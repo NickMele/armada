@@ -19,7 +19,9 @@ use api::Daemon;
 use core_model::{EscalationTrigger, JobStatus, StepId, StepState, StepVerdict};
 use testkit::{FakeWorkProduct, Gate, Sketch};
 
+use crate::adrift::Adrift;
 use crate::gate::Ruling;
+use crate::resume::Redirection;
 use crate::tests::daemon::{a_fleet_holding, a_proposal, diff_evidence, worktree_directory};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
@@ -177,6 +179,67 @@ async fn a_step_with_no_budget_fails_on_its_first_failed_check() {
     assert_eq!(
         fleet.load(job.id()).await.unwrap().status(),
         JobStatus::AwaitingRepair
+    );
+}
+
+/// **The slot goes back the moment the budget is spent**, and a redirect is
+/// refused rather than answered.
+///
+/// `#208` landed the other way: the Drone was kept alive at `awaiting_repair`
+/// so that telling it what it was missing would cost no respawn. What it also
+/// kept was the working slot, for as long as a person took to read the failure
+/// — which is the trade `awaiting_review` made and gave up on 30 Aug 2026,
+/// after one Job held the only slot for four hours and fifty-six minutes while
+/// somebody read it. **A repair somebody may take a day over is that wait under
+/// another name**, so the session ends here and the answer is a restart.
+///
+/// The worktree survives, which is what makes the restart worth having: every
+/// step that passed is still on the branch.
+#[tokio::test]
+async fn a_spent_budget_frees_the_slot_and_leaves_a_restart_as_the_answer() {
+    let home = TempDir::new();
+    let fleet = a_fleet_holding(
+        &home,
+        FakeWorkProduct::changed(&["src/routes.rs"]),
+        gated_on(UNHAPPY, 0),
+        1,
+    );
+
+    let job = fleet
+        .propose(a_proposal("register the route"))
+        .await
+        .unwrap();
+    worktree_directory(&home, job.id());
+    fleet.approve(job.id()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
+    fleet.turn().await.unwrap();
+
+    assert_eq!(
+        fleet.load(job.id()).await.unwrap().status(),
+        JobStatus::AwaitingRepair
+    );
+    assert!(
+        fleet.working_on().await.is_empty(),
+        "the next queued Job may have the slot now, not once somebody answers"
+    );
+
+    let said = Redirection::saying("the assertion is in tests/parse.rs").expect("something in it");
+    assert!(
+        matches!(
+            fleet.redirect(job.id(), &said).await,
+            Err(Adrift::NoDroneToRedirect { .. })
+        ),
+        "there is no session left to inject a turn into"
+    );
+
+    fleet
+        .restart_step(job.id())
+        .await
+        .expect("a fresh Drone onto the worktree the last one left");
+    assert_eq!(
+        fleet.load(job.id()).await.unwrap().status(),
+        JobStatus::Running,
+        "the cap has room, so admission spawns inline"
     );
 }
 

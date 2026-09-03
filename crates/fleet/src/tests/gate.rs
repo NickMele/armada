@@ -627,8 +627,9 @@ async fn a_failed_check_holds_the_job_and_fleet_is_the_actor() {
     assert_eq!(moved.job.status(), JobStatus::AwaitingRepair);
     assert_eq!(moved.event.actor(), Actor::Fleet);
     assert!(
-        !ruling.ends_the_drone(),
-        "the session that wrote the code is what a redirect is injected into"
+        ruling.ends_the_drone(),
+        "a person's repair costs no fleet time, so the slot goes back with the \
+         session — `awaiting_review`'s bargain, made here too"
     );
     assert!(
         ruling.tell().is_none(),

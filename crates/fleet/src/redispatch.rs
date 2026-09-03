@@ -56,9 +56,9 @@ where
     /// something and go again, and that loop is what this is. A running Job is
     /// redirected instead, and one at a gate has not stopped.
     ///
-    /// `awaiting_repair` is the newest and the one to reach for last: the
-    /// Drone is still there holding the session, so a redirect answers the
-    /// failure without discarding a single step that passed. `#208`.
+    /// `awaiting_repair` is the newest and the one to reach for last: a
+    /// restart puts a fresh Drone on the step that failed and keeps every step
+    /// before it, where this throws all of them away. `#208`.
     ///
     /// **`rejected` is refused because it never ran.** There is no Facts and no
     /// Evidence to carry into a replacement, so what is being asked for is a

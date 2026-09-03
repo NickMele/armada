@@ -628,9 +628,9 @@ async fn a_job_is_driven_from_created_to_completed_and_survives_a_reopen() {
     );
 }
 
-/// A failed Check holds the Job for a person, and the worktree stays exactly
-/// where it is. The Drone stays too, which is what makes a redirect the
-/// cheapest answer — `#208`, which retitled this from *ends the Job*.
+/// A failed Check holds the Job for a person, the worktree stays exactly where
+/// it is, and **the Drone does not stay**: a repair is a wait like a review, so
+/// the slot goes back and a restart puts a fresh Drone on the same worktree.
 #[tokio::test]
 async fn a_failed_check_holds_the_job_and_keeps_the_worktree() {
     let home = TempDir::new();
@@ -651,10 +651,10 @@ async fn a_failed_check_holds_the_job_and_keeps_the_worktree() {
 
     let held = fleet.load(job.id()).await.unwrap();
     assert_eq!(held.status(), JobStatus::AwaitingRepair);
-    assert_eq!(
-        fleet.working_on().await,
-        vec![job.id().clone()],
-        "the Drone that wrote the code is still there to be told what is missing"
+    assert!(
+        fleet.working_on().await.is_empty(),
+        "the slot is free the moment the budget is spent, not when somebody \
+         gets round to reading the failure"
     );
 
     let spec = WorktreeSpec::for_job(&home.path().to_string_lossy(), job.id().as_str()).unwrap();
