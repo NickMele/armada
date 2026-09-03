@@ -169,3 +169,8 @@ export * from "./compositions/DroneBrief/DroneBrief";
 // the workflow and the split, so the form behind `Enter by hand` is the
 // override rather than the path.
 export * from "./compositions/DispatchRequest/DispatchRequest";
+
+// One worktree Fleet is holding, and the test it did not pass. The reasons are
+// the component: not-provably-safe is one word for four situations a person
+// answers differently, and each wants different facts in front of the decision.
+export * from "./compositions/HeldWorktree/HeldWorktree";

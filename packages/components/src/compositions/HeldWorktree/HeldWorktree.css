@@ -1,0 +1,215 @@
+/* One worktree fleet is holding, and the test it did not pass.
+
+   A card and not a well: a row here is something to be acted on, which is the
+   line the design system draws between the two. `ChangedFiles` is a well for
+   the opposite reason — nothing in it is actionable. */
+.armada-held {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--pad-card);
+  border: var(--border-width) solid var(--edge-card);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  list-style: none;
+}
+
+/* Selected. The shell's own selected-row fill, so a chosen worktree reads the
+   same as a chosen row anywhere else — and an edge as well as a fill, because
+   the confirmation that follows is destructive and a tint alone is a state a
+   person can miss in the moment they most need to see it. */
+.armada-held[data-selected] {
+  border-color: var(--edge-focus);
+  background: var(--surface-row-selected);
+}
+
+.armada-held__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The job as a person remembers it. Sans and --fg-default: it is the one thing
+   on the row that is not machine-derived. */
+.armada-held__title {
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Where it is and what it is on. Two values on one line, wrapping rather than
+   truncating against each other — a path a person cannot read whole is a path
+   they have to go and find. */
+.armada-held__where {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  min-width: 0;
+}
+
+.armada-held__value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-label);
+}
+
+/* A path and a branch get pasted into a shell, so they copy on click and say so
+   by going to --accent on hover. No copy glyph beside them: the affordance
+   token is the affordance, and the leading glyph already says what the value
+   is. */
+.armada-held__value--copies {
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-held__value--copies:hover {
+  color: var(--accent);
+}
+
+/* Machine-derived, so mono. Truncates from the right inside a value that has
+   its whole self on the title and on the clipboard. */
+.armada-held__mono {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.armada-held__reasons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One test that did not pass. A well inside the card, because the reason is a
+   reading being presented rather than a second thing to act on — the act is one
+   per row, and it is the checkbox above. */
+.armada-held__reason {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-well);
+}
+
+/* What the test found. The line a person reads first, so it carries the weight
+   and the body colour. */
+.armada-held__what {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-medium);
+  color: var(--text-body);
+  text-wrap: pretty;
+}
+
+/* What it means for the decision. */
+.armada-held__means {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--text-label);
+  text-wrap: pretty;
+}
+
+/* The two clauses that decide the answer: what survives, and what does not.
+
+   **Weight, never hue.** Status colour maps onto the job state machine and
+   nothing else, and neither of these is a job state — a red sentence here would
+   be a second, unregistered status vocabulary. It is the same call
+   `ChangedFiles` makes for its drift mark, and the destructive treatment is
+   where it belongs: on the confirmation, which the dialog owns. */
+.armada-held__safe,
+.armada-held__lost {
+  font-weight: var(--weight-medium);
+  color: var(--text-body);
+}
+
+/* The commit a kept branch is reachable from, and the files a reclaim would
+   end. Both are values under a sentence rather than in it. */
+.armada-held__tip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding-top: var(--space-1);
+  color: var(--text-meta);
+}
+
+.armada-held__detail {
+  display: block;
+  padding-top: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--text-meta);
+}
+
+.armada-held__files {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  margin: 0;
+  padding: var(--space-2) 0 0;
+  list-style: none;
+  color: var(--text-meta);
+}
+
+/* Nothing is holding this one. Said in the row rather than left blank, because
+   an empty reason list reads as reasons that failed to load. */
+.armada-held__automatic {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--text-label);
+  text-wrap: pretty;
+}
+
+/* What the reclaim did, half by half. A definition list because that is what it
+   is: two named outcomes, each with its own answer, and neither derivable from
+   the other. */
+.armada-held__receipt {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
+  margin: 0;
+  padding-top: var(--space-3);
+  border-top: var(--border-width) solid var(--edge-rule);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+.armada-held__receipt dt {
+  color: var(--text-meta);
+}
+
+.armada-held__receipt dd {
+  margin: 0;
+  color: var(--text-body);
+  text-wrap: pretty;
+}

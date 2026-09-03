@@ -133,3 +133,8 @@
 /* Dispatch a job by describing the work — the Job proposer's surface.
    Appended, per the rule at the head of this file. */
 @import "./compositions/DispatchRequest/DispatchRequest.css";
+
+/* One worktree Fleet is holding, and the test it did not pass. Appended, per
+   the rule at the head of this file: a stylesheet the app does not import
+   renders its component as a vertical stack with its class names on. */
+@import "./compositions/HeldWorktree/HeldWorktree.css";
