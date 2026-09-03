@@ -52,12 +52,13 @@ Two consequences follow, and both are paid rather than avoided. **Approving does
 
 While suspended, Fleet stops expecting heartbeats and `poke_limit` does not advance. **What bounds a Job sitting at a gate is Drone/Job timeout and worktree cleanup policy, not the liveness timer.** Fleet still reconciles dead processes against live Jobs on restart; a gate has no process to be missing, so what that reconciliation catches is a Drone that died on a step being worked.
 
-**A healthy Drone accepts Redirect, Kill and Pause.** All three are available on a non-escalated Drone rather than reserved for escalated ones.
+**A healthy Drone accepts Redirect and Kill.** Both are available on a non-escalated Drone rather than reserved for escalated ones.
 
 - **Redirect** is context injection, and it is recorded on the Job. It must never silently become a step restart: the work already done is kept, and the record says a person intervened. Where the Job is mid-step it is a turn into the Drone that is there and nothing is written down; where the Job is at a boundary the note waits on the Job and goes into the next Drone's opening brief. **Exactly one of those two paths runs** — a note both injected and written down is a note a Drone reads twice. **The act is chosen by where the Job stands, not by whether a process happens to exist** — see [Job](job.md).
 - **A waiting note lasts one boundary.** It is cleared when it is delivered, whether or not the Drone acts on it, so it never reaches a Drone working a part it was not about: a note written about part two and surfacing during part four is advice about finished work, which reads as Armada being confused rather than as a person having changed their mind. Losing the note is the cheaper failure. **The record says it was delivered**, not merely that one was written, so a person can tell "you were told" from "nobody was there". A second note arriving before the first is delivered is refused rather than overwriting it — silently dropping something a person typed is what both other answers do.
 - **Kill** is unambiguous on a healthy Drone and already safe. Nothing about the escalated state makes killing safer.
-- **Pause** only means anything while a Drone is healthy, since anything escalated is already paused.
+
+**Pause was retired 2026-09-03.** This sentence named it as a third act alongside Redirect and Kill, and it never gained a route, an operation implementation, or a binding in `actions.toml` in the months it stood. Redirect and Kill cover what a person actually does to a working Drone — say something, or stop it.
 
 ## Composition
 

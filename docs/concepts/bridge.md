@@ -43,7 +43,7 @@ The module grid is [Doctor](doctor.md)'s. **The count is not a contract** — a 
 
 Run and edit a Manifest reads a project's Checks and Commands, runs any one of them as a rehearsal, and edits the file.
 
-**Redirect, Kill and Pause are all available on a healthy Drone.** A redirect is recorded on the Job.
+**Redirect and Kill are both available on a healthy Drone.** A redirect is recorded on the Job.
 
 **Watching a healthy Drone work is [Observe](observe.md)**, opened on one Job and read-only. It is not on the Board, which stays a scanning surface.
 
