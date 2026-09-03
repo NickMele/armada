@@ -48,6 +48,13 @@ pub enum DronePresence {
 }
 
 impl DronePresence {
+    /// Both variants, in the order they happen.
+    ///
+    /// Carried so the set-comparison rule in `xtask` can read it: a presence
+    /// with no sanctioned word renders in the transition history as its wire
+    /// spelling.
+    pub const ALL: &'static [DronePresence] = &[DronePresence::Spawned, DronePresence::Exited];
+
     pub fn as_wire(&self) -> &'static str {
         match self {
             DronePresence::Spawned => "drone_spawned",

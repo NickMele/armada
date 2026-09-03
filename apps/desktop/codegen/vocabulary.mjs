@@ -55,17 +55,17 @@ const OUT_VERSION = join(repo, "packages", "protocol", "src", "generated", "prot
 // the glyph are the registry's. Reported: the variant belongs under
 // `check_outcome` too.
 //
-// `step_state` has no rows in `enum-verbs.toml` at all, so it emits empty and a
-// rail row renders `job_steps.state`'s own wire spelling until they land. That
-// is visible and recoverable; copy typed into a component is not.
+// `step_state` and `advance_gate` were wanted here before either had a row, on
+// purpose: asking for a vocabulary is what puts the gap in this script's own
+// output — `advance_gate (no rows in enum-verbs.toml)` — rather than leaving a
+// renderer to write the missing words itself. Both have rows now, and the
+// mechanism is why the omission was visible for long enough to fix.
 //
-// `advance_gate` is here on the same terms and for the same reason, and it is
-// wanted before it has a row on purpose: the rail now says whether a step will
-// stop for a person, `auto_if_judge_passes` and `human_always` are the two
-// values that answer that, and neither has a verb anywhere in the repository.
-// Asking for the vocabulary is what puts the gap in this script's own output —
-// `advance_gate (no rows in enum-verbs.toml)` — rather than leaving a renderer
-// to write the missing words itself.
+// The five below them arrived the same way and are drawn on four surfaces
+// nobody had a word for: the changed-files list, the evidence trail, the
+// transition history's kind and subject columns, and the observe pane's note
+// when the transcript socket closes. Each was rendering the wire spelling in
+// mono at a person.
 const WANTED = [
   "job_status",
   "queued_reason",
@@ -78,6 +78,11 @@ const WANTED = [
   "step_state",
   "advance_gate",
   "gaming_pattern",
+  "evidence_type",
+  "change_kind",
+  "movement_kind",
+  "drone_presence",
+  "silence",
 ];
 
 // `admission_hold` is here because the status bar says which of the four things

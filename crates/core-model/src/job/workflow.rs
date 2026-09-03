@@ -498,6 +498,17 @@ impl EvidenceType {
 }
 
 impl AdvanceGate {
+    /// Every variant, in the order the tiers run.
+    ///
+    /// Carried for the reason [`EvidenceType::ALL`] is: it is what the
+    /// set-comparison rule in `xtask` reads, and a gate with no sanctioned
+    /// word renders on the rail as its wire spelling.
+    pub const ALL: &'static [AdvanceGate] = &[
+        AdvanceGate::Auto,
+        AdvanceGate::AutoIfJudgePasses,
+        AdvanceGate::HumanAlways,
+    ];
+
     pub fn as_wire(&self) -> &'static str {
         match self {
             AdvanceGate::Auto => "auto",

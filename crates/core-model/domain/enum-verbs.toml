@@ -26,6 +26,14 @@
 #   escalation_reason          - why a Job stopped and asked. Keys match
 #                                escalation-triggers.toml
 #   step_verdict               - the outcome of one workflow step
+#   step_state                 - where one step of the frozen WorkflowDef is.
+#                                Keys match step-states.toml, and it is the
+#                                inner half of the two-level machine
+#                                `job_status` is the outer half of
+#   advance_gate               - what it takes to advance past one step. No
+#                                registry file of its own: the set is three of
+#                                the WorkflowDef schema's four, the fourth
+#                                being refused where a definition is parsed
 #   check_outcome              - how one declared Check ended. Keys match
 #                                check-outcomes.toml
 #   criterion_verdict_check    - one criterion, as a mechanical Check saw it
@@ -35,9 +43,31 @@
 #                                No registry file of its own either: the set is
 #                                what a workflow's `flag_if` may name, and
 #                                whether it is fixed at all is open
+#   evidence_type              - what one step produces as its work product. No
+#                                registry file of its own: the values in use
+#                                are named as prose on job-fields.toml's
+#                                `evidence_type` row
+#   change_kind                - what happened to one file in a Drone's
+#                                worktree, as of one reading
+#   movement_kind              - what one row of a Job's log says moved: the
+#                                Job's own machine, one step of it, or a Drone
+#   drone_presence             - whether a Drone arrived on a step or left it.
+#                                Presence, not a machine — `assigned_drone` is
+#                                a pointer that is set or null
+#   silence                    - why the transcript socket closed, told apart
+#                                from a transport close, which carries its own
+#                                words
 #   origin                     - where a Job came from. Keys match the `origin`
 #                                row of job-fields.toml, which has no registry
 #                                file of its own
+#
+# **Five of these have no `PAIRINGS` entry in `xtask/src/rules_enums.rs`, so
+# the set is declared here and compared against nothing.** `step_verdict` and
+# the two unpaired criterion verdicts were already in that position;
+# `change_kind`, `movement_kind` and `silence` join them because the enums are
+# `crates/ipc`'s and carry a serde derive rather than the `ALL` and `as_wire`
+# pair the rule reads. `advance_gate`, `evidence_type`, `step_state` and
+# `drone_presence` are paired.
 #
 # Fields:
 #   verb         - what a person reads. Never the enum name
@@ -163,6 +193,54 @@ icon = "archive"
 status_token = "--status-superseded"
 vocabulary = "Job status"
 in_code = ""
+
+[verbs.step_state.advanced]
+verb = "advanced"
+icon = "check"
+status_token = ""
+vocabulary = "Step state"
+in_code = ""
+notes = "The inner machine's word for what the outer one calls `done`, and it stays the enum's own spelling because the enum's own spelling is already plain English — the same reason `running` and `rejected` keep theirs. `check` is the borrowing `packages/icons/icons.toml` sanctions under `[conventions.step_activity_borrowing]`: the Job glyph that means the same thing one level down, and a rail row that showed a different mark from the badge above it is the collision that convention exists to prevent. No token: the hue is `--step-advanced` in `packages/tokens/src/status.css`, which is its own axis and not a `--status-` stem, so it lands in GAPS the way the two Judge verdicts do. `in_code` is empty because there is no source value to carry: the row was authored here."
+
+[verbs.step_state.awaiting_human]
+verb = "awaiting review"
+icon = "eye"
+status_token = ""
+vocabulary = "Step state"
+in_code = ""
+notes = "The same words as `job_status.awaiting_review`, because it is the same claim one level down: `step-states.toml` sees this state beneath that status and beneath no other. `awaiting a human` would be a second phrase for one fact, and `waiting on you` would be a third. `eye` for the same reason the words are the same, and it is one of the five glyphs `[conventions.step_activity_borrowing]` names. Iconography's prose says `waiting (clock)` in the paragraph above the one that defers to that convention for the full mapping — `clock` is `queued`'s and the convention does not list it, so the convention is read as the authority and the prose as stale. Reported. No token, for `advanced`'s reason: the hue is `--step-waiting`."
+
+[verbs.step_state.not_started]
+verb = "not started"
+icon = ""
+status_token = ""
+vocabulary = "Step state"
+in_code = ""
+notes = "Written at Job creation for every step of the frozen WorkflowDef, so it is the state most rail rows are in and the one that must read as ordinary rather than as something withheld. The enum's spelling with its underscore taken out. No glyph, and this is the one step state that owes one: `[conventions.step_activity_borrowing]` names five borrowings and none of them is this, `clock` is `queued`'s badge, and a mark invented here would be the second vocabulary the file exists to prevent. No token by decision rather than by omission — `packages/tokens/src/status.css` says outright that not-started takes no hue and renders in `--fg-subtle`."
+
+[verbs.step_state.retrying]
+verb = "retrying"
+icon = "rotate-cw"
+status_token = ""
+vocabulary = "Step state"
+in_code = ""
+notes = "`rotate-cw` is the single-arrow glyph, deliberately not `refresh-cw`, which `packages/icons/icons.toml` reserves to churning alone. The registry's own note on that row already calls it the proposed step-level retrying mark, so this is the assignment being taken up rather than made. No token: `status.css` says retrying takes no hue and renders in `--fg-muted`."
+
+[verbs.step_state.running]
+verb = "running"
+icon = "circle-dot"
+status_token = ""
+vocabulary = "Step state"
+in_code = ""
+notes = "The Job glyph one level down, from `[conventions.step_activity_borrowing]`. No token, for `advanced`'s reason: the hue is `--step-running`."
+
+[verbs.step_state.stopped]
+verb = "stopped"
+icon = "flag"
+status_token = ""
+vocabulary = "Step state"
+in_code = ""
+notes = "Retries spent, and neither retrying nor waiting on a person — folding it into either would make a designed human gate and a dead stop render alike, which is `step-states.toml`'s own `why`. The verb stays `stopped` rather than becoming `retries spent`: the count of attempts is on the row beside it, and a verb that stated a cause would say twice what the badge above already says once. `flag` is reserved to this state alone and to nothing else in Armada. No token, and this row is the one place that is a real loss: the state's whole treatment is a surface, `--step-stopped-bg`, rather than a glyph hue, and a `--status-` stem cannot carry it."
 
 [verbs.queued_reason.blocked_by_dependency]
 verb = "blocked"
@@ -579,6 +657,198 @@ status_token = ""
 vocabulary = "Gaming pattern"
 in_code = ""
 notes = "The question's own test, kept as the verb: would these read the same written about a different diff. `generic` is the enum's word and tells a reader nothing on its own. Neither glyph nor token, for `assertion_weakened`'s reason."
+
+[verbs.advance_gate.auto]
+verb = "the checks decide"
+icon = ""
+status_token = ""
+vocabulary = "Advance gate"
+in_code = ""
+notes = "Names the tier rather than the absence of a person, because `auto` reads as unattended and the step is not — it is gated, on everything `mechanical_checks[]` declares. The rail draws no row for this value at all, so the words are read where a gate is named beside a tier rather than in a list of three. Neither glyph nor token, and that is the vocabulary's decision rather than this row's: a gate is a property of the frozen step and not a status, it renders as a label beside `advance_gate` in `--fg-muted`, and the `shield-*` family is reserved to Checks. `in_code` is empty because the row was authored here."
+
+[verbs.advance_gate.auto_if_judge_passes]
+verb = "the checks decide, unless the Judge objects"
+icon = ""
+status_token = ""
+vocabulary = "Advance gate"
+in_code = ""
+notes = "Deliberately does not say `if the Judge passes`, which is the enum's own name and the thing the design contract forbids saying: there is no such thing as a Judge pass, only a mechanical pass a Judge declined to refuse. `objects` is the negation of `no objection`, which is what `criterion_verdict_judge.met` already reads, so the two rows use one word for one act. It also keeps the order the gate actually runs in — the mechanical tier holds first, and the Judge can only make the answer stricter. Neither glyph nor token, for `auto`'s reason."
+
+[verbs.advance_gate.human_always]
+verb = "a person answers"
+icon = ""
+status_token = ""
+vocabulary = "Advance gate"
+in_code = ""
+notes = "The two other values name a tier and this one names an actor, which is the distinction everything downstream turns on, so the verb names the actor and says nothing about the tiers. They still run and still stop the step — what they establish is the material a person reads, not the verdict — and a verb saying `no checks` or `skips the gate` would be false of both halves. `a person`, not `you`: the same Job may be answered by whoever is at the machine, and the rest of this file addresses nobody. Neither glyph nor token, for `auto`'s reason."
+
+[verbs.evidence_type.diff]
+verb = "a diff"
+icon = ""
+status_token = ""
+vocabulary = "Evidence type"
+in_code = ""
+notes = "What the step produces as its work product, in the words `docs/contracts/workflow-design-system.md` uses in its own per-type table. Neither glyph nor token, and that is the vocabulary's decision rather than this row's: it renders in mono on the evidence trail's provenance line beside the time, which is a label and not a badge, and every member of the `file-*` family that means evidence is already reserved elsewhere — `file` to the log row, `file-check` to a submission that landed, `file-diff` to opening one produced file's changes. `in_code` is empty because the row was authored here."
+
+[verbs.evidence_type.failing_test]
+verb = "a failing test"
+icon = ""
+status_token = ""
+vocabulary = "Evidence type"
+in_code = ""
+notes = "The test is the product and its failing is the point — a reproduction nobody can run proves nothing, which is why Bug's `repro` step is the one this value exists for. Neither glyph nor token, for `diff`'s reason."
+
+[verbs.evidence_type.facts_note]
+verb = "a note of facts"
+icon = ""
+status_token = ""
+vocabulary = "Evidence type"
+in_code = ""
+notes = "The enum's spelling read as English and no further. `a root-cause analysis` was rejected: that is the question the Judge asks of Bug's `diagnose` step and not what the type is, and writing it here would narrow a value Prototype also uses for something else. `a written finding` was rejected for the same reason, and because the phrase is already `shown_by`'s in the evidence schema. The note is a deliverable judged as one, never the Drone's account of how the step went — the transcript is that, and it is not admissible. Neither glyph nor token, for `diff`'s reason."
+
+[verbs.evidence_type.test_suite_run]
+verb = "a test suite run"
+icon = ""
+status_token = ""
+vocabulary = "Evidence type"
+in_code = ""
+notes = "The enum's spelling read as English. The verb claims nothing about the outcome, which is right: the run's exit code is a deterministic fact handed to the Judge alongside the diff, and the Judge's question on this type is about the diff rather than the run. Neither glyph nor token, for `diff`'s reason."
+
+[verbs.evidence_type.bundle]
+verb = "the earlier steps' evidence, assembled"
+icon = ""
+status_token = ""
+vocabulary = "Evidence type"
+in_code = ""
+notes = "The one value whose enum name tells a reader nothing, and the only one whose verb is longer than its wire spelling. It is the accumulated evidence of prior steps gathered into one payload, which is what Bug's `review` step reads — so the verb says what was gathered rather than naming the container. Neither glyph nor token, for `diff`'s reason."
+
+[verbs.evidence_type.document]
+verb = "a document"
+icon = ""
+status_token = ""
+vocabulary = "Evidence type"
+in_code = ""
+notes = "Design Plan's product, and the contract's table calls it `Document or mockup`. The verb takes the narrower half: a mockup is a document here, and a verb naming both would ask a reader to pick which one arrived when the type does not distinguish them. Neither glyph nor token, for `diff`'s reason."
+
+[verbs.change_kind.added]
+verb = "added"
+icon = ""
+status_token = ""
+vocabulary = "Change kind"
+in_code = ""
+notes = "Five of the eight change kinds keep the enum's own spelling, because git's words for what happened to a file are already the words a person reads — the same reason `running` and `passed` keep theirs. The rows exist so a surface reads them from here rather than falling through to the wire, which is what the changed-files list does today. Staged or not: an untracked file a Drone wrote is added. Neither glyph nor token, and that is the vocabulary's decision rather than this row's — a changed file is not a status, and `packages/icons/icons.toml` reserves `file` to the log row and `file-check` to a submission that landed, so the mark column stays empty on purpose. `in_code` is empty because the row was authored here."
+
+[verbs.change_kind.modified]
+verb = "modified"
+icon = ""
+status_token = ""
+vocabulary = "Change kind"
+in_code = ""
+notes = "The enum's spelling. Neither glyph nor token, for `added`'s reason."
+
+[verbs.change_kind.deleted]
+verb = "deleted"
+icon = ""
+status_token = ""
+vocabulary = "Change kind"
+in_code = ""
+notes = "The enum's spelling. Neither glyph nor token, for `added`'s reason."
+
+[verbs.change_kind.renamed]
+verb = "renamed"
+icon = ""
+status_token = ""
+vocabulary = "Change kind"
+in_code = ""
+notes = "The enum's spelling. Neither glyph nor token, for `added`'s reason."
+
+[verbs.change_kind.copied]
+verb = "copied"
+icon = ""
+status_token = ""
+vocabulary = "Change kind"
+in_code = ""
+notes = "The enum's spelling. Neither glyph nor token, for `added`'s reason."
+
+[verbs.change_kind.type_changed]
+verb = "type changed"
+icon = ""
+status_token = ""
+vocabulary = "Change kind"
+in_code = ""
+notes = "A file became a directory or a symlink, or the reverse, and it is not a content change — which is the whole of what the row has to keep separate from `modified`. The underscore comes out and nothing else does: `became a different kind of file` was drafted and rejected for the width it would force on a column that is scanned beside a path. Neither glyph nor token, for `added`'s reason."
+
+[verbs.change_kind.conflicted]
+verb = "conflicted"
+icon = ""
+status_token = ""
+vocabulary = "Change kind"
+in_code = ""
+notes = "git's word, kept. Neither glyph nor token, for `added`'s reason."
+
+[verbs.change_kind.unreadable]
+verb = "could not be read"
+icon = ""
+status_token = ""
+vocabulary = "Change kind"
+in_code = ""
+notes = "The one change kind whose enum name states the wrong thing. `unreadable` reads as a property the file has, and what happened is that one path's reading failed while the rest did not — the file is in the diff and it is not an absence of change. The verb says which reading failed rather than claiming nothing happened, and it is past tense because the next reading may well succeed. Neither glyph nor token, for `added`'s reason."
+
+[verbs.movement_kind.status]
+verb = "status"
+icon = ""
+status_token = ""
+vocabulary = "Movement kind"
+in_code = ""
+notes = "What the transition history's kind column says moved. All three keep the wire's own word, and the rows exist to sanction that rather than to change it: the words are already plain English, and the component drawing them says outright that a word chosen there would be a second vocabulary. Neither glyph nor token, and the token is refused rather than owed — `docs/contracts/design-system.md` permits hue below Job level only where `packages/tokens/src/status.css` declares it, that file declares no history row, and twelve statuses hued down a list would read as twelve verdicts. `in_code` is empty because the row was authored here."
+
+[verbs.movement_kind.step]
+verb = "step"
+icon = ""
+status_token = ""
+vocabulary = "Movement kind"
+in_code = ""
+notes = "One step moved and the Job did not, which is the distinction the column carries. Neither glyph nor token, for `status`'s reason."
+
+[verbs.movement_kind.drone]
+verb = "drone"
+icon = ""
+status_token = ""
+vocabulary = "Movement kind"
+in_code = ""
+notes = "A Drone arrived on a step or left it, and neither machine moved. Lowercase because it is countable, which is the casing rule the lexicon states for job, drone, convoy and workspace. Neither glyph nor token, for `status`'s reason."
+
+[verbs.drone_presence.drone_spawned]
+verb = "a drone started"
+icon = ""
+status_token = ""
+vocabulary = "Drone presence"
+in_code = ""
+notes = "Presence, not state: `assigned_drone` is a pointer that is set or null, so the two rows are the two moments that change it. `started` rather than `spawned`, which is the process word and not the one a person uses. The article carries the fact that a Job may have had more than one — a restart, a redispatch or a step boundary each give it another — and the row beside it names which. Neither glyph nor token, for `movement_kind.status`'s reason: this draws in the same history rows, which are neutral all the way down. `in_code` is empty because the row was authored here."
+
+[verbs.drone_presence.drone_exited]
+verb = "a drone left"
+icon = ""
+status_token = ""
+vocabulary = "Drone presence"
+in_code = ""
+notes = "The state the pointer is in afterwards rather than the way it got there, which is `no_worktree`'s rule taken before it had to be learned twice — a Drone is gone however it went, and `finished`, `was killed` and `crashed` would each be wrong on two of the three. The liveness clock is suspended by the same moment. Neither glyph nor token, for `drone_spawned`'s reason."
+
+[verbs.silence.drone_ended]
+verb = "the drone that was writing has finished"
+icon = ""
+status_token = ""
+vocabulary = "Silence"
+in_code = ""
+notes = "Why the transcript socket closed, said in the observe pane where a person is watching a Drone work. It is a clause rather than a badge word because the surface is a note under the pane and not a chip, so it reads the way `origin`'s rows do — drawn close to as written. No full stop: the sentence around it is the surface's. The history is complete, which is the fact this variant carries and `nothing_writing` does not. Neither glyph nor token: a note is not a badge, and nothing has gone wrong. `in_code` is empty because the row was authored here."
+
+[verbs.silence.nothing_writing]
+verb = "no drone is writing this transcript"
+icon = ""
+status_token = ""
+vocabulary = "Silence"
+in_code = ""
+notes = "Present tense, where `drone_ended` is past, and the tenses are the distinction: one is a Drone that finished and one is a Job nothing was writing when the socket opened. A Job may not have been dispatched, or its Drone may have gone with the Fleet that spawned it, and the row claims neither — `the job has not been dispatched` would be wrong on the second. Neither glyph nor token, for `drone_ended`'s reason."
 
 [verbs.origin.auto_detected]
 verb = "Found by Fleet"
