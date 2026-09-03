@@ -104,17 +104,13 @@ fn a_section_m1_does_not_read_hard_fails_and_names_what_it_does_read() {
 
 #[test]
 fn an_unknown_key_inside_a_check_hard_fails_too() {
-    // `requires` and `timeout` are both on the concept page and neither is one
-    // of the five. The refusal names the exact key, not the Check.
+    // `timeout` is on the concept page and is not one of the three this parser
+    // reads. The refusal names the exact key, not the Check.
     let refused = refusals(parse(
-        "version: 1\nid: armada\nchecks:\n  test:\n    run: cargo test\n    timeout: 600\n    requires: [migrate]\n",
+        "version: 1\nid: armada\nchecks:\n  test:\n    run: cargo test\n    timeout: 600\n",
     ));
     assert!(matches!(
         fault_at(&refused, "checks.test.timeout"),
-        Fault::Unknown { .. }
-    ));
-    assert!(matches!(
-        fault_at(&refused, "checks.test.requires"),
         Fault::Unknown { .. }
     ));
 }
@@ -410,7 +406,7 @@ fn a_destructive_command_cannot_be_required() {
     ));
     assert!(matches!(
         fault_at(&refused, "setup.requires[0]"),
-        Fault::PreparedBySomethingDestructive { value } if value == "reset"
+        Fault::RequiresSomethingDestructive { value } if value == "reset"
     ));
 }
 

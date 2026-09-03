@@ -447,6 +447,7 @@ fn the_frozen_workflow_comes_back_with_every_check_its_steps_declared() {
                 run: "cargo build".to_string(),
                 expect_exit_code: 0,
                 when: Covers::of(vec![PathPattern::parse("crates/**").expect("a pattern")]),
+                requires: Vec::new(),
             },
             ResolvedCheck::DiffNonempty,
             ResolvedCheck::ArtifactExists {

@@ -94,6 +94,25 @@ pub async fn execute(
         return Err(unknown(&manifest, registry, name));
     };
 
+    // **A Check's prerequisites run here too**, for this module's own reason: a
+    // Check a person runs is the Check a Drone is measured by. `armada check
+    // format` that skipped `cargo fmt --all` would pass where the gate fails,
+    // or fail where the gate passes, and either way the terminal would be
+    // rehearsing a different question from the one being asked.
+    //
+    // There is no ledger, because there is one Check: `armada check` twice runs
+    // the prerequisite twice, which is what a person typing it twice asked for.
+    if let Some(check) = manifest.check(name) {
+        if let Some(blocked) = first_unmet(check.requires(), root, budget).await {
+            return Ok(Ran {
+                name: name.to_string(),
+                command,
+                destructive,
+                attempt: blocked,
+            });
+        }
+    }
+
     let attempt = checks_runner::run(&command, root, budget).await;
     Ok(Ran {
         name: name.to_string(),
@@ -101,6 +120,33 @@ pub async fn execute(
         destructive,
         attempt,
     })
+}
+
+/// Run a Check's prerequisites in order and answer with the first that failed.
+///
+/// `None` where every one of them exited zero, which includes a Check that
+/// declares none. The [`Attempt`] handed back carries the **prerequisite's**
+/// output under an exit that names it, so the line printed after says which
+/// command a person has to go and fix.
+async fn first_unmet(
+    requires: &[core_model::Prerequisite],
+    root: &Path,
+    budget: Duration,
+) -> Option<Attempt> {
+    for needed in requires {
+        let attempt = checks_runner::run(needed.run(), root, budget).await;
+        if attempt.exit != Exit::Code(0) {
+            return Some(Attempt {
+                exit: Exit::NeverRan(NeverRan::PrerequisiteFailed {
+                    command: needed.name().to_string(),
+                    run: needed.run().to_string(),
+                    exit: Box::new(attempt.exit),
+                }),
+                output: attempt.output,
+            });
+        }
+    }
+    None
 }
 
 /// What running it produced, with everything a caller needs to report it.
@@ -162,6 +208,13 @@ impl fmt::Display for Ended<'_> {
             }
             Exit::NeverRan(NeverRan::NotSpawned { program, kind }) => {
                 write!(out, "could not start `{program}`: {kind}")
+            }
+            Exit::NeverRan(NeverRan::PrerequisiteFailed { command, run, exit }) => {
+                write!(
+                    out,
+                    "did not run: the Command `{command}` (`{run}`) it requires {}",
+                    Ended(exit)
+                )
             }
         }
     }

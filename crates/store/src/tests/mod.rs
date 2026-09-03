@@ -102,6 +102,7 @@ pub fn workflow() -> FrozenWorkflow {
                         // of its own, so every roundtrip in this crate walks a
                         // Check that declares which paths it covers.
                         when: Covers::of(vec![PathPattern::parse("crates/**").expect("a pattern")]),
+                        requires: Vec::new(),
                     },
                     ResolvedCheck::DiffNonempty,
                     // Carried on the shared fixture for `when`'s reason: every

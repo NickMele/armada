@@ -32,6 +32,7 @@ use crate::job::covers::Covers;
 use crate::job::gaming::GamingCheck;
 use crate::job::ids::{ModelName, StepId, WorkflowId};
 use crate::job::judge::JudgeCheck;
+use crate::job::prerequisite::Prerequisite;
 use crate::job::scope::EvidenceScope;
 
 /// What a step produces as its work product.
@@ -108,6 +109,15 @@ pub enum ResolvedCheck {
         /// was already approved, and a Check that stopped running would be
         /// invisible in a way a changed command would not.
         when: Option<Covers>,
+        /// The Commands the Manifest says must run before this Check, **in the
+        /// order it named them**. Empty on a Check that requires none, which
+        /// is every Check written before the key existed.
+        ///
+        /// A `Vec` and not a set: `[migrate, seed]` is a sequence somebody
+        /// wrote, and the two are not interchangeable. Frozen for `when`'s
+        /// reason — what runs before a Check is part of what produced its exit
+        /// code.
+        requires: Vec<Prerequisite>,
     },
     /// The step produced a non-empty diff.
     DiffNonempty,
@@ -200,6 +210,16 @@ impl ResolvedCheck {
     /// the reading off the gate of a step that would not use it.
     pub fn needs_changed_paths(&self) -> bool {
         self.when().is_some()
+    }
+
+    /// What has to run before this Check, in order. **Empty on a built-in and
+    /// on a Check that requires nothing**, which is the same answer: nothing
+    /// runs first.
+    pub fn requires(&self) -> &[Prerequisite] {
+        match self {
+            ResolvedCheck::ManifestCheck { requires, .. } => requires,
+            ResolvedCheck::DiffNonempty | ResolvedCheck::ArtifactExists { .. } => &[],
+        }
     }
 
     /// The exit code the step expects. `None` where there is no command.

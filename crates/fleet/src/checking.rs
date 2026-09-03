@@ -22,12 +22,39 @@
 //!
 //! A failing Check cancels none of the others. Someone reading a failed step
 //! wants every result, and the second failure often explains the first.
+//!
+//! # Prerequisites run first, one at a time, and the context is this call
+//!
+//! `checks.<name>.requires` names Commands that must have run before a Check.
+//! [`beforehand`] runs them, and it runs **all of them before any Check is
+//! spawned** rather than each Check's own immediately before it. Two reasons,
+//! and the second is the one that decides it:
+//!
+//! - A prerequisite exists to change the worktree — `cargo fmt --all` is the
+//!   case that filed `#387`. Every Check in this batch shares that worktree, so
+//!   a prerequisite running beside a Check would be rewriting files underneath
+//!   a command already reading them.
+//! - The order is the Manifest's. Running the union serially, first occurrence
+//!   winning, is the only arrangement that honours every Check's list at once.
+//!
+//! **A context is one call to [`ran`]** — one gate evaluation of one step, or
+//! one dry run. That is what "skipped if already run in the same context" is
+//! defined as here, and the definition follows from what a prerequisite leaves
+//! behind: its effect is in the worktree, and this call is the span over which
+//! that worktree is not being edited by anything else. A Drone edits between
+//! attempts, so the next attempt is a new context and `fmt` runs again — which
+//! it must, or the second attempt gates on the first attempt's formatting. A
+//! Check running in its own container would be a third context and would find
+//! no hit, which is `docs/concepts/manifest.md`'s own reading.
+//!
+//! A Check the step's changes do not cover contributes no prerequisites. Its
+//! `migrate` would be minutes spent for a Check that is not going to run.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use checks_runner::{Attempt, Output};
-use core_model::ResolvedCheck;
+use core_model::{Prerequisite, ResolvedCheck};
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 use verification::{Artifact, Exit, NeverRan, Observed};
@@ -105,8 +132,87 @@ enum Planned {
     /// Already answered — a Check the step's changes do not cover, or the diff
     /// reading the caller took before this was called.
     Already(Observed),
+    /// A Check that will not be run, because a Command it requires did not
+    /// succeed. **Not a skip** — a skip fails nothing and this must, so it is
+    /// its own variant and carries an `Observed::Command` that no expectation
+    /// can be compared into a pass.
+    ///
+    /// The name rides along so the prerequisite's output is filed under the
+    /// Check whose row a person will open looking for it.
+    Blocked { name: String, observed: Observed },
     /// A command, and the slot it belongs in.
     Command { name: String, run: String },
+}
+
+/// A prerequisite that did not succeed, and what it printed.
+///
+/// One per batch at most, because [`beforehand`] stops at the first failure —
+/// `[migrate, seed]` is a sequence, and carrying on past the first would
+/// produce the second's error about the first's job. That is
+/// `crate::preparing::prepare`'s rule, one scope down.
+struct NotMet {
+    command: String,
+    run: String,
+    exit: Exit,
+    output: Output,
+}
+
+impl NotMet {
+    /// What a Check blocked by this is told, and what its row records.
+    ///
+    /// **The Check's name is not in here.** It is the prerequisite that broke,
+    /// and the sentence a Drone reads has to name what it should go and fix.
+    fn blocked(&self) -> Observed {
+        Observed::Command(Exit::NeverRan(NeverRan::PrerequisiteFailed {
+            command: self.command.clone(),
+            run: self.run.clone(),
+            exit: Box::new(self.exit.clone()),
+        }))
+    }
+}
+
+/// Run every prerequisite the batch's runnable Checks name, in order, once each.
+///
+/// **Serial, not concurrent.** These mutate the worktree by design; running two
+/// at once, or one beside a Check, is a race with no upper bound on how it goes
+/// wrong. The batch pays the wall clock, which is the cost of the guarantee.
+///
+/// **First occurrence wins and the rest are skipped.** Two Checks naming
+/// `migrate` run it once, which is the skip `docs/concepts/manifest.md`
+/// specifies — and the skip is by name rather than by command line, because a
+/// name is what the Manifest's own de-duplication is written in.
+///
+/// **`requires` guarantees *has run*, not *has just run*.** A Check needing
+/// genuinely fresh state resets what it needs in its own command; nothing here
+/// re-runs a prerequisite for the second Check that named it.
+async fn beforehand(
+    needed: &[&Prerequisite],
+    worktree: &Path,
+    budget: Duration,
+) -> (Vec<String>, Option<NotMet>) {
+    let mut met = Vec::new();
+    for prerequisite in needed {
+        if met.iter().any(|had: &String| had == prerequisite.name()) {
+            continue;
+        }
+        let attempt = checks_runner::run(prerequisite.run(), worktree, budget).await;
+        // **Nothing but zero passes**, for `prepare`'s reason: `expect_exit_code`
+        // is a Check's field, and there is no reading of *the fix failed and
+        // that was expected* that leaves a worktree the Check can measure.
+        if attempt.exit != Exit::Code(0) {
+            return (
+                met,
+                Some(NotMet {
+                    command: prerequisite.name().to_string(),
+                    run: prerequisite.run().to_string(),
+                    exit: attempt.exit,
+                    output: attempt.output,
+                }),
+            );
+        }
+        met.push(prerequisite.name().to_string());
+    }
+    (met, None)
 }
 
 /// What is at the path a step's `artifact_exists` names.
@@ -147,7 +253,7 @@ pub(crate) async fn ran(
     worktree: &Path,
     budget: Duration,
 ) -> Vec<Completed> {
-    let planned: Vec<Planned> = checks
+    let mut planned: Vec<Planned> = checks
         .iter()
         .map(|check| match not_covered(check, touched) {
             Some(skipped) => Planned::Already(skipped),
@@ -164,13 +270,47 @@ pub(crate) async fn ran(
         })
         .collect();
 
+    // Every prerequisite of every Check that is actually going to run, in the
+    // order the Manifest named them, before anything is spawned. `beforehand`
+    // takes the wall clock of this out of the batch on purpose; see the module
+    // header for why it cannot overlap the Checks it prepares for.
+    let needed: Vec<&Prerequisite> = planned
+        .iter()
+        .enumerate()
+        .filter(|(_, plan)| matches!(plan, Planned::Command { .. }))
+        .flat_map(|(at, _)| checks[at].requires())
+        .collect();
+    let (met, not_met) = match needed.is_empty() {
+        true => (Vec::new(), None),
+        false => beforehand(&needed, worktree, budget).await,
+    };
+    // A Check whose prerequisites all ran still runs, even where another
+    // Check's did not: a broken `migrate` is not a reason to stop asking `lint`.
+    // `met` is what succeeded before the phase stopped, so a Check naming
+    // something after the failure is blocked by it too — and is told about the
+    // command that actually broke rather than the one that never got a turn.
+    if let Some(failed) = &not_met {
+        for (at, plan) in planned.iter_mut().enumerate() {
+            let unmet = checks[at]
+                .requires()
+                .iter()
+                .any(|needed| !met.iter().any(|had| had == needed.name()));
+            if let (true, Planned::Command { name, .. }) = (unmet, &*plan) {
+                *plan = Planned::Blocked {
+                    name: name.clone(),
+                    observed: failed.blocked(),
+                };
+            }
+        }
+    }
+
     let mut done: Vec<Option<(Attempt, Duration)>> = planned.iter().map(|_| None).collect();
     let mut queued = planned
         .iter()
         .enumerate()
         .filter_map(|(at, plan)| match plan {
             Planned::Command { run, .. } => Some((at, run.clone())),
-            Planned::Already(_) => None,
+            Planned::Already(_) | Planned::Blocked { .. } => None,
         });
     let worktree = worktree.to_path_buf();
     // Refilled as each one finishes rather than run in batches of four: a batch
@@ -203,6 +343,17 @@ pub(crate) async fn ran(
             Planned::Already(observed) => Completed {
                 observed,
                 printed: None,
+                took: Duration::ZERO,
+            },
+            // **The prerequisite's output, filed under the Check's name.** It
+            // is the only output there is — the Check ran nothing — and the
+            // Check's row is where a person goes looking for why it did not
+            // pass. `took` is zero because this Check took nothing; the
+            // prerequisite's own seconds are the batch's and are not one
+            // Check's to claim.
+            Planned::Blocked { name, observed } => Completed {
+                observed,
+                printed: not_met.as_ref().map(|failed| (name, failed.output.clone())),
                 took: Duration::ZERO,
             },
             Planned::Command { name, run } => match done[at].take() {

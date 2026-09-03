@@ -630,12 +630,14 @@ fn a_resolved_workflow_carries_the_command_not_the_name() {
                 run: "cargo build --workspace".to_string(),
                 expect_exit_code: 0,
                 when: None,
+                requires: Vec::new(),
             },
             ResolvedCheck::ManifestCheck {
                 name: "test".to_string(),
                 run: "cargo nextest run --workspace".to_string(),
                 expect_exit_code: 0,
                 when: None,
+                requires: Vec::new(),
             },
             ResolvedCheck::DiffNonempty,
         ]
