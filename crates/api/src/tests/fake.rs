@@ -19,7 +19,7 @@ use ipc::{
     Actor, CallArguments, ChangesRequested, Event, FleetCapacity, Instant, JobCreated, JobDetail,
     JobDiff, JobEvidence, JobForgotten, JobHistory, JobId, JobList, JobStateChanged, JobSummary,
     ManifestId, ManifestSummary, ModelChoices, Origin, ProposeJob, Redispatched, UnreadableJob,
-    Urgency, WorkflowId, WorkflowSummary, WorktreeReclaimed,
+    Urgency, WorkflowId, WorkflowSummary, WorktreeReclaimed, WorktreesHeld,
 };
 
 use super::shapes;
@@ -54,6 +54,10 @@ pub struct FakeDaemon {
     /// Every report filed, in filing order, so a test can assert that a
     /// refused filing left none behind.
     pub reports: Mutex<Vec<ipc::Report>>,
+    /// What `list_worktrees` answers with. Set by a test, because nothing here
+    /// has a repository to read a checkout out of — the derivation is Fleet's
+    /// and the route only carries it.
+    pub held: Mutex<Vec<ipc::WorktreeHeld>>,
     /// When set, every call answers with a fault. The stream closing on a
     /// daemon that cannot answer is a behaviour worth a test.
     pub mute: Mutex<bool>,
@@ -75,6 +79,7 @@ impl FakeDaemon {
             dispatched: Mutex::new(Vec::new()),
             checked: AtomicU64::new(0),
             reports: Mutex::new(Vec::new()),
+            held: Mutex::new(Vec::new()),
             mute: Mutex::new(false),
         }
     }
@@ -602,6 +607,12 @@ impl Daemon for FakeDaemon {
     /// Newest first, and the two counts a fake can honestly answer. It knows
     /// nothing about recorded refusals, which are rows in a store this has
     /// none of, so that count is zero rather than invented.
+    async fn list_worktrees(&self) -> Result<WorktreesHeld, Refusal> {
+        Ok(WorktreesHeld {
+            worktrees: self.held.lock().expect("not poisoned").clone(),
+        })
+    }
+
     async fn list_reports(&self) -> Result<ipc::ReportList, Refusal> {
         let reports = self.reports.lock().expect("not poisoned");
         let disputed = |claim: ipc::Claim| {

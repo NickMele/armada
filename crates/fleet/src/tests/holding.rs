@@ -12,12 +12,15 @@
 
 use std::time::Duration;
 
+use axum::http::StatusCode;
 use core_model::{Actor, JobStatus, PilotReason, Target};
+use ipc::RunId;
 use testkit::{FakeVcs, FakeWorkProduct};
 
 use crate::daemon::Fleet;
 use crate::holding::{Held, Reclaiming};
 use crate::tests::daemon::{a_proposal, fittings};
+use crate::tests::http::call;
 use crate::tests::reclaim::{a_finished_job, a_repository, a_worktree_for, branches, commit, git};
 use crate::tests::tmp::TempDir;
 
@@ -328,4 +331,86 @@ async fn a_worktree_failing_two_tests_carries_both_reasons() {
         [Held::Unmerged { .. }, Held::Uncommitted { .. }]
     ));
     assert!(!held[0].provably_safe());
+}
+
+/// The list over HTTP, which is what `#385` reads.
+///
+/// **The row names the checkout and the branch.** A person deciding goes and
+/// looks at a directory, and a branch is what the commits are recoverable from
+/// afterwards — a row carrying a ULID and a reason would leave them to derive
+/// both by hand from a scheme only Fleet knows.
+#[tokio::test]
+async fn the_held_list_names_the_checkout_the_branch_and_why() {
+    let home = TempDir::new();
+    let fleet = a_fleet_sweeping_every_turn(&home);
+    a_repository(&home);
+    let job_id = a_finished_job(&fleet, "read me over the wire").await;
+    a_worktree_for(&home, job_id.as_str());
+    a_commit_nobody_has_taken(&home, &job_id);
+
+    let events = fleet.events();
+    let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
+    let (status, body) = call(&app, "GET", "/worktrees", "").await;
+    assert_eq!(status, StatusCode::OK);
+
+    let answer: ipc::WorktreesHeld =
+        ipc::decode("what fleet is holding", &body).expect("the answer decodes");
+    let one = &answer.worktrees[0];
+    assert_eq!(one.job_id.as_str(), job_id.as_str());
+    assert_eq!(one.job_title, "read me over the wire");
+    assert!(
+        one.path.ends_with(job_id.as_str()),
+        "the checkout a person goes and looks at: {}",
+        one.path
+    );
+    assert!(one.branch.contains(job_id.as_str()), "{}", one.branch);
+    assert!(!one.provably_safe());
+    assert!(matches!(
+        one.held.as_slice(),
+        [ipc::HeldReason::Unmerged { base, commits, tip }]
+            if base == "main" && *commits == 1 && !tip.is_empty()
+    ));
+}
+
+/// **A piloted Job's checkout is not on the wire at all** — `#367`.
+///
+/// Held by Fleet, absent from the answer, and absent rather than sent with a
+/// flag a client is trusted to honour: an act that is drawn is an act somebody
+/// eventually clicks, and a person is standing in that directory.
+#[tokio::test]
+async fn a_piloted_jobs_checkout_is_not_served_at_all() {
+    let home = TempDir::new();
+    let fleet = a_fleet_sweeping_every_turn(&home);
+    a_repository(&home);
+    let job = fleet
+        .propose(a_proposal("somebody is in this one"))
+        .await
+        .expect("a Job at the gate");
+    a_worktree_for(&home, job.id().as_str());
+    let running = fleet.approve(job.id()).await.expect("running");
+    fleet
+        .move_job(
+            &running,
+            Target::Piloted(PilotReason::TakeOver),
+            Actor::Human,
+        )
+        .await
+        .expect("a person took it over");
+    assert_eq!(
+        fleet.worktrees_held().await.expect("the held list").len(),
+        1,
+        "Fleet is holding it, and knows why"
+    );
+
+    let events = fleet.events();
+    let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
+    let (_, body) = call(&app, "GET", "/worktrees", "").await;
+
+    let answer: ipc::WorktreesHeld =
+        ipc::decode("what fleet is holding", &body).expect("the answer decodes");
+    assert!(
+        answer.worktrees.is_empty(),
+        "and it is not offered: {:?}",
+        answer.worktrees
+    );
 }

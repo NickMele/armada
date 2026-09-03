@@ -96,9 +96,25 @@ pub enum Held {
 /// **An empty `held` is the whole of the safety claim.** A sweep acts on that
 /// and nothing else, so a test added to this module is a test the sweep starts
 /// applying with no second place to change.
+///
+/// **The checkout and the branch are carried, not left to be derived again.**
+/// [`Fleet::holding_of`] already holds the `WorktreeSpec` that produced them,
+/// and a caller that re-derived a path from a Job id would be the second
+/// derivation this module exists to avoid — the one that disagrees the day
+/// `WorktreeSpec` changes. `#385` draws both: a path is what a person goes and
+/// looks at, and a branch is what the commits are recoverable from.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Holding {
     pub job: JobId,
+    /// What the Job is called, and where it got to. **Read off the same Job
+    /// the tests were applied to**, so a row cannot describe one Job and be
+    /// held for another's reasons.
+    pub title: String,
+    pub status: JobStatus,
+    /// The checkout on disk, derived once.
+    pub path: String,
+    /// The branch the Job derived. Named even where it is already gone.
+    pub branch: String,
     /// Empty where every test passed.
     pub held: Vec<Held>,
 }
@@ -254,6 +270,10 @@ where
         }
         Some(Holding {
             job: job.id().clone(),
+            title: job.title().as_str().to_string(),
+            status: job.status(),
+            path: spec.worktree_path(),
+            branch: spec.branch(),
             held,
         })
     }

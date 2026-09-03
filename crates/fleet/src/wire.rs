@@ -12,9 +12,12 @@ use adapters::{BranchGone, Reclaimed, WorktreeGone};
 use core_model::Job;
 use ipc::mcp::NotRecorded;
 use ipc::{
-    CheckRun, DeclaredCheck, DeclaredJudge, Flagged, Judged, KeptDeliverable, ReclaimedBranch,
-    ReclaimedWorktree, StepFacts, StepId, Submitted, WorkflowStep, WorktreeReclaimed,
+    CheckRun, DeclaredCheck, DeclaredJudge, Flagged, HeldReason, Judged, KeptDeliverable,
+    ReclaimedBranch, ReclaimedWorktree, StepFacts, StepId, Submitted, WorkflowStep, WorktreeHeld,
+    WorktreeReclaimed,
 };
+
+use crate::holding::{Held, Holding};
 use store::{LoadJobError, Moved, RecordedEvent, Store};
 
 use crate::adrift::Adrift;
@@ -482,4 +485,56 @@ fn kept_for(
                 })
         })
         .collect()
+}
+
+/// One held worktree on the wire, reasons and all.
+///
+/// **`Held::Piloted` has no arm and cannot get one.** The caller drops a
+/// piloted Job before this is reached — `Holding::offerable` — so the variant
+/// is absent here rather than mapped to something a surface could render.
+/// `#367` is the reason, and the compiler is what keeps it: an arm added below
+/// would be a piloted worktree on the wire.
+pub(crate) fn worktree_held(holding: &Holding) -> WorktreeHeld {
+    WorktreeHeld {
+        job_id: ipc::JobId::from(&holding.job),
+        job_title: holding.title.clone(),
+        status: holding.status.into(),
+        path: holding.path.clone(),
+        branch: holding.branch.clone(),
+        held: holding.held.iter().filter_map(held_reason).collect(),
+    }
+}
+
+/// One reason, or `None` for the one that is never served.
+///
+/// `usize` becomes `u32` here rather than on the wire type: a commit count is a
+/// number a person reads, and `usize` is a pointer width that would spell
+/// itself differently on two machines serving the same protocol.
+fn held_reason(held: &Held) -> Option<HeldReason> {
+    Some(match held {
+        Held::Piloted => return None,
+        Held::NotTerminal { status } => HeldReason::NotTerminal {
+            status: (*status).into(),
+        },
+        Held::Unmerged { base, commits, tip } => HeldReason::Unmerged {
+            base: base.clone(),
+            commits: u32::try_from(*commits).unwrap_or(u32::MAX),
+            tip: tip.clone(),
+        },
+        Held::BaseUnanswered { why } => HeldReason::BaseUnanswered {
+            detail: why.clone(),
+        },
+        Held::Uncommitted { files } => HeldReason::Uncommitted {
+            files: files.clone(),
+        },
+        Held::Locked { reason } => HeldReason::Locked {
+            reason: reason.clone(),
+        },
+        Held::DependedOn { by } => HeldReason::DependedOn {
+            by: by.iter().map(ipc::JobId::from).collect(),
+        },
+        Held::Unreadable { why } => HeldReason::Unreadable {
+            detail: why.clone(),
+        },
+    })
 }
