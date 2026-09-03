@@ -12,6 +12,7 @@ import type {
   CallArguments,
   JobDetail,
   JobFilesChanged,
+  JobSummary,
   ManifestSummary,
   ModelChoices,
   Recorded,
@@ -213,6 +214,59 @@ export type Outcome =
   | { ok: false; why: "empty_note" }
   | { ok: false; why: "refused"; error: WireError }
   | { ok: false; why: "transport"; detail: string };
+
+/**
+ * What `proposeFromRequest` answered. **Not `Outcome`**, for two reasons that
+ * are both about what a person does next.
+ *
+ * One request can be several Jobs, and `Outcome` carries one optional `jobId`
+ * for the one act that mints a Job the caller did not name. A plan is every Job
+ * the request became, and approving one of several accepts a plan whose members
+ * each take their own approval in turn — a shape that carried a single id would
+ * make that unrepresentable.
+ *
+ * And the two refusals are not the same thing. **The request being declined and
+ * the call failing are different statuses because a person does different
+ * things about them** — one is said again differently or hand-entered through
+ * `proposeJob`, the other is simply asked again. `crates/ipc/operations.toml`
+ * is where that division is stated and `crates/fleet/src/refusing.rs` is where
+ * the two codes are declared apart so a client can honour it.
+ *
+ * Nothing here is a Job that is running. Every member is at
+ * `awaiting_approval`, exactly as `proposeJob` answers for one.
+ */
+export type Proposed =
+  /**
+   * Every Job the request became, in dependency order, already folded onto the
+   * board. Never empty on a success: Fleet answers 201 with at least one.
+   */
+  | { ok: true; jobs: JobSummary[] }
+  /**
+   * The request was read and no workflow fits. **No Job was created**, and
+   * `request` is what was sent, carried back off the error envelope's own
+   * field so what a person retypes is what they wrote, character for
+   * character.
+   *
+   * Not a fault and never a default: the resolved definition is frozen into
+   * the Job and becomes what the work is judged against, so a nearest fit
+   * would be the standard rather than a guess anybody could correct.
+   */
+  | { ok: false; why: "unresolved"; request: string; outcome: Outcome }
+  /**
+   * The call could not be made — the network, the quota, the timeout, or no
+   * answer at all. **This says nothing about the request**, which is why it is
+   * not the arm above: rendering an outage as "nothing fits" tells a person
+   * their request was refused when it was never read. Asking again is
+   * reasonable, and `request` is what to ask with.
+   */
+  | { ok: false; why: "faulted"; request: string; outcome: Outcome }
+  /**
+   * Nothing was proposed and neither of the two above says why: Bridge's own
+   * refusal before anything was sent, or a refusal of Fleet's that is neither
+   * of the named two. The outcome carries the whole of it, and the surface
+   * renders it the way it renders every other refusal.
+   */
+  | { ok: false; why: "refused"; outcome: Outcome };
 
 /**
  * What `clearTerminalJobs` answered. **Not `Outcome`**: there is no bulk

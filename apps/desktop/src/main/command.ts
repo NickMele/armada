@@ -17,7 +17,9 @@
 import type { BridgeState } from "../shared/bridge";
 import type { ClearOutcome, Draft, Outcome } from "@armada/protocol";
 import type { ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report } from "@armada/protocol";
+import type { Proposed } from "@armada/protocol";
 import { ask, isJobSummary, type Answer } from "./request";
+import { proposeFromRequest as propose } from "./proposing";
 import { decide, type Decision } from "./review";
 
 /**
@@ -184,6 +186,21 @@ export class JobCommands {
     if (answer.ok !== true) return answer.outcome;
     this.board.fold(answer.body as JobSummary);
     return { ok: true };
+  }
+
+  /**
+   * The other way a Job reaches the same gate: describe the work, and the Job
+   * proposer reads it and fills the workflow in.
+   *
+   * **Not `Outcome`, and not the shape `act` holds.** A plan is every Job the
+   * request became, so there is no one row to fold and no one id to hand back —
+   * and the request being declined and the call failing are different statuses
+   * because a person does different things about them. `Proposed` is both.
+   *
+   * `proposing.ts` is what it is, for the reason `decide` is `review.ts`'s.
+   */
+  async proposeFromRequest(request: string): Promise<Proposed> {
+    return propose(this.board, request);
   }
 
   // ------------------------------------------------------------ dispatching

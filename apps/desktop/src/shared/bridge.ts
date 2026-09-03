@@ -18,6 +18,7 @@ import type {
   Holdings,
   Observed,
   Outcome,
+  Proposed,
   ProtocolVersion,
   Reports,
   Skew,
@@ -166,6 +167,23 @@ export type BridgeApi = {
   state: () => Promise<BridgeState>;
   subscribe: (onState: (state: BridgeState) => void) => () => void;
   proposeJob: (draft: Draft) => Promise<Outcome>;
+  /**
+   * Describe the work and let the Job proposer decide what it is: which
+   * workflow, what to call it, and whether it is one Job or several.
+   *
+   * **The same gate as `proposeJob`, and this adds none.** Every Job comes back
+   * at `awaiting_approval` and each takes its own approval in turn — approving
+   * one of several accepts a plan and starts nothing else.
+   *
+   * `proposeJob` stays the override, not a fallback: a person who knows which
+   * workflow they want names it themselves and no model is asked.
+   *
+   * The two refusals are separate arms of `Proposed` because a person does
+   * different things about them — a request nothing fits is said again
+   * differently or hand-entered, and a call that could not be made is simply
+   * asked again.
+   */
+  proposeFromRequest: (request: string) => Promise<Proposed>;
   /**
    * Write pasted or picked bytes to a staging file before a Job exists —
    * there is no Job id yet to key storage on; one is minted at `propose`
@@ -412,6 +430,7 @@ export const CHANNELS = {
   state: "bridge:state",
   changed: "bridge:changed",
   proposeJob: "bridge:propose-job",
+  proposeFromRequest: "bridge:propose-from-request",
   stageAttachment: "bridge:stage-attachment",
   approveDispatch: "bridge:approve-dispatch",
   redispatchJob: "bridge:redispatch-job",
