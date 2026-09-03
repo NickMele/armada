@@ -164,3 +164,8 @@ export * from "./foundations/Tokens/Tokens";
 // preview drew it as one paragraph and every newline collapsed to a space —
 // #306.
 export * from "./compositions/DroneBrief/DroneBrief";
+
+// Dispatch a job by describing the work. The Job proposer answers the title,
+// the workflow and the split, so the form behind `Enter by hand` is the
+// override rather than the path.
+export * from "./compositions/DispatchRequest/DispatchRequest";
