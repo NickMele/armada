@@ -93,6 +93,12 @@ fn an_edit_reaches_the_manifest_fleet_is_already_holding() {
     assert_eq!(adopted.moved()[0].before, Some(300));
     assert_eq!(adopted.moved()[0].after, Some(90));
     assert!(adopted.at_restart().is_empty());
+    // The line a person reads on the daemon's console. It names the key as
+    // `armada.yml` spells it, so it can be searched for in the file it is about.
+    assert_eq!(
+        adopted.moved()[0].to_string(),
+        "drone.quiet_after_seconds 300 -> 90"
+    );
 }
 
 #[test]
@@ -121,6 +127,11 @@ fn a_key_deleted_from_the_file_falls_back_rather_than_keeping_its_last_number() 
     // the last number would make a deletion the one edit that cannot be made.
     assert_eq!(manifest.poke_limit(), None);
     assert_eq!(adopted.moved()[0].after, None);
+    // Spelled, because a blank there reads as a value nobody wrote.
+    assert_eq!(
+        adopted.moved()[0].to_string(),
+        "drone.poke_limit 2 -> unset"
+    );
 }
 
 #[test]
