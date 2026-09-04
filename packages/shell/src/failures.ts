@@ -14,15 +14,23 @@
 // broken: the variant is the builder below, and the declaration sits above it.
 //
 // The namespace and the argument for it are in `codes.ts` beside `ErrorCode`
-// in `@armada/components`, including why these do not join the manifest
-// `cargo xtask verify-error-codes` collects. **Nothing collects these**, so the
-// bound on a duplicate is that every one is declared in this file.
+// in `@armada/components`. **`cargo xtask verify-error-codes` collects these
+// too**, since `#345`: it reads both languages and fails on a duplicate within
+// either, so a second declaration of one code names both sites rather than
+// resting on somebody having read this file.
+//
+// **Each failure also says which class it is, beside the code and for the same
+// reason.** The class is a claim about Fleet's state, which nothing that draws
+// a notice can make — so `FailureNotice` passed `fault` as a literal and every
+// one of these drew red, including the two where Fleet is alive and restarting
+// it is the wrong move. #344.
 
 import { File } from "lucide-react";
 import type {
   BridgeCode,
   DebugField,
   DebugPayload,
+  ErrorClass,
   FailureDetail,
   FailureMachineValue,
 } from "@armada/components";
@@ -74,6 +82,15 @@ export type FailureFacts = Omit<DebugPayload, "at" | "code"> & {
 };
 
 export type Failure = {
+  /**
+   * Which of the two error classes this is. The rule and its argument are the
+   * error contract's; what it comes to here is that **degraded asserts the
+   * work is still happening and only the reading of it stopped**, so exactly
+   * the two connection states where Bridge verified the pid are degraded and
+   * everything else — every command, every refused read, every throw inside
+   * Bridge — is a fault. Each declaration below carries its own reasoning.
+   */
+  kind: ErrorClass;
   /** What broke, one sentence, in the app's voice. */
   headline: string;
   /** What to do. Never absent. */
@@ -175,16 +192,44 @@ function fleetRun(runId: string): FailureMachineValue[] {
   return [{ value: runId, copyValue: runId, meta: "Fleet run" }];
 }
 
-/** Fleet's runtime file named no process Bridge could connect to. */
+/**
+ * Fleet's runtime file named no process Bridge could connect to. **A fault**:
+ * no Fleet is running, so no Job is progressing and nothing becomes current on
+ * its own. The fix is the one a degraded notice must never send anybody to.
+ */
 const FLEET_NOT_RUNNING: BridgeCode = "bridge.fleet.not_running";
 
-/** Fleet's runtime file could not be read, so its liveness is unknown. */
+/**
+ * Fleet's runtime file could not be read, so its liveness is unknown.
+ *
+ * **A fault, and the one the rule has to work on.** It sits beside two degraded
+ * states and looks like them. Degraded asserts Fleet is alive, and here the
+ * read that would have established it failed — an unknown is not a claim, and
+ * drawing it as a stale view says wait for a daemon that may not exist.
+ */
 const FLEET_RUNTIME_FILE_REFUSED: BridgeCode = "bridge.fleet.runtime_file_refused";
 
-/** Fleet's process is alive and its socket has stopped answering. */
+/**
+ * Fleet's process is alive and its socket has stopped answering.
+ *
+ * **Degraded**, and the case the design system names by hand. The pid was
+ * verified, so Fleet is running and Jobs keep progressing; what stopped is
+ * Bridge's reading of them. This builder's own note has said so all along —
+ * "Jobs keep progressing either way" — while the notice above it drew red.
+ */
 const FLEET_UNREACHABLE: BridgeCode = "bridge.fleet.unreachable";
 
-/** Fleet speaks a protocol Bridge will not open a socket for. */
+/**
+ * Fleet speaks a protocol Bridge will not open a socket for.
+ *
+ * **Degraded.** The pid was verified and the socket answered with a version, so
+ * Fleet is alive and dispatching; Bridge declined to read it rather than failed
+ * to. Independent lifetimes are the point, so a person has a stale board rather
+ * than a stopped fleet.
+ *
+ * **Standing rather than self-clearing, which does not make it a fault.** The
+ * class is about whether the work is still happening, not about recovery.
+ */
 const FLEET_VERSION_SKEW: BridgeCode = "bridge.fleet.version_skew";
 
 /**
@@ -197,6 +242,11 @@ const FLEET_VERSION_SKEW: BridgeCode = "bridge.fleet.version_skew";
  * **The four runtime-file answers stay four.** Which one it was is the first
  * row of the fold, because only one of the four — running and silent — is
  * worth waiting on, and the other three need somebody to start Fleet.
+ *
+ * **This is the builder where both classes appear**, and the line falls exactly
+ * where the pid check falls: `unreachable` and `version_skew` are the two where
+ * Bridge verified the pid, so Fleet is known alive and only the reading has
+ * stopped. The other two draw red because Fleet is either absent or unproven.
  */
 export function fleetFailure(
   connection: Connection,
@@ -268,6 +318,7 @@ export function fleetFailure(
       }
       return {
         ...base,
+        kind: "fault",
         payload: facts(FLEET_NOT_RUNNING, absent),
         detailsLabel: "What the runtime file answered",
         details,
@@ -281,6 +332,7 @@ export function fleetFailure(
     case "runtime_file_refused":
       return {
         ...base,
+        kind: "fault",
         payload: facts(FLEET_RUNTIME_FILE_REFUSED, [
           { key: "why", value: connection.fault.why },
           { key: "runtime_file", value: connection.fault.path },
@@ -306,6 +358,7 @@ export function fleetFailure(
     case "unreachable":
       return {
         ...base,
+        kind: "degraded",
         payload: facts(FLEET_UNREACHABLE, [
           { key: "pid", value: String(connection.fleet.pid) },
           { key: "port", value: String(connection.fleet.port) },
@@ -325,6 +378,7 @@ export function fleetFailure(
     case "version_skew":
       return {
         ...base,
+        kind: "degraded",
         payload: facts(FLEET_VERSION_SKEW, [
           { key: "why", value: connection.why },
           // Not the tail's `fleet protocol`, and not always equal to it: the
@@ -408,6 +462,10 @@ export function rendererFailure(
   if (caught.stack !== null) details.push({ label: "Stack", value: caught.stack.trim() });
 
   return {
+    // **A fault, not the stale view it resembles.** Fleet is fine and Jobs are
+    // progressing, but what failed is Bridge's own act: this region will not
+    // draw on the next render either, and no waiting makes it current.
+    kind: "fault",
     headline: `Bridge could not draw ${region}`,
     // The exception's own words, not the headline: the headline names the
     // region in the app's voice, and a person reading this in an issue needs
@@ -476,6 +534,10 @@ const JOB_UNREADABLE: BridgeCode = "bridge.job.unreadable";
 export function jobFailure(row: UnreadableJob, bridge: BridgeIdentity): Failure {
   const named = row.job_id !== undefined;
   return {
+    // **A fault.** Fleet answered: this is a row Fleet refused, not a read
+    // Bridge missed, and it will be refused again next time. The board around
+    // it is current, which is the opposite of a stale view.
+    kind: "fault",
     headline: named ? `Job ${row.job_id} did not load` : "A job did not load",
     // **The one wire failure that is not a `WireError`.** `UnreadableJob`
     // carries a job id and a sentence, and no code, no run id and no chain, so
@@ -559,6 +621,10 @@ export function refusalFailure(error: WireError, bridge: BridgeIdentity): Failur
   }
 
   return {
+    // **A fault, read off the situation and not off the code.** A command was
+    // refused, so Armada did not do the thing — and the code here is opaque,
+    // so deriving a class from it would read a value the contract forbids.
+    kind: "fault",
     // The only one of the six with everything the contract guarantees. The
     // wire's `fields` keys pass through with their own spelling: they are what
     // somebody greps a log for, and rewriting them into prose would break the
@@ -611,6 +677,10 @@ export function uncaughtFailure(uncaught: Uncaught, bridge: BridgeIdentity): Fai
   if (uncaught.stack !== null) details.push({ label: "Stack", value: uncaught.stack.trim() });
 
   return {
+    // **A fault, both ways.** Something inside Bridge stopped halfway. Fleet's
+    // state is not what this is about and may be perfectly healthy — the
+    // process that failed is this one.
+    kind: "fault",
     // `from` leads the fields because it is the difference that matters: a
     // rejection is a command that never answered, and a throw is a handler
     // that stopped halfway. It is the same difference the code carries, and
@@ -672,6 +742,12 @@ export function transportFailure(
   const fault = outcome.fault;
   const asked = `${fault.method} ${fault.path}`;
   const base = {
+    // **All three are faults**, whatever Fleet's state turns out to be: what
+    // failed is a command rather than a view. The third of them proves Fleet
+    // alive and answering and is still one, because the act did not complete
+    // and no wait completes it. The degraded thing on this seam is the
+    // *connection*, which `fleetFailure` draws and `unreachable` points at.
+    kind: "fault" as const,
     detailsLabel: "What Bridge asked",
     values: machineLog(bridge),
   };

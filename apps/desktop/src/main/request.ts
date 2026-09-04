@@ -126,9 +126,9 @@ export async function ask(
  * A refusal, as the wire carries it, or `null` where the body is not one.
  *
  * **Nothing here mints a code.** A code's declaration lives beside the variant
- * that raises it and `cargo xtask verify-error-codes` collects them, so a code
- * invented in Bridge would be in no manifest and mean nothing to the lookup
- * Bridge does. A body that is not a `WireError` is reported as the transport
+ * that raises it and `cargo xtask verify-error-codes` collects them across both
+ * languages, so a code invented here would be collected from nowhere and mean
+ * nothing to the lookup Bridge does. A body that is not a `WireError` is reported as the transport
  * failure it is.
  */
 function refusal(text: string): WireError | null {

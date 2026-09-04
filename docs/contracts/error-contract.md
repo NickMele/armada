@@ -61,36 +61,52 @@ credential cannot be put into one without it failing to compile.
 ### Codes
 
 **Declaration stays beside the variant that raises it.** The set is closed
-by collection, not by authorship: `cargo xtask verify-error-codes` walks
-the workspace, fails on a duplicate, and emits a checked-in manifest.
-
-**That command is specified here and not built.** `xtask/src/main.rs` serves no
-such subcommand, so nothing collects, no manifest is checked in, and a duplicate
-fails nothing today. The rule above is the intent and holds; the mechanism for
-it does not exist yet.
+by collection, not by authorship: a `verify-foundations` rule walks both
+halves of the repository and fails on a code declared twice, naming every
+site that declares it.
 
 A central registry puts every code far from the failure it names and turns
 adding one into a merge conflict. Scanning gets the closure without the
 distance — the same shape the vendor-literal rule already uses.
 
+**What a declaration looks like is not specified here, it is observed.** The
+scan reads the form each half already uses, so neither had to change:
+
+| Half | Declared as | Found by |
+| --- | --- | --- |
+| Rust | `const NO_SUCH_JOB: &str = "fleet.no_such_job";` | the literal's shape |
+| Bridge | `const FLEET_UNREACHABLE: BridgeCode = "bridge.fleet.unreachable";` | the type annotation |
+
+Bridge's half is exact, because `BridgeCode` is a type. Rust's is a shape —
+two or more lowercase segments — because nothing types a code there, and a
+dotted lowercase string is also what a file name looks like. Four of those
+live in `crates/` and are excluded by their extension. **That exclusion is a
+guess, and it is the loud kind**: a wrong include arrives as a duplicate
+naming a file name, not as silence.
+
 ### A code's meaning
 
-**The meaning travels in the manifest.** Each code's one-line meaning is
-lifted from a doc comment beside its declaration into the generated,
-checked-in manifest. Changing what a code means therefore changes a
-tracked file, and shows up in a diff and in review like any other change.
+**The meaning is the doc comment beside the declaration, and no manifest is
+checked in.** This contract used to say the meaning was lifted into a
+generated, tracked file so that changing what a code means changed a diff.
+It already does: the doc comment is in a tracked file, one line above the
+declaration, and a generated copy of it moves in exactly the same commit.
+The copy would add no detection and one more way to be stale.
 
-This closes the only failure here that every other check misses. A code's
-meaning can shift under a stable name with byte-identical wire, an exact
-version match and every gate green — and the first person to notice is the
-one the wrong copy misled. Every other kind of drift in this contract has a
-mechanism; this one had a sentence.
+`cargo xtask verify-error-codes` prints the collection instead — every code,
+its site, and its one line — computed on demand. **The listing is the
+manifest, and it cannot go out of date because it is never written down.**
 
-It also settles where this page sits: **the manifest is the record, and
-this page is the explanation.** Two alternatives rejected — a stated
-convention against repurposing, honest about being unenforceable; and
-leaving it until a code first needs to change, which decides it under
-pressure.
+Two alternatives rejected. A stated convention against repurposing, honest
+about being unenforceable, is what this replaces and is weaker than a
+comment a reviewer sees in the diff. Checking in the listing was rejected on
+the argument above and on what this repository has already found out about
+generated files nobody reads — see #468.
+
+**The residual risk is named rather than closed.** A meaning can still shift
+under a stable name if somebody edits the doc comment and the reviewer waves
+it through; nothing here makes that impossible. What the manifest would have
+added is a second place for the same reviewer to miss it.
 
 ### The wire
 
@@ -177,16 +193,22 @@ lines of boilerplate first.**
 
 ### Where the code check lives
 
-`verify-error-codes` stands alone rather than folding into the protocol
-check.
+**A rule in `verify-foundations`, and `cargo xtask verify-error-codes` runs
+that same rule alone.** Two doors to one check, the way `verify-tokens` is
+also a `verify-foundations` rule.
 
-Folding would couple it to a toolchain it does not need: the protocol
-check requires the TypeScript codegen chain, so a contributor adding an
-error code in Rust would need the whole front end installed to find out
-they had duplicated a string. And the failure would read *protocol is
-stale* when the actual fault is two variants claiming one code. The cost is
-one more command in CI. **A check that names its own failure is worth more
-than a shorter list of checks.**
+This page used to say the check stood alone, and the argument it stood on
+was about the *protocol* check: folding into that one would couple a
+contributor adding a Rust code to the whole TypeScript codegen chain, and
+the failure would read *protocol is stale* when the fault is two variants
+claiming one code. Both halves of that argument survive and neither points
+at `verify-foundations`, which builds nothing, needs no toolchain and prints
+each rule under its own name — so the failure still reads *one code, one
+failure* and not something else.
+
+What changed the answer is that a command outside the gate is a command
+nobody runs. **A check that names its own failure is worth more than a
+shorter list of checks; a check nothing invokes is worth nothing at all.**
 
 ### Version skew
 
@@ -201,9 +223,9 @@ event to it, and both render.
 
 ## What the wire always carries
 
-Bridge falls back to these when it meets an unknown code — which is every
-code today, since the set does not exist yet. **The fallback only works if
-these are guaranteed.**
+Bridge falls back to these when it meets an unknown code, and every code it
+meets is unknown: it looks one up or falls back, and never matches
+exhaustively. **The fallback only works if these are guaranteed.**
 
 | Field | Present | Why it is here |
 | --- | --- | --- |
@@ -227,6 +249,48 @@ placement — and not the colour either: there is one error red, and the
 [Design System](design-system.md) contract's error treatment says what
 separates a fault from a degraded condition.
 
+### Which class a failure is
+
+**The class is a claim about Fleet's state, not about how serious the
+failure is.** A fault is Armada unable to do the thing; degraded is Armada
+unable to refresh what it shows. **Degraded therefore asserts two things at
+once — the work is still happening, and only the reading of it stopped** —
+and a failure that cannot assert both is a fault.
+
+**Two questions decide it, and neither is "how bad is this".**
+
+| Ask | Degraded | Fault |
+| --- | --- | --- |
+| Is the work still going? | Yes, and Bridge knows it | No, or Bridge does not know |
+| What failed? | A reading | An act |
+
+**"Bridge does not know" is a fault.** An unknown is not a claim, and
+drawing one as a stale view sends somebody to wait for a daemon that may not
+exist. This is what separates a runtime file Bridge could not read from a
+socket that has gone silent: they look alike and only the second one
+established that Fleet is alive.
+
+**Whether it clears on its own decides nothing.** Version skew never
+resolves without somebody acting and is degraded, because Jobs progress
+throughout it. A command that timed out may well have been carried out and
+is a fault, because what failed was an act.
+
+**The class is stated by the failure, never by what renders it.** Only the
+thing that observed the failure knows Fleet's state, and a component that
+mints the class has to guess — which is how every Bridge failure came to
+draw as a fault, including the two where restarting Fleet is the wrong move.
+It sits beside the code, in `packages/shell/src/failures.ts`, and carries
+its argument there. See #344.
+
+**It is never derived from the code.** The one code Bridge does not mint is
+opaque to it — looked up, never parsed — so a lookup would read a value this
+contract forbids Bridge to read.
+
+**It is not a payload field.** What a person quotes is what crossed the
+wire plus what Bridge appends about itself; the class is Bridge's reading of
+a situation the payload already describes, and a row for it would be a
+second spelling of `connection`.
+
 ### What a person quotes
 
 **The payload is one artifact and one format.** Formatted text, aligned
@@ -243,13 +307,17 @@ and shows it always, so a reader meeting a payload without one cannot tell
 whether the failure carried none or whether the paste was cut short, and the
 payload is read away from the screen that would have answered that.
 
-**Bridge mints a code for each of its own faults.** Only one of the failures
-Bridge draws crosses the wire that guarantees one, and the code is what
-separates an error from a failed Job. See #228.
+**Bridge mints a code for each of its own failures.** Only one of the
+failures Bridge draws crosses the wire that guarantees one, and the code is
+what separates an error from a failed Job. See #228.
 
 **A Bridge code is declared beside the builder that raises it**, in
 `packages/shell/src/failures.ts`, and is namespaced `bridge.`. The prefix keeps
-the Rust set and the Bridge set disjoint without a collector spanning both.
+the Rust set and the Bridge set disjoint without a collector spanning both —
+which is why the collection above may check each half against itself and
+decide nothing about the other. A Rust code that took the prefix fails, since
+it is the one thing that would make that reading wrong. The failure's class is
+declared in the same place, for the same reason.
 
 **`none` is a fact, not a minted code.** No failure Bridge draws renders it; it
 is what a payload assembled outside those builders shows.
