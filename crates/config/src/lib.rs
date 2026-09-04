@@ -20,12 +20,9 @@
 //! as an untyped value rather than deserialized into a struct —
 //! [`yaml`](mod@yaml) holds why a derive could not carry the refusals.
 //!
-//! **Nothing here reads a clock.** Parsing and validation are pure: no mtime
-//! check, no staleness window, no cache expiry. A Manifest is as fresh as the
-//! last time somebody read it, and *when* it is read again is decided in
-//! `crates/armada/src/watching.rs` rather than here — [`live`](mod@live) says
-//! only which of its keys a re-read is allowed to move, and hands out the one
-//! handle that can move them.
+//! **Nothing here reads a clock.** No mtime check, no staleness window, no
+//! cache expiry: *when* a Manifest is read again is `armada::watching`'s, and
+//! [`live`](mod@live) says only which keys a re-read may move.
 
 mod error;
 mod judge;

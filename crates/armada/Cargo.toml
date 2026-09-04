@@ -42,3 +42,8 @@ notify = { version = "8", default-features = false, features = ["macos_fsevent"]
 # Recorded as a deviation rather than followed silently.
 [dev-dependencies]
 testkit = { path = "../testkit" }
+# `test-util` only, and only for `src/tests/watching.rs`: the debounce is a
+# window measured in seconds, and a test that waited one would be a test
+# nobody runs. Paused time advances it when every task is idle, which is also
+# what makes the assertion exact rather than a race.
+tokio = { version = "1", features = ["test-util"] }
