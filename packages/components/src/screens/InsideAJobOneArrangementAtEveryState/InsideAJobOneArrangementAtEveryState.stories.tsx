@@ -568,6 +568,17 @@ export const NoDroneYet: Story = {
  * **What the wire does not carry, said where it would have gone.** A hole that
  * names its cause is a finding; one that reads "coming soon" is not — and a
  * region that closes up reads as a screen that is finished.
+ *
+ * **The panel stays and says why it is empty, rather than being taken off the
+ * screen.** Every other region here names its own cause — the run, the paths,
+ * the brief, the step — and the one that vanished would be the only region a
+ * reader could not account for. It is also the region a person came to this
+ * screen for, since it is the one that answers *is this working*.
+ *
+ * **What it must not do is offer to ask.** Every reading on it is Fleet's, so
+ * a Fleet that did not answer leaves nothing to ask, and `Look now` over
+ * "Looking costs no model call" was a live control pointed at the silence.
+ * #462.
  */
 export const NothingServesTheStep: Story = {
   render: () => (
@@ -577,12 +588,7 @@ export const NothingServesTheStep: Story = {
         run={[]}
         runAbsent="Fleet did not answer for this Job, so its steps are unknown."
         machine={
-          <JobResources
-            reading={null}
-            note="Fleet did not answer for this Job, so nothing here can say what it holds."
-            examined={null}
-            onExamine={nothingPressedYet}
-          />
+          <JobResources reading={null} examined={null} unreachable onExamine={nothingPressedYet} />
         }
         where={undefined}
         whereAbsent="Nothing serves this Job's paths, and no branch exists yet."
@@ -593,4 +599,10 @@ export const NothingServesTheStep: Story = {
       />
     </div>
   ),
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByText(/Fleet is not answering, so there is nothing to ask/),
+    ).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: /Look now/ })).toBeNull();
+  },
 };

@@ -191,12 +191,44 @@ export const LookingNow: Story = {
  * **Nothing has been read.** Not the same as a job holding nothing, which is
  * the distinction the whole panel turns on — so the note says which rather than
  * drawing an empty table.
+ *
+ * Fleet is answering here and this one read did not come back, so the act
+ * stays: another attempt is a reasonable move.
  */
 export const NothingHasBeenRead: Story = {
   args: {
     reading: null,
-    note: "Fleet is not connected.",
+    note: "Fleet did not answer, so what this job holds is unknown.",
     examined: null,
     onExamine: () => {},
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("button", { name: /Look now/ })).toBeVisible();
+  },
+};
+
+/**
+ * **Fleet is the thing that did not answer, so there is nothing to ask.** The
+ * act is gone rather than greyed: it asks Fleet, and pressing it could only
+ * ask the thing that is silent. A disabled button with no sentence beside it
+ * is the same dead end drawn quieter, which is what this state was before.
+ *
+ * **Degraded and not a fault.** Amber, no red, because restarting Fleet is the
+ * wrong move when the process is alive and only the connection stopped — and
+ * the status bar is the one surface that says which of the two this is.
+ *
+ * **Not `lookFailed`.** That says one attempt did not come back, which invites
+ * another. This says attempts are not the shape of the problem.
+ */
+export const ThereIsNothingToAsk: Story = {
+  args: { reading: null, examined: null, unreachable: true, onExamine: () => {} },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByText(/Fleet is not answering, so there is nothing to ask/),
+    ).toBeVisible();
+    await expect(canvas.getByText(/Nothing here is a reading of this job/)).toBeVisible();
+    // The whole point: no control that asks Fleet, disabled or otherwise.
+    await expect(canvas.queryByRole("button", { name: /Look now/ })).toBeNull();
+    await expect(canvas.queryByText(/Looking costs no model call/)).toBeNull();
   },
 };

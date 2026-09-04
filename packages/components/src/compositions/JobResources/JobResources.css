@@ -46,6 +46,35 @@
   color: var(--fg-muted);
 }
 
+/* Fleet is not there to ask. The DEGRADED treatment and not the error one:
+   an unreachable Fleet is Armada unable to refresh what it shows, not Armada
+   unable to do the thing, and a red edge here is what would send somebody to
+   restart a process that is running.
+
+   The edge alone would not carry it. This card already draws a fault edge on
+   the sentence below, so the two would differ by a pixel of width and nothing
+   else — the amber dot is what tells them apart at a glance, and telling them
+   apart is the whole reason the contract gives degraded a dot at all. */
+.armada-holds__verdict[data-degraded] {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding-inline-start: var(--space-3);
+  border-inline-start: var(--degraded-edge) solid var(--degraded);
+  color: var(--text-body);
+}
+
+/* On the first line's optical centre rather than the block's: a 6px dot in a
+   22px line box sits 8px down, which is one spacing step exactly. */
+.armada-holds__dot {
+  flex: none;
+  width: var(--dot);
+  height: var(--dot);
+  margin-block-start: var(--space-2);
+  border-radius: 50%;
+  background: var(--degraded-dot);
+}
+
 .armada-holds__looks {
   display: flex;
   flex-direction: column;

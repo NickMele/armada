@@ -29,6 +29,13 @@ import { Button } from "../../primitives/Button/Button";
  * a second reason to exist — seventy-four worktrees once took 220 GB and three
  * agents died at zero bytes free — and it is the one number here a person acts
  * on directly.
+ *
+ * **The act is not offered where Fleet is the thing that did not answer.**
+ * Every reading here is Fleet's, and the button asks Fleet for one, so a Fleet
+ * that is not there leaves nothing to ask — `unreachable`. Drawn as an
+ * unpressed panel it read "Nobody has asked whether this job is working" over
+ * a live control, which is the opposite of what was true, and a disabled
+ * control with no sentence beside it is the same dead end drawn quieter.
  */
 export type JobResourcesProps = {
   /**
@@ -48,6 +55,21 @@ export type JobResourcesProps = {
   looking?: boolean;
   /** Why the last look failed, where it did. Drawn instead of a finding. */
   lookFailed?: string;
+  /**
+   * Fleet is not there to ask. **The act is not drawn at all**, and the panel
+   * says so rather than leaving a dead control on screen.
+   *
+   * **Not `lookFailed`, and the difference is what to do next.** A failed look
+   * is one attempt that did not come back, which invites another; this says
+   * attempts are not the shape of the problem. The caller decides it from what
+   * the failure was, never from the fact that something failed — a read Fleet
+   * refused or answered late is a read worth sending again.
+   *
+   * **A boolean rather than a sentence**, because the sentence is fixed copy
+   * and belongs to one producer. Which Fleet state this is, and what to do
+   * about it, is the status bar's to say on every surface.
+   */
+  unreachable?: boolean;
   onExamine: () => void;
 };
 
@@ -58,22 +80,36 @@ export function JobResources({
   examined,
   looking = false,
   lookFailed,
+  unreachable = false,
   onExamine,
 }: JobResourcesProps) {
   return (
     <section className="armada-holds">
       <div className="armada-holds__head">
-        <Headline examined={examined} looking={looking} lookFailed={lookFailed} />
-        <Button size="sm" onClick={onExamine} disabled={looking}>
-          <Search size={12} strokeWidth={2} aria-hidden="true" />
-          {looking ? "Looking" : "Look now"}
-        </Button>
+        <Headline
+          examined={examined}
+          looking={looking}
+          lookFailed={lookFailed}
+          unreachable={unreachable}
+        />
+        {/* No act where there is nothing to ask. **Absent rather than
+            disabled**: a greyed control still says an act exists here and puts
+            the reason on a person to work out, and this one has a reason worth
+            reading. */}
+        {unreachable ? null : (
+          <Button size="sm" onClick={onExamine} disabled={looking}>
+            <Search size={12} strokeWidth={2} aria-hidden="true" />
+            {looking ? "Looking" : "Look now"}
+          </Button>
+        )}
       </div>
 
       {examined === null ? null : <Looks looks={examined.looks} />}
 
       {reading === null ? (
-        <p className="armada-holds__note">{note ?? "Nothing has been read yet."}</p>
+        <p className="armada-holds__note">
+          {unreachable ? NOT_A_READING : (note ?? "Nothing has been read yet.")}
+        </p>
       ) : (
         <>
           <Processes reading={reading} examined={examined} />
@@ -101,11 +137,24 @@ function Headline({
   examined,
   looking,
   lookFailed,
+  unreachable,
 }: {
   examined: JobExamined | null;
   looking: boolean;
   lookFailed?: string;
+  unreachable: boolean;
 }) {
+  // Ahead of every other arm, including a look still in flight and a finding
+  // from before. Both of those are claims about the job; this is the reason
+  // there can be no claim, and it outranks a stale one.
+  if (unreachable) {
+    return (
+      <p className="armada-holds__verdict" data-degraded>
+        <span className="armada-holds__dot" aria-hidden="true" />
+        {NOTHING_TO_ASK}
+      </p>
+    );
+  }
   if (lookFailed !== undefined) {
     return <p className="armada-holds__verdict" data-found="not_working">{lookFailed}</p>;
   }
@@ -125,6 +174,29 @@ function Headline({
     </p>
   );
 }
+
+/**
+ * What the panel says when Fleet is what did not answer.
+ *
+ * **It names Fleet as the subject, because the alternative reading is the one
+ * this panel exists to make loud.** A job that holds nothing is a real answer
+ * and reads as one; this is the panel having nothing to report, and a sentence
+ * that did not say which would report a silent connection as a silent job.
+ *
+ * **It does not repeat the status bar.** Fleet not running and Fleet up and
+ * not answering are two different things to do, the bar names which on every
+ * surface, and a second copy here would be the one that goes stale.
+ */
+const NOTHING_TO_ASK = "Fleet is not answering, so there is nothing to ask.";
+
+/**
+ * What stands in for the reading, and it is not a reading.
+ *
+ * **Unknown rather than absent**, said out loud, because everything else on
+ * this panel is a figure and an empty panel reads as a job holding nothing.
+ */
+const NOT_A_READING =
+  "Nothing here is a reading of this job. The status bar names which Fleet state this is and what to do.";
 
 /**
  * The three findings, said once.
