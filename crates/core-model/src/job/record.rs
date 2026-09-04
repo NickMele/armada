@@ -390,6 +390,11 @@ impl Job {
     /// is absent because it is unrepresentable — [`StepTarget`] names no state
     /// a step may not be moved to.
     ///
+    /// **A loop return is the one move that takes the cursor backwards**, and
+    /// it is the routed-*to* step's: the next Drone goes where the work goes.
+    /// The emitting step is not moved by this call, and what its own row does
+    /// on a return is undecided — see `workflowdef-fields.toml`.
+    ///
     /// **Entering `running` is what moves `current_step_id`, and nothing
     /// clears it.** `job-fields.toml` says the nested machine is "frozen
     /// otherwise, never cleared, still rendered", so a Job that advanced or
@@ -426,7 +431,7 @@ impl Job {
         );
         let mut job = self.clone();
         job.steps[index] = self.steps[index].moved_to(&to, at);
-        if matches!(to, StepTarget::Running) {
+        if to.begins_a_run() {
             job.current_step_id = Some(step_id.clone());
         }
         Ok(StepTransitioned { job, event })

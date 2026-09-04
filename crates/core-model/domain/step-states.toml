@@ -32,7 +32,11 @@
 meaning = "The step passed its advance gate"
 seen_under = ["awaiting_approval", "awaiting_attestation", "awaiting_repair", "awaiting_review", "completed_failed", "completed_success", "escalated", "killed", "piloted", "queued", "rejected", "running", "superseded"]
 in_code = "Not yet"
-notes = "Reached a second way, from `stopped`, when a person overrules the gate that refused it. The state is the same and the verdict is not: an overridden step keeps `failed(<trigger>)`, so a step the gate cleared and a step a person cleared over the gate are told apart by the pair and never by the state alone."
+notes = """
+Reached a second way, from `stopped`, when a person overrules the gate that refused it. The state is the same and the verdict is not: an overridden step keeps `failed(<trigger>)`, so a step the gate cleared and a step a person cleared over the gate are told apart by the pair and never by the state alone.
+
+**Left a second way too, and it is the only backward move in the machine.** `advanced -> running` is a loop return: a later step's `verdict_routing` sends the work back here and the step is redone as the workflow designed. Not a retry — nothing failed — so it moves `iteration_count` and never the retry budget. `StepTarget::Returned` is the only target that walks the edge; a plain dispatch across it is the redispatch `fleet::resume` refuses, and it is refused here too. #263.
+"""
 
 [states.awaiting_human]
 meaning = "The step's advance gate is a human gate, and it is open"

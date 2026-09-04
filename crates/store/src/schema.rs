@@ -145,8 +145,11 @@ CREATE TABLE jobs (
 ) STRICT;
 
 -- One row per step of the frozen WorkflowDef, written at Job creation. No
--- `retry_count` and no `iteration_count`: both arrive with retries, and a
--- counter that exists and never moves reads as a counter that is working.
+-- `retry_count` and no `iteration_count`, and now for the reason rather than
+-- the timing: `job_events` is append-only in the database itself and records
+-- every entry into `running` and the state it came from, so both counts are one
+-- read of it each — `store::attempt` and `store::iteration`. A column beside
+-- the log would be a second record of one fact and a pair that can disagree.
 CREATE TABLE job_steps (
     job_id       TEXT NOT NULL REFERENCES jobs(job_id),
     step_id      TEXT NOT NULL,
