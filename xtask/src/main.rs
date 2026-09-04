@@ -26,6 +26,7 @@ mod rules_bundled;
 mod rules_design;
 mod rules_docs;
 mod rules_enums;
+mod rules_errors;
 mod rules_icons;
 mod rules_layers;
 mod rules_node;
@@ -79,18 +80,19 @@ fn main() -> ExitCode {
             verify_tokens(write)
         }
         Some("verify-roadmap") => verify_roadmap(),
+        Some("verify-error-codes") => verify_error_codes(),
         Some("verify-docs") => {
             let write = std::env::args().any(|a| a == "--write");
             regenerate("verify-docs", docs::outputs, write)
         }
         Some(other) => {
             eprintln!("xtask: unknown task `{other}`");
-            eprintln!("tasks: verify-foundations, verify-tokens [--write], verify-docs [--write], verify-roadmap");
+            eprintln!("tasks: verify-foundations, verify-error-codes, verify-tokens [--write], verify-docs [--write], verify-roadmap");
             ExitCode::FAILURE
         }
         None => {
             eprintln!("xtask: no task given");
-            eprintln!("tasks: verify-foundations, verify-tokens [--write], verify-docs [--write], verify-roadmap");
+            eprintln!("tasks: verify-foundations, verify-error-codes, verify-tokens [--write], verify-docs [--write], verify-roadmap");
             ExitCode::FAILURE
         }
     }
@@ -128,6 +130,7 @@ fn verify_foundations() -> ExitCode {
         rules_stylesheets::every_stylesheet_reaches_the_sheet_the_app_loads(&root),
         rules_protocol::the_router_serves_what_the_inventory_names(&root),
         rules_protocol::version::the_version_and_its_generated_constant_agree(&root),
+        rules_errors::one_code_names_one_failure(&root),
         rules_enums::every_registry_key_is_a_variant(&root),
         rules_enums::edges::the_registry_and_the_edge_table_hold_the_same_edges(&root),
         rules_enums::reachability::every_status_declares_the_step_states_it_holds(&root),
@@ -136,9 +139,47 @@ fn verify_foundations() -> ExitCode {
         rules_vocabulary::the_generated_vocabulary_says_what_the_registries_say(&root),
     ];
 
+    render("verify-foundations", &reports)
+}
+
+/// The error-code collection, run alone and listed.
+///
+/// **The contract names this command, and `verify-foundations` runs the same
+/// rule.** Two doors to one check, the way `verify-tokens` is also
+/// `the_tokens_generate_what_is_checked_in`: the gate is what stops a duplicate
+/// landing, and this is what a person asks when they want the answer and not
+/// the other thirty-five rules.
+///
+/// **The listing is the manifest, computed rather than checked in.** The
+/// contract asks for a generated file so a code's meaning cannot shift under a
+/// stable name without a tracked diff — but the meaning is a doc comment in a
+/// tracked file already, and a generated copy of it moves in exactly the same
+/// commit. What the file would add is a way to be stale.
+fn verify_error_codes() -> ExitCode {
+    let root = repo_root();
+    let (rust, bridge) = rules_errors::collect(&root);
+    for declared in rust.iter().chain(&bridge) {
+        let site = declared.site();
+        match &declared.meaning {
+            Some(meaning) => println!("{:<34}  {site:<44}  {meaning}", declared.code),
+            None => println!("{:<34}  {site}", declared.code),
+        }
+    }
+    println!("\n{} Rust, {} Bridge", rust.len(), bridge.len());
+    render(
+        "verify-error-codes",
+        &[rules_errors::one_code_names_one_failure(&root)],
+    )
+}
+
+/// Print every rule's outcome, and fail on any `Fail`.
+///
+/// **Neither colour is the signal — the delta is**, which is why the red line
+/// says so rather than saying how to make it green.
+fn render(task: &str, reports: &[Report]) -> ExitCode {
     let mut out = String::new();
     let (mut fails, mut warns) = (0usize, 0usize);
-    for report in &reports {
+    for report in reports {
         let mark = if report.failed() { "FAIL" } else { "ok  " };
         let _ = writeln!(out, "{mark}  {}", report.rule);
         for finding in &report.findings {
@@ -157,14 +198,14 @@ fn verify_foundations() -> ExitCode {
     print!("{out}");
 
     if fails > 0 {
-        println!("\nverify-foundations: RED — {fails} failing, {warns} warning");
+        println!("\n{task}: RED — {fails} failing, {warns} warning");
         println!(
             "Red is a legitimate state. Each line above names its subject — read those, \
              and compare them against the baseline on main rather than to zero."
         );
         ExitCode::FAILURE
     } else {
-        println!("\nverify-foundations: green — {warns} warning");
+        println!("\n{task}: green — {warns} warning");
         ExitCode::SUCCESS
     }
 }

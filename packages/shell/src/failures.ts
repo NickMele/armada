@@ -14,9 +14,10 @@
 // broken: the variant is the builder below, and the declaration sits above it.
 //
 // The namespace and the argument for it are in `codes.ts` beside `ErrorCode`
-// in `@armada/components`, including why these do not join the manifest
-// `cargo xtask verify-error-codes` collects. **Nothing collects these**, so the
-// bound on a duplicate is that every one is declared in this file.
+// in `@armada/components`. **`cargo xtask verify-error-codes` collects these
+// too**, since `#345`: it reads both languages and fails on a duplicate within
+// either, so a second declaration of one code names both sites rather than
+// resting on somebody having read this file.
 //
 // **Each failure also says which class it is, beside the code and for the same
 // reason.** The class is a claim about Fleet's state, which nothing that draws
