@@ -43,6 +43,8 @@ import type {
 } from "@armada/protocol";
 import { refusalFailure } from "@armada/shell";
 
+export type { Proposed };
+
 /** What the surface draws, and what the app has to say somewhere else. */
 export type Answered = {
   proposal: Proposal;

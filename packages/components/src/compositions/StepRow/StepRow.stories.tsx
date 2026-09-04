@@ -209,6 +209,43 @@ export const Held: Story = {
 };
 
 /**
+ * A step worked more than once, each attempt carrying its own Checks, Judge
+ * and Verdict. **The defect this issue is #373**: before, a single flat set of
+ * gate rows was drawn beneath every attempt, so a stopped first attempt's
+ * Checks read as though they belonged to the running second one too. Nested,
+ * each attempt owns its own rows and a reader can tell which is live.
+ */
+export const Retried: Story = {
+  args: {
+    label: "Plan the change",
+    activity: "running",
+    status: "running",
+    elapsed: "4m 02s",
+    selected: true,
+    open: true,
+    factsId: "facts-retried",
+    onToggle: () => {},
+    onSelect: () => {},
+    facts: [
+      {
+        label: "Attempt 1",
+        value: <FactChip named="refused">stopped · gate_failure</FactChip>,
+        children: [
+          { label: "Checks", value: <FactChip named="failed">suite failed</FactChip> },
+          { label: "Judge", value: <FactChip named="passed">2 of 2 met</FactChip> },
+          { label: "Verdict", value: <FactChip named="failed">stopped at the gate</FactChip> },
+        ],
+      },
+      {
+        label: "Attempt 2",
+        value: <FactChip>running</FactChip>,
+        children: [{ label: "Checks", value: <FactChip>not run</FactChip> }],
+      },
+    ],
+  },
+};
+
+/**
  * A step waiting on a person. **Amber, never red, and no surface at all** —
  * everything mechanical cleared, so the Job is stopped and that is the
  * workflow working.
