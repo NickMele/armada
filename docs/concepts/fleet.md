@@ -142,9 +142,9 @@ An edge carries no strength of its own — every edge gates identically and the 
 
 **Rescope-and-respawn.** Fleet terminates the Drone, re-resolves configuration against the new declared set, and spawns a fresh Drone **on the same worktree and branch** — work survives, session context does not, since Facts and Evidence live on the Job rather than on the Drone.
 
-**Narrowing proceeds unchallenged; widening returns to the dispatch approval gate.** Why: one-by-one approval is the primary control above, and a Job must not reach further than it was authorised to one revision at a time.
+**Narrowing proceeds unchallenged. A person's widening returns to the dispatch approval gate; a Drone asking for one is answered by the [Judge](judge.md), and the Job never leaves `running`.** Why: scope is not a permission system — a declaration never bound writes, and it exists so that drift is detectable — so *does this belong to the step this Drone was given* is a Judge's question. A refusal escalates, which is where a person comes in. [Change a Job's scope](../journeys/change-a-jobs-scope.md).
 
-Known cost: permissions intersect across the declared set, so a respawned Drone can come back less capable than the one that asked to widen.
+Known cost: permissions intersect across the declared set, so a respawned Drone can come back less capable than the one that asked to widen. A judged widening respawns nothing, so the Drone that asked keeps its own toolset and the intersection reaches the next one.
 
 ### Job proposal
 

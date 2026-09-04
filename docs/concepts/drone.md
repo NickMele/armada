@@ -82,7 +82,7 @@ The injected toolset:
 - The project's allowlist
 - The [Manifest Commands registry](manifest.md)
 - A brokered secrets scope
-- A dedicated **Armada MCP server**. Four tools in every toolbelt — submit evidence, declare scope, run this step's Checks, ask a person a question — and a fifth, dispatch a Job, only where it was granted
+- A dedicated **Armada MCP server**. Every tool is in every toolbelt — submit evidence, declare scope, ask for a path the task's scope does not cover, run this step's Checks, ask a person a question — except dispatch a Job, which is granted rather than given
 
 All of that assumes one owning Manifest. For a Drone working a [Convoy](convoy.md), see the resolution rule below.
 
@@ -90,17 +90,21 @@ Discovery needs nothing from Armada for the MCP half: tools are self-describing,
 
 **Asking is the only one whose answer comes from a person, and it is given rather than granted.** A Drone that does not know had escalate — which stops the [Job](job.md) and holds its worktree until somebody moves it — and guess, which nothing prevents. Asking offers between two and four answers, a person picks one, and the answer arrives as a turn in the Drone's own session; the call returns a receipt rather than blocking, because a person's wait has no budget. **There is no free-text reply and no second question while one is outstanding**: a question is an event on a Job, asked once and answered once, and a Drone that could stack them would be holding a conversation. Where a person needs to say something the offered answers do not cover, Redirect is what carries their own words. A Drone waiting on an answer is *waiting* rather than silent, so neither the liveness vigil nor the thrashing chain measures it. It is in every toolbelt because asking costs nothing and creates nothing, unlike dispatch — and because the alternative to a denied `ask_question` is not a Drone that goes quiet but one that guesses.
 
+**Asking for a path is its opposite on both counts.** A [Judge](judge.md) answers it, and a model call has a budget a person's wait does not — so the call is held open like the Checks tool's and the answer is in the reply rather than in a later turn. What it may not do is narrow: the tool has no field for a path to hand back.
+
 **The brokered scope never includes a Git credential.** A Drone commits locally, inside its own worktree, and the Drone-facing `VCS` type has no push method at all. Push, pull request and merge are [Fleet](fleet.md)'s, using credentials Fleet holds directly.
 
 **A [Convoy](convoy.md) Drone's single worktree spans every declared Workspace's directory** — still one Drone, one worktree, one branch. Why: every declared Workspace descends from a single root `armada.yml`, so a Convoy is root-Manifest-scoped and cannot span repos, which is what makes one worktree spanning Workspaces ordinary git.
 
 Where a worktree and its log live on disk is in `../contracts/system-architecture.md` section 7. It is not configurable, and is derived rather than stored.
 
-**A worktree outlives every Drone that uses it.** It is made once, when the Job dispatches, and held until retention sweeps it — so it outlives each step's Drone by construction, as well as the two acts that end one early. On a scope revision Fleet terminates the Drone, re-resolves configuration against the new Manifest set, and spawns a fresh Drone **on the same worktree and branch** — the same path [Pilot](pilot.md)'s Restart Step and every ordinary step boundary use.
+**A worktree outlives every Drone that uses it.** It is made once, when the Job dispatches, and held until retention sweeps it — so it outlives each step's Drone by construction, as well as the two acts that end one early. On a **person's** scope revision Fleet terminates the Drone, re-resolves configuration against the new Manifest set, and spawns a fresh Drone **on the same worktree and branch** — the same path [Pilot](pilot.md)'s Restart Step and every ordinary step boundary use.
 
-**A narrowing proceeds unchallenged; a widening returns to the dispatch approval gate first**, so a respawn against a widened scope happens only after a person has approved that scope. What is lost is session context, not work: Facts and Evidence live on the [Job](job.md).
+**A Drone asking to widen costs none of that**, and it is the common case. It asks through a tool, a [Judge](judge.md) answers whether the paths belong to the step it was given, and a Judge call ends nothing — the Job is `running` throughout and the Drone keeps its session. Scope is not a permission system: a declaration never bound writes, and it exists so that drift is detectable, which makes *does this make sense for this step* a Judge's question rather than a person's. A refusal escalates, so a person is met by the exception rather than by every request. [Change a Job's scope](../journeys/change-a-jobs-scope.md) is the flow.
 
-**The resolution below runs again on a scope revision, and on nothing else.** A step boundary does not re-resolve it; that is the snapshot rule below, and a scope revision is the one re-snapshot because a person approved it. Since permissions intersect, a widened scope can only produce a narrower toolset than the Drone that asked for it — Commands excepted, since they union.
+**A narrowing proceeds unchallenged.** Nothing in a Drone's toolset reaches one — it hands back scope already held, so there is nothing to ask about — and it is a person's act.
+
+**The resolution below runs again on a respawn, and on nothing else.** A step boundary does not re-resolve it; that is the snapshot rule below. So a Drone whose Job widened mid-step **keeps the toolset it was spawned with**, and the intersection governs the next Drone rather than this one. Since permissions intersect, that is the safe direction: a widened scope can only produce a narrower toolset than the Drone working under the old one already holds — Commands excepted, since they union.
 
 **What Armada injects is not what the process ends up holding.** Measured against the live CLI: `--allowedTools` is a permission allowlist rather than a toolset — it removed none of the thirty built-in tools, and a spawned Drone inherited the operator's own MCP servers, plugins, subagents, skills and SessionStart hook. **Isolation is opt-out, and the opt-out is not** `--allowedTools`**.**
 

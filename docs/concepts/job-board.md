@@ -303,7 +303,7 @@ What this surface looks like is deliberately undecided; no journey has UI design
 
 ### What is called approval on a Job's path
 
-**Two distinct things are called approval on a Job's path, not three:** the dispatch gate here — which covers the Job proposer's proposal, the Job's own dispatch, and any mid-flight scope widening — and a workflow's own human gate over finished work.
+**Two distinct things are called approval on a Job's path, not three:** the dispatch gate here — which covers the Job proposer's proposal, the Job's own dispatch, and a person's own mid-flight scope widening — and a workflow's own human gate over finished work. A widening a Drone asks for reaches neither: it is the [Judge](judge.md)'s, and only a refusal puts a person back on the Job.
 
 ## Configuration
 
