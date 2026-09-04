@@ -304,6 +304,8 @@ Not `gate_failure` and not `check_timeout`, which are the two rows a reader reac
 
 Every path into it — a non-zero exit, a signal, a budget overrun, a program not on the path, a worktree that has gone — leaves the same fact behind, which is why the meaning names the worktree rather than any one of them. Which one it was is on the Job's log, with the `setup.requires` entry and the line that ran.
 
+**A sixth path, and it is the one where no command ran at all.** `crates/fleet/src/unattended.rs` raises this over a Job that is `running`, has never entered a step, and that nothing in Fleet is holding — which is what a dispatch cancelled mid-preparation leaves behind, because `approve_dispatch` runs the dispatch inside the HTTP request and a client that stops waiting takes the future with it. The meaning's first clause reads as a command that failed and this one never started; the row is still right, because the second clause is the part a person acts on — "nothing had been spawned and no step had been entered" — and it is exactly true, and the recourse is the same `redispatch`. A trigger meaning *abandoned* was the alternative and is refused on `#410`'s own argument in reverse: that split is warranted where two causes want opposite responses from a person, and these two want the same one. What separates them is only how Fleet found out, which the Job's log carries and a badge should not.
+
 Fires the default edge, `running -> escalated`: the Job is `running` by the time the worktree exists.
 
 `in_code` is empty rather than "Not yet" for `gate_undecided`'s reason — the row was authored here and has no source value to carry.
