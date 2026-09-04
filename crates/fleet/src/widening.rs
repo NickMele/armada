@@ -86,7 +86,13 @@ pub enum NotWidened {
     CouldNotAsk { cause: String },
     /// The Judge decided the paths do not belong to the step. The Job is
     /// escalated and a person has it.
-    Refused { because: String },
+    ///
+    /// `escalated` is whether the Job actually stopped. **It is a field rather
+    /// than an assumption**: the slot lock is not held across the call, so a
+    /// step that ended while the call was out has no `running` step to stop,
+    /// and a message telling the Drone a person is on it would be a message
+    /// nobody is behind.
+    Refused { because: String, escalated: bool },
     /// The decision could not be written down. **The Job's scope does not move
     /// on a record that did not land**: unlike a declaration, which the live
     /// check already holds, this *is* the record — a widening nothing wrote
@@ -142,10 +148,19 @@ impl fmt::Display for NotWidened {
                 "the request could not be looked at: {cause}. Nothing has \
                  changed and nothing has been recorded against you"
             ),
-            NotWidened::Refused { because } => write!(
+            NotWidened::Refused {
+                because,
+                escalated: true,
+            } => write!(
                 out,
                 "the request was not taken. {because}\n\nA person has been asked \
                  about it and this task is waiting on them. Stop here"
+            ),
+            NotWidened::Refused { because, .. } => write!(
+                out,
+                "the request was not taken. {because}\n\nWork inside the scope \
+                 you have, and say what you could not do in `not_claimed` when \
+                 you submit"
             ),
             NotWidened::NotKept { cause } => write!(
                 out,
@@ -342,23 +357,44 @@ where
         // makes restarting that step later a coherent act. Matched rather than
         // unwrapped, so a registry change reads as this going quiet in one
         // place instead of as a panic in the daemon.
-        if let Some(stops) = StepLevelTrigger::of(REFUSED_A_WIDENING) {
-            if let Ok(stopped) = self
-                .move_step(record, step, StepTarget::Stopped(stops))
-                .await
-            {
-                let _ = self
-                    .move_job(
-                        &stopped,
-                        Target::Escalated(REFUSED_A_WIDENING),
-                        Actor::Fleet,
-                    )
-                    .await;
-            }
-        }
         Err(NotWidened::Refused {
             because: because.to_string(),
+            escalated: self.stopped_for_a_refusal(record, step).await,
         })
+    }
+
+    /// Stop the step and escalate the Job, and answer whether it landed.
+    ///
+    /// **The step before the Job**, and the order is forced: the inner machine
+    /// is frozen beneath every status but `running`, so a step stopped after
+    /// the escalation would be refused and `last_verdict` would stay unwritten.
+    ///
+    /// `false` where either move was refused — a step that ended while the call
+    /// was out, or a Job somebody moved meanwhile. Nothing is retried and
+    /// nothing panics: what the Drone is told changes instead, because the one
+    /// thing worse than not escalating is telling it a person is on this.
+    async fn stopped_for_a_refusal(&self, record: &Job, step: &StepId) -> bool {
+        // `Some` for as long as `escalation-triggers.toml` types the row
+        // step-level, which is what lets it reach the step's `last_verdict` and
+        // makes restarting that step later a coherent act. Matched rather than
+        // unwrapped, so a registry change reads as this going quiet in one
+        // place instead of as a panic in the daemon.
+        let Some(stops) = StepLevelTrigger::of(REFUSED_A_WIDENING) else {
+            return false;
+        };
+        let Ok(stopped) = self
+            .move_step(record, step, StepTarget::Stopped(stops))
+            .await
+        else {
+            return false;
+        };
+        self.move_job(
+            &stopped,
+            Target::Escalated(REFUSED_A_WIDENING),
+            Actor::Fleet,
+        )
+        .await
+        .is_ok()
     }
 
     /// One entry of the scope history.
