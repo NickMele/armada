@@ -5,16 +5,18 @@ import { Check, CircleDashed, CircleDot, Eye, Flag, Power, RotateCw, X, type Luc
  * the step-activity vocabulary is written down.
  *
  * Step activity answers **where the work is**, one level below the Job badge.
- * Six of these are `job_steps.state` values; `failed` is not — a refusal lands
- * in `last_verdict`, and the split is the point: a step retrying after a
- * refusal is `running` in activity and `failed` in verdict at the same moment,
- * so one column cannot say both.
+ * Six of these are `job_steps.state` values; `failed` and `killed` are not — a
+ * refusal lands in `last_verdict`, and the split is the point: a step retrying
+ * after a refusal is `running` in activity and `failed` in verdict at the same
+ * moment, so one column cannot say both. `killed` is the Job's status showing
+ * through, freezing the step where it stood.
  *
  * The glyphs are borrowings, under `[conventions.step_activity_borrowing]` in
  * `packages/icons/icons.toml` — a step carries the Job glyph that means the
  * same thing one level down, because a rail row and the badge above it stating
- * the same claim must show the same mark. One value is not a borrowing: `flag`
- * for `stopped`, reserved to it alone.
+ * the same claim must show the same mark. Two values are not borrowings:
+ * `flag` for `stopped`, reserved to it alone, and `circle-dashed` for
+ * `not_started`, minted because every borrowing claims something happened.
  *
  * Hue lives in the stylesheet beside the geometry, keyed off `data-activity`.
  * That is the split `Badge` uses, and it keeps one file to read when a value's
@@ -42,16 +44,13 @@ export type StepActivity =
  * reaches this component.
  *
  * `awaiting_human` takes `eye`. The registry's borrowing convention lists
- * `eye` and does not list `clock`, and the hue agrees: `--step-waiting`
- * aliases `--status-awaiting-review`, whose badge is `eye`. `clock` is
- * `queued`'s badge and would state a claim the hue does not. The prose in
- * `docs/contracts/iconography.md` says `clock` here; the registry is the
- * authority on which glyph means what, so the registry wins. Reported.
+ * `eye` and refuses `clock`, and the hue agrees: `--step-waiting` aliases
+ * `--status-awaiting-review`, whose badge is `eye`. `clock` is `queued`'s
+ * badge and would state a claim the hue does not. Iconography's prose said
+ * `clock` here until the two were reconciled; both now say `eye`.
  *
  * `killed` borrows `power`, the Job badge for the same decision one level
- * down. The design system names a killed step and gives it no hue; no roster
- * names its glyph, so the borrowing convention is what sanctions this one.
- * Reported.
+ * down. It is on the roster, which was short of it while this file drew it.
  */
 const GLYPH: Record<StepActivity, LucideIcon> = {
   not_started: CircleDashed,

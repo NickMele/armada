@@ -35,8 +35,9 @@
 
 import type { Observed, Turn } from "@armada/protocol";
 import type { ChangedFile, CheckRun } from "@armada/protocol";
-import { CHECK_ADVANCES, CHECK_OUTCOME } from "@armada/components";
+import { CHECK_ADVANCES, CHECK_OUTCOME, SILENCE } from "@armada/components";
 import { clock } from "./duration";
+import { leading } from "./reading";
 
 /** Who wrote the line. The wire's own three, as `LogEntry` spells them. */
 export type LogActor = "armada" | "drone" | "fleet";
@@ -182,16 +183,22 @@ export function whyNotWatching(observed: Observed): string | undefined {
  * the socket opened. Anything else is a transport close, and it carries main's
  * own words rather than a word invented here — the reading `story.ts` gives an
  * unrecognised row.
+ *
+ * **Neither of the two is spelled here.** Both clauses come off `SILENCE`, the
+ * `enum-verbs.toml` rows the generated vocabulary carries, read the way the
+ * rail reads `STEP_STATE`. The registry spells them lowercase and without a
+ * stop because the sentence around a clause belongs to the surface saying it;
+ * that sentence is the capital and the full stop below, and it chooses,
+ * shortens and rewrites nothing. Change the row and this pane changes. #346.
+ *
+ * A row the registry has no verb for falls to the same shape a transport close
+ * takes — the wire spelling, which is recoverable, in place of copy invented
+ * at the call site. `readingOf` handles a missing verb the same way.
  */
 function whyItEnded(because: string): string {
-  switch (because) {
-    case "drone_ended":
-      return "The drone that was writing this transcript has finished.";
-    case "nothing_writing":
-      return "No drone is writing this job's transcript.";
-    default:
-      return `The transcript stopped: ${because}.`;
-  }
+  const clause = SILENCE[because]?.verb;
+  if (clause === undefined || clause === null) return `The transcript stopped: ${because}.`;
+  return `${leading(clause)}.`;
 }
 
 /**
@@ -324,12 +331,20 @@ function rowOf(row: Turn): LogRow {
     case "unrecognised":
       // A kind this Bridge has no case for. Drawn as itself rather than
       // dropped: a row nobody can read is a finding, and a missing row is not.
+      //
+      // **The kind is in the sentence, not only behind it.** Five of these
+      // arrived across four seconds carrying five different kinds and read as
+      // one error repeated, because the only thing telling them apart was a
+      // payload chip nobody opens five times. The wire's own word is the whole
+      // finding — what Fleet sent that this build cannot draw — so it goes
+      // where a person reads first. It stays on the payload too, so the row
+      // still opens to something. #379.
       return {
         id,
         at,
         actor,
         kind,
-        message: "A row this Bridge has no reading for",
+        message: `A row this Bridge has no reading for: ${saw.kind}`,
         payload: [{ text: saw.kind, named: "meta" }],
       };
     default:

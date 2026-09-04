@@ -71,3 +71,20 @@ export function readingOf(job: JobSummary): Reading {
   }
   return { as: "badge", status: base.badgeStatus, icon, verb };
 }
+
+/**
+ * A registry verb, opening a sentence.
+ *
+ * **The word is still the registry's.** `enum-verbs.toml` spells its verbs for
+ * the sentence they usually sit in the middle of; capitalising the first letter
+ * where one leads is presentation, not a second spelling — nothing here
+ * chooses, shortens or rewrites the word.
+ *
+ * Here rather than in the two files that call it, because both are in this
+ * package and a helper copied inside one package is the drift this module
+ * exists to argue against. `badge.ts` in `@armada/components` spells it a third
+ * time; that one is across a package boundary and stays. Reported.
+ */
+export function leading(verb: string): string {
+  return verb.charAt(0).toUpperCase() + verb.slice(1);
+}
