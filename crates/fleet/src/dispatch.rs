@@ -691,13 +691,21 @@ where
 
     /// The same move, said by somebody other than Fleet.
     ///
-    /// **Only one act needs it.** Every step move above follows from something
-    /// Fleet derived — a gate ruling, a dispatch, a reap — so Fleet is the
-    /// actor and [`move_step`](Fleet::move_step) is the spelling. An override
-    /// is a person advancing a step the gate refused, and the actor is the
-    /// whole content of that row: the log cannot reconstruct afterwards who
-    /// disagreed with the Judge, and a `stopped -> advanced` recorded against
-    /// Fleet would say Fleet overruled itself.
+    /// **Only what a person did needs it.** Every step move Fleet derives — a
+    /// gate ruling, a dispatch, a reap — is Fleet's, and
+    /// [`move_step`](Fleet::move_step) is the spelling. An override is a person
+    /// advancing a step the gate refused, and the actor is the whole content of
+    /// that row: the log cannot reconstruct afterwards who disagreed with the
+    /// Judge, and a `stopped -> advanced` recorded against Fleet would say
+    /// Fleet overruled itself.
+    ///
+    /// **`crate::reviewing` is the other caller, and the actor is what tells
+    /// its row from the loop's.** Both walk `running -> running` as
+    /// [`StepTarget::Revisited`] and neither carries a payload; Fleet on that
+    /// row is a loop coming round to the step that emitted the verdict, and a
+    /// person on it is a person sending the work back to the step they were
+    /// standing at. Nothing else on the row distinguishes them, so nothing else
+    /// had to be added to make it.
     pub(crate) async fn move_step_by(
         &self,
         job: &Job,
