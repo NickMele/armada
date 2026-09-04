@@ -32,7 +32,7 @@ import { connects, skew } from "@armada/protocol";
 import type { BridgeState } from "../shared/bridge";
 import type { CallRead, Connection } from "@armada/protocol";
 import type { JobHistory, Recorded } from "@armada/protocol";
-import type { JobDetail, JobSummary, StreamMessage } from "@armada/protocol";
+import type { JobDetail, JobExamined, JobResources, JobSummary, StreamMessage } from "@armada/protocol";
 import { JobCommands } from "./command";
 import { JournalSocket } from "./journal";
 import { ObserveSocket } from "./observe";
@@ -76,6 +76,20 @@ export class FleetConnection {
    * around it. So the surface that draws it says when it wants one.
    */
   private readonly history: JobReader<{ moves: Recorded[] }>;
+  /**
+   * What the open Job holds on this machine.
+   *
+   * **Opened with the Job and re-read on every event naming it**, which is the
+   * same rule `watched` follows and for the same reason: a figure that stopped
+   * moving while a Job ran would be a panel claiming a stall that is not there.
+   *
+   * **No timer.** Every reading walks a process table and a directory, and a
+   * poll would pay for that continuously to answer a question asked rarely —
+   * which is the cost the Fleet side already refuses. A Job that has genuinely
+   * wedged emits no events and so goes stale, which is why `read_at` is on the
+   * wire and why `examineJob` is the press that takes a fresh one.
+   */
+  private readonly resources: JobReader<{ resources: JobResources }>;
   /** The Job whose turns are open. A second socket to Fleet — see `observe.ts`. */
   private observing: string | null = null;
   /**
@@ -140,6 +154,15 @@ export class FleetConnection {
           watched.state === "read" ? { watched, readAt: this.wiring.now() } : { watched },
         ),
     });
+    this.resources = new JobReader<{ resources: JobResources }>({
+      route: (jobId) => `/jobs/${encodeURIComponent(jobId)}/resources`,
+      keeps: (body) => ({ resources: body as JobResources }),
+      // A blanked panel reads as a Job holding nothing, which is the exact
+      // answer this exists to make loud. The instant on the kept reading is
+      // what says how old it is.
+      keepsLastGood: true,
+      publish: (resources) => this.publish({ resources }),
+    });
     this.history = new JobReader<{ moves: Recorded[] }>({
       // **The rows are carried, never folded.** `crates/store/src/fold.rs` owns
       // the machine, and Fleet loads the Job before it reads the log — so a
@@ -182,6 +205,7 @@ export class FleetConnection {
       await this.reread(fleet.port);
       await this.readHoldings(fleet.port);
       await this.watched.again(fleet.port);
+      await this.resources.again(fleet.port);
       await this.history.again(fleet.port);
       await this.material.reread(fleet.port);
       // A no-op where nothing has them open. Nothing but Bridge files a
@@ -543,6 +567,50 @@ export class FleetConnection {
     await this.watched.want(this.connected()?.port ?? null, jobId);
   }
 
+  /**
+   * Read what the open Job holds on this machine, or `null` to stop.
+   *
+   * **An examination for another Job is dropped here**, not kept until the
+   * next press: a verdict drawn under the wrong title is worse than none, and
+   * this is the one place that knows the open Job changed.
+   */
+  async readResources(jobId: string | null): Promise<void> {
+    const found = this.current.examination;
+    if (found.state !== "none" && found.jobId !== jobId) {
+      this.publish({ examination: { state: "none" } });
+    }
+    await this.resources.want(this.connected()?.port ?? null, jobId);
+  }
+
+  /**
+   * Go and look at this Job now. **The rung below intervene**, and the one act
+   * here that moves nothing — what it leaves is a line in the Job's own log.
+   *
+   * The answer is published rather than returned, so a window that reloaded
+   * while a look was out still draws it. The reading beside it is re-read on
+   * the same press, because the panel and the verdict must not be two instants.
+   */
+  async examineJob(jobId: string): Promise<void> {
+    const port = this.connected()?.port ?? null;
+    if (port === null) {
+      this.publish({
+        examination: { state: "failed", jobId, outcome: { ok: false, why: "not_connected" } },
+      });
+      return;
+    }
+    this.publish({ examination: { state: "looking", jobId } });
+    const answer = await ask(port, "POST", `/jobs/${encodeURIComponent(jobId)}/examine`);
+    // The open Job moved while the look was out. Nobody has this answer's Job
+    // open, and publishing it would draw a verdict under another Job's title.
+    if (this.resources.jobId !== jobId) return;
+    this.publish(
+      answer.ok === true
+        ? { examination: { state: "found", jobId, examined: answer.body as JobExamined } }
+        : { examination: { state: "failed", jobId, outcome: answer.outcome } },
+    );
+    await this.resources.again(port);
+  }
+
   /** Read one Job's transition history, or `null` to stop. */
   async readHistory(jobId: string | null): Promise<void> {
     await this.history.want(this.connected()?.port ?? null, jobId);
@@ -568,6 +636,9 @@ export class FleetConnection {
     // A history that is unfolded grows as the Job moves, so the move that was
     // just delivered is read back rather than left off the end of the list.
     if (this.history.jobId === jobId) void this.history.again(port);
+    // The machine reading moves with the Job rather than on a clock of its
+    // own. See the field: a poll would pay a process table per tick.
+    if (this.resources.jobId === jobId) void this.resources.again(port);
     if (this.watched.jobId !== jobId) return;
     void this.watched.again(port);
   }

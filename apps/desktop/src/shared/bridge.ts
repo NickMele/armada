@@ -13,7 +13,9 @@ import type {
   Diff,
   Draft,
   Evidence,
+  Examination,
   Footprint,
+  Holds,
   HeldWorktrees,
   History,
   Holdings,
@@ -197,6 +199,27 @@ export type BridgeState = {
    * pays for them until somebody is reading them.
    */
   reports: Reports;
+  /**
+   * What the open Job holds on this machine — its processes, what each is
+   * burning, and the disk its worktree has taken.
+   *
+   * **Opened with the Job and re-read while it is open**, which is what makes
+   * it a live panel rather than a snapshot: a figure that stopped moving while
+   * a Job ran would be a panel claiming a stall that is not there. It keeps its
+   * last good reading through a failed re-read for `watched`'s reason — a
+   * blanked panel reads as a Job holding nothing, which is the exact answer
+   * this exists to make loud.
+   */
+  resources: Holds;
+  /**
+   * What Fleet found when somebody pressed for a look — and only then.
+   *
+   * **Not read on opening a Job.** It is a thing a person did, it costs a
+   * process table and a directory walk, and an answer that appeared without
+   * anybody asking would be the automatic bound rather than the person's half
+   * of it. It stays on screen until they press again or leave the Job.
+   */
+  examination: Examination;
   /**
    * What Fleet is holding disk for, where a surface asked.
    *
@@ -413,6 +436,26 @@ export type BridgeApi = {
    */
   readHistory: (jobId: string | null) => Promise<void>;
   /**
+   * Read what the open Job holds on this machine, or `null` to stop.
+   *
+   * **Read-only and its own entry**, because it is its own operation on the
+   * Rust side and for the same reason: `watchJob` is re-read on every event
+   * naming the Job, and this walks a process table and a directory.
+   */
+  readResources: (jobId: string | null) => Promise<void>;
+  /**
+   * Ask Fleet to go and look at this Job now, and say what it found.
+   *
+   * **The rung below intervene.** Every other act on a Job here changes it, so
+   * a person who suspected one was wedged had one move. This one moves nothing
+   * — what it leaves is a line in the Job's own log.
+   *
+   * It costs no model call. The answer arrives on `examination` rather than
+   * coming back from the call, so a window reopened while a look was out still
+   * gets it.
+   */
+  examineJob: (jobId: string) => Promise<void>;
+  /**
    * Read what one Job's Drones claimed, or `null` to stop. Read-only, and its
    * own entry rather than folded into `readDiff`: they are two operations on
    * the Rust side because a surface wanting only the claims would otherwise
@@ -543,6 +586,8 @@ export const NOTHING_YET: BridgeState = {
   evidence: { state: "none" },
   diff: { state: "none" },
   reports: { state: "none" },
+  resources: { state: "none" },
+  examination: { state: "none" },
   held: { state: "none" },
 };
 
@@ -570,6 +615,8 @@ export const CHANNELS = {
   observeJob: "bridge:observe-job",
   readHistory: "bridge:read-history",
   readEvidence: "bridge:read-evidence",
+  readResources: "bridge:read-resources",
+  examineJob: "bridge:examine-job",
   readDiff: "bridge:read-diff",
   readCall: "bridge:read-call",
   readReports: "bridge:read-reports",
