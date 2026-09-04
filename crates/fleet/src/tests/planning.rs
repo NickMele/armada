@@ -9,6 +9,7 @@ use core_model::JobStatus;
 use testkit::{FakeJudge, FakeWorkProduct};
 
 use crate::proposing::NotProposed;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_fleet_proposing_through, diff_evidence, worktree_directory};
 use crate::tests::proposing::{a_catalogue, read};
 use crate::tests::tmp::TempDir;
@@ -88,7 +89,9 @@ async fn an_approved_dependent_is_not_admitted_before_its_upstream_lands() {
 
     // The dependent alone, approved out of turn. The slot is free, so nothing
     // but the edge is keeping it from running.
-    let waiting = fleet.approve(made[1].id()).await.expect("approval lands");
+    let waiting = dispatched(&fleet, made[1].id())
+        .await
+        .expect("approval lands");
 
     assert_eq!(
         waiting.status(),
@@ -117,12 +120,10 @@ async fn a_dependent_is_admitted_once_its_upstream_completes() {
         .expect("a plan");
     worktree_directory(&home, made[0].id());
     worktree_directory(&home, made[1].id());
-    fleet
-        .approve(made[0].id())
+    dispatched(&fleet, made[0].id())
         .await
         .expect("the upstream runs");
-    fleet
-        .approve(made[1].id())
+    dispatched(&fleet, made[1].id())
         .await
         .expect("the dependent waits");
     assert_eq!(fleet.working_on().await, vec![made[0].id().clone()]);

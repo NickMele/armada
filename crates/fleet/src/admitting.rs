@@ -182,15 +182,20 @@ where
     /// **The roster lock is held across the loop, and nothing else is.** Two
     /// admissions running at once would each read the same `queued` Job as
     /// next and dispatch it twice; holding the roster is what makes admission
-    /// one act. It is released the moment the last Drone is spawned, which is
-    /// what keeps it from being the single working slot again — a slot is held
-    /// for as long as a Job is worked, and this is held for as long as a Job is
+    /// one act. It is released the moment the last Drone is spawned — a slot is
+    /// held for as long as a Job is worked, and this for as long as one is
     /// *started*.
     ///
     /// Admission stops at the first Job that will not start. The failure is
     /// returned, its Job is left `escalated` by `dispatch`, and the next turn
     /// asks again — Fleet does not walk on down the queue to find one that
     /// works, because the reason the first failed is ordinarily the disk.
+    ///
+    /// **Never from a `Commands` method, which is `#428`.** This runs a whole
+    /// [`crate::dispatch`]: on a handler's future a client that stops waiting
+    /// takes the command and its timeout away together. [`Fleet::turn`] and
+    /// [`Fleet::reconcile`] are safe; `approve_review`, `request_changes`,
+    /// `override_verdict`, `reject`, `restart_step` and `kill_job` are not.
     pub(crate) async fn admit_next(&self) -> Result<Vec<JobId>, Adrift> {
         let mut slots = self.slots().lock().await;
         let mut admitted = Vec::new();

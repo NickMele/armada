@@ -30,6 +30,7 @@ use crate::crossing::Crossed;
 use crate::daemon::Fleet;
 use crate::evidence::Call;
 use crate::gate::Ruling;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_fleet_holding, a_proposal, worktree_directory};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::{declared_by_the_one, submitted_by_the_one};
@@ -367,7 +368,7 @@ pub(super) async fn told_across_the_boundary(
         .await
         .expect("a proposal");
     worktree_directory(home, job.id());
-    fleet.approve(job.id()).await.expect("it is approved");
+    dispatched(&fleet, job.id()).await.expect("it is approved");
     let plan = DeclareScope {
         context_paths: vec!["docs".to_string()],
     };

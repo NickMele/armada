@@ -88,6 +88,10 @@ pub trait Commands: Send + Sync + 'static {
 
     /// `approve_dispatch` — releases a Job to spawn. The primary autonomy
     /// control, and a human act: `helm_access` on this row is `No`.
+    ///
+    /// **What comes back is `queued`, not `running`.** The dispatch is a
+    /// turn's, because one inside this request died whenever a client stopped
+    /// waiting for it — `fleet::daemon::Fleet::approve` and `#428`.
     fn approve_dispatch(
         &self,
         job_id: JobId,

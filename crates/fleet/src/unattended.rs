@@ -9,19 +9,20 @@
 //! `stuck`, offered no act, and stayed that way for as long as Fleet stayed
 //! up. `#436`.
 //!
-//! # What actually wedges, and it is not a slow install
+//! # What used to wedge, and what still can
 //!
-//! `approve_dispatch` runs the whole of [`crate::dispatch`] **inside the HTTP
-//! request that approved the Job** — `crates/armada/src/serve.rs` says so:
-//! "`approve` and each turn both dispatch inline". Bridge waits five seconds
-//! for an answer, a cold `pnpm install` is not five seconds, and when the wait
-//! is spent axum drops the handler's future and every await under it.
-//! `checks_runner::run` sets `kill_on_drop`, so the install dies with it.
+//! `approve_dispatch` ran the whole of [`crate::dispatch`] **inside the HTTP
+//! request that approved the Job**, Bridge waits five seconds, and a cold
+//! `pnpm install` is not five seconds. When the wait was spent axum dropped
+//! the handler's future and `kill_on_drop` took the install. That is `#435`'s
+//! third answer: not spawned and lost, not never spawned, but **spawned and
+//! then taken away with everything that would have said so** — the
+//! `tokio::time::timeout` bounding the command included.
 //!
-//! That is `#435`'s third answer: not spawned and lost, not never spawned, but
-//! **spawned and then taken away along with everything that would have said
-//! so** — including the `tokio::time::timeout` bounding the command, which
-//! lived in the same dropped future.
+//! **`#428` moved the dispatch off that future**, so a client stopping can no
+//! longer reach one. What is left is Fleet's own doing: `Turning::drop` aborts
+//! the turn in flight, so a Fleet stopping during a long preparation leaves
+//! exactly this state, and the reading and the answer are identical.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
@@ -128,9 +129,9 @@ where
 /// half-finished install left in it and Fleet cannot tell what that is.
 /// `Recourse::Redispatch` is what a person is offered, which `crate::stuck`
 /// already gives a top-level Job at `escalated` — non-empty, which `#436`
-/// requires. **The cause is upstream and is not fixed here**: dispatch should
-/// not be cancellable by a client that stopped waiting, and that is a change to
-/// `approve` and to what `POST /jobs/:id/approve_dispatch` answers.
+/// requires. **The cause a client could reach is gone**: `#428` took the
+/// dispatch off the request's future, so what reaches this now is a turn Fleet
+/// itself abandoned rather than a browser that stopped waiting.
 ///
 /// A free function, so the reading is one expression and testable without a
 /// Fleet. Whether anything is *attending* it is the roster's answer and is

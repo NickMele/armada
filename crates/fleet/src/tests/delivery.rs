@@ -13,6 +13,7 @@ use testkit::{Delivered, Delivering, FakeHarness, FakeVcs, FakeWorkProduct};
 
 use crate::daemon::Fleet;
 use crate::gate::Ruling;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
     a_fleet_committing_through, a_fleet_whose_manifest_declares_a_base, a_proposal, diff_evidence,
     fittings, note_evidence, one, two_steps_both_gated_on_a_diff, worktree_directory,
@@ -49,7 +50,7 @@ async fn a_branch_that_is_not_behind_is_not_rebased_at_a_boundary() {
         .await
         .unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
@@ -72,7 +73,7 @@ async fn a_behind_branch_is_brought_up_to_date_at_a_step_boundary() {
     );
     let job = fleet.propose(a_proposal("catch up mid-Job")).await.unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     // The first step advances, which is a boundary and not the end.
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
@@ -138,7 +139,7 @@ async fn a_conflicting_rebase_is_handed_to_the_drone_rather_than_failing_the_job
         .await
         .unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
@@ -202,7 +203,7 @@ async fn a_step_that_resolves_none_of_a_conflicted_rebase_fails_its_diff_check()
         .await
         .unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     // The first step does real work and advances, which is the boundary.
     fleet
@@ -257,7 +258,7 @@ async fn a_finished_job_is_pushed_and_opened_for_review() {
         .await
         .unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
@@ -303,7 +304,7 @@ async fn the_pull_request_body_is_assembled_from_what_was_checked() {
         .await
         .unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
@@ -387,7 +388,7 @@ async fn a_pull_request_names_the_commits_its_base_carries_that_the_remote_has_n
         .await
         .unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
@@ -424,7 +425,7 @@ async fn a_pull_request_says_when_the_base_it_rebased_onto_is_behind_the_remote(
         .await
         .unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
@@ -456,7 +457,7 @@ async fn a_base_level_with_its_remote_puts_no_caveat_in_the_pull_request() {
         .await
         .unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
@@ -498,7 +499,7 @@ async fn a_job_on_a_repository_with_no_remote_completes_without_a_push() {
         .await
         .unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
@@ -550,7 +551,7 @@ async fn the_declared_base_overrides_what_would_have_been_inferred() {
         .await
         .unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
@@ -588,7 +589,7 @@ async fn a_declared_base_is_what_the_pull_request_merges_into() {
         .await
         .unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();

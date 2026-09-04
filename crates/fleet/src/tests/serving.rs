@@ -18,6 +18,7 @@ use axum::Router;
 use ipc::{JobList, JobSummary, RunId};
 use testkit::FakeWorkProduct;
 
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_fleet, a_proposal, diff_evidence, note_evidence, worktree_directory};
 use crate::tests::http::call;
 use crate::tests::tmp::TempDir;
@@ -38,9 +39,13 @@ pub(crate) const A_PROPOSAL: &str = r#"{
 #[tokio::test]
 async fn the_operations_answer_from_a_real_fleet() {
     let home = TempDir::new();
-    let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    let fleet = Arc::new(a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"])));
     let events = fleet.events();
-    let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
+    let app = api::router(api::Served::sharing(
+        Arc::clone(&fleet),
+        RunId::carried("01RUN"),
+        events,
+    ));
 
     let (status, body) = call(&app, "POST", "/jobs", A_PROPOSAL).await;
     assert_eq!(status, StatusCode::CREATED, "the Job exists, at the gate");
@@ -70,14 +75,29 @@ async fn the_operations_answer_from_a_real_fleet() {
     .await;
     assert_eq!(status, StatusCode::OK);
     let approved: JobSummary = ipc::decode("an approved Job", &body).expect("a JobSummary");
+    // **`queued` and not `running`, which is what `#428` moved.** The route
+    // answered `running` while it dispatched inside the request that asked for
+    // it — and a client that stopped waiting took the dispatch with it. What
+    // crosses is the same field carrying a value Bridge already draws; the
+    // `job.state_changed` to `running` follows on the turn below.
     assert_eq!(
         approved.status.as_wire(),
-        "running",
-        "approval released it and the slot was free"
+        "queued",
+        "approval released it, and dispatch is the turn's"
     );
     assert_eq!(
         approved.current_step_id.as_ref().map(|id| id.as_str()),
-        Some("implement")
+        None,
+        "no step is entered until something dispatches it"
+    );
+
+    fleet.turn().await.expect("the turn that admits it");
+    let started = only_job(&app).await;
+    assert_eq!(started.status.as_wire(), "running");
+    assert_eq!(
+        started.current_step_id.as_ref().map(|id| id.as_str()),
+        Some("implement"),
+        "and the slot was free, so it took one turn"
     );
 }
 
@@ -152,6 +172,15 @@ async fn a_job_approved_over_the_api_reaches_a_terminal_state() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "approval released it");
+
+    // **Nobody presses anything else, and this is `#428`'s other half.** The
+    // route answers `queued` now; the loop above is what dispatches, and this
+    // is the assertion that it does — without which the fix would have traded
+    // a Job a client could kill for a Job nothing ever starts.
+    until(&app, "was given a Drone by the loop", |job| {
+        job.current_step_id.as_ref().map(|id| id.as_str()) == Some("implement")
+    })
+    .await;
 
     // The Drone's first submission. Before this change it would have sat in the
     // inbox for the life of the process.
@@ -275,7 +304,7 @@ async fn a_step_that_moves_while_a_client_is_connected_reaches_that_client() {
     let events = fleet.events();
     let mut watching = events.subscribe();
 
-    fleet.approve(job.id()).await.expect("released to run");
+    dispatched(&fleet, job.id()).await.expect("released to run");
 
     // `awaiting_approval -> queued`, `queued -> running`, then the first step
     // entering `running` — which is the one that used to be silent.

@@ -16,6 +16,7 @@ use testkit::{FakeHarness, FakeJudge, FakeLinkLookup, FakeVcs, FakeWorkProduct};
 use tower::ServiceExt;
 
 use crate::daemon::Fleet;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
     a_fleet, a_fleet_holding_all, a_fleet_minting_from, a_proposal, a_proposal_for, diff_evidence,
     workflow_named_gated_on_diff, worktree_directory,
@@ -58,7 +59,7 @@ async fn an_escalated_job(home: &TempDir) -> JobId {
             .await
             .expect("a Job at the gate");
         worktree_directory(home, job.id());
-        fleet.approve(job.id()).await.expect("released to run");
+        dispatched(&fleet, job.id()).await.expect("released to run");
         // **Ended here rather than left to the drop.** A Drone outlives the
         // Fleet that spawned it by design, and one still in the process table
         // is one the second Fleet adopts — which would leave this Job
@@ -159,7 +160,7 @@ async fn a_job_a_check_failed_is_replaced_and_the_original_is_cleared() {
         .expect("a Job at the gate");
     let failed = job.id().clone();
     worktree_directory(&home, &failed);
-    fleet.approve(&failed).await.expect("released to run");
+    dispatched(&fleet, &failed).await.expect("released to run");
     submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("evidence taken");
@@ -209,7 +210,7 @@ async fn a_killed_job_is_replaced_and_stays_killed() {
         .expect("a Job at the gate");
     let killed = job.id().clone();
     worktree_directory(&home, &killed);
-    fleet.approve(&killed).await.expect("released to run");
+    dispatched(&fleet, &killed).await.expect("released to run");
     fleet.kill_job(&killed).await.expect("ended by hand");
 
     let events = fleet.events();
@@ -325,7 +326,7 @@ async fn a_redispatch_freezes_the_failed_jobs_own_workflow_not_the_first_one_hel
         .expect("beta is a workflow this Fleet holds");
     let failed = job.id().clone();
     worktree_directory(&home, &failed);
-    fleet.approve(&failed).await.expect("released to run");
+    dispatched(&fleet, &failed).await.expect("released to run");
     submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("evidence taken");
@@ -388,7 +389,7 @@ async fn killed(
     job_id: &JobId,
 ) {
     worktree_directory(home, job_id);
-    fleet.approve(job_id).await.expect("released to run");
+    dispatched(&fleet, job_id).await.expect("released to run");
     fleet.kill_job(job_id).await.expect("ended by hand");
 }
 

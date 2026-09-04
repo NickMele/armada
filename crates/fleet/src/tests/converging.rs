@@ -31,6 +31,7 @@ use crate::converging::{
     stops_the_step, ReportNow, Stage, StepNorms, Tripwire, Wandering, FORCED_REPORT,
 };
 use crate::daemon::Fleet;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::declared_by_the_one;
@@ -205,7 +206,7 @@ async fn started(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
         .await
         .unwrap();
     worktree_directory(home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
     job.id().clone()
 }
 

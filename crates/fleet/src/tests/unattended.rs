@@ -1,16 +1,24 @@
 //! A Job with no Drone yet, and nothing in Fleet holding it.
 //!
-//! **The cancellation is reproduced rather than simulated.** `#435`'s Job was
-//! wedged because Bridge stopped waiting on `POST /jobs/:id/approve_dispatch`
-//! after five seconds and axum dropped the handler's future — so the fixture
-//! drops the same future, with `tokio::time::timeout` standing in for the
-//! abort. A test that planted a `running` Job with no slot by hand would assert
-//! that the vigil reads a state, and would not say whether anything can produce
-//! it.
+//! **The cancellation is reproduced rather than simulated**, and what is
+//! cancelled is what moved. `#435`'s Job was wedged because Bridge stopped
+//! waiting on `POST /jobs/:id/approve_dispatch` after five seconds, axum
+//! dropped the handler's future, and the whole dispatch was inside it — the
+//! `pnpm install` under `kill_on_drop`, and the `tokio::time::timeout` that
+//! would have noticed. **`#428` took the dispatch off that future.** The
+//! approval queues and answers, `crate::turning` admits, and the first case
+//! below is the assertion that a client has nothing left it can take away.
+//!
+//! The vigil still has a subject, and the second case is it: a turn's own
+//! future can be dropped, because `Turning::drop` aborts the turn in flight
+//! when Fleet is stopping. That is now the only producer of a Job that is
+//! `running` with nothing attending it, and it is Fleet's own doing rather
+//! than somebody's browser. A test that planted the state by hand would assert
+//! that the vigil reads it, and would not say whether anything can produce it.
 //!
 //! **A real process again, for `tests::preparing`'s reason.** `/bin/sleep` is
 //! on every machine Armada runs on and needs no shell; what is being tested is
-//! a dispatch that is still inside a command when the request goes away, and a
+//! a dispatch that is still inside a command when the future goes away, and a
 //! fake runner has no inside to be in.
 
 use std::path::Path;
@@ -21,6 +29,7 @@ use core_model::{EscalationTrigger, JobStatus, Recourse, StepState, TransitionRe
 use testkit::{FakeHarness, FakeVcs, FakeWorkProduct};
 
 use crate::daemon::Fleet;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fittings, worktree_directory};
 use crate::tests::tmp::TempDir;
 
@@ -42,31 +51,80 @@ fn a_fleet_requiring(home: &TempDir, run: &str) -> Fleet<FakeHarness, FakeVcs, F
     Fleet::assembled(fittings)
 }
 
-/// **(a)** A dispatch whose caller stopped waiting leaves a Job `running` with
-/// no Drone and nothing preparing it — and the next turn escalates it.
+/// **(a)** A client that stops waiting cannot destroy the work. **`#428`.**
 ///
-/// The first half is the defect and it is asserted before the fix runs: the Job
-/// reads as healthy, its steps have not started, its spend is nothing and the
-/// roster has forgotten it. That is what six minutes of `#435` looked like from
-/// every surface Armada has.
+/// The Manifest below requires thirty seconds of preparation and the wait given
+/// to the approval is three hundred milliseconds — the same shape as Bridge's
+/// `COMMAND_MS` against a cold `pnpm install`, one order of magnitude faster.
+/// **The approval answers inside it**, because the dispatch is not in there any
+/// more; the Job is `queued`, and a turn the caller does not own is what runs
+/// the thirty seconds.
+///
+/// The last two assertions are what the fix has to keep true and what a
+/// cancellation-safe dispatch could quietly lose: the Job is left somewhere a
+/// turn will find it, and the roster is not holding a place for a Drone that
+/// nothing is starting.
 #[tokio::test]
-async fn a_dispatch_its_caller_stopped_waiting_for_is_escalated_on_the_next_turn() {
+async fn an_approval_its_caller_stops_waiting_for_still_leaves_the_job_dispatchable() {
     let home = TempDir::new();
     let fleet = a_fleet_requiring(&home, "/bin/sleep 30");
 
     let job = fleet
-        .propose(a_proposal("a Job whose approval times out"))
+        .propose(a_proposal("a Job whose approval used to time out"))
         .await
         .expect("proposed");
     worktree_directory(&home, job.id());
 
-    // Exactly what Bridge's `COMMAND_MS` does to the request, one order of
-    // magnitude faster: the wait is spent, the future is dropped, and
-    // `kill_on_drop` takes the command with it.
-    let gave_up = tokio::time::timeout(Duration::from_millis(300), fleet.approve(job.id())).await;
+    let answered = tokio::time::timeout(Duration::from_millis(300), fleet.approve(job.id()))
+        .await
+        .expect("the approval is not inside the preparation command any more")
+        .expect("released to run");
+    assert_eq!(
+        answered.status(),
+        JobStatus::Queued,
+        "the approval queues; `crate::turning` dispatches"
+    );
+    assert!(
+        answered
+            .steps()
+            .iter()
+            .all(|step| step.state() == StepState::NotStarted),
+        "and no step is entered until something dispatches it"
+    );
+    assert!(
+        fleet.working_on().await.is_empty(),
+        "the roster holds no place for a Drone nothing has started"
+    );
+}
+
+/// **(b)** A turn whose own future is dropped mid-dispatch leaves a Job
+/// `running` with no Drone and nothing preparing it — and the next turn
+/// escalates it.
+///
+/// **The vigil `#436` built still has a subject**, and this is what it is now:
+/// `Turning::drop` aborts the turn in flight, which is what a Fleet stopping
+/// during a long preparation does. It is Fleet's own doing rather than a
+/// person's browser, and the reading is identical from every surface Armada
+/// has — the Job reads as healthy, its steps have not started, and the roster
+/// has forgotten it.
+#[tokio::test]
+async fn a_dispatch_whose_turn_was_dropped_is_escalated_on_the_next_turn() {
+    let home = TempDir::new();
+    let fleet = a_fleet_requiring(&home, "/bin/sleep 30");
+
+    let job = fleet
+        .propose(a_proposal("a Job whose dispatch is abandoned"))
+        .await
+        .expect("proposed");
+    worktree_directory(&home, job.id());
+    fleet.approve(job.id()).await.expect("released to run");
+
+    // What `Turning::drop` does to the turn in flight: the wait is spent, the
+    // future is dropped, and `kill_on_drop` takes the command with it.
+    let gave_up = tokio::time::timeout(Duration::from_millis(300), fleet.turn()).await;
     assert!(
         gave_up.is_err(),
-        "the approval was still inside the preparation command when the wait was spent"
+        "the turn was still inside the preparation command when the wait was spent"
     );
 
     let wedged = fleet.load(job.id()).await.expect("readable");
@@ -118,7 +176,7 @@ async fn a_dispatch_its_caller_stopped_waiting_for_is_escalated_on_the_next_turn
     );
 }
 
-/// **(b)** A Job whose preparation is still running is not escalated, however
+/// **(c)** A Job whose preparation is still running is not escalated, however
 /// long it takes.
 ///
 /// **The regression `#436` names first.** A cold `playwright install` is
@@ -139,11 +197,17 @@ async fn a_preparation_that_is_still_running_is_left_alone() {
         .await
         .expect("proposed");
     worktree_directory(&home, job.id());
+    fleet.approve(job.id()).await.expect("released to run");
 
-    let (approved, turned) = tokio::join!(fleet.approve(job.id()), fleet.turn());
+    // `admit_next` is what a turn ends in, called here directly so the turn
+    // beside it is a *second* one and not the same one: the roster is held for
+    // the whole of a dispatch, so the turn cannot read the board until the
+    // command has finished.
+    let (admitted, turned) = tokio::join!(fleet.admit_next(), fleet.turn());
     assert_eq!(
-        approved.expect("dispatch runs").status(),
-        JobStatus::Running
+        admitted.expect("dispatch runs"),
+        vec![job.id().clone()],
+        "the admission that ran the command is the one that started it"
     );
     assert!(
         turned.expect("a turn").unattended.is_empty(),
@@ -156,9 +220,9 @@ async fn a_preparation_that_is_still_running_is_left_alone() {
     );
 }
 
-/// **(c)** A turn over a Job whose Drone is working touches nothing.
+/// **(d)** A turn over a Job whose Drone is working touches nothing.
 ///
-/// The other half of (b): once a step is entered the Job is out of the span
+/// The other half of (c): once a step is entered the Job is out of the span
 /// whatever the roster says, so a Drone standing at a gate with its slot
 /// momentarily unheld cannot be read as one that never started.
 #[tokio::test]
@@ -171,7 +235,7 @@ async fn a_job_whose_first_step_has_started_is_out_of_the_span() {
         .await
         .expect("proposed");
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.expect("dispatch runs");
+    dispatched(&fleet, job.id()).await.expect("dispatch runs");
 
     let turned = fleet.turn().await.expect("a turn");
     assert!(turned.unattended.is_empty());

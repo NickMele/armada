@@ -34,6 +34,7 @@ use testkit::{FakeHarness, FakeVcs, FakeWorkProduct, Scoped, Sketch};
 
 use crate::clock::Clock;
 use crate::daemon::Fleet;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fittings, one, worktree_directory};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::declared_by_the_one;
@@ -97,7 +98,7 @@ pub(super) async fn started(fleet: &Fixture, home: &TempDir) -> core_model::JobI
         .await
         .unwrap();
     worktree_directory(home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
     job.id().clone()
 }
 

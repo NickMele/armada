@@ -21,6 +21,7 @@ use testkit::{FakeHarness, FakeVcs, FakeWorkProduct};
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
     a_proposal, diff_evidence, fittings, note_evidence, worktree_directory,
 };
@@ -70,7 +71,7 @@ async fn what_the_manifest_requires_has_run_in_the_worktree_before_any_drone() {
         .expect("proposed");
     worktree_directory(&home, job.id());
 
-    let approved = fleet.approve(job.id()).await.expect("dispatch runs");
+    let approved = dispatched(&fleet, job.id()).await.expect("dispatch runs");
     assert_eq!(approved.status(), JobStatus::Running);
     assert_eq!(
         approved.current_step_id().map(|id| id.as_str()),
@@ -95,7 +96,7 @@ async fn a_repository_that_requires_nothing_dispatches_exactly_as_before() {
         .expect("proposed");
     worktree_directory(&home, job.id());
 
-    let approved = fleet.approve(job.id()).await.expect("dispatch runs");
+    let approved = dispatched(&fleet, job.id()).await.expect("dispatch runs");
     assert_eq!(approved.status(), JobStatus::Running);
 }
 
@@ -117,8 +118,7 @@ async fn a_required_command_that_fails_escalates_the_job_and_enters_no_step() {
         .expect("proposed");
     worktree_directory(&home, job.id());
 
-    let refused = fleet
-        .approve(job.id())
+    let refused = dispatched(&fleet, job.id())
         .await
         .expect_err("a worktree that could not be prepared is not dispatched");
     let Adrift::NotPrepared { cause, .. } = &refused else {
@@ -173,7 +173,7 @@ async fn preparation_runs_once_for_the_worktree_and_not_once_per_drone() {
         .await
         .expect("proposed");
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.expect("dispatch runs");
+    dispatched(&fleet, job.id()).await.expect("dispatch runs");
 
     submitted_by_the_one(&fleet, diff_evidence())
         .await
@@ -230,8 +230,7 @@ async fn the_log_names_each_command_as_it_is_attempted() {
         .await
         .expect("proposed");
     worktree_directory(&home, job.id());
-    fleet
-        .approve(job.id())
+    dispatched(&fleet, job.id())
         .await
         .expect_err("the second command fails");
 

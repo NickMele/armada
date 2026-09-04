@@ -27,6 +27,7 @@ use testkit::{FakeJudge, FakeWorkProduct, Gate, Sketch};
 
 use crate::daemon::Fleet;
 use crate::gate::Ruling;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
     a_fleet_judged_by, a_proposal, diff_evidence, fittings, worktree_directory,
 };
@@ -80,7 +81,7 @@ async fn refused(fleet: &Fixture, home: &TempDir, brief: &str) -> core_model::Jo
         .expect("a Job at the approval gate");
     let job_id = job.id().clone();
     worktree_directory(home, &job_id);
-    fleet.approve(&job_id).await.expect("released to run");
+    dispatched(&fleet, &job_id).await.expect("released to run");
     submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("the Drone reports its diff");
