@@ -749,6 +749,36 @@ fn a_workflow_frozen_before_a_step_could_name_a_model_reads_back_as_naming_none(
     );
 }
 
+/// **A step's own patience survives the column, both halves and both
+/// absences.** They are four different sentences: how long this step's Drone
+/// may be quiet, how many nudges it gets, and — twice — the step deferring to
+/// what Fleet is running with. A writer and a reader that disagreed about
+/// either key would collapse a declaration into a deferral, and every step
+/// would go back to the one constant `#60` was opened about, with nothing
+/// saying so.
+///
+/// The pre-`#60` row is asserted beside it, because that is the same failure
+/// arriving by the other road: an absent key is a step that declared nothing,
+/// which every row written before today is.
+#[test]
+fn a_steps_own_patience_and_its_absence_both_survive_the_column() {
+    let workflow =
+        crate::columns::read_workflow(&crate::columns::write_workflow(&crate::tests::workflow()))
+            .expect("a workflow that was just written");
+    let declared = workflow.step(&StepId::new("fix")).expect("the step");
+    assert_eq!(declared.quiet_after_seconds(), Some(900));
+    assert_eq!(declared.poke_limit(), Some(4));
+
+    let deferring = workflow.step(&StepId::new("reproduce")).expect("the step");
+    assert_eq!(deferring.quiet_after_seconds(), None);
+    assert_eq!(deferring.poke_limit(), None);
+
+    let before = crate::columns::read_workflow(WITHOUT_WHEN).expect("a pre-`#60` row");
+    let step = before.step(&StepId::new("fix")).expect("the step");
+    assert_eq!(step.quiet_after_seconds(), None);
+    assert_eq!(step.poke_limit(), None);
+}
+
 /// A blank in the column is a refusal rather than a none. `""` is a workflow
 /// that meant to say something, and reading it as "use the Job's" would be the
 /// dial silently not applying.

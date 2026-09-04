@@ -5,6 +5,11 @@
 // act in the registry has to be answered here — either by doing it, or by
 // saying in a few words why this build cannot.
 //
+// **The places a person can go are not here.** The rail and the palette are two
+// controls over one roster, and it was in this file while the palette was the
+// only one of them that drew it. It is `packages/shell/src/surfaces.ts` now,
+// beside both.
+//
 // # Every row is drawn, and a row that cannot act says why
 //
 // The contract's rule about a registered binding nothing answers is that the
@@ -26,44 +31,10 @@
 // are not: nothing serves an attestation, nothing pilots a job, and observing
 // is automatic on an open Job rather than an act.
 
-import { ClipboardList, HardDrive } from "lucide-react";
-
-import type { PaletteChoice, PaletteSurface } from "@armada/shell";
+import type { PaletteChoice } from "@armada/shell";
 
 /** What the palette says when the act needs a Job and none is under the cursor. */
 const NO_JOB = "no job focused";
-
-/** The ids the Navigation rows route on. Here, so a typo cannot be a dead row. */
-export const NAVIGATION = { board: "board", worktrees: "worktrees" } as const;
-
-/**
- * The places a person can go, in the order the section draws them.
- *
- * **The Board is in the rail and the held worktrees are not**, which is the
- * whole of why one carries a digit and the other does not. `⌘1–⌘4` is bound to
- * *Bridge surfaces in rail order*, so the digit is a position in the rail and a
- * place with no rail row has none to take. Both digits going spare are already
- * somebody's: `⌘2` is Alerts' by the rail order `docs/concepts/bridge.md`
- * fixes, and `⌘5` is Helm's, published in `actions.toml` and drawn in this
- * palette today. Whether the held worktrees join the rail, and what Helm's
- * digit becomes if they do, is a decision about the roster and about a binding
- * a person has already read — the issue that put this row here asked for
- * neither, and its own definition of done is that the digits still say what
- * they said.
- *
- * So it is found by name, under the screen's own title. `held disk` is an alias
- * because that is the word on the control this screen has been reached by since
- * it shipped, and a person who learned it should not have to learn a second.
- */
-export const SURFACES: readonly PaletteSurface[] = [
-  { id: NAVIGATION.board, label: "Job Board", shortcut: "⌘1", icon: ClipboardList },
-  {
-    id: NAVIGATION.worktrees,
-    label: "Held worktrees",
-    aliases: ["disk", "held disk"],
-    icon: HardDrive,
-  },
-];
 
 /**
  * Why each act cannot be chosen, by action id. An id absent from the answer is

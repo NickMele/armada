@@ -27,8 +27,8 @@ use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
-    Actor, Component, Envelope, EscalationTrigger, FieldValue, JobId, JobStatus, Level, StepId,
-    Target,
+    Actor, Component, Envelope, EscalationTrigger, FieldValue, Job, JobId, JobStatus, Level,
+    StepId, Target,
 };
 
 use crate::adrift::Adrift;
@@ -53,15 +53,9 @@ use crate::working::{StoodDown, Working};
 ///
 /// **The value in force is the watched step's, and nothing aggregates.** A
 /// Drone belongs to one step, so a Job spanning four steps is four independent
-/// patiences — never a sum and never the strictest of them. The poke budget
-/// already resets at the boundary, because `crate::working::Working` is
-/// per step.
-///
-/// **What is here is the constant, and neither tier is wired.** Resolution
-/// wants the pair on the slot at step start rather than a read per turn:
-/// `watch_silence` compares against the threshold before it touches the store,
-/// and a per-step value read off the Job would cost that read every turn on
-/// every healthy Drone.
+/// patiences — never a sum and never the strictest of them. [`at`](Liveness::at)
+/// resolves one at each boundary and `crate::working::Working` holds it from
+/// there, which is also where the poke budget resets.
 ///
 /// [`StepNorms`]: crate::StepNorms
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,6 +82,47 @@ impl Liveness {
     /// `crates/config/settings.toml`, which is Fleet's own.
     pub fn pokes(&self) -> u32 {
         self.pokes
+    }
+
+    /// What one step of one Job gets, given what Fleet is running with.
+    ///
+    /// # A live setting under a frozen step, and which wins
+    ///
+    /// Both rows are `lifetime = "Live"` and a step's override rides a
+    /// WorkflowDef frozen at Job creation. **The override wins where it
+    /// exists, and `Live` governs the tier it falls back to** — not a
+    /// compromise, but what each word is about. A setting is live so a person
+    /// may change what Fleet runs with; a step is frozen so an edit to
+    /// `.armada/workflows/` cannot move a running Job's terms under an
+    /// approval nobody re-gave. Neither claim reaches the other's tier.
+    ///
+    /// **And `Live` stays true**, because this is asked at each step boundary
+    /// rather than once per Job: a Job whose steps declare nothing follows a
+    /// changed setting into its next step, with no restart. What it cannot do
+    /// is have its *declared* patience change underneath it.
+    ///
+    /// # The chain is shorter than the rows say
+    ///
+    /// They resolve *Kit → Manifest*, and this workspace has no Kit: what
+    /// exists is the composition root's constant — `self` — and the step.
+    /// `armada.yml` carries no key and `#60` added none, a key ahead of its
+    /// reader being this issue's own defect wearing the other hat.
+    ///
+    /// Each half falls back on its own, and a step naming neither takes both.
+    pub fn at(self, job: &Job, step: &StepId) -> Liveness {
+        // A step this workflow does not name takes both, which no dispatch can
+        // produce — the id came out of this same workflow — and a restart can,
+        // where the step comes off a record a Fleet that is gone wrote.
+        let Some(declared) = job.workflow().step(step) else {
+            return self;
+        };
+        Liveness {
+            quiet_after: declared
+                .quiet_after_seconds()
+                .map(|seconds| Duration::from_secs(u64::from(seconds)))
+                .unwrap_or(self.quiet_after),
+            pokes: declared.poke_limit().unwrap_or(self.pokes),
+        }
     }
 }
 
@@ -239,7 +274,12 @@ where
         }
         let now = self.now();
         let after = at_work.quiet_for(&now);
-        if after < self.liveness().quiet_after() {
+        // **The step's own, off the slot.** It was resolved once at the
+        // boundary against the frozen step, so a formatting step and a large
+        // refactor are compared against different thresholds here — which is
+        // the whole of `#60` — and neither costs a read to find out.
+        let liveness = at_work.liveness();
+        if after < liveness.quiet_after() {
             return Ok(None);
         }
         let (job, step, _) = at_work.standing();
@@ -259,7 +299,7 @@ where
             }
             return Ok(None);
         }
-        let said = if spent < self.liveness().pokes() {
+        let said = if spent < liveness.pokes() {
             self.poke(working, after).await
         } else {
             self.move_job(

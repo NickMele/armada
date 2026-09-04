@@ -1,11 +1,11 @@
-//! Kit and Manifest resolution, and the merge strategies between them.
+//! Manifest and WorkflowDef resolution: two files, checked against each other.
 //!
-//! Owns scan, propose, select and verify — the part of v1 that ported most
-//! cleanly — plus Check and Command definitions, and the Kit and Manifest
-//! health probes, which read and validate their own files. A Manifest is an
-//! `armada.yml` at a workspace root, version-controlled with the project it
-//! configures, and path ownership is nearest-ancestor: the nearest `armada.yml`
-//! up the tree owns a path, and the root owns whatever no Workspace claims.
+//! Owns scan, propose, select and verify, plus Check and Command definitions.
+//! A Manifest is an `armada.yml` at a workspace root, version-controlled with
+//! the project it configures; the nearest one up the tree owns a path, and the
+//! root owns what no Workspace claims. **There is no Kit**, though this line
+//! said so until `#60`: `settings.toml` resolves most values *Kit → Manifest*,
+//! nothing here parses one, and the tiers are a constant, this Manifest, a step.
 //!
 //! **Everything either schema holds and this crate does not read is an unknown
 //! key, and hard-fails.** [`manifest`](mod@manifest) and
@@ -26,6 +26,7 @@
 
 mod error;
 mod judge;
+mod loops;
 mod manifest;
 mod resolve;
 mod roster;
@@ -37,6 +38,7 @@ mod yaml;
 mod tests;
 
 pub use error::{Fault, LoadError, Refusal, ResolveError, UnknownCheck};
+pub use loops::GateVerdict;
 pub use manifest::{Check, Command, Manifest, Preparation};
 pub use resolve::ResolvedWorkflow;
 pub use roster::Roster;

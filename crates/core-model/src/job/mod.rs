@@ -50,7 +50,7 @@ mod workflow;
 #[cfg(test)]
 mod tests;
 
-pub use attempt::Attempt;
+pub use attempt::{Attempt, Iteration};
 pub use check::{CheckOutcome, StepCheck};
 pub use collision::{collisions, Collision, ScopeClaim};
 pub use covers::{BadPattern, Covers, PathPattern};

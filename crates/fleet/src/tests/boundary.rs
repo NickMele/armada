@@ -33,6 +33,7 @@ use testkit::FakeHarness;
 
 use crate::drone::{start, Ending};
 use crate::process::{holder_of, Holder};
+use crate::silence::Liveness;
 use crate::tests::daemon::Ticking;
 use crate::tests::drone::config;
 use crate::tests::tmp::TempDir;
@@ -138,6 +139,10 @@ async fn a_slot_with(harness: FakeHarness, at: &TempDir) -> (Working, u32) {
         started,
         harness,
         taps(at),
+        // Nothing here reads it: these cases are about what standing a Drone
+        // down does, and the shipped pair is the least surprising thing to
+        // hold while they do it.
+        Liveness::of(Duration::from_secs(120), 2),
         Timestamp::from_rfc3339("2026-08-26T09:00:00.000Z"),
     );
     (working, pid)

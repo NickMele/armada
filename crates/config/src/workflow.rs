@@ -1,11 +1,10 @@
 //! A WorkflowDef, in the slice M1 reads.
 //!
 //! **A field nothing reads is a promise the file makes and the system does not
-//! keep**, so this parser refuses one rather than ignoring it. `verdict_routing`,
-//! `iteration_cap`, `hard_prerequisite`, `default_gate_policy`, `on_fail` and
-//! `on_gaming_flag` are refused because there is no loop; `evidence_scope` and
-//! `declare_plan_at` are read, and [`crate::scope`] holds the two keys inside
-//! that block that are not.
+//! keep**, so this parser refuses one rather than ignoring it.
+//! `hard_prerequisite`, `default_gate_policy`, `on_fail` and `on_gaming_flag`
+//! are refused; `evidence_scope` and `declare_plan_at` are read, and
+//! [`crate::scope`] holds the two keys inside that block that are not.
 //!
 //! **Three closed sets, each narrowed.** [`Structure`], `AdvanceGate` and
 //! [`MechanicalCheck`] carry fewer variants than the schema has, and each is an
@@ -33,8 +32,9 @@ use core_model::{
 };
 use serde_yaml_ng::Value;
 
-use crate::error::{BadTarget, Fault, LoadError, Refusal};
+use crate::error::{BadReturn, BadTarget, Fault, LoadError, Refusal};
 use crate::judge;
+use crate::loops::{self, GateVerdict, Looping};
 use crate::roster::{self, Roster};
 use crate::scope;
 use crate::yaml::{self, Table};
@@ -54,22 +54,43 @@ const STEP_KEYS: &[&str] = &[
     "retry_limit",
     "model",
     "may_dispatch_jobs",
+    "verdict_routing",
+    "iteration_cap",
+    "quiet_after_seconds",
+    "poke_limit",
 ];
 
-/// How the steps are wired. **One variant, of two.**
+/// How the steps are wired. **Both of the schema's two values.**
 ///
-/// `loop` is the schema's other value and M1 does not carry it: a loop returns
-/// to an earlier step by `verdict_routing`, which needs a verdict, which needs
-/// a Judge or a human gate. Neither exists yet, so a `loop` definition would
-/// load and then have no way to close its own loop.
+/// `loop` means a step returns to an earlier one by `verdict_routing` until it
+/// converges or spends its `iteration_cap`. What that return needs is a
+/// verdict, and a verdict now has two places to come from: `human_always` is a
+/// carried gate that `fleet::gate` holds a step at, and a Judge panel runs from
+/// `judge_checks`. The sentence that stood here until #263 said neither
+/// existed, and it had outlived both.
+///
+/// **What is still missing is underneath the parser rather than in it.** The
+/// step machine has no edge from `advanced` back to `running`, so the return
+/// itself is a move `core-model` cannot express; `iteration_count` is a
+/// `job_steps` column the schema records as deliberately absent, and it is not
+/// `retry_count`, because a plan on its fourth honest draft is not a gate
+/// failure; and `EscalationTrigger::LoopCap` exists with nothing raising it. So
+/// a `loop` definition loads here and nothing yet runs it, which is why no
+/// definition under `.armada/workflows/` declares one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Structure {
     Linear,
+    Loop,
 }
 
-const STRUCTURE_CARRIED: &[(&str, Structure)] = &[("linear", Structure::Linear)];
+const STRUCTURE_CARRIED: &[(&str, Structure)] =
+    &[("linear", Structure::Linear), ("loop", Structure::Loop)];
+/// The schema's whole set, and now also the carried set — so [`Fault::OutsideM1`]
+/// is unreachable at this key and the third argument to [`yaml::word`] is the
+/// same list as the second. Kept as an argument rather than collapsed, because
+/// the two lists mean different things everywhere else and only the caller
+/// knows when they have converged.
 const STRUCTURE_LEGAL: &[&str] = &["linear", "loop"];
-const STRUCTURE_M1: &[&str] = &["linear"];
 
 const GATE_LEGAL: &[&str] = &[
     "auto",
@@ -151,6 +172,10 @@ pub struct Step {
     retry_limit: u32,
     model: Option<ModelName>,
     may_dispatch_jobs: bool,
+    verdict_routing: BTreeMap<GateVerdict, StepId>,
+    iteration_cap: Option<u32>,
+    quiet_after_seconds: Option<u32>,
+    poke_limit: Option<u32>,
 }
 
 impl Step {
@@ -225,6 +250,46 @@ impl Step {
     /// every workflow that creates none.
     pub fn may_dispatch_jobs(&self) -> bool {
         self.may_dispatch_jobs
+    }
+
+    /// Where this step goes on a verdict that neither advances nor ends.
+    /// **Empty on every step of a linear workflow**, and empty is what makes a
+    /// step's only exit forward. This is the edge that declares the loop —
+    /// `structure` only labels it, which is why the two are checked against
+    /// each other.
+    pub fn verdict_routing(&self) -> &BTreeMap<GateVerdict, StepId> {
+        &self.verdict_routing
+    }
+
+    /// How many times this step may be returned to before the Job escalates as
+    /// `loop_cap`. **`None` where the step declares none**, which is not
+    /// unbounded and not a number invented here: the schema defaults it from
+    /// `default_gate_policy.iteration_cap`, that block is still refused as
+    /// deferred, and inventing a ceiling at this layer would put the bound on a
+    /// Job in the one place nobody reading the workflow would look for it.
+    ///
+    /// **Not [`Step::retry_limit`], and never spent against it.** A retry is a
+    /// step that failed going again; an iteration is a step that was asked for
+    /// another draft.
+    pub fn iteration_cap(&self) -> Option<u32> {
+        self.iteration_cap
+    }
+
+    /// How long this step's Drone may say nothing before Fleet pokes it, in
+    /// seconds. **`None` where the file declares none**, which is Fleet's
+    /// standing value — the fallback is spelled at `fleet::Liveness::at` and
+    /// never re-derived here, for [`model`](Step::model)'s reason.
+    pub fn quiet_after_seconds(&self) -> Option<u32> {
+        self.quiet_after_seconds
+    }
+
+    /// How many nudges this step's quiet Drone gets. **`None` where the file
+    /// declares none**, and read independently of
+    /// [`quiet_after_seconds`](Step::quiet_after_seconds) because the two fall
+    /// back independently: a step that wants longer between pokes does not
+    /// thereby want more pokes.
+    pub fn poke_limit(&self) -> Option<u32> {
+        self.poke_limit
     }
 }
 
@@ -334,26 +399,41 @@ fn read(path: &Path, root: &Value, roster: &Roster, out: &mut Vec<Refusal>) -> O
             value,
             STRUCTURE_CARRIED,
             STRUCTURE_LEGAL,
-            STRUCTURE_M1,
+            STRUCTURE_LEGAL,
             out,
         )
     });
 
+    let items = top
+        .required("steps", out)
+        .and_then(|value| yaml::list("steps", value, out))
+        .unwrap_or_default();
     // Paired with the file position each step came from, because a step that
     // failed to parse is dropped and the duplicate-id report below has to name
     // the line the author wrote rather than the index in a shortened list.
-    let placed: Vec<(usize, Step)> = top
-        .required("steps", out)
-        .and_then(|value| yaml::list("steps", value, out))
-        .map(|items| {
-            items
-                .iter()
-                .enumerate()
-                .filter_map(|(n, (at, item))| Some((n, step(at, item, structure, roster, out)?)))
-                .collect()
-        })
-        .unwrap_or_default();
+    let placed: Vec<(usize, Step)> = items
+        .iter()
+        .enumerate()
+        .filter_map(|(n, (at, item))| Some((n, step(at, item, structure, roster, out)?)))
+        .collect();
     top.close(TOP_LEVEL, out);
+
+    // **The other half of the rule `loops` holds the linear half of.** The
+    // structure field is redundant with `verdict_routing` by construction and
+    // that redundancy is the whole value of the field: without this, `loop` is
+    // a label a file can wear while running as a straight line, and what
+    // surfaces is a Job that advances off the end of a workflow its author
+    // believed would come back.
+    //
+    // Reported at `structure` rather than at a step, because the absence is the
+    // file's and there is no offending step to name. Asked of what the file
+    // wrote rather than of what parsed — `yaml::any_holds` for why.
+    if structure == Some(Structure::Loop) && !yaml::any_holds(&items, "verdict_routing") {
+        out.push(Refusal::new(
+            "structure",
+            Fault::ContradictsStructure { structure: "loop" },
+        ));
+    }
 
     // Duplicate step ids, reported on the second occurrence and naming the
     // first. Every per-step counter in the system is keyed by this value, so
@@ -372,6 +452,53 @@ fn read(path: &Path, root: &Value, roster: &Roster, out: &mut Vec<Refusal>) -> O
             }
         }
     }
+    // **A routing edge has to name a step, and an earlier one.** Every other
+    // name in this crate is resolved where it is written rather than at the
+    // gate, for the reason `artifact_exists` gives: a step no Drone could pass
+    // costs a worktree, a Drone and a retry budget to discover. A routing
+    // target is the same name one layer up, and the layer that would otherwise
+    // find it is a Job standing at a human gate with nowhere to go.
+    //
+    // The order is checked here rather than deferred to the step machine
+    // because there is nothing there to defer to: the edge a return takes is
+    // `advanced -> running`, and a step the Job has not reached has advanced
+    // nothing. A step routing at itself is refused for the opposite reason —
+    // that move exists and is spelled `retry_limit`, and the two counters are
+    // two counters so a Drone that failed four times and a plan asked for a
+    // fourth draft do not read alike.
+    //
+    // Read off the file for `yaml::any_holds`'s reason: a target step dropped
+    // for its own unrelated fault is still a step the author wrote. The
+    // position is the index in the document, which is what `steps[n]` in the
+    // refusal already names.
+    let declared = yaml::placed_values(&items, "id");
+    for (n, step) in &placed {
+        for (verdict, target) in step.verdict_routing() {
+            let at = format!("steps[{n}].verdict_routing.{}", verdict.as_wire());
+            let value = target.as_str().to_string();
+            let found = declared
+                .iter()
+                .find(|(_, id)| *id == target.as_str())
+                .map(|(at, _)| *at);
+            let fault = match found {
+                None => Fault::RoutesToNoSuchStep {
+                    value,
+                    declared: declared.iter().map(|(_, id)| (*id).to_string()).collect(),
+                },
+                Some(target_at) if target_at == *n => Fault::NotAReturn {
+                    value,
+                    why: BadReturn::Itself,
+                },
+                Some(target_at) if target_at > *n => Fault::NotAReturn {
+                    value,
+                    why: BadReturn::Ahead,
+                },
+                Some(_) => continue,
+            };
+            out.push(Refusal::new(at, fault));
+        }
+    }
+
     let steps: Vec<Step> = placed.iter().map(|(_, step)| step.clone()).collect();
 
     Some(WorkflowDef {
@@ -393,19 +520,9 @@ fn step(
 ) -> Option<Step> {
     let mut table = Table::open(at, value, out)?;
 
-    // `verdict_routing` is the one deferred key with a refusal of its own. As
-    // an unknown key it would read as "M1 does not do that yet", when on a
-    // linear workflow it is wrong at every milestone: the declared structure
-    // and the wiring disagree, and the file says so about itself.
-    if structure == Some(Structure::Linear) && table.present("verdict_routing") {
-        table.ignore("verdict_routing");
-        out.push(Refusal::new(
-            format!("{at}.verdict_routing"),
-            Fault::ContradictsStructure {
-                structure: "linear",
-            },
-        ));
-    }
+    // Read first, because the routing map's refusal depends on the structure
+    // the file declared and every other key on the step does not.
+    let looping = loops::looping(&mut table, structure == Some(Structure::Linear), out);
 
     let id = table
         .required("id", out)
@@ -485,6 +602,32 @@ fn step(
         None => Some(false),
         Some(value) => yaml::flag(&grant_key, value, out),
     };
+    // **Absent is Fleet's, and absent has to stay absent all the way to the
+    // record** — `ResolvedStep::quiet_after_seconds` says why. A step written
+    // with the number Fleet happens to ship would be a second place that
+    // number lives, and it would freeze a value marked live.
+    //
+    // **`positive`, so zero is refused rather than carried.** A
+    // `quiet_after_seconds: 0` is a step whose Drone is quiet the instant it is
+    // spawned, which pokes it on the first turn and escalates it on the third
+    // — a sentence nobody means, and the two keys disagree about zero for
+    // exactly the reason `counted` and `positive` were split.
+    //
+    // A refused value reads as absent from here, which is `model`'s
+    // arrangement and is safe for `model`'s reason: the refusal is already in
+    // `out`, and a definition with any refusal in it does not load at all.
+    let quiet_key = table.at("quiet_after_seconds");
+    let quiet_after_seconds = table
+        .optional("quiet_after_seconds")
+        .and_then(|value| yaml::positive(&quiet_key, value, out));
+    // **`counted`, because zero is a sentence here.** A step with
+    // `poke_limit: 0` says its Drone gets no nudge at all and the first
+    // silence past the threshold escalates, which is a legitimate thing to ask
+    // for on a step where a poke costs a model run and buys nothing.
+    let poke_key = table.at("poke_limit");
+    let poke_limit = table
+        .optional("poke_limit")
+        .and_then(|value| yaml::counted(&poke_key, value, out));
     let gate_key = table.at("advance_gate");
     let advance_gate = table
         .required("advance_gate", out)
@@ -546,6 +689,10 @@ fn step(
     if disagrees || (judged && evidence_type.is_none()) {
         return None;
     }
+    let Looping {
+        routing,
+        iteration_cap,
+    } = looping?;
 
     Some(Step {
         id: StepId::new(id?),
@@ -558,6 +705,10 @@ fn step(
         retry_limit: retry_limit?,
         model,
         may_dispatch_jobs: may_dispatch_jobs?,
+        verdict_routing: routing,
+        iteration_cap,
+        quiet_after_seconds,
+        poke_limit,
     })
 }
 

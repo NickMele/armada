@@ -40,6 +40,7 @@ use crate::drone::{Ending, Started};
 use crate::footprint::Publishing;
 use crate::questioning::Question;
 use crate::session::LiveSession;
+use crate::silence::Liveness;
 use crate::transcript::{Tap, Taps};
 use crate::watch::{Drained, Watching};
 use store::DroneSpend;
@@ -195,6 +196,21 @@ pub(crate) struct Working {
     /// answer would let a Drone that says one word every two minutes and does
     /// nothing else stay under the counter for ever.
     pokes: u32,
+    /// How long this Drone may say nothing, and how many nudges it gets:
+    /// **this step's, resolved when the slot was made.**
+    ///
+    /// A field rather than a reading, because `Fleet::watch_silence` compares
+    /// against the threshold before it touches the store — a per-step value
+    /// fetched off the record would put a store read on every turn of every
+    /// healthy Drone, which is the reading the whole vigil is arranged to
+    /// avoid. [`Liveness::at`] is the resolution and it runs once, here, over
+    /// the same frozen step this slot was spawned against.
+    ///
+    /// **It cannot go stale, because a slot does not outlive a step.** The
+    /// boundary ends the Drone and builds a new slot, which resolves again —
+    /// so a Job of four steps holds four of these in turn, and never a sum of
+    /// them.
+    liveness: Liveness,
     /// When the worktree was last read for the live file list, and what was
     /// last published from it.
     publishing: Publishing,
@@ -305,6 +321,12 @@ impl Working {
         started: Started,
         harness: Arc<H>,
         taps: Taps,
+        // This step's, already resolved — see the field. A parameter and not a
+        // builder, for the reason `Liveness` has no `Default`: there is no
+        // value to hold until somebody remembers to set one, and a slot
+        // holding the wrong patience is a Job that escalates for no reason a
+        // person can see.
+        liveness: Liveness,
         at: Timestamp,
     ) -> Working
     where
@@ -332,6 +354,7 @@ impl Working {
             asked: None,
             told_after: AtomicUsize::new(0),
             pokes: 0,
+            liveness,
             publishing: Publishing::default(),
             entered_with: None,
             checking_since: None,
@@ -367,6 +390,7 @@ impl Working {
         adopted: Adopted,
         worktree: Worktree,
         taps: Taps,
+        liveness: Liveness,
         at: Timestamp,
     ) -> Working {
         let each = taps.each();
@@ -391,6 +415,7 @@ impl Working {
             asked: None,
             told_after: AtomicUsize::new(0),
             pokes: 0,
+            liveness,
             publishing: Publishing::default(),
             entered_with: None,
             checking_since: None,
@@ -761,6 +786,15 @@ impl Working {
     /// How many pokes this step has spent.
     pub(crate) fn pokes(&self) -> u32 {
         self.pokes
+    }
+
+    /// What this step's patience is, both halves of it. **The slot's and not
+    /// Fleet's** — `Fleet::liveness` is what an absent override fell back to,
+    /// and this is the answer, resolved at the boundary. Every reader of the
+    /// threshold and of the poke budget asks here, so a step's declaration
+    /// cannot apply to one of the two and not the other.
+    pub(crate) fn liveness(&self) -> Liveness {
+        self.liveness
     }
 
     /// The Drone has been poked, at this instant. **The clock restarts**, so

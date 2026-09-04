@@ -27,7 +27,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::job::attempt::Attempt;
+use crate::job::attempt::{Attempt, Iteration};
 use crate::job::covers::Covers;
 use crate::job::gaming::GamingCheck;
 use crate::job::ids::{ModelName, StepId, WorkflowId};
@@ -266,6 +266,46 @@ pub struct ResolvedStep {
     /// Whether a Drone on this step is given the tool that creates Jobs.
     /// **False on every step that does not say otherwise.**
     may_dispatch_jobs: bool,
+    /// How many passes over this step a loop may make before the cap is spent.
+    /// **Zero on a step no verdict routes back to**, which is every step of
+    /// every linear workflow — and a count rather than an `Option` for
+    /// [`retry_limit`](ResolvedStep::retry_limit)'s reason: absent and "no loop
+    /// here" are the same sentence, and two spellings of it could drift.
+    ///
+    /// **It lives on the step that emits the routing verdict**, which is where
+    /// `workflowdef-fields.toml` puts it: *"a cap split from the count it
+    /// bounds never fires."*
+    iteration_cap: u32,
+    /// How long this step's Drone may say nothing before Fleet pokes it, in
+    /// seconds. **`None` is the step declaring none**, and none means the
+    /// value Fleet is running with rather than a number restated here.
+    ///
+    /// **Frozen, while the setting it overrides is marked live.** Reading it
+    /// live would mean re-reading `.armada/workflows/`, which is the one thing
+    /// this module exists to refuse: an edit would move a running Job's
+    /// patience under an approval nobody re-gave. The order between the two
+    /// tiers is `fleet::Liveness::at`'s, and it is the only place that resolves
+    /// them.
+    ///
+    /// Seconds, and the unit is in the name, following the schema's
+    /// `heartbeat_interval_minutes`. A `u32` rather than a `Duration` because
+    /// what the file wrote is what the row holds.
+    quiet_after_seconds: Option<u32>,
+    /// How many nudges this step's quiet Drone gets before the Job escalates as
+    /// stalled. **`None` is the step declaring none**, with
+    /// [`quiet_after_seconds`](Self::quiet_after_seconds)'s meaning and its
+    /// live-versus-frozen answer.
+    ///
+    /// **A second `Option` and not the other half of one**, which `#60` decided
+    /// rather than assumed: a step wanting longer between pokes does not
+    /// thereby want more pokes, so a step overriding either half must not have
+    /// to restate the other. Two fields is what makes that true at the call
+    /// site instead of by care.
+    ///
+    /// `Some(0)` is a legal sentence and is not `None`: it is a step saying its
+    /// Drone gets no nudge at all, and the first silence past the threshold
+    /// escalates.
+    poke_limit: Option<u32>,
 }
 
 impl ResolvedStep {
@@ -296,9 +336,15 @@ impl ResolvedStep {
             evidence_scope,
             retry_limit,
             model,
-            // Set by the builder below: a tenth parameter would make ten
-            // callers state a value that is false on all but one step.
+            // Set by the builders below, all four of them: a tenth parameter
+            // would make ten callers state a value that is false on all but
+            // one step, an eleventh a zero on every step of every linear
+            // workflow, and the last two a `None` about a dial almost no step
+            // touches.
             may_dispatch_jobs: false,
+            iteration_cap: 0,
+            quiet_after_seconds: None,
+            poke_limit: None,
         }
     }
 
@@ -306,6 +352,37 @@ impl ResolvedStep {
     /// given it.
     pub fn dispatching(mut self, may: bool) -> ResolvedStep {
         self.may_dispatch_jobs = may;
+        self
+    }
+
+    /// The loop cap, for the reason [`dispatching`](Self::dispatching) is a
+    /// builder: one step of one workflow carries one, and every other step
+    /// would be restating a zero.
+    ///
+    /// **Zero is the fail-closed default and that is deliberate.** A step whose
+    /// cap never arrived permits no return, so a loop that was wired and not
+    /// capped stops on its first return and says so. The other direction — a
+    /// missing cap meaning unbounded — is a Job that never terminates, which is
+    /// the failure `structure` exists to catch at load time.
+    pub fn looping(mut self, iteration_cap: u32) -> ResolvedStep {
+        self.iteration_cap = iteration_cap;
+        self
+    }
+
+    /// How long this step's Drone may be silent, where it says.
+    ///
+    /// **Its own builder rather than a pair with [`poking`](Self::poking)**,
+    /// which is the whole of "two settings, not one" made visible: a caller
+    /// setting one of them does not touch the other, and neither can be set by
+    /// accident while writing the other down.
+    pub fn quiet_after(mut self, seconds: Option<u32>) -> ResolvedStep {
+        self.quiet_after_seconds = seconds;
+        self
+    }
+
+    /// How many nudges this step's quiet Drone gets, where it says.
+    pub fn poking(mut self, limit: Option<u32>) -> ResolvedStep {
+        self.poke_limit = limit;
         self
     }
 
@@ -402,6 +479,34 @@ impl ResolvedStep {
         spent.number() <= self.retry_limit
     }
 
+    /// How many passes a loop may make over this step. **Zero on every step of
+    /// every linear workflow**, and on any step no verdict routes back to.
+    pub fn iteration_cap(&self) -> u32 {
+        self.iteration_cap
+    }
+
+    /// Whether the pass `now` may be redone once more, or the cap is spent.
+    ///
+    /// **The arithmetic is here and nowhere else**, for
+    /// [`may_hand_back`](ResolvedStep::may_hand_back)'s reason — and it is a
+    /// *different* arithmetic, which is why they are two calls taking two
+    /// types. `retry_limit` counts hand-backs; `iteration_cap` counts passes,
+    /// so a cap of five makes the fifth pass the last. See
+    /// `workflowdef-fields.toml`, which said "returns" until #263 and does not
+    /// now: `attempt_cap: 15` is `retry_limit × iteration_cap` at 3 × 5 only on
+    /// the passes reading, and "iteration 3 of 5" renders the same way.
+    ///
+    /// [`Iteration`] is the parameter for [`Attempt`]'s reason: nothing invents
+    /// one, so no caller can pass a count the step's log does not support.
+    ///
+    /// **A spent cap is not a failure.** Nothing went wrong and the loop did
+    /// not converge, so the step stops under
+    /// [`EscalationTrigger::LoopCap`](crate::EscalationTrigger) — raised by
+    /// `fleet::gate`, exactly as it raises `gate_failure` off the other call.
+    pub fn may_return(&self, now: Iteration) -> bool {
+        now.number() < self.iteration_cap
+    }
+
     /// What this step asked to be run as. **`None` on most steps**, and on
     /// every step written before a step could name one — see
     /// [`Job::model_at`](crate::Job::model_at), which is the only place the
@@ -414,6 +519,27 @@ impl ResolvedStep {
     /// toolbelt is built, and again where a call of it arrives.
     pub fn may_dispatch_jobs(&self) -> bool {
         self.may_dispatch_jobs
+    }
+
+    /// How long this step's Drone may say nothing, in seconds, where the step
+    /// declares it. **`None` on almost every step**, and none is Fleet's
+    /// standing value rather than a number this record knows — see the field
+    /// for why one tier is frozen and the other is live.
+    ///
+    /// The resolution is `fleet::Liveness::at` and is spelled nowhere else. It
+    /// is not spelled here because this record has no access to what it would
+    /// fall back to, and a default invented on this side would be a second
+    /// place the shipped number lives.
+    pub fn quiet_after_seconds(&self) -> Option<u32> {
+        self.quiet_after_seconds
+    }
+
+    /// How many nudges this step's quiet Drone gets, where the step declares
+    /// it. **`None` on almost every step**, with
+    /// [`quiet_after_seconds`](Self::quiet_after_seconds)'s meaning — and read
+    /// independently of it, because the two fall back independently.
+    pub fn poke_limit(&self) -> Option<u32> {
+        self.poke_limit
     }
 
     /// How many model calls one pass over this step makes. Latency rather than
