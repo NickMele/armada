@@ -205,7 +205,7 @@ Drawn shape: `plan -> dispatch -> roll_up`, with `request_changes` on `roll_up` 
 
 `roll_up` is the step `docs/capabilities/epic-as-one-job.md` drew as `assess`. It is not called `converge`: `crates/fleet/src/converging.rs` owns that word for a Drone that is working and getting nowhere.
 
-What is not settled here is whether a person reads every plan or only a flagged one. Today it is fixed in this definition; the shape it wants is a gate read per Job, which is #206.
+What is not settled here is whether a person reads every plan or only a flagged one. Today it is fixed in this definition; the shape it wants is a gate read per Job, which is #264.
 """
 
 [workflows.feature]

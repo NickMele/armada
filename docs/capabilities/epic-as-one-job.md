@@ -168,7 +168,8 @@ time. A Judge-first variant was rejected because it needs `#206`, which is open,
 and because the first thing a Judge would wave through is eight Jobs' worth of
 spend. What the shape wants is a gate that is *read* per Job rather than
 declared per workflow — a low-risk milestone running wave to wave, a risky one
-stopping each round — and that is `#206`'s, unbuilt.
+stopping each round — and that is `#264`'s, unbuilt. `#206` is the other half:
+which plans reach a person at all, once a Judge panel can say how sure it is.
 
 ## What is built, and what it is waiting for
 
@@ -238,7 +239,7 @@ peers, which requires an upstream to have landed.
 
 | Undecided | What turns on it |
 |---|---|
-| Whether a person reads every plan, or only a flagged one | `#206`. The gate is declared per workflow today, so every milestone stops each round whatever its risk. A gate read per Job is the shape this wants and nothing carries one |
+| Whether a person reads every plan, or only a flagged one | `#264` carries the mechanism — a gate read off the Job rather than fixed in the definition — and `#206` carries the question of which plans a Judge would let through. Today the gate is declared per workflow, so every milestone stops each round whatever its risk |
 | What a spent budget does to a parent with children queued | `#51`. A cap that stops the parent leaves children queued against an approval whose author is gone; a cap that stops the children leaves a parent waiting for Jobs that will not run |
 | What Fleet does about a child that failed | The brief names it and Fleet does nothing else. Whether the parent's own step should fail, and whether a person is asked, is a person's call |
 
