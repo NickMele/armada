@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn } from "storybook/test";
 import { Check, CircleDot, OctagonAlert, UserCheck, X } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
@@ -93,6 +94,15 @@ export const AFailedJob: Story = {
  * finished job are about its branch and its log, and they sit beside those
  * rather than up here. The field run changes with the state — a job that has
  * stopped reports what it ran, not what step it is on.
+ *
+ * **`Pull request #4711` is a fact and not an act**, which is why it is in the
+ * run rather than in the trailing group. Going to read something is not one of
+ * the things that end a job, and it belongs beside the branch it was opened
+ * from. It is `--accent`, the token the design contract gives links, and it
+ * underlines only on hover.
+ *
+ * **The number, never the address.** The address is sixty characters of which
+ * a person reads four; the whole of it is on the link's `title`.
  */
 export const AFinishedJob: Story = {
   args: {
@@ -103,10 +113,65 @@ export const AFinishedJob: Story = {
     jobId: "job_4f10",
     fields: [
       { label: "All", value: "4 of 4", mono: true, suffix: "steps advanced" },
+      { label: "Branch", value: "fix/poke-ceiling", mono: true, copyValue: "fix/poke-ceiling" },
+      {
+        label: "Pull request",
+        value: "#4711",
+        mono: true,
+        href: "https://forge.invalid/org/repo/pull/4711",
+      },
       { label: "Ran", value: "18m 22s", mono: true },
       { label: "Spend, estimated", value: "~$2.40", mono: true },
       { label: "Dispatched by you" },
     ],
+  },
+};
+
+/**
+ * The same job once somebody has taken the work. **What became of the pull
+ * request continues the fact that names it** — `Pull request #4711, merged` —
+ * rather than standing beside it as a second fact. They are one thing said to
+ * the depth the record can say it, and the run's gap would read them as two.
+ *
+ * Nothing is drawn here while a pull request is merely open: that is the state
+ * every one of them is in from the moment it exists, so a word for it would be
+ * a slot on every finished job saying that nothing has happened.
+ */
+export const ThePullRequestOnceItLanded: Story = {
+  args: {
+    ...AFinishedJob.args,
+    fields: [
+      { label: "All", value: "4 of 4", mono: true, suffix: "steps advanced" },
+      { label: "Branch", value: "fix/poke-ceiling", mono: true, copyValue: "fix/poke-ceiling" },
+      {
+        label: "Pull request",
+        value: "#4711",
+        mono: true,
+        href: "https://forge.invalid/org/repo/pull/4711",
+      },
+      { label: "merged", continues: true },
+      { label: "Ran", value: "18m 22s", mono: true },
+      { label: "Spend, estimated", value: "~$2.40", mono: true },
+      { label: "Dispatched by you" },
+    ],
+    onFollowed: fn(),
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const address = "https://forge.invalid/org/repo/pull/4711";
+    const link = canvas.getByRole("link", { name: "#4711" });
+
+    // The number is what is on screen and the address is what is behind it.
+    await expect(link).not.toHaveTextContent(address);
+    await expect(link).toHaveAttribute("title", address);
+
+    // One fact, not two: the fold puts the comma inside the same run.
+    await expect(link.parentElement).toHaveTextContent("Pull request #4711, merged");
+
+    // The click leaves, and this window does not. `preventDefault` is what
+    // keeps a forge address from loading over the app, and the host is what
+    // decides where it actually goes.
+    await userEvent.click(link);
+    await expect(args.onFollowed).toHaveBeenCalledWith(address);
   },
 };
 

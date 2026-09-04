@@ -74,6 +74,7 @@ const reclaimOne = (jobId: string) => window.armada.reclaimWorktree(jobId);
 const readEvidence = (jobId: string | null): void => void window.armada.readEvidence(jobId);
 const readCall = (jobId: string, callId: string) => window.armada.readCall(jobId, callId);
 const openArtifact = (jobId: string, what: Artifact) => window.armada.openArtifact(jobId, what);
+const openPullRequest = (jobId: string) => window.armada.openPullRequest(jobId);
 const stageAttachment = (bytes: ArrayBuffer, filename: string, mimeType: string) =>
   window.armada.stageAttachment(bytes, filename, mimeType);
 
@@ -595,6 +596,7 @@ export function App() {
                 job={reading}
                 onReadDiff={readDiff}
                 onOpenArtifact={openArtifact}
+                onOpenPullRequest={openPullRequest}
                 onReadCall={readCall}
                 onNeedMaterial={readEvidence}
                 watched={state.watched}

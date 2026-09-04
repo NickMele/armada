@@ -78,7 +78,7 @@ import type { JobFootprint } from "@armada/protocol";
 import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
 import { Acts, type ConfirmableAct } from "./Acts";
 import { useCallArguments, type Calls, type ReadCall } from "./calls";
-import type { OpenArtifact } from "./opening";
+import { openPullRequest, type OpenArtifact, type OpenPullRequest } from "./opening";
 import { DIFF_CHAPTER, FLEET_LOG, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-keys";
 import { useAtFloor } from "@armada/shell";
 import { DetailSheet, holdOf, type HeldAt, type OpenSheet } from "./Sheets";
@@ -152,6 +152,16 @@ export type JobDetailProps = {
    * could not be rendered anywhere but inside the app.
    */
   onOpenArtifact: OpenArtifact;
+  /**
+   * Open the pull request this Job opened, in whatever browses the web here.
+   *
+   * **Beside `onOpenArtifact` and not folded into it.** That one takes a word
+   * from a closed set and lands a file in an editor; this takes no word at all
+   * and leaves the app. One prop taking which would read as one act and perform
+   * two — and the two fail at different things, which is why `Followed` is not
+   * `Opened`.
+   */
+  onOpenPullRequest: OpenPullRequest;
   onReadCall: ReadCall;
   /** Stable, like `onReadDiff` — an effect in the decision block depends on it. */
   onNeedMaterial: (jobId: string | null) => void;
@@ -204,6 +214,7 @@ export type JobDetailProps = {
 export function JobDetail({
   onReadDiff,
   onOpenArtifact,
+  onOpenPullRequest,
   onReadCall,
   onNeedMaterial,
   job,
@@ -437,6 +448,14 @@ export function JobDetail({
         onCopied={onCopied}
       />
     ),
+    // The pull request fact, followed. The address the link carries is what the
+    // fact drew from; what is sent is the Job id, so the string never decides
+    // what opens. `opening.ts` says why.
+    onFollowed: () => {
+      void openPullRequest(onOpenPullRequest, job.id).then((because) => {
+        if (because !== null) onSaid(because);
+      });
+    },
   };
 
   return (

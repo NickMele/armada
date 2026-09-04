@@ -127,3 +127,25 @@
      a flex line has no gap to distribute. */
   margin-inline-start: auto;
 }
+
+/* A fact that points outside Armada draws in --accent, which the design
+   contract gives to links, and underlines only on hover. Accent at rest rather
+   than on hover alone, unlike the copy affordance above: copying is discovered
+   because every mono value in the run does it, and a link that looked like
+   plain text until the pointer reached it would be a thing nobody knows is
+   there. The underline is held back to hover so a run of short readings does
+   not gain a rule through one of them.
+
+   No `external-link` glyph. The run is --text-2xs and a 12px mark beside a
+   four-character value is more ink than the value. */
+.armada-job-head__value[data-opens] {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: none;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-job-head__value[data-opens]:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
