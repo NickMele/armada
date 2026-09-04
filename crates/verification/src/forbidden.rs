@@ -22,7 +22,7 @@
 //! `no_vendor_literal_outside_adapters` keeps out of this crate, and a
 //! repository's own entry, which needs a workflow schema key.
 
-use core_model::RepoPath;
+use core_model::{under, RepoPath};
 
 /// How a boundary's name matches a path segment.
 ///
@@ -43,6 +43,17 @@ struct Boundary {
     /// Matched against every segment of a repository-relative path.
     name: &'static str,
     reach: Reach,
+    /// Directories inside this boundary that it does not reach.
+    ///
+    /// **Not an exception a caller can supply** — it is compiled in beside the
+    /// boundary it narrows, and no signature in this module carries it. What it
+    /// says is what the boundary *is*, not what somebody may do about it, and
+    /// [`BOUNDARIES`] holds one entry that needs one.
+    ///
+    /// The test is the one this file already applies to `Cargo.toml`: a
+    /// boundary that stops the work Armada itself directs a Drone to do is
+    /// refusing the work rather than protecting anything.
+    but_not: &'static [&'static str],
     /// Why nothing lifts it. **Reaches the Drone and the person**, so it says
     /// what the file is rather than that a rule exists.
     because: &'static str,
@@ -54,23 +65,39 @@ const BOUNDARIES: &[Boundary] = &[
     Boundary {
         name: ".env",
         reach: Reach::OrAnythingAfterIt,
+        but_not: &[],
         because: "it holds secrets",
     },
     Boundary {
         name: ".git",
         reach: Reach::Exactly,
+        but_not: &[],
         because: "it holds the repository's own machinery, including the hooks \
                   a check runs through",
     },
     Boundary {
+        // **`.armada/artifacts/` is the one directory under here a Drone is
+        // told to write to**, by `mechanical_checks[].target` in seven of the
+        // shipped workflows, and Fleet opens exactly that path at the gate to
+        // put in the Judge's brief. The boundary without this exception refuses
+        // every deliverable step in the fleet.
+        //
+        // It did not bite until `#431` because this repository's `.gitignore`
+        // holds `.armada/*`, so the artifact never enters a diff and the gate
+        // never saw it. A repository that does not ignore it would have met
+        // this the first time a `plan` step submitted — which is the reason the
+        // exception is stated here rather than left to every repository's
+        // ignore file to imply.
         name: ".armada",
         reach: Reach::Exactly,
+        but_not: &[".armada/artifacts"],
         because: "it holds the workflow definitions, which say what this step is \
                   judged by",
     },
     Boundary {
         name: "armada.yml",
         reach: Reach::Exactly,
+        but_not: &[],
         because: "it is the manifest of checks this work is measured by",
     },
 ];
@@ -113,12 +140,17 @@ pub fn forbidden(path: &RepoPath) -> Option<Forbidden> {
     BOUNDARIES
         .iter()
         .find(|boundary| {
-            path.split('/')
-                .filter(|segment| !segment.is_empty())
-                .any(|segment| match boundary.reach {
-                    Reach::Exactly => segment == boundary.name,
-                    Reach::OrAnythingAfterIt => segment.starts_with(boundary.name),
-                })
+            !boundary
+                .but_not
+                .iter()
+                .any(|sanctioned| under(sanctioned, path))
+                && path
+                    .split('/')
+                    .filter(|segment| !segment.is_empty())
+                    .any(|segment| match boundary.reach {
+                        Reach::Exactly => segment == boundary.name,
+                        Reach::OrAnythingAfterIt => segment.starts_with(boundary.name),
+                    })
         })
         .map(|boundary| Forbidden {
             path: RepoPath::new(path),
@@ -132,6 +164,39 @@ pub fn forbidden(path: &RepoPath) -> Option<Forbidden> {
 /// absolute" rather than as "there was nothing to check".
 pub fn forbidden_among<'a>(paths: impl IntoIterator<Item = &'a RepoPath>) -> Vec<Forbidden> {
     paths.into_iter().filter_map(forbidden).collect()
+}
+
+/// The same answer over a footprint alone — the paths Fleet read out of the
+/// worktree, with no declaration beside them.
+///
+/// **This is the half a step that declared nothing can still be asked.**
+/// `InScope::resolved` answers the absolute tier over the declaration and the
+/// footprint together, which needs a declaration to have been made;
+/// `#431` is what a step with none is owed, and it is this. Same
+/// [`forbidden`] underneath, so there is one list and one predicate.
+pub fn out_of_bounds(changed: &[String]) -> Vec<Forbidden> {
+    changed
+        .iter()
+        .filter_map(|path| forbidden(&RepoPath::new(path)))
+        .collect()
+}
+
+/// What a refusal says when a path is under one of these, **written once**.
+///
+/// Both tiers of caller render it: the resolution that found it beside a
+/// declaration, and the floor that found it in a footprint with no declaration
+/// at all. Two spellings of this sentence would be the absolute refusal reading
+/// as two different rules depending on which door the path came through.
+pub(crate) fn reaches(paths: &[Forbidden]) -> String {
+    let mut said = String::from("the step reaches ");
+    for (n, found) in paths.iter().enumerate() {
+        if n > 0 {
+            said.push_str(", ");
+        }
+        said.push_str(&found.to_string());
+    }
+    said.push_str(", which nothing here can allow");
+    said
 }
 
 #[cfg(test)]
@@ -174,6 +239,38 @@ mod tests {
         assert_eq!(at("Cargo.toml"), None);
         assert_eq!(at("package.json"), None);
         assert_eq!(at("Makefile"), None);
+    }
+
+    /// The directory the workflows send a deliverable to is the work, not the
+    /// machinery. A boundary that refused it would fail every `plan`, `scope`,
+    /// `draft`, `read`, `assess` and `roll_up` step in the fleet.
+    #[test]
+    fn the_directory_a_drone_is_told_to_write_its_deliverable_to_is_ordinary() {
+        assert_eq!(at(".armada/artifacts/plan.md"), None);
+        assert_eq!(at(".armada/artifacts/roll-up.md"), None);
+        assert!(at(".armada/artifacts").is_none());
+    }
+
+    /// The exception is that directory and nothing beside it. A Job's own log
+    /// and a Drone's scratch directory are records of the run, and a step that
+    /// edits the record of itself is what the boundary is for.
+    #[test]
+    fn the_rest_of_the_armada_directory_is_still_absolute() {
+        assert!(at(".armada/workflows/bug.json").is_some());
+        assert!(at(".armada/artifacts-of-mine/plan.md").is_some());
+        assert!(at(".armada/some-job-id/notes.md").is_some());
+    }
+
+    #[test]
+    fn a_footprint_is_answered_without_a_declaration_beside_it() {
+        let changed = vec![
+            String::from("crates/fleet/src/gate.rs"),
+            String::from(".env.local"),
+        ];
+        let found = out_of_bounds(&changed);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].path(), &RepoPath::new(".env.local"));
+        assert!(out_of_bounds(&[String::from("docs/plan.md")]).is_empty());
     }
 
     #[test]

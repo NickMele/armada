@@ -24,7 +24,7 @@
 
 use core_model::{under, DeclaredPaths, EvidenceScope, Job, RepoPath};
 
-use crate::forbidden::{forbidden_among, Forbidden};
+use crate::forbidden::{forbidden_among, reaches, Forbidden};
 
 /// A footprint that agreed with what was declared.
 ///
@@ -105,11 +105,7 @@ impl core::fmt::Display for OutsideScope {
                 "the step declared {}, which its evidence scope excludes",
                 Listed(declared)
             ),
-            OutsideScope::Forbidden { paths } => write!(
-                f,
-                "the step reaches {}, which nothing here can allow",
-                Reasoned(paths)
-            ),
+            OutsideScope::Forbidden { paths } => f.write_str(&reaches(paths)),
             OutsideScope::NothingDeclared => f.write_str(
                 "the step asks the Drone which paths its work is in and none were declared",
             ),
@@ -129,25 +125,6 @@ impl core::fmt::Display for Listed<'_> {
                 f.write_str(", ")?;
             }
             write!(f, "`{}`", path.as_str())?;
-        }
-        Ok(())
-    }
-}
-
-/// The same, each path followed by why nothing lifts it.
-///
-/// **Separate from [`Listed`] rather than a flag on it**, because the reason is
-/// the whole difference between the two tiers and a message that dropped it
-/// would be the absolute refusal reading like the ordinary one.
-struct Reasoned<'a>(&'a [Forbidden]);
-
-impl core::fmt::Display for Reasoned<'_> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        for (n, found) in self.0.iter().enumerate() {
-            if n > 0 {
-                f.write_str(", ")?;
-            }
-            write!(f, "{found}")?;
         }
         Ok(())
     }

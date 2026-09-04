@@ -384,7 +384,11 @@ async fn a_gate_that_cannot_read_its_artifact_escalates_and_names_the_artifact()
         "a gate that reads nothing and writes nothing is the whole defect: {written}"
     );
     assert!(
-        written.contains("the Job's diff"),
+        // The changed-file list rather than the footprint, since `#431` made
+        // that reading the first thing every gate does. Either is a worktree
+        // that would not open; what the log owes the person is which reading
+        // was refused, and the earliest one is the one that failed.
+        written.contains("the Job's changed files"),
         "the artifact is named, not just the fact that something went wrong: {written}"
     );
     assert!(
