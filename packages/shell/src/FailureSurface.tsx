@@ -107,6 +107,10 @@ export function FailureBlock({
 }: FailureBlockProps) {
   return (
     <FailureNotice
+      // The class comes off the failure, which is the only thing that knows
+      // whether Fleet is alive. It was a literal inside the notice, so all six
+      // drew red and the two where Fleet is up and working said "restart me".
+      kind={failure.kind}
       headline={failure.headline}
       // Read off the payload rather than off a second field beside it. The
       // chip on screen and the `code` row in the copied artifact are then the
