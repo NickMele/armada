@@ -224,7 +224,7 @@ icon = "eye"
 status_token = ""
 vocabulary = "Step state"
 in_code = ""
-notes = "The same words as `job_status.awaiting_review`, because it is the same claim one level down: `step-states.toml` sees this state beneath that status and beneath no other. `awaiting a human` would be a second phrase for one fact, and `waiting on you` would be a third. `eye` for the same reason the words are the same, and it is one of the five glyphs `[conventions.step_activity_borrowing]` names. Iconography's prose says `waiting (clock)` in the paragraph above the one that defers to that convention for the full mapping — `clock` is `queued`'s and the convention does not list it, so the convention is read as the authority and the prose as stale. Reported. No token, for `advanced`'s reason: the hue is `--step-waiting`."
+notes = "The same words as `job_status.awaiting_review`, because it is the same claim one level down: `step-states.toml` sees this state beneath that status and beneath no other. `awaiting a human` would be a second phrase for one fact, and `waiting on you` would be a third. `eye` for the same reason the words are the same, and it is one of the five glyphs `[conventions.step_activity_borrowing]` names. Iconography's prose says `waiting (clock)` in the paragraph above the one that defers to that convention for the full mapping — `clock` is `queued`'s and the convention does not list it, so the convention is read as the authority and the prose as stale. Settled that way by `#347`, and Iconography now says the same. No token, for `advanced`'s reason: the hue is `--step-waiting`."
 
 [verbs.step_state.not_started]
 verb = "not started"
