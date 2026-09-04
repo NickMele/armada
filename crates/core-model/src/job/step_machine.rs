@@ -126,7 +126,12 @@ fn overruled_while_frozen(status: JobStatus, from: StepState, to: &StepTarget) -
 /// instead, which renders less honestly and behaves identically — and cannot
 /// be passed to [`Job::transition_step`](crate::Job::transition_step), because
 /// there is nothing to pass.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+///
+/// **Not [`Copy`], since [`Returned`](StepTarget::Returned) carries a
+/// [`StepId`].** It was `Copy` while every payload was a trigger, and the
+/// alternative — an index, or a borrowed id — would put a lifetime on the one
+/// type `store` reads back off a row with nothing to borrow from.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StepTarget {
     /// The step is being worked. Entering it is what moves the Job's cursor.
     ///
@@ -207,19 +212,32 @@ pub enum StepTarget {
     /// a gate refused something and no gate refused this; a payload would be a
     /// third place a return could be conflated with a retry.
     ///
+    /// **The payload is the step that sent it back**, and it is not a trigger.
+    /// A trigger is a reason a gate refused something and no gate refused this.
+    /// What the row has to carry instead is *whose* loop this pass belongs to:
+    /// `iteration_count` is the **emitting** step's — `docs/journeys/triage-queue.md`
+    /// settles it, because a cap and the count it bounds must not be split and
+    /// because two loops sharing a target step would otherwise sum into one
+    /// count — and the emitting step makes no move of its own on a return, so
+    /// without this there is nothing in the log to count against it.
+    ///
+    /// **It is not a seventh [`StepState`].** The emitting step keeps reading
+    /// `running`, which is already how a step at a human gate behaves; a
+    /// seventh state is a wire-breaking change and was rejected on that cost.
+    ///
     /// Which verdict routed it back is not recorded here, and neither is
     /// whether the cap allows it: this type cannot see a workflow, the same way
     /// [`Retrying`](StepTarget::Retrying) cannot see a retry budget.
     /// [`ResolvedStep::may_return`](crate::ResolvedStep::may_return) owns the
     /// arithmetic and a spent cap is [`EscalationTrigger::LoopCap`].
-    Returned,
+    Returned(StepId),
 }
 
 impl StepTarget {
     /// The state this target arrives at.
     pub fn state(&self) -> StepState {
         match self {
-            StepTarget::Running | StepTarget::Returned => StepState::Running,
+            StepTarget::Running | StepTarget::Returned(_) => StepState::Running,
             StepTarget::Advanced | StepTarget::Overridden(_) => StepState::Advanced,
             StepTarget::Stopped(_) => StepState::Stopped,
             StepTarget::Retrying(_) => StepState::Retrying,
@@ -235,17 +253,34 @@ impl StepTarget {
     /// again — so the three had to agree, and a fourth caller matching on the
     /// variants would be a fourth place they could stop agreeing.
     pub fn begins_a_run(&self) -> bool {
-        matches!(self, StepTarget::Running | StepTarget::Returned)
+        matches!(self, StepTarget::Running | StepTarget::Returned(_))
     }
 
     /// What qualifies the move, where the destination stores one. `None` on the
     /// two that do not, for [`StepEdge`]'s reason.
     pub fn why(&self) -> Option<StepLevelTrigger> {
         match self {
-            StepTarget::Running | StepTarget::Advanced | StepTarget::Returned => None,
+            StepTarget::Running | StepTarget::Advanced | StepTarget::Returned(_) => None,
             StepTarget::Stopped(why) | StepTarget::Overridden(why) | StepTarget::Retrying(why) => {
                 Some(*why)
             }
+        }
+    }
+
+    /// Which step sent the work back, on the one move that is a loop return.
+    ///
+    /// `None` on every other target, which is what makes the column it writes
+    /// null on every row of every linear workflow — and what lets
+    /// `store::step_iteration` count the returns a step *caused* rather than
+    /// the returns that landed on it.
+    pub fn returned_by(&self) -> Option<&StepId> {
+        match self {
+            StepTarget::Returned(by) => Some(by),
+            StepTarget::Running
+            | StepTarget::Advanced
+            | StepTarget::Stopped(_)
+            | StepTarget::Overridden(_)
+            | StepTarget::Retrying(_) => None,
         }
     }
 
@@ -265,15 +300,26 @@ impl StepTarget {
     /// Without it a replayed `advanced -> running` row would come back as
     /// [`Running`](StepTarget::Running), which [`admits_step`] then refuses,
     /// and a Job that had looped would be unreadable off its own log.
+    ///
+    /// **`by` is refused where it does not belong and required where it does**,
+    /// exactly as a reason is: a return with no emitter would rebuild as a pass
+    /// nobody's `iteration_count` was charged for, and an emitter on any other
+    /// move is a row this build cannot have written.
     pub fn arriving_at(
         from: StepState,
         state: StepState,
         why: Option<StepLevelTrigger>,
+        by: Option<StepId>,
     ) -> Option<StepTarget> {
+        // The loop return, and the only way to reach it: no other edge into
+        // `running` starts at `advanced`, so the triple is unambiguous.
+        if from == StepState::Advanced && state == StepState::Running && why.is_none() {
+            return by.map(StepTarget::Returned);
+        }
+        if by.is_some() {
+            return None;
+        }
         match (state, why) {
-            // The loop return, and the only way to reach it: no other edge into
-            // `running` starts at `advanced`, so the pair is unambiguous.
-            (StepState::Running, None) if from == StepState::Advanced => Some(StepTarget::Returned),
             (StepState::Running, None) => Some(StepTarget::Running),
             (StepState::Advanced, None) => Some(StepTarget::Advanced),
             // The trigger is what tells the two arrivals at `advanced` apart,
@@ -479,7 +525,7 @@ pub(crate) fn admits_step(
             step_id: step_id.clone(),
         });
     }
-    if from != StepState::Advanced && matches!(to, StepTarget::Returned) {
+    if from != StepState::Advanced && matches!(to, StepTarget::Returned(_)) {
         return Err(IllegalStepTransition::NotAnAdvancedStep {
             step_id: step_id.clone(),
             from,

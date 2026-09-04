@@ -145,6 +145,13 @@ pub struct StepEvent {
     /// fold over it, so a stop recorded without its trigger would rebuild as a
     /// stopped step nobody could ask why about.
     why: Option<StepLevelTrigger>,
+    /// Which step sent the work back, on the one move that is a loop return.
+    ///
+    /// **`None` on every other move**, and therefore on every row of every
+    /// linear workflow. It is here rather than derivable because the emitting
+    /// step makes no move of its own on a return: `iteration_count` is its,
+    /// and without this the log holds nothing to count against it.
+    returned_by: Option<StepId>,
     under: JobStatus,
     actor: Actor,
     at: Timestamp,
@@ -169,6 +176,7 @@ impl StepEvent {
             from,
             to: to.state(),
             why: to.why(),
+            returned_by: to.returned_by().cloned(),
             under,
             actor,
             at,
@@ -191,6 +199,11 @@ impl StepEvent {
     /// destination that stores a reason.
     pub fn why(&self) -> Option<StepLevelTrigger> {
         self.why
+    }
+    /// Which step routed a verdict back here. `Some` only on a loop return,
+    /// which is the one move that stores it.
+    pub fn returned_by(&self) -> Option<&StepId> {
+        self.returned_by.as_ref()
     }
     /// The Job status this move happened beneath. Always one of
     /// [`ADVANCING_STATUSES`](crate::ADVANCING_STATUSES), and the Job does not
