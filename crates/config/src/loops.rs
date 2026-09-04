@@ -2,30 +2,26 @@
 //! bound on how many times it may be taken.
 //!
 //! **Both are read all the way through now.** They were carried for one wave
-//! while nothing routed on them, which this crate's own rule otherwise refuses:
-//! a field nothing reads is a promise the file makes and the system does not
-//! keep. `resolve` freezes the pair onto `ResolvedStep`, the step machine has
-//! the `advanced -> running` edge, and `fleet::reviewing` walks it — so the
-//! promise is kept and the exception is over.
+//! while nothing routed on them, which this crate's own rule otherwise refuses.
+//! `resolve` freezes the pair onto `ResolvedStep`, the step machine has the
+//! `advanced -> running` edge, and `fleet::reviewing` walks it.
 //!
 //! **A loop return is not a retry**, which is why there are two counters in the
 //! registry and not one. Nothing went wrong: a plan on its fourth honest draft
-//! must not have consumed a retry budget or tripped an escalation. That is the
-//! distinction `iteration_cap` exists to hold, and folding it into
-//! `retry_limit` would save a field and lose the difference between a Drone
-//! that failed four times and a plan that was asked for four drafts.
+//! must not have consumed a retry budget or tripped an escalation. Folding
+//! `iteration_cap` into `retry_limit` would save a field and lose the
+//! difference between a Drone that failed four times and a plan that was asked
+//! for four drafts.
 //!
 //! **The cap lives on the step that emits the verdict**, beside the routing it
 //! bounds — the registry is explicit that a cap split from the count it bounds
-//! never fires, and `docs/journeys/triage-queue.md` settled the matching
+//! never fires, and `docs/journeys/triage-queue.md` settles the matching
 //! question about the count: `request_changes` increments the *gate* step's
-//! `iteration_count`, not the step it routes back to. `store::step_iteration`
-//! counts it that way, off the emitting step named on the return's own row.
+//! `iteration_count`. `store::step_iteration` counts it off the emitting step
+//! named on the return's own row.
 //!
-//! **[`GateVerdict`] is `core-model`'s and is re-exported here.** A Job freezes
-//! `verdict_routing` and `store` reads it back off the row, so the type has to
-//! be reachable from the record — and `config` is downstream of both.
-
+//! **[`GateVerdict`] is `core-model`'s and re-exported here**, because a Job
+//! freezes `verdict_routing` and `store` reads it back off the row.
 use std::collections::BTreeMap;
 
 use crate::error::{Fault, Refusal};

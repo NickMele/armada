@@ -2,11 +2,11 @@
 //! failure**, and both counts come off the same log.
 //!
 //! `job-fields.toml` types `retry_count` and `iteration_count` as `job_steps`
-//! columns. Neither is one. `job_events` is append-only in the database itself
+//! columns. Neither is one: `job_events` is append-only in the database itself
 //! and already records every entry into `running` and the state each came from,
-//! so a column beside it would be a second record of one fact and a pair that
-//! can disagree — which is the argument `store::attempt` already made for the
-//! first counter, holding for the second without change.
+//! so a column beside it would be a pair that can disagree. That is the
+//! argument `store::attempt` made for the first counter, holding for the
+//! second without change.
 //!
 //! # Whose count it is
 //!
@@ -14,18 +14,13 @@
 //! `request_changes` — and not the step the verdict routes back to.
 //! `docs/journeys/triage-queue.md` settles it: the cap and the count it bounds
 //! must live on one step or `loop_cap` never fires, and two loops sharing a
-//! target step would otherwise sum into one number. The emitting step makes no
-//! move of its own on a return, so the row the routed-to step writes names it,
-//! and the count is over that column.
+//! target step would otherwise sum into one number. The emitter makes no move
+//! of its own on a return, so the row the routed-to step writes names it.
 //!
-//! The shape here is Design Plan's, with this crate's two-step fixture standing
-//! in for it: `reproduce` is the step redone and `fix` is the gate that sends
-//! the work back.
-//!
-//! Every run and every return here is reached by transitioning. Nothing writes
-//! a state into a row, so the counts are facts about the log rather than
-//! numbers this file chose.
-
+//! The shape is Design Plan's, with this crate's two-step fixture standing in:
+//! `reproduce` is the step redone and `fix` is the gate that sends it back.
+//! Every run and every return is reached by transitioning, so the counts are
+//! facts about the log rather than numbers this file chose.
 use core_model::{Actor, EscalationTrigger, Job, StepId, StepLevelTrigger, StepTarget};
 
 use crate::tests::attempt::on_its_first_run;

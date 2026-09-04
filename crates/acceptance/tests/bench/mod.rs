@@ -99,8 +99,10 @@ impl Mint for Counted {
 ///
 /// `crates/core-model/domain/workflow-samples/bug.json` is the real one and it
 /// has seven steps. **It does not load**, and `config`'s own sample tests
-/// assert so: it declares `structure: linear` and carries `verdict_routing`,
-/// which the structure rule rejects. Five of its seven steps need machinery M1
+/// assert so: no step carries a `label`, and it declares `default_gate_policy`,
+/// which M1 defers by name. Neither of those is its structure — it declares
+/// `structure: loop` with the routing edge that makes the claim true, and both
+/// have been carried since `#263`. Five of its seven steps need machinery M1
 /// did not build — `test_run` and `pr_merged` are sanctioned check types with
 /// no implementation, `review` is a Judge and there is no Judge, and `merge` is
 /// a push nothing in this workspace can perform. `artifact_exists` was a third

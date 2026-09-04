@@ -79,11 +79,12 @@ fn every_shipped_workflow_definition_parses() {
 
 /// **Nothing this repository ships grants the dispatch tool.**
 ///
-/// `may_dispatch_jobs` is carried by the parser and by the frozen record, and
-/// no shipped definition sets it — the workflow that will is a loop, and while
-/// the loop keys parse since #263, nothing yet takes the return: no step-machine
-/// edge from `advanced` back to `running`, and no `iteration_count` to bound it.
-/// So this is not a gap: it is the grant existing before the shape that uses it,
+/// `may_dispatch_jobs` is carried by the parser and by the frozen record, and no
+/// shipped definition sets it. **The loop is no longer what it is waiting on**:
+/// `design-plan.json` declares one and `#263` closed the return, the count and
+/// the cap. What is missing is the workflow — a milestone dispatched as one Job
+/// is `plan -> dispatch -> assess -> plan`, and nobody has written it. So this
+/// is not a gap: it is the grant existing before the definition that uses it,
 /// and it is asserted so that a step quietly acquiring the ability to create
 /// Jobs is a failing test rather than a Drone with an extra tool.
 #[test]

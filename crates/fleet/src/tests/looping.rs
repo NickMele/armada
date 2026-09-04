@@ -21,12 +21,44 @@ use testkit::FakeWorkProduct;
 
 use crate::resume::Redirection;
 use crate::tests::daemon::{
-    a_fleet_running_a_loop, a_proposal_for, diff_evidence, note_evidence, worktree_directory,
+    a_proposal_for, diff_evidence, fittings, manifest, note_evidence, one, worktree_directory,
 };
 use crate::tests::reviewing::Fixture;
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
 use crate::Adrift;
+
+/// `two_steps_gated_on_a_person`'s two steps, wired as a loop: `summarise`'s `request_changes` routes
+/// back to `implement`, bounded by `cap` passes.
+///
+/// **Design Plan's shape, in this crate's fixture vocabulary.** The gate is on
+/// the last step because that is where a loop's gate is — the step that reads
+/// the work is the step that sends it back — and `implement` stays `auto` so
+/// the Job walks to it the way a Job does.
+fn a_loop_of_two_steps(cap: u32) -> config::ResolvedWorkflow {
+    let def = config::WorkflowDef::parse(
+        std::path::Path::new("fixture.yml"),
+        &format!(
+            "version: 1\nworkflow_id: fixture-loop\nname: fixture\nstructure: loop\n\
+             steps:\n  - id: implement\n    label: \"Implement\"\n    evidence_type: diff\n    \
+             mechanical_checks:\n      - type: diff_nonempty\n    advance_gate: auto\n  - \
+             id: summarise\n    label: \"Summarise\"\n    evidence_type: facts_note\n    \
+             advance_gate: human_always\n    verdict_routing:\n      \
+             request_changes: implement\n    iteration_cap: {cap}\n"
+        ),
+        &config::Roster::offering_nothing(),
+    )
+    .unwrap_or_else(|refused| panic!("the fixture loop did not parse: {refused}"));
+    config::ResolvedWorkflow::resolve(&def, &manifest())
+        .unwrap_or_else(|refused| panic!("the fixture loop did not resolve: {refused}"))
+}
+
+/// A Fleet running [`a_loop_of_two_steps`].
+fn a_fleet_running_a_loop(home: &TempDir, work: FakeWorkProduct, cap: u32) -> Fixture {
+    let mut fittings = fittings(home, work);
+    fittings.workflows = one(a_loop_of_two_steps(cap));
+    crate::daemon::Fleet::assembled(fittings)
+}
 
 fn drafted() -> StepId {
     StepId::new("implement")

@@ -7,27 +7,20 @@
 //! identically to one that passed first time. `docs/concepts/workflow.md`:
 //! *"keeping all the verdicts is what shows the same note went unaddressed
 //! three times."*
-//! # The ordinal is read off the log, not carried to the writer
 //!
-//! [`Store::step_attempt`] counts the step's `job_events` rows arriving at
-//! `running`, and every writer calls it inside its own transaction. **No caller
-//! supplies an attempt number**, so none can disagree with the history — which
-//! is why this is a module and not four more arguments. **Nothing here folds
-//! and the fold reads none of it**: an attempt is a coordinate on evidence
-//! about a `Job` state, never a way to reach one.
-//! Counting entries into `running` rather than back edges is what let this
-//! survive the open question of a loop's return shape: a return is another run
-//! and increments the attempt like any other. [`Store::step_iteration`] reads
-//! the same table for the one edge that says a step is on a new pass.
+//! # Three readings of one log, and no two are the same number
 //!
-//! **Three readings of one log, and no two of them are the same number.**
 //! [`Store::step_attempt`] climbs forever and keys the per-run records;
 //! [`Store::step_spent`] resets on a return, because `retry_limit` does;
-//! [`Store::step_iteration`] counts passes and is charged to the step that
+//! [`Store::step_iteration`] counts passes and charges them to the step that
 //! *caused* them. `core_model` gives each its own type so a call site cannot
-//! quietly take the wrong one, which is how `may_hand_back` spent a looping
+//! quietly take the wrong one — which is how `may_hand_back` spent a looping
 //! step's retry budget on its own iterations until `#263`.
-
+//!
+//! All three are read off `job_events` inside the transaction that writes, and
+//! **no caller supplies a number**, so none can disagree with the history.
+//! **Nothing here folds and the fold reads none of it**: an attempt is a
+//! coordinate on evidence about a `Job` state, never a way to reach one.
 use core_model::{
     Attempt, CheckOutcome, CriterionId, EvidenceType, GamingFlag, GamingPattern, Iteration, JobId,
     JudgeVerdict, Judgment, Spent, StepCheck, StepEvidence, StepId, Timestamp,

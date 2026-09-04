@@ -1,30 +1,41 @@
-# Design Plan, reduced to what M1's parser accepts. See `bug.json` beside this
-# file for why a reduced form exists at all, and for the six fields this one
-# also holds to.
+# Design Plan, the loop it was designed as. See `bug.json` beside this file for
+# why a reduced form exists at all, and for the six fields this one also holds
+# to.
 #
-# The designed `design-plan.json` (`crates/core-model/domain/workflow-samples/`)
-# is Armada's only instantiated loop: `draft` and `present`, with
-# `present`'s `request_changes` verdict routing back to `draft`. `structure:
-# loop` is not in M1's carried set, so this form keeps both steps and drops
-# the loop — one pass through `draft` then `present`.
+# `crates/core-model/domain/workflows.toml` calls this Armada's only
+# instantiated loop: `draft` and `present`, with `present`'s `request_changes`
+# routing back to `draft`. It said so while this file could not carry it —
+# `structure: loop` was outside M1's carried set, so this form kept both steps
+# and dropped the loop. It carries it now. The designed
+# `design-plan.json` (`crates/core-model/domain/workflow-samples/`) is what the
+# routing and the cap of five are taken from; the cap lives on the step here
+# rather than under `default_gate_policy`, which is still a deferred key.
 #
-# **`present` carries the designed `human_always`, which is now in M1's
-# carried set.** That is the half of the loop this milestone can honour: the
-# thing that ends a design plan is a person reading it, and they can now read
-# it. What is still missing is where `request_changes` goes -- the designed
-# file routes it back to `draft`, and without `structure: loop` it puts the
-# Drone back on `present` instead. Re-presenting is a nearer approximation of
-# a design conversation than advancing unread, which is what `auto` did.
+# **`present` carries the designed `human_always`, and that is the half of the
+# loop that always worked.** The thing that ends a design plan is a person
+# reading it. What `request_changes` does with their answer is the half that
+# arrived with the loop: it used to put the Drone back on `present`, which
+# re-presented an unchanged document, and it now sends the work back to `draft`
+# the way the design says.
+#
+# **A Job goes round once, and the second return has nowhere to land.** The
+# loop return re-enters `draft` and leaves `present` reading `running`, which is
+# how a step at a human gate already behaves and is what #263 settled — the
+# alternatives were a seventh step state, which breaks the wire, and `stopped`,
+# whose registry meaning is "retries spent". When the redrafted plan advances,
+# Fleet walks forward onto `present` and finds it already `running`, and there
+# is no self-edge. `crates/fleet/src/tests/looping.rs` pins the refusal by name.
+# The cap stays at the designed five rather than being lowered to one to hide
+# it: the bound is a property of the design, and the state the gate holds
+# between passes is a property of the machine.
 #
 # **This workflow carries no Judge, and that is a decision rather than an
 # omission.** The designed `design-plan.json` carries none either. Design Plan
 # is a back-and-forth the engineer ends when the design is in a good place --
 # `workflowdef-fields.toml` says treating that as a config error would break
 # it. The thing that ends a design plan is a person reading it, and the loop
-# that carries the reading back is `structure: loop`, which M1 does not have.
+# that carries the reading back is what this file now declares.
 #
-# So this stays thin until the loop lands, and a Judge would not make it less
-# thin -- it would gate a draft on a machine's opinion of a conversation.#
 # **A step whose product a later step reads writes a file.** `artifact_exists`
 # is carried now, and `bug.json` carries the reasoning: a written step used to
 # hand the next one three prose strings, two of which `verification::submission`
@@ -45,7 +56,7 @@
   "version": 1,
   "workflow_id": "design_plan",
   "name": "design_plan",
-  "structure": "linear",
+  "structure": "loop",
   "steps": [
     {
       "id": "draft",
@@ -63,7 +74,11 @@
       "id": "present",
       "label": "Present",
       "evidence_type": "document",
-      "advance_gate": "human_always"
+      "advance_gate": "human_always",
+      "verdict_routing": {
+        "request_changes": "draft"
+      },
+      "iteration_cap": 5
     }
   ]
 }

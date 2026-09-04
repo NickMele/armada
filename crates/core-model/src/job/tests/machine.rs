@@ -68,11 +68,7 @@ fn every_edge_in_the_table_is_admitted() {
             Some(_) => reach_with_every_step_advanced(edge.from),
             None => reach(edge.from),
         };
-        // The first of the edge's triggers where it names any, which is enough
-        // to walk it: `every_declared_trigger_edge_is_in_the_table` below is
-        // what asserts each named trigger is admitted, and the loop here is
-        // about the edge rather than about the vocabulary on it.
-        let target = target_for(edge.to, edge.escalation_triggers.first().copied());
+        let target = target_for(edge.to, edge.escalation_trigger);
         let moved = job
             .transition(target, Actor::Fleet, at("2026-08-26T10:00:00.000Z"))
             .unwrap_or_else(|e| panic!("{} -> {}: {e}", edge.from.as_wire(), edge.to.as_wire()));
@@ -183,13 +179,7 @@ fn every_declared_trigger_edge_is_in_the_table() {
             .iter()
             .find(|e| e.from == from && e.to == to)
             .expect("a trigger names an edge the table does not have");
-        assert!(
-            edge.escalation_triggers.contains(trigger),
-            "{} -> {} is declared by {} and does not admit it",
-            from.as_wire(),
-            to.as_wire(),
-            trigger.as_wire()
-        );
+        assert_eq!(edge.escalation_trigger, Some(*trigger));
     }
 }
 

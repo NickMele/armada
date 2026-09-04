@@ -392,13 +392,10 @@ impl Job {
     ///
     /// **A loop return is the one move that takes the cursor backwards**, and
     /// it is the routed-*to* step's: the next Drone goes where the work goes.
-    /// The emitting step is not moved by this call — it keeps reading
-    /// `running`, which is how a step at a human gate already behaves — and
-    /// [`StepTarget::Returned`] names it so the row says whose
+    /// The emitting step is not moved by this call and keeps reading `running`;
+    /// [`StepTarget::Returned`] names it, so the row says whose
     /// `iteration_count` the pass belongs to. A return naming a step this Job
-    /// does not have is [`NoSuchStep`](IllegalStepTransition::NoSuchStep), the
-    /// same refusal the moved step gets: a count attributed to nothing is a
-    /// count nobody can read back.
+    /// does not have is refused as [`NoSuchStep`](IllegalStepTransition::NoSuchStep).
     ///
     /// **Entering `running` is what moves `current_step_id`, and nothing
     /// clears it.** `job-fields.toml` says the nested machine is "frozen

@@ -279,14 +279,26 @@ where
     /// step's `iteration_cap` does not have.
     ///
     /// **Nothing failed**, which is the whole content of the trigger: a plan on
-    /// its sixth draft under a cap of five is not a Drone that got it wrong five
-    /// times, and `retry_count` is untouched. The step stops and the Job
-    /// escalates for a person, which is what `escalation-triggers.toml` says a
-    /// spent cap does.
+    /// its sixth draft under a cap of five is not a Drone that got it wrong
+    /// five times, and `retry_count` is untouched.
     ///
-    /// The step stops first and the Job moves second, which is the order every
-    /// escalation here uses: the inner machine freezes the moment the Job leaves
-    /// an advancing status, so a step move made after would be refused.
+    /// # Three moves, and every one of them a declared edge
+    ///
+    /// **`awaiting_review -> escalated` is `interrupted`'s alone.**
+    /// `job-transitions.toml` gives that edge one `escalation_trigger`, an
+    /// edge's identity there is its `(from, to)` pair, and `xtask` compares the
+    /// two — so a second trigger on it is a change to the registry, and not one
+    /// this wave has a ruling for.
+    ///
+    /// What is left is the road a person's answer already takes.
+    /// [`request_changes`](Fleet::request_changes) moves
+    /// `awaiting_review -> running` where a Drone is there to hear the note, so
+    /// that edge already means "the person answered and the Job is back on the
+    /// machine". It is true here too: they asked for another pass and the
+    /// machine refused it. Then the step stops and the Job takes the default
+    /// `running -> escalated`, which every trigger without an edge of its own
+    /// fires — the step first, because the inner machine freezes the moment the
+    /// Job leaves an advancing status.
     async fn loop_is_spent(
         &self,
         job: &Job,
@@ -297,12 +309,17 @@ where
         if working.as_ref().is_some_and(|at_work| at_work.is(job.id())) {
             self.end_the_drone(working).await;
         }
+        // The actor is the person: they answered, and leaving the gate is what
+        // their answer did. What happened next is Fleet's and is recorded as
+        // Fleet's, two rows down.
+        let job = self.move_job(job, Target::Running, Actor::Human).await?;
         let job = self
-            .move_step_by(job, gate, StepTarget::Stopped(spent), Actor::Fleet)
+            .move_step_by(&job, gate, StepTarget::Stopped(spent), Actor::Fleet)
             .await?;
-        // **Fleet is the actor and the person is not.** They asked for another
-        // pass; what refused it is the workflow's own bound, read by Fleet. A
-        // row saying a person escalated the Job would say they gave up on it.
+        // **Fleet is the actor here and the person is not.** They asked for
+        // another pass; what refused it is the workflow's own bound, read by
+        // Fleet. A row saying a person escalated the Job would say they gave up
+        // on it.
         self.move_job(&job, Target::Escalated(spent.trigger()), Actor::Fleet)
             .await
     }

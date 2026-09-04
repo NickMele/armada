@@ -203,33 +203,27 @@ pub enum StepTarget {
     /// as the workflow designed.
     ///
     /// **It arrives at `running` and it is not [`Running`](StepTarget::Running)**,
-    /// which is a dispatch or a resume — and re-running an advanced step is the
-    /// redispatch `fleet::resume` refuses, so an unnarrowed edge would admit it
-    /// underneath the refusal. This is the only target that walks it, as
+    /// which is a dispatch or a resume — re-running an advanced step is the
+    /// redispatch `fleet::resume` refuses, and an unnarrowed edge would admit
+    /// it underneath the refusal. This is the only target that walks it, as
     /// [`Overridden`](StepTarget::Overridden) is for `stopped -> advanced`.
     ///
-    /// **It carries no trigger, and that is the point.** A trigger is a reason
-    /// a gate refused something and no gate refused this; a payload would be a
-    /// third place a return could be conflated with a retry.
+    /// **The payload is the step that sent it back, and it is not a trigger.**
+    /// No gate refused this, so there is no reason to carry. What the row has
+    /// to carry instead is *whose* loop the pass belongs to: `iteration_count`
+    /// is the **emitting** step's, which `docs/journeys/triage-queue.md`
+    /// settles — a cap and the count it bounds must not be split, and two loops
+    /// sharing a target step would sum into one count. The emitter makes no
+    /// move of its own on a return, so without this the log has nothing to
+    /// count against it.
     ///
-    /// **The payload is the step that sent it back**, and it is not a trigger.
-    /// A trigger is a reason a gate refused something and no gate refused this.
-    /// What the row has to carry instead is *whose* loop this pass belongs to:
-    /// `iteration_count` is the **emitting** step's — `docs/journeys/triage-queue.md`
-    /// settles it, because a cap and the count it bounds must not be split and
-    /// because two loops sharing a target step would otherwise sum into one
-    /// count — and the emitting step makes no move of its own on a return, so
-    /// without this there is nothing in the log to count against it.
+    /// **It is not a seventh [`StepState`]**: the emitter keeps reading
+    /// `running`, as a step at a human gate already does, and a seventh state
+    /// is a wire break that was rejected on that cost.
     ///
-    /// **It is not a seventh [`StepState`].** The emitting step keeps reading
-    /// `running`, which is already how a step at a human gate behaves; a
-    /// seventh state is a wire-breaking change and was rejected on that cost.
-    ///
-    /// Which verdict routed it back is not recorded here, and neither is
-    /// whether the cap allows it: this type cannot see a workflow, the same way
-    /// [`Retrying`](StepTarget::Retrying) cannot see a retry budget.
-    /// [`ResolvedStep::may_return`](crate::ResolvedStep::may_return) owns the
-    /// arithmetic and a spent cap is [`EscalationTrigger::LoopCap`].
+    /// Which verdict routed it back is not recorded, and neither is whether the
+    /// cap allowed it: this type cannot see a workflow, and
+    /// [`ResolvedStep::may_return`](crate::ResolvedStep::may_return) owns that.
     Returned(StepId),
 }
 

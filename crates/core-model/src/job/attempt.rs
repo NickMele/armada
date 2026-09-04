@@ -6,31 +6,22 @@
 //! three times, which is the judgement `iteration_cap` exists to force."* A
 //! record keyed by step alone can only say what the last run found.
 //!
-//! # It is not `retry_count`, and it is not `iteration_count`
-//!
-//! Both are typed `job_steps` columns in `domain/job-fields.toml` and neither
-//! is one; `domain/workflows.toml` records that whose `retry_count` a backward
-//! jump increments is undefined. Naming this one of those would settle that
-//! silently.
+//! # Three types over one log, and no two of them are the same number
 //!
 //! **An [`Attempt`] counts something observed rather than something policy
 //! decides**: the times the step's log says it entered `running`. It is also
 //! the registry's own word for the unit — `attempt_cap` "bounds total attempts
-//! across all iterations of a step" — so those counters get defined against
-//! this rather than against a third vocabulary beside it.
+//! across all iterations of a step".
 //!
-//! [`Iteration`] is the same discipline over the other edge, and a second type
-//! rather than a second number: a return must never spend the retry budget,
-//! and one `u32` fits both caps.
+//! [`Iteration`] is the same discipline over the loop's edge, and [`Spent`] is
+//! the retry budget's own count, which resets where an attempt does not.
 //!
-//! [`Spent`] is the third, and it exists because the wrong one compiled.
-//! `ResolvedStep::may_hand_back` took an [`Attempt`] — the step's whole run
-//! count — so a step on its second pass arrived at its retry gate with the
-//! first pass's runs already charged against it, and `retry_limit`'s own
-//! registry row says the opposite: *"Resets on a loop return — re-entry as
-//! designed is a fresh attempt budget."* Three readings of one log, three
-//! types, and no call site where two of them are interchangeable.
-
+//! **[`Spent`] exists because the wrong one compiled.**
+//! `ResolvedStep::may_hand_back` took an [`Attempt`], so a step on its second
+//! pass arrived at its retry gate with the first pass's runs already charged —
+//! and `retry_limit`'s registry row says the opposite: *"Resets on a loop
+//! return — re-entry as designed is a fresh attempt budget."* Three types, and
+//! no call site where two of them are interchangeable.
 use core::fmt;
 use core::num::NonZeroU32;
 

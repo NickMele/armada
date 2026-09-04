@@ -15,27 +15,21 @@ use core_model::{Attempt, EvidenceRef, FrozenWorkflow, ResolvedStep, Spent, Step
 /// step id the workflow actually declares, so a gate cannot be pointed at a
 /// step that is not in the definition the Job froze.
 ///
-/// # Which run of the step is part of where the Job is
+/// # Which run of the step is part of where the Job is, and there are two of them
 ///
 /// A step can be worked more than once, so "which step" does not locate a Job
-/// on its own. [`Attempt`] is the third coordinate and it is the same one
-/// `store::attempt` files every per-run record under — derived from the step's
-/// own log, with no constructor that invents a number. A caller cannot tell
-/// this type it is on the fourth run when the log says the second.
+/// on its own. [`Attempt`] is the coordinate `store::attempt` files every
+/// per-run record under, and [`Spent`] is what the retry budget is asked
+/// against — a different number the moment anything loops, because an attempt
+/// climbs across a return and the budget resets. Both are carried so the gate
+/// cannot reach for whichever is nearer; the types make taking the wrong one a
+/// compile error.
 ///
-/// Both constructors answer [`Attempt::FIRST`], which is not a default so much
-/// as the only value a position with no history could have — `Attempt`'s own
-/// rule. [`on_attempt`](AtStep::on_attempt) is how the one caller that has read
-/// the log says so.
-///
-/// # And which run of the *pass* is a second coordinate, not the same one
-///
-/// [`Spent`] is what the retry budget is asked against, and it is a different
-/// number the moment anything loops: an [`Attempt`] climbs across a return
-/// because the per-run records must not overwrite each other, and the budget
-/// resets because `retry_limit`'s registry row says a re-entry as designed is a
-/// fresh one. Both are carried here so the gate cannot reach for whichever is
-/// nearer — the types are what make taking the wrong one a compile error.
+/// Neither has a constructor that invents a number, so a caller cannot tell
+/// this type it is on the fourth run when the log says the second. All three
+/// constructors answer the first of each, which is the only value a position
+/// with no history could have — [`on_attempt`](AtStep::on_attempt) is how the
+/// callers that have read the log say otherwise.
 #[derive(Clone, Copy, Debug)]
 pub struct AtStep<'a> {
     workflow: &'a FrozenWorkflow,

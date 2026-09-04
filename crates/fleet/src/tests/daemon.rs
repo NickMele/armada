@@ -376,42 +376,6 @@ pub fn a_fleet_gated_on_a_person(
     Fleet::assembled(fittings)
 }
 
-/// The same two steps, wired as a loop: `summarise`'s `request_changes` routes
-/// back to `implement`, bounded by `cap` passes.
-///
-/// **Design Plan's shape, in this crate's fixture vocabulary.** The gate is on
-/// the last step because that is where a loop's gate is — the step that reads
-/// the work is the step that sends it back — and `implement` stays `auto` so
-/// the Job walks to it the way a Job does.
-pub fn a_loop_of_two_steps(cap: u32) -> config::ResolvedWorkflow {
-    let def = config::WorkflowDef::parse(
-        std::path::Path::new("fixture.yml"),
-        &format!(
-            "version: 1\nworkflow_id: fixture-loop\nname: fixture\nstructure: loop\n\
-             steps:\n  - id: implement\n    label: \"Implement\"\n    evidence_type: diff\n    \
-             mechanical_checks:\n      - type: diff_nonempty\n    advance_gate: auto\n  - \
-             id: summarise\n    label: \"Summarise\"\n    evidence_type: facts_note\n    \
-             advance_gate: human_always\n    verdict_routing:\n      \
-             request_changes: implement\n    iteration_cap: {cap}\n"
-        ),
-        &config::Roster::offering_nothing(),
-    )
-    .unwrap_or_else(|refused| panic!("the fixture loop did not parse: {refused}"));
-    config::ResolvedWorkflow::resolve(&def, &manifest())
-        .unwrap_or_else(|refused| panic!("the fixture loop did not resolve: {refused}"))
-}
-
-/// A Fleet running [`a_loop_of_two_steps`].
-pub fn a_fleet_running_a_loop(
-    home: &TempDir,
-    work: FakeWorkProduct,
-    cap: u32,
-) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
-    let mut fittings = fittings(home, work);
-    fittings.workflows = one(a_loop_of_two_steps(cap));
-    Fleet::assembled(fittings)
-}
-
 /// A Fleet over an `armada.yml` that names the branch its work merges into.
 pub fn a_fleet_whose_manifest_declares_a_base(
     home: &TempDir,
