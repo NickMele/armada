@@ -13,8 +13,8 @@ use core_model::Job;
 use ipc::mcp::NotRecorded;
 use ipc::{
     CheckRun, DeclaredCheck, DeclaredJudge, Flagged, HeldReason, Judged, KeptDeliverable,
-    ReclaimedBranch, ReclaimedWorktree, StepFacts, StepId, Submitted, WorkflowStep, WorktreeHeld,
-    WorktreeReclaimed,
+    ManifestId, ManifestSummary, ReclaimedBranch, ReclaimedWorktree, StepFacts, StepId, Submitted,
+    WorkflowId, WorkflowStep, WorkflowSummary, WorktreeHeld, WorktreeReclaimed,
 };
 
 use crate::holding::{Held, Holding};
@@ -184,6 +184,61 @@ pub(crate) fn canonical(path: &std::path::Path) -> String {
         .to_string()
 }
 
+/// One workflow as a caller sees it before naming one, with [`declared`]
+/// carrying the steps.
+///
+/// The Manifest id travels on every row rather than beside the list: a
+/// workflow is only nameable against the Manifest it was resolved from, and a
+/// caller holding one row alone would otherwise have to remember which.
+pub(crate) fn workflow_summary(
+    workflow: &config::ResolvedWorkflow,
+    manifest_id: &core_model::ManifestId,
+) -> WorkflowSummary {
+    WorkflowSummary {
+        id: WorkflowId::from(workflow.id()),
+        name: workflow.name().to_string(),
+        version: workflow.version(),
+        steps: declared(workflow),
+        manifest_id: ManifestId::from(manifest_id),
+    }
+}
+
+/// The Manifest a Fleet was started against, as the wire carries it.
+///
+/// **`repository` is not a name the Manifest declares.** `armada.yml` has no
+/// key for one — `version`, `id`, `checks` and `commands` are the whole schema
+/// — so what is carried is the directory the file was read from, which is a
+/// fact rather than an invention. A person reading a Job wants to know which
+/// project it runs against, and a ULID does not say.
+pub(crate) fn manifest_summary(manifest: &config::Manifest) -> ManifestSummary {
+    let path = manifest.path();
+    ManifestSummary {
+        id: ManifestId::from(manifest.id()),
+        repository: path
+            .parent()
+            .and_then(|dir| dir.file_name())
+            .map(|name| name.to_string_lossy().to_string())
+            // A Manifest at the filesystem root has no directory to name. Its
+            // own path is the next most useful true thing.
+            .unwrap_or_else(|| path.to_string_lossy().to_string()),
+        // **Absolute, and it has to be.** Bridge derives every artifact path
+        // from this one — the worktree, the Job log, the transcripts — and then
+        // hands the result to the OS to open. A relative path answers a
+        // question about Fleet's working directory, which is not a fact about
+        // the repository and is not a directory Bridge is in: served as
+        // `./armada.yml`, every one of those opens resolved against the
+        // Electron process and found nothing.
+        //
+        // `$HOME` therefore appears on this wire, which the log envelope and
+        // the failure record both refuse. It is a different surface: those are
+        // written down and read later, and this is two processes on one machine
+        // agreeing where a file is.
+        path: canonical(path),
+        version: manifest.version(),
+        checks: manifest.check_names(),
+    }
+}
+
 /// One filed report, as the wire carries it. **The redaction, for a report.**
 ///
 /// A plain function for [`recorded`]'s reason. Every field crosses, which is
@@ -272,33 +327,24 @@ fn narrowed(events: &[RecordedEvent]) -> Vec<StepMove> {
 
 /// What Fleet knows about a Job's steps beyond the `job_steps` rows.
 ///
-/// **The declaration comes from the Job's own frozen workflow**, which is
-/// also what the gate runs — so what a person is shown and what actually
-/// gates the step are one value rather than two that can drift.
+/// **Nothing here is read off the Job.** That row carries the trigger the gate
+/// stopped on and nothing else, so a refusal's citation and a gaming finding's
+/// pattern arrive as `judged` and `flagged` read from the store beside `ran`.
+/// The declaration comes from the workflow the Job froze, which is also what
+/// the gate runs, so what a person is shown cannot drift from what gates the
+/// step.
 ///
-/// `declares` stays an `Option` and is now absent only where the frozen
-/// workflow does not declare the step at all. That cannot happen through
-/// this crate, since the `job_steps` rows are seeded from those steps; it is
-/// kept because "Fleet cannot say" and "the step declares nothing" are
-/// different sentences on the wire and a row written by something else
-/// should not read as the second.
-/// `judged` and `flagged` are read from the store beside `ran` and never
-/// off the Job: the `job_steps` row carries the trigger the gate stopped on
-/// and nothing else, so a refusal's citation and a gaming finding's pattern
-/// — the whole of what an escalated Job has to say — live in their own
-/// tables and arrive here.
+/// **`ran` and `judged` are every attempt's rows, stamped with the attempt**,
+/// which is what tells a retried step's Checks and Judge answers apart by run
+/// rather than merging them into one. `flagged` stays latest-only: the run tree
+/// draws no Flagged fact.
 ///
-/// **`ran` and `judged` are every attempt's rows, not the latest's.** Each
-/// group is stamped with the attempt it belongs to before it crosses, which is
-/// what lets a retried step's Checks and Judge answers be told apart by run
-/// rather than merged into one. `flagged` stays latest-only, on the scope this
-/// change draws deliberately: the run tree draws no Flagged fact today.
+/// `declares` is absent only where the frozen workflow does not declare the
+/// step, which this crate cannot produce — kept because "Fleet cannot say" and
+/// "the step declares nothing" are different sentences on the wire.
 ///
-/// **A free function taking the mark rather than a method taking Fleet.** The
-/// one thing here that is not a row is the Judge call in flight, and that is a
-/// read of one shared value — so the only thing this needs of Fleet is
-/// [`Aloft`], and asking for that rather than for the daemon is what keeps it
-/// in this file. `serving.rs` is the trait impl; its helpers live here.
+/// [`Aloft`] rather than the daemon, because the one thing here that is not a
+/// row is the Judge call in flight.
 pub(crate) fn step_facts(
     aloft: &Aloft,
     repo_root: &str,

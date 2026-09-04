@@ -13,7 +13,9 @@
 //!
 //! **Which refusal a failure is, and the code it carries, is
 //! [`refusing`](mod@crate::refusing)'s** — every `WireError` below is raised
-//! through `Fleet::refusal`.
+//! through `Fleet::refusal`. The trait's other half, whose caller is a Drone
+//! and which refuses through no status code at all, is
+//! [`tooling`](mod@crate::tooling)'s.
 //!
 //! **The reason costs a second read, and is not derived.** `JobSummary` carries
 //! the reason its last transition stored, which is in `job_events` and not on
@@ -28,9 +30,9 @@ use ipc::mcp::{
 };
 use ipc::{
     CallArguments, ChangesRequested, FleetCapacity, JobDelivery, JobDetail, JobDiff, JobEvidence,
-    JobForgotten, JobHistory, JobId, JobList, JobSpend, JobSummary, ManifestId, ManifestSummary,
-    ModelChoices, Overruled, ProposeJob, Redirection, Redispatched, Work, WorkflowId,
-    WorkflowSummary, WorktreeReclaimed, WorktreesHeld,
+    JobForgotten, JobHistory, JobId, JobList, JobSpend, JobSummary, ManifestSummary, ModelChoices,
+    Overruled, ProposeJob, Redirection, Redispatched, Work, WorkflowSummary, WorktreeReclaimed,
+    WorktreesHeld,
 };
 use store::LoadJobError;
 
@@ -44,7 +46,8 @@ use crate::overruling::Overruling;
 use crate::reporting::Filed;
 use crate::resume::Redirection as Instruction;
 use crate::wire::{
-    canonical, declared, recorded, reported, step_facts, step_moves, submitted, told, worktree_held,
+    manifest_summary, recorded, reported, step_facts, step_moves, submitted, workflow_summary,
+    worktree_held,
 };
 
 impl<H, V, W> Daemon for Fleet<H, V, W>
@@ -392,54 +395,17 @@ where
     /// Every workflow this Fleet holds, so a caller can name one that will not
     /// be refused.
     async fn list_workflows(&self) -> Result<Vec<WorkflowSummary>, Refusal> {
+        let manifest_id = self.manifest().id();
         Ok(self
             .workflows()
             .values()
-            .map(|workflow| WorkflowSummary {
-                id: WorkflowId::from(workflow.id()),
-                name: workflow.name().to_string(),
-                version: workflow.version(),
-                steps: declared(workflow),
-                manifest_id: ManifestId::from(self.manifest().id()),
-            })
+            .map(|workflow| workflow_summary(workflow, manifest_id))
             .collect())
     }
 
     /// The one Manifest this Fleet was started against.
-    ///
-    /// **`repository` is not a name the Manifest declares.** `armada.yml` has
-    /// no key for one — `version`, `id`, `checks` and `commands` are the whole
-    /// schema — so what is carried is the directory the file was read from,
-    /// which is a fact rather than an invention. A person reading a Job wants
-    /// to know which project it runs against, and a ULID does not say.
     async fn list_manifests(&self) -> Result<Vec<ManifestSummary>, Refusal> {
-        let manifest = self.manifest();
-        let path = manifest.path();
-        Ok(vec![ManifestSummary {
-            id: ManifestId::from(manifest.id()),
-            repository: path
-                .parent()
-                .and_then(|dir| dir.file_name())
-                .map(|name| name.to_string_lossy().to_string())
-                // A Manifest at the filesystem root has no directory to name.
-                // Its own path is the next most useful true thing.
-                .unwrap_or_else(|| path.to_string_lossy().to_string()),
-            // **Absolute, and it has to be.** Bridge derives every artifact path
-            // from this one — the worktree, the Job log, the transcripts — and
-            // then hands the result to the OS to open. A relative path answers
-            // a question about Fleet's working directory, which is not a fact
-            // about the repository and is not a directory Bridge is in: served
-            // as `./armada.yml`, every one of those opens resolved against the
-            // Electron process and found nothing.
-            //
-            // `$HOME` therefore appears on this wire, which the log envelope
-            // and the failure record both refuse. It is a different surface:
-            // those are written down and read later, and this is two processes
-            // on one machine agreeing where a file is.
-            path: canonical(path),
-            version: manifest.version(),
-            checks: manifest.check_names(),
-        }])
+        Ok(vec![manifest_summary(self.manifest())])
     }
 
     /// What a Job may be spawned as, resolved once by the composition root.
@@ -786,117 +752,53 @@ where
         self.summarised(&job).await
     }
 
-    /// The working Drone asking a person something it cannot answer from the
-    /// repository. Binding and refusals are `Fleet::ask_question`'s, under the
-    /// slot lock. **The receipt says taken, never answered**: what a person
-    /// chose arrives as a later turn, which is why this does not block — see
-    /// `crate::questioning`.
+    // The rest of the trait is the other caller. **A Drone makes these calls,
+    // not a person**, and no row of `crates/ipc/operations.toml` names one:
+    // they answer a `Receipt` through `NotRecorded` rather than a DTO through
+    // `Fleet::refusal`, so nothing said above about the redaction or the
+    // refusal path is theirs. They are [`tooling`](mod@crate::tooling)'s.
+
     async fn ask_question(
         &self,
         caller: api::Caller,
         asking: ipc::mcp::AskQuestion,
     ) -> Result<Receipt, NotRecorded> {
-        let job = self.placed(&caller)?;
-        Fleet::ask_question(self, &job, asking).await?;
-        Ok(Receipt {
-            word: "asked".to_string(),
-        })
+        self.asked(caller, asking).await
     }
 
-    /// The Evidence tool. **The one method here whose caller is a Drone.**
-    ///
-    /// It converts and maps, and decides nothing: the binding — which Job, which
-    /// step, which evidence type — is `Fleet::record_evidence`'s, under the lock
-    /// that makes it a single decision.
-    ///
-    /// Every path answers 200 with `isError` rather than a status code, because
-    /// a Drone reads a tool error and can act on it, and a 4xx reaches the model
-    /// as a broken server — which is something it stops trying.
     async fn submit_evidence(
         &self,
         caller: api::Caller,
         submission: SubmitEvidence,
     ) -> Result<Receipt, NotRecorded> {
-        let job = self.placed(&caller)?;
-        match self.record_evidence(&job, &submission).await {
-            Ok(recorded) => Ok(Receipt {
-                word: recorded.word().to_string(),
-            }),
-            Err(why) => Err(told(why)),
-        }
+        self.submitted(caller, submission).await
     }
 
-    /// Where the working Drone says this step's work will be.
-    ///
-    /// The same shape as the call above and the same reason for it: the binding
-    /// — which Job, which step — is `Fleet::declare_scope`'s, under the slot
-    /// lock, and every refusal answers 200 with `isError` so a Drone can read
-    /// it and declare again.
     async fn declare_scope(
         &self,
         caller: api::Caller,
         declaration: DeclareScope,
     ) -> Result<Receipt, NotRecorded> {
-        let job = self.placed(&caller)?;
-        let declared = Fleet::declare_scope(self, &job, &declaration).await?;
-        Ok(Receipt {
-            word: declared.word().to_string(),
-        })
+        self.declared(caller, declaration).await
     }
 
-    /// The working Drone asking the task's own scope to grow. Held open while
-    /// a Judge call runs, and **every outcome comes back through the tool** —
-    /// a Drone told nothing writes the file anyway.
     async fn request_scope(
         &self,
         caller: api::Caller,
         request: RequestScope,
     ) -> Result<Receipt, NotRecorded> {
-        let job = self.placed(&caller)?;
-        let widened = Fleet::request_scope(self, &job, &request).await?;
-        Ok(Receipt {
-            word: widened.word().to_string(),
-        })
+        self.widened(caller, request).await
     }
 
-    /// The Drone asking whether its work passes.
-    ///
-    /// It converts and maps like the two above, and decides as little: which
-    /// Checks, what they are run against and what bounds the asking are all
-    /// `Fleet::run_checks`'s, under the slot lock that binds them to one step.
-    ///
-    /// **What comes back is a report and never a verdict.** The step is exactly
-    /// where it was when the call arrived, whatever the Checks said.
     async fn run_checks(&self, caller: api::Caller) -> Result<CheckReport, NotRecorded> {
-        let job = self.placed(&caller)?;
-        Ok(Fleet::run_checks(self, &job).await?)
+        self.checked(caller).await
     }
 
-    /// The Drone asking for one more Job to exist.
-    ///
-    /// The same shape as the three above: it places the caller, converts, and
-    /// decides nothing. **What is different is what a success is** — the other
-    /// three answer about the Job the call was made on, and this one answers
-    /// with the id of a record that did not exist a moment ago.
-    ///
-    /// `crate::sub_dispatch` holds whether the caller was allowed to ask, and
-    /// the refusal reaches the Drone as a tool error it can read rather than a
-    /// status code it can only retry.
     async fn dispatch_job(
         &self,
         caller: api::Caller,
         dispatch: DispatchJob,
     ) -> Result<Receipt, NotRecorded> {
-        let job = self.placed(&caller)?;
-        match Fleet::sub_dispatch(self, &job, &dispatch).await {
-            // The minted id, and nothing else. A Drone needs it to name this
-            // Job in a later call's `after`, and it needs nothing else — the
-            // Job's state is not knowable yet and a receipt implying it were
-            // would be the verdict `Receipt` exists to have no room for.
-            Ok(minted) => Ok(Receipt {
-                word: minted.as_str().to_string(),
-            }),
-            Err(why) => Err(why.into()),
-        }
+        self.dispatched(caller, dispatch).await
     }
 }
