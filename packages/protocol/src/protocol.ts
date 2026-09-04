@@ -677,27 +677,6 @@ export type Redispatched = {
   dispatched: JobSummary;
 };
 
-/**
- * The body of `redirect_drone`. `crates/ipc/src/job.rs`. The one string that
- * reaches a Drone without Fleet assembling it — blank is refused server-side.
- */
-export type Redirection = {
-  instruction: string;
-};
-
-/**
- * The body of `override_verdict`. `crates/ipc/src/work.rs`.
- *
- * **Its own type though it is structurally the same string as `Redirection`**,
- * for that type's own reason turned around: a redirect steers a Drone, and this
- * one goes nowhere near one. It is written for the record and for whoever later
- * asks how often the Judge was wrong. Blank is refused server-side with a 422,
- * and refused here before the press for the same reason.
- */
-export type Overruled = {
-  reason: string;
-};
-
 /** The reason a transition carried, where it stored one. */
 export type Reason = {
   named?: string;

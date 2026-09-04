@@ -502,7 +502,26 @@ impl Daemon for FakeDaemon {
         Ok(job.clone())
     }
 
-    async fn restart_step(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+    /// **The note is refused blank and otherwise ignored here.** Where it goes
+    /// is onto the record, and this fake holds summaries — so what it can check
+    /// is the one thing the route promises about the body, which is that an
+    /// empty note is a refusal rather than a restart with nothing said.
+    async fn restart_step(
+        &self,
+        job_id: JobId,
+        note: Option<ipc::RestartRequested>,
+    ) -> Result<JobSummary, Refusal> {
+        if note
+            .as_ref()
+            .is_some_and(|note| note.note.trim().is_empty())
+        {
+            return Err(Refusal::Unacceptable(ipc::WireError::raised(
+                "fake.blank_note",
+                "a restart note with nothing in it says nothing to the Drone it asks for"
+                    .to_string(),
+                run_id(),
+            )));
+        }
         let jobs = self.jobs.lock().expect("not poisoned");
         let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
             return Err(self.no_such_job(&job_id));

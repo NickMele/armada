@@ -82,3 +82,26 @@ export const FactsOnly: Story = {
 export const AsALine: Story = {
   args: { criteria: [], facts, only: "facts", factsLabel: null },
 };
+
+/**
+ * A note somebody has written that no drone has opened with yet.
+ *
+ * **The state is short and it is the only thing that says the note landed.**
+ * Two acts leave one — sending work back at a gate, and restarting a step with
+ * something to say — and both put the job in the queue with the words on its
+ * record. The next drone to start opens with them and fleet clears the field in
+ * the same breath, so this block is on screen for as long as the job waits and
+ * gone the instant one starts.
+ *
+ * It leads, above both standing halves, because it is the newest thing about
+ * the job and the only one that will not be here later.
+ */
+export const NoteWaiting: Story = {
+  args: {
+    criteria: [],
+    facts,
+    only: "facts",
+    factsLabel: null,
+    waiting: "Delete the assertion about the old header — it is testing behaviour we replaced.",
+  },
+};

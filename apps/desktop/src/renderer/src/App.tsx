@@ -19,7 +19,7 @@
 // line joins to nothing, and a labelled blank is worse than an absent row.
 
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Dialog } from "@armada/components";
+import { Alert, Button, Dialog, Textarea } from "@armada/components";
 import { ClipboardList } from "lucide-react";
 
 import { NOTHING_YET } from "../../shared/bridge";
@@ -39,7 +39,7 @@ import { watchOf } from "@armada/screens";
 import { Reports } from "@armada/screens";
 import { Worktrees } from "@armada/screens";
 import { JobDetail, type ConfirmableAct } from "@armada/screens";
-import { ACT_LABEL, CONFIRM, reclaimed, said } from "@armada/screens";
+import { ACT_LABEL, CONFIRM, reclaimed, RESTART_NOTE, said } from "@armada/screens";
 import { Jobs } from "@armada/screens";
 import { BOARD_TABS, type BoardReach, type BoardTab } from "@armada/screens";
 import { carryOut, dormantIn } from "./palette";
@@ -129,6 +129,11 @@ export function App() {
   const [confirming, setConfirming] = useState<{ act: ConfirmableAct; jobId: string } | null>(
     null,
   );
+  // What a person typed into the restart confirmation, which is the one
+  // confirmation that collects anything. **Held beside `confirming` rather than
+  // inside it**: the act being confirmed is what the palette and the step
+  // header both set, and neither of them knows about a field.
+  const [restartNote, setRestartNote] = useState("");
   // What the last reclaim answered. **Its own state and not `outcome`** — that
   // one draws refusals, and this is a success worth reading: the act asks for
   // two things, the halves can disagree, and a kept branch is something a
@@ -313,7 +318,13 @@ export function App() {
    * is stated instead of being left to a silent success.
    */
   async function act(act: ConfirmableAct, jobId: string): Promise<void> {
+    // Read before the state is cleared, and only the restart has one. A blank
+    // field is not sent: `restartStep` drops it, so a person who opened the
+    // dialog and typed nothing gets the restart they pressed for rather than
+    // the 422 a blank note earns.
+    const note = act === "restart_step" ? restartNote : undefined;
     setConfirming(null);
+    setRestartNote("");
     setActing(jobId);
     try {
       const answer =
@@ -322,7 +333,7 @@ export function App() {
           : act === "kill_drone"
             ? await window.armada.killDrone(jobId)
             : act === "restart_step"
-              ? await window.armada.restartStep(jobId)
+              ? await window.armada.restartStep(jobId, note)
               : act === "reclaim_worktree"
                 ? await window.armada.reclaimWorktree(jobId)
                 : await window.armada.killJob(jobId);
@@ -767,10 +778,29 @@ export function App() {
           tone={CONFIRM[confirming.act].tone ?? "destructive"}
           title={CONFIRM[confirming.act].title}
           confirmLabel={ACT_LABEL[confirming.act]}
-          onCancel={() => setConfirming(null)}
+          onCancel={() => {
+            setConfirming(null);
+            setRestartNote("");
+          }}
           onConfirm={() => void act(confirming.act, confirming.jobId)}
         >
           {CONFIRM[confirming.act].body}
+          {/* The one confirmation that collects anything, and what it collects
+              is optional — the button is never disabled on it, because leaving
+              the field alone is the restart this dialog has always been. No
+              `autoFocus`: the dialog puts initial focus on Cancel, and a
+              second claim on it here would only lose to it. */}
+          {confirming.act !== "restart_step" ? null : (
+            <>
+              <p>{RESTART_NOTE.says}</p>
+              <Textarea
+                label={RESTART_NOTE.label}
+                rows={4}
+                value={restartNote}
+                onChange={(event) => setRestartNote(event.target.value)}
+              />
+            </>
+          )}
         </Dialog>
       )}
 

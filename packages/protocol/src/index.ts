@@ -11,6 +11,7 @@
 // `crates/core-model/domain/`, which stay the authority: a status, a verb or a
 // glyph is decided there and rendered here.
 
+export * from "./acts";
 export * from "./artifacts";
 export * from "./attempt";
 export * from "./connection";

@@ -2,25 +2,25 @@
 //!
 //! # Which one applies is decided by where the Job stands
 //! `docs/concepts/job.md` retired *"decided by the Drone, not by the person"*
-//! when a Drone became a step's, since absence is then ordinary between steps.
-//! **Neither act asks the other's question**, and each asked the other's until
-//! #145: [`redirect`](Fleet::redirect) wants a session and steers `running` and
-//! `escalated`, [`restart_step`] a stopped step a person is holding.
+//! when a Drone became a step's: absence is ordinary between steps. **Neither
+//! asks the other's question**, and each asked the other's until #145 —
+//! [`redirect`](Fleet::redirect) wants a session, [`restart_step`] a stopped step.
 //!
 //! # A redirect moves a stopped step; a restart moves nothing
 //! Where a step stopped, a redirect moves both machines in the one order the
 //! registry admits — `escalated -> running`, then `stopped -> running`. Where
-//! none stopped nothing is unfrozen: the Job stays where it was, and an
-//! escalated one returns only on [`watch_redirect`](Fleet::watch_redirect)
-//! seeing the Drone turn, never on the sending — moved there it would read as
-//! recovered whether or not anything woke.
-//!
-//! **A restart takes neither move**, because it spawns and since #50 nothing
-//! spawns outside admission: `-> queued` from either held status, step left at
-//! `stopped`. **It alone reaches `awaiting_repair`**, whose Drone is gone.
+//! none stopped nothing is unfrozen: an escalated Job returns only on
+//! [`watch_redirect`](Fleet::watch_redirect) seeing the Drone turn, since the
+//! send is no evidence anything woke. **A restart takes neither move**, because
+//! it spawns and since #50 nothing spawns outside admission: `-> queued` from
+//! either held status, step left at `stopped`. **It alone reaches
+//! `awaiting_repair`**, whose Drone is gone.
 //!
 //! **Nothing here is bounded, so a redirect buys no time.** No document caps
 //! how often a person may, so only a stopped step gets its clocks back.
+//!
+//! **Both carry a person's words, two ways.** A redirect's enter an open
+//! session; a restart's wait on the Job for the next Drone's brief — `#396`.
 //!
 //! [`restart_step`]: Fleet::restart_step
 
@@ -34,6 +34,7 @@ use core_model::{
 use crate::adrift::Adrift;
 use crate::briefing::Stopped;
 use crate::daemon::Fleet;
+use crate::reviewing::Said;
 use crate::session::{LiveSession, Occasion};
 use crate::transcript;
 use crate::working::Working;
@@ -283,16 +284,17 @@ where
     ///
     /// **It asks; it does not start one.** The Job takes `-> queued` from
     /// either held status and `crate::readmitting` spawns when
-    /// `concurrency-cap` has room — the shape `approve_review` has had since
-    /// #50. **Never refused because the cap is spent**: the act lands and the
-    /// Job says `waiting_on_resources`. On a spent retry budget it is the
-    /// *only* act, since the Drone is stood down there, and it carries no
-    /// words: the fresh Drone opens with what stopped the last one.
+    /// `concurrency-cap` has room — `approve_review`'s shape since #50. **Never
+    /// refused because the cap is spent**: the act lands and the Job says
+    /// `waiting_on_resources`. On a spent retry budget it is the *only* act.
+    ///
+    /// **It may carry the person's words, and carried none until `#396`.**
+    /// `None` is the plain restart, byte for byte. `Some` enters the road
+    /// `request_changes` built — [`hold_the_note`](Fleet::hold_the_note).
     ///
     /// **The step does not move here either**, because `store::attempt` counts
     /// entries into `running` as runs and a run belongs to a Drone. It waits at
-    /// `stopped`, which is both what a rail should render and how re-admission
-    /// knows which act to answer.
+    /// `stopped`, which a rail renders and re-admission reads.
     ///
     /// **Every guard below does run here**, because each is a question about
     /// *now* — a Drone still standing, a worktree still there, an exit still
@@ -300,10 +302,12 @@ where
     ///
     /// **The worktree, the branch and every earlier step's work survive**, and
     /// the branch is caught up inside [`put_a_drone_on`](Fleet::put_a_drone_on)
-    /// rather than here — #180. A restart is the case a rebase most often
-    /// conflicts on, since it re-runs the same step on a tree already holding an
-    /// attempt; the markers ride the opening brief. **Nothing is inherited.**
-    pub async fn restart_step(&self, job_id: &JobId) -> Result<Job, Adrift> {
+    /// rather than here — #180, the case a rebase most often conflicts on.
+    pub async fn restart_step(
+        &self,
+        job_id: &JobId,
+        note: Option<&Redirection>,
+    ) -> Result<Job, Adrift> {
         // Looked up rather than opened: this act starts nothing, so it needs no
         // place in the roster. What it wants the slot for is the one question
         // only the slot can answer — whether a Drone is still standing here —
@@ -338,6 +342,21 @@ where
         // hearing that now is better than hearing it when the queue reaches
         // this Job.
         self.every_exit_recorded(job_id).await?;
+        // **Last of the refusals and before the Job moves**, which is
+        // `request_changes`'s ordering for its own reason: a Job put in the
+        // queue with the person's words nowhere is the failure the refusal
+        // exists to prevent, arriving one line later. It is last because the
+        // three above are questions about the Job that make the restart
+        // impossible at all, and a person hearing "a note is already waiting"
+        // when the worktree is gone would fix the wrong thing.
+        //
+        // **Where there is no note the Job is untouched here**, including a Job
+        // already holding one: that note is owed to the next Drone, this act
+        // asks for exactly that Drone, and `crate::spawning` delivers it.
+        let job = match note {
+            Some(note) => self.hold_the_note(&job, note, Said::Restarting).await?,
+            None => job,
+        };
         // The actor is **human**. A person took the Job out of `escalated`;
         // Fleet only chooses which turn it gets a process back, which is the
         // `queued -> running` row `crate::readmitting` writes as its own.

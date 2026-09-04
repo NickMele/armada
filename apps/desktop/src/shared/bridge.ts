@@ -293,11 +293,22 @@ export type BridgeApi = {
     chose: string,
   ) => Promise<Outcome>;
   /**
-   * Put a fresh Drone on the surviving worktree, at the step that stopped.
+   * Put a fresh Drone on the surviving worktree, at the step that stopped, and
+   * say what to do differently where there is something to say.
    * **Legal only where the Drone is gone** — Fleet refuses 409 where one is
    * still alive, or where the worktree itself is gone.
+   *
+   * **The note is optional and the plain restart sends no body at all.** It
+   * does not reach a session — there is none — it waits on the job and opens
+   * the brief of the drone this asks for, which is where `requestChanges`'s
+   * note goes. A blank one is not sent: `undefined` and `""` are both a
+   * restart with nothing said, because a drone handed an empty instruction
+   * starts over with exactly what was not enough.
+   *
+   * Fleet answers 409 where a note is already waiting on the job, quoting it
+   * back rather than overwriting it.
    */
-  restartStep: (jobId: string) => Promise<Outcome>;
+  restartStep: (jobId: string, note?: string) => Promise<Outcome>;
   /**
    * Overrule a machine that stopped the work, and let the Job go on.
    *

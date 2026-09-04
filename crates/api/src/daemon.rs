@@ -32,8 +32,8 @@ use ipc::mcp::{
 use ipc::{
     CallArguments, ChangesRequested, ChosenAnswer, FileReport, FleetCapacity, JobDetail, JobDiff,
     JobEvidence, JobForgotten, JobHistory, JobId, JobList, JobSummary, ManifestSummary,
-    ModelChoices, ProposeJob, Redirection, Redispatched, Report, ReportList, WireError,
-    WorkflowSummary, WorktreeReclaimed, WorktreesHeld,
+    ModelChoices, ProposeJob, Redirection, Redispatched, Report, ReportList, RestartRequested,
+    WireError, WorkflowSummary, WorktreeReclaimed, WorktreesHeld,
 };
 
 /// The request-response operations M1 serves.
@@ -350,9 +350,18 @@ pub trait Daemon: Send + Sync + 'static {
     /// **Refused where the Drone is alive**, and refused where the worktree has
     /// been reclaimed — the second says the act being asked for is a
     /// redispatch rather than becoming one.
+    ///
+    /// **The note is optional and is not a reason for the restart.** `None` is
+    /// the plain restart this act has always been. `Some` is a person saying
+    /// what to do differently in the same breath as asking for another
+    /// attempt — held on the Job and delivered into the opening brief of the
+    /// Drone this asks for, which is the road [`Daemon::request_changes`]
+    /// writes down and not a second one. Refused where a note is already
+    /// waiting, and refused blank for [`Daemon::redirect_drone`]'s reason.
     fn restart_step(
         &self,
         job_id: JobId,
+        note: Option<RestartRequested>,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `approve_review` — the person takes the work, and the Job goes on.

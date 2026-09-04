@@ -95,7 +95,8 @@ pub use ids::{
 };
 pub use job::{
     AttachmentRef, DependencyEdge, JobForgotten, JobList, JobRequest, JobSummary, ProposeJob,
-    ProposedCriterion, ProposedPlan, Redirection, Redispatched, Subject, UnreadableJob,
+    ProposedCriterion, ProposedPlan, Redirection, Redispatched, RestartRequested, Subject,
+    UnreadableJob,
 };
 pub use judged::{CitedAt, Flagged, Judged, KeptDeliverable};
 pub use overlap::{ScopeOverlap, SharedPath};

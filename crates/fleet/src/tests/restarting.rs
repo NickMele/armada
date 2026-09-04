@@ -31,8 +31,11 @@ use testkit::{
     Delivered, Delivering, FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Gate, Sketch,
 };
 
+use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::gate::Ruling;
+use crate::resume::Redirection;
+use crate::reviewing::Said;
 use crate::tests::daemon::{a_proposal, diff_evidence, fitted_with, one, worktree_directory};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
@@ -204,7 +207,7 @@ async fn a_restart_catches_the_branch_up_before_the_new_drone_starts() {
     let before = fleet.vcs().delivered().len();
 
     fleet
-        .restart_step(&job)
+        .restart_step(&job, None)
         .await
         .expect("a stopped step with a worktree and no Drone restarts");
 
@@ -244,7 +247,7 @@ async fn a_conflicted_rebase_on_a_restart_is_the_new_drones_opening_work() {
     let job = stopped(&fleet, &home).await;
     until_reaped(&fleet).await;
 
-    fleet.restart_step(&job).await.expect("a restart");
+    fleet.restart_step(&job, None).await.expect("a restart");
 
     let said = until_spoken(&home, &on_it(&fleet, &job).await).await;
     assert!(
@@ -293,7 +296,7 @@ async fn a_restart_that_resolves_none_of_a_conflicted_rebase_fails_its_diff_chec
 
     let job = stopped(&fleet, &home).await;
     until_reaped(&fleet).await;
-    fleet.restart_step(&job).await.expect("a restart");
+    fleet.restart_step(&job, None).await.expect("a restart");
 
     // The restarted Drone resolves nothing and submits anyway.
     submitted_by_the_one(&fleet, diff_evidence())
@@ -327,7 +330,7 @@ async fn a_restart_onto_a_current_branch_rebases_nothing_and_says_nothing() {
     let job = stopped(&fleet, &home).await;
     until_reaped(&fleet).await;
 
-    fleet.restart_step(&job).await.expect("a restart");
+    fleet.restart_step(&job, None).await.expect("a restart");
 
     assert!(
         fleet.vcs().delivered().is_empty(),
@@ -338,4 +341,185 @@ async fn a_restart_onto_a_current_branch_rebases_nothing_and_says_nothing() {
         !said.contains("THE BRANCH YOU ARE ON"),
         "a branch that did not move is not announced: {said}"
     );
+}
+
+/// **The whole of #396.** A person restarting a step says what to do
+/// differently in the same act, and the Drone the restart asks for opens with
+/// their words.
+///
+/// It is read off the transcript rather than off the record, because what is in
+/// doubt is not that the column took the string — `crate::tests::sending_back`
+/// asserts that for the gate — but that a restart reaches the same delivery the
+/// gate's note reaches, without a second road being built for it.
+#[tokio::test]
+async fn a_restart_carrying_a_note_opens_the_new_drone_with_it() {
+    let home = TempDir::new();
+    let fleet = a_fleet_with(
+        &home,
+        FakeHarness::that_echoes_its_first_turn(),
+        FakeVcs::new(),
+    );
+    let job = stopped(&fleet, &home).await;
+    until_reaped(&fleet).await;
+
+    fleet
+        .restart_step(
+            &job,
+            Some(&a_note("delete that test, it tests the old behaviour")),
+        )
+        .await
+        .expect("a restart with a note");
+
+    let said = until_spoken(&home, &on_it(&fleet, &job).await).await;
+    assert!(
+        said.contains("WHAT A PERSON ASKED FOR"),
+        "the note reached no block of the opening brief: {said}"
+    );
+    assert!(
+        said.contains("delete that test, it tests the old behaviour"),
+        "the words were paraphrased or dropped: {said}"
+    );
+    assert_eq!(
+        fleet
+            .load(&job)
+            .await
+            .expect("the Job reads")
+            .redirect_waiting(),
+        None,
+        "the note outlived the brief it was built into, and would reach a second Drone"
+    );
+}
+
+/// A restart with nothing to say is the act it always was, and the Drone it
+/// asks for is handed no block at all.
+///
+/// **The absence is the assertion.** A restart that opened every Drone with an
+/// empty heading would be the poke `resume::Redirection` refuses, arriving
+/// through a different door.
+#[tokio::test]
+async fn a_restart_with_no_note_hands_the_new_drone_nothing_extra() {
+    let home = TempDir::new();
+    let fleet = a_fleet_with(
+        &home,
+        FakeHarness::that_echoes_its_first_turn(),
+        FakeVcs::new(),
+    );
+    let job = stopped(&fleet, &home).await;
+    until_reaped(&fleet).await;
+
+    fleet.restart_step(&job, None).await.expect("a restart");
+
+    let said = until_spoken(&home, &on_it(&fleet, &job).await).await;
+    assert!(
+        !said.contains("WHAT A PERSON ASKED FOR"),
+        "a restart nobody typed into announced a note anyway: {said}"
+    );
+}
+
+/// **A second note is refused, and the refusal carries the first back.** The
+/// person is left holding both sets of words, which is the one answer that
+/// loses neither — overwriting drops the first silently.
+///
+/// The Job is put in the state by hand through the same call `request_changes`
+/// makes, because what reaches it for real is a spawn that failed after a note
+/// was written, and driving that failure would be testing the spawn.
+#[tokio::test]
+async fn a_second_note_on_a_restart_is_refused_with_the_first_quoted_back() {
+    let home = TempDir::new();
+    let fleet = a_fleet_with(&home, a_drone_that_leaves(), FakeVcs::new());
+    let job = stopped(&fleet, &home).await;
+    until_reaped(&fleet).await;
+    let record = fleet.load(&job).await.expect("the Job reads");
+    fleet
+        .hold_the_note(&record, &a_note("the fixture is wrong"), Said::Restarting)
+        .await
+        .expect("the first note goes on");
+
+    let refusal = fleet
+        .restart_step(&job, Some(&a_note("no, the assertion is wrong")))
+        .await
+        .expect_err("a second note over an undelivered first");
+
+    let Adrift::NoteAlreadyWaiting { held, .. } = refusal else {
+        panic!("the second note overwrote the first: {refusal:?}");
+    };
+    assert_eq!(held.held.text(), "the fixture is wrong");
+    assert_eq!(
+        fleet.load(&job).await.expect("the Job reads").status(),
+        JobStatus::Escalated,
+        "the Job moved on a refusal, so the person's own restart is half-done"
+    );
+}
+
+/// A restart carrying **no** note over a held one is not a second note. It
+/// lands, and the note that was waiting opens the Drone it asked for — which is
+/// the whole point of the note being owed to the next Drone rather than to the
+/// act that wrote it.
+#[tokio::test]
+async fn a_restart_with_no_note_delivers_the_one_already_waiting() {
+    let home = TempDir::new();
+    let fleet = a_fleet_with(
+        &home,
+        FakeHarness::that_echoes_its_first_turn(),
+        FakeVcs::new(),
+    );
+    let job = stopped(&fleet, &home).await;
+    until_reaped(&fleet).await;
+    let record = fleet.load(&job).await.expect("the Job reads");
+    fleet
+        .hold_the_note(
+            &record,
+            &a_note("start from the failing case"),
+            Said::AtTheGate,
+        )
+        .await
+        .expect("a note is waiting");
+
+    fleet
+        .restart_step(&job, None)
+        .await
+        .expect("a plain restart over a held note");
+
+    let said = until_spoken(&home, &on_it(&fleet, &job).await).await;
+    assert!(
+        said.contains("start from the failing case"),
+        "the waiting note was skipped by the act that spawned the Drone it was for: {said}"
+    );
+}
+
+/// A note with nothing in it is refused at the boundary rather than written
+/// down, and **it is not the same request as a restart with no note**: that one
+/// lands. A Drone opened with a heading and nothing under it has been given
+/// exactly the information that was not enough.
+#[tokio::test]
+async fn a_blank_note_is_refused_and_an_absent_one_restarts() {
+    let home = TempDir::new();
+    let fleet = a_fleet_with(&home, a_drone_that_leaves(), FakeVcs::new());
+    let job = stopped(&fleet, &home).await;
+    until_reaped(&fleet).await;
+
+    let refusal = api::Daemon::restart_step(
+        &fleet,
+        ipc::JobId::from(&job),
+        Some(ipc::RestartRequested {
+            note: String::from("   "),
+        }),
+    )
+    .await
+    .expect_err("a note with nothing in it");
+    assert_eq!(refusal.status(), 422, "{:?}", refusal.error());
+    assert_eq!(
+        fleet.load(&job).await.expect("the Job reads").status(),
+        JobStatus::Escalated,
+        "a refused note restarted the step anyway"
+    );
+
+    api::Daemon::restart_step(&fleet, ipc::JobId::from(&job), None)
+        .await
+        .expect("no note at all is the act it always was");
+}
+
+/// The person's words, as the act takes them.
+fn a_note(said: &str) -> Redirection {
+    Redirection::saying(said).expect("a note with something in it")
 }

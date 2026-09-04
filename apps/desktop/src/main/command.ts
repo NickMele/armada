@@ -16,7 +16,7 @@
 
 import type { BridgeState } from "../shared/bridge";
 import type { ClearOutcome, Draft, Outcome } from "@armada/protocol";
-import type { ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report } from "@armada/protocol";
+import type { ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report, RestartRequested } from "@armada/protocol";
 import type { ProposalInFlight, Proposed } from "@armada/protocol";
 import { ask, isJobSummary, MODEL_CALL_MS, route, type Answer } from "./request";
 import { Clearing } from "./clearing";
@@ -382,12 +382,23 @@ export class JobCommands {
 
   /**
    * Put a fresh Drone on the worktree the last one left, at the step that
-   * stopped. **One Job comes back**, resuming rather than replacing — the
-   * whole difference between this and a redispatch.
+   * stopped, carrying whatever the person said to do differently. **One Job
+   * comes back**, resuming rather than replacing — the whole difference
+   * between this and a redispatch.
+   *
+   * **Nothing said means no body, not an empty one.** A blank note is dropped
+   * here rather than refused, which is the one place this differs from
+   * `redirectDrone`: there the note *is* the act and blank is
+   * `empty_instruction`, and here the act is the restart and the note is an
+   * option on it. So a person who opens the field and types nothing gets the
+   * restart they asked for, and Fleet is never sent the 422.
    */
-  async restartStep(jobId: string): Promise<Outcome> {
+  async restartStep(jobId: string, note?: string): Promise<Outcome> {
+    const said = note?.trim();
+    const body: RestartRequested | undefined =
+      said === undefined || said === "" ? undefined : { note: said };
     return this.act(jobId, this.restarting, "already_restarting", (port) =>
-      ask(port, "POST", route(jobId, "restart_step")),
+      ask(port, "POST", route(jobId, "restart_step"), body),
     );
   }
 

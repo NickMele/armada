@@ -247,7 +247,7 @@ async fn a_stalled_job_is_told_it_is_redirected_and_the_redirect_lands() {
         .expect("the act the classification named");
     assert!(
         matches!(
-            fleet.restart_step(&job).await,
+            fleet.restart_step(&job, None).await,
             Err(Adrift::NoStepStopped { .. })
         ),
         "and the one it withheld is the one Fleet refuses, for the reason the          classification withheld it: a Job-level escalation names no step"
@@ -284,7 +284,7 @@ async fn a_job_whose_worktree_is_gone_is_told_only_a_redispatch_moves_it() {
     );
     assert!(
         matches!(
-            fleet.restart_step(&job).await,
+            fleet.restart_step(&job, None).await,
             Err(Adrift::WorktreeGone { .. })
         ),
         "which is exactly what the act says on the press"
@@ -302,7 +302,7 @@ async fn a_restart_onto_a_gone_worktree_answers_409_over_the_wire() {
     until_reaped(&fleet).await;
     delete_the_worktree(&home, &job);
 
-    let refusal = api::Daemon::restart_step(&fleet, ipc::JobId::from(&job))
+    let refusal = api::Daemon::restart_step(&fleet, ipc::JobId::from(&job), None)
         .await
         .expect_err("the worktree was just deleted");
 
@@ -421,7 +421,7 @@ async fn killing_a_running_jobs_drone_leaves_a_step_a_restart_lands_on() {
     );
 
     fleet
-        .restart_step(&job)
+        .restart_step(&job, None)
         .await
         .expect("the act the classification named");
 }
@@ -510,7 +510,10 @@ async fn a_restart_after_a_kill_keeps_the_step_that_already_advanced() {
         .unwrap();
 
     fleet.kill_drone(&job).await.expect("the Drone ends");
-    fleet.restart_step(&job).await.expect("a restart lands");
+    fleet
+        .restart_step(&job, None)
+        .await
+        .expect("a restart lands");
 
     let record = fleet.load(&job).await.unwrap();
     let plan = record.step(&StepId::new(PLAN)).expect("the first step");

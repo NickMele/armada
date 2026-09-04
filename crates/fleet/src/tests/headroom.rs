@@ -508,7 +508,7 @@ async fn a_restart_is_accepted_and_then_held_by_short_headroom() {
         Bytes::gibibytes(1),
     ));
     fleet
-        .restart_step(job.id())
+        .restart_step(job.id(), None)
         .await
         .expect("the act is accepted: a person is never refused for a machine");
 

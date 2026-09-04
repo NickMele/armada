@@ -341,7 +341,7 @@ async fn a_run_that_ends_with_nothing_submitted_escalates_on_the_next_turn() {
     // `running` under a held slot it refused twice over, so the only act on
     // offer was redispatching the whole Job.
     let restarted = fleet
-        .restart_step(&job)
+        .restart_step(&job, None)
         .await
         .expect("a reaped step is one a person can restart");
     assert_ne!(restarted.status(), JobStatus::Escalated);
