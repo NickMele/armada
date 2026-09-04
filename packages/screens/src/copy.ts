@@ -163,6 +163,28 @@ export const CONFIRM: Record<ConfirmableAct, { title: string; body: string; tone
 };
 
 /**
+ * The field the restart confirmation carries, and what it promises.
+ *
+ * **The one confirmation that collects anything, and the field is optional.**
+ * Every other dialog that takes a field is its own act — a redirect and an
+ * override each need theirs, and neither reaches `CONFIRM`. This one is a
+ * restart either way: leaving it alone sends exactly what a restart sent before
+ * the field existed, which is why it is not a second control and not a second
+ * step.
+ *
+ * **It says where the words go, because the answer is surprising.** There is no
+ * drone to read them — that is what a restart is for — so they wait on the job
+ * and open the brief of the drone this asks for. A person who was not told that
+ * would expect something to happen to the drone they can see is gone.
+ */
+export const RESTART_NOTE = {
+  label: "What to do differently — optional",
+  says:
+    "Anything you write here opens the new drone's brief before it starts. Leave it empty to " +
+    "restart on what stopped the last one.",
+};
+
+/**
  * What each act is called on its button. **Redispatch does not say "retry" or
  * "run again"** — nothing resumes, and a label implying the same Job continues
  * would describe an act Fleet does not perform. The confirmation states the

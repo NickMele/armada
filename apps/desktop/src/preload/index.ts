@@ -88,8 +88,11 @@ const api: BridgeApi = {
   ): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.answerQuestion, jobId, questionId, chose),
 
-  restartStep: (jobId: string): Promise<Outcome> =>
-    ipcRenderer.invoke(CHANNELS.restartStep, jobId),
+  // The note is optional, and `undefined` crosses as `undefined` — a plain
+  // restart sends Fleet no body at all, which is the request it took before it
+  // could read one.
+  restartStep: (jobId: string, note?: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.restartStep, jobId, note),
 
   // Overrule a Judge that refused the work. **Its own entry and never a flag on
   // `approveReview`** — that one answers a gate nothing objected to, this one

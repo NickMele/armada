@@ -192,8 +192,8 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.redirectDrone, (_event, jobId: string, instruction: string) =>
     connection?.commands.redirectDrone(jobId, instruction),
   );
-  ipcMain.handle(CHANNELS.restartStep, (_event, jobId: string) =>
-    connection?.commands.restartStep(jobId),
+  ipcMain.handle(CHANNELS.restartStep, (_event, jobId: string, note?: string) =>
+    connection?.commands.restartStep(jobId, note),
   );
   // The third act on an escalated Job, and the only one that keeps the work the
   // gate refused. Its own channel rather than a flag on `approveReview`: that
