@@ -69,7 +69,7 @@ notes = """
 
 A reading is three short-lived processes and about eighty milliseconds, so taking one on every turn — four a second — would be a measurable share of a core spent on a number that does not move that fast. It ships at five seconds, which is twenty turns.
 
-Daemon-level. Distinct from Drone heartbeat/liveness timeout, which is per-Drone silence rather than Fleet's own polling.
+Daemon-level. Distinct from Drone silence threshold (quiet_after), which is per-Drone silence rather than Fleet's own polling.
 """
 
 [settings.sqlite-wal-checkpoint-interval]
@@ -608,19 +608,30 @@ peer_polarity = "Lower is stricter"
 owner = "Fleet"
 read_by = "verification"
 notes = """
-Free rounds before an insufficient-evidence loop escalates as stalled. Does not consume the step's retry_limit — which is what lets the two multiply past the Job timeout. Owner corrected from Drone to Fleet in the Aug 2026 spot-check: a Drone does not count its own rounds and stop, verification counts them, and the enforced consequence is a stall escalation, which is Fleet's. Drone heartbeat / liveness timeout was moved on identical reasoning and this neighbouring row was missed.
+Free rounds before an insufficient-evidence loop escalates as stalled. Does not consume the step's retry_limit — which is what lets the two multiply past the Job timeout. Owner corrected from Drone to Fleet in the Aug 2026 spot-check: a Drone does not count its own rounds and stop, verification counts them, and the enforced consequence is a stall escalation, which is Fleet's. Drone silence threshold (quiet_after) was moved on identical reasoning and this neighbouring row was missed.
 """
 
-[settings.drone-heartbeat-liveness-timeout]
-name = "Drone heartbeat/liveness timeout"
+[settings.drone-silence-threshold-quiet-after]
+name = "Drone silence threshold (quiet_after)"
 scope = "Kit → Manifest"
+default = "120 seconds"
 lifetime = "Live"
 merge_strategy = "REPLACE"
 peer_polarity = "Lower is stricter"
 owner = "Fleet"
 read_by = "fleet"
 notes = """
-Per-Drone silence threshold that triggers a stalled escalation. Documented on Drone; Fleet is what notices the silence. Distinct from Fleet health-check / resource-poll interval.
+How long a Drone may say nothing before Fleet pokes it, and — once `poke_limit` is spent — escalates the Job as stalled. **Overridable per step, defaulted from `default_gate_policy.quiet_after_seconds`**, the same shape as `iteration_cap` and the two `default_gate_policy` caps below. That per-step tier is what `#60` is for: a formatting step and a large refactor were given the same patience, because there was one number and it was a constant.
+
+**Called "Drone heartbeat/liveness timeout" until `#60`, and the old name is why nothing found this row.** `fleet::Liveness` carries both halves of the pair, cites `poke_limit`'s row for the count and cited no row at all for the duration, and `crates/armada/src/serve.rs` hard-codes both as `PROVISIONAL_LIVENESS`. The heartbeat half of the old name was split out into `drone-heartbeat-interval-heartbeat-interval-minutes` in Aug 2026 and the name was not corrected with it, so the row read as being about a beat Armada does not send.
+
+**It is the silence, not the elapsed time.** `docs/spikes/009-how-long-does-a-step-take.md` measured the longest silence inside an honest step at 79s against a step wall clock whose p90 was 437s: every stuck step it saw was quiet, not long. A step's wall clock is a different dial and is `fleet::StepNorms`'s.
+
+**Two rows and not one pair.** `poke-limit-poke-limit` holds the count that travels with this duration, and they stay separately overridable: a step that deserves more patience per poke does not thereby deserve more pokes, and a repository that wants to be asked more often wants to change one and inherit the other. `fleet::Liveness` is the pair the two resolve into, and no file states a tuple. The product is what must not fire routinely — at the defaults that is about six minutes of silence, four and a half times the longest any honest step produced.
+
+**A step-level override is the watched step's own, and nothing aggregates.** The vigil watches one Drone and a Drone belongs to exactly one step, so the value in force is that step's, re-read at the step boundary. The poke budget resets with it, because the slot holding the count is per step already. A Job spanning four steps is four independent patiences, never a sum and never the strictest of them.
+
+**Not wired.** `fleet::silence` reads this off `Fleet` rather than off the Job, so neither the Manifest tier nor the step tier exists in code yet. Documented on Drone; Fleet is what notices the silence. Distinct from Fleet health-check / resource-poll interval, and from the heartbeat interval, which is how often a Drone is expected to speak rather than how long Fleet waits before speaking to it.
 """
 
 [settings.fleet-self-restart-attempt-limit-backoff]
@@ -905,6 +916,12 @@ owner = "Fleet"
 read_by = "fleet"
 notes = """
 How many nudge prompts a silent Drone gets before the Job escalates as stalled. A liveness counter — nothing arrived at all. Distinct from Drone evidence clarification-round cap, which is a content-sufficiency counter: something arrived via the Evidence MCP tool but was not enough. Both end in the stalled label; they track independently. Set in a WorkflowDef default_gate_policy since the schema was written; no row until Aug 21 2026.
+
+**The count that travels with `quiet_after`, and the second of two rows rather than half of one value.** `#60` weighed folding the pair into a single setting and refused it: a step that deserves more patience per poke does not thereby deserve more pokes, no other row in this file states a tuple, and one key would make overriding either half mean restating both. `fleet::Liveness` is where the two meet, and it holds them as two numbers behind one constructor for that reason.
+
+**Overridable per step, defaulted from `default_gate_policy.poke_limit`**, and the budget resets at each step boundary because the slot that counts spent pokes is per step. A Drone poked twice on step one starts step two with two pokes in hand.
+
+**Not wired.** `crates/armada/src/serve.rs` hard-codes it as the second half of `PROVISIONAL_LIVENESS`, and `fleet::silence` reads it off `Fleet` rather than off the Job — so neither the Manifest tier nor the step tier exists in code yet.
 """
 
 [settings.drone-heartbeat-interval-heartbeat-interval-minutes]
@@ -917,7 +934,7 @@ peer_polarity = "Lower is stricter"
 owner = "Fleet"
 read_by = "fleet"
 notes = """
-How often a Drone is expected to emit a heartbeat. Distinct from Drone heartbeat/liveness timeout, which is how long silence runs before Fleet acts, and from Fleet health-check / resource-poll interval, which is Fleet polling its own headroom. Three different quantities that were carried in two rows. Must be shorter than the liveness timeout or every Drone escalates between beats — validate at config load, the same shape as requires_checks needing requires_worktree.
+How often a Drone is expected to emit a heartbeat. Distinct from Drone silence threshold (quiet_after), which is how long silence runs before Fleet acts, and from Fleet health-check / resource-poll interval, which is Fleet polling its own headroom. Three different quantities that were carried in two rows. Must be shorter than the liveness timeout or every Drone escalates between beats — validate at config load, the same shape as requires_checks needing requires_worktree.
 """
 
 [settings.log-pruning-trigger-sweep-or-timer]

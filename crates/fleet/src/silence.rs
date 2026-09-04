@@ -45,6 +45,24 @@ use crate::working::{StoodDown, Working};
 /// reason: a threshold invented at a call site is a threshold nobody can find.
 /// The composition root names them once, and says there what measured them.
 ///
+/// **Two settings and not one**, which `#60` decided rather than assumed:
+/// `drone-silence-threshold-quiet-after` and `poke-limit-poke-limit` in
+/// `crates/config/settings.toml`, each overridable per repository and per step.
+/// A step wanting more patience per poke does not thereby want more pokes, so
+/// one key would make setting either half mean restating both.
+///
+/// **The value in force is the watched step's, and nothing aggregates.** A
+/// Drone belongs to one step, so a Job spanning four steps is four independent
+/// patiences — never a sum and never the strictest of them. The poke budget
+/// already resets at the boundary, because `crate::working::Working` is
+/// per step.
+///
+/// **What is here is the constant, and neither tier is wired.** Resolution
+/// wants the pair on the slot at step start rather than a read per turn:
+/// `watch_silence` compares against the threshold before it touches the store,
+/// and a per-step value read off the Job would cost that read every turn on
+/// every healthy Drone.
+///
 /// [`StepNorms`]: crate::StepNorms
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Liveness {
@@ -58,6 +76,10 @@ impl Liveness {
     }
 
     /// How long silence runs before Fleet says anything.
+    /// `drone-silence-threshold-quiet-after` in
+    /// `crates/config/settings.toml`, which carries what measured it. It was
+    /// called a heartbeat timeout there until `#60`, which is why this type
+    /// cited a row for its second number and none for this one.
     pub fn quiet_after(&self) -> Duration {
         self.quiet_after
     }
