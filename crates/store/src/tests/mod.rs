@@ -22,6 +22,7 @@ mod forget;
 mod gaming;
 mod migrate;
 mod plan;
+mod process;
 mod reconstruct;
 mod report;
 mod roundtrip;

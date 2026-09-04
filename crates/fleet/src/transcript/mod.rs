@@ -14,15 +14,15 @@
 //! # Neither consumer can hold up the loop
 //!
 //! The file's queue is `try_send` and the live channel is drop-oldest, so a row
-//! either will not take is dropped and counted rather than awaited. That is why
-//! a second consumer changes nothing about what Fleet does with the events,
-//! which `docs/concepts/observe.md` calls load-bearing.
+//! either will not take is dropped and counted rather than awaited — which is
+//! why a second consumer changes nothing about what Fleet does with the events,
+//! and `docs/concepts/observe.md` calls that load-bearing.
 //!
-//! # A Fleet that dies does not come back to this file
+//! # A Fleet that dies comes back only where the Drone is
 //!
-//! The writer goes with Fleet, `Fleet::reconcile` never puts a Drone back onto
-//! a Job it did not spawn, and every row already taken is flushed. A retry is a
-//! second `drone_id`, so nothing appends to a dead Drone's transcript.
+//! Every row taken is flushed, and a retry is a second `drone_id` — nothing
+//! appends to a *dead* Drone's transcript. **An adoption does**:
+//! `crate::readopting` reopens the same file and writes what nothing observed.
 
 mod backfill;
 mod row;
@@ -43,7 +43,7 @@ use tokio::task::JoinHandle;
 use crate::clock::Clock;
 use row::Line;
 
-pub use backfill::{arguments, history, HISTORY};
+pub use backfill::{arguments, history, last_heard, HISTORY};
 
 /// How many rows may be waiting to be written.
 ///

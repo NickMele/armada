@@ -162,7 +162,9 @@ pub enum Drained {
 /// A transcript being read.
 pub struct Watching {
     heard: Arc<Mutex<Heard>>,
-    reader: JoinHandle<()>,
+    /// The task doing the reading. **`None` where there is no pipe to read** —
+    /// see [`Watching::unheard`], which is the one thing that produces one.
+    reader: Option<JoinHandle<()>>,
 }
 
 impl fmt::Debug for Watching {
@@ -211,7 +213,41 @@ impl Watching {
                 .expect("the transcript is not held across a panic")
                 .ended = true;
         });
-        Watching { heard, reader }
+        Watching {
+            heard,
+            reader: Some(reader),
+        }
+    }
+
+    /// A transcript Fleet holds no pipe into, and never will.
+    ///
+    /// **The adopted Drone's transcript, and it is a statement of deafness
+    /// rather than of silence.** A Drone that outlived the Fleet which spawned
+    /// it is still writing to the pipe that Fleet held; the read end went with
+    /// that process, and nothing can reopen another process's stdout. So there
+    /// is no reader, nothing will ever arrive, and every count below stays
+    /// zero for the rest of the run.
+    ///
+    /// **[`transcript_ended`](Watching::transcript_ended) answers `true`**, and
+    /// that is the honest reading rather than a convenience: the pipe *has*
+    /// closed — it closed when Fleet died — and `dispatch::reap` gates on it
+    /// before asking whether the process is gone, which is exactly the question
+    /// that still has an answer for an adopted Drone.
+    ///
+    /// What this must not be read as is a Drone that said nothing. `Ending::of`
+    /// over no events folds to [`Ending::Vanished`](crate::Ending), which is
+    /// right for a Drone whose process has gone and is a floor rather than a
+    /// finding for one that was adopted: whatever it said in the gap is
+    /// unrecoverable, so `blocked_by_policy`, `silent` and `stalled` are three
+    /// answers Fleet has permanently lost the evidence to give.
+    pub fn unheard() -> Watching {
+        Watching {
+            heard: Arc::new(Mutex::new(Heard {
+                events: Vec::new(),
+                ended: true,
+            })),
+            reader: None,
+        }
     }
 
     /// Whether the pipe has closed. **Not whether the process is gone** — see
@@ -297,7 +333,17 @@ impl Watching {
         // the inner `Err` is a panic inside it — in which case whatever had
         // been read is already in `heard` and there is nothing further to wait
         // for. Either way the pipe reached its end.
-        match tokio::time::timeout(DRAIN, &mut self.reader).await {
+        let Some(reader) = self.reader.as_mut() else {
+            // **An adopted Drone, and `CutShort` with nothing waited is the
+            // true sentence.** There was no pipe to drain and none was waited
+            // on, and the transcript is missing everything the Drone said after
+            // the Fleet that was reading it died — which is precisely what this
+            // variant says. `ToTheEnd` would claim the record is whole.
+            return Drained::CutShort {
+                waited: Duration::ZERO,
+            };
+        };
+        match tokio::time::timeout(DRAIN, reader).await {
             Ok(_) => Drained::ToTheEnd,
             // The reader is left running rather than aborted here. `Drop` is
             // what stops it, and dropping it closes Fleet's read end — so the
@@ -333,6 +379,8 @@ impl Drop for Watching {
     /// left for this to catch is a slot dropped without one — a Fleet shutting
     /// down, or a test walking away.
     fn drop(&mut self) {
-        self.reader.abort();
+        if let Some(reader) = self.reader.as_ref() {
+            reader.abort();
+        }
     }
 }

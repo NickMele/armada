@@ -170,7 +170,14 @@ where
         // The pid index goes in beside it, for `crate::peer`: the two are one
         // fact — a Drone is on this Job — recorded in the two places that can
         // answer for it, the record for a person and the index for a caller.
+        //
+        // And a third place, which is the only one that outlives this process:
+        // the pid and when it started, written to the store so a Fleet that
+        // restarts can ask what became of this Drone instead of asserting it is
+        // gone. See `crate::adopting`.
         self.drone_at_work(&job_id, started.session.pid());
+        self.drone_process_recorded(job, step, &drone, started.session.pid())
+            .await?;
         self.drone_arrived(job, step, drone.clone()).await?;
         // After the process exists too, and for the same reason: a note
         // cleared over a spawn that then failed is a note nobody was told.
@@ -254,7 +261,7 @@ where
     /// The log line is still written: it carries the transcript's path, which
     /// `assigned_drone` does not — the step's column names the Drone and this
     /// names the file its rows are in.
-    fn recording(
+    pub(crate) fn recording(
         &self,
         job: &JobId,
         drone: &DroneId,
