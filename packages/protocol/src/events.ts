@@ -17,6 +17,7 @@ import type {
   Reason,
   Settled,
 } from "./protocol";
+import type { ManifestReading } from "./reading";
 import type { ProposalInFlight } from "./proposing";
 import type { QuestionInFlight } from "./waiting";
 import type { ProtocolVersion } from "./version";
@@ -50,7 +51,8 @@ export type Event =
   | ({ kind: "job.asking" } & JobAsking)
   | ({ kind: "job.forgotten" } & JobForgotten)
   | ({ kind: "job.landed" } & JobLanded)
-  | ({ kind: "proposal.moved" } & ProposalMoved);
+  | ({ kind: "proposal.moved" } & ProposalMoved)
+  | ({ kind: "manifest.reread" } & ManifestReading);
 
 /**
  * A Job exists that did not before, carrying the row whole.
@@ -246,3 +248,13 @@ export type ChangedFile = {
    */
   outside_plan?: boolean;
 };
+
+// `manifest.reread` carries `ManifestReading` itself rather than a payload
+// wrapping it, which is what `job.forgotten` does with `JobForgotten`: the
+// answer to `get_manifest_reading` and this event's body are the same fact.
+//
+// It is the second kind here that names no Job, and unlike `proposal.moved` it
+// names no Drone and no step either — a Manifest is Fleet's own, so nothing on
+// the Board moves when it arrives. It carries no `actor` and no `at` on the
+// envelope for that reason: `at` would be a second copy of the reading's own,
+// and nobody pressed anything in Armada at all.

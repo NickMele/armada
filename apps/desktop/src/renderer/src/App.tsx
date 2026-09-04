@@ -19,13 +19,14 @@
 // line joins to nothing, and a labelled blank is worse than an absent row.
 
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Dialog, Textarea } from "@armada/components";
+import { Button, Dialog, Textarea } from "@armada/components";
 
 import { NOTHING_YET } from "../../shared/bridge";
 import type { BridgeState } from "../../shared/bridge";
 import type { Artifact, Draft, Outcome } from "@armada/protocol";
 import type { FileReport, WorktreeReclaimed } from "@armada/protocol";
 import { Boundary } from "@armada/shell";
+import { Standing } from "./Standing";
 import { CopiedToast, SaidToast, useCopied, useSaid } from "@armada/shell";
 import { FailureBlock } from "@armada/shell";
 import { fleetFailure, jobFailure, refusalFailure, transportFailure, uncaughtFailure } from "@armada/shell";
@@ -143,6 +144,8 @@ export function App() {
   // two things, the halves can disagree, and a kept branch is something a
   // person has to go and deal with by hand.
   const [givenBack, setGivenBack] = useState<WorktreeReclaimed | null>(null);
+  /** The Manifest reading a person put away. A later read draws again. */
+  const [readingSeen, setReadingSeen] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   // Which Job has a decision on its work in flight. Separate from `acting`,
   // the header's act set: sharing one flag would grey out the header's kills
@@ -564,86 +567,24 @@ export function App() {
         onSurface={goTo}
       >
         <div className="flex flex-col gap-6">
-          {/* Fleet, when the one connection is not one. The status bar keeps the
-              single line; this is the same reading with the four runtime-file
-              answers and the log under it. */}
-          {fleet === null ? null : <FailureBlock failure={fleet} onCopied={setCopied} />}
-
-          {/* What no boundary sees. A click that threw and a rejected preload
-              call both look like a button that did nothing. */}
-          {uncaught === null ? null : (
-            <FailureBlock
-              failure={uncaughtFailure(uncaught, state.bridge)}
-              onCopied={setCopied}
-              // Cleared by hand rather than on a timer: a failure that vanishes
-              // while nobody is looking is the silence being repaired here.
-              onDismiss={() => setUncaught(null)}
-            />
-          )}
-
-          {state.missed <= acknowledged ? null : (
-            <Alert
-              tone="escalated"
-              title="Events were dropped before Bridge saw them"
-              action={
-                <Button variant="ghost" size="sm" onClick={() => setAcknowledged(state.missed)}>
-                  Noted
-                </Button>
-              }
-            >
-              {`${state.missed} events will never arrive. Fleet resynced current state after each drop, so the list below is repaired.`}
-            </Alert>
-          )}
-
-          {/* What a reclaim gave back. **Neutral, because nothing is wrong** —
-              a branch kept for holding work nothing has taken is the safe
-              setting working, and drawing it in the escalation hue would tell
-              somebody the act failed when it did exactly what it promised.
-              Dismissed by hand: a directory and a branch are what a person goes
-              and looks at, and a notice that vanished while they did is one
-              they cannot get back. */}
-          {givenBack === null ? null : (
-            <Alert
-              tone="neutral"
-              title="Worktree reclaimed"
-              action={
-                <Button variant="ghost" size="sm" onClick={() => setGivenBack(null)}>
-                  Dismiss
-                </Button>
-              }
-            >
-              {reclaimed(givenBack)}
-            </Alert>
-          )}
-
-          {/* A refusal Fleet named carries a `run_id`, its `fields` and its
-              `chain`, so it is drawn whole rather than as one line of copy —
-              its `message` names one problem even where several exist. A
-              command Fleet did not answer carries no envelope and is drawn
-              whole for the same reason: the code, the route and the wait are
-              the whole of what a person has to hand on. Neither is reloadable,
-              because a redraw re-runs no command. Everything else here is the
-              form telling you what it will not send, which is guidance and not
-              a failure. */}
-          {commandFailure !== null ? (
-            <FailureBlock
-              failure={commandFailure}
-              onCopied={setCopied}
-              reloadable={false}
-              onDismiss={() => setOutcome(null)}
-            />
-          ) : outcome === null || outcome.ok ? null : (
-            <Alert
-              tone="escalated"
-              action={
-                <Button variant="ghost" size="sm" onClick={() => setOutcome(null)}>
-                  Dismiss
-                </Button>
-              }
-            >
-              {said(outcome)}
-            </Alert>
-          )}
+          <Standing
+            fleet={fleet}
+            manifestReading={state.manifestReading}
+            readingSeen={readingSeen}
+            onReadingSeen={setReadingSeen}
+            uncaught={uncaught}
+            onUncaught={setUncaught}
+            bridge={state.bridge}
+            onCopied={setCopied}
+            missed={state.missed}
+            acknowledged={acknowledged}
+            onAcknowledged={setAcknowledged}
+            givenBack={givenBack}
+            onGivenBack={setGivenBack}
+            commandFailure={commandFailure}
+            outcome={outcome}
+            onOutcome={setOutcome}
+          />
 
           {/* One Job, read whole, in place of the board. Reviewing and deciding
               is one loop, so the detail is not a panel beside the list — and the

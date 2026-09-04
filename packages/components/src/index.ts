@@ -179,3 +179,4 @@ export * from "./compositions/HeldWorktree/HeldWorktree";
 // debug panel: the first thing on it is a sentence answering *is this working*,
 // because the moment it is for is a person worried about a Job.
 export * from "./compositions/JobResources/JobResources";
+export * from "./compositions/ManifestNotice/ManifestNotice";

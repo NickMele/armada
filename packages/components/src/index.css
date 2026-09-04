@@ -142,3 +142,7 @@
 /* What one Job holds on the machine. A card and not a well: the act on it makes
    it something to be acted on. */
 @import "./compositions/JobResources/JobResources.css";
+
+/* What Fleet's last read of `armada.yml` came to. Appended, per the rule at the
+   head of this file. */
+@import "./compositions/ManifestNotice/ManifestNotice.css";

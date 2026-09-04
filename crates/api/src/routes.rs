@@ -37,7 +37,8 @@ use crate::daemon::Daemon;
 use crate::journal::Journal;
 use crate::queries::{
     get_call, get_capacity, get_diff, get_evidence, get_job, get_job_events, get_job_resources,
-    list_jobs, list_manifests, list_models, list_reports, list_workflows, list_worktrees,
+    get_manifest_reading, list_jobs, list_manifests, list_models, list_reports, list_workflows,
+    list_worktrees,
 };
 use crate::sockets::{events, job_log, observe_job};
 use crate::stream::Broadcaster;
@@ -83,6 +84,15 @@ pub const SERVED: &[Route] = &[
         operation: "get_capacity",
         method: "GET",
         path: "/capacity",
+    },
+    // Fleet's reading of its own Manifest, and singular where `/manifests` is
+    // plural on purpose: that route lists what Fleet holds, and this one is the
+    // single `armada.yml` Fleet is running on and watching. Not under `/jobs`
+    // for `get_capacity`'s reason — a reload belongs to no Job at all.
+    Route {
+        operation: "get_manifest_reading",
+        method: "GET",
+        path: "/manifest/reading",
     },
     // The path taken, under the Job that took it. `get_job_events` drops
     // `get_` and `job_` for the reason `redispatch` drops `_job`: the segment
@@ -369,6 +379,13 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/events",
     },
+    // The other kind that names no Job, and it names no Drone or step either.
+    // A Manifest is Fleet's own, so nothing on the Board moves when it arrives.
+    Route {
+        operation: "manifest.reread",
+        method: "GET",
+        path: "/events",
+    },
 ];
 
 /// Everything a handler needs. Cloned per request, so nothing here may be
@@ -472,6 +489,7 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/manifests", get(list_manifests::<D>))
         .route("/models", get(list_models::<D>))
         .route("/capacity", get(get_capacity::<D>))
+        .route("/manifest/reading", get(get_manifest_reading::<D>))
         .route("/jobs/:job_id", get(get_job::<D>))
         .route("/jobs/:job_id/events", get(get_job_events::<D>))
         .route("/jobs/:job_id/evidence", get(get_evidence::<D>))

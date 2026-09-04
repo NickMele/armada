@@ -208,6 +208,23 @@ notes = """
 The resolution chain across Kit, Machine and Manifest is not yet stated.
 """
 
+[operations.get_manifest_reading]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "What Fleet's last read of armada.yml came to, and whether it took"
+notes = """
+Fleet-wide, and there is no Job to hang it off. Every Envelope in the workspace is written into one Job's transcript and a Manifest reload belongs to none of them, which is why `crates/armada/src/watching.rs` had nowhere to put this and printed it on the daemon's console — a terminal window a person running Bridge does not have open.
+
+A query as well as an event, and that is the point rather than belt-and-braces. A refusal is not an instant that passes: the file on disk and the values Fleet is running with disagree, and they go on disagreeing until somebody corrects the file. Fleet holds its last reading and answers for it here, so a Bridge opened after the save learns it, and so does one that reconnected through a drop. An event alone would mean a person who was not looking at the window in the second it fired never finds out at all, which is the defect one window over from the one being fixed.
+
+Refusal is the absent field, not a flag: `refused` present is the read that did not take. That is `job.judging`'s shape, and it is here for the same reason — a boolean beside a reason that means nothing when it is false is two fields for one fact.
+
+Every fault crosses, not the first. `config::LoadError` finds them all, and a person correcting a file from a message naming one saves, waits, and meets the next — the same silence one round longer.
+
+`helm_access` is `Yes` on `get_capacity`'s terms: it is one small answer about Fleet's own state, and a Helm whose dispatch is running against configuration the repository no longer describes should be able to find that out.
+"""
+
 [operations.get_usage]
 kind = "query"
 transport = "HTTP"
@@ -1032,6 +1049,21 @@ kind = "event"
 transport = "WebSocket"
 helm_access = "Bridge only"
 description = "A workflow step passes its gate"
+
+[operations."manifest.reread"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "Fleet read armada.yml again, and this is what it came to"
+notes = """
+The second kind on this stream that names no Job — `proposal.moved` is the first — and unlike that one it names no Drone and no step either. A Manifest is Fleet's own, so nothing on the Board moves when this arrives and there is nothing for a client to fold into a row.
+
+It carries `ManifestReading` itself rather than a payload wrapping one, which is what `job.forgotten` does with `JobForgotten`: the answer to `get_manifest_reading` and this event's body are the same fact, and declaring it twice would be two shapes to keep in step for one sentence.
+
+No actor and no `at` on the envelope. `at` would be a second copy of the reading's own, and an actor would have to claim either that Fleet decided something — it read a file — or that a person did, when nobody pressed anything in Armada at all.
+
+It publishes at the rate somebody saves a file, behind a settle window, so it costs the shared backlog nothing worth stating. A save that moved nothing Fleet reads live is still published: the reading is what Fleet now holds, and a client asks `worth_saying` whether it is news rather than being told only about the readings somebody else judged interesting.
+"""
 
 [operations."review.ready"]
 kind = "event"

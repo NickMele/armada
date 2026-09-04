@@ -54,6 +54,9 @@ pub mod mcp;
 /// verdict** — nothing in it is readable as a refusal.
 mod overlap;
 mod proposing;
+/// Fleet's last read of `armada.yml`, held rather than announced. **The one
+/// shape here about the fleet and not about a Job**, beside `capacity`.
+mod reading;
 /// What giving one Job's worktree and branch back did, half by half.
 /// **Two halves, because half of it happening is a real outcome.**
 mod reclaimed;
@@ -110,6 +113,7 @@ pub use journal::{
 pub use judged::{CitedAt, Flagged, Judged, KeptDeliverable};
 pub use overlap::{ScopeOverlap, SharedPath};
 pub use proposing::{ProposalInFlight, ProposalReach, ProposalStopped, StopProposal};
+pub use reading::{ManifestFault, ManifestMoved, ManifestReading, ManifestRefused};
 pub use reclaimed::{ReclaimedBranch, ReclaimedWorktree, WorktreeReclaimed};
 pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, ReportOrigin};
 pub use resources::{

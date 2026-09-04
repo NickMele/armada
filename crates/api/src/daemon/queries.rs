@@ -17,7 +17,8 @@ use crate::daemon::Refusal;
 use crate::observing::Observed;
 use ipc::{
     CallArguments, FleetCapacity, JobDetail, JobDiff, JobEvidence, JobHistory, JobId, JobList,
-    JobResources, ManifestSummary, ModelChoices, ReportList, WorkflowSummary, WorktreesHeld,
+    JobResources, ManifestReading, ManifestSummary, ModelChoices, ReportList, WorkflowSummary,
+    WorktreesHeld,
 };
 
 /// Everything a client reads.
@@ -45,6 +46,24 @@ pub trait Queries: Send + Sync + 'static {
     /// are still true. The only `Refusal` here is Fleet being unable to read
     /// its own roster, which is not a state that has ever occurred.
     fn get_capacity(&self) -> impl Future<Output = Result<FleetCapacity, Refusal>> + Send;
+
+    /// `get_manifest_reading` — what Fleet's last re-read of `armada.yml` came
+    /// to, and whether it took.
+    ///
+    /// **Fleet-wide, and there is no Job to hang it off.** A Manifest reload
+    /// belongs to no Job's transcript, which is why the only place it used to
+    /// be said was the daemon's console.
+    ///
+    /// `None` is a real answer and not a miss: Fleet has not re-read the file
+    /// since it started with it. The configuration in force is then simply the
+    /// one it booted on, and there is nothing about it to say.
+    ///
+    /// It cannot refuse. Fleet either holds a reading or does not, and both are
+    /// answers — `Result` is here to match the surface, not because a failure
+    /// is reachable.
+    fn get_manifest_reading(
+        &self,
+    ) -> impl Future<Output = Result<Option<ManifestReading>, Refusal>> + Send;
 
     /// `get_job` — one Job in full: its steps and where each got to, the
     /// criteria it is held to, the branch its worktree is on, and the brief it

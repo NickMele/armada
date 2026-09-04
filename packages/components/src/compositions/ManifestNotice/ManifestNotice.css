@@ -1,0 +1,51 @@
+/* What Fleet's last read of `armada.yml` came to, drawn as a standing
+   condition.
+
+   No card and no well: this is `Alert`'s body, and `Alert` already draws the
+   ground it sits on. What is here is the shape of the copy inside it — a
+   sentence, then the fields it is about. */
+.armada-manifest-notice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The refusal's own sentence, as Fleet rendered it. Mono, because it is
+   machine-derived and carries a line and column the reader has to retype into
+   an editor — the same treatment every other machine value takes. */
+.armada-manifest-notice__summary {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+/* Key by key. A list and not prose: every fault found crosses, and a person
+   correcting a file reads down them. */
+.armada-manifest-notice__faults {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-manifest-notice__fault {
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The key is what a person searches the file for, so it is the mono half. */
+.armada-manifest-notice__key {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--fg-default);
+  overflow-wrap: anywhere;
+}
+
+.armada-manifest-notice__fault-said {
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}
