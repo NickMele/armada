@@ -8,20 +8,20 @@
 //!
 //! # It is not `retry_count`, and it is not `iteration_count`
 //!
-//! Both are `job_steps` columns in `domain/job-fields.toml` and both are
-//! contested there: `domain/workflows.toml` records that whose `retry_count` a
-//! backward jump increments "is undefined", and `workflowdef-fields.toml`
-//! leaves open "whose `iteration_count` increments — the gate step's or the
-//! routed-to step's". Naming this one of those would settle those questions
+//! Both are typed `job_steps` columns in `domain/job-fields.toml` and neither
+//! is one; `domain/workflows.toml` records that whose `retry_count` a backward
+//! jump increments is undefined. Naming this one of those would settle that
 //! silently.
 //!
 //! **An [`Attempt`] counts something observed rather than something policy
-//! decides**: the times the step's log says it entered `running`. Whether a run
-//! was a retry or an iteration is the open question, and the record does not
-//! have to answer it in order to keep both runs. It is also the registry's own
-//! word for the unit — `attempt_cap` "bounds total attempts across all
-//! iterations of a step" — so this is what those counters get defined against
-//! rather than a third vocabulary beside them.
+//! decides**: the times the step's log says it entered `running`. It is also
+//! the registry's own word for the unit — `attempt_cap` "bounds total attempts
+//! across all iterations of a step" — so those counters get defined against
+//! this rather than against a third vocabulary beside it.
+//!
+//! [`Iteration`] is the same discipline over the other edge, and a second type
+//! rather than a second number: a return must never spend the retry budget,
+//! and one `u32` fits both caps.
 
 use core::fmt;
 use core::num::NonZeroU32;
@@ -101,5 +101,113 @@ mod tests {
     #[test]
     fn attempts_order_by_their_number() {
         assert!(Attempt::runs_begun(1) < Attempt::runs_begun(2));
+    }
+}
+
+/// Which pass over a step this is. One-based.
+///
+/// **The loop counterpart of [`Attempt`], and constructed the same two ways for
+/// the same reason**: [`returns_made`](Iteration::returns_made) derives it from
+/// the step's own log and [`stored`](Iteration::stored) validates one read back
+/// off a row. There is no constructor taking an arbitrary number, so nothing
+/// can hand a cap a count the history does not support.
+///
+/// # What it counts, and what it does not claim
+///
+/// The entries into `running` from `advanced` in this step's log. That edge is
+/// the loop return and only the loop return, so the count is an observation
+/// rather than a policy — exactly [`Attempt`]'s standing, and for the same
+/// reason: the questions the registry leaves open are about *whose* counter
+/// increments, and an observation about one step's log does not have to answer
+/// them to be true about that step.
+///
+/// **It is therefore not yet `iteration_count`.** That counter is the emitting
+/// step's — `docs/journeys/triage-queue.md` settles it, because a cap and the
+/// count it bounds must not be split or `loop_cap` never fires, and because the
+/// emitting-step reading is the only one that survives two loops sharing a
+/// target. The emitting step has no move of its own on a return, so it has
+/// nothing to count yet, and this reads as the routed-to step's passes — which
+/// is true about that step, renders as "draft · 3rd", and is not the number the
+/// cap is asked against.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Iteration(NonZeroU32);
+
+impl Iteration {
+    /// The pass a step is on before anything has routed back to it. **Every
+    /// step of a linear workflow is on this one forever**, which is why the
+    /// type is not an `Option`: a step that has never looped is on its first
+    /// pass, not on no pass.
+    pub const FIRST: Iteration = Iteration(NonZeroU32::MIN);
+
+    /// The pass in progress, given how many times a step's log records it
+    /// entering `running` from `advanced`.
+    ///
+    /// **Off by one against the returns, deliberately.** A step redone once is
+    /// on its second pass, and the arithmetic lives here rather than at the
+    /// caller for the reason `ResolvedStep::may_hand_back` gives about the
+    /// retry budget: a caller adding the one itself is a second place the
+    /// off-by-one can be wrong.
+    pub fn returns_made(returns: u32) -> Iteration {
+        match returns.checked_add(1).and_then(NonZeroU32::new) {
+            Some(count) => Iteration(count),
+            // Unreachable off a real log — it would need four billion returns
+            // past a cap of five — and saturating is the only answer that is
+            // not a lie: the highest pass this type can name is nearer the
+            // truth than wrapping to the first.
+            None => Iteration(NonZeroU32::MAX),
+        }
+    }
+
+    /// A pass read back off a stored row. `None` on zero, which is not a pass
+    /// and is a malformed column rather than a first one.
+    pub fn stored(number: u32) -> Option<Iteration> {
+        NonZeroU32::new(number).map(Iteration)
+    }
+
+    /// The ordinal, for a rendering. One-based, so a rail reads "iteration 3 of
+    /// 5" off this and the cap without arithmetic of its own.
+    pub fn number(self) -> u32 {
+        self.0.get()
+    }
+}
+
+impl fmt::Display for Iteration {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.get())
+    }
+}
+
+#[cfg(test)]
+mod iteration_tests {
+    use super::Iteration;
+
+    #[test]
+    fn a_step_nothing_has_returned_to_is_on_its_first_pass() {
+        assert_eq!(Iteration::returns_made(0), Iteration::FIRST);
+        assert_eq!(Iteration::returns_made(0).number(), 1);
+    }
+
+    /// The off-by-one the type exists to own: one return, second pass.
+    #[test]
+    fn one_return_is_the_second_pass() {
+        assert_eq!(Iteration::returns_made(1).number(), 2);
+        assert_eq!(Iteration::returns_made(4).number(), 5);
+    }
+
+    #[test]
+    fn a_stored_zero_is_refused_rather_than_read_as_a_first_pass() {
+        assert_eq!(Iteration::stored(0), None);
+        assert_eq!(Iteration::stored(3), Some(Iteration::returns_made(2)));
+    }
+
+    #[test]
+    fn a_count_that_could_not_come_off_a_log_saturates_rather_than_wrapping() {
+        assert_eq!(Iteration::returns_made(u32::MAX).number(), u32::MAX);
+    }
+
+    /// The order is what a cap is asked against.
+    #[test]
+    fn passes_order_by_their_number() {
+        assert!(Iteration::returns_made(0) < Iteration::returns_made(1));
     }
 }

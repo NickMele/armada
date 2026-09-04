@@ -83,6 +83,14 @@ fn every_edge_in_the_table_is_admitted() {
                 &first(),
                 StepTarget::Retrying(gate_failure().expect("gate_failure is step-level")),
             ),
+            // Two moves past the start as well, and the plain one of the two
+            // ways in: an ordinary pass rather than an override, so the step
+            // this loop returns to is one the gate actually cleared.
+            StepState::Advanced => step(
+                &step(&running(), &first(), StepTarget::Running),
+                &first(),
+                StepTarget::Advanced,
+            ),
             other => panic!("no way to reach {} by transitioning", other.as_wire()),
         };
         // The reason follows the *edge* and not the destination alone, which
@@ -93,8 +101,9 @@ fn every_edge_in_the_table_is_admitted() {
         let qualified = edge.to == StepState::Stopped
             || edge.to == StepState::Retrying
             || (edge.to == StepState::Advanced && edge.from == StepState::Stopped);
-        let target = StepTarget::arriving_at(edge.to, qualified.then(gate_failure).flatten())
-            .expect("a table edge names a target");
+        let target =
+            StepTarget::arriving_at(edge.from, edge.to, qualified.then(gate_failure).flatten())
+                .expect("a table edge names a target");
         let moved = step(&job, &first(), target);
         assert_eq!(
             moved.step(&first()).expect("the row is there").state(),
@@ -312,15 +321,16 @@ fn the_two_states_m1_cannot_reach_have_no_target_to_arrive_by() {
     // has its gate and is still unreachable, because a step at that gate stays
     // `running` — `step_machine`'s own comment says what changing that costs.
     assert!(
-        StepTarget::arriving_at(StepState::AwaitingHuman, None).is_none(),
+        StepTarget::arriving_at(StepState::Running, StepState::AwaitingHuman, None).is_none(),
         "awaiting_human needs a variant and two edges, and M1 has neither"
     );
     assert!(
-        StepTarget::arriving_at(StepState::AwaitingHuman, gate_failure()).is_none(),
+        StepTarget::arriving_at(StepState::Running, StepState::AwaitingHuman, gate_failure())
+            .is_none(),
         "and a trigger does not buy one"
     );
     assert!(
-        StepTarget::arriving_at(StepState::NotStarted, None).is_none(),
+        StepTarget::arriving_at(StepState::Running, StepState::NotStarted, None).is_none(),
         "not_started is written at creation and is not a destination"
     );
 }
@@ -330,21 +340,24 @@ fn the_two_states_m1_cannot_reach_have_no_target_to_arrive_by() {
 /// what stops a stored row folding into a step that stopped for no reason.
 #[test]
 fn a_stored_state_and_its_reason_are_read_as_one_value() {
-    assert!(StepTarget::arriving_at(StepState::Stopped, None).is_none());
-    assert!(StepTarget::arriving_at(StepState::Running, gate_failure()).is_none());
+    assert!(StepTarget::arriving_at(StepState::Running, StepState::Stopped, None).is_none());
+    assert!(
+        StepTarget::arriving_at(StepState::NotStarted, StepState::Running, gate_failure())
+            .is_none()
+    );
     assert_eq!(
-        StepTarget::arriving_at(StepState::Stopped, gate_failure()),
+        StepTarget::arriving_at(StepState::Running, StepState::Stopped, gate_failure()),
         gate_failure().map(StepTarget::Stopped)
     );
     // `advanced` is the one state two targets reach, and the trigger is what
     // tells them apart. Without the reason a stored override would fold back as
     // an ordinary pass, and the verdict a person overruled would be gone.
     assert_eq!(
-        StepTarget::arriving_at(StepState::Advanced, None),
+        StepTarget::arriving_at(StepState::Running, StepState::Advanced, None),
         Some(StepTarget::Advanced)
     );
     assert_eq!(
-        StepTarget::arriving_at(StepState::Advanced, gate_failure()),
+        StepTarget::arriving_at(StepState::Stopped, StepState::Advanced, gate_failure()),
         gate_failure().map(StepTarget::Overridden)
     );
 }
