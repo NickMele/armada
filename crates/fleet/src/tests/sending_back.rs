@@ -384,18 +384,16 @@ async fn a_note_waiting_behind_a_busy_fleet_is_on_the_wire_until_it_is_delivered
 
 /// **A step sent back twice keeps three records and not one, which is `#418`.**
 ///
-/// The gate ends its Drone, so the pass after a note is worked by a process
-/// that was not there for the pass before it — a different session, unable to
-/// see the first one's reasoning, and the first one's Checks and evidence the
-/// only surviving account of what it did. Keyed under one ordinal they were
-/// overwritten, and the note, the work that ignored it and the work that fixed
-/// it read as a step that passed first time.
+/// The gate ends its Drone, so the pass after a note is a different process
+/// with a session that cannot see the first one's reasoning — and the first
+/// one's Checks are the only account of what it did. Keyed under one ordinal
+/// they were overwritten, and the note, the work that ignored it and the work
+/// that fixed it read as a step that passed first time.
 ///
-/// **The budget is not what moves.** `retry_count` counts the runs of the
-/// current pass, and a person asking for a change opens a pass rather than
-/// spending one — so `step_spent` reads 1 at the third run, and a Job cannot
-/// die of being reviewed. `iteration_count` does not move either: nothing
-/// routed anywhere, and this workflow declares no loop to charge.
+/// **The budget is not what moves.** A person asking for a change opens a pass
+/// rather than spending one, so `step_spent` reads 1 at the third run and a Job
+/// cannot die of being reviewed. `iteration_count` does not move either:
+/// nothing routed anywhere, and this workflow declares no loop to charge.
 #[tokio::test]
 async fn a_step_sent_back_twice_files_each_pass_apart_from_the_last() {
     let home = TempDir::new();
