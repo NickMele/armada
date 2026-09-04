@@ -188,7 +188,15 @@ where
             .await
             .step_checks(job.id())
             .map_err(Adrift::Reading)?;
-        let review = review_of(job, &checks, base);
+        // **Read here and nowhere earlier.** It changes nothing about what was
+        // rebased — the base on this machine is the branch a person merges into
+        // — and it is the pull request, not the Job, that is wrong when the two
+        // disagree.
+        let remote = self
+            .vcs()
+            .base_on_the_remote(worktree, base)
+            .map_err(|why| Adrift::from_delivery(job.id(), why))?;
+        let review = review_of(job, &checks, base, &remote);
         self.vcs()
             .open_for_review(worktree, base, &review)
             .map_err(|why| Adrift::from_delivery(job.id(), why))

@@ -9,7 +9,7 @@
 
 use adapter_traits::{Base, BroughtUpToDate, Opened, Pushed, Standing};
 use core_model::JobStatus;
-use testkit::{Delivered, Delivering, FakeVcs, FakeWorkProduct};
+use testkit::{Delivered, Delivering, FakeHarness, FakeVcs, FakeWorkProduct};
 
 use crate::daemon::Fleet;
 use crate::gate::Ruling;
@@ -351,6 +351,115 @@ async fn the_pull_request_body_is_assembled_from_what_was_checked() {
         !body.contains("The reader stops one line later"),
         "nothing the Drone claimed is pasted — its words are what the gate ruled on"
     );
+}
+
+/// A base holding commits the remote's has not got makes every one of them look
+/// like this Job's work. The pull request says so, and says what to do about it.
+#[tokio::test]
+async fn a_pull_request_names_the_commits_its_base_carries_that_the_remote_has_not_got() {
+    let home = TempDir::new();
+    let fleet = a_fleet_committing_through(
+        &home,
+        FakeWorkProduct::changed(&["src/log.rs"]),
+        FakeVcs::new().base_apart_from_the_remote("origin/main", 8, 0),
+    );
+    let job = fleet
+        .propose(a_proposal("fix the off-by-one in the log reader"))
+        .await
+        .unwrap();
+    worktree_directory(&home, job.id());
+    fleet.approve(job.id()).await.unwrap();
+
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
+    fleet.turn().await.unwrap();
+    submitted_by_the_one(&fleet, note_evidence()).await.unwrap();
+    fleet.turn().await.unwrap();
+
+    let body = the_body_opened(&fleet);
+    assert!(
+        body.contains("carries 8 commits nobody asked this Job for"),
+        "the count, before anything else about it: {body}"
+    );
+    assert!(
+        body.contains("origin/main"),
+        "the remote branch a person would go and look at: {body}"
+    );
+    assert!(
+        body.contains("Push `main`"),
+        "and the remedy, because a caveat a reviewer cannot act on is one they skim: {body}"
+    );
+}
+
+/// The other direction is a different problem and gets a different sentence:
+/// nothing on the branch is wrong, the base it was brought up to is stale.
+#[tokio::test]
+async fn a_pull_request_says_when_the_base_it_rebased_onto_is_behind_the_remote() {
+    let home = TempDir::new();
+    let fleet = a_fleet_committing_through(
+        &home,
+        FakeWorkProduct::changed(&["src/log.rs"]),
+        FakeVcs::new().base_apart_from_the_remote("origin/main", 0, 2),
+    );
+    let job = fleet
+        .propose(a_proposal("fix the off-by-one in the log reader"))
+        .await
+        .unwrap();
+    worktree_directory(&home, job.id());
+    fleet.approve(job.id()).await.unwrap();
+
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
+    fleet.turn().await.unwrap();
+    submitted_by_the_one(&fleet, note_evidence()).await.unwrap();
+    fleet.turn().await.unwrap();
+
+    let body = the_body_opened(&fleet);
+    assert!(
+        body.contains("`origin/main` holds 2 commits that `main` has not got"),
+        "{body}"
+    );
+    assert!(
+        !body.contains("nobody asked this Job for"),
+        "and nothing on this branch is unasked-for, so that sentence stays away: {body}"
+    );
+}
+
+/// A base level with its remote is every other Job, and it says nothing at all.
+#[tokio::test]
+async fn a_base_level_with_its_remote_puts_no_caveat_in_the_pull_request() {
+    let home = TempDir::new();
+    let fleet = a_fleet_committing_through(
+        &home,
+        FakeWorkProduct::changed(&["src/log.rs"]),
+        FakeVcs::new(),
+    );
+    let job = fleet
+        .propose(a_proposal("fix the off-by-one in the log reader"))
+        .await
+        .unwrap();
+    worktree_directory(&home, job.id());
+    fleet.approve(job.id()).await.unwrap();
+
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
+    fleet.turn().await.unwrap();
+    submitted_by_the_one(&fleet, note_evidence()).await.unwrap();
+    fleet.turn().await.unwrap();
+
+    let body = the_body_opened(&fleet);
+    assert!(!body.contains("nobody asked this Job for"), "{body}");
+    assert!(!body.contains("has not got"), "{body}");
+}
+
+/// The body of the one pull request a run opened.
+fn the_body_opened(fleet: &Fleet<FakeHarness, FakeVcs, FakeWorkProduct>) -> String {
+    fleet
+        .vcs()
+        .delivered()
+        .into_iter()
+        .find_map(|did| match did {
+            Delivered::OpenedForReview { review, .. } => Some(review.body().to_string()),
+            _ => None,
+        })
+        .expect("a pull request was opened")
 }
 
 /// A local-only repository is ordinary. The Job completes and says so.

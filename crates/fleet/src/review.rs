@@ -18,7 +18,7 @@
 //! Fleet's, and it takes that page's structural rules: headings rather than
 //! colon reveals, and a caveat a reviewer can act on.
 
-use adapter_traits::{how_the_base_was_found, Base, Review};
+use adapter_traits::{how_the_base_was_found, Base, BaseOnTheRemote, Review};
 use core_model::{Job, StepCheck, StepId, StepState};
 
 /// The pull request for a Job that finished.
@@ -26,11 +26,16 @@ use core_model::{Job, StepCheck, StepId, StepState};
 /// `checks` is what the store holds against the Job, step by step, in the order
 /// the store returned. A step with no rows is a step whose Checks were never
 /// run, and it is named as one rather than left out.
-pub(crate) fn review_of(job: &Job, checks: &[(StepId, Vec<StepCheck>)], base: &Base) -> Review {
+pub(crate) fn review_of(
+    job: &Job,
+    checks: &[(StepId, Vec<StepCheck>)],
+    base: &Base,
+    remote: &BaseOnTheRemote,
+) -> Review {
     let mut body = String::new();
     body.push_str(&what_was_asked(job));
     body.push_str(&what_was_checked(job, checks));
-    body.push_str(&what_this_does_not_say(job, base));
+    body.push_str(&what_this_does_not_say(job, base, remote));
     Review::assembled(job.title().as_str(), body)
 }
 
@@ -93,7 +98,7 @@ fn one_check(check: &StepCheck) -> String {
 ///
 /// It carries the cost, the reason, and what to do — the three things
 /// `agent-copy.md` says a caveat needs to be actionable rather than skimmed.
-fn what_this_does_not_say(job: &Job, base: &Base) -> String {
+fn what_this_does_not_say(job: &Job, base: &Base, remote: &BaseOnTheRemote) -> String {
     let mut out = String::from("## What this does not say\n\n");
     out.push_str(
         "Every line above is something Fleet ran, not something the agent reported. \
@@ -112,6 +117,9 @@ fn what_this_does_not_say(job: &Job, base: &Base) -> String {
                 .join("\n")
         ));
     }
+    if let Some(line) = what_the_base_carries(base, remote) {
+        out.push_str(&line);
+    }
     out.push_str(&format!(
         "Armada job `{}`, workflow `{}`, branch `{}`, merging into `{}` ({}).\n",
         job.id().as_str(),
@@ -121,6 +129,56 @@ fn what_this_does_not_say(job: &Job, base: &Base) -> String {
         how_the_base_was_found(base),
     ));
     out
+}
+
+/// What the branch carries that this Job did not write, and what to do about it.
+///
+/// **The files in a pull request are the thing a reviewer trusts least when
+/// they are wrong**, and a base ahead of its remote makes every one of its own
+/// commits look like this Job's work. So the caveat names the count, names the
+/// remedy, and says what the diff becomes afterwards — `agent-copy.md`'s rule
+/// that a caveat is something a reviewer can act on.
+///
+/// A base *behind* its remote is said in the same line and is a different
+/// problem: nothing here is wrong, the rebase used a reading somebody has since
+/// moved past.
+fn what_the_base_carries(base: &Base, remote: &BaseOnTheRemote) -> Option<String> {
+    let BaseOnTheRemote::Apart {
+        remote,
+        ahead,
+        behind,
+    } = remote
+    else {
+        return None;
+    };
+    let mut out = String::new();
+    if *ahead > 0 {
+        out.push_str(&format!(
+            "**This pull request carries {} nobody asked this Job for** — on `{}` on the \
+             machine Fleet runs on and not on `{remote}`, so already on the branch before \
+             the Job started, and counted as this Job's work by the diff below. Push `{}` \
+             and the diff becomes what the Job actually changed.\n\n",
+            commits(*ahead),
+            base.name(),
+            base.name(),
+        ));
+    }
+    if *behind > 0 {
+        out.push_str(&format!(
+            "`{remote}` holds {} that `{}` has not got, so this branch was brought up to \
+             a base somebody has since moved past.\n\n",
+            commits(*behind),
+            base.name(),
+        ));
+    }
+    Some(out)
+}
+
+fn commits(n: usize) -> String {
+    match n {
+        1 => String::from("one commit"),
+        _ => format!("{n} commits"),
+    }
 }
 
 /// The criteria a person wrote as a judgement rather than as a command.
