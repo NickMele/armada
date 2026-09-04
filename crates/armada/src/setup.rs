@@ -19,6 +19,9 @@
 //! [`Manifest`] beside it. Every Check any workflow's steps name was declared
 //! by that Manifest at the moment the daemon started — checked once, before a
 //! worktree exists and before a Drone is spawned.
+//! **It stays proof while the file is re-read** — `#430`: a reload moves the
+//! Manifest's `lifetime = "Live"` keys and nothing a workflow resolved
+//! against. See `config::live`; [`Setup`] holds the one handle that can.
 
 use std::collections::BTreeMap;
 use std::fmt;
