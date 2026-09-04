@@ -27,16 +27,18 @@ use std::path::Path;
 use std::process::{Command, Output};
 
 use adapter_traits::{
-    Base, BaseOnTheRemote, BroughtUpToDate, Delivery, Landing, NotDelivered, Opened, Pushed, Review,
+    Base, BaseOnTheRemote, BroughtUpToDate, Delivery, NotDelivered, Opened, Pushed, Renewed,
+    RepositoryStanding, Review, WhatBecameOfIt,
 };
 use adapter_traits::{Standing, Worktree};
 use git2::{BranchType, Repository};
 
 use crate::worktree::GitVcs;
 
-/// The command that opens a pull request. **The one vendor name in this file**,
-/// and the reason the whole of delivery lives in `adapters`.
-const FORGE: &str = "gh";
+/// The command that opens a pull request, and later says what became of it.
+/// **The one vendor name in this crate**, shared with `crate::landing`, and the
+/// reason the whole of delivery lives in `adapters` at all.
+pub(crate) const FORGE: &str = "gh";
 
 impl Delivery for GitVcs {
     fn base(
@@ -185,29 +187,24 @@ impl Delivery for GitVcs {
         }
     }
 
-    fn landed(&self, in_repo: &str, pull_request: &str) -> Landing {
-        // The state alone. The address is the argument, so asking for it back
-        // would be asking the forge to confirm what was just handed to it.
-        let Some(state) = asked(in_repo, pull_request, "state", ".state") else {
-            return Landing::Unknown;
-        };
-        let url = pull_request.to_string();
-        match state.as_str() {
-            "MERGED" => Landing::Merged { url },
-            "OPEN" => Landing::Open { url },
-            "CLOSED" => Landing::ClosedUnmerged { url },
-            // A word this forge has and Armada has not. Saying nothing is the
-            // honest answer, and it costs one more ask later.
-            _ => Landing::Unknown,
-        }
+    fn landed(&self, in_repo: &str, pull_request: &str) -> WhatBecameOfIt {
+        crate::landing::read(in_repo, pull_request)
+    }
+
+    fn rendered_afresh(&self, in_repo: &str, pull_request: &str) -> Renewed {
+        crate::landing::rendered_afresh(in_repo, pull_request)
+    }
+
+    fn caught_the_repository_up(&self, in_repo: &str, base: &str) -> RepositoryStanding {
+        crate::landing::caught_up(in_repo, base)
     }
 }
 
 /// Ask the forge one thing about one pull request, named as the forge names
 /// them — a branch, a number or an address, all of which `pr view` takes.
 ///
-/// **Every failure is `None`**, which is the rule [`Landing`] and
-/// [`already_open`] share: no tool, not signed in, no such pull request, a
+/// **Every failure is `None`**, which is the rule
+/// [`Landing`](adapter_traits::Landing) and [`already_open`] share: no tool, not signed in, no such pull request, a
 /// network that would not answer. Nothing follows differently from any of them,
 /// and where one is followed by a second call, that call is what says which it
 /// was — putting the same fault on two lines is what this avoids.
@@ -215,7 +212,7 @@ impl Delivery for GitVcs {
 /// **`--jq` and not a parse.** The forge does the reading, so bytes enter this
 /// process as one line of text and `store` and `ipc` stay the only two places
 /// that deserialise anything.
-fn asked(in_dir: &str, named: &str, fields: &str, jq: &str) -> Option<String> {
+pub(crate) fn asked(in_dir: &str, named: &str, fields: &str, jq: &str) -> Option<String> {
     let run = run_in(
         in_dir,
         FORGE,
@@ -337,10 +334,10 @@ fn run(worktree: &Worktree, program: &str, args: &[&str]) -> Result<Output, std:
     run_in(worktree.path(), program, args)
 }
 
-/// The same, in a directory that is not a Job's worktree. **The one caller is
-/// the merge question**, which is asked long after the worktree it was written
-/// in has been reclaimed.
-fn run_in(dir: &str, program: &str, args: &[&str]) -> Result<Output, std::io::Error> {
+/// The same, in a directory that is not a Job's worktree. **Every caller is in
+/// `crate::landing`**, whose questions are asked long after the worktree the
+/// work was written in has been reclaimed.
+pub(crate) fn run_in(dir: &str, program: &str, args: &[&str]) -> Result<Output, std::io::Error> {
     Command::new(program)
         .args(args)
         .current_dir(dir)
@@ -352,7 +349,7 @@ fn run_in(dir: &str, program: &str, args: &[&str]) -> Result<Output, std::io::Er
 }
 
 /// What a failed command said, both streams, for a person to read.
-fn said(run: &Output) -> String {
+pub(crate) fn said(run: &Output) -> String {
     let err = String::from_utf8_lossy(&run.stderr);
     let out = String::from_utf8_lossy(&run.stdout);
     let joined = format!("{}\n{}", err.trim(), out.trim());
@@ -361,7 +358,7 @@ fn said(run: &Output) -> String {
 
 /// The last non-blank line of stdout. What a tool that prints an address prints
 /// it as, after whatever progress it printed first.
-fn last_line(run: &Output) -> String {
+pub(crate) fn last_line(run: &Output) -> String {
     String::from_utf8_lossy(&run.stdout)
         .lines()
         .map(str::trim)

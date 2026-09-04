@@ -8,7 +8,7 @@
 //! that turn.
 
 use crate::tests::{open, top_level, TempDir};
-use adapter_traits::Landing;
+use adapter_traits::{Landing, Rendering};
 
 use crate::{Delivery, Store};
 
@@ -191,7 +191,13 @@ fn an_open_or_unknown_answer_is_not_written_down() {
         .expect("the delivery is recorded");
 
     store
-        .record_landed(&id, &Landing::Open { url })
+        .record_landed(
+            &id,
+            &Landing::Open {
+                url,
+                rendering: Rendering::AsWritten,
+            },
+        )
         .expect("an open pull request is not a failure to record");
     store
         .record_landed(&id, &Landing::Unknown)

@@ -149,8 +149,11 @@ pub enum Landing {
     /// Somebody merged it. **The end of the asking** — this never changes back,
     /// so a caller that records it never asks again.
     Merged { url: String },
-    /// It is open and nobody has merged it yet.
-    Open { url: String },
+    /// It is open and nobody has merged it yet — and, because that is the only
+    /// state in which the question means anything, what the forge is comparing
+    /// it against. A merged pull request's render is nobody's problem, and this
+    /// is where that is said in the type rather than in a comment.
+    Open { url: String, rendering: Rendering },
     /// It was closed and never merged. Also terminal, and a different sentence:
     /// the work was published and turned down.
     ClosedUnmerged { url: String },
@@ -168,6 +171,115 @@ impl Landing {
             Landing::Merged { .. } | Landing::ClosedUnmerged { .. }
         )
     }
+}
+
+/// Everything one ask of the forge answers about a pull request that was
+/// opened. **One call and three answers.**
+///
+/// `#427` asked for the base question to ride the merge question rather than
+/// sweep on its own, because `gh pr view` answers both in the same breath and
+/// building them apart would be two processes where one would do. So this is
+/// what [`Delivery::landed`] returns, and what it carries is the three things
+/// a person wants to know about work they cannot see: did it land, what does it
+/// land into, and — on [`Landing::Open`], where alone it means anything — is
+/// the forge showing the right diff beside it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WhatBecameOfIt {
+    /// Whether anybody merged it.
+    pub landing: Landing,
+    /// The branch it merges into, as the forge names it — not as this machine
+    /// infers it, because the forge is the one rendering the comparison.
+    ///
+    /// **`None` is a forge that did not answer**, which is exactly
+    /// [`Landing::Unknown`]'s case and never any other.
+    pub base: Option<String>,
+}
+
+impl WhatBecameOfIt {
+    /// Nothing on this machine could say anything at all. **The one absence**,
+    /// for [`Landing::Unknown`]'s reason: no tool, not signed in, no such pull
+    /// request and a forge that would not answer are one silence here, and a
+    /// caller records nothing and asks again later.
+    pub fn unknown() -> WhatBecameOfIt {
+        WhatBecameOfIt {
+            landing: Landing::Unknown,
+            base: None,
+        }
+    }
+}
+
+/// Whether the forge is comparing a pull request against the commit its branch
+/// actually sits on.
+///
+/// A forge pins the base at the commit the pull request was opened from and
+/// does not move it when the base branch advances underneath. So a pull request
+/// that was right when it was opened renders other people's commits as this
+/// Job's work once anything else merges — `#427` read 65 files beside the 28 its
+/// Job wrote, and only a close and reopen moved it.
+///
+/// **This is not the defect a pull request's body already warns about.** A base
+/// that was ahead of its remote *at open time* is a Job carrying commits it did
+/// not write, and the remedy there is a push — [`BaseOnTheRemote`]. This is a
+/// base that moved *after*, and no sentence in the body changes what the forge
+/// renders beside it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Rendering {
+    /// The commit the forge pinned is the one the branch was written on top of,
+    /// so the file list beside it is this Job's work and nothing else.
+    AsWritten,
+    /// The pinned commit has been superseded, so what is rendered beside the
+    /// pull request is somebody else's work as well as this Job's.
+    FromASupersededBase {
+        /// What the forge is comparing against.
+        pinned: String,
+        /// What it should be comparing against — where the branch and the base
+        /// actually part company.
+        written_on: String,
+    },
+    /// Nothing on this machine could say which of the two it is.
+    ///
+    /// **Not stale**, and the distinction is the whole reason this is three
+    /// variants rather than a `bool`: a pull request nobody can check is left
+    /// alone rather than nudged, because the nudge closes and reopens it.
+    Unreadable,
+}
+
+/// What came of asking the forge to compare a pull request afresh.
+///
+/// **No `Result`**, for [`Delivery::landed`]'s reason: a caller does nothing
+/// differently about a forge that would not answer than about one that refused,
+/// and both mean try again on a later sweep.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Renewed {
+    /// It is open again and comparing against the right commit.
+    Renewed,
+    /// **It is closed and this call could not reopen it**, which is the one
+    /// outcome that leaves a pull request worse than it found it.
+    ///
+    /// A caller that sees this must not read the next `CLOSED` off the forge as
+    /// somebody turning the work down — it is this call's own leavings. See
+    /// `fleet::noticing`, which holds that guard.
+    LeftClosed { why: String },
+}
+
+/// Where the repository every worktree is cut from stands, after a merge was
+/// noticed.
+///
+/// **Fast-forward or nothing.** This runs in a repository a person is working
+/// in, so every reading that is not "clean, on the branch that merged, and one
+/// fast-forward behind it" is [`LeftAlone`](RepositoryStanding::LeftAlone) with
+/// the reason said out loud.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RepositoryStanding {
+    /// It moved, and by how much.
+    MovedOn { base: String, commits: usize },
+    /// It already had what merged. Ordinary, and the answer whenever a person
+    /// pulled before Armada got to it.
+    AlreadyHadIt { base: String },
+    /// Nothing was touched, and why — a person's uncommitted work, a checkout
+    /// that is not on the base, no remote, or a history that would not
+    /// fast-forward.
+    LeftAlone { why: String },
 }
 
 /// A pull request's contents, assembled before anything is opened.
@@ -309,7 +421,39 @@ pub trait Delivery {
     /// that does not take a [`Worktree`]**: a Job's own worktree is reclaimed
     /// long before anybody merges its work, so the caller passes the repository
     /// every worktree was cut from, which is not one.
-    fn landed(&self, in_repo: &str, pull_request: &str) -> Landing;
+    fn landed(&self, in_repo: &str, pull_request: &str) -> WhatBecameOfIt;
+
+    /// Make the forge compare a pull request against the commit its branch
+    /// actually sits on.
+    ///
+    /// **Closing and reopening it, because nothing else moves it.** `#427`
+    /// measured the alternatives: the compare endpoint answered the right file
+    /// count the whole time and the pull request did not, pushing the base
+    /// corrected the repository and not the render, and a sentence in the body
+    /// changes nothing a person is shown. An empty commit does move it, and
+    /// puts a commit nobody wrote into the history a reviewer reads.
+    ///
+    /// **Called only for [`Rendering::FromASupersededBase`]**, and at most once
+    /// per pull request, because this is the one method here that a person
+    /// watching the forge sees happen.
+    ///
+    /// `in_repo` is the repository every worktree was cut from, for
+    /// [`landed`](Delivery::landed)'s reason.
+    fn rendered_afresh(&self, in_repo: &str, pull_request: &str) -> Renewed;
+
+    /// Bring the repository every worktree is cut from up to the branch that
+    /// just merged.
+    ///
+    /// **What merged is now what everything else builds on** — `#337` — so the
+    /// tree the next Job is cut from should have it. Nothing here is a gate and
+    /// nothing fails a Job: every refusal is
+    /// [`LeftAlone`](RepositoryStanding::LeftAlone).
+    ///
+    /// **Never anything but a fast-forward, and never over a person's work.**
+    /// This is the one method on this trait that writes into the repository a
+    /// person is standing in rather than a Job's worktree, so it declines on
+    /// anything it cannot do without merging, rebasing or discarding.
+    fn caught_the_repository_up(&self, in_repo: &str, base: &str) -> RepositoryStanding;
 }
 
 /// A line for a person about where the base came from. Built here so the two

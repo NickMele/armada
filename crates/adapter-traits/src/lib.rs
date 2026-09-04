@@ -44,7 +44,8 @@ mod worktree;
 pub use commit::{CommitTime, Committed};
 pub use delivery::{
     how_the_base_was_found, Base, BaseOnTheRemote, BroughtUpToDate, Delivery, Landing,
-    NotDelivered, Opened, Pushed, Review, Standing,
+    NotDelivered, Opened, Pushed, Rendering, Renewed, RepositoryStanding, Review, Standing,
+    WhatBecameOfIt,
 };
 pub use event::{CallDetail, DroneEvent, Speaker};
 pub use harness::{
