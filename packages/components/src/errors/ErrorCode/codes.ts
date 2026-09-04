@@ -22,21 +22,19 @@
  *
  * # Why a namespace, and not the collected manifest
  *
- * `cargo xtask verify-error-codes` is specified as walking the **Rust**
- * workspace, so a code declared in TypeScript has nowhere to be collected
- * from. Joining it means teaching the collection a second language — and that
- * check is not written yet in any form, so the change is not a directory added
- * to a walk but a decision about what a cross-language collector is. **That is
- * a bigger change than the component this arrived through.**
+ * `cargo xtask verify-error-codes` was specified as walking the **Rust**
+ * workspace alone, which is why this namespace was taken rather than joined.
+ * `#345` since taught the collection both languages, and the prefix survives
+ * that on its own merits rather than as a workaround — it is what lets each
+ * half be checked against itself while deciding nothing about the other.
  *
  * The prefix is what keeps the two sets disjoint without a shared collector,
  * and nothing has to agree with anything for it to hold: no crate raises a
  * `bridge.` code, and Bridge never parses a code it received.
  *
- * **What it costs.** Nothing on this side fails on a duplicate. The bound is
- * that every Bridge code is declared in one file — `failures.ts` in
- * `@armada/shell`, beside the builder that raises it. If the Rust collection
- * ever grows a TypeScript walk, this prefix is the set to fold in.
+ * **A duplicate now fails on this side too.** The collection reads the
+ * `const X: BridgeCode = "…"` form wherever it is declared, so the bound is no
+ * longer that every Bridge code lives in one file and somebody read it.
  */
 
 /**
