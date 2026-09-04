@@ -5,10 +5,14 @@
 // no line counts here, because the patch is the expensive read and it is not on
 // this seam.
 //
-// **The change kind renders as the wire spelled it.** `enum-verbs.toml` carries
-// no `change_kind` rows, so there is no verb, glyph or hue for one — the same
-// fallback a step state takes. A word chosen here would be the second
-// vocabulary the generated module exists to prevent. Reported.
+// **The change kind is carried, not worded.** The wire's own value goes through
+// untouched and `ChangedFiles` reads the word off `CHANGE_KIND` — the eight
+// `change_kind` rows in `enum-verbs.toml`, carried across by the generated
+// vocabulary. The lookup sits in the component rather than here because three
+// callers build the same row from three sources — this live reading,
+// `produced.ts` from a finished job's record, and `run.ts` from a step's
+// `Saw::Produced` — and a word chosen at any one of them would be the second
+// vocabulary the generated module exists to prevent. #465.
 //
 // # The note says what is in front of a reader, not where it came from
 //

@@ -1,4 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect } from "storybook/test";
+
+import { CHANGE_KIND } from "../../generated/vocabulary";
 import { ChangedFiles, changedFilesSummary, type ChangedFile } from "./ChangedFiles";
 
 /**
@@ -7,6 +10,10 @@ import { ChangedFiles, changedFilesSummary, type ChangedFile } from "./ChangedFi
  * A Drone that is working and a Drone that is thrashing look identical from the
  * outside; a file list is the cheapest thing that tells them apart. Names and a
  * change kind only — the diff is the expensive read and it is a later question.
+ *
+ * **Every `change` below is a wire value, never a word.** The component reads
+ * the verb off `CHANGE_KIND`, so a fixture spelling the rendered word would be
+ * a story that keeps passing while the surface goes stale. #465.
  */
 const meta: Meta<typeof ChangedFiles> = {
   title: "Compositions/Changed files",
@@ -94,9 +101,14 @@ export const NoPlanIsRecordedAgainstIt: Story = {
 };
 
 /**
- * The kinds that are not an edit. Each renders the wire's own word — nothing
- * folds `conflicted` or `unreadable` into "modified", because those are the two
- * a person has to act on.
+ * The kinds that are not an edit. Nothing folds `conflicted` or `unreadable`
+ * into "modified", because those are the two a person has to act on.
+ *
+ * **Two of these five do not read as the wire spells them.** `type_changed`
+ * renders `type changed` and `unreadable` renders `could not be read` — the
+ * registry's own wording, which says which reading failed rather than claiming
+ * the file has a property. Five of the eight kinds keep git's spelling, so this
+ * is the story where the lookup is visible at all.
  */
 export const TheKindsThatAreNotAnEdit: Story = {
   args: {
@@ -104,9 +116,21 @@ export const TheKindsThatAreNotAnEdit: Story = {
     files: [
       { path: "docs/scope.md", change: "renamed" },
       { path: "docs/journeys/watch-a-drone.md", change: "copied" },
+      { path: "scripts/dev", change: "type_changed" },
       { path: "crates/fleet/src/serving.rs", change: "conflicted" },
       { path: "assets/AppIcon.icns", change: "unreadable" },
     ],
+  },
+  play: async ({ canvas }) => {
+    // The expectation is the registry's own verb and never a word typed here.
+    // A copy in the assertion is the second source reading `CHANGE_KIND` exists
+    // to be rid of, one file across — and it is the copy that would let this
+    // story pass over a column that had stopped following the rows.
+    for (const wire of ["renamed", "copied", "type_changed", "conflicted", "unreadable"]) {
+      const verb = CHANGE_KIND[wire]?.verb;
+      await expect(verb).toBeTruthy();
+      await expect(canvas.getByText(verb!)).toBeVisible();
+    }
   },
 };
 
