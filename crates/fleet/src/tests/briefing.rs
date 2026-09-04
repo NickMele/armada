@@ -198,6 +198,57 @@ fn the_offer_names_the_checks_that_gate_this_step() {
         said.contains("One ask runs the whole list and you do not choose from it."),
         "a list a Drone could pick from is one it could pick around: {said}"
     );
+    assert!(
+        !said.contains("comes back skipped"),
+        "every Check on this step runs, so it carries no caveat about one that \
+         might not: {said}"
+    );
+}
+
+/// A named list is a promise, and a path-scoped Check is where it is not kept:
+/// a Drone reads `suite`, calls for exactly that, and gets a skip. **The
+/// report's skipped row says so after the call was spent**, and #376 is about
+/// deciding before — so the block says it, in the same breath as the list and
+/// never in the workflow's words.
+#[test]
+fn a_step_with_a_path_scoped_check_says_one_may_come_back_skipped() {
+    let workflow = testkit::frozen(&[Sketch {
+        id: "implement",
+        label: "Implement",
+        evidence_type: Some("diff"),
+        gates: &[Gate::Check {
+            name: "suite",
+            run: "cargo nextest run --workspace",
+            expect_exit_code: 0,
+            when: &["crates/**"],
+        }],
+        judged_on: &[],
+        scope: None,
+        gaming: None,
+    }]);
+    let said = first_turn(
+        &a_job(),
+        &workflow,
+        &StepId::new("implement"),
+        &Crossed::nothing(),
+    )
+    .expect("a prompt")
+    .as_str()
+    .to_string();
+
+    assert!(
+        said.contains(
+            "A check on this list that covers only certain files comes back \
+             skipped rather than run"
+        ),
+        "the list is a promise and this is where it is not kept: {said}"
+    );
+    assert!(
+        !said.contains("crates/**"),
+        "the caveat is about the Drone's own changes, not about the paths the \
+         workflow scoped the Check to — a Drone does not write the workflow: \
+         {said}"
+    );
 }
 
 /// A step with no Checks makes no offer at all, so the sentence never
