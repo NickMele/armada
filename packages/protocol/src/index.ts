@@ -17,6 +17,7 @@ export * from "./attempt";
 export * from "./connection";
 export * from "./events";
 export * from "./footprint";
+export * from "./forge";
 export * from "./generated/protocol-version";
 export * from "./history";
 export * from "./holding";

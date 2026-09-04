@@ -14,7 +14,7 @@
 // Fleet put on the wire. `@armada/protocol`'s `artifacts.ts` owns why that is safe and
 // `main/open.ts` is what enforces it; nothing here concatenates anything.
 
-import type { Artifact, Opened } from "@armada/protocol";
+import type { Artifact, Followed, Opened } from "@armada/protocol";
 import { isKept } from "@armada/protocol";
 
 /** What each kept record is called, in the sentence a failure writes. */
@@ -96,3 +96,57 @@ export async function openArtifact(
  * import it, so the call arrives as an argument.
  */
 export type OpenArtifact = (jobId: string, what: Artifact) => Promise<Opened>;
+
+// # Going somewhere is not opening a file, and this is where the two meet
+//
+// The rest of this module hands main a Job id and a word and gets a file on
+// screen. What follows hands main a Job id and gets a browser — a different
+// process, a different failure set and a different sentence — and it is here
+// rather than in a module of its own because both are one thought: *the thing
+// this Job left is somewhere, take me to it*. A second module would be a second
+// vocabulary for a click that did nothing.
+
+/**
+ * Why the pull request did not open, in the app's voice, or `null` because it
+ * did.
+ *
+ * `null` on success is the whole of the confirmation, exactly as it is for a
+ * file: the page is in front of the person, which says it better than a toast.
+ */
+export function whyNotFollowed(followed: Followed): string | null {
+  if (followed.ok) return null;
+  switch (followed.why) {
+    case "unknown_job":
+      return "Bridge no longer holds this job, so it could not say what it opened.";
+    case "no_address":
+      return (
+        "Fleet's record of this job names no pull request. It did when this screen was " +
+        "drawn, so the job has been re-read since — re-open it and try again."
+      );
+    case "not_addressable":
+      return `Fleet recorded ${followed.address} as this job's pull request, and Bridge only opens a web address.`;
+    case "refused":
+      return `This machine did not open ${followed.address}: ${followed.detail}`;
+  }
+}
+
+/**
+ * Asking the host to open one Job's pull request, as the caller hands it in.
+ *
+ * **A Job id and nothing else**, which is `OpenArtifact`'s rule for
+ * `OpenArtifact`'s reason: the renderer never holds the argument that decides
+ * what is opened. Main reads the address off the same record it published, so
+ * a string built anywhere in the renderer cannot reach the OS through here.
+ */
+export type OpenPullRequest = (jobId: string) => Promise<Followed>;
+
+/**
+ * Ask main to open one Job's pull request, and answer with the sentence to say
+ * where it did not. `null` is success.
+ */
+export async function openPullRequest(
+  open: OpenPullRequest,
+  jobId: string,
+): Promise<string | null> {
+  return whyNotFollowed(await open(jobId));
+}

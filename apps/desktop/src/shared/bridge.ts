@@ -31,7 +31,7 @@ import type {
 } from "@armada/protocol";
 import type { FileReport, FleetCapacity, JobDetail, JobFilesChanged, JobSummary, ProposalInFlight, Report, ReportList, UnreadableJob, WireError } from "@armada/protocol";
 import type { ManifestReading, ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
-import type { Artifact, Opened } from "@armada/protocol";
+import type { Artifact, Followed, Opened } from "@armada/protocol";
 import type { Recorded } from "@armada/protocol";
 import type { Submitted, Work } from "@armada/protocol";
 import type { CallArguments, Saw, Voice } from "@armada/protocol";
@@ -561,6 +561,22 @@ export type BridgeApi = {
    */
   openArtifact: (jobId: string, what: Artifact) => Promise<Opened>;
   /**
+   * Open the pull request Fleet opened for this Job, in whatever browses the
+   * web on this machine.
+   *
+   * **A Job id and nothing else, which is `openArtifact`'s rule.** Main reads
+   * the address off the reading it published and checks it is a web address
+   * before handing it over, so the renderer never holds the argument that
+   * decides what opens — an address arriving from a click handler is the one
+   * string that would turn this into arbitrary URL handling.
+   *
+   * **Its own entry rather than a fourth `Artifact`.** That set is files, main
+   * derives a path for each, and every one of them lands on this machine; this
+   * one is served rather than derived and it leaves the app. One capability
+   * covering both would read as one act and perform two.
+   */
+  openPullRequest: (jobId: string) => Promise<Followed>;
+  /**
    * Where a pressed notification says to go.
    *
    * **The one entry here the renderer cannot initiate.** Every other capability
@@ -643,5 +659,6 @@ export const CHANNELS = {
   requestChanges: "bridge:request-changes",
   rejectWork: "bridge:reject-work",
   openArtifact: "bridge:open-artifact",
+  openPullRequest: "bridge:open-pull-request",
   summoned: "bridge:summoned",
 } as const;

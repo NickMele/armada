@@ -66,8 +66,14 @@ legibility win over impact.
    **command**. Compose from these; do not invent new base components.
    `textarea` is sanctioned because a Job's brief is prose a person writes at
    length, and a single-line input for it is a control that fights its content.
-   `command` (cmdk) backs the command palette. A `kbd` element is the one
-   non-shadcn primitive, specified under Keyboard and command palette.
+   `command` (cmdk) backs the command palette. A `kbd` element and an `a`
+   element are the two non-shadcn primitives — `kbd` is specified under Keyboard
+   and command palette, and `a` is what a fact that names something outside
+   Armada is drawn as. It takes `--accent`, which this document already gives
+   links, and underlines on hover only. **No surface may navigate.** Every
+   anchor cancels its own default and hands the address to the process that
+   owns the shell; a window that loaded a forge would be a window with no rail
+   and no way back, which is the frozen surface Bridge exists to escape.
 3. **Status colors are never chosen.** They map to the Job state machine
    one to one. Never assign a status color by aesthetic judgment. **Below
    Job level, hue exists only where `tokens/status.css` declares it**,
@@ -1564,6 +1570,16 @@ gained icons they previously lacked.
 carries job identity, state, step N of M, elapsed, spend so far,
 verification source, actor. The detail view expands per state and shows
 only what applies.
+
+**A fact may point somewhere, and it stays in the run.** Job detail's
+header names the pull request Fleet opened — `Pull request #4711`, and
+`Pull request #4711, merged` once somebody has taken it — beside the
+branch it was opened from, not among the acts at the trailing edge.
+Going to read something is not one of the things that end a Job. The
+number is what is drawn and never the address: a forge address is sixty
+characters of which a person reads four, and the whole of it stays on
+the link's `title`. A Job with no pull request draws nothing here rather
+than an empty field.
 
 **Workspace is not in the row.** It was, and it came out: a row is
 scanned, and the workspace is the field a reader already knows — they

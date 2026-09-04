@@ -21,6 +21,17 @@ export type JobDetailHeading = {
   fields: JobDetailField[];
   /** The controls at the header's trailing edge. `Kill`, or a redispatch. */
   actions?: ReactNode;
+  /**
+   * A fact carrying an `href` was clicked, with the address it carries.
+   *
+   * **Here rather than beside `onCopied` on the screen**, and the difference is
+   * scope: copying is offered by every mono value on job detail, in four
+   * regions, so the screen owns it; a link is offered by one fact in this
+   * block, and the address and what to do with it are one decision made in one
+   * place. Riding on the heading means it reaches the header through the same
+   * spread the fields do, and no render in between has to know it exists.
+   */
+  onFollowed?: (href: string) => void;
 };
 
 /**

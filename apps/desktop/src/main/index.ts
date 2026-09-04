@@ -11,6 +11,7 @@ import type { FileReport } from "@armada/protocol";
 import type { Artifact } from "@armada/protocol";
 import { FleetConnection } from "./connection";
 import { openArtifact } from "./open";
+import { openPullRequest } from "./forge";
 import { Attention } from "./telling";
 
 // Bridge's window, and the one connection under it.
@@ -88,6 +89,26 @@ function createWindow(): BrowserWindow {
   });
 
   window.on("ready-to-show", () => window.show());
+
+  // **This window goes nowhere.** It loads one file and stays on it for the
+  // life of the process, so every navigation and every new window is refused
+  // outright rather than filtered — there is no address this app is meant to
+  // reach, which makes an allowlist a thing that could be wrong and a refusal a
+  // thing that cannot.
+  //
+  // Here because job detail now draws a real `<a href>` for a Job's pull
+  // request. That anchor cancels its own default and hands the click to main,
+  // but the middle click, the modifier click and the `target` a future one
+  // forgets to cancel all route around a click handler — and `default-src
+  // 'self'` does not cover top-level navigation. A window that navigated to a
+  // forge would be a window with no rail, no shell and no way back: Electron's
+  // version of the frozen surface this app was built to escape.
+  //
+  // `openExternal` is `forge.ts`'s, on a channel, from an address main read
+  // off its own state. Nothing the renderer initiates reaches it.
+  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.on("will-navigate", (event) => event.preventDefault());
+
   // **Always the built renderer, and `dev` builds it first.** electron-vite
   // serves a dev server and publishes `ELECTRON_RENDERER_URL`; loading it would
   // be the obvious branch and it does not work here, because the React plugin
@@ -364,6 +385,13 @@ void app.whenReady().then(() => {
   // words, so no string the renderer composed reaches `shell.openPath`.
   ipcMain.handle(CHANNELS.openArtifact, (_event, jobId: string, what: Artifact) =>
     openArtifact(published, jobId, what),
+  );
+  // The second channel that reaches the OS, and the only one that leaves this
+  // machine. **The address is read here** off what main published, and checked
+  // to be a web address before it is handed over; what crosses is a Job id, so
+  // no string the renderer composed reaches `shell.openExternal`. `forge.ts`.
+  ipcMain.handle(CHANNELS.openPullRequest, (_event, jobId: string) =>
+    openPullRequest(published, jobId),
   );
 
   createWindow();
