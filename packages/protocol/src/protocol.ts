@@ -363,7 +363,11 @@ export type StepDetail = {
    * does not hold, which is not the same as a step that gates on nothing.
    */
   checks?: DeclaredCheck[];
-  /** What each declared Check did. Empty until the gate has run them. */
+  /**
+   * What every declared Check did, every run of the step, oldest first.
+   * Empty until the gate has run them. Since 7.0 this was the latest run
+   * alone; join to `attempts` by `attempt`.
+   */
   check_runs: CheckRun[];
   /**
    * The semantic tier this step declares, in the workflow's order. **Empty is
@@ -398,12 +402,12 @@ export type StepDetail = {
    */
   overridden: boolean;
   /**
-   * Every criterion the Judge answered on this step, in the order asked.
+   * Every criterion the Judge answered, every run of the step, oldest first.
    *
    * **Always present, empty on a step that asks nothing** — which is most of
    * them, and also every step the Judge never reached. This is where a
-   * refusal's citation arrives, and it is the only thing that says what was
-   * wrong with the work: the trigger says the gate stopped.
+   * refusal's citation arrives. Since 7.0 this was the latest run alone; join
+   * to `attempts` by `attempt`.
    */
   judged: Judged[];
   /**
@@ -440,6 +444,13 @@ export type StepDetail = {
    * nothing has entered, which is every step a Job has not reached.
    */
   attempts: StepAttempt[];
+  /**
+   * What each closed run of this step came to, oldest first. Since 7.0.
+   *
+   * **What `attempts[].outcome` cannot say** — `passed` or `failed` in so
+   * many words, not just where a run ended. Join to `attempts` by `attempt`.
+   */
+  verdicts: Verdict[];
   /**
    * The Judge call out on this step **right now**, where one is.
    *
@@ -551,6 +562,9 @@ export type DeclaredJudge = {
  * paths it covers.
  */
 export type CheckRun = {
+  /** Which run of the step produced it, counted from one. Since 7.0. Joins
+   * to `StepDetail.attempts`. */
+  attempt: number;
   /** The Manifest Check's name, or the built-in's kind. Joins to `checks`. */
   name: string;
   /** `check-outcomes.toml`: `passed`, `failed`, `signalled`, `timed_out`, `never_ran`, `skipped`. */
@@ -585,6 +599,9 @@ export type CheckRun = {
  * somebody lost.
  */
 export type Judged = {
+  /** Which run of the step this was answered on, counted from one. Since
+   * 7.0. Joins to `StepDetail.attempts`. */
+  attempt: number;
   /** Which criterion was asked. Joins to `JobDetail.acceptance_criteria`. */
   criterion_id: string;
   /** `criterion_verdict_judge`: `met` or `not_met`. */
@@ -645,6 +662,9 @@ export type Flagged = {
 
 /** The last ruling against a step. `failed` carries its trigger; the rest do not. */
 export type Verdict = {
+  /** Which run of the step this was ruled on, counted from one. Since 7.0.
+   * Joins to `StepDetail.attempts`. */
+  attempt: number;
   named: string;
   trigger?: string;
 };

@@ -9,4 +9,4 @@
 // `version.ts` beside this file is the only comparison, and there is no bare
 // here to spell `!==` against.
 
-export const PROTOCOL_VERSION = { major: 6, minor: 10 };
+export const PROTOCOL_VERSION = { major: 7, minor: 0 };

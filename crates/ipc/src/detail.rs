@@ -87,6 +87,12 @@ pub struct StepFacts {
     /// is what `store::step_attempt` already counts to key the per-attempt
     /// tables. Empty on a step nothing has entered.
     pub attempts: Vec<StepAttempt>,
+    /// What each closed run of this step came to, oldest first. **Derived from
+    /// `attempts` and carried beside it**, rather than recomputed at every
+    /// reader: [`StepAttempt::verdicts`] is the one place the `(outcome, why)`
+    /// pair becomes a ruling, and a second surface restating that mapping is
+    /// how the two come to disagree.
+    pub verdicts: Vec<Verdict>,
     /// The Judge call out on this step **right now**. `None` on every step but
     /// the one Fleet is asking about, and on that one too between calls.
     ///
@@ -404,8 +410,11 @@ pub struct StepDetail {
     /// one a gap is — which is the whole reason this field exists.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checks: Option<Vec<DeclaredCheck>>,
-    /// What each declared Check did, in the same order. Empty until the gate
-    /// has run them, which is not the same as declaring none.
+    /// What each declared Check did, **every attempt's rows, oldest first**.
+    /// Empty until the gate has run them, which is not the same as declaring
+    /// none. Join to [`attempts`](StepDetail::attempts) by `attempt` — a step
+    /// worked more than once holds one group of rows per run, not the
+    /// latest's alone.
     pub check_runs: Vec<CheckRun>,
     /// What this step declares for the semantic tier, in the workflow's order.
     ///
@@ -447,12 +456,15 @@ pub struct StepDetail {
     /// What was overruled is on `last_verdict`, which still names the trigger.
     /// The person's reason is in the Job's own log, not here.
     pub overridden: bool,
-    /// Every criterion the Judge answered on this step, in the order asked.
+    /// Every criterion the Judge answered, **every attempt's rows, oldest
+    /// first**, in the order asked within each run.
     ///
     /// **This is where a refusal's citation arrives**, and it is the whole
     /// reason a refusal escalates rather than ending the Job: the trigger says
     /// the gate stopped, and only these say what was wrong with the work.
     /// Empty on a step that asks nothing and on a step the Judge never reached.
+    /// Join to [`attempts`](StepDetail::attempts) by `attempt`, for
+    /// [`check_runs`](StepDetail::check_runs)'s reason.
     pub judged: Vec<Judged>,
     /// Every gaming pattern this step's evidence tripped, with what each cites.
     ///
@@ -491,6 +503,13 @@ pub struct StepDetail {
     /// [`JobDetail::steps`] makes about its own.
     #[serde(default)]
     pub attempts: Vec<StepAttempt>,
+    /// What each closed run of this step came to, oldest first. **The nested
+    /// reading `attempts` alone cannot give**: `last_verdict` says only the
+    /// current ruling and `attempts[].outcome` says only where a run ended,
+    /// never `passed` or `failed` in so many words. Empty on a step nothing
+    /// has closed a run of yet, same as `attempts`.
+    #[serde(default)]
+    pub verdicts: Vec<Verdict>,
     /// The Judge call out on this step **right now**, where one is.
     ///
     /// **Absent is the ordinary case and it is not a gap.** A step nothing is
@@ -605,7 +624,9 @@ impl StepDetail {
             check_runs: facts.map(|facts| facts.ran.clone()).unwrap_or_default(),
             judge_checks: declared.map(|declared| DeclaredJudge::firing(declared.judge_checks())),
             advance_gate: declared.map(|declared| declared.advance_gate().into()),
-            last_verdict: step.last_verdict().map(Verdict::of),
+            last_verdict: step
+                .last_verdict()
+                .map(|verdict| Verdict::of(latest_closed_attempt(facts), verdict)),
             // The one place the pair is read, so that no surface has to. A step
             // that advanced still carrying a failure is a step a person
             // advanced over the gate's ruling — the ordinary advance writes
@@ -622,6 +643,9 @@ impl StepDetail {
                 .unwrap_or_default(),
             attempts: facts
                 .map(|facts| facts.attempts.clone())
+                .unwrap_or_default(),
+            verdicts: facts
+                .map(|facts| facts.verdicts.clone())
                 .unwrap_or_default(),
             judging: facts.and_then(|facts| facts.judging.clone()),
             entered_at: step.entered_at().into(),
@@ -640,6 +664,21 @@ fn facts_for<'a>(steps: &'a [StepFacts], step_id: &core_model::StepId) -> Option
         .find(|facts| facts.step_id.as_str() == step_id.as_str())
 }
 
+/// Which attempt a step's standing verdict belongs to.
+///
+/// **The latest closed attempt, never the one still open.** Entering
+/// `running` leaves the previous ruling standing —
+/// `core_model::JobStep::moved_to`'s own rule — so the run that produced
+/// `last_verdict` is the last one `verdicts` holds, not the last one
+/// `attempts` does. `1` where nothing has closed yet, which cannot arise
+/// beside a `last_verdict` that is `Some`.
+fn latest_closed_attempt(facts: Option<&StepFacts>) -> u32 {
+    facts
+        .and_then(|facts| facts.verdicts.last())
+        .map(|verdict| verdict.attempt)
+        .unwrap_or(1)
+}
+
 /// The last ruling against a step.
 ///
 /// Two fields rather than one string, for the reason
@@ -647,6 +686,13 @@ fn facts_for<'a>(steps: &'a [StepFacts], step_id: &core_model::StepId) -> Option
 /// failed it, and the other two carry nothing.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Verdict {
+    /// Which run of the step this ruling was made on, counted from one. **On
+    /// the row rather than implied by position**, for
+    /// [`CheckRun::attempt`](crate::CheckRun::attempt)'s reason: this is what
+    /// joins [`StepDetail::last_verdict`] and each entry of
+    /// [`StepDetail::verdicts`] back to [`StepDetail::attempts`]. The same
+    /// ordinal [`StepAttempt::attempt`](crate::StepAttempt) carries.
+    pub attempt: u32,
     /// `passed`, `failed` or `not_reached`, spelled as the domain spells it.
     pub named: String,
     /// The escalation trigger a failure carried. Absent on the other two.
@@ -655,8 +701,9 @@ pub struct Verdict {
 }
 
 impl Verdict {
-    pub fn of(verdict: core_model::StepVerdict) -> Verdict {
+    pub fn of(attempt: u32, verdict: core_model::StepVerdict) -> Verdict {
         Verdict {
+            attempt,
             named: verdict.as_wire().to_string(),
             trigger: match verdict {
                 core_model::StepVerdict::Failed(trigger) => Some(trigger.as_wire().to_string()),

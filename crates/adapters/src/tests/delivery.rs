@@ -11,7 +11,9 @@
 //! and a network, and the shape of the answer — opened, already open, nothing
 //! pushed, no tool — is what every crate above this one asserts against a fake.
 
-use adapter_traits::{Base, BroughtUpToDate, Delivery, Pushed, Standing, Vcs, Worktree};
+use adapter_traits::{
+    Base, BaseOnTheRemote, BroughtUpToDate, Delivery, Pushed, Standing, Vcs, Worktree,
+};
 use adapter_traits::{NotDelivered, WorktreeSpec};
 
 use crate::tests::repo::TempRepo;
@@ -217,6 +219,67 @@ fn a_committed_branch_that_will_not_replay_is_put_back_exactly_as_it_was() {
 }
 
 // ------------------------------------------------------------- the push
+
+// ------------------------------------- the base against the remote's
+
+/// The defect this exists for: `main` on the machine holds commits `origin/main`
+/// does not, so a pull request opened against `origin/main` carries every one of
+/// them under a Job that never touched their files.
+#[test]
+fn a_base_ahead_of_its_remote_is_counted_and_the_tracking_branch_named() {
+    let repo = TempRepo::with_a_commit();
+    repo.with_a_bare_remote();
+    repo.git(&["push", "--set-upstream", "origin", "main"]);
+    // Two commits on `main` that nobody pushed. This is the whole shape.
+    main_moves_on(&repo, "one.txt", "1");
+    main_moves_on(&repo, "two.txt", "2");
+    let worktree = worktree_for(&repo);
+
+    assert_eq!(
+        GitVcs::new()
+            .base_on_the_remote(&worktree, &Base::Inferred(String::from("main")))
+            .expect("a reading"),
+        BaseOnTheRemote::Apart {
+            remote: String::from("origin/main"),
+            ahead: 2,
+            behind: 0,
+        },
+        "the remote is named as a person would type it, not as a refspec"
+    );
+}
+
+/// A base level with its remote has nothing to say, and this is every ordinary
+/// Job — so an answer here that was not `Agreed` would put a caveat on all of
+/// them.
+#[test]
+fn a_base_level_with_its_remote_says_nothing() {
+    let repo = TempRepo::with_a_commit();
+    repo.with_a_bare_remote();
+    repo.git(&["push", "--set-upstream", "origin", "main"]);
+    let worktree = worktree_for(&repo);
+
+    assert_eq!(
+        GitVcs::new()
+            .base_on_the_remote(&worktree, &Base::Inferred(String::from("main")))
+            .expect("a reading"),
+        BaseOnTheRemote::Agreed
+    );
+}
+
+/// **Not a refusal.** A repository with no remote, and a base branch nobody has
+/// ever pushed, both mean there is no second reading to compare with — the same
+/// reading `Pushed::NoRemote` is, one call earlier.
+#[test]
+fn a_base_that_tracks_nothing_is_agreed_rather_than_refused() {
+    let repo = TempRepo::with_a_commit();
+    let worktree = worktree_for(&repo);
+    assert_eq!(
+        GitVcs::new()
+            .base_on_the_remote(&worktree, &Base::Inferred(String::from("main")))
+            .expect("an answer, not a refusal"),
+        BaseOnTheRemote::Agreed
+    );
+}
 
 #[test]
 fn a_repository_with_no_remote_is_answered_rather_than_failed() {

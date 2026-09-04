@@ -216,7 +216,7 @@ where
                 at_work.told(
                     ipc::Voice::Fleet,
                     ipc::Saw::Checked {
-                        run: ipc::CheckRun::from(run),
+                        run: ipc::CheckRun::of(attempt.number(), run),
                     },
                 );
             }

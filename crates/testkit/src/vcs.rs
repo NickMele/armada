@@ -29,8 +29,8 @@ use std::fmt;
 use std::sync::Mutex;
 
 use adapter_traits::{
-    Base, BroughtUpToDate, Change, CommitTime, Committed, Delivery, Landing, NotDelivered, Opened,
-    Pushed, Review, Standing, Vcs, Worktree, WorktreeSpec,
+    Base, BaseOnTheRemote, BroughtUpToDate, Change, CommitTime, Committed, Delivery, Landing,
+    NotDelivered, Opened, Pushed, Review, Standing, Vcs, Worktree, WorktreeSpec,
 };
 
 use crate::work_product::Holding;
@@ -96,6 +96,14 @@ pub struct FakeVcs {
     /// What the rebase leaves in the worktree, and where. Absent for every case
     /// that does not care — see [`FakeVcs::writing_into`].
     rebase_writes: Mutex<Option<(Holding, Vec<String>)>>,
+    /// Whether the base branch and the remote's agree. **Its own field rather
+    /// than a sixth on [`Delivering`]**, which is that type's own rule: every
+    /// field there is written out at every call site, and a repository whose
+    /// base is level with its remote is what all but one of them mean. See
+    /// [`FakeVcs::base_apart_from_the_remote`]. Absent is `Agreed`, which is
+    /// what keeps this fake's `Default` and the domain type's lack of one both
+    /// intact.
+    base_on_the_remote: Mutex<Option<BaseOnTheRemote>>,
 }
 
 /// One thing this fake was asked to do to a Job's branch, in order.
@@ -267,6 +275,21 @@ impl FakeVcs {
     /// are not. It is needed because a test cannot see *when* Fleet takes a
     /// step's baseline unless the rebase between the two readings moves
     /// something.
+    /// Say that the base branch on this machine holds commits the remote's has
+    /// not got, or the other way round.
+    ///
+    /// `Agreed` without this, because a base level with its remote is the
+    /// ordinary case and a fake that defaulted to skew would put a caveat into
+    /// every pull request every other test reads.
+    pub fn base_apart_from_the_remote(self, remote: &str, ahead: usize, behind: usize) -> FakeVcs {
+        *self.base_on_the_remote.lock().expect("not poisoned") = Some(BaseOnTheRemote::Apart {
+            remote: remote.to_string(),
+            ahead,
+            behind,
+        });
+        self
+    }
+
     pub fn writing_into(self, holding: Holding, files: &[&str]) -> FakeVcs {
         *self.rebase_writes.lock().expect("not poisoned") =
             Some((holding, files.iter().map(|path| path.to_string()).collect()));
@@ -297,6 +320,19 @@ impl Delivery for FakeVcs {
 
     fn standing(&self, _worktree: &Worktree, _base: &Base) -> Result<Standing, NotDelivered> {
         Ok(self.delivery.lock().expect("not poisoned").standing)
+    }
+
+    fn base_on_the_remote(
+        &self,
+        _worktree: &Worktree,
+        _base: &Base,
+    ) -> Result<BaseOnTheRemote, NotDelivered> {
+        Ok(self
+            .base_on_the_remote
+            .lock()
+            .expect("not poisoned")
+            .clone()
+            .unwrap_or(BaseOnTheRemote::Agreed))
     }
 
     fn bring_up_to_date(

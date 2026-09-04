@@ -151,24 +151,41 @@ premise turned out to be false once `write_targets` was known to be null at
 every gate. A slate written at the start would have dispatched `#47` against an
 impossible specification and paid a Drone to find out.
 
-So the workflow is `plan` -> `dispatch` -> `assess` -> back to `plan`, or
+So the workflow is `plan` -> `dispatch` -> `roll_up` -> back to `plan`, or
 forward. **What closes the loop is `verdict_routing`, and what bounds it is
-`iteration_cap`** — both in the designed schema, both refused today as
-deferred. Carrying them changes the workflow language for every workflow rather
-than for this one, which is why it is its own piece of work.
+`iteration_cap`** — both carried since `#263`, and `.armada/workflows/epic.json`
+is what declares them. `roll_up` is the step this page called `assess` while it
+was still being drawn; the issue's name is the one that ships, because
+`fleet::converging` owns the other candidate.
 
-**How often a person approves is a property of the milestone, not of the
-system.** It is set when they approve it: a low-risk milestone runs wave to
-wave on its own, a risky one stops each round. The gate is therefore one that
-is *read* rather than one that is fixed in a definition — which is also the
-shape `#206` needs, where a unanimous confident Judge panel clears a plan and
-only a flagged one reaches a person.
+`iteration_cap` is five, which buys five waves. It is `design-plan.json`'s
+designed cap taken for want of a better-argued number, and it is not what bounds
+the spend — `#51` is.
+
+**How often a person approves is fixed in the definition today, and that is not
+where it belongs.** The owner's decision, 3 Sep 2026: he reads every plan, every
+time. A Judge-first variant was rejected because it needs `#206`, which is open,
+and because the first thing a Judge would wave through is eight Jobs' worth of
+spend. What the shape wants is a gate that is *read* per Job rather than
+declared per workflow — a low-risk milestone running wave to wave, a risky one
+stopping each round — and that is `#264`'s, unbuilt. `#206` is the other half:
+which plans reach a person at all, once a Judge panel can say how sure it is.
 
 ## What is built, and what it is waiting for
 
-**Everything below the workflow exists.** The tool, the grant that withholds
-it, the refusals, the constructor, the wait and the return from it. What does
-not exist is a workflow that uses any of it.
+**The workflow exists now, and everything below it did first.** The tool, the
+grant that withholds it, the refusals, the constructor, the wait and the return
+from it were all built before anything used any of them;
+`.armada/workflows/epic.json` is the definition that does, and
+`crates/fleet/src/tests/epic.rs` drives it off disk.
+
+**Where the gate sits is the one thing the shape above did not settle.**
+`human_always` is on `plan` and not on `dispatch`, and the placement is forced
+rather than chosen: an `advance_gate` is read *after* a step's Drone has
+submitted, so on the dispatching step it would be a person approving a spend
+that had already happened. On the step before it, approving is what advances
+into the step holding the tool — which is what makes the approval the dispatch.
+`crates/config/tests/shipped.rs` asserts the pair.
 
 | Built | Where |
 |---|---|
@@ -178,10 +195,14 @@ not exist is a workflow that uses any of it.
 | `create_sub_dispatched` reached | `crates/fleet/src/sub_dispatch.rs`, its only call site |
 | The parent standing down and coming back | `running -> queued`, `fleet::admitting`, `fleet::readmitting` |
 
-**No shipped workflow sets `may_dispatch_jobs`**, and
-`crates/config/tests/shipped.rs` asserts that none does. The step key is
-carried by the parser and by the frozen record, so a definition that wanted the
-grant could have it; the definition that will want it is the loop above.
+**Exactly one shipped workflow sets `may_dispatch_jobs`**, and
+`crates/config/tests/shipped.rs` asserts that it is the only one — the
+assertion used to be that *none* did, and flipping it was part of shipping this.
+The grant is `epic.json`'s `dispatch` step and nothing else in
+`.armada/workflows/` has it, which is the property worth holding: the step key
+is carried by the parser and by the frozen record, so any definition could ask
+for it, and a test is what makes a second one a deliberate act rather than a
+merge nobody read.
 
 ## What was decided, and how each one is held
 
@@ -193,6 +214,7 @@ holds each is named beside it.
 | **Recursion is refused outright — depth 1** | `Dispatching::at` is built from `Origin::top_level`, which answers `None` for a sub-dispatched Job. There is no constructor that reaches a grandchild, so there is no bound to keep in step with anything. It matters more under a loop, where rounds repeat |
 | **The two routes do not converge** | Written down in `concepts/fleet.md` beside the approval rule. One route is the gate and the other is the exemption from it; a shared path would put the exemption one refactor away from the rule |
 | **A Drone cannot name the parent, or sequence a stranger** | The tool has no parameter for a parent and refuses `parent_id` by name; an `after` id is looked up in this parent's own children and nowhere else |
+| **A person reads every plan before its Jobs spend** | `human_always` on `plan`, which is the step *before* the one holding the tool. A gate is read after its Drone submits, so the same key on the dispatching step would approve a spend that had happened. `crates/config/tests/shipped.rs` asserts the pair rather than either half |
 
 ## What waiting costs, and who gives up the slot
 
@@ -221,7 +243,7 @@ peers, which requires an upstream to have landed.
 
 | Undecided | What turns on it |
 |---|---|
-| The loop keys — `verdict_routing`, `iteration_cap`, `structure: loop` | The shape above cannot be written until they are carried, and carrying them changes the language every workflow is written in |
+| Whether a person reads every plan, or only a flagged one | `#264` carries the mechanism — a gate read off the Job rather than fixed in the definition — and `#206` carries the question of which plans a Judge would let through. Today the gate is declared per workflow, so every milestone stops each round whatever its risk |
 | What a spent budget does to a parent with children queued | `#51`. A cap that stops the parent leaves children queued against an approval whose author is gone; a cap that stops the children leaves a parent waiting for Jobs that will not run |
 | What Fleet does about a child that failed | The brief names it and Fleet does nothing else. Whether the parent's own step should fail, and whether a person is asked, is a person's call |
 

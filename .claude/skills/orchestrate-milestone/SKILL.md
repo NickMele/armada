@@ -60,6 +60,30 @@ documents needed correcting, a wrong baseline count, and an entire premise —
 that a step's deliverable should reach the Judge through git — which the owner
 then rejected outright.
 
+**Check each claim at the moment you write it into a brief, not from what you
+read earlier in the session.** A fact you looked up an hour ago is a memory by
+the time it reaches a brief, and it is indistinguishable from one you verified.
+`grep` again. This cost twice in one run on 3 Sep 2026, and both times a child
+caught what the parent had already had on screen:
+
+- A brief said *"add its registry row, so the transition registry and the edge
+  table still name the same edges"* — of `STEP_EDGES`, which has no registry.
+  `crates/core-model/src/job/tests/step_machine.rs` says so in its own header,
+  and **that line had been in the parent's own grep output an hour earlier**.
+  The item had no target, and the child spent a round-trip saying so.
+- A brief said a question was *"not settled anywhere"*. A **different** child,
+  working on something else, found it settled with three reasons in
+  `docs/journeys/triage-queue.md`. The first was corrected mid-run by luck
+  rather than by anything in this skill.
+
+**A negative needs the search, not the memory.** *"Nothing decides this"* is the
+claim most likely to be wrong and least likely to be checked, because there is no
+file to open that disagrees with it. A registry row carrying an open question
+says **that row** does not settle it — which is a different sentence. Before
+writing one, grep the concept across `docs/` rather than the file you happened to
+be in: a decision lives where it was argued, which is usually a journey or a
+concept page and not the registry that consumes it.
+
 ## Reading what comes back
 
 **The report is not the work.** Read the diff. An agent's summary of its own

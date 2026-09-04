@@ -5,6 +5,7 @@
 // slot that has nothing in it — so what is pinned here is which Jobs draw
 // nothing, not just which draw something.
 
+import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
 import { factsOf } from "./facts";
@@ -41,7 +42,7 @@ function detail(delivery: JobDetail["delivery"]): JobDetail {
 }
 
 /** The labels the run drew, in order. */
-function labels(whole: JobDetail | null): (string | undefined)[] {
+function labels(whole: JobDetail | null): ReactNode[] {
   return factsOf(job(), whole, undefined, Date.parse("2026-08-31T09:05:00Z")).map(
     (field) => field.label,
   );

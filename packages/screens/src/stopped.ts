@@ -13,7 +13,7 @@
 
 import { CHECK_ADVANCES, CHECK_OUTCOME } from "@armada/components";
 import type { CheckRun, JobDetail as JobWhole } from "@armada/protocol";
-import { ordered } from "./facts";
+import { onlyCurrentAttempt, ordered } from "./facts";
 
 /** Where a Job that is over stopped, and what the gate found there. */
 export type StoppedAt = {
@@ -38,11 +38,16 @@ export type StoppedAt = {
  * **The step is Fleet's, not a guess.** `current_step_id` is frozen at the
  * failed step, so a Job whose current step Fleet cannot name says nothing here
  * rather than picking a row off the states.
+ *
+ * **Narrowed to the step's current attempt.** `check_runs` holds every
+ * attempt's rows since 7.0, and a `.find` over all of them could name a
+ * stopped first attempt's Check as the reason a second, still-running
+ * attempt ended the Job.
  */
 export function stoppedAt(whole: JobWhole): StoppedAt | undefined {
   const step = ordered(whole).find((held) => held.step_id === whole.job.current_step_id);
   if (step === undefined) return undefined;
-  const run = step.check_runs.find(didNotPass);
+  const run = onlyCurrentAttempt(step, step.check_runs).find(didNotPass);
   const said = run === undefined ? undefined : resultOf(run);
   return {
     label: step.label,

@@ -45,6 +45,7 @@ function job(over: Partial<JobSummary> = {}): JobSummary {
     urgency: "normal",
     atomic: false,
     model: "sonnet",
+    created_at: "2026-09-02T22:14:03Z",
     ...over,
   };
 }

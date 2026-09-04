@@ -6,8 +6,8 @@
 //! says to somebody reading it.
 //!
 //! **Nothing here decides anything.** Every conversion below is `ipc`'s own —
-//! `JobSummary::of`, [`JobDetail::of`] and the three `From` impls over a Check,
-//! a Judgment and a gaming flag. What this file adds is the *assembly*: which
+//! `JobSummary::of`, [`JobDetail::of`], `CheckRun::of`, `Judged::of` and the
+//! `From` impl over a gaming flag. What this file adds is the *assembly*: which
 //! step's rulings go into which [`StepFacts`], which is what
 //! `fleet::wire::step_facts` does over a store. **That function is `pub(crate)`
 //! and cannot be called from here**, so what is asserted is that a gate's
@@ -48,9 +48,10 @@ pub fn on_its_branch(run: &mut Run) {
 /// defect this workspace names. So `board.rs` asserts what each Check *did* and
 /// not what each step declared, and says so in its header.
 ///
-/// `deliverables`, `attempts` and `judging` are empty on every step: the first
-/// is read off the filesystem, the second is folded from the store's log and
-/// the third is a live slot, and this bench holds none of the three.
+/// `deliverables`, `attempts`, `verdicts` and `judging` are empty on every
+/// step: the first is read off the filesystem, the second and third are
+/// folded from the store's log, and the fourth is a live slot — this bench
+/// holds none of the four.
 pub fn step_facts(job: &Job, ruled: &[(&str, &Ruling)]) -> Vec<StepFacts> {
     job.steps()
         .iter()
@@ -64,11 +65,26 @@ pub fn step_facts(job: &Job, ruled: &[(&str, &Ruling)]) -> Vec<StepFacts> {
                 step_id: step.step_id().into(),
                 label: declared.map(|step| step.label().to_string()),
                 declares: None,
+                // The bench holds no real attempt history, so every ruling
+                // here is stamped as the first and only run — see the header
+                // on `attempts` below.
                 ran: ruling
-                    .map(|ruling| ruling.checks().iter().map(CheckRun::from).collect())
+                    .map(|ruling| {
+                        ruling
+                            .checks()
+                            .iter()
+                            .map(|check| CheckRun::of(1, check))
+                            .collect()
+                    })
                     .unwrap_or_default(),
                 judged: ruling
-                    .map(|ruling| ruling.judged().iter().map(Judged::from).collect())
+                    .map(|ruling| {
+                        ruling
+                            .judged()
+                            .iter()
+                            .map(|answer| Judged::of(1, answer))
+                            .collect()
+                    })
                     .unwrap_or_default(),
                 flagged: ruling
                     .and_then(Ruling::flagged)
@@ -76,6 +92,7 @@ pub fn step_facts(job: &Job, ruled: &[(&str, &Ruling)]) -> Vec<StepFacts> {
                     .unwrap_or_default(),
                 deliverables: Vec::new(),
                 attempts: Vec::new(),
+                verdicts: Vec::new(),
                 judging: None,
             }
         })

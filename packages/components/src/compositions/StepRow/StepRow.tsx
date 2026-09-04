@@ -54,6 +54,12 @@ export type StepRowFact = {
    * rules and re-deriving them here is how two drawings of one chip start.
    */
   value?: ReactNode;
+  /**
+   * That attempt's own Checks, Judge and Verdict, indented beneath it. Only
+   * an attempt fact carries these, on a step worked more than once — see
+   * `RunTreeFact.children`, which this is drawn from.
+   */
+  children?: StepRowFact[];
 };
 
 /** The em dash a step that has not run shows in place of a duration. */
@@ -222,6 +228,16 @@ export function StepRow({
             <div className="armada-srow__fact" key={at}>
               <span className="armada-srow__fact-label">{fact.label}</span>
               {fact.value}
+              {fact.children === undefined || fact.children.length === 0 ? null : (
+                <div className="armada-srow__fact-children">
+                  {fact.children.map((child, c) => (
+                    <div className="armada-srow__fact" key={c}>
+                      <span className="armada-srow__fact-label">{child.label}</span>
+                      {child.value}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))
         )}

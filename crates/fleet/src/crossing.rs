@@ -137,10 +137,9 @@ impl Dispatched {
             return None;
         }
         let mut said = String::from(
-            "THE JOBS YOU DISPATCHED
-
-Every one of these has finished. This is the              whole of what you have to report on, and it is not visible to you              anywhere else.
-",
+            "THE JOBS YOU DISPATCHED\n\nEvery one of these has finished. This is \
+             the whole of what you have to report on, and it is not visible to \
+             you anywhere else.\n",
         );
         for (id, title, ended) in children {
             said.push_str(&format!(
