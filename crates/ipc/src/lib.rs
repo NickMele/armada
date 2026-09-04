@@ -96,13 +96,13 @@ pub use holding::{HeldReason, WorktreeHeld, WorktreesHeld};
 pub use ids::{
     CriterionId, DroneId, Instant, JobId, ManifestId, ProposalId, QuestionId, StepId, WorkflowId,
 };
-pub use journal::{
-    JournalClosed, JournalMessage, JournalOpened, LogNote, NoteLevel, NotedField, Quiet,
-};
 pub use job::{
     AttachmentRef, DependencyEdge, JobForgotten, JobList, JobRequest, JobSummary, ProposeJob,
     ProposedCriterion, ProposedPlan, Redirection, Redispatched, RestartRequested, Subject,
     UnreadableJob,
+};
+pub use journal::{
+    JournalClosed, JournalMessage, JournalOpened, LogNote, NoteLevel, NotedField, Quiet,
 };
 pub use judged::{CitedAt, Flagged, Judged, KeptDeliverable};
 pub use overlap::{ScopeOverlap, SharedPath};
