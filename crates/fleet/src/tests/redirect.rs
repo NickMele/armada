@@ -465,7 +465,7 @@ async fn a_stalled_job_whose_drone_is_gone_refuses_a_redirect() {
     );
     assert!(
         matches!(
-            fleet.restart_step(&job).await,
+            fleet.restart_step(&job, None).await,
             Err(Adrift::NoStepStopped { .. })
         ),
         "and a restart needs a stopped step, which a Job-level escalation never named"
@@ -509,7 +509,7 @@ async fn a_restart_with_the_drone_still_there_answers_409_over_the_wire() {
     let fleet = a_fleet_with(&home, a_drone_that_answers());
     let job = refused(&fleet, &home).await;
 
-    let refusal = api::Daemon::restart_step(&fleet, ipc::JobId::from(&job))
+    let refusal = api::Daemon::restart_step(&fleet, ipc::JobId::from(&job), None)
         .await
         .expect_err("the Drone `refused` left in the slot is still there");
 
@@ -536,7 +536,7 @@ async fn a_job_escalated_with_its_drone_gone_still_refuses_both_acts() {
         Err(Adrift::NoDroneToRedirect { .. })
     ));
     assert!(matches!(
-        fleet.restart_step(&job).await,
+        fleet.restart_step(&job, None).await,
         Err(Adrift::NoStepStopped { .. })
     ));
 }
@@ -573,7 +573,7 @@ async fn a_healthy_job_takes_a_redirect_and_still_refuses_a_restart() {
     );
     assert!(
         matches!(
-            fleet.restart_step(&job).await,
+            fleet.restart_step(&job, None).await,
             Err(Adrift::NotResumable {
                 status: JobStatus::Running,
                 ..

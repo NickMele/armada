@@ -57,6 +57,12 @@ const NOT_REDISPATCHABLE: &str = "fleet.not_redispatchable";
 /// own code because a caller reading `ILLEGAL_MOVE` would look for an edge that
 /// exists — the machine was never asked.
 const NOT_UNDER_REVIEW: &str = "fleet.not_under_review";
+/// A note left for the next Drone on a Job already holding one nobody has
+/// opened with. A 409 like the conflicts above, and its own code because two
+/// acts write that note now — a caller reading [`NOT_UNDER_REVIEW`] off a
+/// restart would go looking at the Job's status and find nothing wrong with it.
+/// The message carries the held note, so the person keeps both sets of words.
+const NOTE_ALREADY_WAITING: &str = "fleet.note_already_waiting";
 /// An act on a stopped step asked for on a Job that has no stopped step to act
 /// on, or one whose step stopped for a reason the act does not answer. A 409
 /// for [`NOT_UNDER_REVIEW`]'s reason — the machine was never asked, so a caller
@@ -113,10 +119,18 @@ where
             // The Job is not at a human gate. A 409 like the conflicts above,
             // and never a 500: the machine was never asked, so there is no edge
             // for a caller to go looking for.
-            Adrift::NotUnderReview { job, .. }
-            | Adrift::NoDroneToTell { job }
-            | Adrift::NoteAlreadyWaiting { job, .. } => Refusal::IllegalMove(
-                WireError::raised(NOT_UNDER_REVIEW, said, self.run_id())
+            Adrift::NotUnderReview { job, .. } | Adrift::NoDroneToTell { job } => {
+                Refusal::IllegalMove(
+                    WireError::raised(NOT_UNDER_REVIEW, said, self.run_id())
+                        .about_job(ipc::JobId::from(job)),
+                )
+            }
+            // A note over a note. Its own code since `restart_step` became the
+            // second act that writes one: a caller reading `NOT_UNDER_REVIEW`
+            // off a restart would go and look at the Job's status, and find
+            // nothing wrong with it. The message carries both sets of words.
+            Adrift::NoteAlreadyWaiting { job, .. } => Refusal::IllegalMove(
+                WireError::raised(NOTE_ALREADY_WAITING, said, self.run_id())
                     .about_job(ipc::JobId::from(job)),
             ),
             // A forget on a Job that is not yet terminal. The machine was

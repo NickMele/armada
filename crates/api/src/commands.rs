@@ -15,7 +15,7 @@ use axum::http::StatusCode;
 use axum::response::Response;
 use ipc::{
     ChangesRequested, ChosenAnswer, FileReport, JobId, JobRequest, Overruled, ProposeJob,
-    Redirection, StopProposal,
+    Redirection, RestartRequested, StopProposal,
 };
 
 use crate::answers::{answer, refused, undecodable};
@@ -307,16 +307,42 @@ pub(crate) async fn answer_question<D: Daemon>(
         Err(refusal) => refused(refusal),
     }
 }
-/// Put a new Drone on the worktree the last one left. **One Job comes back**,
-/// not two — this is the same Job resuming, which is the whole of what makes it
-/// different from a redispatch.
+/// Put a new Drone on the worktree the last one left, and say what to do
+/// differently. **One Job comes back**, not two — this is the same Job
+/// resuming, which is the whole of what makes it different from a redispatch.
 ///
-/// 409 where the Drone is alive, and where the worktree is gone.
+/// **The body is optional, and no body is the plain restart.** It is the one
+/// route here that reads its bytes conditionally, and the condition is that the
+/// act existed without them: a restart with nothing to say sends exactly what
+/// it sent before this route learned to read anything, so the commonest use of
+/// it did not get a step longer. Bytes that arrive are read as a note and a
+/// note that will not parse is the transport's 400 like every other body.
+///
+/// 409 where the Drone is alive, where the worktree is gone, and where a note
+/// is already waiting on the Job. 422 on a note with nothing in it — which is
+/// not the same request as one with no note.
 pub(crate) async fn restart_step<D: Daemon>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
+    body: Bytes,
 ) -> Response {
-    match served.daemon().restart_step(JobId::carried(job_id)).await {
+    // Emptiness is read here rather than through an `Option<Json<_>>`
+    // extractor, because the question this asks is about the bytes and not
+    // about their shape: a caller that sends no body and one that sends a
+    // zero-length one have both said the same thing, and both predate this.
+    let note: Option<RestartRequested> = if body.is_empty() {
+        None
+    } else {
+        match ipc::decode("a restart note", &body) {
+            Ok(note) => Some(note),
+            Err(why) => return undecodable(&why.to_string(), served.run_id()),
+        }
+    };
+    match served
+        .daemon()
+        .restart_step(JobId::carried(job_id), note)
+        .await
+    {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }

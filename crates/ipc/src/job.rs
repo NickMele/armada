@@ -267,6 +267,37 @@ pub struct Redirection {
     pub instruction: String,
 }
 
+/// What a person says as they restart a step. The request half of
+/// `restart_step`, and **the whole body is optional**.
+///
+/// # Absent is a plain restart, and there is no third spelling
+///
+/// `restart_step` took no body until this and a restart with nothing to say
+/// still sends none, byte for byte. So there is no `Option` inside this type:
+/// `{"note": null}` and `{}` would be two more spellings of the empty request,
+/// and a reader would test three things to learn one.
+///
+/// # Its own type though it is structurally [`Redirection`]'s string
+///
+/// For that type's own reason: a redirect steers a Drone that is *there*, and
+/// this opens the brief of one that does not exist yet. The two are told apart
+/// on this seam by which route the bytes arrived on.
+///
+/// **It is not a reason for the restart**, and the record keeps none. What
+/// happens to these words is that `redirect_waiting` holds them and the next
+/// Drone's brief is built from them — `request_changes`'s road, and the block
+/// `crossing::Redirected` renders.
+///
+/// Blank is refused at the Fleet boundary rather than here, for
+/// [`Redirection`]'s reason: a decoded request is well-formed, and a note with
+/// nothing in it is a value that cannot work — a 422 and not a 400.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RestartRequested {
+    /// The person's own words, held on the Job and delivered into the opening
+    /// brief of the Drone this restart asks for.
+    pub note: String,
+}
+
 /// The redaction, at the Fleet boundary, with no reason to hand.
 ///
 /// **No queued reason and no resumption either**, and that is not a gap: this

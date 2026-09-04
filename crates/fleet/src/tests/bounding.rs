@@ -162,7 +162,7 @@ async fn a_restart_does_not_spend_a_place_the_bound_has_not_got() {
     assert_eq!(fleet.working_on().await, vec![holding.clone()]);
 
     let after = fleet
-        .restart_step(&stopped)
+        .restart_step(&stopped, None)
         .await
         .expect("the act lands whatever the cap holds");
 
@@ -191,7 +191,10 @@ async fn the_restarted_step_runs_once_the_place_frees() {
     let fleet = bounded_at_one(&home);
     let stopped = escalated_with_no_drone(&fleet, &home, "make the parser take it").await;
     let holding = working(&fleet, &home, "the Job in the place").await;
-    fleet.restart_step(&stopped).await.expect("the act lands");
+    fleet
+        .restart_step(&stopped, None)
+        .await
+        .expect("the act lands");
 
     assert_eq!(
         state_of(&fleet, &stopped, IMPLEMENT).await,
@@ -344,7 +347,10 @@ async fn a_turn_does_not_strand_a_job_a_person_put_back_in_the_queue() {
     let fleet = bounded_at_one(&home);
     let stopped = escalated_with_no_drone(&fleet, &home, "make the parser take it").await;
     let holding = working(&fleet, &home, "the Job in the place").await;
-    fleet.restart_step(&stopped).await.expect("the act lands");
+    fleet
+        .restart_step(&stopped, None)
+        .await
+        .expect("the act lands");
 
     let turned = fleet.turn().await.expect("the loop turns");
 

@@ -233,7 +233,7 @@ async fn a_spent_budget_frees_the_slot_and_leaves_a_restart_as_the_answer() {
     );
 
     fleet
-        .restart_step(job.id())
+        .restart_step(job.id(), None)
         .await
         .expect("a fresh Drone onto the worktree the last one left");
     assert_eq!(

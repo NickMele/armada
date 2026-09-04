@@ -634,14 +634,31 @@ where
         self.summarised(&job).await
     }
 
-    /// A fresh Drone on the worktree the last one left.
+    /// A fresh Drone on the worktree the last one left, and what to do
+    /// differently where a person had something to say.
     ///
     /// The Job resumes at the step that stopped; every earlier step's work is
     /// on the branch and is not redone. That is what separates this from a
     /// redispatch, which starts a replacement Job at the approval gate.
-    async fn restart_step(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+    ///
+    /// **No note and a blank note are different requests.** Absent is the plain
+    /// restart, which is what this act has always been and stays. Present and
+    /// empty is refused here rather than written down, for the reason
+    /// `redirect_drone` refuses one: a Drone opened with a heading and nothing
+    /// under it has been given exactly the information that was not enough.
+    async fn restart_step(
+        &self,
+        job_id: JobId,
+        note: Option<ipc::RestartRequested>,
+    ) -> Result<JobSummary, Refusal> {
+        let said = match &note {
+            Some(note) => Some(
+                Instruction::saying(&note.note).ok_or_else(|| self.refusal(Adrift::Unnameable))?,
+            ),
+            None => None,
+        };
         let job = self
-            .restart_step(&job_id.to_domain())
+            .restart_step(&job_id.to_domain(), said.as_ref())
             .await
             .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await

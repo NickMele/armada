@@ -469,6 +469,62 @@ async fn a_subscriber_that_falls_behind_is_told_how_many_it_lost() {
     assert!(matches!(watching.next().await, Some(Next::Send(_))));
 }
 
+/// **`restart_step` is the one route here whose body is optional**, and what it
+/// tells apart is "no body" from "a body with nothing in it".
+///
+/// The first is what every restart sent before this route learned to read
+/// anything, and it must still be a restart — that is the whole of *restarting
+/// without a note stays exactly as easy as it was*. The second is a person
+/// having typed nothing into a field they opened, and it is a 422 rather than a
+/// Drone opened with a heading and nothing under it.
+#[tokio::test]
+async fn a_restart_takes_no_body_a_note_or_a_refusal_and_tells_them_apart() {
+    let events = Broadcaster::new();
+    let daemon = FakeDaemon::new(events.clone());
+    at(&daemon, "01STOPPED", "escalated");
+    let app = wired(daemon, events);
+    let uri = "/jobs/01STOPPED/restart_step";
+
+    let (status, _) = call(&app, "POST", uri, "").await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "a restart with nothing to say stopped being a restart"
+    );
+
+    let (status, _) = call(&app, "POST", uri, A_RESTART_NOTE).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = call(&app, "POST", uri, A_BLANK_NOTE).await;
+    assert_eq!(
+        status,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "a note with nothing in it was written down rather than refused"
+    );
+    let error: WireError = ipc::decode("wire error", &body).expect("an error body");
+    assert_eq!(
+        error.code, "fake.blank_note",
+        "the refusal came from the transport rather than from what was asked"
+    );
+
+    let (status, _) = call(&app, "POST", uri, NOT_A_NOTE).await;
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "bytes that are not a request are the transport's refusal, not the daemon's"
+    );
+}
+
+/// A restart carrying a person's words.
+const A_RESTART_NOTE: &str = r#"{"note":"delete that test, it tests the old behaviour"}"#;
+
+/// A restart carrying a field somebody opened and typed nothing into.
+const A_BLANK_NOTE: &str = r#"{"note":"   "}"#;
+
+/// Bytes that are not a request at all. **Not the same failure as either of the
+/// two above** — nothing downstream was asked, so it is the transport's 400.
+const NOT_A_NOTE: &str = "{";
+
 fn a_transition() -> ipc::Event {
     let message: StreamMessage = ipc::decode(
         "stream message",

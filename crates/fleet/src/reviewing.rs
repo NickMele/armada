@@ -167,23 +167,7 @@ where
         // landed with the write still to come would put the Job in the queue
         // with the person's words nowhere, which is the failure the whole
         // refusal existed to prevent, arriving one line later.
-        //
-        // `redirect_waits` refuses a second note over an undelivered first.
-        // Nothing reaches that here: the Job leaves `awaiting_review` in this
-        // same call, under the slot lock, and `at_the_gate` refuses every act
-        // that follows.
-        let waiting =
-            job.redirect_waits(waiting_note(note))
-                .map_err(|held| Adrift::NoteAlreadyWaiting {
-                    job: job_id.clone(),
-                    held,
-                })?;
-        self.store()
-            .lock()
-            .await
-            .record_redirect_waiting(&waiting)
-            .map_err(Adrift::Writing)?;
-        self.noted_waiting(job_id, &waiting);
+        let waiting = self.hold_the_note(&job, note, Said::AtTheGate).await?;
         // The actor is **human**, for `approve_review`'s reason: a person took
         // the Job out of the gate, and Fleet only decides which turn it gets a
         // process back.
@@ -197,6 +181,47 @@ where
         self.load(job_id).await
     }
 
+    /// Put a person's note on the Job, for the opening brief of the next Drone
+    /// that starts on it.
+    ///
+    /// **One road, two entrances.** `request_changes` writes at a human gate
+    /// and [`restart_step`](Fleet::restart_step) writes on a step that stopped;
+    /// both are a person saying something to a Drone that does not exist yet,
+    /// and both are answered by the same column, the same spawn and the same
+    /// clearing. A second writer assembling this for itself would be a second
+    /// road to one destination, and the note's whole lifetime rule lives on the
+    /// road.
+    ///
+    /// **It refuses a second note over an undelivered first**, which is
+    /// `core_model::RedirectAlreadyWaiting` and not a rule invented here: the
+    /// refusal carries the held note back, so the person is left holding both
+    /// sets of words. Nothing reaches it from the gate — the Job leaves
+    /// `awaiting_review` in that same call, under the slot lock — and a restart
+    /// reaches it whenever a spawn failed after a note had been written.
+    ///
+    /// **The write lands before the caller moves anything**, and the caller's
+    /// job is to keep it that way.
+    pub(crate) async fn hold_the_note(
+        &self,
+        job: &Job,
+        note: &Redirection,
+        said: Said,
+    ) -> Result<Job, Adrift> {
+        let waiting =
+            job.redirect_waits(waiting_note(note))
+                .map_err(|held| Adrift::NoteAlreadyWaiting {
+                    job: job.id().clone(),
+                    held,
+                })?;
+        self.store()
+            .lock()
+            .await
+            .record_redirect_waiting(&waiting)
+            .map_err(Adrift::Writing)?;
+        self.noted_waiting(job.id(), &waiting, said);
+        Ok(waiting)
+    }
+
     /// Write into the Job's own log that a person spoke and nobody was there.
     ///
     /// **The first of the pair, and `crate::spawning` writes the second.** The
@@ -207,20 +232,18 @@ where
     /// It carries the words. They are the person's own and they are already on
     /// the record; a log line that said only that a note existed would send a
     /// reader to the column to find out what it was.
-    fn noted_waiting(&self, job: &JobId, waiting: &Job) {
-        let said = waiting
+    fn noted_waiting(&self, job: &JobId, waiting: &Job, said: Said) {
+        let words = waiting
             .redirect_waiting()
             .map(|note| note.text())
             .unwrap_or_default();
+        let stood = said.clause();
         let envelope = Envelope::new(
             self.now(),
             Level::Info,
             Component::Fleet,
             self.run().clone(),
-            format!(
-                "changes were asked for at the gate with no Drone there to hear it, and the \
-                 note is waiting for the next one: \"{said}\""
-            ),
+            format!("{stood}, and the note is waiting for the next Drone: \"{words}\""),
         )
         .in_job(job.as_ulid().clone());
         // A log line that will not write does not undo the write that matters,
@@ -356,6 +379,38 @@ where
             .map(|branch| branch.as_str().to_string())
             .unwrap_or_else(|| spec.branch());
         Ok(Some(Worktree::at(spec.worktree_path(), branch)))
+    }
+}
+
+/// Where a person was standing when they left the note.
+///
+/// **It reaches the log and nothing else.** The record holds one note and does
+/// not say which act wrote it, because nothing reads that — the Drone is handed
+/// the words, and a column recording the entrance would be a fact with one
+/// reader and two ways to be wrong. What a person reading the Job's own log
+/// needs is the sentence, and the two sentences are genuinely different: one
+/// says a gate had nobody at it, and one says a person asked for another
+/// attempt and said what to change.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Said {
+    /// At a human advance gate, through `request_changes`.
+    AtTheGate,
+    /// On a step that stopped, through [`restart_step`](Fleet::restart_step).
+    Restarting,
+}
+
+impl Said {
+    /// The clause the log line opens with. It states what happened and never
+    /// what will — the delivery is `crate::spawning`'s line, and this one has
+    /// to read the same whether or not that one ever comes.
+    fn clause(self) -> &'static str {
+        match self {
+            Said::AtTheGate => "changes were asked for at the gate with no Drone there to hear it",
+            Said::Restarting => {
+                "a person restarted the step and said what to do differently, with no Drone \
+                 there to hear it"
+            }
+        }
     }
 }
 
