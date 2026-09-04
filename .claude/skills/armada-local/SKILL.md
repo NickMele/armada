@@ -46,6 +46,11 @@ stopped verifying screens at all.
   would tell you it is wrong. A launch with no question is a look around.
 - **Quit what you launched**, and say you did. A window left running is one the
   owner has to find and close.
+- **Quit it by what you started, never by what it is called.** Confirmed 4 Sep
+  2026: `pkill -9 -f "storybook"` was run to stop two Storybooks on ports 6007
+  and 6009 and killed a third on 6006 that the session had never started. Keep
+  the handle, or match the port you chose — a pattern broad enough to catch
+  yours is broad enough to catch the owner's.
 - **Never leave a dialog up.** Dismiss it, or quit the app.
 
 **`scripts/dev` and `pnpm dev` are not yours.** Not because they start Bridge,

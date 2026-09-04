@@ -76,6 +76,20 @@ For every branch this session committed to. The gate is all of it, every time:
 hours ago. Counts moved 1249 → 1325 in one evening here; a stale baseline turns
 a correct report into a wrong one.
 
+**And take it from `origin/main`, not from the checkout.** Confirmed 4 Sep 2026:
+a session measured `verify-foundations` on a local `main` that was **19 commits
+behind**, reported the repository red on two hard refusals, and briefed two
+agents to treat them as inherited failure. Both had been fixed on the remote
+before either agent started. `git fetch` and compare — a local `main` in a
+repository other sessions are pushing to is a claim about the past.
+
+**A measurement is a timestamp, not a state.** The same session reported two
+worktrees that had been removed minutes earlier, and offered the owner a branch
+as "green, 152 lines of headroom" after `main` had made it unmergeable. Nothing
+was wrong with any of the measurements when they were taken. **Re-read before
+you report, not just before you act** — this repository moved 19 commits in two
+hours that day.
+
 **Rebase before merging, never merge a stale branch.** An agent that started
 before three other merges is not describing today's `main`. `git rebase main`,
 re-run the gate, then `git merge --ff-only`.
