@@ -26,6 +26,7 @@
 use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
+use config::Manifest;
 use core_model::{
     Actor, Component, Envelope, EscalationTrigger, FieldValue, Job, JobId, JobStatus, Level,
     StepId, Target,
@@ -49,7 +50,8 @@ use crate::working::{StoodDown, Working};
 /// `drone-silence-threshold-quiet-after` and `poke-limit-poke-limit` in
 /// `crates/config/settings.toml`, each overridable per repository and per step.
 /// A step wanting more patience per poke does not thereby want more pokes, so
-/// one key would make setting either half mean restating both.
+/// one key would make setting either half mean restating both — and both
+/// overriding tiers resolve the halves separately for that reason.
 ///
 /// **The value in force is the watched step's, and nothing aggregates.** A
 /// Drone belongs to one step, so a Job spanning four steps is four independent
@@ -86,11 +88,23 @@ impl Liveness {
 
     /// What one step of one Job gets, given what Fleet is running with.
     ///
+    /// # Three tiers, and this is the only place their order is written
+    ///
+    /// The composition root's constant — `self` — then the repository's
+    /// `armada.yml`, then the step. Each is narrower than the one before it and
+    /// each half falls back on its own, so a repository may state a threshold
+    /// and inherit a poke budget, and a step may override either without
+    /// restating the other.
+    ///
+    /// **There is no Kit**, though `crates/config/settings.toml` files both
+    /// rows as *Kit → Manifest*: nothing in this workspace parses one. Three
+    /// tiers, and the code reads as three.
+    ///
     /// # A live setting under a frozen step, and which wins
     ///
     /// Both rows are `lifetime = "Live"` and a step's override rides a
     /// WorkflowDef frozen at Job creation. **The override wins where it
-    /// exists, and `Live` governs the tier it falls back to** — not a
+    /// exists, and `Live` governs the tiers it falls back to** — not a
     /// compromise, but what each word is about. A setting is live so a person
     /// may change what Fleet runs with; a step is frozen so an edit to
     /// `.armada/workflows/` cannot move a running Job's terms under an
@@ -98,32 +112,47 @@ impl Liveness {
     ///
     /// **And `Live` stays true**, because this is asked at each step boundary
     /// rather than once per Job: a Job whose steps declare nothing follows a
-    /// changed setting into its next step, with no restart. What it cannot do
-    /// is have its *declared* patience change underneath it.
+    /// changed value into its next step, with no restart. What it cannot do is
+    /// have its *declared* patience change underneath it.
     ///
-    /// # The chain is shorter than the rows say
-    ///
-    /// They resolve *Kit → Manifest*, and this workspace has no Kit: what
-    /// exists is the composition root's constant — `self` — and the step.
-    /// `armada.yml` carries no key and `#60` added none, a key ahead of its
-    /// reader being this issue's own defect wearing the other hat.
-    ///
-    /// Each half falls back on its own, and a step naming neither takes both.
-    pub fn at(self, job: &Job, step: &StepId) -> Liveness {
-        // A step this workflow does not name takes both, which no dispatch can
-        // produce — the id came out of this same workflow — and a restart can,
-        // where the step comes off a record a Fleet that is gone wrote.
+    /// **How live the Manifest tier is, is `manifest`'s question and not
+    /// this one.** What arrives here is whatever `Fleet::manifest` holds at the
+    /// boundary; today the composition root reads `armada.yml` once at daemon
+    /// start, so an edit reaches a running Job's next step only across a
+    /// restart. Resolving here rather than folding the repository's value into
+    /// the constant is what makes that a property of when the file is read
+    /// instead of a property of this chain.
+    pub fn at(self, manifest: &Manifest, job: &Job, step: &StepId) -> Liveness {
+        // Tier two. A repository stating one half inherits the other from the
+        // constant, which is why this is built rather than matched on.
+        let repository = Liveness {
+            quiet_after: manifest
+                .quiet_after_seconds()
+                .map(seconds)
+                .unwrap_or(self.quiet_after),
+            pokes: manifest.poke_limit().unwrap_or(self.pokes),
+        };
+        // Tier three, and a step this workflow does not name takes the two
+        // above — which no dispatch can produce, the id having come out of this
+        // same workflow, and a restart can, where the step comes off a record a
+        // Fleet that is gone wrote.
         let Some(declared) = job.workflow().step(step) else {
-            return self;
+            return repository;
         };
         Liveness {
             quiet_after: declared
                 .quiet_after_seconds()
-                .map(|seconds| Duration::from_secs(u64::from(seconds)))
-                .unwrap_or(self.quiet_after),
-            pokes: declared.poke_limit().unwrap_or(self.pokes),
+                .map(seconds)
+                .unwrap_or(repository.quiet_after),
+            pokes: declared.poke_limit().unwrap_or(repository.pokes),
         }
     }
+}
+
+/// Both files write the threshold as a whole number of seconds, and both are
+/// read through here rather than each converting for itself.
+fn seconds(count: u32) -> Duration {
+    Duration::from_secs(u64::from(count))
 }
 
 /// What the Drone is told when it has gone quiet.
