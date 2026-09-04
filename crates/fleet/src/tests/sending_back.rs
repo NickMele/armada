@@ -20,7 +20,7 @@
 use core_model::{JobStatus, StepId};
 use testkit::{FakeVcs, FakeWorkProduct};
 
-use crate::tests::admitted::dispatched;
+use crate::tests::admitted::{dispatched, started};
 use crate::tests::daemon::{
     a_fleet_gated_on_a_person, a_proposal, diff_evidence, note_evidence, worktree_directory,
 };
@@ -63,13 +63,22 @@ async fn changes_asked_for_at_a_gate_open_the_next_drone_s_brief() {
 
     assert_eq!(
         sent_back.status(),
-        JobStatus::Running,
-        "the Job re-queued and the free slot took it straight back"
+        JobStatus::Queued,
+        "the act re-queues and stops there — the Drone is the turn's, `#456`"
     );
     assert_eq!(
         sent_back.current_step_id().map(|step| step.as_str()),
         Some("implement"),
         "the step did not advance — the work is being done again, not accepted"
+    );
+
+    let running = started(&fleet, &job_id)
+        .await
+        .expect("the turn puts a fresh Drone on the same step");
+    assert_eq!(
+        running.status(),
+        JobStatus::Running,
+        "and the free slot took it straight back"
     );
 
     let configured = fleet.harness().configured();
@@ -114,6 +123,9 @@ async fn a_delivered_note_does_not_cross_the_next_boundary() {
         .request_changes(&job_id, &said)
         .await
         .expect("the note waits and is delivered");
+    started(&fleet, &job_id)
+        .await
+        .expect("the turn puts the fresh Drone on");
     let after_the_note = fleet.harness().configured().len();
 
     // The step is worked again, reaches the gate again, and this time it is
@@ -126,6 +138,9 @@ async fn a_delivered_note_does_not_cross_the_next_boundary() {
         .approve_review(&job_id)
         .await
         .expect("a person takes the work this time");
+    started(&fleet, &job_id)
+        .await
+        .expect("the turn puts a Drone on the next step");
 
     let configured = fleet.harness().configured();
     assert!(
@@ -283,6 +298,9 @@ async fn a_step_sent_back_carries_no_verdict_about_the_part_before_it() {
         )
         .await
         .expect("the note waits and is delivered");
+    started(&fleet, &job_id)
+        .await
+        .expect("the turn puts the fresh Drone on");
 
     let brief = fleet.harness().configured()[before]
         .prompt()
@@ -412,6 +430,9 @@ async fn a_step_sent_back_twice_files_each_pass_apart_from_the_last() {
             )
             .await
             .expect("the note waits and a fresh Drone opens with it");
+        started(&fleet, &job_id)
+            .await
+            .expect("the turn puts the fresh Drone on");
         submitted_by_the_one(&fleet, diff_evidence())
             .await
             .expect("the next Drone reports its diff");

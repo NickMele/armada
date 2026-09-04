@@ -11,11 +11,12 @@
 //!
 //! # What is asserted, and what would pass without meaning anything
 //!
-//! **The place has to be spent by a different Job across the assertion.** An
-//! act that re-queued into an empty Fleet is admitted inline a line later and
-//! looks exactly like the act that spawned for itself. Every case here holds
-//! one Job's Drone open while the act is taken on a second, so the deferral is
-//! observable.
+//! **The place has to be spent by a different Job across the assertion.** Every
+//! case here holds one Job's Drone open while the act is taken on a second, so
+//! what is read afterwards is the bound refusing a place rather than a turn not
+//! having come round. Since `#456` no command admits at all — the cases below
+//! ask for the admission by name where they are about what happens once the
+//! place frees.
 //!
 //! And the act must **land** rather than be refused: `#50`'s follow-on chose
 //! the edge over refusing the act while the cap is spent, so a person is told
@@ -31,7 +32,7 @@ use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Gate, Sketch};
 use crate::daemon::{Fittings, Fleet};
 use crate::overruling::Overruling;
 use crate::slots::Concurrency;
-use crate::tests::admitted::dispatched;
+use crate::tests::admitted::{dispatched, started};
 use crate::tests::daemon::{a_proposal, fittings, one, worktree_directory};
 use crate::tests::tmp::TempDir;
 
@@ -205,16 +206,19 @@ async fn the_restarted_step_runs_once_the_place_frees() {
     );
 
     fleet.kill_job(&holding).await.expect("the place frees");
+    // **The kill frees the place and the turn fills it**, which is `#456`: a
+    // kill that admitted for itself could stop the next Job starting whenever
+    // the client that pressed it stopped waiting.
+    let restarted = started(&fleet, &stopped)
+        .await
+        .expect("the turn takes the freed place");
 
     assert_eq!(
         fleet.working_on().await,
         vec![stopped.clone()],
         "admission took the Job a person restarted"
     );
-    assert_eq!(
-        fleet.load(&stopped).await.expect("the Job reads").status(),
-        JobStatus::Running,
-    );
+    assert_eq!(restarted.status(), JobStatus::Running);
     assert_eq!(
         state_of(&fleet, &stopped, IMPLEMENT).await,
         Some(StepState::Running),
@@ -279,6 +283,9 @@ async fn the_step_after_an_override_runs_once_the_place_frees() {
         .expect("the act lands");
 
     fleet.kill_job(&holding).await.expect("the place frees");
+    started(&fleet, &stopped)
+        .await
+        .expect("the turn takes the freed place");
 
     assert_eq!(fleet.working_on().await, vec![stopped.clone()]);
     assert_eq!(

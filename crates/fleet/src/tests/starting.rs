@@ -28,7 +28,7 @@ use testkit::{FakeHarness, FakeWorkProduct};
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
-use crate::tests::admitted::dispatched;
+use crate::tests::admitted::{admit, dispatched};
 use crate::tests::daemon::{a_fleet, a_proposal, fitted_with, fittings, worktree_directory};
 use crate::tests::reviewing::{a_fleet_reviewing_the_first_step, at_the_gate};
 use crate::tests::tmp::TempDir;
@@ -148,7 +148,12 @@ async fn attachments_that_will_not_copy_stop_the_job_as_no_worktree() {
 /// `?` then returned in place of the missing worktree. The Job stayed `queued`
 /// and admission failed on it again every turn. The move through `running` is
 /// what makes an escalation reachable, and both halves are asserted: the error
-/// a caller gets, and the status a person sees.
+/// the admission gets, and the status a person sees.
+///
+/// **The error is no longer the approving caller's**, which is `#456`. The
+/// approval answers `queued` and the disk is met on the turn that tries to put
+/// a Drone back on — so what a person pressed comes back clean and the Job
+/// escalates a tick later, carrying the same trigger and the same remedy.
 #[tokio::test]
 async fn a_readmitted_job_whose_worktree_is_gone_stops_as_no_worktree() {
     let home = TempDir::new();
@@ -164,8 +169,11 @@ async fn a_readmitted_job_whose_worktree_is_gone_stops_as_no_worktree() {
     )
     .expect("the worktree is reclaimed");
 
-    let refused = fleet
+    fleet
         .approve_review(&job_id)
+        .await
+        .expect("the person's decision lands whatever the disk holds");
+    let refused = admit(&fleet)
         .await
         .expect_err("there is nothing to put a Drone back onto");
     assert!(

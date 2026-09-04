@@ -22,7 +22,7 @@ use verification::{Claimed, NotClaimed, ShownBy};
 
 use crate::evidence::Call;
 use crate::resume::Redirection;
-use crate::tests::admitted::dispatched;
+use crate::tests::admitted::{dispatched, started};
 use crate::tests::daemon::{
     a_proposal_for, diff_evidence, fittings, manifest, note_evidence, one, worktree_directory,
 };
@@ -244,6 +244,11 @@ async fn a_second_pass_reaches_the_gate_and_is_filed_apart_from_the_first() {
         .await
         .expect("the first return is inside a cap of five");
     assert_eq!(sent_back.current_step_id(), Some(&drafted()));
+    // **The return queues and the turn spawns**, since `#456`. The redraft
+    // below is a Drone's, so the case has to ask for the Drone.
+    started(&fleet, &job_id)
+        .await
+        .expect("the turn puts a Drone back on the draft");
 
     // The redraft is submitted, clears its own gate, and the Job walks forward
     // onto the step that sent it back.
@@ -309,6 +314,9 @@ async fn two_passes_and_then_the_cap_is_spent() {
         .await
         .expect("the first return is inside a cap of two");
     assert_eq!(sent_back.current_step_id(), Some(&drafted()));
+    started(&fleet, &job_id)
+        .await
+        .expect("the turn puts a Drone back on the draft");
 
     // Round the loop: the redraft is worked, clears, and the gate is reached a
     // second time with a fresh Drone on it.
@@ -450,6 +458,9 @@ async fn the_shipped_design_plan_goes_round_twice_and_then_stops() {
                 answered.step(&drafting()).map(|step| step.state()),
                 Some(StepState::Running)
             );
+            started(&fleet, &job_id)
+                .await
+                .expect("the turn puts the next pass's Drone on the draft");
         }
     }
 

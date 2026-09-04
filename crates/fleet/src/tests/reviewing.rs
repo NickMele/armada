@@ -25,7 +25,7 @@ use testkit::{Delivered, Delivering, FakeJudge, FakeVcs, FakeWorkProduct};
 use crate::daemon::Fleet;
 use crate::gate::Ruling;
 use crate::process::{holder_of, Holder};
-use crate::tests::admitted::dispatched;
+use crate::tests::admitted::{dispatched, started};
 use crate::tests::daemon::{
     a_fleet_gated_on_a_person, a_fleet_judged_by, a_proposal, diff_evidence, fittings,
     note_evidence, one, two_steps_gated_on_a_person, worktree_directory,
@@ -99,8 +99,9 @@ async fn approving_advances_the_step_and_the_job_goes_on() {
 
     assert_eq!(
         job.status(),
-        JobStatus::Running,
-        "a workflow with a step left goes back to being worked"
+        JobStatus::Queued,
+        "a workflow with a step left goes back in the queue, and the turn is \
+         what puts a Drone on it — `#456`"
     );
     let reloaded = fleet.load(&job_id).await.expect("the Job is there");
     assert_eq!(
@@ -155,10 +156,17 @@ async fn a_boundary_a_person_approved_catches_the_branch_up() {
     // are still reading.
     let before = fleet.vcs().delivered().len();
 
-    let job = fleet
+    fleet
         .approve_review(&job_id)
         .await
         .expect("the work is taken");
+    // **The catch-up is the spawn's and the spawn is the turn's**, since
+    // `#456`. The delta asserted below is still across the decision — nothing
+    // moved while the person was reading — and it is now read across the two
+    // acts the approval was one of.
+    let job = started(&fleet, &job_id)
+        .await
+        .expect("the turn puts a Drone on the next step");
 
     assert_eq!(job.status(), JobStatus::Running);
     assert_eq!(
@@ -184,6 +192,12 @@ async fn a_branch_that_is_not_behind_is_left_alone_at_a_human_boundary() {
         .approve_review(&job_id)
         .await
         .expect("the work is taken");
+    // **Admitted, or the assertion below is about a spawn that never
+    // happened.** `#456` took the dispatch off the approval; an empty
+    // `delivered` on a Fleet that started nothing says nothing at all.
+    started(&fleet, &job_id)
+        .await
+        .expect("the turn puts a Drone on the next step");
 
     assert!(fleet.vcs().delivered().is_empty());
 }
@@ -212,10 +226,14 @@ async fn a_conflict_at_a_human_boundary_goes_to_the_drone_that_is_still_there() 
     );
     let job_id = at_the_gate(&fleet, &home).await;
 
-    let job = fleet
+    fleet
         .approve_review(&job_id)
         .await
         .expect("a conflict is not a refusal of the person's decision");
+    // The conflict is met at the spawn, which is the turn's since `#456`.
+    let job = started(&fleet, &job_id)
+        .await
+        .expect("a conflict does not stop the turn admitting");
 
     assert_eq!(
         job.status(),
@@ -304,6 +322,9 @@ async fn a_step_after_a_human_boundary_does_not_advance_on_a_rebase_it_did_not_r
         .approve_review(job.id())
         .await
         .expect("the work is taken");
+    started(&fleet, job.id())
+        .await
+        .expect("the turn puts the second step's Drone on");
 
     // The second step's Drone resolves nothing and submits anyway.
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
@@ -621,10 +642,14 @@ async fn a_job_approved_while_another_holds_the_slot_waits_its_turn() {
     );
 
     // The slot comes free and the queued Job takes it — on its second step,
-    // not its first, and on the worktree the gate's Drone left behind.
+    // not its first, and on the worktree the gate's Drone left behind. The kill
+    // frees the place and the turn fills it: `#456`, and the reason it matters
+    // here is that the Job admitted is the one nobody pressed anything on.
     fleet.kill_job(next.id()).await.expect("it is killed");
 
-    let resumed = fleet.load(&job_id).await.expect("the Job");
+    let resumed = started(&fleet, &job_id)
+        .await
+        .expect("the turn takes the freed slot");
     assert_eq!(
         resumed.status(),
         JobStatus::Running,

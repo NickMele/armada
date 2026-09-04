@@ -92,11 +92,11 @@ where
         let told = OutcomeTurn::approved(&passed, next.as_ref());
         let Some(next) = next else {
             let done = self.completed(&job, &told, job_id, &mut working).await?;
-            // **After the slot is let go**, which is the lock order
-            // `crate::slots` states: admission takes the roster, and a caller
-            // holding a slot must not reach for it.
-            drop(working);
-            self.admit_next().await?;
+            // **The slot this hands back is the turn's to fill, not this
+            // call's** — `#428`, and the rule is on `Fleet::admit_next`. The
+            // Job admitted onto a freed slot is a *different* Job, so a client
+            // that stopped waiting for this answer used to kill a dispatch on
+            // one nobody was watching.
             return Ok(done);
         };
         // The next step is entered here for the same reason, and it is what
@@ -108,20 +108,18 @@ where
         let job = self.move_step(&job, next.id(), entering).await?;
         // The actor is **human**. A person took the Job out of the gate; Fleet
         // only decides which turn it gets a process back.
-        self.move_job(&job, Target::Queued, Actor::Human).await?;
-        // Inline, exactly as `approve` dispatches inline off the other gate —
-        // so a fleet with nothing else to do starts the next step now rather
-        // than on the next tick, and a busy one leaves the Job in the queue
-        // where a person can see it waiting.
+        // **It answers `queued` and no longer `running`**, which is `#428`: the
+        // dispatch that used to happen here ran inside the request that
+        // approved the work, and a client that stopped waiting took the
+        // preparation and the timeout watching it away together. The turn
+        // admits, within one `PROVISIONAL_TURN_INTERVAL`.
         //
         // The `told` above is still built and still goes to the Drone on the
         // path where there is no next step: a Job that finished tells the
         // process that finished it. There is nobody to tell here. That a person
         // accepted the part crosses as a block in the next Drone's opening
         // brief, built by `crate::dispatch`'s re-admission.
-        drop(working);
-        self.admit_next().await?;
-        self.load(job_id).await
+        self.move_job(&job, Target::Queued, Actor::Human).await
     }
 
     /// Send the work back with a note. **The worktree and every step so far
@@ -180,13 +178,11 @@ where
             }
         };
         if answered {
-            // **After the slot is let go**, which is the lock order
-            // `crate::slots` states and the reason neither call above admits
-            // for itself: admission takes the roster, and a caller holding a
-            // slot must not reach for it. A Job re-queued with the lock still
-            // held sat at `queued` until the next tick.
+            // **`queued`, and the turn is what makes it `running`** — `#428`.
+            // Neither call above admits for itself and neither does this: a
+            // dispatch inside the request that asked for it dies when the
+            // client stops waiting.
             drop(working);
-            self.admit_next().await?;
             return self.load(job_id).await;
         }
         if working.as_ref().is_some_and(|at_work| at_work.is(job_id)) {
@@ -234,14 +230,9 @@ where
         // The actor is **human**, for `approve_review`'s reason: a person took
         // the Job out of the gate, and Fleet only decides which turn it gets a
         // process back.
-        self.move_job(&waiting, Target::Queued, Actor::Human)
-            .await?;
-        // Inline, exactly as an approval re-admits inline — so a fleet with
-        // nothing else to do starts the step again now rather than on the next
-        // tick.
-        drop(working);
-        self.admit_next().await?;
-        self.load(job_id).await
+        // **`queued`, and the turn spawns the fresh Drone** — `#428`, the same
+        // reason an approval no longer dispatches for itself.
+        self.move_job(&waiting, Target::Queued, Actor::Human).await
     }
 
     /// Send the work back to an earlier step, as the workflow's own
@@ -438,9 +429,10 @@ where
         self.at_the_gate(&job)?;
         let rejected = self.move_job(&job, Target::Rejected, Actor::Human).await?;
         // The bound has room and a queued Job is entitled to it, the same as
-        // after a kill. A rejection that left the place held would stop the
-        // board on a Job that is over.
-        self.admit_next().await?;
+        // after a kill — **and the turn is what gives it, not this call**.
+        // `#428`: the Job admitted onto the freed place is somebody else's, so
+        // a rejection abandoned mid-flight used to stop a Job nobody had
+        // touched from ever starting.
         Ok(rejected)
     }
 

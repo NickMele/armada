@@ -19,7 +19,7 @@ use testkit::{Delivered, Delivering, FakeJudge, FakeVcs, FakeWorkProduct, Gaming
 use crate::daemon::Fleet;
 use crate::gate::Ruling;
 use crate::overruling::Overruling;
-use crate::tests::admitted::dispatched;
+use crate::tests::admitted::{dispatched, started};
 use crate::tests::daemon::{
     a_fleet_judged_by, a_proposal, diff_evidence, fittings, one, worktree_directory,
 };
@@ -199,15 +199,22 @@ async fn a_refused_step_advances_when_a_person_overrules_the_judge() {
 
     assert_eq!(
         job.status(),
-        JobStatus::Running,
-        "a workflow with a step left goes back to being worked"
+        JobStatus::Queued,
+        "a workflow with a step left goes back in the queue — `#456`"
     );
-    let reloaded = fleet.load(&job_id).await.expect("the Job is there");
     assert_eq!(
-        reloaded.step(&implement()).map(|step| step.state()),
+        job.step(&implement()).map(|step| step.state()),
         Some(StepState::Advanced),
-        "the step a person overruled is advanced, not stopped and not re-run"
+        "the step a person overruled is advanced, not stopped and not re-run, \
+         and that half of the act is not deferred"
     );
+    // **The cursor is the spawn's, not the override's.** `current_step_id`
+    // moves when a step enters `running`, and nothing else moves it — so the
+    // claim below is about the turn and has to ask for one.
+    let reloaded = started(&fleet, &job_id)
+        .await
+        .expect("the turn puts a Drone on the step that follows");
+    assert_eq!(reloaded.status(), JobStatus::Running);
     assert_eq!(
         reloaded.current_step_id().map(|id| id.as_str()),
         Some("summarise"),
@@ -246,6 +253,10 @@ async fn an_overruled_step_catches_the_branch_up_like_any_other_boundary() {
         .override_verdict(&job_id, &a_reason())
         .await
         .expect("the person overrules the verdict");
+    // The catch-up is the spawn's, and since `#456` the spawn is the turn's.
+    started(&fleet, &job_id)
+        .await
+        .expect("the turn puts a Drone on the step after the one overruled");
 
     assert_eq!(
         fleet.vcs().delivered().split_off(before),
@@ -396,7 +407,13 @@ async fn a_gaming_flag_is_overruled_and_the_step_advances_still_carrying_it() {
         .expect("the person overrules the gaming flag");
 
     let advanced = fleet.load(&job_id).await.expect("the Job reads");
-    assert_eq!(advanced.status(), JobStatus::Running);
+    assert_eq!(
+        advanced.status(),
+        JobStatus::Queued,
+        "the record is what this case is about; the Drone on the next step is \
+         the turn's — `#456`, and `a_job_whose_drone_has_gone_gets_a_fresh_one_\
+         at_the_next_step` is where that is the subject"
+    );
     let row = advanced.step(&implement()).expect("the row is there");
     assert_eq!(row.state(), StepState::Advanced);
     assert_eq!(
@@ -607,10 +624,15 @@ async fn a_job_whose_drone_has_gone_gets_a_fresh_one_at_the_next_step() {
         None,
     );
 
-    let job = fleet
+    fleet
         .override_verdict(&job_id, &a_reason())
         .await
         .expect("the person overrules the verdict");
+    // **The fresh Drone is the turn's**, since `#456`. It is the whole of what
+    // this case is about, so it is asked for by name.
+    let job = started(&fleet, &job_id)
+        .await
+        .expect("the turn puts a fresh Drone on the next step");
 
     assert_eq!(job.status(), JobStatus::Running);
     assert_eq!(
@@ -648,6 +670,9 @@ async fn a_fresh_drone_at_the_next_step_is_told_what_the_overruled_one_produced(
         .override_verdict(&job_id, &a_reason())
         .await
         .expect("the person overrules the verdict");
+    started(&fleet, &job_id)
+        .await
+        .expect("the turn puts the fresh Drone on part 2");
 
     let said = until_spoken(&home, &on_it(&fleet, &job_id).await).await;
     assert!(

@@ -115,7 +115,12 @@ where
         self.every_exit_recorded(job_id).await?;
         let job = self.load(job_id).await?;
         let killed = self.move_job(&job, Target::Killed, Actor::Human).await?;
-        self.admit_next().await?;
+        // **The kill is not deferred and the admission after it is** — `#428`,
+        // and the sharpest instance of it: killing one Job used to be able to
+        // stop the next one starting, because `admit_next` runs a whole
+        // dispatch and this one ran inside a request a client could abandon.
+        // The Job is `killed` before this returns; the place it gave back is
+        // filled by the turn.
         Ok(killed)
     }
 

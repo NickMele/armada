@@ -22,7 +22,7 @@ use testkit::{FakeWorkProduct, Gate, Sketch};
 use crate::adrift::Adrift;
 use crate::gate::Ruling;
 use crate::resume::Redirection;
-use crate::tests::admitted::dispatched;
+use crate::tests::admitted::{dispatched, started};
 use crate::tests::daemon::{a_fleet_holding, a_proposal, diff_evidence, worktree_directory};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
@@ -233,14 +233,19 @@ async fn a_spent_budget_frees_the_slot_and_leaves_a_restart_as_the_answer() {
         "there is no session left to inject a turn into"
     );
 
-    fleet
+    let restarted = fleet
         .restart_step(job.id(), None)
         .await
         .expect("a fresh Drone onto the worktree the last one left");
     assert_eq!(
-        fleet.load(job.id()).await.unwrap().status(),
+        restarted.status(),
+        JobStatus::Queued,
+        "the act asks for a Drone and the turn is what starts one — `#456`"
+    );
+    assert_eq!(
+        started(&fleet, job.id()).await.unwrap().status(),
         JobStatus::Running,
-        "the cap has room, so admission spawns inline"
+        "the cap has room, so the next turn spawns"
     );
 }
 
