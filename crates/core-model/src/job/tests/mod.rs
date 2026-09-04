@@ -14,8 +14,9 @@
 //!
 //! This module is the scaffolding. [`machine`] tests what the registry says is
 //! legal for a Job; [`step_machine`] tests the inner half, which has no
-//! registry table to be read against; [`record`] tests what a Job is made of
-//! and what a transition records.
+//! registry table to be read against; [`loop_return`] tests the one edge of
+//! that half that takes a step backwards; [`record`] tests what a Job is made
+//! of and what a transition records.
 
 use crate::envelope::{Actor, FieldValue, Timestamp, Ulid};
 use crate::job::*;
@@ -266,6 +267,7 @@ fn reach(status: JobStatus) -> Job {
 }
 
 mod covers;
+mod loop_return;
 mod machine;
 mod models;
 mod note;

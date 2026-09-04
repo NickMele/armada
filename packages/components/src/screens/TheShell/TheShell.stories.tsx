@@ -1,13 +1,14 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { ComponentProps } from "react";
-import { Activity } from "lucide-react";
+import { ClipboardList, HardDrive } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
 import { Select } from "../../primitives/Select/Select";
 import { TheShell } from "./TheShell";
 
 /**
- * Rail, panel, status bar — with one surface in the rail, because one surface
- * exists.
+ * Rail, panel, status bar — with the surfaces in the rail that are built,
+ * which is two of the five the concept page fixes. The rest hold their place
+ * in the order and their digit and draw nothing.
  *
  * The values are the drawing's own: pid 4417, port 7411, six jobs, one of them
  * waiting on you. **Two of the drawing's are not here.** `today ~$4.80` has
@@ -29,12 +30,16 @@ const shell: ComponentProps<typeof TheShell> = {
       <option>armada</option>
     </Select>
   ),
-  // The drawing's rail row carries a label and a count and no glyph. Sidebar
-  // requires one, and `activity` is what the registry assigns to Active jobs,
-  // so that is the glyph. Reported.
-  surfaces: [{ id: "active", label: "Active jobs", icon: Activity, count: 6 }],
-  activeId: "active",
-  title: "Active jobs",
+  // The drawing's rail row carried a label and a count and no glyph, and drew
+  // Active jobs — a surface retired when the Board became every Job with state
+  // as a filter. This is the roster now, with the registry's own glyph for
+  // each. Only the Board carries a count.
+  surfaces: [
+    { id: "board", label: "Job Board", icon: ClipboardList, count: 6 },
+    { id: "worktrees", label: "Held worktrees", icon: HardDrive },
+  ],
+  activeId: "board",
+  title: "Job Board",
   summary: "6 jobs. 1 awaiting approval.",
   actions: <Button variant="primary">New job</Button>,
   children: <div className="armada-screen__mount">The list mounts here — 1d</div>,
@@ -76,7 +81,10 @@ export const FleetIsNotRunning: Story = {
   args: {
     ...shell,
     summary: "No jobs.",
-    surfaces: [{ id: "active", label: "Active jobs", icon: Activity, count: 0 }],
+    surfaces: [
+      { id: "board", label: "Job Board", icon: ClipboardList, count: 0 },
+      { id: "worktrees", label: "Held worktrees", icon: HardDrive },
+    ],
     status: {
       fleet: "not-running",
       fleetLabel: "Fleet is not running",

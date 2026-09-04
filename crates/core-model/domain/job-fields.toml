@@ -33,7 +33,7 @@ nullable = "No"
 frozen_at = "Creation"
 purpose = "One row per step of the frozen WorkflowDef, written at Job creation, all not_started."
 in_code = "Not yet"
-notes = "`job_steps(job_id, step_id, ordinal, state, last_verdict, retry_count, iteration_count, entered_at, updated_at)`. Rows are written at Job creation, not at dispatch — including for Jobs never approved."
+notes = "`job_steps(job_id, step_id, ordinal, state, last_verdict, assigned_drone, entered_at, updated_at)`. Rows are written at Job creation, not at dispatch — including for Jobs never approved. **`retry_count` and `iteration_count` are not columns** and their own rows say why: both are one read of `job_events` each."
 why = "A Job can sit at `awaiting_approval` for days while the workflow file is edited; writing at creation is what lets \"what you approved is what runs\" hold through that window."
 
 [fields."acceptance_criteria[]"]
@@ -200,12 +200,20 @@ scope_narrowed = "Suspect"
 [fields.iteration_count]
 type = "int"
 table = "job_steps"
-storage = "Column"
+storage = "Derived — not stored"
 nullable = "No"
-frozen_at = "Never"
-purpose = "How many times this step has been redone as designed, via a loop return. Nothing went wrong. Arrives with retries, not at M1."
-in_code = "Not yet"
-notes = "Never consumes the retry budget and never trips an escalation. Increments on the step that emits the verdict, not the step the loop routes back to — the cap lives on the emitting step, since a target-step counter would conflate two loops sharing one target. A rail renders \"iteration 3 of 5\" against the gate row, not the draft row."
+frozen_at = "N/A"
+purpose = "How many times this step has been redone as designed, via a loop return. Nothing went wrong."
+in_code = "Partly"
+notes = """
+Never consumes the retry budget and never trips an escalation.
+
+**Typed a column here and built as a derivation**, which is the answer `retry_count` got first and for the same reason: `store::iteration` counts a step's `advanced -> running` rows off `job_events`, which is append-only in the database itself, so a stored count would be a second record of one fact and a pair that can disagree. `crates/store/src/schema.rs` records the column's absence in the table definition. #263.
+
+**Increments on the step that emits the verdict, not the step the loop routes back to, and that is decided rather than assumed.** `docs/journeys/triage-queue.md` settles it under what is already decided: the cap and the count it bounds must not be split or `loop_cap` never fires, the loop is a property of the gate rather than of the work, and it is the only reading that generalises to a workflow with two loops sharing one target step. Cost accepted there: a rail renders "iteration 3 of 5" against the gate row and not the draft row.
+
+**The derivation does not reach that step yet.** `advanced -> running` is written on the step the loop routes *to*, so that step's passes are what `store::iteration` counts; the emitting step has no move of its own on a return, because none of the six states in `step-states.toml` says "ruled, and waiting for the loop to come back". Counting the target's returns instead is the target-step reading the decision above rejects by name. So the count exists, the decision exists, and what is missing between them is a step move nobody has specified. #263.
+"""
 
 [fields.judge_calls]
 type = "int"
@@ -285,13 +293,19 @@ why = "A second failure under a new job id would otherwise read as a first failu
 [fields.retry_count]
 type = "int"
 table = "job_steps"
-storage = "Column"
+storage = "Derived — not stored"
 nullable = "No"
-frozen_at = "Never"
-purpose = "How many times this step failed and was retried. Arrives with retries, not at M1."
-in_code = "Not yet"
+frozen_at = "N/A"
+purpose = "How many times this step failed and was retried."
+in_code = "Partly"
 open_questions = ["Is there an aggregate attempt bound on a looping step, given retry_count resets each iteration?"]
-notes = "Resets on a loop return — re-entry as designed is a fresh attempt budget, bounded by `iteration_cap` rather than the retry limit. The aggregate bound over all iterations lives on `default_gate_policy`, which Workflow owns; `unbounded` is legal there, making `completed_failed` unreachable on that step by deliberate per-workflow choice."
+notes = """
+**Typed a column here and built as a derivation.** `store::attempt` counts a step's entries into `running` off `job_events`, which is append-only in the database itself, so a stored count would be a second record of one fact and a pair that can disagree. `crates/store/src/schema.rs` records the column's absence in the table definition, and `ResolvedStep::may_hand_back` owns the arithmetic that reads it.
+
+Resets on a loop return — re-entry as designed is a fresh attempt budget, bounded by `iteration_cap` rather than the retry limit. The aggregate bound over all iterations lives on `default_gate_policy`, which Workflow owns; `unbounded` is legal there, making `completed_failed` unreachable on that step by deliberate per-workflow choice.
+
+**The reset is not built, and the derivation is what makes it visible.** `may_hand_back` is asked with the total attempt count, which now climbs across `advanced -> running` — so on a looping step an iteration would spend the retry budget, which `workflowdef-fields.toml` refuses in terms. The count that call wants is runs since the last return, over the same log; its only caller is `crates/fleet/src/gate.rs`. #263.
+"""
 
 [fields."scope_revisions[]"]
 type = "array<object>"

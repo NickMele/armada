@@ -1,12 +1,13 @@
 // Bridge's frame: the rail, the panel the journeys mount in, and the status
 // bar. The drawn shell, wired to what Fleet actually serves.
 //
-// # One surface, because one surface exists
+// # The roster is what exists
 //
-// The rail carries the Job Board and nothing else. Alerts, Doctor, Manifest
-// and Helm are named in the concept page and none of them is built — four
-// disabled rows would be a promise Armada does not keep, so the roster is
-// what exists.
+// The rail carries the Job Board and the held worktrees, which are the
+// surfaces built. Alerts, Doctor, Manifest and Helm are named in the concept
+// page and none of them is built — a disabled row would be a promise Armada
+// does not keep, so each holds its place in the order and its digit without
+// drawing anything. `surfaces.ts` is where that order lives.
 //
 // Active Jobs, Reviews and the Activity Feed used to be named here too. They
 // are not surfaces any more: the Board holds every Job with state as a filter,
@@ -31,7 +32,6 @@
 // to be.
 
 import { useEffect, useState, type ReactNode } from "react";
-import { ClipboardList } from "lucide-react";
 import { plural, Select, TheShell, type FleetState, type StatusBarProps } from "@armada/components";
 
 import type { Connection } from "@armada/protocol";
@@ -39,9 +39,7 @@ import type { FleetCapacity, JobSummary } from "@armada/protocol";
 import type { ManifestSummary } from "@armada/protocol";
 import type { Statement } from "./fleet";
 import { ADMISSION_HOLD } from "@armada/components";
-
-/** The one surface in the rail. Its glyph is the registry's for Job Board. */
-const JOB_BOARD = "board";
+import { SURFACE, SURFACES } from "./surfaces";
 
 export type ShellProps = {
   connection: Connection;
@@ -60,10 +58,14 @@ export type ShellProps = {
   summary?: string;
   /** The head's trailing controls. `New job` is the one primary. */
   actions?: ReactNode;
-  /** Selecting the rail's surface returns to it. The rail is the one thing
-   *  present on every view, so it is where a person looks to get back —
-   *  Escape and Cancel both work and neither is what they reach for. */
-  onSurface?: () => void;
+  /** Which surface is up, by its id in `surfaces.ts`. The rail marks it. */
+  showing: string;
+  /** Selecting a rail row goes to that surface, from wherever you are. The
+   *  rail is the one thing present on every view, so it is where a person
+   *  looks to get back — Escape and Cancel both work and neither is what they
+   *  reach for. **It takes the id**: with more than one row, a handler that
+   *  ignored which was pressed would land on the wrong screen silently. */
+  onSurface?: (surfaceId: string) => void;
   children: ReactNode;
 };
 
@@ -78,6 +80,7 @@ export function Shell({
   title,
   summary,
   actions,
+  showing,
   onSurface,
   children,
 }: ShellProps) {
@@ -85,11 +88,18 @@ export function Shell({
 
   return (
     <TheShell
-      surfaces={[
-        { id: JOB_BOARD, label: "Job Board", icon: ClipboardList, count: jobs.length },
-      ]}
-      activeId={JOB_BOARD}
-      onSelect={onSurface === undefined ? undefined : () => onSurface()}
+      surfaces={SURFACES.map((surface) => ({
+        id: surface.id,
+        label: surface.label,
+        icon: surface.icon,
+        // Only the Board carries one. What Fleet is holding disk for is read
+        // while that screen is open and not before, so a number here would be
+        // right for as long as somebody was looking at it and stale after —
+        // and a count nobody can trust is worse than a row with none.
+        ...(surface.id === SURFACE.board ? { count: jobs.length } : {}),
+      }))}
+      activeId={showing}
+      onSelect={onSurface}
       collapsed={collapsed}
       railHeader={
         <Select

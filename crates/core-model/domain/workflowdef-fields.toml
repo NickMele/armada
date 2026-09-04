@@ -145,14 +145,17 @@ It has no counterpart on Job: a Job cannot currently record that a dependency wa
 type = "int"
 concern = "Retry and loops"
 parent = "steps[]"
-purpose = "Ceiling on loop returns for this step. Distinct from retry_limit, which counts failures."
-open_questions = ["Where does a loop workflow's iteration cap live?", "Does an iteration need its own counter, separate from retry_count?"]
+purpose = "How many passes a loop may make over this step. Distinct from retry_limit, which counts failures."
 notes = """
 Defaulted from `default_gate_policy.iteration_cap`. Renders as "iteration 3 of 5".
 
 Lives on the same step as `verdict_routing` — the one that emits the verdict — because a cap split from the count it bounds never fires.
 
 Reaching it escalates the way a stuck gate does, under the `loop_cap` trigger. Nothing failed: the loop simply did not converge, which is why it is not `gate_failure`.
+
+**It counts passes and not returns, and this line said returns until #263.** Two other statements in this repository compute the other way and they win on the count: `escalation-triggers.toml` says a looping step burns `retry_limit × iteration_cap` attempts, and the design-plan sample carries `retry_limit: 3`, `iteration_cap: 5` and `attempt_cap: 15`, which is 3 × 5 only if five is the number of passes. So a cap of five is five passes, and the fifth may not return. `ResolvedStep::may_return` is where that is said once.
+
+**An iteration does have its own counter** and the question is struck: `iteration_count`, derived off the `advanced -> running` rows in `job_events` rather than stored. Its own row on `job-fields.toml` carries what is still open about it.
 """
 
 [fields.judge_checks]
@@ -437,9 +440,12 @@ type = "map"
 concern = "Retry and loops"
 parent = "steps[]"
 purpose = "Maps a non-terminal verdict to the step_id it returns to. This is what declares the loop edge."
-open_questions = ["Which step does a loop workflow return to, and what field records it?", "Whose iteration_count does request_changes increment — the gate step's or the routed-to step's?"]
 notes = """
 `{ "request_changes": "draft" }` on Design Plan's `present` step. Lives on the step that emits the verdict, not on the `WorkflowDef`, so one workflow can carry more than one loop — it sits beside `on_fail` and `on_gaming_flag`, which are already step-level targets.
 
-A loop return is not a retry: nothing went wrong, so it must not consume the retry budget or trip an escalation — a plan on its fourth honest draft is not a gate failure. The counter it increments is `iteration_count`, not `retry_count`; both live in `workflow_status.steps[step_id]` on Job.
+A loop return is not a retry: nothing went wrong, so it must not consume the retry budget or trip an escalation — a plan on its fourth honest draft is not a gate failure. The counter it increments is `iteration_count`, not `retry_count`.
+
+**The step machine can say the return now.** `advanced -> running` is in `STEP_EDGES`, walkable only by `StepTarget::Returned`, and it is the routed-*to* step that moves: the cursor follows the work, because the work is where the next Drone goes. Which step a loop returns to is no longer open — this field records it, and nothing else does — and whose `iteration_count` a `request_changes` increments is settled on the emitting step by `docs/journeys/triage-queue.md`.
+
+**What the emitting step's own row does on a return is still unspecified**, and it is the last thing between the settled decision and a working count: the emitter needs a move of its own for its returns to be countable off the log, and none of the six states in `step-states.toml` says "ruled, and waiting for the loop to come back". Not a parser question, and not answered by building the edge. #263.
 """

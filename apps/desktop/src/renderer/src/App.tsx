@@ -41,11 +41,12 @@ import { JobDetail, type ConfirmableAct } from "@armada/screens";
 import { ACT_LABEL, CONFIRM, reclaimed, RESTART_NOTE, said } from "@armada/screens";
 import { Jobs } from "@armada/screens";
 import { BOARD_TABS, type BoardReach, type BoardTab } from "@armada/screens";
-import { carryOut, dormantIn, NAVIGATION, SURFACES } from "./palette";
+import { carryOut, dormantIn } from "./palette";
 import { proposeRequest } from "./dispatch";
 import { Palette, useCommandPalette } from "@armada/shell";
 import { copyDebugInfoFor } from "@armada/shell";
 import { Shell } from "@armada/shell";
+import { SURFACE, SURFACES } from "@armada/shell";
 import { watchUncaught } from "@armada/shell";
 import type { Uncaught } from "@armada/shell";
 
@@ -502,11 +503,27 @@ export function App() {
     setOpenJob(null);
   }
 
+  /**
+   * Go to a place in the rail. **One function, because the rail and the palette
+   * are two controls on one act** — a second copy is where one of them gets
+   * left behind, which is how `auditing` came to survive a rail press.
+   *
+   * A clear-then-set rather than a branch per destination: a branch is where a
+   * view gets left standing under the next one.
+   */
+  function goTo(surfaceId: string): void {
+    setOpenJob(null);
+    setComposing(false);
+    setAuditing(false);
+    setClearing(surfaceId === SURFACE.worktrees);
+  }
+
   const scoped = state.holds.manifests.find((held) => held.id === scope);
-  const base = headOf({
+  const head = headOf({
     reading: reading !== null,
     composing,
     auditing,
+    clearing,
     live,
     refreshing,
     onCloseJob: close,
@@ -514,43 +531,10 @@ export function App() {
     onCompose: () => setComposing(true),
     onCloseReports: () => setAuditing(false),
     onReadReports: () => setAuditing(true),
+    onCloseWorktrees: () => setClearing(false),
+    onReadWorktrees: () => setClearing(true),
     onRefresh: () => void refresh(),
   });
-
-  // The fifth view, composed here rather than in `headOf`.
-  //
-  // **`packages/shell` is outside this change's scope**, so the head that
-  // serves four views is left as it is and this one is assembled beside it. It
-  // is the same shape — a title, and the one control that leaves — and it
-  // belongs in that file with the other four.
-  //
-  // No `Esc` hint: the key is bound while a Job is open and nowhere else, and a
-  // hint for a key that does nothing is worse than no hint.
-  const head = clearing
-    ? {
-        title: "Held worktrees",
-        actions: (
-          <Button variant="ghost" size="sm" onClick={() => setClearing(false)}>
-            Back to the list
-          </Button>
-        ),
-      }
-    : {
-        ...base,
-        actions: (
-          <>
-            {/* Ghost, beside the other two ghosts. Giving disk back is read
-                deliberately and is queued on nobody, so it is in the head and
-                never on a row — the same argument that places `Reported`. */}
-            {reading !== null || composing || auditing ? null : (
-              <Button variant="ghost" size="sm" onClick={() => setClearing(true)}>
-                Held disk
-              </Button>
-            )}
-            {base.actions}
-          </>
-        ),
-      };
 
   return (
     <>
@@ -565,16 +549,11 @@ export function App() {
         title={head.title}
         summary={head.summary}
         actions={head.actions}
-        // The rail returns to the list from wherever you are. Every view it
-        // closes is a single piece of state, so there is no history to unwind.
-        // **`auditing` was missing here**, so the rail drew the Board's head
-        // over the filed reports and left them on screen.
-        onSurface={() => {
-          setOpenJob(null);
-          setComposing(false);
-          setAuditing(false);
-          setClearing(false);
-        }}
+        // Which row the rail marks. The held worktrees are the one surface
+        // other than the Board that draws, so everything else — a Job, the
+        // composer, the reports — is the Board with something over it.
+        showing={clearing ? SURFACE.worktrees : SURFACE.board}
+        onSurface={goTo}
       >
         <div className="flex flex-col gap-6">
           {/* Fleet, when the one connection is not one. The status bar keeps the
@@ -865,15 +844,7 @@ export function App() {
             openJob: setOpenJob,
             closeJob: close,
             compose: () => setComposing(true),
-            // The rail's own clear, and then one destination opens something.
-            // A clear-then-set rather than a branch per row: a branch is where
-            // a view gets left standing under the next one.
-            surface: (surfaceId) => {
-              setOpenJob(null);
-              setComposing(false);
-              setAuditing(false);
-              setClearing(surfaceId === NAVIGATION.worktrees);
-            },
+            surface: goTo,
             filter: (tabId) => reach.current?.tab(tabId as BoardTab),
             search: () => reach.current?.search(),
             copyDebugInfo: () => {

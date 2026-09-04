@@ -53,7 +53,11 @@ Run and edit a Manifest reads a project's Checks and Commands, runs any one of t
 
 Bridge's shell is a **left resizable rail** for navigation, a **full-width panel** to its right where the journeys mount, and a **status bar fixed to the bottom**. Finer layout treatment within each journey remains UI/UX design phase work.
 
-The rail carries Job Board, Alerts, Doctor and Manifest. Helm sits below them.
+The rail carries Job Board, Alerts, Doctor, Manifest and Held worktrees. Helm sits below them.
+
+**Held worktrees is last because it is newest, and that is the rule rather than a placement.** A surface joins at the end, so `⌘1`–`⌘4` keep reaching what they reached and only the sibling beneath the rule takes a new digit — Helm went to `⌘6` when this one arrived. See `../contracts/design-system.md`, Two tiers.
+
+What the rail draws is what is built, which is not yet the whole roster. A surface with nothing behind it would be a promise Armada does not keep, so it holds its place in the order and its digit without drawing a row.
 
 **Active Jobs, Reviews and the Activity Feed are not on it.** All three were lists of Jobs standing beside the Board, and the Board now holds every Job with state as a filter — see [Job Board](job-board.md). Each is that list under one filter: running, `awaiting_review`, and over. Four lists of Jobs gave four surfaces four chances to disagree about what a Job row looks like, and a person had to learn which one held which state.
 

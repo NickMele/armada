@@ -27,24 +27,23 @@ type Story = StoryObj<typeof CommandPalette>;
 const CONTEXT = "job_2d90bb — coalesce the session refresh";
 
 /**
- * Where a person can go: the rail's four destinations, and one that is not in
- * the rail. Each glyph is the icon registry's own assignment for that surface;
- * the registry's `bridge_surfaces` row carries none by design, because a fifth
- * glyph standing for all four is not a thing — which is also why the rail
- * expands into rows here rather than that one row being drawn. Helm is not
- * among them: it is a sibling surface with a registry row of its own, and it
- * arrives through `globalActs`.
+ * The whole rail, one row per destination. Each glyph is the icon registry's
+ * own assignment for that surface; the registry's `bridge_surfaces` row carries
+ * none by design, because one glyph standing for all of them is not a thing —
+ * which is also why the rail expands into rows here rather than that one row
+ * being drawn. Helm is not among them: it is a sibling surface with a registry
+ * row of its own, and it arrives through `globalActs`.
  *
- * **`Held worktrees` carries no digit, and this is where that is visible.**
- * `⌘1–⌘4` is bound to Bridge surfaces *in rail order*, so a digit is a place
- * in the rail; the held worktrees are reached from the Board's head and have
- * no such place, and the two digits going spare belong to Alerts and to Helm.
- * A blank key column beside four filled ones is the honest drawing of that,
- * and it is what a person looking for the missing binding should be shown.
+ * **This is where the digits are read as a set, and where one of them moved.**
+ * `⌘1–⌘5` is bound to Bridge surfaces *in rail order*, so a digit is a place in
+ * the rail and nothing else. `Held worktrees` joined at the end and took `⌘5`;
+ * Helm, the digit after the last surface, went to `⌘6`. Drawn together, the
+ * five keys people already know are unmoved and the one that moved is beside
+ * the row that pushed it.
  *
- * The Manifest drew `clipboard-list` here until this row was added — the Job
- * Board's glyph, on a second destination, in the one place the set is read as
- * a set. `file-cog` is the registry's assignment and its own row reserves it
+ * The Manifest drew `clipboard-list` here until the fifth row was added — the
+ * Job Board's glyph, on a second destination, in the one place the set is read
+ * as a set. `file-cog` is the registry's assignment and its own row reserves it
  * to the Manifest surface and the file.
  */
 const RAIL: PaletteEntry[] = [
@@ -56,6 +55,7 @@ const RAIL: PaletteEntry[] = [
     id: "nav-worktrees",
     section: "navigation",
     label: "Held worktrees",
+    shortcut: "⌘5",
     aliases: ["disk", "held disk"],
     icon: HardDrive,
   },
@@ -104,7 +104,7 @@ function sections(title: string): PaletteSection[] {
  * navigation, jobs, settings.
  *
  * Navigation is the rail's destinations plus the global acts the rail is not.
- * `bridge_surfaces` is one registry row over four destinations, because the
+ * `bridge_surfaces` is one registry row over every destination, because the
  * rule there is rail order rather than the digits — so the rail is what
  * expands it, and Helm arrives from the registry as the digit after the last
  * of them.
@@ -258,31 +258,34 @@ export const AnAliasFindsTheLexiconTerm: Story = {
 };
 
 /**
- * **A place with no binding is still a place.** The held worktrees are reached
- * from the Board's head and sit in no rail slot, so there is no digit to draw
- * beside them — and the row is here anyway, because the rule the palette keeps
- * is that nothing exists outside it, not that everything has a key.
+ * **The newest surface goes last, so it is the only digit that is new.** `Held
+ * worktrees` joined the rail on 2026-09-03 and took `⌘5`; Helm, which is the
+ * digit after the last surface rather than a surface, went from `⌘5` to `⌘6`.
+ * Every key anyone had learned still reaches what it reached.
+ *
+ * A published binding moved, and this is where a person finds out: the palette
+ * displays the binding beside every entry, so the two rows are read together
+ * the next time anybody opens it.
  *
  * The query is "disk", the word on the control that has reached this screen
  * since it shipped. The row reads `Held worktrees`, which is the title of the
  * screen it lands on.
  */
-export const APlaceWithNoBindingIsStillFound: Story = {
+export const TheNewestSurfaceTookTheLastDigit: Story = {
   args: { ...board, defaultQuery: "disk" },
   /**
-   * Two things a rendering cannot state: the row was reached by a word that is
-   * not in its label, and its accessible name carries no binding where every
-   * other Navigation row's ends in one. The second is read after the query is
-   * cleared, because "disk" narrows Job Board away — and Job Board is the row
-   * the claim is against.
+   * Three things a rendering cannot state: the row was reached by a word that
+   * is not in its label, the digit beside it is the rail position rather than
+   * anything about the row, and Helm has moved off the digit it published. The
+   * last two are read after the query is cleared, because "disk" narrows both
+   * of the rows the claim is against away.
    *
-   * Broken on purpose by dropping the aliases from the entry, which loses the
-   * row entirely and fails on the first line rather than on the name.
+   * Broken on purpose twice — by dropping the aliases, which loses the row and
+   * fails on the first line, and by putting `⌘5` back on Helm in the registry,
+   * which fails on the last.
    */
   play: async ({ canvas, userEvent }) => {
-    await expect(canvas.getByRole("option", { name: /Held worktrees/ })).toHaveAccessibleName(
-      "Held worktrees",
-    );
+    await expect(canvas.getByRole("option", { name: /Held worktrees/ })).toBeVisible();
 
     await userEvent.clear(canvas.getByRole("combobox"));
 
@@ -290,9 +293,10 @@ export const APlaceWithNoBindingIsStillFound: Story = {
     await expect(canvas.getByRole("option", { name: /^Job Board/ })).toHaveAccessibleName(
       "Job Board ⌘ 1",
     );
-    await expect(canvas.getByRole("option", { name: /Held worktrees/ })).toHaveAccessibleName(
-      "Held worktrees",
+    await expect(canvas.getByRole("option", { name: /^Held worktrees/ })).toHaveAccessibleName(
+      "Held worktrees ⌘ 5",
     );
+    await expect(canvas.getByRole("option", { name: /^Helm/ })).toHaveAccessibleName("Helm ⌘ 6");
   },
 };
 
