@@ -231,6 +231,10 @@ pub trait Commands: Send + Sync + 'static {
     /// been reclaimed — the second says the act being asked for is a
     /// redispatch rather than becoming one.
     ///
+    /// **What comes back is `queued`.** The act asks for a Drone; the turn
+    /// starts one, because a spawn inside this request died whenever a client
+    /// stopped waiting for it — `#428` and `#456`.
+    ///
     /// **The note is optional and is not a reason for the restart.** `None` is
     /// the plain restart this act has always been. `Some` is a person saying
     /// what to do differently in the same breath as asking for another
@@ -252,9 +256,13 @@ pub trait Commands: Send + Sync + 'static {
     ///
     /// It moves the machine and never writes a status: the step advances on the
     /// inner machine, which is legal beneath `awaiting_review`, and then the
-    /// Job goes back to `running` at the next step — or, where the step that
-    /// passed was the workflow's last, is committed, delivered and recorded
-    /// `completed_success`.
+    /// Job goes back in the **queue** at the next step — or, where the step
+    /// that passed was the workflow's last, is committed, delivered and
+    /// recorded `completed_success`.
+    ///
+    /// **What comes back is `queued`, not `running`**, for
+    /// [`Commands::approve_dispatch`]'s reason and `#456`. The Drone on the
+    /// next step is a turn's.
     ///
     /// **Refused with a 409 anywhere but `awaiting_review`.** All three review
     /// acts share that refusal, and it is what stops this from quietly becoming
@@ -287,26 +295,26 @@ pub trait Commands: Send + Sync + 'static {
     /// that keeps the work.** [`Commands::approve_review`] cannot be it: a Job a
     /// gate refused is `escalated`, not `awaiting_review`.
     /// [`Commands::restart_step`] cannot either — it re-runs the step, discarding
-    /// work that was right and possibly drawing the same refusal. A verdict
-    /// with no appeal is worse than no verdict, because a verifier a person
-    /// cannot overrule is one they route around.
+    /// work that was right and possibly drawing the same refusal. A verdict with
+    /// no appeal is worse than no verdict, because a verifier a person cannot
+    /// overrule is one they route around.
     ///
     /// **It is not an approve-anything.** Only `gate_failure` is liftable — the
     /// Judge refusing a criterion, which is a matter of opinion. A step stopped
     /// on `gate_undecided` was never weighed and one stopped on
     /// `evidence_suspect` is a claim about the Drone's honesty; both are
-    /// [`Refusal::IllegalMove`]. A failed mechanical Check is out of reach
-    /// twice over: it ends the Job at `completed_failed`, which is terminal and
-    /// stops no step, and the recorded Check runs are read again before
-    /// anything moves.
+    /// [`Refusal::IllegalMove`]. A failed mechanical Check is out of reach twice
+    /// over: it ends the Job at `completed_failed`, which is terminal and stops
+    /// no step, and the recorded Check runs are read again before anything moves.
     ///
-    /// **It is recorded as an override.** The step move is `stopped ->
-    /// advanced` carrying the trigger it overruled, so the row still says
-    /// `failed` beside a state that says `advanced`, and
-    /// [`ipc::StepDetail::overridden`] is that pair read once here rather than
-    /// by every surface. A blank reason is [`Refusal::Unacceptable`]: an
-    /// override that says nothing is how this becomes the way somebody quiets a
-    /// gate.
+    /// **It answers `queued`**, or `completed_success` on the last step: the
+    /// verdict is not deferred and the Drone is — `#456`. **And it is recorded as
+    /// an override** — the step move is `stopped -> advanced` carrying the
+    /// trigger it overruled, so the row still says `failed` beside a state that
+    /// says `advanced`, and [`ipc::StepDetail::overridden`] is that pair read
+    /// once here rather than by every surface. A blank reason is
+    /// [`Refusal::Unacceptable`]: an override that says nothing is how this
+    /// becomes the way somebody quiets a gate.
     fn override_verdict(
         &self,
         job_id: JobId,
