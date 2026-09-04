@@ -53,11 +53,13 @@ Doing that by hand means knowing the workflow catalogue before you can ask for a
 
 ### Scope is not among them
 
-**It proposes no `write_targets` and no `atomic`.** Which files the work touches belongs to the workflow's own scope step, declared through the scope tool by a [Drone](drone.md) that has read the code.
+**It proposes no `write_targets` and no `atomic`.** A Job it drafted reaches the gate with the first null and the second false.
 
-Why: naming paths credibly needs the repository, and a guess would be a second source for something settled later with better information.
+Why: naming paths credibly needs the repository, and a guess would be a second source for something a [Drone](drone.md) states later with better information.
 
-**Shape is therefore not among them either.** A Job's shape follows from `write_targets` and `atomic`, so it is underivable until the scope step runs. [Convoy](convoy.md) — Three shapes, not two carries what the three are.
+**The workflow's scope step does not fill them in either.** `declare_scope` sets that step's own `DeclaredPaths`, which is what the drift check reads; `write_targets` moves only on a scope revision, and `atomic` is frozen at dispatch. [Change a Job's scope](../journeys/change-a-jobs-scope.md) holds what each of the two lists is for.
+
+**Shape is therefore not among them either.** A Job's shape follows from `write_targets` and `atomic`, and this call settles neither. [Convoy](convoy.md) — Three shapes, not two carries what the three are.
 
 ### When it cannot resolve a workflow
 

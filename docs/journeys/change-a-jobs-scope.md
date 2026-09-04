@@ -22,6 +22,28 @@ Everything the flow needs beyond what the record already states is listed under 
 
 **A person is met by the exception.** A Judge that refuses escalates the Job, with the reason on the record and the Drone alive and idle in front of somebody.
 
+## Two lists are called a Job's scope
+
+They answer different questions, and neither is authoritative over the other.
+
+| | The Job's write targets | A step's declared paths |
+| --- | --- | --- |
+| What it is | What a person mentioned when asking | What a Drone found on reading the code |
+| The field | `write_targets`, one list per Job | `DeclaredPaths`, one per step per run |
+| Set | Once, at creation, from the request | Every step, through `declare_scope` |
+| Measured against | Nothing. It meets no diff | The real diff at the gate, and live edits each turn |
+| Nothing there | Null — scope not yet determined | The step declared nothing |
+| Who reads it | The overlap warning, and `request_scope` | The drift check, and the Judge look it triggers |
+
+**A stated list is a seed, not a fence.** A person asking for work names the files worth naming and will not name every file the work turns out to need, so the list is partial even where it exists.
+
+**Drift is measured against the declaration alone.** A changed file no declared path covers is what a Judge is given; the Job's write targets weigh nothing in that comparison.
+
+**A Job that stated no scope cannot be widened.** `request_scope` grows the write targets, so a null list leaves the paths nothing to be an addition to and the request is refused with *scope not yet determined*.
+Why: a request that determined the list would let a Drone write the whole answer to a question the Job never asked.
+
+**That is the common case rather than the edge.** Every Job the [Job proposer](../concepts/job-proposer.md) drafted reaches its first step with the list null. What such a Drone has instead is `declare_scope`, which costs no call, refuses nothing but the step's own denylist, and is what the drift check reads.
+
 ## Flow
 
 Two entrances and two directions. A Drone asking is the common one; a person changing it before anybody asks is rare and is the only route to a narrowing.
@@ -73,8 +95,8 @@ All of it is in hand when the request arrives, and none of it is anything a Dron
 | --- | --- |
 | The step's intent | Its label and the file it was asked to write, off the frozen workflow |
 | The request the whole Job answers | Its title, its Facts and its acceptance criteria, labelled as the standard rather than as something under judgment |
-| The scope the Job declared | Whole, so an addition can be told from what was already there |
-| The paths asked for | Only the ones actually outside the declared scope |
+| The Job's write targets | Whole, so an addition can be told from what was already there |
+| The paths asked for | Only the ones outside those write targets |
 | Why | The Drone's own words, labelled as an argument rather than as a fact |
 
 **It is not shown the diff.** The question is about a plan rather than about work, and a call handed the diff would be answering the mid-step convergence look's question instead.

@@ -445,6 +445,12 @@ Three fields, three readers, and none of them substitutes for another.
 
 **The [Job proposer](job-proposer.md) generates it**, from the same reading of the request that produces `workflow_id`. Hand entry is the override.
 
+## Scope is two lists, and only one of them is on this record
+
+`job_write_targets` is what a person mentioned when asking. It is partial by design, it binds no writes, and it is null on every Job the [Job proposer](job-proposer.md) drafted.
+
+**A step's declared paths are not on this record.** They are `DeclaredPaths`, set through `declare_scope` by a [Drone](drone.md) that has read the code, kept per run against the step, and measured against the real diff at the gate. Neither list is authoritative over the other, and [Change a Job's scope](../journeys/change-a-jobs-scope.md) holds the pair.
+
 ## Other fields
 
 The complete Job field list is in `crates/core-model/domain/job-fields.toml`.

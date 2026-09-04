@@ -449,5 +449,11 @@ notes = """
 The Workspace set derives from these paths by nearest-ancestor ownership; ownership is not exclusivity. The declaration does not bind — a Drone's worktree is a whole-repo checkout, and nothing binds writes to declared paths.
 
 Null is scope not yet determined; empty is determined to write nothing. Shape is underivable while null, rather than defaulting.
+
+**It is partial by design.** A person asking for work names the files worth naming and will not name every file the work turns out to need, so a list that exists seeds the work rather than fencing it.
+
+**A step's declared paths are a separate list.** `DeclaredPaths`, set through `declare_scope` by a Drone that has read the code, is what the gate measures the real diff against; this list is never compared to a diff. Neither ranks over the other, and `docs/journeys/change-a-jobs-scope.md` holds the pair.
+
+`request_scope` widens this list, so a Job whose list is null has nothing for the paths to be an addition to and the request is refused.
 """
 why = "Binding the declaration as a lease would serialise the Jobs that declared honestly and miss the one that wrote outside what it named."
