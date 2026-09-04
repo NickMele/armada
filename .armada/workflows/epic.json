@@ -1,0 +1,163 @@
+# Epic — a milestone dispatched as one Job. #215, and the workflow the six
+# files beside it exist to be unlike: its product is not a diff, it is other
+# Jobs.
+#
+# **This is the only definition that ships with `may_dispatch_jobs`.**
+# `crates/config/tests/shipped.rs` asserts that `dispatch` below is the one
+# step in `.armada/workflows/` that has it, and says why it alone may.
+# Everything under this file was built before it — the tool, the grant, the
+# refusals, the constructor, the stand-down and the return — and
+# `docs/capabilities/epic-as-one-job.md` is the record of that.
+#
+# # The shape is a loop because a milestone plan is a hypothesis
+#
+# Owner, 31 Aug 2026. A slate written before anything runs briefs its later
+# waves against what was believed at the beginning, and that is not a worry:
+# building Throughput by hand, `#50` landing rewrote the two briefs after it
+# and `#47`'s whole premise turned out to be false once `write_targets` was
+# known to be null at every gate. So the loop plans one wave, dispatches it,
+# reads what it actually did, and plans the next against that.
+#
+# `roll_up`'s `request_changes` routes back to `plan` and its `iteration_cap`
+# of five is what bounds it: **a cap of five buys five waves**, the fifth
+# `request_changes` having nowhere to go and escalating as `loop_cap`. Five is
+# `design-plan.json`'s designed cap, taken here for want of a better-argued
+# number; the real bound on what one approval spends is `#51`'s budget cap,
+# which is closed and load-bearing from the moment this file exists.
+#
+# # The gate is on `plan`, and that is the whole of the approval
+#
+# **The owner's decision, 3 Sep 2026: he reads every plan, every time.** He
+# was asked who checks a plan that splits a milestone into eight Jobs before
+# those eight start spending. A Judge-first variant was rejected — it depends
+# on `#206`, which is open, and the first thing a Judge would wave through is
+# eight Jobs' worth of spend.
+#
+# **So `human_always` is on `plan` and not on `dispatch`, and the placement is
+# forced rather than chosen.** A step's `advance_gate` is read after its Drone
+# submits. On the dispatching step that is after the Jobs exist, which is a
+# person approving a spend that already happened. On the step before it, the
+# approval is what advances into the step holding the tool — so **approving
+# the plan is what dispatches the wave**, in one act rather than a plan
+# followed by a second one. `dispatch.rs`'s own tool description already says
+# this from the other side: the tool is available *"only after a person has
+# read the plan you wrote"*.
+#
+# `dispatch` is therefore `auto`. Asking again on the far side of the tool
+# call is approval fatigue with no decision content in it, which is what
+# `docs/contracts/workflow-design-system.md` says about sub-dispatch generally.
+#
+# # `roll_up`, not `converge` and not `assess`
+#
+# The issue names this step `roll_up` and the name is the one that ships.
+# `crates/fleet/src/converging.rs` already owns *converge* for a Drone that is
+# working and getting nowhere, and a second meaning for it would be the
+# second-vocabulary defect. `docs/capabilities/epic-as-one-job.md` draws the
+# loop as `plan -> dispatch -> assess`; that is this step under an earlier
+# name.
+#
+# **Nothing marks it as the step that waits.** `fleet::sub_dispatch` asks
+# about the step that *advanced*, never about the step ahead — so the parent
+# stands its Drone down at the end of `dispatch`, `admitting` holds it until
+# every child is terminal, and `readmitting` puts a fresh Drone here with
+# every child's outcome in its opening brief. Terminal, not successful: a
+# child that failed is exactly what this step is for.
+#
+# # What each step delivers, and why all three deliver a file
+#
+# **The plan is a real artifact and the drawing is what is approved.** Owner,
+# 2 Sep 2026, on reading one produced by hand. A wave is a set of Jobs that
+# may run at once and an ordering between the sets, and prose asking a person
+# to hold that in their head asks them to redraw it before they can answer. So
+# `plan` writes `.armada/artifacts/plan.md`, `artifact_exists` makes the file
+# the product rather than a sentence a Drone typed, and Fleet puts its
+# contents in the Judge's brief.
+#
+# `dispatch` writes one too. Its real product is Jobs, which no mechanical
+# check can read; what the file gives is the parent's own record of the wave
+# it created, at a path a person and the next Drone can open. A step whose
+# only gate was "it submitted something" would be the weakest gate in the
+# repository on the most consequential act in it.
+#
+# **`dispatch` carries no Judge, and that is a decision.** A refusal there
+# arrives after the Jobs exist and cannot un-create them; all it could do is
+# stop the step that reports on them. The place to refuse a bad split is
+# `plan`, before anything runs, which is where both criteria are.
+#
+# **The two criteria on `plan` are the two ways a plan is unreviewable.** One
+# asks whether the split is drawn; the other whether each piece carries what
+# `dispatch_job` will be asked for — a brief and a bar. A plan failing the
+# second produces children briefed from a title, which is the decomposition
+# thrown away at the moment it was supposed to be delivered.
+#
+# **What the Drone is told about all this is `fleet::terms`', not this
+# file's.** A step definition has no field for prose and `fleet::briefing`
+# says so outright — *"there is no argument through which arbitrary text
+# reaches a Drone"*. `Splitting` in `crates/fleet/src/terms.rs` is the block,
+# and it is keyed off `may_dispatch_jobs` on this step or the next one rather
+# than off this workflow's name.
+{
+  "version": 1,
+  "workflow_id": "epic",
+  "name": "epic",
+  "structure": "loop",
+  "steps": [
+    {
+      "id": "plan",
+      "label": "Plan the wave",
+      "evidence_type": "document",
+      "mechanical_checks": [
+        {
+          "type": "artifact_exists",
+          "target": ".armada/artifacts/plan.md"
+        }
+      ],
+      "judge_checks": [
+        {
+          "enabled": true,
+          "model": "haiku",
+          "criteria": [
+            {
+              "criterion_id": "draws_the_split",
+              "question": "Does this plan draw the split -- a node for each Job it proposes, and an edge wherever one of them has to wait for another -- rather than describing the split in prose alone?"
+            },
+            {
+              "criterion_id": "each_piece_carries_its_own_brief",
+              "question": "Does the plan say, for every Job it proposes, what that Job's agent is to be told and what its work will be held to, rather than naming the piece and leaving both to be worked out later?"
+            }
+          ]
+        }
+      ],
+      "advance_gate": "human_always"
+    },
+    {
+      "id": "dispatch",
+      "label": "Dispatch the wave",
+      "evidence_type": "facts_note",
+      "may_dispatch_jobs": true,
+      "mechanical_checks": [
+        {
+          "type": "artifact_exists",
+          "target": ".armada/artifacts/dispatched.md"
+        }
+      ],
+      "advance_gate": "auto"
+    },
+    {
+      "id": "roll_up",
+      "label": "Roll up the wave",
+      "evidence_type": "document",
+      "mechanical_checks": [
+        {
+          "type": "artifact_exists",
+          "target": ".armada/artifacts/roll-up.md"
+        }
+      ],
+      "advance_gate": "human_always",
+      "verdict_routing": {
+        "request_changes": "plan"
+      },
+      "iteration_cap": 5
+    }
+  ]
+}
