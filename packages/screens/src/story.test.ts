@@ -16,11 +16,20 @@
 // were to guess or to draw every line the same. So each of those cases is
 // written against a guess. A short line, a shouted line and a line at the top
 // of a block are all body unless the wire named them.
+//
+// **What a row says about a kind nobody can draw is the third.** Five of those
+// rows arrived across four seconds carrying five different kinds and read as
+// one error repeated, so the case below asserts five distinct lines rather
+// than five rows. Nothing here asserts the row is dropped or folded: it exists
+// to make a Fleet ahead of this Bridge visible, and muting it is the fix that
+// was refused. #379.
 
 import { describe, expect, it } from "vitest";
 
+import { SILENCE } from "@armada/components";
 import type { Observed, Turn, Turns } from "@armada/protocol";
 
+import { leading } from "./reading";
 import { entriesOf, NOTHING_YET_ON_THIS_STEP, whyNotWatching } from "./story";
 
 const A_JOB = "01M1HQZAKN001AJ5MT3PT09KKY";
@@ -95,6 +104,18 @@ describe("why the log is not being read", () => {
     };
     const nothing: Observed = { ...drone, because: "nothing_writing" };
     expect(whyNotWatching(drone)).not.toBe(whyNotWatching(nothing));
+  });
+
+  it("says what the registry says, so changing the row changes the pane", () => {
+    // The expectation is the registry's own clause and never a sentence typed
+    // here: a copy in the test is the second source this reads `SILENCE` to
+    // be rid of, one file across. #346.
+    for (const because of ["drone_ended", "nothing_writing"]) {
+      const clause = SILENCE[because]?.verb;
+      expect(clause).toBeTruthy();
+      const ended: Observed = { state: "ended", jobId: A_JOB, turns: CARRIED, because };
+      expect(whyNotWatching(ended)).toBe(`${leading(clause!)}.`);
+    }
   });
 
   it("renders a reason of its own, so a transport close is not a wire word", () => {
@@ -197,5 +218,39 @@ describe("a block heading in a turn's payload", () => {
     // is marked and nothing throws — an index is not a promise about length.
     const said = payload(instructed("JOB BRIEF", [0, 40]));
     expect(said.map((line) => line.named)).toEqual(["heading"]);
+  });
+});
+
+describe("a kind this Bridge has no reading for", () => {
+  /** One row of a kind this build cannot draw, as the wire spelled it. */
+  function unrecognised(kind: string, seq = 3): Turn {
+    return {
+      ts: "2026-09-02T13:50:33Z",
+      seq,
+      step: "plan",
+      by: "drone",
+      saw: { event: "unrecognised", kind },
+    };
+  }
+
+  it("names the kind in the line a person reads closed", () => {
+    // The row is drawn and never dropped, so the version skew is visible; what
+    // makes it a finding rather than an error is the wire's own word. #379.
+    expect(drawn(unrecognised("thinking_delta")).message).toContain("thinking_delta");
+  });
+
+  it("reads as five findings when five kinds arrive, not one sentence five times", () => {
+    const kinds = ["thinking_delta", "system/compact", "stream_event", "usage_delta", "tool_use"];
+    const rows = entriesOf(
+      kinds.map((kind, n) => unrecognised(kind, n)),
+      "plan",
+    );
+    expect(rows).toHaveLength(kinds.length);
+    expect(new Set(rows.map((row) => row.message)).size).toBe(kinds.length);
+  });
+
+  it("keeps the kind on the payload, so the row still opens to something", () => {
+    const lines = payload(unrecognised("thinking_delta"));
+    expect(lines.map((line) => line.text)).toEqual(["thinking_delta"]);
   });
 });
