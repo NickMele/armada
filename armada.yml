@@ -178,6 +178,25 @@ commands:
     # Exits non-zero on purpose, which is why it is not a Check.
     run: cargo xtask verify-foundations
 
+# How patient Fleet is with a Drone working here. Both keys are optional and
+# each falls back on its own: what is not written is what Fleet was started
+# with, and a workflow step may override either again.
+drone:
+  # 300, against a shipped 120, because one command here is longer than the
+  # whole of what the threshold was measured against. Spike 009 saw a longest
+  # honest silence of 79s on a repository with a warm cache and small changes.
+  # Measured here into an empty target directory on 3 Sep 2026, each a single
+  # tool call a Drone makes no sound during: `build` 37.6s, `test` 41s, and
+  # `bridge_test` 6s then 40s before a browser starts. A Drone that runs two of
+  # them before it speaks is past 120s while nothing is wrong.
+  #
+  # 300 is the top of the band that spike named as separating every stuck step
+  # it saw from every honest one, so this is still a tripwire. Raise it again
+  # only with a silence somebody measured.
+  quiet_after_seconds: 300
+  # No `poke_limit`. Nothing here wants more or fewer nudges than Fleet's two,
+  # and a number written without a reason is one the next person deletes.
+
 # What has to have run before any step starts in a fresh worktree. Names a
 # Command above; a name nothing declares is refused at load. Fleet runs it once
 # where the worktree is cut, not once per Drone, and has no opinion about what

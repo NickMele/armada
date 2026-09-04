@@ -1,53 +1,28 @@
 //! `armada.yml`, in the slice M1 reads.
 //!
-//! **These keys, and nothing else.** `version`, `id`, `base`,
-//! `checks.<name>.run`, `checks.<name>.when`, `checks.<name>.requires`,
-//! `commands.<name>.run`, `commands.<name>.destructive`, `setup.requires`,
-//! `drone.quiet_after_seconds` and `drone.poke_limit`. Every other section the
-//! Manifest concept page describes — permissions, secrets, ports, skills,
-//! budget, dispatch freeze, auto-merge — is a key this parser refuses.
-//!
-//! **The count that used to open this line was wrong before `#414` touched
-//! it** — it said eight and listed nine — so it is gone rather than corrected.
-//! A number that has to be maintained beside the list it counts is a second
-//! source for something the list already says.
+//! **These keys, and nothing else.** `version`, `id`, `base`; `run`, `when`
+//! and `requires` under `checks.<name>`; `run` and `destructive` under
+//! `commands.<name>`; `setup.requires`; and `quiet_after_seconds` and
+//! `poke_limit` under `drone`, `#414`'s — the first section here that is a dial
+//! rather than a registry, spelled as a step spells it and named for the reason
+//! `docs/contracts/configuration.md` gives. `fleet::Liveness::at` orders its
+//! tiers and nothing else does. Every other section the concept page describes
+//! is refused: permissions, secrets, ports, skills, budget, dispatch freeze,
+//! auto-merge.
 //!
 //! **A key nothing reads is worse than a key that is not there.** A file
 //! carrying `budget: 40` that no code consumes reads to its author as a budget
-//! that is set. Refusing it means the section arrives with the code that
-//! honours it, and every deferred section stays additive rather than a
+//! that is set. Refusing it keeps every deferred section additive rather than a
 //! migration. [`Manifest::version`] refuses no number for the same reason.
 //!
-//! `checks.<name>.when` is a list of path patterns in
-//! `core_model::PathPattern`'s dialect, checked at load, so a pattern this
-//! parser cannot read is a refusal beside every other refusal in the file
-//! rather than a Check that quietly stops running. **Absent means always.**
+//! `checks.<name>.when` is a list of `core_model::PathPattern`s checked at
+//! load, so one this parser cannot read is a refusal beside every other in the
+//! file rather than a Check that quietly stops running. **Absent means always.**
 //!
 //! **Both `requires` keys name Commands this file declares, resolved at load,
 //! and share every refusal** — see [`named_commands`]. `setup`'s code word is
 //! *preparation*, because `armada::setup` runs nothing and means something
 //! else; one word over two meanings is a second vocabulary.
-//!
-//! # `drone:`, the middle tier of a Drone's patience
-//!
-//! `#414`. `quiet_after_seconds` and `poke_limit` are the whole of it, and they
-//! are spelled exactly as a workflow step spells them — one vocabulary for one
-//! value, so a person moving a number from a step to the repository moves the
-//! line rather than translating it. The tiers are the composition root's
-//! constant, this section, and the step; `fleet::Liveness::at` is where all
-//! three meet and is the only place the order is written.
-//!
-//! **A section rather than two top-level keys.** `poke_limit` at the top level
-//! of an `armada.yml` is a name with no subject, and the sections this file
-//! will grow — permissions, secrets, ports — are named for what they configure.
-//! `drone:` is what these two configure: how long the process Armada starts
-//! here may say nothing.
-//!
-//! **Not `fleet:`, though `settings.toml` files both rows under Fleet as
-//! owner.** Owner is who enforces a value, and every Fleet-owned row that has a
-//! Manifest tier at all is about a Drone's conduct — Fleet's own dials are
-//! `Machine`-scoped and can never appear in an `armada.yml`. A `fleet:` section
-//! here could hold nothing else.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};

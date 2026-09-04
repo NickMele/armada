@@ -91,14 +91,10 @@ impl Liveness {
     /// # Three tiers, and this is the only place their order is written
     ///
     /// The composition root's constant — `self` — then the repository's
-    /// `armada.yml`, then the step. Each is narrower than the one before it and
-    /// each half falls back on its own, so a repository may state a threshold
-    /// and inherit a poke budget, and a step may override either without
-    /// restating the other.
-    ///
-    /// **There is no Kit**, though `crates/config/settings.toml` files both
-    /// rows as *Kit → Manifest*: nothing in this workspace parses one. Three
-    /// tiers, and the code reads as three.
+    /// `armada.yml`, then the step. **Each half falls back on its own**, so a
+    /// repository may state a threshold and inherit a poke budget. **There is
+    /// no Kit**, though both rows are filed *Kit → Manifest*: nothing in this
+    /// workspace parses one.
     ///
     /// # A live setting under a frozen step, and which wins
     ///
@@ -108,20 +104,13 @@ impl Liveness {
     /// compromise, but what each word is about. A setting is live so a person
     /// may change what Fleet runs with; a step is frozen so an edit to
     /// `.armada/workflows/` cannot move a running Job's terms under an
-    /// approval nobody re-gave. Neither claim reaches the other's tier.
+    /// approval nobody re-gave.
     ///
-    /// **And `Live` stays true**, because this is asked at each step boundary
-    /// rather than once per Job: a Job whose steps declare nothing follows a
-    /// changed value into its next step, with no restart. What it cannot do is
-    /// have its *declared* patience change underneath it.
-    ///
-    /// **How live the Manifest tier is, is `manifest`'s question and not
-    /// this one.** What arrives here is whatever `Fleet::manifest` holds at the
-    /// boundary; today the composition root reads `armada.yml` once at daemon
-    /// start, so an edit reaches a running Job's next step only across a
+    /// **`Live` reaches this boundary and no further, because the Manifest is
+    /// read once.** A Job declaring nothing follows what `Fleet::manifest`
+    /// holds into its next step; an edit to the file reaches it only across a
     /// restart. Resolving here rather than folding the repository's value into
-    /// the constant is what makes that a property of when the file is read
-    /// instead of a property of this chain.
+    /// the constant keeps that a fact about when the file is read.
     pub fn at(self, manifest: &Manifest, job: &Job, step: &StepId) -> Liveness {
         // Tier two. A repository stating one half inherits the other from the
         // constant, which is why this is built rather than matched on.
