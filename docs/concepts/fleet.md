@@ -217,7 +217,7 @@ The remedy needs no new state: `depends_on` already sequences Jobs and already p
 
 **The repository is fast-forwarded or left alone, and never anything in between.** A checkout on some other branch, a working tree carrying somebody's uncommitted change, a repository with no remote, and a history that will not fast-forward are all refusals — this is the one thing Fleet writes into the repository a person is standing in, and `--autostash` is not on offer because nobody asked for a rebase.
 
-**Nothing watches main for breakage after a merge.** Under `auto_merge: never` a person merges and Armada is not party to it, so a post-merge signal would cover only the subset Fleet merged itself. A detector that fires on some breakages and not others is worse than none, because its silence reads as an all-clear. Running the Checks once against the updated tree is the piece that would answer it and is not built.
+**Nothing watches main for breakage after a merge.** Under `auto_merge: never` a person merges and Armada is not party to it, so a post-merge signal would cover only the subset Fleet merged itself. A detector that fires on some breakages and not others is worse than none, because its silence reads as an all-clear. Running the Checks once against the updated tree is the piece that would answer it, and it is not built — #474, where the reason it is its own issue is that the run belongs to the commit rather than to any one Job.
 
 A merge that breaks main is raised by a person, and the response is a new Job pointing back through `subject` rather than anything reopening: `completed_success` is terminal and stays true. See [Job](job.md). Whether Fleet should watch the merges it did perform is open (see Open questions).
 

@@ -1,27 +1,28 @@
-//! Noticing that somebody merged a Job's pull request.
+//! Noticing that somebody merged a Job's pull request, and what follows.
 //!
 //! # Noticing, not merging
 //!
 //! Armada opens a pull request and a person merges it — `docs/scope.md`, and
 //! the `human_always` gate on every shipped workflow's last step. Nothing here
-//! merges, and no method could: [`Delivery::landed`] reads, and the only thing
-//! written is the Job's own record.
+//! merges, and no method could: [`Delivery::landed`] reads, and what is written
+//! is the Job's own record and a fast-forward of the branch it merged into.
 //!
 //! # One pull request per sweep, and never on the turn interval
 //!
 //! The loop ticks four times a second and asking the forge is a process. An
 //! open pull request needs asking rarely and a merged one never again, so this
 //! asks about **one** Job every [`Noticing`] interval and rotates: ten open at
-//! a minute apiece is each asked every ten minutes, and a merge recorded
-//! leaves the rotation for good. The cost is one blocking call on the
-//! interval, which is the shape `caught_up_onto` has for a far longer rebase.
+//! a minute apiece is each asked every ten minutes, and a merge recorded leaves
+//! the rotation for good. The cost is one blocking call on the interval, which
+//! is the shape `caught_up_onto` has for a far longer rebase.
 //!
-//! # The repository root, not the Job's worktree
+//! # What a merge moves, and what it does not
 //!
-//! A Job's worktree is reclaimed long before anybody merges its work, so
-//! asking from there would answer `Unknown` for exactly the Jobs this exists
-//! for. The question is asked from the repository every worktree is cut from,
-//! carrying the branch the record holds.
+//! `#337` named four outcomes. The record and the row shipped in `#360`; the
+//! repository every worktree is cut from is brought up to what merged here.
+//! Running the Checks against that tree is `#474` — that run belongs to the
+//! commit, not to whichever Job noticed first. Every question is asked from the
+//! repository root and never a Job's worktree: [`Delivery::landed`] says why.
 
 use std::collections::BTreeMap;
 use std::time::Duration;
