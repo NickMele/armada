@@ -208,12 +208,16 @@ The declared edge is a *second* edge, not the only one. `running -> escalated` i
 kind = "Trigger"
 level = "Step"
 meaning = "A loop workflow's step hit its iteration_cap."
-in_code = "Not yet"
-open_questions = ["Where does a loop workflow's iteration cap live?", "Is there an aggregate attempt bound on a looping step, given retry_count resets each iteration?"]
+in_code = "Partly"
+open_questions = ["Is there an aggregate attempt bound on a looping step, given retry_count resets each iteration?"]
 notes = """
 Nothing failed — the loop simply did not converge, which is why the count that tripped it is `iteration_count` rather than `retry_count`: an iteration is the step being redone as designed, and must never consume the retry budget. It escalates the way a stuck gate does.
 
 Because `retry_count` resets on each loop return, a looping step can burn `retry_limit × iteration_cap` attempts before this fires, and `completed_failed` is unreachable on such a step — `loop_cap` always gets there first. The aggregate attempt cap in `default_gate_policy` bounds that.
+
+**The arithmetic exists and nothing raises the trigger yet.** `ResolvedStep::may_return` is the one place a spent cap is decided, exactly as `may_hand_back` is the one place a spent retry budget is; `crates/fleet/src/gate.rs` is what raises `gate_failure` off the first and is what will raise this off the second. The cap counts *passes* — with a cap of five the fifth pass is the last — which is the reading `retry_limit × iteration_cap` above and the canvas's "iteration 3 of 5" both compute against. #263.
+
+**Where the cap lives is settled and no longer asked here**: on the step that emits the routing verdict, beside the `verdict_routing` that declares the loop, because a cap split from the count it bounds never fires.
 """
 
 [triggers.no_report]

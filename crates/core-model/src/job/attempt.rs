@@ -8,39 +8,20 @@
 //!
 //! # It is not `retry_count`, and it is not `iteration_count`
 //!
-//! Both are `job_steps` columns in `domain/job-fields.toml` and both are
-//! contested there: `domain/workflows.toml` records that whose `retry_count` a
-//! backward jump increments "is undefined", and `workflowdef-fields.toml`
-//! leaves open "whose `iteration_count` increments — the gate step's or the
-//! routed-to step's". Naming this one of those would settle those questions
+//! Both are typed `job_steps` columns in `domain/job-fields.toml` and neither
+//! is one; `domain/workflows.toml` records that whose `retry_count` a backward
+//! jump increments is undefined. Naming this one of those would settle that
 //! silently.
 //!
 //! **An [`Attempt`] counts something observed rather than something policy
-//! decides**: the times the step's log says it entered `running`. Whether a run
-//! was a retry or an iteration is the open question, and the record does not
-//! have to answer it in order to keep both runs. It is also the registry's own
-//! word for the unit — `attempt_cap` "bounds total attempts across all
-//! iterations of a step" — so this is what those counters get defined against
-//! rather than a third vocabulary beside them.
+//! decides**: the times the step's log says it entered `running`. It is also
+//! the registry's own word for the unit — `attempt_cap` "bounds total attempts
+//! across all iterations of a step" — so those counters get defined against
+//! this rather than against a third vocabulary beside it.
 //!
-//! # The second counter, and why it is a second type
-//!
-//! [`Iteration`] is the same discipline over the other edge. It counts the
-//! times the step's log says it entered `running` **from `advanced`**, which
-//! `step_machine::STEP_EDGES` makes the loop return and nothing else. So the
-//! pair is one log read two ways rather than two stored columns that can
-//! disagree — the standing `store::attempt` already earned, applied again.
-//!
-//! **Two types and not one number, because the two bound different things.**
-//! `retry_limit` is spent by failures and `iteration_cap` by returns, and
-//! `workflowdef-fields.toml` is emphatic that a return must never consume the
-//! retry budget: *"a plan on its fourth honest draft is not a gate failure."*
-//! One `u32` passed to both caps is a call site where the wrong one compiles.
-//!
-//! **What this still does not settle is whose count it is.** An [`Iteration`]
-//! read off a step's own log is that step's own passes. The registry's cap
-//! lives on the step that *emits* the routing verdict, and that step's move on
-//! a return is undecided — see [`Iteration`] itself.
+//! [`Iteration`] is the same discipline over the other edge, and a second type
+//! rather than a second number: a return must never spend the retry budget,
+//! and one `u32` fits both caps.
 
 use core::fmt;
 use core::num::NonZeroU32;
@@ -140,12 +121,14 @@ mod tests {
 /// increments, and an observation about one step's log does not have to answer
 /// them to be true about that step.
 ///
-/// **It is therefore not yet `iteration_count`.** `job-fields.toml` puts that
-/// counter on the step which *emits* the routing verdict, because the cap sits
-/// there and `workflows.toml` notes that a cap and a count on different steps
-/// means `loop_cap` never fires. The emitting step's own move on a return is
-/// undecided, so it has no return edge of its own to count yet, and this reads
-/// as the routed-to step's passes until it does.
+/// **It is therefore not yet `iteration_count`.** That counter is the emitting
+/// step's — `docs/journeys/triage-queue.md` settles it, because a cap and the
+/// count it bounds must not be split or `loop_cap` never fires, and because the
+/// emitting-step reading is the only one that survives two loops sharing a
+/// target. The emitting step has no move of its own on a return, so it has
+/// nothing to count yet, and this reads as the routed-to step's passes — which
+/// is true about that step, renders as "draft · 3rd", and is not the number the
+/// cap is asked against.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Iteration(NonZeroU32);
 

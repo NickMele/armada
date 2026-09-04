@@ -390,18 +390,10 @@ impl Job {
     /// is absent because it is unrepresentable — [`StepTarget`] names no state
     /// a step may not be moved to.
     ///
-    /// **Entering `running` is what moves `current_step_id`, and nothing
-    /// clears it — including backwards.** A loop return is the one move that
-    /// takes the cursor to a *lower* ordinal, and it is the target step's
-    /// cursor that moves: `verdict_routing` names where the work goes, and
-    /// where the work goes is where the next Drone is put. The step that
-    /// emitted the verdict is not moved by this call.
-    ///
-    /// **Which state that emitting step is left in is not decided here or
-    /// anywhere else yet** — `workflows.toml`'s `design_plan` row leaves it
-    /// open, and none of the six declared states says "ruled, and waiting for
-    /// the loop to come back". `fleet::gate` is where the second move will be
-    /// driven from when it is decided.
+    /// **A loop return is the one move that takes the cursor backwards**, and
+    /// it is the routed-*to* step's: the next Drone goes where the work goes.
+    /// The emitting step is not moved by this call, and what its own row does
+    /// on a return is undecided — see `workflowdef-fields.toml`.
     ///
     /// **Entering `running` is what moves `current_step_id`, and nothing
     /// clears it.** `job-fields.toml` says the nested machine is "frozen

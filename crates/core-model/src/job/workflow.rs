@@ -439,28 +439,20 @@ impl ResolvedStep {
     ///
     /// **The arithmetic is here and nowhere else**, for
     /// [`may_hand_back`](ResolvedStep::may_hand_back)'s reason — and it is a
-    /// different arithmetic, which is why the two are separate calls taking
-    /// separate types. `retry_limit` counts hand-backs, so a limit of two is
-    /// worked three times. `iteration_cap` counts *passes*: with a cap of five
-    /// the fifth pass is the last, which is what `escalation-triggers.toml`
-    /// computes against when it says a looping step can burn
-    /// `retry_limit × iteration_cap` attempts, and what a rail reads when it
-    /// renders "iteration 3 of 5".
+    /// *different* arithmetic, which is why they are two calls taking two
+    /// types. `retry_limit` counts hand-backs; `iteration_cap` counts passes,
+    /// so a cap of five makes the fifth pass the last. See
+    /// `workflowdef-fields.toml`, which said "returns" until #263 and does not
+    /// now: `attempt_cap: 15` is `retry_limit × iteration_cap` at 3 × 5 only on
+    /// the passes reading, and "iteration 3 of 5" renders the same way.
     ///
-    /// **`iteration_cap`'s own purpose line says "ceiling on loop returns"**,
-    /// which would make a cap of five six passes. Two other statements in the
-    /// same registry say passes and one says returns, so passes wins here; the
-    /// row has been corrected to match rather than left to be read both ways.
+    /// [`Iteration`] is the parameter for [`Attempt`]'s reason: nothing invents
+    /// one, so no caller can pass a count the step's log does not support.
     ///
-    /// [`Iteration`] is the parameter for [`Attempt`]'s reason: there is no
-    /// constructor that invents one, so a caller cannot hand this a pass count
-    /// that disagrees with the step's log.
-    ///
-    /// **A spent cap is not a failure.** The Job does not fail the step, it
-    /// stops it under [`EscalationTrigger::LoopCap`](crate::EscalationTrigger)
-    /// — nothing went wrong, the loop did not converge — and `fleet::gate` is
-    /// what raises it, exactly as it raises `gate_failure` off
-    /// [`may_hand_back`](ResolvedStep::may_hand_back).
+    /// **A spent cap is not a failure.** Nothing went wrong and the loop did
+    /// not converge, so the step stops under
+    /// [`EscalationTrigger::LoopCap`](crate::EscalationTrigger) — raised by
+    /// `fleet::gate`, exactly as it raises `gate_failure` off the other call.
     pub fn may_return(&self, now: Iteration) -> bool {
         now.number() < self.iteration_cap
     }

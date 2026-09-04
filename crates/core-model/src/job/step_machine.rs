@@ -8,21 +8,15 @@
 //!
 //! **`stopped -> running` is one edge for two acts**, and which of them a Job
 //! admits is decided by whether it holds a Drone — `fleet::resume`'s to ask,
-//! not this file's. **`stopped -> advanced` is one edge for one**, and the only
-//! edge two targets could reach: [`StepTarget::Overridden`] alone may walk it.
-//!
-//! **`advanced -> running` is the loop return**, and it is the mirror of that
-//! pair: one edge that two targets could reach, narrowed to the one that means
-//! it. [`StepTarget::Returned`] alone may walk it, and
-//! [`StepTarget::Running`] — dispatch and resume — may not, because
-//! `fleet::resume` holds that re-running an advanced step is a redispatch and
-//! an unnarrowed edge would make that a legal move here.
+//! not this file's. **`stopped -> advanced` and `advanced -> running` are one
+//! edge for one each**, walked by [`StepTarget::Overridden`] and
+//! [`StepTarget::Returned`] alone — an open edge at the second would admit the
+//! redispatch `fleet::resume` refuses above this layer.
 //!
 //! `awaiting_human` has its human advance gate now and is **still
 //! unreachable**: a step at that gate stays `running`, since `approve_review`
 //! advances it while the Job is still there. It stays declared on
-//! [`StepState`], because a stored row may render any of the six, and it has no
-//! [`StepTarget`].
+//! [`StepState`] — a stored row may render any of the six — with no target.
 //!
 //! **The outer machine gates the inner one**, and [`ADVANCING_STATUSES`] is
 //! that rule — which is why a step stops *before* the Job escalates, and why a
@@ -70,21 +64,6 @@ pub struct StepEdge {
 /// `running` were the machine handing work back and which were a person
 /// restarting a stopped step. Those are different acts, and `stopped ->
 /// running` already spells the second.
-///
-/// **`advanced -> running` is the loop return, and it is not a retry.**
-/// `workflowdef-fields.toml`, `verdict_routing`: *"A loop return is not a
-/// retry: nothing went wrong, so it must not consume the retry budget or trip
-/// an escalation — a plan on its fourth honest draft is not a gate failure."*
-/// [`Retrying`](StepTarget::Retrying) is the same step going round again inside
-/// its budget after a failure; this is an *earlier* step being redone on
-/// purpose because a later one routed a verdict back to it. Folding the two
-/// loses the distinction between a Drone that failed four times and a plan on
-/// its fourth honest draft, which is what the registry refuses in two places.
-///
-/// **It is the only edge into `running` that says a step is on a new pass**,
-/// which is what makes [`Iteration`](crate::Iteration) derivable off the log
-/// with no stored column — the standing `store::attempt` already has, applied
-/// to the second counter.
 pub static STEP_EDGES: &[StepEdge] = &[
     step_edge(StepState::NotStarted, StepState::Running),
     step_edge(StepState::Running, StepState::Advanced),
@@ -93,6 +72,13 @@ pub static STEP_EDGES: &[StepEdge] = &[
     step_edge(StepState::Retrying, StepState::Running),
     step_edge(StepState::Stopped, StepState::Running),
     step_edge(StepState::Stopped, StepState::Advanced),
+    // **The loop return, and it is not a retry.** `Retrying` is the same step
+    // going round again inside its budget after a failure; this is an earlier
+    // step redone on purpose because a later one routed a verdict back to it,
+    // and `workflowdef-fields.toml` refuses the conflation in two places.
+    //
+    // It is the only edge into `running` that says a step is on a new pass,
+    // which is what makes `Iteration` derivable off the log with no column.
     step_edge(StepState::Advanced, StepState::Running),
 ];
 
@@ -211,32 +197,21 @@ pub enum StepTarget {
     /// A later step routed its verdict back here, and this step is being redone
     /// as the workflow designed.
     ///
-    /// **It arrives at `running` and it is not [`Running`](StepTarget::Running).**
-    /// That one is a dispatch or a resume, and neither may reach a step that
-    /// already advanced: `fleet::resume` holds that re-running an advanced step
-    /// is a redispatch, so an unnarrowed `advanced -> running` would make the
-    /// act it refuses a legal move in the machine underneath it. This one is
-    /// the only target that walks that edge, exactly as
-    /// [`Overridden`](StepTarget::Overridden) is the only one that walks
-    /// `stopped -> advanced`.
+    /// **It arrives at `running` and it is not [`Running`](StepTarget::Running)**,
+    /// which is a dispatch or a resume — and re-running an advanced step is the
+    /// redispatch `fleet::resume` refuses, so an unnarrowed edge would admit it
+    /// underneath the refusal. This is the only target that walks it, as
+    /// [`Overridden`](StepTarget::Overridden) is for `stopped -> advanced`.
     ///
-    /// **It carries no trigger, and that is the whole point.** A
-    /// [`Retrying`](StepTarget::Retrying) step failed and is inside its budget;
-    /// nothing failed here. `workflowdef-fields.toml` refuses the conflation
-    /// twice, and a payload of [`StepLevelTrigger`] would be the third place it
-    /// could happen — there is no trigger a loop return could honestly carry,
-    /// because a trigger is a reason a gate refused something and no gate
-    /// refused this.
+    /// **It carries no trigger, and that is the point.** A trigger is a reason
+    /// a gate refused something and no gate refused this; a payload would be a
+    /// third place a return could be conflated with a retry.
     ///
-    /// **Which verdict routed it back, and from which step, is not recorded
-    /// here.** `verdict_routing` is read where the routing decision is made;
-    /// this type cannot see a workflow, the same way
+    /// Which verdict routed it back is not recorded here, and neither is
+    /// whether the cap allows it: this type cannot see a workflow, the same way
     /// [`Retrying`](StepTarget::Retrying) cannot see a retry budget.
-    ///
-    /// **Whether there is cap for it is not decided here either.**
     /// [`ResolvedStep::may_return`](crate::ResolvedStep::may_return) owns the
-    /// arithmetic and `fleet::gate` asks it; a spent cap is
-    /// [`EscalationTrigger::LoopCap`] and stops the step instead.
+    /// arithmetic and a spent cap is [`EscalationTrigger::LoopCap`].
     Returned,
 }
 

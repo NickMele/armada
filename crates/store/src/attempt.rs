@@ -7,37 +7,22 @@
 //! identically to one that passed first time. `docs/concepts/workflow.md`:
 //! *"keeping all the verdicts is what shows the same note went unaddressed
 //! three times."*
-//!
 //! # The ordinal is read off the log, not carried to the writer
 //!
 //! [`Store::step_attempt`] counts the step's `job_events` rows arriving at
 //! `running`, and every writer calls it inside its own transaction. **No caller
 //! supplies an attempt number**, so none can disagree with the history — which
-//! is why this is a module and not four more arguments. `job_events` already
-//! keeps every one of these correctly, so the new dimension borrows its
-//! authority rather than standing up a second one. **Nothing here folds and the
-//! fold reads none of it**: an attempt is a coordinate on evidence about a
-//! `Job` state, never a way to reach one.
-//!
+//! is why this is a module and not four more arguments. **Nothing here folds
+//! and the fold reads none of it**: an attempt is a coordinate on evidence
+//! about a `Job` state, never a way to reach one.
 //! Counting entries into `running` rather than back edges is what let this
-//! survive the open question of a loop's return shape, and it did: `STEP_EDGES`
-//! now carries `advanced -> running`, and a loop return increments the attempt
-//! like any other run, because it *is* another run — a fresh Drone works the
-//! step again and files its own checks, judgments and evidence.
+//! survive the open question of a loop's return shape: a return is another run
+//! and increments the attempt like any other. [`Store::step_iteration`] reads
+//! the same table for the one edge that says a step is on a new pass.
 //!
-//! # The second count, off the same log
-//!
-//! [`Store::step_iteration`] reads the same table for the one edge that says a
-//! step is on a new pass. **Two reads of one append-only log, not two stored
-//! columns**, so the pair cannot disagree with each other or with the history.
-//!
-//! **What this breaks, and what has not been fixed here.**
-//! `ResolvedStep::may_hand_back` is asked with [`Store::step_attempt`], which
-//! now climbs across a loop return — so on a looping step the retry budget
-//! would be spent by iterations, which `workflowdef-fields.toml` refuses in
-//! terms: *"a loop return is not a retry ... it must not consume the retry
-//! budget."* The count that call wants is runs since the last return, and its
-//! only caller is `fleet::gate`. `#263`.
+//! **Not fixed here**: `ResolvedStep::may_hand_back` is asked with
+//! [`Store::step_attempt`], which now climbs across a return, so a looping
+//! step's iterations would spend its retry budget. `#263`.
 
 use core_model::{
     Attempt, CheckOutcome, CriterionId, EvidenceType, GamingFlag, GamingPattern, Iteration, JobId,
@@ -91,12 +76,12 @@ impl Store {
     /// step of every linear workflow, and why the answer is never `None`.
     ///
     /// **It answers about the step named and makes no claim beyond it.**
-    /// `job-fields.toml` puts `iteration_count` on the step that *emits* the
-    /// routing verdict rather than the one routed to, and that step's own move
-    /// on a return is undecided — so it has no return edge of its own to count
-    /// yet. Asking this about the routed-to step is asking how many times that
-    /// step has been redone, which is true, renders, and is the number
-    /// `workflows.toml` describes the canvas drawing.
+    /// `iteration_count` is the *emitting* step's, settled in
+    /// `docs/journeys/triage-queue.md`, and the emitting step has no move of
+    /// its own on a return — so it has nothing here to count. Asking this
+    /// about the routed-to step is asking how many times that step has been
+    /// redone, which is true, renders as `workflows.toml` describes the canvas
+    /// drawing it, and is not the number `iteration_cap` is asked against.
     pub fn step_iteration(&self, job_id: &JobId, step_id: &StepId) -> Result<Iteration, RowError> {
         iteration_now(&self.conn, job_id, step_id).map_err(RowError::Database)
     }
