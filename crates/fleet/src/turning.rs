@@ -128,6 +128,13 @@ pub struct Turned {
     /// one pull request every sweep. Empty on every other turn, which is nearly
     /// all of them.
     pub noticed: Option<Noticed>,
+    /// Jobs escalated because nothing in Fleet was working on them and no
+    /// Drone had ever been started. **On the turn for `stranded`'s reason and
+    /// the strongest form of it**: the subject is a Job that is in no slot at
+    /// all, so there is no [`Worked`] entry it could have sat on. Empty on
+    /// nearly every turn — see `crate::unattended` for what has to have
+    /// happened for it not to be.
+    pub unattended: Vec<JobId>,
     /// The Jobs whose worktrees Fleet gave back on this turn, having proved
     /// every one of `crate::holding`'s tests.
     ///
@@ -252,6 +259,12 @@ where
         // branch reachable from the base — so a Job whose pull request just
         // landed is provably safe on this turn rather than on the next sweep.
         turned.reclaimed = self.reclaim_what_is_safe().await?;
+        // Beside the dependent walk and for its reason — it touches no slot and
+        // reads the whole board — and **before admission**, because a Job
+        // nothing is working on is a Job that should be off the Board before
+        // Fleet decides what to start next. See `crate::unattended`, which is
+        // the only watcher here whose subject is a Job rather than a Drone.
+        turned.unattended = self.watch_unattended().await?;
         turned.admitted = self.admit_next().await?;
         Ok(turned)
     }

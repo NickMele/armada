@@ -129,8 +129,8 @@ where
     W::Error: std::error::Error + Send + Sync + 'static,
 {
     // **Here rather than in `crate::serving`, where it landed.** That file's
-    // header keeps it the `Daemon` trait impl and nothing else; this is a
-    // helper calling `owed` below it, and it put that file over 900.
+    // header keeps it the `Queries` impl and nothing else; this is a helper
+    // calling `owed` below it, and it put that file over 900.
     /// Which act a person took to put this Job back in the queue, where one
     /// did.
     ///

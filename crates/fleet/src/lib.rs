@@ -34,6 +34,10 @@ pub mod briefing;
 mod check_output;
 mod checking;
 pub mod clock;
+/// `api::Commands`, implemented over a real Fleet — the write half of the seam
+/// `serving` holds the read half of. Three traits, three impl blocks, three
+/// files, and no delegating signature between them.
+pub mod commanding;
 pub mod converging;
 /// What an upstream's terminal status does to the Job waiting behind it — the
 /// one place a dependency edge is weighed, for both admission and the Board.
@@ -102,10 +106,12 @@ pub mod terms;
 mod tooling;
 pub mod transcript;
 pub mod turning;
+/// The one vigil whose subject is a Job with no Drone to watch.
+mod unattended;
 pub mod watch;
 pub mod widening;
-/// The redactions `serving`'s `Daemon` impl calls by hand. Split out to keep
-/// `serving.rs` itself, rather than its helpers, the thing that grows.
+/// The redactions the `Queries` and `Commands` impls call by hand. Split out to
+/// keep those files, rather than their helpers, the thing that grows.
 mod wire;
 pub mod working;
 

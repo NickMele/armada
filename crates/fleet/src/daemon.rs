@@ -262,7 +262,7 @@ pub struct Fleet<H, V, W> {
     events: api::Broadcaster,
     /// Every Job somebody could be watching. **Minted here, not a fitting** —
     /// nothing outside this crate holds one, because a viewer reaches it
-    /// through `api::Daemon::observe_job` rather than through the composition
+    /// through `api::Queries::observe_job` rather than through the composition
     /// root.
     turns: api::Turns,
     inbox: EvidenceInbox,

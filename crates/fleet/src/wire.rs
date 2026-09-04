@@ -1,5 +1,5 @@
-//! The redactions `serving`'s `Daemon` impl calls by hand, split out of that
-//! file so the trait impl itself stays the thing that grows.
+//! The redactions the `Queries` and `Commands` impls call by hand, split out of
+//! `serving` and `commanding` so those files stay the thing that grows.
 //!
 //! Every function here does the same job [`ipc::JobSummary::of`] does for a
 //! Job: it is the visible line somebody had to write to put a domain value on

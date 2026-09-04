@@ -26,7 +26,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use adapter_traits::Change;
-use api::{Daemon, Next, Subscription};
+use api::{Next, Queries, Subscription};
 use config::ResolvedWorkflow;
 use core_model::Timestamp;
 use ipc::mcp::DeclareScope;

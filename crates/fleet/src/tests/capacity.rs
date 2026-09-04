@@ -17,7 +17,7 @@
 
 use std::sync::Arc;
 
-use api::Daemon;
+use api::Queries;
 use config::ResolvedWorkflow;
 use core_model::{Actor, EscalationTrigger, JobId, StepId, StepLevelTrigger, StepTarget, Target};
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Sketch};

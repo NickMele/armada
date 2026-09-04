@@ -24,19 +24,18 @@
 //! through, and sleeping for it would be a test that is slow *and* timing-
 //! dependent — this way the number under test is the real one.
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
 use adapter_traits::{CallDetail, DroneEvent};
 use config::ResolvedWorkflow;
-use core_model::{EscalationTrigger, JobStatus, StepState, Timestamp, TransitionReason};
+use core_model::{EscalationTrigger, JobStatus, StepState, TransitionReason};
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Patience, Sketch};
 
-use crate::clock::Clock;
 use crate::daemon::Fleet;
 use crate::silence::{Liveness, Poke, Quiet, Vigil};
 use crate::tests::daemon::{a_proposal, diff_evidence, fitted_with, one, worktree_directory};
+use crate::tests::planted::Held;
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
 use crate::Ruling;
@@ -56,39 +55,6 @@ const QUIET_AFTER: Duration = Duration::from_secs(120);
 /// how a machine already running the rest of the workspace turned a child that
 /// had not been scheduled yet into a Drone that had stopped talking — #327.
 const A_CHILD_HAS_LONG_ENOUGH: Duration = Duration::from_secs(30);
-
-/// A clock that ticks a second per reading, and jumps when a test says so.
-struct Held {
-    ticks: AtomicU64,
-    pushed: AtomicU64,
-}
-
-impl Held {
-    fn started() -> Held {
-        Held {
-            ticks: AtomicU64::new(0),
-            pushed: AtomicU64::new(0),
-        }
-    }
-
-    /// Move the clock on. **Never backwards**, which `converging::elapsed`
-    /// reads as zero and which no machine should produce.
-    fn on(&self, seconds: u64) {
-        self.pushed.fetch_add(seconds, Ordering::SeqCst);
-    }
-}
-
-impl Clock for Held {
-    fn now(&self) -> Timestamp {
-        let at = self.ticks.fetch_add(1, Ordering::SeqCst) + self.pushed.load(Ordering::SeqCst);
-        Timestamp::from_rfc3339(format!(
-            "2026-08-26T{:02}:{:02}:{:02}.000Z",
-            (at / 3_600) % 24,
-            (at / 60) % 60,
-            at % 60
-        ))
-    }
-}
 
 /// One step, gated on nothing, so nothing but the vigil can move it.
 fn one_step() -> ResolvedWorkflow {
@@ -385,7 +351,13 @@ async fn a_drone_silent_past_the_threshold_is_poked_and_then_escalates() {
 
     let last = after_the_threshold(&fleet, &clock, "escalated the Job").await;
     assert!(
-        matches!(last.said, Vigil::Escalated { pokes: 2 }),
+        matches!(
+            last.said,
+            Vigil::Escalated {
+                pokes: 2,
+                found: EscalationTrigger::Stalled
+            }
+        ),
         "{:?}",
         last.said
     );
@@ -582,7 +554,13 @@ async fn a_step_that_asks_for_no_pokes_escalates_without_spending_one() {
 
     let said = after_the_threshold(&fleet, &clock, "escalated the Job").await;
     assert!(
-        matches!(said.said, Vigil::Escalated { pokes: 0 }),
+        matches!(
+            said.said,
+            Vigil::Escalated {
+                pokes: 0,
+                found: EscalationTrigger::Stalled
+            }
+        ),
         "the step's own budget was spent before it was offered: {:?}",
         said.said
     );
@@ -741,7 +719,13 @@ async fn a_repository_that_asks_for_no_pokes_keeps_fleets_threshold() {
 
     let said = after_the_threshold(&fleet, &clock, "escalated the Job").await;
     assert!(
-        matches!(said.said, Vigil::Escalated { pokes: 0 }),
+        matches!(
+            said.said,
+            Vigil::Escalated {
+                pokes: 0,
+                found: EscalationTrigger::Stalled
+            }
+        ),
         "the repository's budget was spent before it was offered: {:?}",
         said.said
     );

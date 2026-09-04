@@ -8,7 +8,7 @@
 //! the same question, and a Board saying a Job is blocked while Fleet is
 //! starting it would be worse than a Board saying nothing at all.
 
-use api::Daemon;
+use api::Queries;
 use testkit::{FakeJudge, FakeWorkProduct};
 
 use crate::tests::daemon::{
