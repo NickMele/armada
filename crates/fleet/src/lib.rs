@@ -101,6 +101,8 @@ mod summarising;
 pub mod terms;
 pub mod transcript;
 pub mod turning;
+/// The one vigil whose subject is a Job with no Drone to watch.
+mod unattended;
 pub mod watch;
 pub mod widening;
 /// The redactions `serving`'s `Daemon` impl calls by hand. Split out to keep
