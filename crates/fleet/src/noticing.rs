@@ -23,14 +23,18 @@
 //! for. The question is asked from the repository every worktree is cut from,
 //! carrying the branch the record holds.
 
+use std::collections::BTreeMap;
 use std::time::Duration;
 
-use adapter_traits::{AgentHarness, Delivery, Landing, Vcs, WorkProduct};
-use core_model::{JobId, Timestamp};
+use adapter_traits::{
+    AgentHarness, Delivery, Landing, Rendering, Renewed, RepositoryStanding, Vcs, WorkProduct,
+};
+use core_model::{Component, Envelope, FieldValue, JobId, Level, Timestamp};
 
 use crate::adrift::Adrift;
 use crate::converging::elapsed;
 use crate::daemon::Fleet;
+use crate::transcript;
 use ipc::Settled;
 
 /// How often the forge is asked about one pull request.
@@ -64,6 +68,12 @@ pub struct Noticed {
     /// [`Landing::ClosedUnmerged`] — the other two are not news and are not
     /// recorded, so they never reach here.
     pub landed: Landing,
+    /// Where the repository every worktree is cut from was left.
+    ///
+    /// **`None` on a close that was not a merge**, which is the whole of the
+    /// rule: nothing arrived on the base branch, so there is nothing for the
+    /// repository to catch up to.
+    pub repository: Option<RepositoryStanding>,
 }
 
 /// Where the rotation stands, and when it last ran.
@@ -75,6 +85,16 @@ pub struct Noticed {
 pub(crate) struct Sweep {
     pub(crate) last: Option<Timestamp>,
     pub(crate) next: usize,
+    /// Every pull request this process has closed and reopened, and how that
+    /// went.
+    ///
+    /// **Two rules live in this one map.** A pull request is nudged once, so a
+    /// base this cannot re-pin does not close and reopen a person's work every
+    /// sweep for the life of the process. And a pull request left closed by a
+    /// reopen that failed is not read as somebody turning the work down — it is
+    /// this sweep's own leavings, and the next sweep tries the reopen again
+    /// rather than recording it.
+    pub(crate) nudged: BTreeMap<String, Renewed>,
 }
 
 /// What the record's state says on the wire, where it says anything.
@@ -123,18 +143,47 @@ where
         // The Job's own worktree is long gone by the time anybody merges, so
         // the question is asked from the repository it was cut from, and about
         // the address rather than the branch — which the merge usually deleted.
-        let landed = self.vcs().landed(&self.host().repo_root, &asking.url);
-        if !landed.is_settled() {
-            return Ok(None);
+        let read = self.vcs().landed(&self.host().repo_root, &asking.url);
+        match &read.landing {
+            // Still open, so the merge question has no news — and the second
+            // question this call answers does. `#427`: the forge pins the
+            // comparison at the commit the pull request was opened from, and a
+            // base that has moved since renders other people's commits as this
+            // Job's work.
+            Landing::Open { url, rendering } => {
+                self.nudged(&asking.job_id, url, rendering).await;
+                return Ok(None);
+            }
+            Landing::Unknown => return Ok(None),
+            // **This sweep's own leavings, not a person turning the work
+            // down.** A reopen that failed left it closed, and recording that
+            // would put the wrong sentence on the record for good — so the
+            // reopen is tried again instead.
+            Landing::ClosedUnmerged { url } if self.left_it_closed(url).await => {
+                self.reopened(url).await;
+                return Ok(None);
+            }
+            Landing::Merged { .. } | Landing::ClosedUnmerged { .. } => {}
         }
+        let landed = read.landing;
         self.store()
             .lock()
             .await
             .record_landed(&asking.job_id, &landed)
             .map_err(Adrift::Writing)?;
+        let repository = match (&landed, read.base.as_deref()) {
+            // **Only a merge, and only where the forge named the branch.**
+            // What merged is now what everything else builds on — `#337` — and
+            // a pull request that was closed put nothing on the base at all.
+            (Landing::Merged { .. }, Some(base)) => {
+                Some(self.caught_the_repository_up(&asking.job_id, base).await)
+            }
+            _ => None,
+        };
         let noticed = Noticed {
             job: asking.job_id.clone(),
             landed,
+            repository,
         };
         // The row whole, for `JobStepAdvanced`'s reason: a client told only
         // that something happened would have to re-read the Job it was just
@@ -171,6 +220,136 @@ where
         let at = sweep.next % waiting.len();
         sweep.next = at + 1;
         Ok(waiting.into_iter().nth(at))
+    }
+
+    /// Ask the forge to compare an open pull request afresh, where its base has
+    /// been superseded and this process has not already asked.
+    ///
+    /// **Nothing is returned and nothing raises.** The Job is finished and its
+    /// record says everything it is going to say; what this changes is what a
+    /// person is shown on the forge, which is not a fact Armada holds. A forge
+    /// that would not do it is a log line and another sweep.
+    ///
+    /// **Once per pull request, per process.** Closing and reopening is visible
+    /// to everybody watching it, so a base this cannot re-pin must not do that
+    /// on a loop. The memory is [`Sweep::nudged`], which is lost on a restart —
+    /// costing at most one more nudge over a set that is small by construction.
+    async fn nudged(&self, job: &JobId, url: &str, rendering: &Rendering) {
+        let Rendering::FromASupersededBase { pinned, written_on } = rendering else {
+            return;
+        };
+        if self.sweeping().lock().await.nudged.contains_key(url) {
+            return;
+        }
+        let renewed = self.reopened(url).await;
+        let level = match &renewed {
+            Renewed::Renewed => Level::Info,
+            Renewed::LeftClosed { .. } => Level::Warn,
+        };
+        self.logged(
+            job,
+            Envelope::new(
+                self.now(),
+                level,
+                Component::Fleet,
+                self.run().clone(),
+                match &renewed {
+                    Renewed::Renewed => {
+                        "the pull request was comparing against a base that had \
+                         moved, and was reopened against the right one"
+                    }
+                    Renewed::LeftClosed { .. } => {
+                        "the pull request was closed to re-pin its base and the \
+                         forge would not reopen it"
+                    }
+                },
+            )
+            .in_job(job.as_ulid().clone())
+            .with_field("pull_request", FieldValue::Str(url.to_string()))
+            .with_field("pinned_at", FieldValue::Str(pinned.clone()))
+            .with_field("written_on", FieldValue::Str(written_on.clone())),
+        );
+    }
+
+    /// Close and reopen, and remember how it went.
+    ///
+    /// **The one write to the forge on this path**, and the reason
+    /// [`Sweep::nudged`] exists at all: what it records is not an optimisation
+    /// but the guard that stops a pull request this left closed being read as
+    /// one somebody turned down.
+    async fn reopened(&self, url: &str) -> Renewed {
+        let renewed = self.vcs().rendered_afresh(&self.host().repo_root, url);
+        self.sweeping()
+            .lock()
+            .await
+            .nudged
+            .insert(url.to_string(), renewed.clone());
+        renewed
+    }
+
+    /// Whether this process closed that pull request and could not reopen it.
+    async fn left_it_closed(&self, url: &str) -> bool {
+        matches!(
+            self.sweeping().lock().await.nudged.get(url),
+            Some(Renewed::LeftClosed { .. })
+        )
+    }
+
+    /// Bring the repository every worktree is cut from up to what just merged.
+    ///
+    /// **One Job at a time, for `caught_up_onto`'s reason.** This writes into
+    /// the one `.git` every worktree shares, so it takes `Fleet::merge_end`
+    /// rather than racing a rebase that is already holding it.
+    ///
+    /// **Never a gate and never a failure.** The work is already merged, so
+    /// nothing about the Job can turn on this — a repository a person is
+    /// standing in with uncommitted work is left alone and said so.
+    async fn caught_the_repository_up(&self, job: &JobId, base: &str) -> RepositoryStanding {
+        let _at_the_merge_end = self.merge_end().lock().await;
+        let standing = self
+            .vcs()
+            .caught_the_repository_up(&self.host().repo_root, base);
+        let (level, wording) = match &standing {
+            RepositoryStanding::MovedOn { .. } => (
+                Level::Info,
+                "the repository was brought up to the branch that merged",
+            ),
+            RepositoryStanding::AlreadyHadIt { .. } => (
+                Level::Info,
+                "the repository already had the branch that merged",
+            ),
+            RepositoryStanding::LeftAlone { .. } => (
+                Level::Info,
+                "the repository was left where it was after the merge",
+            ),
+        };
+        let mut envelope = Envelope::new(
+            self.now(),
+            level,
+            Component::Fleet,
+            self.run().clone(),
+            wording,
+        )
+        .in_job(job.as_ulid().clone())
+        .with_field("base", FieldValue::Str(base.to_string()));
+        envelope = match &standing {
+            RepositoryStanding::MovedOn { commits, .. } => {
+                envelope.with_field("commits", FieldValue::Int(*commits as i64))
+            }
+            RepositoryStanding::LeftAlone { why } => {
+                envelope.with_field("left_alone", FieldValue::Str(why.clone()))
+            }
+            RepositoryStanding::AlreadyHadIt { .. } => envelope,
+        };
+        self.logged(job, envelope);
+        standing
+    }
+
+    /// A line in the Job's own log. **A log line that will not write does not
+    /// stop anything**, for `converging::noted`'s reason — and here there is
+    /// not even a step left to stop: the Job finished before any of this ran.
+    fn logged(&self, job: &JobId, envelope: Envelope) {
+        let _ = transcript::note(&self.host().repo_root, job, &envelope);
     }
 
     /// Tell whoever is watching, with the Job's row as it now stands.

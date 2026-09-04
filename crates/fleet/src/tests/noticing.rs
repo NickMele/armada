@@ -12,7 +12,7 @@
 
 use std::time::Duration;
 
-use adapter_traits::Landing;
+use adapter_traits::{Landing, Rendering, RepositoryStanding};
 use testkit::{FakeVcs, FakeWorkProduct};
 
 use crate::daemon::Fleet;
@@ -111,6 +111,7 @@ async fn an_open_pull_request_is_asked_again_and_recorded_nowhere() {
 
     fleet.vcs().now_landed(Landing::Open {
         url: String::from("https://forge.invalid/armada/pull/1"),
+        rendering: Rendering::AsWritten,
     });
     let turned = fleet.turn().await.unwrap();
     assert!(
@@ -208,4 +209,224 @@ async fn the_forge_is_not_asked_on_every_turn() {
         first,
         "five turns inside one interval ask the forge nothing"
     );
+}
+
+/// The address the fixture's finish opens a pull request at.
+const PULL_REQUEST: &str = "https://forge.invalid/armada/pull/1";
+
+/// An open pull request whose base has been superseded, as the forge would
+/// report it.
+fn open_against_a_base_that_moved() -> Landing {
+    Landing::Open {
+        url: String::from(PULL_REQUEST),
+        rendering: Rendering::FromASupersededBase {
+            pinned: String::from("67cb1b9e"),
+            written_on: String::from("8c2ce681"),
+        },
+    }
+}
+
+/// The whole of #427: the base moved under an open pull request, so the forge
+/// is asked to compare it afresh rather than told about it in the body.
+#[tokio::test]
+async fn a_pull_request_whose_base_moved_is_compared_afresh() {
+    let home = TempDir::new();
+    let fleet = a_fleet_asking_every_turn(&home);
+    a_finished_job(&fleet, &home).await;
+
+    fleet.vcs().now_landed(open_against_a_base_that_moved());
+    let turned = fleet.turn().await.unwrap();
+
+    assert!(
+        turned.noticed.is_none(),
+        "a stale render is not news about a landing"
+    );
+    assert_eq!(
+        fleet.vcs().times_asked_to_render_afresh(),
+        1,
+        "the forge was nudged, which is the one thing that moves it"
+    );
+    assert!(
+        fleet
+            .store()
+            .lock()
+            .await
+            .landed_by_job()
+            .unwrap()
+            .is_empty(),
+        "nothing landed, so nothing is written down"
+    );
+}
+
+/// **Once, and then never again.** Closing and reopening is visible to
+/// everybody watching the pull request, so a base this cannot re-pin must not
+/// do it on every sweep for the life of the process.
+#[tokio::test]
+async fn a_pull_request_is_only_ever_compared_afresh_once() {
+    let home = TempDir::new();
+    let fleet = a_fleet_asking_every_turn(&home);
+    a_finished_job(&fleet, &home).await;
+
+    fleet.vcs().now_landed(open_against_a_base_that_moved());
+    for _ in 0..5 {
+        fleet.turn().await.unwrap();
+    }
+
+    assert!(
+        fleet.vcs().times_asked_what_became_of_it() > 1,
+        "the pull request is still asked about, because it is still open"
+    );
+    assert_eq!(
+        fleet.vcs().times_asked_to_render_afresh(),
+        1,
+        "and it is closed and reopened exactly once"
+    );
+}
+
+/// A pull request the forge is already rendering correctly is left alone — and
+/// so is one nothing on this machine could check, which is the distinction
+/// `Rendering` is three variants for.
+#[tokio::test]
+async fn a_render_that_is_right_or_unreadable_is_never_touched() {
+    for rendering in [Rendering::AsWritten, Rendering::Unreadable] {
+        let home = TempDir::new();
+        let fleet = a_fleet_asking_every_turn(&home);
+        a_finished_job(&fleet, &home).await;
+
+        fleet.vcs().now_landed(Landing::Open {
+            url: String::from(PULL_REQUEST),
+            rendering: rendering.clone(),
+        });
+        fleet.turn().await.unwrap();
+
+        assert_eq!(
+            fleet.vcs().times_asked_to_render_afresh(),
+            0,
+            "{rendering:?} is not a base anybody has to close a pull request over"
+        );
+    }
+}
+
+/// **A pull request this left closed is not somebody turning the work down.**
+/// The reopen failed, so the next `CLOSED` off the forge is this sweep's own
+/// leavings — recording it would put the wrong sentence on the record for good.
+#[tokio::test]
+async fn a_pull_request_left_closed_by_the_nudge_is_not_recorded_as_refused() {
+    let home = TempDir::new();
+    let fleet = a_fleet_asking_every_turn(&home);
+    a_finished_job(&fleet, &home).await;
+
+    fleet.vcs().unable_to_reopen();
+    fleet.vcs().now_landed(open_against_a_base_that_moved());
+    fleet.turn().await.unwrap();
+    assert_eq!(fleet.vcs().times_asked_to_render_afresh(), 1);
+
+    // What the forge now says, because the close worked and the reopen did not.
+    fleet.vcs().now_landed(Landing::ClosedUnmerged {
+        url: String::from(PULL_REQUEST),
+    });
+    let turned = fleet.turn().await.unwrap();
+
+    assert!(
+        turned.noticed.is_none(),
+        "the closure is Armada's own and is not reported as a person's"
+    );
+    assert!(
+        fleet
+            .store()
+            .lock()
+            .await
+            .landed_by_job()
+            .unwrap()
+            .is_empty(),
+        "`closed_unmerged` is permanent, and this one was never true"
+    );
+    assert_eq!(
+        fleet.vcs().times_asked_to_render_afresh(),
+        2,
+        "the reopen is tried again rather than the closure being believed"
+    );
+}
+
+/// The remaining row of #337: what merged is now what everything else builds
+/// on, so the repository every worktree is cut from is brought up to it.
+#[tokio::test]
+async fn a_merge_brings_the_repository_up_to_the_branch_that_merged() {
+    let home = TempDir::new();
+    let fleet = a_fleet_asking_every_turn(&home);
+    a_finished_job(&fleet, &home).await;
+
+    fleet
+        .vcs()
+        .repository_standing(RepositoryStanding::MovedOn {
+            base: String::from("main"),
+            commits: 3,
+        });
+    fleet.vcs().now_landed(Landing::Merged {
+        url: String::from(PULL_REQUEST),
+    });
+    let turned = fleet.turn().await.unwrap();
+
+    let noticed = turned.noticed.expect("the sweep read the merge");
+    assert_eq!(
+        noticed.repository,
+        Some(RepositoryStanding::MovedOn {
+            base: String::from("main"),
+            commits: 3,
+        })
+    );
+    assert_eq!(
+        fleet.vcs().repository_caught_up_to(),
+        vec![String::from("main")],
+        "the branch the forge named, and not one this machine inferred"
+    );
+}
+
+/// **A person's uncommitted work is never fast-forwarded over, and the merge is
+/// recorded anyway.** Nothing about the Job turns on the repository moving —
+/// the work is already merged — so a refusal is a line, not a failure.
+#[tokio::test]
+async fn a_repository_that_cannot_move_still_records_the_merge() {
+    let home = TempDir::new();
+    let fleet = a_fleet_asking_every_turn(&home);
+    let job_id = a_finished_job(&fleet, &home).await;
+
+    fleet
+        .vcs()
+        .repository_standing(RepositoryStanding::LeftAlone {
+            why: String::from("`main` is carrying 2 uncommitted change(s)"),
+        });
+    fleet.vcs().now_landed(Landing::Merged {
+        url: String::from(PULL_REQUEST),
+    });
+    let turned = fleet.turn().await.unwrap();
+
+    let noticed = turned.noticed.expect("the merge is still news");
+    assert!(matches!(
+        noticed.repository,
+        Some(RepositoryStanding::LeftAlone { .. })
+    ));
+    let landed = fleet.store().lock().await.landed_by_job().unwrap();
+    assert!(matches!(landed.get(&job_id), Some(Landing::Merged { .. })));
+}
+
+/// A pull request that was closed and never merged put nothing on the base, so
+/// there is nothing for the repository to catch up to.
+#[tokio::test]
+async fn a_closed_pull_request_leaves_the_repository_where_it_is() {
+    let home = TempDir::new();
+    let fleet = a_fleet_asking_every_turn(&home);
+    a_finished_job(&fleet, &home).await;
+
+    fleet.vcs().now_landed(Landing::ClosedUnmerged {
+        url: String::from(PULL_REQUEST),
+    });
+    let turned = fleet.turn().await.unwrap();
+
+    let noticed = turned.noticed.expect("a closure is news");
+    assert_eq!(
+        noticed.repository, None,
+        "nothing merged, so nothing is behind"
+    );
+    assert!(fleet.vcs().repository_caught_up_to().is_empty());
 }
