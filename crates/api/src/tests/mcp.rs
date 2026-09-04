@@ -131,6 +131,7 @@ async fn the_tool_list_carries_every_tool_and_only_one_that_reports() {
     for named in [
         "submit_evidence",
         "declare_scope",
+        "request_scope",
         "run_checks",
         "dispatch_job",
         "ask_question",
@@ -142,13 +143,14 @@ async fn the_tool_list_carries_every_tool_and_only_one_that_reports() {
     }
     // **Only one of them reports**, which is what the count is about — a Drone
     // choosing between reporting-shaped tools is spike 6's one miss, and none
-    // of a declaration, a dry run, a dispatch and a question is a report.
+    // of a declaration, a scope request, a dry run, a dispatch and a question
+    // is a report.
     //
     // The count is of the top-level key, one per tool. `ask_question`'s schema
     // nests an object for its options and `dispatch_job`'s nests one for its
     // edges; neither adds an `inputSchema`, because the nested shapes are
     // `items` and `properties`.
-    assert_eq!(answered.body.matches("\"inputSchema\"").count(), 5);
+    assert_eq!(answered.body.matches("\"inputSchema\"").count(), 6);
     assert_eq!(
         answered
             .body
@@ -156,6 +158,44 @@ async fn the_tool_list_carries_every_tool_and_only_one_that_reports() {
             .count(),
         1
     );
+}
+
+/// The two scope tools are two tools, and a Drone is shown both. One states a
+/// plan and costs nothing; the other asks the task's own scope to grow and is
+/// answered by a Judge — and a list carrying only the first is a Drone that
+/// writes the file instead of asking about it.
+#[tokio::test]
+async fn a_scope_request_is_taken_and_answers_with_a_receipt() {
+    let daemon = FakeDaemon::new(Broadcaster::new());
+    running(&daemon, "01JOB0");
+    let app = wired(daemon);
+
+    let answered = call(
+        &app,
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"request_scope",
+           "arguments":{"paths":["crates/store/src/schema.rs"],
+           "reason":"the column the fix needs is declared there"}}}"#,
+    )
+    .await;
+    assert_eq!(answered.status, StatusCode::OK);
+    assert!(!answered.is_error());
+    assert_eq!(answered.text(), "widened");
+}
+
+/// A request on a connection nothing is being worked on is a **tool error**
+/// rather than a status code, for every other tool call's reason: a Drone reads
+/// one and can act on it, and a 4xx reaches the model as a broken server.
+#[tokio::test]
+async fn a_scope_request_with_nothing_working_is_a_tool_error() {
+    let app = wired(FakeDaemon::new(Broadcaster::new()));
+    let answered = call(
+        &app,
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"request_scope",
+           "arguments":{"paths":["crates/store"],"reason":"why"}}}"#,
+    )
+    .await;
+    assert_eq!(answered.status, StatusCode::OK);
+    assert!(answered.is_error(), "{}", answered.body);
 }
 
 /// The list is the same for every Drone, and the grant is what differs.

@@ -26,6 +26,7 @@ mod plan;
 mod process;
 mod reconstruct;
 mod report;
+mod revision;
 mod roundtrip;
 mod spend;
 mod tmp;

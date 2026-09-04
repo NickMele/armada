@@ -298,7 +298,98 @@ fn a_tool_that_is_neither_names_both() {
     assert!(
         said.contains("submit_evidence")
             && said.contains("declare_scope")
+            && said.contains("request_scope")
             && said.contains("run_checks"),
         "{said}"
     );
+}
+
+/// The two scope tools are two tools. One says where this part's work will be
+/// and is replaced by calling it again; this one asks the task's own scope to
+/// grow and is answered. A call of either reaching the other's variant would
+/// make a plan correction cost a Judge call, or a request for scope cost
+/// nothing and decide nothing.
+#[test]
+fn a_request_for_scope_reads_as_a_request_and_not_as_a_declaration() {
+    use crate::mcp::{read, Incoming, RequestScope};
+
+    let called = read(
+        br#"{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"request_scope",
+            "arguments":{"paths":["crates/store/src/schema.rs"],
+            "reason":"the column the fix needs is declared there"}}}"#,
+    );
+    let Incoming::Widen {
+        request: RequestScope { paths, reason },
+        ..
+    } = called
+    else {
+        panic!("a scope request is its own variant");
+    };
+    assert_eq!(paths, ["crates/store/src/schema.rs".to_string()]);
+    assert_eq!(reason, "the column the fix needs is declared there");
+}
+
+/// Empty is a legal declaration and is not a legal request. The difference is
+/// that one is an answer — this part changes nothing — and the other spends
+/// the one ask a part gets on nothing at all.
+#[test]
+fn a_request_for_no_paths_is_refused_by_name() {
+    use crate::mcp::{read, Incoming, NotAnArgument};
+
+    let called = read(
+        br#"{"jsonrpc":"2.0","id":14,"method":"tools/call","params":{"name":"request_scope",
+            "arguments":{"paths":[],"reason":"I need more room"}}}"#,
+    );
+    assert!(matches!(
+        called,
+        Incoming::NotASubmission {
+            why: NotAnArgument::AskedForNothing,
+            ..
+        }
+    ));
+}
+
+/// The reason is the whole of what the decision is made on beyond the paths,
+/// and it is what a person reads beside a refusal. A blank one is refused where
+/// the Drone can still fix it.
+#[test]
+fn a_request_with_no_reason_is_refused_where_the_drone_can_fix_it() {
+    use crate::mcp::{read, Incoming, NotAnArgument};
+
+    let called = read(
+        br#"{"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"request_scope",
+            "arguments":{"paths":["crates/store"],"reason":"  "}}}"#,
+    );
+    assert!(matches!(
+        called,
+        Incoming::NotASubmission {
+            why: NotAnArgument::Blank { field: "reason" },
+            ..
+        }
+    ));
+}
+
+/// No field for a path to hand back, and none for a criterion. Both are
+/// properties of the argument type rather than checks, and this is the shape
+/// they take on the wire: a Drone that sends either is told the field does not
+/// exist rather than having it quietly dropped.
+#[test]
+fn a_request_cannot_narrow_and_cannot_raise_its_own_bar() {
+    use crate::mcp::{read, Incoming, NotAnArgument};
+
+    for field in ["paths_removed", "acceptance_criteria"] {
+        let body = format!(
+            r#"{{"jsonrpc":"2.0","id":16,"method":"tools/call","params":{{"name":"request_scope",
+               "arguments":{{"paths":["crates/store"],"reason":"why","{field}":["x"]}}}}}}"#
+        );
+        let called = read(body.as_bytes());
+        let Incoming::NotASubmission {
+            why: NotAnArgument::NotAField { named, .. },
+            ..
+        } = called
+        else {
+            panic!("`{field}` is not a field of this tool");
+        };
+        assert_eq!(named, field);
+    }
 }

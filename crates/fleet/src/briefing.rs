@@ -448,6 +448,19 @@ impl Stopped {
                  submitted anything, and was stopped there. Nothing it did was checked, \
                  and anything it did after saying so was not kept."
             }
+            // **Not `BlockedByPolicy`'s line**, which says a tool or a
+            // command was denied and sends the next attempt looking for a
+            // setting to work around. Nothing was denied here: the earlier
+            // attempt was told the paths it wanted are not part of this part
+            // of the work. The second sentence is what this attempt can do
+            // differently, and it is the only one of these lines that names
+            // the scope at all — a Drone that reads only the first will ask
+            // for the same paths again.
+            EscalationTrigger::ScopeRefused => {
+                "An earlier attempt at this part asked to write files outside what this \
+                 task says it changes, and was told they are not part of it. Nothing it \
+                 did was checked. Do this part inside the files the task already names."
+            }
             // `Thrashing`'s line is true of this too and leaves out the part
             // this attempt can do differently.
             EscalationTrigger::NoReport => {

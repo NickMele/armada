@@ -52,6 +52,13 @@ const EVIDENCE_TOOL: &str = "mcp__armada__submit_evidence";
 const SCOPE_TOOL: &str = "mcp__armada__declare_scope";
 const CHECKS_TOOL: &str = "mcp__armada__run_checks";
 
+/// **In every toolbelt, and the second of the two scope tools.** The first says
+/// where a part's work will be and costs nothing; this asks the task's own
+/// scope to grow and is answered by a Judge. A Drone denied it silently is a
+/// Drone that writes the file anyway and is asked about it at the gate, which
+/// is the outcome the tool exists to replace.
+const WIDEN_TOOL: &str = "mcp__armada__request_scope";
+
 /// **In every toolbelt, and not a `Grant`.** Asking costs nothing and creates
 /// nothing — what it produces is a question on a Board — so there is no spend to
 /// gate it behind, which is the whole of what separates it from
@@ -220,6 +227,7 @@ fn allowlist(config: &DroneSpawnConfig) -> Result<String, HarnessRefused> {
         String::from(EVIDENCE_TOOL),
         String::from(SCOPE_TOOL),
         String::from(CHECKS_TOOL),
+        String::from(WIDEN_TOOL),
         String::from(ASK_TOOL),
     ];
     for grant in config.toolbelt().granted() {
@@ -347,11 +355,17 @@ pub fn evidence_tool() -> &'static str {
     EVIDENCE_TOOL
 }
 
-/// The scope tool's name, for the same callers. **All four are needed**: a
+/// The scope tool's name, for the same callers. **All five are needed**: a
 /// toolbelt missing any one of them denies the Drone silently, and a Job that
 /// goes quiet is an argument-list fault rather than a prompt one.
 pub fn scope_tool() -> &'static str {
     SCOPE_TOOL
+}
+
+/// The scope-request tool's name. The other half of the pair above: one states
+/// a plan, this one asks the task's stated scope to grow.
+pub fn widen_tool() -> &'static str {
+    WIDEN_TOOL
 }
 
 /// The dry-run tool's name. The one this file's [`EVIDENCE_TOOL`] comment is
@@ -368,7 +382,7 @@ pub fn ask_tool() -> &'static str {
 }
 
 /// The dispatch tool's name, for a caller that needs to assert it is *absent*
-/// from a toolbelt. The four above are in every one; this is the only Armada
+/// from a toolbelt. The five above are in every one; this is the only Armada
 /// tool a spawn can be built without.
 pub fn dispatch_tool() -> &'static str {
     DISPATCH_TOOL

@@ -140,13 +140,13 @@ async fn called<D: Daemon>(
                 Err(why) => Answered::Refused { id, why },
             }
         }
-        // **The one call that is held open while work happens.** Every other
-        // arm here answers from a value the daemon already has; this one runs
-        // the step's Checks and comes back with what they printed, which is
-        // minutes rather than milliseconds. It adds nothing to the
-        // unbounded-sink risk this module's comment names — it is still one
-        // reply on the Drone's own connection — and what bounds the cost is
-        // `Daemon::run_checks`'s, not the transport's.
+        // **The first of the two calls held open while work happens** — the
+        // other is `Widen` below. Every other arm here answers from a value the
+        // daemon already has; this one runs the step's Checks and comes back
+        // with what they printed, which is minutes rather than milliseconds. It
+        // adds nothing to the unbounded-sink risk this module's comment names —
+        // it is still one reply on the Drone's own connection — and what bounds
+        // the cost is `Daemon::run_checks`'s, not the transport's.
         Incoming::RunChecks { id } => match served.daemon().run_checks(caller).await {
             Ok(report) => Answered::Checked { id, report },
             Err(why) => Answered::Refused { id, why },
@@ -157,6 +157,18 @@ async fn called<D: Daemon>(
         // to correct.
         Incoming::Dispatch { id, dispatch } => {
             match served.daemon().dispatch_job(caller, dispatch).await {
+                Ok(receipt) => Answered::Recorded { id, receipt },
+                Err(why) => Answered::Refused { id, why },
+            }
+        }
+        // **The second call held open, and the wait has a budget.** What
+        // answers it is one Judge call, so the shape is `run_checks`'s rather
+        // than `ask_question`'s: the outcome *is* the answer, and a receipt
+        // that came back before the answer would leave the Drone with nothing
+        // to act on. Nothing moves while it is out — the Job is `running` when
+        // the call is made and `running` when it returns.
+        Incoming::Widen { id, request } => {
+            match served.daemon().request_scope(caller, request).await {
                 Ok(receipt) => Answered::Recorded { id, receipt },
                 Err(why) => Answered::Refused { id, why },
             }

@@ -16,7 +16,8 @@
 //! legal for a Job; [`step_machine`] tests the inner half, which has no
 //! registry table to be read against; [`loop_return`] tests the one edge of
 //! that half that takes a step backwards; [`record`] tests what a Job is made
-//! of and what a transition records.
+//! of and what a transition records; [`revisions`] the one field that grows
+//! after creation.
 
 use crate::envelope::{Actor, FieldValue, Timestamp, Ulid};
 use crate::job::*;
@@ -272,5 +273,6 @@ mod machine;
 mod models;
 mod note;
 mod record;
+mod revisions;
 mod step_machine;
 mod stuck;
