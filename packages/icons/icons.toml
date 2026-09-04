@@ -132,7 +132,7 @@
   group = "Job state"
   size = "12px"
   status = "Specified"
-  notes = "Unambiguous now that hourglass is banned — no other badge is time-shaped."
+  notes = "Unambiguous now that hourglass is banned — no other badge is time-shaped. A Job scale glyph, and not lent to a rail row: it is not on [conventions.step_activity_borrowing] and is refused there rather than merely absent. A clock says nobody is acting, which is what grey says beside it; a step waiting on a person is the opposite claim and takes `eye`. #347."
 
 [icons.copy]
   means = "copy an id or a path"
@@ -515,10 +515,10 @@
   paired_with = "chevron-down"
 
 [conventions.step_activity_borrowing]
-  glyphs = ["circle-dot", "eye", "rotate-cw", "check", "x"]
+  glyphs = ["circle-dot", "eye", "rotate-cw", "check", "x", "power"]
   means = "Step activity, borrowed from the Job set"
   group = "Step and Verdict"
   size = "12px"
   status = "Specified"
-  notes = "A step may carry the Job glyph that means the same thing one level down. A step and a Job answer the same question at different scales, so a second silhouette for one meaning is the collision this page exists to prevent — a rail row and the badge above it showing the same claim must show the same mark. The rail's activity values take their glyphs this way; the roster is the step-activity table on Iconography, not a list here. Two values are not borrowings and carry their own rows: flag for stopped, and lock for a hard prerequisite. One borrowing differs in treatment rather than glyph — x at step level is hued in --step-failed on a --step-failed-bg row, where the Job badge's x takes the badge's own colour. That sits inside x's reservation rather than widening it: a failed Check is a system failure, not a human decision."
+  notes = "A step may carry the Job glyph that means the same thing one level down. A step and a Job answer the same question at different scales, so a second silhouette for one meaning is the collision this page exists to prevent — a rail row and the badge above it showing the same claim must show the same mark. What a step may not do is take a badge glyph in a sense the badge does not carry. The rail's activity values take their glyphs this way, and `glyphs` above is the roster. It named Iconography's step-activity table as the roster instead until 2026-09-04, and that table had drifted to `waiting (clock)` — a glyph this list does not lend, and each authority pointing at the other is why the disagreement stood with nobody able to say which half was stale (#347). Iconography carries the reasoning and not the lookup; the per-value assignment is `verbs.step_state` in crates/core-model/domain/enum-verbs.toml, where a waiting rail row takes `eye`. `clock` is refused rather than merely missing: it is `queued`'s badge, where nobody is acting and the row reads grey, and a step at `awaiting_human` is the opposite claim — a person is waited on, `--step-waiting` aliases `--status-awaiting-review`, and `eye` is that badge's own glyph, reserved to review, which is this step's claim one level down. Three values are not borrowings and carry their own rows: `flag` for stopped, `circle-dashed` for not_started, and `lock` for a hard prerequisite. `power` joined the roster 2026-09-04 for a killed step, which `StepActivityMark` has drawn since the value landed: it is `job_status.killed`'s own glyph one level down, the same act freezing the step where it stood, so the convention already sanctioned it and only this list was short. One borrowing differs in treatment rather than glyph — `x` at step level is hued in --step-failed on a --step-failed-bg row, where the Job badge's `x` takes the badge's own colour. That sits inside `x`'s reservation rather than widening it: a failed Check is a system failure, not a human decision."
 

@@ -95,7 +95,7 @@ import { StepActs } from "./StepActs";
 import { steeringOf } from "./steering";
 import { NOTHING_FROM_FLEET_YET, notesOf, whyNoNotes } from "./notes";
 import { entriesOf, whyNotWatching } from "./story";
-import { readingOf } from "./reading";
+import { leading, readingOf } from "./reading";
 import { briefOf, whyNoWork, workOf } from "./work";
 import { stoppedAt } from "./stopped";
 
@@ -595,18 +595,6 @@ function named(step: RunTreeStep): RunTreeStep {
       </span>
     ),
   };
-}
-
-/**
- * A registry verb, opening a line.
- *
- * **The word is still the registry's.** `enum-verbs.toml` spells its verbs for
- * the sentence they usually sit in the middle of; capitalising the first letter
- * where one leads a label is presentation, not a second spelling — nothing here
- * chooses, shortens or rewrites the word.
- */
-function leading(verb: string): string {
-  return verb.charAt(0).toUpperCase() + verb.slice(1);
 }
 
 /** What the pointers under the run are for, said once. */
