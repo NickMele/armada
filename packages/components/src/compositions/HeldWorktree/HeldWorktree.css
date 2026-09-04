@@ -214,13 +214,16 @@
   text-wrap: pretty;
 }
 
-/* A status the registry has no verb or glyph for, in the wire's own spelling.
+/* A status spelling this build's registry has no row for, in the wire's own
+   spelling. **Not a registry gap** — `escalated` was the one status reaching
+   here and it has a verb and a glyph since #400. What is left is a value this
+   build has never heard of.
 
    Mono and muted, which is what `ChangedFiles` does with an unworded change
    kind: it is machine-derived and it is deliberately not a badge, because a
    badge is a job state drawn with its glyph and there is no glyph to draw. No
-   hue — status colour is the registry's to hand out, and this is the case where
-   it has not. */
+   hue — status colour is the registry's to hand out, and it cannot hand one out
+   for a name it does not have. */
 .armada-held__unworded {
   font-family: var(--font-mono);
   font-size: var(--text-2xs);

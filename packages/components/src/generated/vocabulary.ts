@@ -12,7 +12,7 @@
 // one is listed in `GAPS` so a surface can say what it could not render instead
 // of inventing copy for it.
 
-import { Archive, ArrowUpToLine, Ban, Check, CircleCheck, CircleDashed, CircleDot, CircleMinus, CircleX, Clock, Cpu, Eye, FileQuestionMark, Flag, Link, OctagonAlert, Power, RefreshCw, RotateCw, ShieldCheck, ShieldMinus, ShieldOff, ShieldX, Split, Stamp, Terminal, Unplug, UserCheck, Wrench, X } from "lucide-react";
+import { Archive, ArrowUpToLine, Ban, Check, CircleCheck, CircleDashed, CircleDot, CircleMinus, CircleX, Clock, Cpu, Eye, FileQuestionMark, Flag, Link, Megaphone, OctagonAlert, Power, RefreshCw, RotateCw, ShieldCheck, ShieldMinus, ShieldOff, ShieldX, Split, Stamp, Terminal, Unplug, UserCheck, Wrench, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 /** How one variant reads. `null` where the registry carries no answer. */
@@ -32,7 +32,7 @@ export const JOB_STATUS: Readonly<Record<string, Rendering | undefined>> = {
   "awaiting_review": { verb: "awaiting review", icon: Eye, badgeStatus: "awaiting-review", statusToken: "--status-awaiting-review" },
   "completed_failed": { verb: "failed", icon: X, badgeStatus: "completed-failed", statusToken: "--status-completed-failed" },
   "completed_success": { verb: "done", icon: Check, badgeStatus: "completed-success", statusToken: "--status-completed-success" },
-  "escalated": { verb: null, icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
+  "escalated": { verb: "needs you", icon: Megaphone, badgeStatus: "escalated", statusToken: "--status-escalated" },
   "killed": { verb: "killed", icon: Power, badgeStatus: "killed", statusToken: "--status-killed" },
   "piloted": { verb: "piloted", icon: Terminal, badgeStatus: "piloted", statusToken: "--status-piloted" },
   "queued": { verb: "queued", icon: Clock, badgeStatus: "not-started", statusToken: "--status-not-started" },
@@ -243,7 +243,6 @@ export type Gap = {
 };
 
 export const GAPS: readonly Gap[] = [
-  { vocabulary: "job_status", variant: "escalated", missing: ["verb", "icon"] },
   { vocabulary: "step_state", variant: "advanced", missing: ["token"] },
   { vocabulary: "step_state", variant: "awaiting_human", missing: ["token"] },
   { vocabulary: "step_state", variant: "not_started", missing: ["token"] },

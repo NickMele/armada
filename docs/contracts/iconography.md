@@ -172,12 +172,32 @@ Job and is not restated here. Categorically different outlines: diagonal
 chain, fringed square. The mapping is `packages/icons/icons.toml`, group
 `Queued reason`.
 
+### `escalated`'s reasons — the same handover, one status over
+
+`escalated` has its own verb and glyph, and a reason's replaces both where one
+is set. That is `queued`'s construction above, and it is not a second mark for
+one meaning: the status says the Job stopped and is asking, and a reason says
+what it stopped on.
+
+**It exists because not every surface is served a reason.** The held-worktrees
+list is handed a Job's status and nothing else about why it stopped
+(`packages/protocol/src/holding.ts`), so *an escalated Job renders its reason*
+was a rule that surface could not obey — it drew a blank where a status goes,
+and a blank cannot be told from a finished Job. The glyph is `megaphone`, in
+`packages/icons/icons.toml`, reserved to this status and held clear of `bell`
+there: an alert is a condition on a Job rather than a status a Job holds, so
+the two populations do not share an outline.
+
 ### The escalation reasons — one orange, icon differentiates
 
 The hardest constraint here. Categorically different outlines: octagon,
 closed loop, page, shield, Y-split, broken plug, ascender-to-a-line. None
 depends on interior detail surviving 12px. The mapping is
 `packages/icons/icons.toml`, group `Escalation reason`.
+
+**The status's own cone and `awaiting_repair`'s spanner share that hue and
+differ from all of them**, which is rule 4 read across the whole orange set
+rather than within the reason list alone.
 
 **A reason may draw its verb alone**, and several do — the heading says what
 the glyphs must do where there is one, not that every reason has one. Where
@@ -448,6 +468,12 @@ terminal       Pilot only. The action and the piloted status, which are one
                concept at two points in a flow
 hourglass      BANNED. Nothing may use it
 flag           stopped step only. A step whose retries are spent
+megaphone      job_status.escalated only. Never an alert or a notification —
+               bell is Alerts', and an alert is a condition on a Job rather
+               than a status a Job holds. Never an escalation reason
+wrench         job_status.awaiting_repair only. Never settings, never a
+               Manifest, and never an action — repairing is what a person does
+               off the badge, not a button Armada draws
 chevron-down   disclosure only. The caret segment of a split button, and the
                one exception to "primary and secondary buttons are label-only"
                — it is the whole content of its own divided segment, structural

@@ -84,15 +84,23 @@
 #   notes        - the reasoning the row carried
 #   verb_and_icon_from
 #                - names the enum a variant borrows both from, where it has
-#                  neither of its own
+#                  neither of its own. Carried by no row today — see below
 #
 # An empty `verb`, `icon` or `status_token` is a gap, not a default. The build
 # fails where a variant lacks one; the gaps are carried so they are countable.
 #
-# `verb_and_icon_from` is how a deliberate blank says so. `escalated` renders
-# its reason rather than its own name, and declaring that here keeps the
-# codegen rule exceptionless — an exception living inside the generator is
-# invisible to whoever adds the next variant.
+# `verb_and_icon_from` is how a deliberate blank would say so, and no row
+# carries it. `escalated` was its worked example until 2026-09-03, when that row
+# took a verb and a glyph of its own: a surface served a Job's status and no
+# reason had nothing to draw, so *renders its reason* was not a rule every
+# surface could obey. The reason still replaces both where one is set, which is
+# `queued`'s construction and needs no field to declare it.
+#
+# **The field is declared here and read by nothing.**
+# `apps/desktop/codegen/vocabulary.mjs` reads `verb`, `icon` and `status_token`
+# and no fourth key, so a row carrying it today would be ignored rather than
+# honoured, and its blanks would still count as gaps. Kept because the shape it
+# names is a real one; whoever needs it implements it in the same change.
 #
 # `origin` is the one vocabulary that renders as text rather than as a badge,
 # so its rows carry neither glyph nor token by decision and each says so. A
@@ -152,12 +160,12 @@ vocabulary = "Job status"
 in_code = ""
 
 [verbs.job_status.escalated]
-verb = ""
-icon = ""
+verb = "needs you"
+icon = "megaphone"
 status_token = "--status-escalated"
 vocabulary = "Job status"
 in_code = ""
-notes = "Renders its reason, never its own name — nobody says a Job escalated at step 3. The verb and the glyph both come from whichever Escalation reason row is set, which is why this row carries neither."
+notes = "**The reason still replaces both where one is set, and this is what stands where none does.** The row read \"renders its reason, never its own name\" and carried nothing, which is not a rule every surface can obey: `packages/protocol/src/holding.ts` serves the held-worktrees list a Job's `status` and no escalation reason at all, so the badge slot drew empty and a person could not tell an escalated Job from a finished one. #400. This is `queued`'s construction one status over rather than an amendment to the contract — its own verb and glyph for the no-reason case, handed over the moment a reason arrives — and `packages/screens/src/reading.ts` already composes it that way, `reason?.verb ?? base.verb`, so nothing carrying a reason draws this word. `needs you` is the token's own definition: `packages/tokens/src/status.css` and `docs/contracts/design-system.md` both gloss `--status-escalated` as *needs you, urgent*. It joins `needs approval` and `needs repair`, on the word `awaiting_approval` settled — the badge means a person must act, not that time is passing. **The objection, recorded rather than hidden.** The Board has a tab called `Needs you` holding five statuses, and giving one of the five the tab's word risks implying the other four do not. Accepted on two grounds: the tab's membership is computed from `who_is_acting` in `job-statuses.toml` and never from a verb — `packages/screens/src/board.ts` — so the word cannot leak into the set; and `needs` is already the group's word rather than this row's, two of the other four saying it. What this row takes is the bare form with no object, which is exactly the case it draws in — where no reason is set there is nothing to name, and naming nothing is why the slot was blank. It is not the hand-typed `Needs you` of #294: that one was written into job detail and displaced every escalation reason's own verb, and this comes from the registry and stands only where a reason does not. `megaphone` is minted in `packages/icons/icons.toml` rather than borrowed from the reason set — a reason's glyph says what the Job stopped on, and this says that it stopped — and its own row carries what was refused."
 
 [verbs.job_status.killed]
 verb = "killed"

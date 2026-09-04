@@ -118,11 +118,11 @@ export const AJobThatHasNotEnded: Story = {
  * This is also the pair that reads in opposite directions: the branch survives
  * the reclaim and the two loose files do not.
  *
- * **And it is the status with no badge.** `enum-verbs.toml` carries no verb and
- * no glyph for `escalated`, so there is nothing to draw one from — the wire's
- * own spelling renders in mono instead, which is what `ChangedFiles` does with
- * an unworded change kind. A blank there would leave a person unable to tell an
- * escalated job from a finished one. The fix is a registry row, not a component.
+ * **And it is the status this surface exists to have exposed.** `escalated`
+ * carried no verb and no glyph, so the badge slot drew empty here and the row
+ * fell back to the wire spelling in mono. It reads `needs you` behind
+ * `megaphone` since #400 — this list is served a job's status and no escalation
+ * reason, so a status that renders only its reason had nothing to draw.
  */
 export const TwoReasonsOnOneWorktree: Story = {
   args: {
