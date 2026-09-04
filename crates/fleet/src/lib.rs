@@ -106,6 +106,8 @@ pub mod terms;
 mod tooling;
 pub mod transcript;
 pub mod turning;
+/// The one vigil whose subject is a Job with no Drone to watch.
+mod unattended;
 pub mod watch;
 pub mod widening;
 /// The redactions the `Queries` and `Commands` impls call by hand. Split out to

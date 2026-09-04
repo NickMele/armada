@@ -19,12 +19,15 @@
 //! [`Manifest`] beside it. Every Check any workflow's steps name was declared
 //! by that Manifest at the moment the daemon started — checked once, before a
 //! worktree exists and before a Drone is spawned.
+//! **It stays proof while the file is re-read** — `#430`: a reload moves the
+//! Manifest's `lifetime = "Live"` keys and nothing a workflow resolved
+//! against. See `config::live`; [`Setup`] holds the one handle that can.
 
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use config::{LoadError, Manifest, ResolveError, ResolvedWorkflow, Roster, WorkflowDef};
+use config::{LoadError, Manifest, Reloads, ResolveError, ResolvedWorkflow, Roster, WorkflowDef};
 
 /// The Manifest's name at a repository root. Not configurable: a repository
 /// that could name its own Manifest is one where finding the Manifest requires
@@ -48,6 +51,10 @@ pub struct Setup {
     root: PathBuf,
     manifest: Manifest,
     workflows: BTreeMap<core_model::WorkflowId, ResolvedWorkflow>,
+    /// The handle that reads `armada.yml` again. **Read here, so the thing
+    /// that can re-read the file is the thing that opened it** — see
+    /// `config::live` for what a re-read may and may not move.
+    reloads: Reloads,
 }
 
 impl Setup {
@@ -66,17 +73,20 @@ impl Setup {
     /// the alternative is finding out with a Drone already on a worktree.
     pub fn at(root: &Path, roster: &Roster) -> Result<Setup, SetupRefused> {
         let manifest_path = root.join(MANIFEST);
-        let manifest = Manifest::load(&manifest_path).map_err(|why| match &why {
-            // Absent is its own answer. The fix is "this directory is not a
-            // repository Armada has been set up for", which is a different act
-            // from correcting a file that is there and wrong.
-            LoadError::Unreadable { cause, .. } if cause.kind() == std::io::ErrorKind::NotFound => {
-                SetupRefused::NoManifest {
-                    path: manifest_path.clone(),
+        let (manifest, reloads) =
+            Manifest::reloadable(&manifest_path).map_err(|why| match &why {
+                // Absent is its own answer. The fix is "this directory is not a
+                // repository Armada has been set up for", which is a different act
+                // from correcting a file that is there and wrong.
+                LoadError::Unreadable { cause, .. }
+                    if cause.kind() == std::io::ErrorKind::NotFound =>
+                {
+                    SetupRefused::NoManifest {
+                        path: manifest_path.clone(),
+                    }
                 }
-            }
-            _ => SetupRefused::ManifestRefused(why),
-        })?;
+                _ => SetupRefused::ManifestRefused(why),
+            })?;
 
         let mut workflows: BTreeMap<core_model::WorkflowId, ResolvedWorkflow> = BTreeMap::new();
         let mut paths: BTreeMap<core_model::WorkflowId, PathBuf> = BTreeMap::new();
@@ -101,6 +111,7 @@ impl Setup {
             root: root.to_path_buf(),
             manifest,
             workflows,
+            reloads,
         })
     }
 
@@ -123,9 +134,20 @@ impl Setup {
         &self.workflows
     }
 
-    /// The two halves, for a `Fittings` that wants both by value.
-    pub fn into_parts(self) -> (Manifest, BTreeMap<core_model::WorkflowId, ResolvedWorkflow>) {
-        (self.manifest, self.workflows)
+    /// The two halves a `Fittings` wants by value, and the handle that reads
+    /// the Manifest again.
+    ///
+    /// **The reload handle comes out here and goes nowhere near Fleet.** The
+    /// composition root hands the first two down and keeps the third; Fleet
+    /// holds a Manifest it cannot move, which is `config::live`'s point.
+    pub fn into_parts(
+        self,
+    ) -> (
+        Manifest,
+        BTreeMap<core_model::WorkflowId, ResolvedWorkflow>,
+        Reloads,
+    ) {
+        (self.manifest, self.workflows, self.reloads)
     }
 }
 

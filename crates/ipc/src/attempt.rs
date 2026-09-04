@@ -81,17 +81,44 @@ impl StepAttempt {
     /// than opening one: the alternative is inventing a `started_at` for a run
     /// whose beginning the log does not hold, and a fabricated instant on a
     /// rail is worse than a run the rail does not draw.
+    ///
+    /// **A second arrival at `running` closes the run and opens the next**, and
+    /// it is the one arrival that changes no state. `running -> running` is the
+    /// machine's only self-edge and exists to be a boundary between two passes
+    /// over a step that never left: `#263` for a loop coming round, `#418` for a
+    /// person sending work back at a gate. Swallowed here, the store keyed
+    /// three passes and this served one — the same half of the same defect,
+    /// one layer out.
+    ///
+    /// **The run it closes reads `awaiting_human`.** It ended because a person
+    /// was standing at the step and answered, which is what that state says and
+    /// the one state nothing else here produces; `running` with an end on it
+    /// would say nothing, and `advanced` would say it passed.
     pub fn over<'a>(moves: impl Iterator<Item = Move<'a>>) -> Vec<StepAttempt> {
         let running = StepState::from(core_model::StepState::Running);
+        let held = StepState::from(core_model::StepState::AwaitingHuman);
         let mut runs: Vec<StepAttempt> = Vec::new();
         for moved in moves {
             let arriving = moved.to == running.as_wire();
             let open = runs.last().is_some_and(|run| run.ended_at.is_none());
             match (arriving, open) {
-                // A second `running` with one already open is a row the machine
-                // does not admit; the fold would have refused it. Left as the
-                // one open run rather than opening a second with no end.
-                (true, true) | (false, false) => {}
+                (false, false) => {}
+                (true, true) => {
+                    // The boundary. It carries no trigger — nothing refused
+                    // this — so the run closes with `why` unset, which is what
+                    // keeps it out of `verdicts`.
+                    if let Some(run) = runs.last_mut() {
+                        run.outcome = held;
+                        run.ended_at = Some(moved.at.clone());
+                    }
+                    runs.push(StepAttempt {
+                        attempt: runs.len() as u32 + 1,
+                        outcome: running,
+                        why: None,
+                        started_at: moved.at.clone(),
+                        ended_at: None,
+                    });
+                }
                 (true, false) => runs.push(StepAttempt {
                     attempt: runs.len() as u32 + 1,
                     outcome: running,
@@ -129,10 +156,19 @@ impl StepAttempt {
     /// exactly the one state this case shares with an ordinary pass. The run
     /// still open — [`ended_at`](StepAttempt::ended_at) absent — has produced
     /// no ruling yet and is not in the list.
+    ///
+    /// **Neither is the run a person ended by answering.** A run closed as
+    /// `awaiting_human` reached no gate ruling at all: the tiers had already
+    /// held, and what closed it was somebody asking for the work again. Left in
+    /// it would read `passed`, because `why` is empty on that row and empty is
+    /// what a pass looks like — a step sent back would report a verdict saying
+    /// it was accepted. What that pass came to is on its own attempt row and in
+    /// the person's note, which is where a reader is owed it.
     pub fn verdicts(attempts: &[StepAttempt]) -> Vec<crate::Verdict> {
+        let held = StepState::from(core_model::StepState::AwaitingHuman);
         attempts
             .iter()
-            .filter(|attempt| attempt.ended_at.is_some())
+            .filter(|attempt| attempt.ended_at.is_some() && attempt.outcome != held)
             .map(|attempt| crate::Verdict {
                 attempt: attempt.attempt,
                 named: if attempt.why.is_some() {
@@ -210,6 +246,52 @@ mod tests {
         assert_eq!(runs[1].attempt, 2);
         assert_eq!(runs[1].outcome.as_wire(), "advanced");
         assert_eq!(runs[1].why, None);
+    }
+
+    /// **A step sent back at a gate has two runs and one verdict.** The
+    /// boundary is `running -> running`, the machine's only self-edge, and the
+    /// run it closes was ended by a person rather than by a gate — so it reads
+    /// `awaiting_human` and reports no ruling. Reported as `passed`, the pass
+    /// somebody refused would say on the wire that it was accepted.
+    #[test]
+    fn a_pass_a_person_ended_closes_and_claims_no_verdict() {
+        let (first, sent_back, advanced) = (at(0), at(1), at(2));
+        let runs = StepAttempt::over(
+            [
+                Move {
+                    to: "running",
+                    why: None,
+                    at: &first,
+                },
+                Move {
+                    to: "running",
+                    why: None,
+                    at: &sent_back,
+                },
+                Move {
+                    to: "advanced",
+                    why: None,
+                    at: &advanced,
+                },
+            ]
+            .into_iter(),
+        );
+
+        assert_eq!(runs.len(), 2, "the boundary opened a second run");
+        assert_eq!(runs[0].outcome.as_wire(), "awaiting_human");
+        assert_eq!(runs[0].ended_at.as_ref(), Some(&sent_back));
+        assert_eq!(runs[1].attempt, 2);
+        assert_eq!(runs[1].started_at, sent_back);
+        assert_eq!(runs[1].outcome.as_wire(), "advanced");
+
+        let verdicts = StepAttempt::verdicts(&runs);
+        assert_eq!(
+            verdicts.len(),
+            1,
+            "only the pass a gate ruled on has a verdict"
+        );
+        assert_eq!(verdicts[0].attempt, 2);
+        assert_eq!(verdicts[0].named, "passed");
     }
 
     /// The run that is still going is the one with no end, and it is the only

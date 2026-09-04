@@ -20,12 +20,13 @@
 //! as an untyped value rather than deserialized into a struct —
 //! [`yaml`](mod@yaml) holds why a derive could not carry the refusals.
 //!
-//! **Nothing here reads a clock.** Parsing and validation are pure: no mtime
-//! check, no staleness window, no cache expiry. A Manifest is as fresh as the
-//! last time somebody read it, and who reads it again is not asked here.
+//! **Nothing here reads a clock.** No mtime check, no staleness window, no
+//! cache expiry: *when* a Manifest is read again is `armada::watching`'s, and
+//! [`live`](mod@live) says only which keys a re-read may move.
 
 mod error;
 mod judge;
+mod live;
 mod loops;
 mod manifest;
 mod resolve;
@@ -38,6 +39,7 @@ mod yaml;
 mod tests;
 
 pub use error::{Fault, LoadError, Refusal, ResolveError, UnknownCheck};
+pub use live::{Adopted, Frozen, LiveKey, Moved, Reloads};
 pub use manifest::{Check, Command, Manifest, Preparation};
 pub use resolve::ResolvedWorkflow;
 pub use roster::Roster;

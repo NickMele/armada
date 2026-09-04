@@ -95,5 +95,6 @@ mod terms;
 mod tmp;
 mod tools;
 mod transcript;
+mod unattended;
 mod watching;
 mod widening;

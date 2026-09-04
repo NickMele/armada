@@ -10,6 +10,7 @@
 //! this parser does with each. A validator that cannot reject the samples in
 //! its own repository is not a validator.
 
+mod live;
 mod loops;
 mod manifest;
 mod model;
