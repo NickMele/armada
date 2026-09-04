@@ -1,6 +1,8 @@
 import type { MouseEvent, ReactNode } from "react";
 import { useCallback } from "react";
 
+import { CHANGE_KIND } from "../../generated/vocabulary";
+
 /**
  * Changed files — what a Drone has touched in its worktree, as of one reading.
  *
@@ -21,17 +23,23 @@ import { useCallback } from "react";
  * **No glyph, and the mark column is empty on purpose.** `file` is reserved to
  * the log row and `file-check` to a submission that landed, so a changed-file
  * row has nothing in the registry to take and none is invented here.
+ *
+ * **The word for a change kind is the registry's.** `enum-verbs.toml` carries
+ * a `change_kind` row for each of the eight, the generated vocabulary carries
+ * them here, and `wordFor` is the whole of the reading. Change a row and this
+ * column changes.
  */
 export type ChangedFile = {
   /** Repository-relative, exactly as git spells it. Copies on click. */
   path: string;
   /**
-   * What happened to it, in the wire's own word: `added`, `modified`,
-   * `deleted`, and the rest.
+   * What happened to it, as the wire spells it: `added`, `modified`,
+   * `type_changed`, and the rest.
    *
-   * **The spelling renders.** `enum-verbs.toml` carries no `change_kind` rows,
-   * so there is no verb, glyph or hue for one — a word chosen here would be the
-   * second vocabulary the generated module exists to prevent. Reported.
+   * **The wire's value, never a rendered one.** The word on screen is read off
+   * `CHANGE_KIND` below, so a caller handing this a word would be the second
+   * vocabulary the generated module exists to prevent — and three callers build
+   * this row, which is three places one could be typed.
    */
   change: string;
   /**
@@ -81,6 +89,23 @@ export type ChangedFilesProps = {
 
 /** What a drifted row says. One wording, so two surfaces cannot disagree. */
 const OUTSIDE_PLAN = "outside plan";
+
+/**
+ * The word for one change kind — the registry's, never this file's.
+ *
+ * **Five of the eight rows keep git's own spelling**, so most of the time the
+ * verb and the wire value are the same string. `type_changed` and `unreadable`
+ * are the two that are not, and they are why this is a lookup rather than a
+ * passthrough: the registry argues `could not be read` because what happened is
+ * that one path's reading failed, not that the file has a property.
+ *
+ * **A kind this build's registry has no verb for renders as the wire spelled
+ * it** — recoverable, and never copy invented at the call site. That is the
+ * same fallback a status with no row takes. #465.
+ */
+function wordFor(change: string): string {
+  return CHANGE_KIND[change]?.verb ?? change;
+}
 
 /**
  * The header line for a list of these files — `3 files · +94 −31 · all inside
@@ -174,7 +199,7 @@ export function ChangedFiles({ files, emptyNote, note, onCopied }: ChangedFilesP
             key={file.path}
             data-outside={file.outsidePlan === true || undefined}
           >
-            <span className="armada-files__change">{file.change}</span>
+            <span className="armada-files__change">{wordFor(file.change)}</span>
             {/* The title carries the whole path however narrow the row gets,
                 and so does the clipboard: a copy that truncated with the
                 display would be worse than the overflow it was fixing. */}

@@ -54,10 +54,15 @@
   border-radius: var(--radius-sm);
 }
 
-/* The wire's own word for what happened. Mono and muted: it is machine-derived
-   and it labels the path rather than being one. No hue — `enum-verbs.toml`
-   carries no `change_kind` rows, and everything below Job level stays neutral
-   unless `tokens/status.css` declares otherwise. */
+/* The registry's word for what happened. Mono and muted: it labels the path
+   rather than being one, and five of the eight verbs are git's own words
+   standing beside a mono path. No hue and no glyph — the `change_kind` rows in
+   `enum-verbs.toml` carry a verb and neither of the other two, and everything
+   below Job level stays neutral unless `tokens/status.css` declares otherwise.
+
+   `nowrap` earns its keep now two verbs are two words. `type changed` and
+   `could not be read` are the registry's spellings, and a column that wrapped
+   them would stack a second line against a one-line path. */
 .armada-files__change {
   font-family: var(--font-mono);
   font-size: var(--text-2xs);

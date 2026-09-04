@@ -219,9 +219,9 @@
    here and it has a verb and a glyph since #400. What is left is a value this
    build has never heard of.
 
-   Mono and muted, which is what `ChangedFiles` does with an unworded change
-   kind: it is machine-derived and it is deliberately not a badge, because a
-   badge is a job state drawn with its glyph and there is no glyph to draw. No
+   Mono and muted, which is the treatment `ChangedFiles` gives a change kind:
+   machine-derived, and deliberately not a badge, because a badge is a job state
+   drawn with its glyph and there is no glyph to draw. No
    hue — status colour is the registry's to hand out, and it cannot hand one out
    for a name it does not have. */
 .armada-held__unworded {
