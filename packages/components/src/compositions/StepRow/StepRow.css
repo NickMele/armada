@@ -207,6 +207,21 @@ button.armada-srow__name:focus-visible {
   color: var(--fg-subtle);
 }
 
+/* An attempt's own Checks, Judge and Verdict, beneath its row. `flex-basis:
+   100%` forces the group onto its own line under the label and value it
+   nests beneath, since `.armada-srow__fact` is itself a flex row. The
+   hairline and indent repeat `.armada-srow__facts`' own treatment one level
+   in, so a retried step's rail reads as attempt, then its own gate rows. */
+.armada-srow__fact-children {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) + var(--space-1) / 4);
+  margin-top: calc(var(--space-1) / 2);
+  padding-left: var(--space-3);
+  border-left: var(--border-width) solid var(--border-subtle);
+}
+
 /* A step that recorded nothing says so, in one line and in the app's own
    empty-state voice. Not a paragraph about why nothing is there. */
 .armada-srow__absent {

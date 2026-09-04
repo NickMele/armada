@@ -135,3 +135,20 @@ const CENT = 0.01;
 export function ordered(whole: JobWhole | null): StepDetail[] {
   return whole === null ? [] : [...whole.steps].sort((a, b) => a.ordinal - b.ordinal);
 }
+
+/**
+ * The rows of a step's own list — `check_runs` or `judged` — that belong to
+ * its current attempt.
+ *
+ * **Since 7.0 both lists hold every attempt's rows, oldest first.** A screen
+ * reading either as "where does this step stand right now" has to narrow to
+ * the live attempt first — the current attempt is the last one `attempts`
+ * names, or every row where nothing has run yet.
+ */
+export function onlyCurrentAttempt<T extends { attempt: number }>(
+  step: StepDetail,
+  rows: T[],
+): T[] {
+  const attempt = step.attempts.at(-1)?.attempt;
+  return attempt === undefined ? rows : rows.filter((row) => row.attempt === attempt);
+}

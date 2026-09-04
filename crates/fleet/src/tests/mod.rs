@@ -39,6 +39,7 @@ mod detach;
 mod detail;
 mod drone;
 mod dry_run;
+mod epic;
 mod evidence;
 mod footprint;
 mod forget;

@@ -88,9 +88,50 @@ The rule this exists for: **`packages/**` and `packages/*` differing silently is
 
 **An absent pattern list is never an empty one.** Where a key is optional — `checks.<name>.when` is the first — absent means *always* and the empty list is refused, because one value with two opposite readings is the failure this whole section is about. In code that is `Option<Covers>` and a `Covers` that cannot be built empty.
 
+## The first `armada.yml` section that is a dial rather than a registry
+
+Added 3 September 2026 with `drone.quiet_after_seconds` and `drone.poke_limit`,
+which are the middle tier of a Drone's patience. Two things this section settles
+because the file had never carried a value of this kind.
+
+**A section is named for what it configures, not for who enforces it.** The
+namespacing rule above says *per owner*, and the reason it gives is collision —
+a key one module writes and another parses. Naming by topic answers that reason
+as well, and it is what every section the Manifest concept page already
+describes does: `permissions`, `secrets`, `ports`, `skills`. `settings.toml`
+files both rows under Fleet as owner, and a `fleet:` section here would be a
+section that could never hold anything else, because every Fleet-owned row with
+a Manifest tier at all is about a Drone's conduct and Fleet's own dials are
+`Machine`-scoped. So it is `drone:`.
+
+**A tier writes a value under the same name every other tier writes it under.**
+A step says `quiet_after_seconds` and so does the repository. One value spelled
+two ways is a vocabulary split that becomes visible only when somebody moves a
+number from one file to the other and it stops working.
+
+| Where | Read by | When |
+| --- | --- | --- |
+| `crates/armada/src/serve.rs` | the composition root | daemon start |
+| `armada.yml`'s `drone:` | `config::Manifest` | daemon start, resolved at every step boundary |
+| a WorkflowDef step | `config::Step` | frozen at Job creation, resolved at every step boundary |
+
+`fleet::Liveness::at` is the only place that order is written. **Each half falls
+back on its own** — a repository stating a threshold and no poke budget inherits
+the budget, and a step may override either without restating the other.
+
+**`Live` reaches the step boundary and no further, because the file is read
+once.** A Job whose step declares nothing follows whatever Fleet is holding into
+its next step; editing `armada.yml` under a running Fleet changes nothing until
+it restarts. That is a property of when the Manifest is loaded rather than of
+the resolution, and it is stated here because `lifetime = "Live"` on its own
+reads as a stronger promise than the system makes. **Whether a Manifest should
+be re-read when it changes is not decided and is not decided here** — nothing in
+the file is re-read today, so this key inherits the answer rather than raising
+the question.
+
 ## Two tiers of path boundary, and only one of them is configuration
 
-Added 3 Sep 2026, with `#417`. A step's `exclude_paths` held two kinds of entry and refused both the same way, which is why a Drone that found the right fix in a fenced-off file had nowhere to go: the declaration was refused mechanically, and the widening it would have been pointed at grows the Job's `write_targets` rather than the list that refused it.
+Added 3 September 2026, with `#417`. A step's `exclude_paths` held two kinds of entry and refused both the same way, which is why a Drone that found the right fix in a fenced-off file had nowhere to go: the declaration was refused mechanically, and the widening it would have been pointed at grows the Job's `write_targets` rather than the list that refused it.
 
 | | Ordinary | Absolute |
 | --- | --- | --- |

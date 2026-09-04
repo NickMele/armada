@@ -37,6 +37,7 @@ import { ADVANCE_GATE, CHECK_ADVANCES, CHECK_OUTCOME, CRITERION_VERDICT_JUDGE } 
 import type { CheckRun, Criterion, Judged, StepDetail } from "@armada/protocol";
 import type { Kept } from "@armada/protocol";
 import { commandOf, nameOf } from "./declared";
+import { onlyCurrentAttempt } from "./facts";
 import { openArtifact, type OpenArtifact } from "./opening";
 
 /**
@@ -189,13 +190,19 @@ const HAS_SUBMITTED: ReadonlySet<string> = new Set([
  * **The tier names its commands rather than counting them while two fit.** Past
  * three it counts, because six commands on one control is a paragraph in a
  * strip.
+ *
+ * **Narrowed to the current attempt before anything below reads it.**
+ * `check_runs` holds every attempt's rows since 7.0, and this strip draws the
+ * live gate — a `.find` over every attempt's rows would surface a stale
+ * attempt's result the moment a step has been worked more than once.
  */
 function checksStage(step: StepDetail, opens: Opens): PhaseStage | undefined {
   const declared = step.checks;
   if (declared === undefined || declared.length === 0) return undefined;
 
+  const runs = onlyCurrentAttempt(step, step.check_runs);
   const rows: PhaseStageRow[] = declared.map((check) => {
-    const run = step.check_runs.find((ran) => ran.name === nameOf(check));
+    const run = runs.find((ran) => ran.name === nameOf(check));
     return {
       label: commandOf(check),
       mono: true,
@@ -212,7 +219,6 @@ function checksStage(step: StepDetail, opens: Opens): PhaseStage | undefined {
     };
   });
 
-  const runs = step.check_runs;
   const failed = runs.filter(didNotPass);
   const label =
     declared.length > 2
@@ -240,6 +246,9 @@ function checksStage(step: StepDetail, opens: Opens): PhaseStage | undefined {
  * **A cleared tier reports the criteria it met**, because that is the reason to
  * trust it, and a declared one says how many it will answer — which is what it
  * will report against.
+ *
+ * **Narrowed to the current attempt**, for [`checksStage`]'s reason: `judged`
+ * holds every attempt's rows since 7.0, and this strip is the live gate.
  */
 function judgeStage(
   step: StepDetail,
@@ -249,24 +258,25 @@ function judgeStage(
   const declared = step.judge_checks;
   if (declared === undefined || declared.length === 0) return undefined;
 
+  const judged = onlyCurrentAttempt(step, step.judged);
   const asked = declared.reduce((sum, judge) => sum + judge.criteria, 0);
-  const rows: PhaseStageRow[] = step.judged.map((judged) => {
-    const criterion = criteria.find((held) => held.criterion_id === judged.criterion_id);
+  const rows: PhaseStageRow[] = judged.map((one) => {
+    const criterion = criteria.find((held) => held.criterion_id === one.criterion_id);
     return {
       // The criterion's own text where the Job carries it, and its id where it
       // does not. A criterion is a sentence somebody wrote, so it is not mono;
       // an id that could not be joined is machine-derived, so it is.
-      label: criterion?.text ?? judged.criterion_id,
+      label: criterion?.text ?? one.criterion_id,
       mono: criterion === undefined || undefined,
       // The registry's verb: `no objection`, `refused`. `not_met` is the wire's
       // key and reads as a field name rather than as a ruling.
-      result: CRITERION_VERDICT_JUDGE[judged.verdict]?.verb ?? judged.verdict,
-      named: judged.verdict,
-      cited: citedOf(judged, opens),
+      result: CRITERION_VERDICT_JUDGE[one.verdict]?.verb ?? one.verdict,
+      named: one.verdict,
+      cited: citedOf(one, opens),
     };
   });
 
-  if (step.judged.length === 0) {
+  if (judged.length === 0) {
     return {
       id: "judge",
       label: asked === 0 ? "Judge" : `Judge · ${asked} ${asked === 1 ? "criterion" : "criteria"}`,
@@ -277,17 +287,17 @@ function judgeStage(
     };
   }
 
-  const met = step.judged.filter((judged) => judged.verdict === "met").length;
-  const refused = step.judged.length - met;
+  const met = judged.filter((one) => one.verdict === "met").length;
+  const refused = judged.length - met;
   return {
     id: "judge",
     label:
       refused === 0
-        ? `Judge · ${met} of ${step.judged.length} met`
-        : `Judge · ${refused} of ${step.judged.length} refused`,
+        ? `Judge · ${met} of ${judged.length} met`
+        : `Judge · ${refused} of ${judged.length} refused`,
     kind: "judge",
     state: refused === 0 ? "cleared" : "failed",
-    stands: refused === 0 ? `${met} of ${step.judged.length} met` : `${refused} refused`,
+    stands: refused === 0 ? `${met} of ${judged.length} met` : `${refused} refused`,
     rows,
   };
 }
@@ -479,7 +489,7 @@ function noteOf(step: StepDetail, checks: boolean, judge: boolean): string {
     return "Everything mechanical has cleared. Nothing is wrong; the workflow asks for a person here.";
   }
   if (step.state === "running" || step.state === "retrying") {
-    return step.check_runs.length === 0
+    return onlyCurrentAttempt(step, step.check_runs).length === 0
       ? "The Drone is working. Nothing has been submitted, so no gate has been asked anything yet."
       : "The gate has run and the Drone has the step back. The tiers behind it are still ahead, not cancelled.";
   }

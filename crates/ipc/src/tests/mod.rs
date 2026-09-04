@@ -157,6 +157,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
             flagged: Vec::new(),
             deliverables: Vec::new(),
             attempts: Vec::new(),
+            verdicts: Vec::new(),
             judging: None,
         }],
     );
@@ -174,6 +175,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
             flagged: Vec::new(),
             deliverables: Vec::new(),
             attempts: Vec::new(),
+            verdicts: Vec::new(),
             judging: None,
         }],
     );
@@ -204,6 +206,7 @@ fn a_step_with_no_label_reads_as_its_id() {
             flagged: Vec::new(),
             deliverables: Vec::new(),
             attempts: Vec::new(),
+            verdicts: Vec::new(),
             judging: None,
         }],
     );
@@ -229,6 +232,7 @@ fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
                 when: Some(vec!["crates/**".to_string()]),
             }]),
             ran: vec![CheckRun {
+                attempt: 1,
                 name: "suite".to_string(),
                 outcome: core_model::CheckOutcome::NeverRan.into(),
                 expected: Some("`suite` can be run".to_string()),
@@ -239,6 +243,7 @@ fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
             flagged: Vec::new(),
             deliverables: Vec::new(),
             attempts: Vec::new(),
+            verdicts: Vec::new(),
             judging: None,
         }],
     );
@@ -275,6 +280,7 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
             ran: Vec::new(),
             judged: vec![
                 Judged {
+                    attempt: 1,
                     criterion_id: crate::CriterionId::carried("c1"),
                     verdict: core_model::JudgeVerdict::NotMet.into(),
                     expected: Some("the caller's bound narrowed".to_string()),
@@ -283,6 +289,7 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
                     brief_path: Some(".armada/briefs/01JOB/repro.1.c1.txt".to_string()),
                 },
                 Judged {
+                    attempt: 1,
                     criterion_id: crate::CriterionId::carried("c2"),
                     verdict: core_model::JudgeVerdict::Met.into(),
                     expected: None,
@@ -294,6 +301,7 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
             flagged: Vec::new(),
             deliverables: Vec::new(),
             attempts: Vec::new(),
+            verdicts: Vec::new(),
             judging: None,
         }],
     );

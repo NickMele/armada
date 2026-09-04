@@ -15,15 +15,16 @@
 //! rather than a term this step puts to whoever works it. `Delivering` was
 //! missing from the list and is the plainest member of it.
 //!
-//! **All four are written from the resolved step and from nothing else**, which
-//! is `briefing`'s narrowing carried across: a `ResolvedCheck`'s `run` string
-//! is not readable from here, [`Checking`] says a tool exists rather than what
-//! it will run, and [`Delivering`] names a path in the Drone's own worktree.
+//! **Every one is written from the definition and from nothing else**, which is
+//! `briefing`'s narrowing carried across: a `ResolvedCheck`'s `run` string is
+//! not readable from here, and [`Delivering`] names a path in the Drone's own
+//! worktree. [`Splitting`] reads one step further, because what a step's
+//! product *becomes* is a fact about the step after it — and names no workflow.
 //!
-//! Three of the four carry **drafted wording**. Sanctioned copy is
+//! Four of the five carry **drafted wording**. Sanctioned copy is
 //! `docs/contracts/agent-prompt.md`'s to write and it has none for them yet.
 
-use core_model::{RepoPath, ResolvedStep};
+use core_model::{FrozenWorkflow, RepoPath, ResolvedStep, StepId};
 
 /// The file a step is asked to write, where it declares one.
 ///
@@ -290,3 +291,87 @@ impl Redeclaring {
         &self.0
     }
 }
+
+/// What a step that creates Jobs tells its Drone, and what the step *before*
+/// one tells its own.
+///
+/// **It is the only term read off two steps**, and the pair is the point. A
+/// step whose product is a plan and a step that turns that plan into Jobs are
+/// one decision written twice: what the first writes is carried out unchanged,
+/// and a Drone that does not know that writes a sketch. So the switch is
+/// `may_dispatch_jobs` here or on the step after — a fact about the definition
+/// in exactly the way [`Delivering`]'s target is.
+///
+/// **The consequence is what it states, because nothing else can.** A Drone
+/// reading `dispatch_job`'s description learns what one call does; it cannot
+/// learn there that the file it wrote on the part before is the authority for
+/// every call. Spike 6's finding is the general form.
+///
+/// **It names no notation.** Whether a plan is drawn in Mermaid is the
+/// repository's business; what this asks for is a drawing rather than a
+/// format, for the reason the owner gave on reading one by hand: a wave is a
+/// set of Jobs and an ordering between the sets, and prose asks a reader to
+/// redraw it before they can answer.
+///
+/// **Drafted wording**, like [`Checking`] and [`Redeclaring`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Splitting(String);
+
+impl Splitting {
+    /// The block this step puts to its Drone, or `None` on every step that
+    /// neither creates Jobs nor stands in front of one that does — which is
+    /// every step of every workflow but one.
+    pub fn at(workflow: &FrozenWorkflow, at: &StepId) -> Option<Splitting> {
+        if workflow.step(at)?.may_dispatch_jobs() {
+            return Some(Splitting(String::from(CARRIES_IT_OUT)));
+        }
+        workflow
+            .after(at)
+            .is_some_and(ResolvedStep::may_dispatch_jobs)
+            .then(|| Splitting(String::from(DECIDES_IT)))
+    }
+
+    /// The block, exactly as it reaches a Drone.
+    pub fn text(&self) -> &str {
+        &self.0
+    }
+}
+
+/// The step before the one that dispatches: what it writes becomes Jobs.
+///
+/// **The two reasons a piece waits are told apart** because only one survives
+/// leaving the plan: needing what another produced becomes a dependency edge,
+/// and two pieces that would write the same files are held apart by the plan
+/// and by nothing else — `#47` settled that an overlap is surfaced, never
+/// serialised.
+const DECIDES_IT: &str = "\
+WHAT THIS PART DECIDES
+
+The part after this one creates a Job for each piece you name here. Each of \
+them is real: it gets its own worktree, its own agent and its own spend, and \
+none of them has read what you read. Nobody rewrites what you write — it is \
+carried out as it stands.
+
+So say, for every piece: what it is called, what its agent is to be told, what \
+its work is held to, and which pieces must finish before it can start. Draw \
+them as well as describing them, because what is being decided is a shape, and \
+prose asks whoever reads this to redraw it before they can answer.
+
+Two things make a piece wait and they are not the same thing. One piece needs \
+what another produced — that is a fact about the work, and it is carried when \
+the Jobs are created. Two pieces would write the same files — that is held \
+apart by this plan and by nothing else. Say which you mean.";
+
+/// The dispatching step: the plan is the authority, and this part is not where
+/// it is decided again.
+const CARRIES_IT_OUT: &str = "\
+WHAT THIS PART CREATES
+
+A plan was written and read before this part started, and this part carries it \
+out. Create one Job for each piece it names and nothing it does not name: what \
+to build was settled when the plan was read, and this is not where it is \
+settled again.
+
+If the plan cannot be carried out as it stands — a piece names a workflow this \
+repository does not have, or an order it draws cannot be expressed — say so in \
+what you submit rather than creating something in its place.";

@@ -13,6 +13,14 @@
 # definition of its own. A Needs design row has neither, and the row exists so
 # that the gap is a fact rather than an omission.
 #
+# **Shipped is the fifth, and Epic is the only one.** It is the one workflow
+# designed in this repository rather than carried from the design workspace, so
+# there is no sample beside this file to point at and nothing stale for one to
+# drift from: `sample` names the definition Fleet actually loads, under
+# .armada/workflows/. Recorded as its own value rather than filed under
+# Designed, because "a sample exists" and "this is what runs" are different
+# claims and only one of them is true of the other thirteen rows.
+#
 # The samples are JSON rather than TOML because they are the shape a repo
 # authors and Fleet interprets, verbatim as the source wrote them. A rule can
 # read one and check every key against workflowdef-fields.toml, every
@@ -176,6 +184,28 @@ No mechanical layer and no code diff, so lighter-weight than Design Plan.
 Alongside Prototype, this is one of the two cases that made a step with neither a Check nor a Judge the common case rather than an edge one.
 
 Whether it is common enough to formalise separately, or just falls under Design Plan generically, is open: Is a Documentation Job its own workflow, or does it fall under Design Plan?
+"""
+
+[workflows.epic]
+name = "Epic"
+workflow_id = "epic"
+version = 1
+sample = "../../../.armada/workflows/epic.json"
+status = "Shipped"
+structure = "loop"
+steps = 3
+gate_profile = "A person reads the plan and nothing else. `plan` is human_always, `dispatch` is auto, `roll_up` is human_always and is where the loop turns."
+what_it_exercises = "The only workflow whose product is other Jobs. Sole holder of `may_dispatch_jobs`, and the only place a step's gate is placed by what the step *after* it may do."
+notes = """
+Designed here rather than carried across, so this row records the decision instead of restating one. #215, and `docs/capabilities/epic-as-one-job.md` is the reasoning at length.
+
+Drawn shape: `plan -> dispatch -> roll_up`, with `request_changes` on `roll_up` looping back to `plan` and an iteration cap of five. A milestone plan is a hypothesis, so the slate is not written at the start: each wave is planned against what the last one actually did.
+
+**The gate is on `plan` and not on `dispatch`, and the placement is forced.** An `advance_gate` is read after a step's Drone submits, so `human_always` on the step holding the tool would be a person approving Jobs that already exist and are already spending. On the step before it the approval is what advances into the tool, which is what makes one approval the dispatch rather than a plan followed by a second act.
+
+`roll_up` is the step `docs/capabilities/epic-as-one-job.md` drew as `assess`. It is not called `converge`: `crates/fleet/src/converging.rs` owns that word for a Drone that is working and getting nowhere.
+
+What is not settled here is whether a person reads every plan or only a flagged one. Today it is fixed in this definition; the shape it wants is a gate read per Job, which is #264.
 """
 
 [workflows.feature]

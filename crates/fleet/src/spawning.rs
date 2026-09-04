@@ -194,9 +194,11 @@ where
             Arc::clone(self.harness()),
             recording,
             // This step's patience, resolved here and held for as long as the
-            // slot lives. Off `job`, which is the record the Job froze — the
-            // one place the step's own declaration exists.
-            self.liveness().at(job, step),
+            // slot lives. Three tiers meet in `Liveness::at`: what Fleet was
+            // started with, what this repository's `armada.yml` says, and what
+            // the step declared — the last off `job`, which is the record the
+            // Job froze and the one place a step's own declaration exists.
+            self.liveness().at(self.manifest(), job, step),
             self.now(),
         ));
         // The first row of this step's record, written by Armada, before the

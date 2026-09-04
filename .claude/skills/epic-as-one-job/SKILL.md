@@ -80,6 +80,14 @@ wave bound is reached, or a question is unanswered.
 items `orchestrate-milestone` lists, the disjoint write scope, and the
 instruction to push back rather than build against a brief it believes is wrong.
 
+**Re-check every claim as you write it into the brief** — the rule and the two
+incidents are `orchestrate-milestone`'s. It is sharper here, because a cadence
+that runs wave to wave has **no boundary where the owner reads a brief**. In an
+ordinary run a wrong claim meets him at the next report; in this one the only
+thing between it and a child building against it is the child. That is what the
+push-back instruction is load-bearing for, and it is not a substitute for
+grepping first.
+
 **Then do nothing but wait.** A parent that keeps working is the deadlock `#50`
 removed, one scope up: you start editing what a child is editing, and the wave
 comes back onto a tree that moved under it. Hand-landing a child's work also

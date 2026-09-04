@@ -141,13 +141,10 @@ where
             .last_reason(job.id())
             .await
             .map_err(|why| self.refusal(why))?;
-        let (ran, judged, flagged, moves) = {
+        let (ran, flagged, moves, ran_every_attempt, judged_every_attempt) = {
             let store = self.store().lock().await;
             let ran = store
                 .step_checks(job.id())
-                .map_err(|why| self.refusal(Adrift::Reading(why)))?;
-            let judged = store
-                .step_judgments(job.id())
                 .map_err(|why| self.refusal(Adrift::Reading(why)))?;
             let flagged = store
                 .step_gaming_flags(job.id())
@@ -158,7 +155,17 @@ where
             // refused` without the unbounded read `history.rs` keeps off this.
             let moves =
                 step_moves(&store, job.id()).map_err(|why| self.refusal(Adrift::Reading(why)))?;
-            (ran, judged, flagged, moves)
+            // **Every attempt's rows, beside the latest-only `ran` above.**
+            // `ran` stays latest-only because `why_stuck` below reads it as
+            // that; `step_facts` wants every run's Checks and Judge answers
+            // stamped with the attempt they belong to, which these two give.
+            let ran_every_attempt = store
+                .step_checks_every_attempt(job.id())
+                .map_err(|why| self.refusal(Adrift::Reading(why)))?;
+            let judged_every_attempt = store
+                .step_judgments_every_attempt(job.id())
+                .map_err(|why| self.refusal(Adrift::Reading(why)))?;
+            (ran, flagged, moves, ran_every_attempt, judged_every_attempt)
         };
         // The plans are read with the footprint and only with it: they are what
         // it is measured against, and a running Job has neither — its live
@@ -243,8 +250,8 @@ where
                 self.aloft(),
                 &self.host().repo_root,
                 &job,
-                ran,
-                judged,
+                ran_every_attempt,
+                judged_every_attempt,
                 flagged,
                 &moves,
             ),

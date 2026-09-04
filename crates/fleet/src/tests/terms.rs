@@ -1,11 +1,16 @@
 //! What a step's own terms say to the Drone working it.
 //!
 //! **The other half of [`briefing`](mod@crate::tests::briefing)**, split with
-//! the module it tests: these are the four blocks a step puts to whoever works
-//! it, and their text does not depend on which turn carried it. The cases
-//! against a *moment* — a boundary that re-asks, a restart whose sentence has
-//! to match the record — stay there, because what they are about is whether the
-//! right thing was sent at all.
+//! the module it tests: these are the blocks a step puts to whoever works it,
+//! and their text does not depend on which turn carried it. The cases against a
+//! *moment* — a boundary that re-asks, a restart whose sentence has to match
+//! the record — stay there, because what they are about is whether the right
+//! thing was sent at all.
+//!
+//! [`Splitting`](crate::terms::Splitting)'s cases are `crate::tests::epic`'s,
+//! and not by preference: the fixture workflow below declares no step that
+//! creates Jobs, so the block cannot be raised against it. They are asserted
+//! against the shipped definition that does.
 //!
 //! `Checking`'s cases are `crate::tests::dry_run`'s and were before this split:
 //! the block offers a tool, and what it says is only worth asserting beside

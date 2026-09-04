@@ -77,36 +77,92 @@ fn every_shipped_workflow_definition_parses() {
     assert!(seen >= 7, "seven workflows ship, and {seen} were read");
 }
 
-/// **Nothing this repository ships grants the dispatch tool.**
+/// **One shipped step may create Jobs, and this names which.**
 ///
-/// `may_dispatch_jobs` is carried by the parser and by the frozen record, and no
-/// shipped definition sets it. **The loop is no longer what it is waiting on**:
-/// `design-plan.json` declares one and `#263` closed the return, the count and
-/// the cap. What is missing is the workflow — a milestone dispatched as one Job
-/// is `plan -> dispatch -> assess -> plan`, and nobody has written it. So this
-/// is not a gap: it is the grant existing before the definition that uses it,
-/// and it is asserted so that a step quietly acquiring the ability to create
-/// Jobs is a failing test rather than a Drone with an extra tool.
+/// This assertion read `no_shipped_workflow_grants_the_dispatch_tool_yet` until
+/// `epic.json` was written, and the sentence under it said what was missing: the
+/// grant, the tool and the loop all existed and no definition used any of them.
+/// One does now, so the claim inverts rather than retiring — a set of exactly
+/// one, spelled out, is what makes a *second* step acquiring the ability to
+/// create Jobs a failing test rather than a Drone with an extra tool.
+///
+/// **Why `epic.dispatch` alone may.** It is the one step in the repository whose
+/// product is other Jobs. Every other shipped step produces a diff, a note or a
+/// document that a person or a Judge reads, and a wrong one costs a refusal; a
+/// wrong dispatch costs Drones that run and spend. What makes it safe to grant
+/// there and nowhere else is that the step before it is `human_always`: the plan
+/// is read and approved, and the approval is what advances into this step. See
+/// the file's own header.
+///
+/// The pair is asserted rather than the flag, because "the epic workflow grants
+/// it" and "the epic workflow's dispatching step grants it" are different
+/// claims, and the second is the one the design makes.
 #[test]
-fn no_shipped_workflow_grants_the_dispatch_tool_yet() {
+fn epic_s_dispatch_step_is_the_only_shipped_step_that_may_create_jobs() {
+    let mut granted: Vec<(String, String)> = Vec::new();
     for (path, text) in shipped() {
         let def = config::WorkflowDef::parse(&path, &text, &roster())
             .unwrap_or_else(|why| panic!("{} is refused:\n{why}", path.display()));
         for step in def.steps() {
-            assert!(
-                !step.may_dispatch_jobs(),
-                "{} step `{}` grants the tool that creates Jobs",
-                path.display(),
-                step.id().as_str(),
-            );
+            if step.may_dispatch_jobs() {
+                let file = path
+                    .file_name()
+                    .expect("a shipped definition is a file")
+                    .to_string_lossy()
+                    .to_string();
+                granted.push((file, step.id().as_str().to_string()));
+            }
         }
     }
+    assert_eq!(
+        granted,
+        vec![("epic.json".to_string(), "dispatch".to_string())],
+        "exactly one shipped step creates Jobs, and it is the epic's dispatching step",
+    );
 }
 
-/// The key is real, and a definition that wanted it could have it. **Parsed
-/// rather than asserted against a shipped file**, because there is no shipped
-/// file that sets it and adding one to make the key look used would be a
-/// workflow nobody dispatches.
+/// **The grant is on the step after the one a person answers.** The placement is
+/// the whole of `#215`'s gate decision and it is forced rather than chosen: an
+/// `advance_gate` is read after a step's Drone has submitted, so `human_always`
+/// on the dispatching step itself would be a person approving Jobs that already
+/// exist and are already spending.
+///
+/// Asserted off the file rather than trusted to its header, because the two keys
+/// are one intent written on two steps and nothing else in the workspace pairs
+/// them.
+#[test]
+fn the_step_before_the_epic_s_dispatch_is_the_one_a_person_answers() {
+    let path = root().join(".armada/workflows/epic.json");
+    let text = std::fs::read_to_string(&path).expect("a readable definition");
+    let def = config::WorkflowDef::parse(&path, &text, &roster())
+        .unwrap_or_else(|why| panic!("{} is refused:\n{why}", path.display()));
+    let steps = def.steps();
+    let at = steps
+        .iter()
+        .position(|step| step.may_dispatch_jobs())
+        .expect("the epic dispatches somewhere");
+    let before = at
+        .checked_sub(1)
+        .and_then(|earlier| steps.get(earlier))
+        .expect("the dispatching step is not the first");
+    assert_eq!(
+        before.advance_gate(),
+        config::AdvanceGate::HumanAlways,
+        "the step before the dispatch is `{}`, and a person has to answer it",
+        before.id().as_str(),
+    );
+    assert_eq!(
+        steps[at].advance_gate(),
+        config::AdvanceGate::Auto,
+        "and the dispatching step itself asks nobody, because the answer was given already",
+    );
+}
+
+/// The key is real on any definition, not only on the one that ships with it.
+/// **Parsed rather than asserted against `epic.json`**, which is the file the
+/// two tests above read: this one is about the parser taking the key wherever it
+/// is written, and reading it off the same file would make three assertions of
+/// one file's contents and none of the language.
 #[test]
 fn a_definition_may_grant_the_dispatch_tool() {
     let text = "version: 1\nworkflow_id: grants\nname: grants\nstructure: linear\n\
@@ -128,4 +184,31 @@ fn a_dispatch_grant_that_is_not_a_boolean_is_refused() {
                 evidence_type: facts_note\n    may_dispatch_jobs: dispatches\n    \
                 advance_gate: auto\n";
     assert!(config::WorkflowDef::parse(Path::new("grants.yml"), text, &roster()).is_err());
+}
+
+/// **This repository's own `armada.yml` loads**, which nothing asked until now.
+///
+/// The header above has claimed since `#200` that these definitions resolve
+/// against the shipped Manifest, and no test here read that file — so a typo in
+/// it was found by starting a daemon, and by nothing before that. `#414` gave it
+/// a `drone:` section and made the gap worth closing rather than only worth
+/// naming.
+///
+/// **The value is asserted and not only the parse.** A `quiet_after_seconds`
+/// silently dropped by a parser that stopped reading the key would leave this
+/// file loading exactly as well as before, and every Drone here back on a
+/// threshold shorter than one of its own commands.
+#[test]
+fn this_repositorys_own_manifest_loads_and_states_its_patience() {
+    let path = root().join("armada.yml");
+    let manifest = config::Manifest::load(&path)
+        .unwrap_or_else(|why| panic!("{} is refused:\n{why}", path.display()));
+    assert_eq!(
+        manifest.quiet_after_seconds(),
+        Some(300),
+        "the repository's own patience is what its `drone:` section writes"
+    );
+    // Nothing here has a reason to want more or fewer nudges than Fleet's, and
+    // the two halves fall back separately — so an absent one is the assertion.
+    assert_eq!(manifest.poke_limit(), None);
 }

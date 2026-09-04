@@ -116,6 +116,35 @@ impl StepAttempt {
         }
         runs
     }
+
+    /// What each closed run in `attempts` came to, oldest first.
+    ///
+    /// **`why` alone decides it.** A run that closed carrying a trigger is one
+    /// a gate refused — `stopped` and `retrying` never close without one, and
+    /// `advanced` carries one only on the one move that arrives there without
+    /// having passed a gate: [`StepTarget::Overridden`](core_model::StepTarget::Overridden),
+    /// where a person advanced the step over the gate's ruling. Reading
+    /// `outcome` first and asking "is this `advanced`" would get that one
+    /// wrong in the other direction — the state a naive mapping trusts is
+    /// exactly the one state this case shares with an ordinary pass. The run
+    /// still open — [`ended_at`](StepAttempt::ended_at) absent — has produced
+    /// no ruling yet and is not in the list.
+    pub fn verdicts(attempts: &[StepAttempt]) -> Vec<crate::Verdict> {
+        attempts
+            .iter()
+            .filter(|attempt| attempt.ended_at.is_some())
+            .map(|attempt| crate::Verdict {
+                attempt: attempt.attempt,
+                named: if attempt.why.is_some() {
+                    "failed"
+                } else {
+                    "passed"
+                }
+                .to_string(),
+                trigger: attempt.why.clone(),
+            })
+            .collect()
+    }
 }
 
 /// One recorded move of one step, as the caller hands it over.

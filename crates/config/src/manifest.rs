@@ -1,22 +1,23 @@
 //! `armada.yml`, in the slice M1 reads.
 //!
-//! **Eight keys, and nothing else.** `version`, `id`, `base`,
-//! `checks.<name>.run`, `checks.<name>.when`, `checks.<name>.requires`,
-//! `commands.<name>.run`, `commands.<name>.destructive` and `setup.requires`.
-//! Every other section the Manifest concept page describes — permissions,
-//! secrets, ports, skills, budget, dispatch freeze, auto-merge — is a key this
-//! parser refuses.
+//! **These keys, and nothing else.** `version`, `id`, `base`; `run`, `when`
+//! and `requires` under `checks.<name>`; `run` and `destructive` under
+//! `commands.<name>`; `setup.requires`; and `quiet_after_seconds` and
+//! `poke_limit` under `drone`, `#414`'s — the first section here that is a dial
+//! rather than a registry, spelled as a step spells it and named for the reason
+//! `docs/contracts/configuration.md` gives. `fleet::Liveness::at` orders its
+//! tiers and nothing else does. Every other section the concept page describes
+//! is refused: permissions, secrets, ports, skills, budget, dispatch freeze,
+//! auto-merge.
 //!
 //! **A key nothing reads is worse than a key that is not there.** A file
 //! carrying `budget: 40` that no code consumes reads to its author as a budget
-//! that is set. Refusing it means the section arrives with the code that
-//! honours it, and every deferred section stays additive rather than a
+//! that is set. Refusing it keeps every deferred section additive rather than a
 //! migration. [`Manifest::version`] refuses no number for the same reason.
 //!
-//! `checks.<name>.when` is a list of path patterns in
-//! `core_model::PathPattern`'s dialect, checked at load, so a pattern this
-//! parser cannot read is a refusal beside every other refusal in the file
-//! rather than a Check that quietly stops running. **Absent means always.**
+//! `checks.<name>.when` is a list of `core_model::PathPattern`s checked at
+//! load, so one this parser cannot read is a refusal beside every other in the
+//! file rather than a Check that quietly stops running. **Absent means always.**
 //!
 //! **Both `requires` keys name Commands this file declares, resolved at load,
 //! and share every refusal** — see [`named_commands`]. `setup`'s code word is
@@ -33,13 +34,19 @@ use crate::error::{Fault, LoadError, Refusal};
 use crate::yaml::{self, Table};
 
 /// The keys M1 reads at the top level of an `armada.yml`.
-const TOP_LEVEL: &[&str] = &["version", "id", "base", "checks", "commands", "setup"];
+const TOP_LEVEL: &[&str] = &[
+    "version", "id", "base", "checks", "commands", "setup", "drone",
+];
 /// The keys M1 reads inside `checks.<name>`.
 const CHECK_KEYS: &[&str] = &["run", "when", "requires"];
 /// The keys M1 reads inside `commands.<name>`.
 const COMMAND_KEYS: &[&str] = &["run", "destructive"];
 /// The keys M1 reads inside `setup`.
 const SETUP_KEYS: &[&str] = &["requires"];
+/// The keys M1 reads inside `drone`. **Spelled as a workflow step spells
+/// them** — `crates/config/src/workflow.rs`'s `STEP_KEYS` carries the same two
+/// words, because they are the same two values one tier up.
+const DRONE_KEYS: &[&str] = &["quiet_after_seconds", "poke_limit"];
 
 /// A command a change must pass to land or to advance a step.
 ///
@@ -154,6 +161,8 @@ pub struct Manifest {
     checks: BTreeMap<String, Check>,
     commands: BTreeMap<String, Command>,
     prepared_by: Vec<Preparation>,
+    quiet_after_seconds: Option<u32>,
+    poke_limit: Option<u32>,
 }
 
 impl Manifest {
@@ -252,6 +261,41 @@ impl Manifest {
     pub fn prepared_by(&self) -> &[Preparation] {
         &self.prepared_by
     }
+
+    /// How long a Drone working in this repository may say nothing before
+    /// Fleet pokes it, in seconds. **`None` where the file declares no
+    /// `drone.quiet_after_seconds`**, which is the repository deferring to what
+    /// Fleet is running with rather than a number invented here.
+    ///
+    /// **The middle of three tiers and never the answer on its own.** A step
+    /// that names its own beats this; this beats the composition root's
+    /// constant. `fleet::Liveness::at` is where the order is written and it is
+    /// written nowhere else — a default spelled here would be a second place
+    /// that number lives, and the two would drift.
+    ///
+    /// **Zero is refused where it is written**, by [`yaml::positive`]: a
+    /// repository whose Drones are quiet the instant they are spawned is a
+    /// sentence nobody means. [`poke_limit`](Manifest::poke_limit) disagrees
+    /// about zero, and is right to.
+    pub fn quiet_after_seconds(&self) -> Option<u32> {
+        self.quiet_after_seconds
+    }
+
+    /// How many nudges a quiet Drone gets in this repository before the Job
+    /// escalates as `stalled`. **`None` where the file declares no
+    /// `drone.poke_limit`**, and resolved independently of
+    /// [`quiet_after_seconds`](Manifest::quiet_after_seconds): a repository
+    /// that wants to be waited on longer does not thereby want to be asked
+    /// more often, which is why `crates/config/settings.toml` holds two rows
+    /// rather than one pair.
+    ///
+    /// **`0` is a value and not an absence**, by [`yaml::counted`]. It says a
+    /// Drone in this repository gets no nudge at all and the first silence past
+    /// the threshold escalates — legitimate where a poke costs a model run and
+    /// buys nothing.
+    pub fn poke_limit(&self) -> Option<u32> {
+        self.poke_limit
+    }
 }
 
 /// The walk. Returns [`None`] only where nothing could be assembled at all;
@@ -289,6 +333,10 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         Some(value) => preparation(value, &declares, &commands, out),
         None => Vec::new(),
     };
+    let (quiet_after_seconds, poke_limit) = match top.optional("drone") {
+        Some(value) => patience(value, out),
+        None => (None, None),
+    };
     top.close(TOP_LEVEL, out);
 
     // Sibling maps sharing no keys. Reported against `commands`, because the
@@ -310,7 +358,49 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         checks,
         commands,
         prepared_by,
+        quiet_after_seconds,
+        poke_limit,
     })
+}
+
+/// `drone:`, the repository's own patience with a Drone that goes quiet.
+///
+/// **Both keys optional and the section refused when it holds neither.** A
+/// `drone:` with nothing under it says nothing, exactly as `setup:` with
+/// nothing under it does, and [`Table::close`] reports no fault for an empty
+/// table — so the emptiness has to be asked about here or it is not asked about
+/// at all.
+///
+/// **The two zeros disagree, and each key is right about its own.** This is
+/// `crates/config/src/workflow.rs`'s split arriving one file up: a
+/// `quiet_after_seconds: 0` pokes a Drone on its first turn and escalates it on
+/// its third, which nobody means, and a `poke_limit: 0` says the first silence
+/// past the threshold escalates, which somebody might. Both readings are the
+/// step tier's and are unchanged by being written here — one value written in
+/// two places that read it differently is the defect this whole chain exists to
+/// avoid.
+///
+/// A refused value reads as absent from here, which is safe for the reason the
+/// workflow parser gives: the refusal is already in `out`, and a file with any
+/// refusal in it does not load at all.
+fn patience(value: &Value, out: &mut Vec<Refusal>) -> (Option<u32>, Option<u32>) {
+    let Some(mut table) = Table::open("drone", value, out) else {
+        return (None, None);
+    };
+    if table.is_empty() {
+        out.push(Refusal::new("drone", Fault::Empty));
+        return (None, None);
+    }
+    let quiet_key = table.at("quiet_after_seconds");
+    let quiet_after_seconds = table
+        .optional("quiet_after_seconds")
+        .and_then(|value| yaml::positive(&quiet_key, value, out));
+    let poke_key = table.at("poke_limit");
+    let poke_limit = table
+        .optional("poke_limit")
+        .and_then(|value| yaml::counted(&poke_key, value, out));
+    table.close(DRONE_KEYS, out);
+    (quiet_after_seconds, poke_limit)
 }
 
 /// `setup.requires`, resolved against the Commands the same file declares.
