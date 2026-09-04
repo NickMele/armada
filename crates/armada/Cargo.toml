@@ -27,6 +27,13 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal
 # a listener is `axum::serve`, and the composition root is where the listener
 # is. It adds no crate to the graph: `api` already brings axum in.
 axum = "0.7"
+# Watching `armada.yml` for an edit — `#430`. **No default features, and one
+# platform backend anyway**: `src/watching.rs` uses `PollWatcher` and says why,
+# but notify 8.2 will not compile on macOS with every backend off, so
+# `macos_fsevent` is named to satisfy its own `cfg` rather than because
+# anything here subscribes to FSEvents. It adds `notify-types`, `walkdir`,
+# `same-file` and `fsevent-sys` to the graph, and no async runtime.
+notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
 
 # **Declared dev-only, against the crate table, deliberately.** The table lists
 # `testkit` among the composition root's dependencies, and this is the

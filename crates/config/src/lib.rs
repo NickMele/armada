@@ -22,10 +22,14 @@
 //!
 //! **Nothing here reads a clock.** Parsing and validation are pure: no mtime
 //! check, no staleness window, no cache expiry. A Manifest is as fresh as the
-//! last time somebody read it, and who reads it again is not asked here.
+//! last time somebody read it, and *when* it is read again is decided in
+//! `crates/armada/src/watching.rs` rather than here — [`live`](mod@live) says
+//! only which of its keys a re-read is allowed to move, and hands out the one
+//! handle that can move them.
 
 mod error;
 mod judge;
+mod live;
 mod loops;
 mod manifest;
 mod resolve;
@@ -38,6 +42,7 @@ mod yaml;
 mod tests;
 
 pub use error::{Fault, LoadError, Refusal, ResolveError, UnknownCheck};
+pub use live::{Adopted, Frozen, LiveKey, Moved, Reloads};
 pub use manifest::{Check, Command, Manifest, Preparation};
 pub use resolve::ResolvedWorkflow;
 pub use roster::Roster;

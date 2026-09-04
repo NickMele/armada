@@ -20,7 +20,9 @@
 //! can be wrong on disk. [`agent`](mod@agent) is the same shape for the
 //! machine: which binary a Drone is started as, and which model.
 //! [`declared`](mod@declared) and [`clean`](mod@clean) are the three verbs that
-//! need no daemon at all.
+//! need no daemon at all. [`watching`](mod@watching) is what makes the
+//! Manifest's live keys live — `#430` — and it is here because the composition
+//! root owns the runtime and nothing below it may spawn a task.
 
 pub mod agent;
 pub mod clean;
@@ -29,6 +31,7 @@ pub mod declared;
 pub mod say;
 pub mod serve;
 pub mod setup;
+pub mod watching;
 
 #[cfg(test)]
 mod tests;
