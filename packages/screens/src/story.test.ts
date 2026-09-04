@@ -19,8 +19,10 @@
 
 import { describe, expect, it } from "vitest";
 
+import { SILENCE } from "@armada/components";
 import type { Observed, Turn, Turns } from "@armada/protocol";
 
+import { leading } from "./reading";
 import { entriesOf, NOTHING_YET_ON_THIS_STEP, whyNotWatching } from "./story";
 
 const A_JOB = "01M1HQZAKN001AJ5MT3PT09KKY";
@@ -95,6 +97,18 @@ describe("why the log is not being read", () => {
     };
     const nothing: Observed = { ...drone, because: "nothing_writing" };
     expect(whyNotWatching(drone)).not.toBe(whyNotWatching(nothing));
+  });
+
+  it("says what the registry says, so changing the row changes the pane", () => {
+    // The expectation is the registry's own clause and never a sentence typed
+    // here: a copy in the test is the second source this reads `SILENCE` to
+    // be rid of, one file across. #346.
+    for (const because of ["drone_ended", "nothing_writing"]) {
+      const clause = SILENCE[because]?.verb;
+      expect(clause).toBeTruthy();
+      const ended: Observed = { state: "ended", jobId: A_JOB, turns: CARRIED, because };
+      expect(whyNotWatching(ended)).toBe(`${leading(clause!)}.`);
+    }
   });
 
   it("renders a reason of its own, so a transport close is not a wire word", () => {
@@ -199,3 +213,4 @@ describe("a block heading in a turn's payload", () => {
     expect(said.map((line) => line.named)).toEqual(["heading"]);
   });
 });
+
