@@ -629,6 +629,29 @@ should paper over.
   alone; if they can, the answer is that it stays wordless, the same way
   Doctor's health grid settled `[doctor-warn-glyph]`.
 
+- **[scope-refused-glyph]** Which glyph, if any, carries the escalation
+  reason `scope_refused` — the step whose Drone asked to write outside
+  the task's scope and was told no? It ships drawing its verb alone,
+  **the scope request was refused**, beside the escalation reasons that
+  already draw one. What was looked at and refused: `ban` is
+  `rejected`'s and means a person declined a whole Job, so a step
+  wearing it would say the Job was rejected when it is running work
+  somebody still wants; `circle-x` is `gate_failure`'s and says work was
+  weighed and found short, which is the distinction this trigger exists
+  to hold; `circle-minus` is `gate_undecided`'s and means the Judge
+  could not decide, where here it decided; `octagon-alert` is reserved
+  to `stalled` by its own note; and the `shield-*` family is reserved to
+  gates and Checks, which a request is neither. What makes it hard is
+  that every candidate says either "a person declined this" or "a
+  machine could not answer", and this row means **a machine read a
+  request and would not grant it** — a decision about a request rather
+  than about work, which nothing else in the badge set is. Neither open
+  question above reaches it: `[no-report-glyph]` is an absence of a
+  reply and `[drone-killed-glyph]` is a person having already acted.
+  What decides it is whether a person scanning the Board can tell this
+  row from a `stopped at the gate` row on the words alone; if they can,
+  it stays wordless, the same way the two above were left.
+
 - **[drone-killed-glyph]** Which glyph, if any, carries the escalation
   reason `drone_killed` — the step whose Drone a person ended? It ships
   drawing its verb alone, **the Drone was ended by hand**, beside the ten

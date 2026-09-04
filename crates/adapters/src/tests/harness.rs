@@ -14,7 +14,8 @@ use adapter_traits::{
 };
 
 use crate::harness::{
-    ask_tool, checks_tool, dispatch_tool, evidence_tool, scope_tool, HarnessRefused, HeadlessAgent,
+    ask_tool, checks_tool, dispatch_tool, evidence_tool, scope_tool, widen_tool, HarnessRefused,
+    HeadlessAgent,
 };
 
 const SECRET_LOOKING_TASK: &str = "fix the parser, the token is hunter2";
@@ -102,16 +103,17 @@ fn armadas_own_tools_are_in_a_toolbelt_that_was_granted_nothing() {
     assert_eq!(
         allowed,
         format!(
-            "{},{},{},{}",
+            "{},{},{},{},{}",
             evidence_tool(),
             scope_tool(),
             checks_tool(),
+            widen_tool(),
             ask_tool()
         ),
         "a Drone granted nothing else still reports, still declares its scope, \
-         can still ask whether its work passes and can still ask a person, \
-         because none of the four is one of the grants — and a Drone denied one \
-         is denied silently"
+         can still ask whether its work passes, can still ask for a path the \
+         task does not name and can still ask a person, because none of the \
+         five is one of the grants — and a Drone denied one is denied silently"
     );
 }
 
@@ -129,10 +131,31 @@ fn a_grant_becomes_the_tools_it_needs_and_armadas_own_stay_first() {
     assert_eq!(entries.first(), Some(&evidence_tool()));
     assert_eq!(entries.get(1), Some(&scope_tool()));
     assert_eq!(entries.get(2), Some(&checks_tool()));
-    assert_eq!(entries.get(3), Some(&ask_tool()));
+    assert_eq!(entries.get(3), Some(&widen_tool()));
+    assert_eq!(entries.get(4), Some(&ask_tool()));
     assert!(entries.contains(&"Read"), "{allowed}");
     assert!(entries.contains(&"Edit"), "{allowed}");
     assert!(entries.contains(&"Bash(cargo test:*)"), "{allowed}");
+}
+
+/// **The scope-request tool is given, not granted**, for the asking tool's
+/// reason and with a sharper failure. A Drone denied it does not stop needing
+/// the path — it writes the file, and the first anybody hears is the drift
+/// look at the gate, which is the outcome asking first exists to replace.
+#[test]
+fn every_toolbelt_carries_the_scope_request_tool() {
+    for belt in [
+        Toolbelt::evidence_only(),
+        Toolbelt::evidence_only().and(Grant::ReadTheWorktree),
+        Toolbelt::evidence_only().and(Grant::DispatchAJob),
+    ] {
+        let args = rendered(belt);
+        let allowed = value_after(&args, "--allowedTools").expect("an allowlist is rendered");
+        assert!(
+            allowed.split(',').any(|entry| entry == widen_tool()),
+            "a Drone that cannot ask for a path writes it anyway: {allowed}"
+        );
+    }
 }
 
 /// **The asking tool is given, not granted**, and this is the case that says

@@ -47,6 +47,7 @@ mod process;
 mod read;
 /// What a person says went wrong, kept after the Job it is about is gone.
 mod report;
+mod revision;
 mod row;
 mod schema;
 /// What a Job's Drones have cost it: one row per Drone, summed per Job.

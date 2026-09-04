@@ -140,7 +140,7 @@ A human override is evaluable against the decisions people actually made.
 
 The scope step declares its paths through the scope tool, and the drift check compares that declaration against the real diff. A proposal made before anything was read is not something that check can weigh.
 
-**Rescope-and-respawn stays the correction path**, and a widening returns to this same gate.
+**Rescope-and-respawn stays the correction path** for a person changing a dispatched Job's scope, and that returns to this same gate. **A Drone asking for a path the Job does not name does not**: a [Judge](judge.md) answers whether it belongs to the step the Drone was given, and the Job never leaves `running`. See [Change a Job's scope](../journeys/change-a-jobs-scope.md).
 
 ## Relationship to Helm
 

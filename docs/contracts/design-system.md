@@ -619,8 +619,8 @@ is the back-fill by hand that this section existed to prevent.
 
 ```
 ⌘K       command palette
-⌘1–⌘4    Bridge surfaces, in rail order
-⌘5       Helm, the digit after the last Bridge surface
+⌘1–⌘5    Bridge surfaces, in rail order
+⌘6       Helm, the digit after the last Bridge surface
 ⌘\       toggle sidebar
 ⌘[ ⌘]    back / forward
 Esc      close an overlay, or return to the list from a detail route
@@ -700,10 +700,18 @@ Three reversals against what stood before, each with a reason:
 **`x` for kill and every safety rule below are unchanged.** Neither was
 in play, and the destructive-key rule is what kept `x` off `k`.
 
-**`⌘1`–`⌘4` follow the rail, which is four destinations** — Job Board,
-Alerts, Doctor, Manifest — since Active Jobs, Reviews and the Activity
-Feed folded into the Board. The digits shift if the rail does; the rule
-is rail order, not the numbers.
+**`⌘1`–`⌘5` follow the rail** — Job Board, Alerts, Doctor, Manifest,
+Held worktrees — since Active Jobs, Reviews and the Activity Feed folded
+into the Board and Held worktrees joined at the end of it. The digits
+shift if the rail does; the rule is rail order, not the numbers.
+
+**Helm moved from `⌘5` to `⌘6` on 2026-09-03**, when Held worktrees
+became a rail surface. The rail reads in order and the newest surface
+goes last, so every surface anyone has learned keeps the key they learned
+and Helm's is the one binding that moves. It moved then rather than
+later, while one person is using it, and the palette displays the binding
+beside every entry — which is where a person finds out. A learned key
+does not move quietly, and this paragraph is the noise.
 
 **`1`–`5` and `⌘1`–`⌘5` are different acts on one row of keys.** One is
 modified and one is not, which is the whole separation. It was drawn
@@ -767,7 +775,7 @@ anchor     top-aligned at 20% of viewport height, never centered
 input      --text-base · no border · --fg-default · placeholder --fg-subtle
            bottom rule --border-subtle
 row        32px · 12px padding · --text-sm · --fg-default
-           12px leading icon · shortcut right-aligned as kbd
+           16px leading icon · shortcut right-aligned as kbd
 active row --bg-hover
 section    --text-2xs · --fg-subtle
 ```
@@ -791,6 +799,15 @@ never chosen and the accent is reserved to interactive affordance, so
 weight is the channel left — and it is already in the type scale. **An
 alias hit marks nothing**, because the match was on a word that never
 renders and there is nothing on the lexicon term to mark.
+
+**The leading glyph read `12px` here until 2026-09-03.**
+[Iconography](iconography.md) is the authority on what a silhouette
+means and at what size it holds, and this line was transcribing it
+wrongly: every glyph the Navigation section draws is assigned 16px
+there, and `hard-drive`'s row records that its interior marks merge into
+the band above them below that size. The record was wrong rather than
+holding a second opinion, so it is the record that moved. A 32px row
+takes 16px comfortably.
 
 **A row that cannot act draws dimmed and says why**, in `--fg-subtle` at
 `--text-2xs`, beside its binding. Two kinds reach it: a binding the
@@ -1470,6 +1487,15 @@ badge answers is what became of the step. Not **stalled** for the same
 reason as above — that is what the *Job* is held for, and one Job carries
 both: the step says what happened to it, the Job says what it happened
 for.
+
+`scope_refused` renders as **the scope request was refused**, and the
+Judge is deliberately not in it — attribution goes in the source field,
+which is `evidence_suspect`'s rule below. It is not **blocked by
+policy**, which is the badge it is being split away from: that one names
+a configuration to go and edit, and a reader who cannot tell them apart
+on the word edits a Manifest when what they should do is read what the
+Drone was trying to write. It is not **stopped at the gate** either —
+that says work was weighed, and here nothing was submitted.
 
 `evidence_suspect` renders as
 **evidence disputed**, with Judge in the source field, which keeps

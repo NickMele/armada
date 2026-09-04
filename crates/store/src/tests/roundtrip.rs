@@ -5,9 +5,9 @@
 
 use core_model::{
     Actor, AdvanceGate, Attachment, CheckOutcome, ContextSource, Covers, CriterionId,
-    DeclarePlanAt, DroneId, EvidenceRef, EvidenceType, GamingPattern, GateVerdict, Job, JobStatus,
-    JobStep, JudgeVerdict, Judgment, ModelName, PathPattern, Prerequisite, RedirectWaiting,
-    RepoPath, ResolvedCheck, StepCheck, StepEvidence, StepId, Target, Ulid, WriteTargets,
+    DeclarePlanAt, DroneId, EvidenceRef, EvidenceType, GamingPattern, Job, JobStatus, JobStep,
+    JudgeVerdict, Judgment, ModelName, PathPattern, Prerequisite, RedirectWaiting, RepoPath,
+    ResolvedCheck, StepCheck, StepEvidence, StepId, Target, Ulid, WriteTargets,
 };
 
 use crate::tests::{created_at, job_id, open, sub_dispatched, top_level, TempDir};
@@ -439,24 +439,9 @@ fn the_frozen_workflow_comes_back_with_every_check_its_steps_declared() {
 
     let fix = workflow.step(&StepId::new("fix")).expect("the gated step");
     assert_eq!(fix.label(), "Fix");
-    // **The loop, as the pair it is frozen as.** A cap that came back without
-    // its routing is a step that stops on a return nothing asked for, and a
-    // routing that came back without its cap is a step that never returns at
-    // all — which is why `ResolvedStep::looping` takes both and this asserts
-    // both.
-    assert_eq!(
-        fix.routes(GateVerdict::RequestChanges),
-        Some(&StepId::new("reproduce"))
-    );
-    assert_eq!(fix.iteration_cap(), 5);
-    let reproduce = workflow
-        .step(&StepId::new("reproduce"))
-        .expect("the first step");
-    assert!(
-        !reproduce.closes_a_loop(),
-        "and a step that closes none comes back closing none"
-    );
-    assert_eq!(reproduce.iteration_cap(), 0);
+    // The loop the fixture's gated step declares round-trips too, and it is
+    // asserted in `tests::iteration` beside the counts it bounds — this file
+    // is at the 900 the gate refuses at.
     assert_eq!(
         fix.checks(),
         &[
@@ -765,6 +750,36 @@ fn a_workflow_frozen_before_a_step_could_name_a_model_reads_back_as_naming_none(
             .model(),
         None
     );
+}
+
+/// **A step's own patience survives the column, both halves and both
+/// absences.** They are four different sentences: how long this step's Drone
+/// may be quiet, how many nudges it gets, and — twice — the step deferring to
+/// what Fleet is running with. A writer and a reader that disagreed about
+/// either key would collapse a declaration into a deferral, and every step
+/// would go back to the one constant `#60` was opened about, with nothing
+/// saying so.
+///
+/// The pre-`#60` row is asserted beside it, because that is the same failure
+/// arriving by the other road: an absent key is a step that declared nothing,
+/// which every row written before today is.
+#[test]
+fn a_steps_own_patience_and_its_absence_both_survive_the_column() {
+    let workflow =
+        crate::columns::read_workflow(&crate::columns::write_workflow(&crate::tests::workflow()))
+            .expect("a workflow that was just written");
+    let declared = workflow.step(&StepId::new("fix")).expect("the step");
+    assert_eq!(declared.quiet_after_seconds(), Some(900));
+    assert_eq!(declared.poke_limit(), Some(4));
+
+    let deferring = workflow.step(&StepId::new("reproduce")).expect("the step");
+    assert_eq!(deferring.quiet_after_seconds(), None);
+    assert_eq!(deferring.poke_limit(), None);
+
+    let before = crate::columns::read_workflow(WITHOUT_WHEN).expect("a pre-`#60` row");
+    let step = before.step(&StepId::new("fix")).expect("the step");
+    assert_eq!(step.quiet_after_seconds(), None);
+    assert_eq!(step.poke_limit(), None);
 }
 
 /// A blank in the column is a refusal rather than a none. `""` is a workflow

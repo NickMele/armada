@@ -14,6 +14,8 @@
 //! puts in quotation marks are in what the call was shown, or in nothing.
 //! [`located`] is where a gaming flag says it found what it found, and which
 //! half of a location each pattern can establish.
+//! [`widening`] is the call a request for more scope costs — the one Judge
+//! call about a plan rather than about work.
 //! [`answered`] is the Check tier of a brief — the two outcomes a Judge can
 //! actually be shown, and the bound on how much of a run travels with them.
 
@@ -27,6 +29,7 @@ mod product;
 mod quoted;
 mod request;
 mod submission;
+mod widening;
 
 use config::{ResolvedStep, ResolvedWorkflow};
 use testkit::{Gate, Sketch};

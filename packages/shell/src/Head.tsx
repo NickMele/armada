@@ -19,9 +19,8 @@
 import type { ReactNode } from "react";
 import { Button, Kbd } from "@armada/components";
 
-/** The four views one head serves, and everything each needs to draw it. */
+/** The views one head serves, and everything each needs to draw it. */
 export type HeadProps = {
-  /** One Job's turns, as a screen of their own. Leaves to the Job. */
   /** One Job, read whole. Leaves to the list. */
   reading: boolean;
   /** The composer. Leaves to the list. */
@@ -35,6 +34,14 @@ export type HeadProps = {
    * Job would lose exactly the reports that most need reading together.
    */
   auditing: boolean;
+  /**
+   * What Fleet is holding disk for. Leaves to the list.
+   *
+   * **Assembled in `App.tsx` until 2026-09-03**, with a note there saying it
+   * was the same shape as the other four and belonged in this file. It is the
+   * same shape, and this is that file.
+   */
+  clearing: boolean;
   /** A live connection. What stops a new Job being proposed into nothing. */
   live: boolean;
   /** A re-read in flight, so a second press does not send a second one. */
@@ -44,6 +51,8 @@ export type HeadProps = {
   onCompose: () => void;
   onCloseReports: () => void;
   onReadReports: () => void;
+  onCloseWorktrees: () => void;
+  onReadWorktrees: () => void;
   onRefresh: () => void;
 };
 
@@ -54,6 +63,7 @@ export function headOf({
   reading,
   composing,
   auditing,
+  clearing,
   live,
   refreshing,
   onCloseJob,
@@ -61,8 +71,22 @@ export function headOf({
   onCompose,
   onCloseReports,
   onReadReports,
+  onCloseWorktrees,
+  onReadWorktrees,
   onRefresh,
 }: HeadProps): Head {
+  if (clearing) {
+    return {
+      title: "Held worktrees",
+      // No `Esc` hint. The key is bound while a Job is open and nowhere else,
+      // and a hint for a key that does nothing is worse than no hint.
+      actions: (
+        <Button variant="ghost" size="sm" onClick={onCloseWorktrees}>
+          Back to the list
+        </Button>
+      ),
+    };
+  }
   if (auditing) {
     return {
       title: "Reported in error",
@@ -117,6 +141,15 @@ export function headOf({
             deliberately, which is why it is here and not on a row. */}
         <Button variant="ghost" size="sm" onClick={onReadReports}>
           Reported
+        </Button>
+        {/* **A second door to a place the rail now reaches**, and it stays.
+            This is the control that screen has been opened by since it
+            shipped; the rail row is a day old, and taking a learned control
+            away in the same change that moves a learned key is two changes.
+            Giving disk back is read deliberately, so it is here and never on a
+            row — the same argument that places `Reported`. */}
+        <Button variant="ghost" size="sm" onClick={onReadWorktrees}>
+          Held disk
         </Button>
         {/* The one accent fill on the surface. */}
         <Button variant="primary" onClick={onCompose} disabled={!live}>

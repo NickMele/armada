@@ -5,7 +5,7 @@
  *   input      --text-base, no border, --fg-default, placeholder --fg-subtle,
  *              bottom rule --border-subtle
  *   row        --h-menu-item, --space-3 padding, --text-sm, --fg-default,
- *              12px leading icon, shortcut right-aligned as kbd
+ *              16px leading icon, shortcut right-aligned as kbd
  *   active row --bg-hover
  *   section    --text-2xs, --fg-subtle
  *
@@ -14,12 +14,12 @@
  *
  * MISSING TOKEN on the line below.
  * --armada-glyph: packages/tokens declares no icon size. The contract fixes a
- *   palette row's leading glyph at 12px, Badge's at 12px and a dialog's at
- *   16px, and none of the three is spellable. This aliases --space-3, which is
- *   12px — the right value under the wrong name, and reported as such.
+ *   palette row's leading glyph at 16px, Badge's at 12px and a dialog's at
+ *   16px, and none of the three is spellable. This aliases --space-4, which is
+ *   16px — the right value under the wrong name, and reported as such.
  */
 .armada-palette {
-  --armada-glyph: var(--space-3);
+  --armada-glyph: var(--space-4);
 }
 
 .armada-palette-layer {

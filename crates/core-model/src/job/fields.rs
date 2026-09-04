@@ -667,8 +667,37 @@ impl core::error::Error for BlankBranch {}
 pub struct ScopeRevisionOutcome(String);
 
 impl ScopeRevisionOutcome {
+    /// The word entry zero carries, and every revision that took.
+    ///
+    /// **A constructor rather than a literal at each site**, which is the only
+    /// part of this that is not the registry's to decide: two spellings of one
+    /// outcome would make "did this take" a string comparison each caller got
+    /// to write for itself.
+    pub const TOOK: &'static str = "took";
+
+    /// A revision that was asked for and not taken. The history's entries
+    /// include these deliberately — *was this ever asked* is a question people
+    /// ask later, so a refused request is dimmed rather than absent.
+    pub const NOT_TAKEN: &'static str = "not_taken";
+
     pub fn recorded(value: impl Into<String>) -> Self {
         ScopeRevisionOutcome(value.into())
+    }
+
+    /// The scope this revision asked for is the scope the Job now carries.
+    pub fn took() -> Self {
+        ScopeRevisionOutcome(ScopeRevisionOutcome::TOOK.into())
+    }
+
+    /// It was asked for and the Job's scope did not move.
+    pub fn not_taken() -> Self {
+        ScopeRevisionOutcome(ScopeRevisionOutcome::NOT_TAKEN.into())
+    }
+
+    /// Whether this entry moved the Job's scope. **Read here and nowhere
+    /// else**, so a value the registry adds later is compared in one place.
+    pub fn took_effect(&self) -> bool {
+        self.0 == ScopeRevisionOutcome::TOOK
     }
 
     pub fn as_str(&self) -> &str {

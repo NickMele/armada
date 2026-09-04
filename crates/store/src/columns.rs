@@ -320,6 +320,20 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
             // meaning anything other than `false`. A row frozen before the key
             // existed carries none, which reads back as `false`.
             "may_dispatch_jobs": step.may_dispatch_jobs(),
+            // Null where the step named none, which is almost every step and
+            // every row written before `#60`. It is not backfilled with what
+            // Fleet was running at the time: absent is the step deferring to
+            // whatever Fleet is running *now*, and a row that recorded the
+            // deferral as a number would freeze a value the workflow never
+            // asked for — which is the one thing `lifetime = "Live"` on
+            // `drone-silence-threshold-quiet-after` forbids.
+            //
+            // Two keys and not one object, for the reason there are two
+            // fields: a step overriding either half must not restate the
+            // other, and a row holding `{quiet_after, pokes}` would make the
+            // absent half unspellable.
+            "quiet_after_seconds": step.quiet_after_seconds(),
+            "poke_limit": step.poke_limit(),
             "evidence_scope": step.evidence_scope().map(|scope| json!({
                 "context_source": scope.context_source().as_wire(),
                 "exclude_paths": scope.exclude_paths().iter()
@@ -418,7 +432,9 @@ fn read_step(entry: &Map<String, Value>) -> Result<ResolvedStep, Malformed> {
         read_step_model(entry)?,
     )
     .dispatching(read_may_dispatch_jobs(entry)?)
-    .looping(read_verdict_routing(entry)?, read_iteration_cap(entry)?))
+    .looping(read_verdict_routing(entry)?, read_iteration_cap(entry)?)
+    .quiet_after(read_patience(entry, "quiet_after_seconds")?)
+    .poking(read_patience(entry, "poke_limit")?))
 }
 
 /// Where the step's gate verdicts route. **Absent and null both read as no
@@ -456,6 +472,13 @@ fn read_verdict_routing(
 /// zero**, which is the fail-closed default `ResolvedStep::looping` states: a
 /// loop that was wired and not capped stops on its first return and says so.
 ///
+/// **Not [`read_patience`], though the middle of the match is identical.** That
+/// one answers `None` where the key is absent and this one answers `0`, and the
+/// two mean opposite things: a step with no `quiet_after_seconds` is deferring
+/// to Fleet's standing value, and a step with no `iteration_cap` is a step no
+/// loop may go round. One reader would have to pick a default and would be
+/// wrong for one of them.
+///
 /// A value that is there and is not a count is a refusal rather than a zero,
 /// for [`read_retry_limit`]'s reason — a Job frozen with a cap must not lose it
 /// quietly, because losing it is a Job that stops on a draft it was entitled to
@@ -469,6 +492,32 @@ fn read_iteration_cap(entry: &Map<String, Value>) -> Result<u32, Malformed> {
             .and_then(|n| u32::try_from(n).ok())
             .ok_or_else(|| format!("`iteration_cap` holds `{found}`")),
         Some(other) => Err(format!("`iteration_cap` is {}", kind(other))),
+    }
+}
+
+/// One half of the step's patience. **Absent and null both read as none**,
+/// which is the backfill every row frozen before `#60` needs and is also what
+/// a step that leaves the key out means: Fleet's standing value applies.
+///
+/// A value that is there and is not a count is a refusal rather than a none.
+/// A step that asked for twenty minutes of patience and silently got two would
+/// escalate as `stalled` in the middle of the work it declared itself slow for
+/// — and the only trace would be a Job that stopped for no reason anyone could
+/// find, which is the shape `#60` was opened about.
+///
+/// **One reader for both keys**, because the two are the same kind of number
+/// read the same way. What is *not* shared is what they mean: they resolve
+/// independently, and `fleet::Liveness::at` is where that happens.
+fn read_patience(entry: &Map<String, Value>, key: &str) -> Result<Option<u32>, Malformed> {
+    match entry.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Number(found)) => found
+            .as_u64()
+            .filter(|n| *n <= u64::from(u32::MAX))
+            .and_then(|n| u32::try_from(n).ok())
+            .map(Some)
+            .ok_or_else(|| format!("`{key}` holds `{found}`")),
+        Some(other) => Err(format!("`{key}` is {}", kind(other))),
     }
 }
 

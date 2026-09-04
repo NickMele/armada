@@ -38,6 +38,7 @@ mod quoted;
 mod request;
 mod scope;
 mod submission;
+mod widening;
 
 #[cfg(test)]
 mod tests;
@@ -58,3 +59,4 @@ pub use product::{
 pub use request::Request;
 pub use scope::{drifted, InScope, OutsideScope};
 pub use submission::{Claimed, NotASubmission, NotClaimed, ShownBy, Submission};
+pub use widening::{NotWidened, Widened, WideningBrief};

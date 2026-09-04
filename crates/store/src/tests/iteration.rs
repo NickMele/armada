@@ -405,3 +405,43 @@ fn a_job_that_went_round_and_came_back_reads_off_its_own_log() {
     assert_eq!(read, round, "the fold rebuilds what the moves left");
     assert_eq!(read.current_step_id(), Some(&gate()));
 }
+
+/// **The loop survives the column, as the pair it is frozen as.** A cap that
+/// came back without its routing is a step that stops on a return nothing asked
+/// for; a routing that came back without its cap is a step that never returns
+/// at all. `ResolvedStep::looping` takes both for that reason and this asserts
+/// both.
+///
+/// Here rather than in `tests::roundtrip` — where the fixture's other frozen
+/// fields are checked — because that file is at the 900 the gate refuses at,
+/// and because the counts this bounds are the rest of this module.
+#[test]
+fn the_frozen_loop_comes_back_off_the_workflow_column() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    let stored = crate::tests::top_level("01FROZENLOOP");
+    store
+        .insert_job(&stored, &crate::tests::created_at())
+        .expect("stored");
+    drop(store);
+
+    let reopened = open(&dir);
+    let loaded = reopened
+        .load_job(&job_id("01FROZENLOOP"))
+        .expect("the job reads back");
+    let workflow = loaded.workflow();
+
+    let gate = workflow.step(&gate()).expect("the gated step");
+    assert_eq!(
+        gate.routes(core_model::GateVerdict::RequestChanges),
+        Some(&drafted())
+    );
+    assert_eq!(gate.iteration_cap(), 5);
+
+    let draft = workflow.step(&drafted()).expect("the first step");
+    assert!(
+        !draft.closes_a_loop(),
+        "and a step that closes none comes back closing none"
+    );
+    assert_eq!(draft.iteration_cap(), 0);
+}

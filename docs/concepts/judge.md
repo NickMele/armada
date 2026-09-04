@@ -80,6 +80,7 @@ Why: a detector that polls is the wrong design — the Judge costs money, and a 
 | Thrashing ceiling | Converging, justified drift, or thrashing? | No — force-interrupts with a report-now directive |
 | Final review | What this diff does, and what a human should look at closely | No — `gates_advancement: false`, advisory only |
 | Gate-definition change | Did an edit to a Check definition weaken the gate it defines | No — makes the attempt visible without blocking |
+| Scope request | Do the paths a Drone asked for belong to the step it was given | No — a refusal escalates, and nothing advances either way |
 
 Per row:
 
@@ -90,8 +91,9 @@ Per row:
 - **Thrashing ceiling** fires when turn count or wall-clock exceeded the step norm. A Drone that goes quiet after the report-now directive has its step stopped, and the step's stated reason is a `forced_report` row naming the report that never came. A Drone still writing inside its declared plan is not stopped for it.
 - **Final review** pre-digests the diff for the human and never replaces them.
 - **Gate-definition change** covers an edit to a Check definition in `armada.yml`. The spawn-time freeze already protects this Job's gate; the look exists to make the attempt visible and to let a legitimate edit flag rather than block.
+- **Scope request** is the one look about a plan rather than about work, and the one a Drone asks for. It is shown the step, the request the Job answers, the scope the Job declared, the paths asked for and the Drone's reason — **and not the diff**, which would be the thrashing question. It answers consistency with the step and never desirability. A Judge call ends nothing, so the Drone keeps its session while it is out; a refusal escalates and a person is met by the exception rather than by every request. [Change a Job's scope](../journeys/change-a-jobs-scope.md).
 
-Every trigger is mechanical. The Judge never fires on a timer, on a healthy Drone, or on its own initiative.
+Every trigger is mechanical, and a scope request is no exception — the trigger is a tool call rather than a schedule. The Judge never fires on a timer, on a healthy Drone with nothing asked of it, or on its own initiative.
 
 ## Multi-criterion judging
 
@@ -107,7 +109,7 @@ Why: this preserves rule 3 rather than bending it — the question gets narrower
 **`Job.acceptance_criteria[]` is new and frozen at Job creation.** Each criterion carries a source — `ticket`, `helm_drafted` or `human`.
 Why: it is the load-bearing half of the change — without it the Judge grades against a list it invented, which is unfalsifiable and quietly puts self-report back in the trust path.
 
-**A criterion may be appended at an approved widening, never edited, reordered or removed.** Why: appending is safe because citations use frozen positions.
+**A criterion may be appended at an approved widening, never edited, reordered or removed.** Why: appending is safe because citations use frozen positions. It is the person's act at the gate and the only route by which criteria are appended: a Drone asking to widen has no field to raise its own bar with.
 
 **Evidence gains one Judge record per step, holding every judge's verdict.** Each verdict carries `{criterion_id, verdict, citation, source}`, where `source` is the verification-source vocabulary: `check`, `judge`, `attestation`.
 
@@ -125,7 +127,7 @@ Why: it is the load-bearing half of the change — without it the Judge grades a
 
 **Money was never the driver — latency is.** The calls sit at a gate a person is waiting behind, and each one is a chance to trip `max_context_size`, which escalates.
 
-The product also stopped being fixed at Job creation: `acceptance_criteria[]` may be appended at an approved widening, so the left factor can climb mid-Job.
+The product also stopped being fixed at Job creation: `acceptance_criteria[]` may be appended at a person's approved widening, so the left factor can climb mid-Job. **The scope-request look is outside the product** — it is one call, no panel, declared by nothing, exactly as the drift and thrashing looks are. What bounds it is one ask per step.
 
 ### Schema sketch
 

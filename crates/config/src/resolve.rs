@@ -185,4 +185,6 @@ fn resolve_step(step: &Step, manifest: &Manifest, unknown: &mut Vec<UnknownCheck
         step.verdict_routing().clone(),
         step.iteration_cap().unwrap_or(0),
     )
+    .quiet_after(step.quiet_after_seconds())
+    .poking(step.poke_limit())
 }

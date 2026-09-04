@@ -25,6 +25,7 @@ mod ask;
 mod dispatch;
 mod report;
 mod tools;
+mod widening;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -38,6 +39,7 @@ pub use tools::{
     DeclareScope, NotAnArgument, SubmitEvidence, CHECKS_FIELDS, CHECKS_TOOL, EVIDENCE_FIELDS,
     SCOPE_FIELDS, SCOPE_TOOL, TOOL,
 };
+pub use widening::{RequestScope, WIDEN_FIELDS, WIDEN_TOOL};
 
 /// The name Armada's server is registered under in a Drone's MCP
 /// configuration, and therefore the middle of the tool name a Drone is
@@ -117,6 +119,17 @@ pub enum Incoming {
     Dispatch {
         id: CallId,
         dispatch: DispatchJob,
+    },
+    /// A call of the scope-request tool that read as a request. Whether the
+    /// task's scope may grow is the daemon's answer, not this module's.
+    ///
+    /// **The second call that is held open while work happens.** What answers
+    /// it is a Judge call with a budget on it, so the wait is bounded and the
+    /// answer is in the reply — unlike [`Ask`](Incoming::Ask), whose answer
+    /// comes from a person and cannot be waited for at all.
+    Widen {
+        id: CallId,
+        request: RequestScope,
     },
     /// A call of the asking tool that read as a question. Whether it *is* one
     /// Fleet may hold is the daemon's answer, not this module's.
@@ -309,6 +322,12 @@ fn called(id: CallId, params: Option<&Value>) -> Incoming {
     if tool == SCOPE_TOOL {
         return match tools::declaration(arguments) {
             Ok(declaration) => Incoming::Declare { id, declaration },
+            Err(why) => Incoming::NotASubmission { id, why },
+        };
+    }
+    if tool == WIDEN_TOOL {
+        return match widening::requested(arguments) {
+            Ok(request) => Incoming::Widen { id, request },
             Err(why) => Incoming::NotASubmission { id, why },
         };
     }

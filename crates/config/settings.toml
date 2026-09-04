@@ -631,7 +631,11 @@ How long a Drone may say nothing before Fleet pokes it, and — once `poke_limit
 
 **A step-level override is the watched step's own, and nothing aggregates.** The vigil watches one Drone and a Drone belongs to exactly one step, so the value in force is that step's, re-read at the step boundary. The poke budget resets with it, because the slot holding the count is per step already. A Job spanning four steps is four independent patiences, never a sum and never the strictest of them.
 
-**Not wired.** `fleet::silence` reads this off `Fleet` rather than off the Job, so neither the Manifest tier nor the step tier exists in code yet. Documented on Drone; Fleet is what notices the silence. Distinct from Fleet health-check / resource-poll interval, and from the heartbeat interval, which is how often a Drone is expected to speak rather than how long Fleet waits before speaking to it.
+**The step tier is wired and the Manifest tier is not.** `quiet_after_seconds` on a step is read by `config`, frozen onto the record, and resolved against this value at each step boundary by `fleet::Liveness::at`; the answer is held on the slot for as long as the Drone is. `armada.yml` carries no key, deliberately — there is no Manifest-level dial of any kind, and a key ahead of the code that reads it is what `#60` was opened about.
+
+**`lifetime = "Live"` governs this value and not a step's override**, which is the one place the two words could have collided. A step's number rides a WorkflowDef frozen at Job creation and stays what the Job froze; live is what an absent override falls back to, re-read at every step boundary, so a Job declaring nothing follows a change into its next step with no restart. `fleet::Liveness::at` carries the argument.
+
+Documented on Drone; Fleet is what notices the silence. Distinct from Fleet health-check / resource-poll interval, and from the heartbeat interval, which is how often a Drone is expected to speak rather than how long Fleet waits before speaking to it.
 """
 
 [settings.fleet-self-restart-attempt-limit-backoff]
@@ -921,7 +925,9 @@ How many nudge prompts a silent Drone gets before the Job escalates as stalled. 
 
 **Overridable per step, defaulted from `default_gate_policy.poke_limit`**, and the budget resets at each step boundary because the slot that counts spent pokes is per step. A Drone poked twice on step one starts step two with two pokes in hand.
 
-**Not wired.** `crates/armada/src/serve.rs` hard-codes it as the second half of `PROVISIONAL_LIVENESS`, and `fleet::silence` reads it off `Fleet` rather than off the Job — so neither the Manifest tier nor the step tier exists in code yet.
+**The step tier is wired and the Manifest tier is not**, exactly as for the duration it travels with. `crates/armada/src/serve.rs` still names the number, as the second half of `PROVISIONAL_LIVENESS`, and that is now the value a step inherits rather than the value every step gets. A step declaring `poke_limit` and nothing else keeps this value's duration, which is what two rows buy: `fleet::Liveness::at` resolves the halves separately.
+
+**`poke_limit: 0` is a legal step**, and it is not an absent key. It says the Drone gets no nudge at all and the first silence past the threshold escalates — the one place the two keys disagree about zero, since a `quiet_after_seconds: 0` is refused where it is written.
 """
 
 [settings.drone-heartbeat-interval-heartbeat-interval-minutes]

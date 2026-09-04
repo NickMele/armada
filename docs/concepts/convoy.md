@@ -34,9 +34,9 @@ Stated as one root rather than one repo because Armada knows roots and Workspace
 
 ### Revising the declared set
 
-**The declared set is not fixed at dispatch.** It may be revised mid-Job by rescope-and-respawn: [Fleet](fleet.md) terminates the [Drone](drone.md), re-resolves configuration against the new Manifest set, and spawns a fresh Drone on the same worktree and branch. **A narrowing proceeds unchallenged; a widening returns to the dispatch approval gate first.**
+**The declared set is not fixed at dispatch.** It may be revised mid-Job, by two routes that cost differently. A **person's** revision is rescope-and-respawn: [Fleet](fleet.md) terminates the [Drone](drone.md), re-resolves configuration against the new Manifest set, and spawns a fresh Drone on the same worktree and branch. A **Drone asking to widen** does none of that — a [Judge](judge.md) answers whether the paths belong to the step, the Job stays `running`, and nothing is respawned or re-resolved. A narrowing proceeds unchallenged and is a person's alone.
 
-**A revision bites hardest on a Convoy.** Permissions intersect across the gating Manifests, and intersection is monotone — widening a Convoy can only remove capability, so the respawned Drone may be less capable than the one that asked to widen. The revision must also stay inside the root bound above.
+**A revision bites hardest on a Convoy.** Permissions intersect across the gating Manifests, and intersection is monotone — widening a Convoy can only remove capability, so a Drone spawned against the wider set is less capable than one spawned against the narrower. **That is why a judged widening not re-resolving is the safe direction and not a hole**: the Drone carrying on holds the narrower set's toolset, which is a subset of nothing it was not already granted, and the next Drone resolves against the wider set as the table below requires. The revision must also stay inside the root bound above.
 
 ### A revision can change the shape
 

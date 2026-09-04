@@ -54,7 +54,7 @@ export type PaletteEntry = {
    */
   shortcut?: string;
   /**
-   * The glyph, 12px, from `packages/icons/icons.toml` by way of `actions.ts`.
+   * The glyph, 16px, from `packages/icons/icons.toml` by way of `actions.ts`.
    *
    * **Absent is common and says nothing is wrong.** Thirteen acts carry no
    * registered glyph, so the slot holds its width and draws nothing rather
@@ -323,7 +323,7 @@ function Row({
       {/* The slot holds its width whether or not there is a glyph, so a
           section with two icons and six blanks still reads as a column. */}
       <span className="armada-palette__glyph">
-        {Glyph === undefined ? null : <Glyph size={12} strokeWidth={2} aria-hidden />}
+        {Glyph === undefined ? null : <Glyph size={16} strokeWidth={2} aria-hidden />}
       </span>
       <span className="armada-palette__label">
         <Marked label={entry.label} query={query} at={held.at} />

@@ -235,6 +235,15 @@ pub enum Unreadable {
     NoState,
     /// A mid-step answer that finds thrashing and cites nothing.
     FindingCitesNothing,
+    /// No `answer:` line on a request for more scope, or one naming neither
+    /// word.
+    NoScopeAnswer,
+    /// A scope answer that says the paths do not belong to the step and does
+    /// not say why. **The reason is the whole of what follows a refusal** —
+    /// it is what the Drone reads and what the person who is escalated to
+    /// reads — so a refusal without one establishes nothing either of them
+    /// could act on.
+    ScopeAnswerSaysNoWhy,
 }
 
 impl core::fmt::Display for Unreadable {
@@ -262,6 +271,14 @@ impl core::fmt::Display for Unreadable {
             Unreadable::NoState => f.write_str(
                 "the answer names none of the three states, so nothing was \
                  established about where the work stands",
+            ),
+            Unreadable::NoScopeAnswer => f.write_str(
+                "the answer says neither that the paths belong to the step nor \
+                 that they do not, so nothing was decided about the request",
+            ),
+            Unreadable::ScopeAnswerSaysNoWhy => f.write_str(
+                "the answer says the paths do not belong to the step and does not \
+                 say why, which is not something the asker or the person can act on",
             ),
             Unreadable::FindingCitesNothing => f.write_str(
                 "the answer finds thrashing and names no observable that has not \
