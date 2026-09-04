@@ -1,15 +1,12 @@
 //! `api::Daemon`, implemented over a real Fleet.
 //!
-//! **The dependency points this way and never back.** The trait is stated in
-//! `api`, where the transport is, and implemented here, where the Jobs are.
-//! `cargo tree -p api` names no `fleet`: the daemon core is drivable in a test
-//! with no socket, no port and no process, and `api`'s own tests were written
-//! against a fake before this existed.
+//! **The dependency points this way and never back**, for the reasons
+//! `api::daemon`'s own header gives and does not need repeating here.
 //!
-//! **This is the redaction, and it is a visible step.** Every signature below
-//! speaks `ipc` DTOs, `JobSummary::of` is called here by hand, and a field added
-//! to `core_model::Job` reaches the wire only when somebody writes the line that
-//! puts it there — `api` never sees a domain type.
+//! **What is local is that this is the redaction, and that it is a visible
+//! step.** `JobSummary::of` is called here by hand, so a field added to
+//! `core_model::Job` reaches the wire only when somebody writes the line that
+//! puts it there.
 //!
 //! **Which refusal a failure is, and the code it carries, is
 //! [`refusing`](mod@crate::refusing)'s** — every `WireError` below is raised
@@ -27,25 +24,22 @@ use ipc::mcp::{
     CheckReport, DeclareScope, DispatchJob, NotRecorded, Receipt, RequestScope, SubmitEvidence,
 };
 use ipc::{
-    CallArguments, ChangesRequested, FleetCapacity, JobDelivery, JobDetail, JobDiff, JobEvidence,
-    JobForgotten, JobHistory, JobId, JobList, JobSpend, JobSummary, ManifestId, ManifestSummary,
-    ModelChoices, Overruled, ProposeJob, Redirection, Redispatched, Work, WorkflowId,
-    WorkflowSummary, WorktreeReclaimed, WorktreesHeld,
+    CallArguments, ChangesRequested, FleetCapacity, JobDetail, JobDiff, JobEvidence, JobForgotten,
+    JobHistory, JobId, JobList, JobSummary, ManifestId, ManifestSummary, ModelChoices, Overruled,
+    ProposeJob, Redirection, Redispatched, Work, WorkflowId, WorkflowSummary, WorktreeReclaimed,
+    WorktreesHeld,
 };
 use store::LoadJobError;
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
-use crate::footprint::kept;
 // The wire's `Redirection` is a struct with a public field; Fleet's is a
 // newtype that cannot hold an empty instruction. Both names are in scope here,
 // which is the one place they meet.
 use crate::overruling::Overruling;
 use crate::reporting::Filed;
 use crate::resume::Redirection as Instruction;
-use crate::wire::{
-    canonical, declared, recorded, reported, step_facts, step_moves, submitted, told, worktree_held,
-};
+use crate::wire::{canonical, declared, recorded, reported, submitted, told, worktree_held};
 
 impl<H, V, W> Daemon for Fleet<H, V, W>
 where
@@ -97,193 +91,47 @@ where
     /// How full the fleet is, and the one thing holding the next Drone back.
     ///
     /// **The same predicate again, unreduced.** `admit_next` opens with
-    /// `room_for_another` and `queued_reason` folds it to one label; this is
-    /// the third reader of that one answer and it takes it whole. Nothing here
-    /// computes a second opinion about why a Job is waiting — `Room::hold` is a
-    /// `match` over the value admission itself returned.
+    /// `room_for_another` and `queued_reason` folds it to one label; this is the
+    /// third reader of that one answer and takes it whole — `Room::hold` is a
+    /// `match` over the value admission returned, never a second opinion.
     ///
-    /// **`occupied` is `Slots::count`.** The roster is what the bound is
-    /// measured against, and a count taken from Job statuses would disagree
-    /// with it: an escalated Job keeps its Drone alive and idle so a redirect
-    /// costs no respawn, and it keeps its place. `count` sweeps the slots whose
-    /// `Working` has gone, so what it answers is what admission will act on.
+    /// **`occupied` is `Slots::count`**, because the roster is what the bound is
+    /// measured against. A count over Job statuses would disagree: an escalated
+    /// Job keeps its Drone alive and idle so a redirect costs no respawn, and it
+    /// keeps its place. `count` sweeps the slots whose `Working` has gone.
     ///
     /// The roster lock is taken once and both facts are read under it, so the
     /// bound, the count and the reason cannot be three readings of three
-    /// different instants. It is admission's own lock order — roster first,
-    /// then the poll lock inside `room_for_another` — so this adds no cycle.
+    /// instants. It is admission's own lock order — roster first, then the poll
+    /// lock inside `room_for_another` — so this adds no cycle.
     async fn get_capacity(&self) -> Result<FleetCapacity, Refusal> {
         let mut slots = self.slots().lock().await;
         let room = self.room_for_another(&mut slots).await;
         Ok(FleetCapacity::of(slots.cap(), slots.count(), room.hold()))
     }
 
-    /// One Job in full, folded from its log like every other read.
-    ///
-    /// # The footprint read is spent only where there is one to read
-    ///
-    /// This call is made on every open of a Job, which is the argument that put
-    /// the history and the patch on routes of their own. A footprint is neither
-    /// — it is a path and a word per file — and it is written at the terminal
-    /// transition, so a Job that is still going has none. Asking only for a
-    /// Job that has stopped is what keeps an open of a running Job costing
-    /// exactly what it cost before, and `footprint` absent on one of them is
-    /// the truth rather than an omission.
-    ///
-    /// **The wait a redirect left is on this read and on no other**, because it
-    /// is held in the slot rather than written down — `Fleet::redirect_awaited`.
+    /// One Job in full. **The assembly is `crate::detail`'s** — the only
+    /// operation here whose body is more than a conversion, and the reasoning
+    /// about what is read and when is beside it.
     async fn get_job(&self, job_id: JobId) -> Result<JobDetail, Refusal> {
-        let job = self
-            .load(&job_id.to_domain())
-            .await
-            .map_err(|why| self.refusal(why))?;
-        let reason = self
-            .last_reason(job.id())
-            .await
-            .map_err(|why| self.refusal(why))?;
-        let (ran, flagged, moves, ran_every_attempt, judged_every_attempt) = {
-            let store = self.store().lock().await;
-            let ran = store
-                .step_checks(job.id())
-                .map_err(|why| self.refusal(Adrift::Reading(why)))?;
-            let flagged = store
-                .step_gaming_flags(job.id())
-                .map_err(|why| self.refusal(Adrift::Reading(why)))?;
-            // The rows `get_job_events` serves, narrowed to the step moves.
-            // **Read on every open, unlike the history**: one entry per run of
-            // a step rather than a row per move, so a rail can say `Attempt 1
-            // refused` without the unbounded read `history.rs` keeps off this.
-            let moves =
-                step_moves(&store, job.id()).map_err(|why| self.refusal(Adrift::Reading(why)))?;
-            // **Every attempt's rows, beside the latest-only `ran` above.**
-            // `ran` stays latest-only because `why_stuck` below reads it as
-            // that; `step_facts` wants every run's Checks and Judge answers
-            // stamped with the attempt they belong to, which these two give.
-            let ran_every_attempt = store
-                .step_checks_every_attempt(job.id())
-                .map_err(|why| self.refusal(Adrift::Reading(why)))?;
-            let judged_every_attempt = store
-                .step_judgments_every_attempt(job.id())
-                .map_err(|why| self.refusal(Adrift::Reading(why)))?;
-            (ran, flagged, moves, ran_every_attempt, judged_every_attempt)
-        };
-        // The plans are read with the footprint and only with it: they are what
-        // it is measured against, and a running Job has neither — its live
-        // reading is marked from the slot, where the step being watched is the
-        // step that declared.
-        let recorded = match job.status().is_terminal() {
-            false => None,
-            true => {
-                let store = self.store().lock().await;
-                let kept = store
-                    .footprint(job.id())
-                    .map_err(|why| self.refusal(Adrift::Reading(why)))?;
-                let plans = match kept.is_some() {
-                    false => Vec::new(),
-                    true => store
-                        .step_plans(job.id())
-                        .map_err(|why| self.refusal(Adrift::Reading(why)))?,
-                };
-                kept.map(|footprint| (footprint, plans))
-            }
-        };
-        // Read on the same terms as the footprint and for the same reason: a
-        // Job that has not finished has nothing here, and a read spent on every
-        // running Job would buy three nulls.
-        let delivery = match job.status().is_terminal() {
-            false => None,
-            true => {
-                let came_to = self
-                    .store()
-                    .lock()
-                    .await
-                    .delivery_for(job.id())
-                    .map_err(|why| self.refusal(Adrift::Reading(why)))?;
-                // Absent rather than three nulls: a Job that finished before
-                // Fleet wrote this down is not a Job whose branch came to
-                // nothing, and the surface says different sentences for the two.
-                match came_to.is_empty() {
-                    true => None,
-                    false => Some(JobDelivery {
-                        commit: came_to.commit,
-                        pushed: came_to.pushed,
-                        pull_request: came_to.pull_request,
-                        landed: came_to.landed.as_ref().and_then(crate::noticing::settled),
-                    }),
-                }
-            }
-        };
-        let queued = self.queued_reason(&job).await?;
-        // **Read for every Job, unlike the footprint and the delivery above.**
-        // Those two are absent until a Job finishes; this one is what a person
-        // watching a running Job wants most, and it is one indexed query. The
-        // cap travels with the figure because neither half is readable alone.
-        let allowance = self.allowance();
-        let spent = self
-            .spend_of(job.id())
-            .await
-            .map_err(|why| self.refusal(why))?;
-        let spend = Some(JobSpend {
-            cost_micros: spent.cost_micros,
-            cost_cap_micros: allowance.cost().count(),
-            turns: spent.turns,
-            turn_cap: allowance.turns(),
-            ran_ms: spent.ran_ms,
-            drones: spent.drones,
-        });
-        // Before `step_facts`, which consumes the Check runs: the
-        // classification reads them to answer whether an override is available,
-        // and reading them twice would be a second answer to one question.
-        let stuck = self.why_stuck(&job, reason.as_ref(), &ran).await;
-        // A read, and only ever a read — `crate::overlap` says why it is
-        // reachable from here and from nothing on the dispatch path.
-        let overlaps = self
-            .write_scope_overlaps(&job)
-            .await
-            .map_err(|why| self.refusal(why))?;
-        Ok(JobDetail::of(
-            &job,
-            reason.as_ref(),
-            queued,
-            self.resumption(&job),
-            &step_facts(
-                self.aloft(),
-                &self.host().repo_root,
-                &job,
-                ran_every_attempt,
-                judged_every_attempt,
-                flagged,
-                &moves,
-            ),
-            recorded
-                .as_ref()
-                .map(|(footprint, plans)| kept(footprint, plans)),
-            self.redirect_awaited(job.id()).await,
-            self.question_awaited(job.id()).await,
-            stuck.as_ref(),
-            overlaps,
-            delivery,
-            spend,
-        ))
+        crate::detail::of(self, job_id).await
     }
 
     /// Every move one Job made, oldest first. **The log, read — not folded.**
     ///
-    /// # The Job is loaded first, and that is not a wasted read
+    /// **The Job is loaded first, and that is not a wasted read.** It makes an
+    /// id that names nothing a 404 rather than an empty history — a lie about a
+    /// Job that exists and has not moved — and it keeps this read behind the
+    /// same fold every other read is behind: a log the machine would not admit
+    /// refuses to load, so a history that reaches the wire is one
+    /// `Job::transition` accepted. **This read cannot show a state the fold
+    /// rejected**, and nothing is replayed to get that: `crates/store/src/fold.rs`
+    /// is still the only caller.
     ///
-    /// It is what makes an id that names nothing a 404 rather than an empty
-    /// history, which would be a lie about a Job that exists and has not moved.
-    /// It also keeps this read behind the same fold every other read is behind:
-    /// a log the machine would not admit refuses to load, so a history that
-    /// reaches the wire is one `Job::transition` accepted. **This read cannot
-    /// show a state the fold rejected**, and it does not replay anything to
-    /// avoid it — `crates/store/src/fold.rs` is still the only caller.
-    ///
-    /// # The rows come back whole
-    ///
-    /// One query, in `seq` order, over the one table both machines write to.
-    /// A step move ordered against the status transitions around it is what a
-    /// separately keyed second log could not have offered.
+    /// The rows come back whole: one query, in `seq` order, over the one table
+    /// both machines write to. A step move ordered against the status
+    /// transitions around it is what a separately keyed second log could not
+    /// have offered.
     async fn get_job_events(&self, job_id: JobId) -> Result<JobHistory, Refusal> {
         let id = job_id.to_domain();
         self.load(&id).await.map_err(|why| self.refusal(why))?;

@@ -42,6 +42,7 @@ pub mod crossing;
 pub mod daemon;
 pub mod delivery;
 pub mod detach;
+mod detail;
 pub mod dispatch;
 pub mod drafting;
 pub mod drone;
