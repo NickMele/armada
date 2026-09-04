@@ -142,6 +142,68 @@ fn is_attribute_test(inside: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ':')
 }
 
+/// The one field in this repository whose value is an issue reference. The
+/// registry writes `unbuilt = "#250"`, the generator validates it against
+/// `^#(\d+)$` before emitting it, and Bridge reads it back as `unbuilt:
+/// "#250"`. A second such field is a line added here, which is a decision
+/// somebody makes on purpose rather than a shape the rule guesses at.
+const CITATION_FIELD: &str = "unbuilt";
+
+/// Whether a run behind a `#` cites an issue rather than naming a colour.
+///
+/// **The length of the run cannot decide this and it was tried.** `#250` is
+/// three decimal digits and so is `#333`; exempting the decimal alphabet
+/// exempts `#000`, `#111` and `#666`, which is where a hardcoded grey actually
+/// clusters. That reading passed its own tests and blinded the rule to the
+/// commonest thing it exists to catch.
+///
+/// What separates them is not the digits, it is what holds them: a citation is
+/// the whole value of a field that carries issue references, and a colour is a
+/// value of anything else. So all four have to hold — the field is
+/// `CITATION_FIELD`, the value is quoted, the run is one to four decimal
+/// digits, and the closing quote comes straight after it. `color: "#000"` fails
+/// every one of them and is still reported.
+///
+/// This is not an opt-out and cannot be used as one: there is nothing to write
+/// into a file to make the rule stop looking, and a colour under any other key
+/// on the same line is read exactly as before.
+fn is_issue_reference(before: &str, run: &str, after: Option<char>) -> bool {
+    if run.is_empty() || run.len() > 4 || !run.chars().all(|c| c.is_ascii_digit()) {
+        return false;
+    }
+    // The value is a string of its own, and the run is all of it. A hash
+    // followed by three digits and then anything else is not a citation.
+    let head = before.trim_end();
+    let Some(quote) = head
+        .chars()
+        .next_back()
+        .filter(|c| matches!(c, '"' | '\'' | '`'))
+    else {
+        return false;
+    };
+    if after != Some(quote) {
+        return false;
+    }
+    // Behind the quote, an assignment: `unbuilt: "…"` as a renderer writes it,
+    // `unbuilt = "…"` as the registry does.
+    let head = head[..head.len() - quote.len_utf8()].trim_end();
+    let Some(head) = head.strip_suffix(':').or_else(|| head.strip_suffix('=')) else {
+        return false;
+    };
+    let head = head.trim_end();
+    let name: String = head
+        .chars()
+        .rev()
+        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .collect();
+    // `--unbuilt` is a custom property, not the field, so what the name ran
+    // into has to be something a name does not continue through.
+    if head[..head.len() - name.len()].ends_with('-') {
+        return false;
+    }
+    name.chars().rev().eq(CITATION_FIELD.chars())
+}
+
 /// Everything off-contract on one line. All of them, not the first: a line
 /// carrying three violations is three things to fix, and reporting one at a
 /// time turns a single edit into three gate runs.
@@ -201,8 +263,15 @@ fn off_contract(code: &str) -> Vec<String> {
     let code = rest_of_line.as_str();
 
     // A hex colour or a px literal in a style object.
-    for rest in code.split('#').skip(1) {
+    for (i, _) in code.match_indices('#') {
+        let rest = &code[i + 1..];
         let hex: String = rest.chars().take_while(|c| c.is_ascii_hexdigit()).collect();
+        // Every character taken is ASCII, so the run's byte length is where it
+        // ends in chars too.
+        let after = rest[hex.len()..].chars().next();
+        if is_issue_reference(&code[..i], &hex, after) {
+            continue;
+        }
         if (hex.len() == 3 || hex.len() == 6 || hex.len() == 8) && !code.contains("://") {
             found.push(format!(
                 "`#{hex}` is a colour literal — spell it with a token"
@@ -224,3 +293,6 @@ fn off_contract(code: &str) -> Vec<String> {
     }
     found
 }
+
+#[cfg(test)]
+mod tests;
