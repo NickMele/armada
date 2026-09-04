@@ -28,7 +28,8 @@ use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Observed, Queries, Refusal};
 use ipc::{
     CallArguments, FleetCapacity, JobDelivery, JobDetail, JobDiff, JobEvidence, JobHistory, JobId,
-    JobList, JobSpend, ManifestSummary, ModelChoices, Work, WorkflowSummary, WorktreesHeld,
+    JobList, JobResources, JobSpend, ManifestSummary, ModelChoices, Work, WorkflowSummary,
+    WorktreesHeld,
 };
 use store::LoadJobError;
 
@@ -292,6 +293,22 @@ where
     /// **The Job is loaded first**, for `get_job_events`' reason: an id naming
     /// nothing is a 404, and never an empty list. Empty is a real answer and it
     /// means no step has submitted anything yet.
+    /// What this Job holds on this machine. **The reading `crate::resources`
+    /// takes, redacted there** — a process crosses as its executable's name and
+    /// never its arguments.
+    ///
+    /// The Job is loaded first, so an id naming nothing is a 404 rather than a
+    /// panel of empty lists.
+    async fn get_job_resources(&self, job_id: JobId) -> Result<JobResources, Refusal> {
+        let job = self
+            .load(&job_id.to_domain())
+            .await
+            .map_err(|why| self.refusal(why))?;
+        self.job_resources(&job)
+            .await
+            .map_err(|why| self.refusal(why))
+    }
+
     async fn get_evidence(&self, job_id: JobId) -> Result<JobEvidence, Refusal> {
         let id = job_id.to_domain();
         self.load(&id).await.map_err(|why| self.refusal(why))?;

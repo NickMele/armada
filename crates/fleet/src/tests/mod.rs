@@ -78,6 +78,7 @@ mod redirect;
 mod redispatch;
 mod regating;
 mod reporting;
+mod resources;
 mod restarting;
 mod resting;
 mod resuming;

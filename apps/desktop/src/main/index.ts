@@ -304,6 +304,17 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.readHistory, (_event, jobId: string | null) =>
     connection?.readHistory(jobId),
   );
+  // What the open Job holds on this machine. Opened with the Job and re-read
+  // on every event naming it — its own channel because it is its own operation
+  // and because it walks a process table, which a Job's detail does not.
+  ipcMain.handle(CHANNELS.readResources, (_event, jobId: string | null) =>
+    connection?.readResources(jobId),
+  );
+  // The act above that read. It moves nothing, costs no model call, and the
+  // answer it publishes is also written into the Job's own log.
+  ipcMain.handle(CHANNELS.examineJob, (_event, jobId: string) =>
+    connection?.examineJob(jobId),
+  );
   // The two reads a review is made of. Two channels because they are two
   // operations: the claims are four lines a step and the diff is the patch,
   // and the patch is read only where somebody is looking at one.

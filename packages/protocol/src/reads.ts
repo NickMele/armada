@@ -11,7 +11,9 @@
 import type {
   CallArguments,
   JobDetail,
+  JobExamined,
   JobFilesChanged,
+  JobResources,
   JobSummary,
   LogNote,
   ManifestSummary,
@@ -224,6 +226,29 @@ export type CallRead =
 
 /** `GET /jobs/:job_id` for the open Job. */
 export type Watched = JobRead<{ detail: JobDetail }>;
+
+/**
+ * `GET /jobs/:job_id/resources` for the open Job.
+ *
+ * **The reading is kept while a re-read is in flight** — `keepsLastGood` — for
+ * the reason the Job's own detail is: it is re-read while a person watches, and
+ * one timed-out read blanking the panel would draw a Job that holds nothing,
+ * which is the exact reading this panel exists to make loud.
+ */
+export type Holds = JobRead<{ resources: JobResources }>;
+
+/**
+ * `POST /jobs/:job_id/examine`, and what it found.
+ *
+ * **Not a `JobRead`.** Nothing polls it: it is a thing a person pressed, and it
+ * stays on screen until they press it again or leave the Job. `looking` is the
+ * press in flight, which is what stops a second press sending a second act.
+ */
+export type Examination =
+  | { state: "none" }
+  | { state: "looking"; jobId: string }
+  | { state: "found"; jobId: string; examined: JobExamined }
+  | { state: "failed"; jobId: string; outcome: Outcome };
 
 /** The values a proposal may name. Empty until the connection answers. */
 export type Holdings = {

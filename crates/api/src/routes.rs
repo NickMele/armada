@@ -28,16 +28,16 @@ use ipc::RunId;
 use std::sync::Arc;
 
 use crate::commands::{
-    answer_question, approve_dispatch, approve_review, file_report, forget_job, kill_drone,
-    kill_job, override_verdict, propose_from_request, propose_job, reclaim_worktree,
+    answer_question, approve_dispatch, approve_review, examine_job, file_report, forget_job,
+    kill_drone, kill_job, override_verdict, propose_from_request, propose_job, reclaim_worktree,
     redirect_drone, redispatch_job, reject_job, request_changes, rerun_gate, restart_step,
     stop_proposal,
 };
 use crate::daemon::Daemon;
 use crate::journal::Journal;
 use crate::queries::{
-    get_call, get_capacity, get_diff, get_evidence, get_job, get_job_events, list_jobs,
-    list_manifests, list_models, list_reports, list_workflows, list_worktrees,
+    get_call, get_capacity, get_diff, get_evidence, get_job, get_job_events, get_job_resources,
+    list_jobs, list_manifests, list_models, list_reports, list_workflows, list_worktrees,
 };
 use crate::sockets::{events, job_log, observe_job};
 use crate::stream::Broadcaster;
@@ -106,6 +106,20 @@ pub const SERVED: &[Route] = &[
         operation: "get_diff",
         method: "GET",
         path: "/jobs/:job_id/diff",
+    },
+    // The machine reading, and the act above it. Not fields on `get_job`,
+    // which is re-read on every event naming the Job: these walk a process
+    // table and a directory. The act is a POST because it does work and leaves
+    // a line in the Job's own log, which is where its answer lives.
+    Route {
+        operation: "get_job_resources",
+        method: "GET",
+        path: "/jobs/:job_id/resources",
+    },
+    Route {
+        operation: "examine_job",
+        method: "POST",
+        path: "/jobs/:job_id/examine",
     },
     // One call's arguments, and a member read rather than an act — the same
     // shape as `get_job` under `/jobs`, which is why the last segment is the id
@@ -462,6 +476,8 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/:job_id/events", get(get_job_events::<D>))
         .route("/jobs/:job_id/evidence", get(get_evidence::<D>))
         .route("/jobs/:job_id/diff", get(get_diff::<D>))
+        .route("/jobs/:job_id/resources", get(get_job_resources::<D>))
+        .route("/jobs/:job_id/examine", post(examine_job::<D>))
         .route("/jobs/:job_id/calls/:call_id", get(get_call::<D>))
         .route("/jobs/:job_id/approve_review", post(approve_review::<D>))
         .route("/jobs/:job_id/request_changes", post(request_changes::<D>))

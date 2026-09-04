@@ -174,6 +174,14 @@ export function App() {
     void window.armada.watchJob(openJob);
   }, [openJob]);
 
+  // What the open Job holds on this machine. **Opened with the Job**, like the
+  // two sockets: the panel it draws answers *is this working*, which is the
+  // question somebody opening a Job they suspect has wedged came with. Main
+  // re-reads it on every event naming the Job and this says nothing about when.
+  useEffect(() => {
+    void window.armada.readResources(openJob);
+  }, [openJob]);
+
   // Opening another Job drops the socket, and does it before the one below is
   // reopened — the rows in hand belong to the Job that was open, and carrying
   // them into a different one would be a transcript under the wrong title.
@@ -658,6 +666,13 @@ export function App() {
                 deciding={deciding === reading.id}
                 observed={state.observed}
                 journalled={state.journalled}
+                resources={state.resources}
+                examination={state.examination}
+                // The one act here that changes nothing. It costs no model
+                // call, and its answer arrives on the published state rather
+                // than coming back — so a window reloaded mid-look still draws
+                // what Fleet found.
+                onExamine={(jobId) => void window.armada.examineJob(jobId)}
                 recorded={{
                   footprint: state.footprint,
                   evidence: state.evidence,

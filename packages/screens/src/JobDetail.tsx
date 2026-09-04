@@ -48,7 +48,7 @@
 // region is gone: the turns are chapter two, the files are chapter three, and
 // the raw event table is not something this screen needs at all.
 
-import { GAMING_PATTERN, JOB_LIFECYCLE } from "@armada/components";
+import { GAMING_PATTERN, JOB_LIFECYCLE, JobResources } from "@armada/components";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -64,7 +64,9 @@ import {
 import type {
   Diff,
   Evidence,
+  Examination,
   Footprint,
+  Holds,
   Journalled,
   Observed,
   Outcome,
@@ -173,6 +175,20 @@ export type JobDetailProps = {
    * opens this screen to find out what is going on.
    */
   journalled: Journalled;
+  /**
+   * What the open Job holds on this machine. **Opened with the Job**, like the
+   * two sockets above: the panel it draws answers *is this working*, which is
+   * the question somebody opening a Job they suspect has wedged came with.
+   */
+  resources: Holds;
+  /**
+   * What the last look found, where somebody pressed for one. **Never opened
+   * with the Job** — an answer that appeared unasked would be the machine
+   * noticing on its own, which is a different capability.
+   */
+  examination: Examination;
+  /** Ask Fleet to go and look at this Job now. It costs no model call. */
+  onExamine: (jobId: string) => void;
   /** The reads the panel's chapters draw from. */
   recorded: FoldedReads;
   onCopied: (value: string) => void;
@@ -200,6 +216,9 @@ export function JobDetail({
   deciding,
   observed,
   journalled,
+  resources,
+  examination,
+  onExamine,
   recorded,
   onAct,
   onRedirect,
@@ -283,6 +302,14 @@ export function JobDetail({
   // the id it was opened for, because this socket lags a selection too.
   const noted = "log" in journalled && journalled.jobId === job.id ? journalled.log : null;
   const fleetSaid = useMemo(() => notesOf(noted?.notes ?? []), [noted]);
+  // The machine reading and the look above it, both checked against the id they
+  // were made for — a reading painted under the Job that replaced it is the
+  // failure `reader.ts` exists to prevent, and the same rule applies once the
+  // state reaches a screen.
+  const holding =
+    resources.state === "read" && resources.jobId === job.id ? resources.resources : null;
+  const looked =
+    examination.state !== "none" && examination.jobId === job.id ? examination : null;
 
   // What the keyboard can name, built before it is drawn. **The three regions
   // the contextual tier reaches are values here rather than queries later** —
@@ -421,6 +448,20 @@ export function JobDetail({
       // state**, not only while a Job is preparing: the lines that belong to no
       // step are also the ones a reader wants after it stopped — what was
       // reclaimed, what was adopted, what went outside its scope.
+      // What it holds on this machine, above the log. The log is the record of
+      // what happened in this span and this is what is true now, which is the
+      // question a person opening a Job they suspect has wedged came with.
+      machine={
+        <JobResources
+          reading={holding}
+          note={whyNoReading(resources)}
+          age={holding === null ? undefined : (span(holding.read_at, now) ?? undefined)}
+          examined={looked?.state === "found" ? looked.examined : null}
+          looking={looked?.state === "looking"}
+          lookFailed={looked?.state === "failed" ? LOOK_FAILED : undefined}
+          onExamine={() => onExamine(job.id)}
+        />
+      }
       fleet={
         <Log
           rows={fleetSaid}
@@ -778,6 +819,34 @@ export type FoldedReads = {
   evidence: Evidence;
   diff: Diff;
 };
+
+/**
+ * What a failed look says, and it says nothing about the Job.
+ *
+ * **Fleet did not answer, which is not a finding.** Drawing a failure as
+ * `not_working` would report a Job as broken on the strength of a connection.
+ */
+const LOOK_FAILED = "Fleet did not answer the look. Nothing here is a finding about the Job.";
+
+/**
+ * Why there is no machine reading, which is never the same sentence twice.
+ *
+ * **A read that has not answered and a Job that holds nothing are different
+ * things**, and this is the half that says which — the panel's own arm says the
+ * other. `undefined` where the reading is in hand.
+ */
+function whyNoReading(resources: Holds): string | undefined {
+  switch (resources.state) {
+    case "none":
+      return "Nothing is being read.";
+    case "reading":
+      return "Reading the machine.";
+    case "failed":
+      return "Fleet did not answer, so what this Job holds is unknown.";
+    case "read":
+      return undefined;
+  }
+}
 
 /** Why the run has no rows, which is never the same sentence twice. */
 function whyNoSteps(watched: Watched, jobId: string): string | undefined {

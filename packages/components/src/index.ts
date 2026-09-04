@@ -174,3 +174,8 @@ export * from "./compositions/DispatchRequest/DispatchRequest";
 // the component: not-provably-safe is one word for four situations a person
 // answers differently, and each wants different facts in front of the decision.
 export * from "./compositions/HeldWorktree/HeldWorktree";
+
+// What one Job holds on the machine, and the act that goes and looks. Not a
+// debug panel: the first thing on it is a sentence answering *is this working*,
+// because the moment it is for is a person worried about a Job.
+export * from "./compositions/JobResources/JobResources";

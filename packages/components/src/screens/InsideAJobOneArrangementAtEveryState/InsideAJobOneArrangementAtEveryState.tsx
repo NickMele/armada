@@ -139,6 +139,18 @@ export type InsideAJobProps = {
   fleet?: ReactNode;
   fleetLabel?: ReactNode;
   /**
+   * What the Job holds on this machine, and the act that goes and looks.
+   *
+   * **Above the log and above the run.** It answers *is this working*, which is
+   * the question a person opening a Job they suspect has wedged came with —
+   * everything else on the screen is what happened, and this is what is true
+   * now. The log below it is the record of the same span.
+   *
+   * Absent draws nothing, like `fleet`.
+   */
+  machine?: ReactNode;
+  machineLabel?: ReactNode;
+  /**
    * The running mark on the current step animates. One per screen: this is the
    * Job being read, so the tree pulses and the header badge stays static.
    */
@@ -210,6 +222,8 @@ export function InsideAJob({
   runAbsent = "Nothing serves this Job's workflow, so its steps are unknown.",
   fleet,
   fleetLabel = "What Armada has done",
+  machine,
+  machineLabel = "What this Job holds",
   pulsing = true,
   onSelectStep,
   openSteps,
@@ -237,15 +251,30 @@ export function InsideAJob({
           {/* Above the run, because it is the Job's and not a step's, and
               because it is what there is to read at the one moment the run has
               nothing in it. */}
+          {machine === undefined ? null : (
+            <>
+              <span className="armada-screen__eyebrow">{machineLabel}</span>
+              <div className="armada-inside__fleet">{machine}</div>
+            </>
+          )}
+
           {fleet === undefined ? null : (
             <>
-              <span className="armada-screen__eyebrow">{fleetLabel}</span>
+              <span
+                className="armada-screen__eyebrow"
+                data-spaced={machine !== undefined || undefined}
+              >
+                {fleetLabel}
+              </span>
               <div className="armada-inside__fleet">{fleet}</div>
             </>
           )}
 
           <div className="armada-inside__region-head">
-            <span className="armada-screen__eyebrow" data-spaced={fleet !== undefined || undefined}>
+            <span
+              className="armada-screen__eyebrow"
+              data-spaced={fleet !== undefined || machine !== undefined || undefined}
+            >
               {runLabel}
             </span>
             {runElapsed === undefined ? null : (

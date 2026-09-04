@@ -176,6 +176,27 @@ Not the turn stream either. `observe_job` renders what a Drone said; this render
 Helm may reach it for the reason it may reach the other queries: reading what happened is not doing anything about it. What that costs is the tokens `get_events_since` names — a long history stays in the session for the rest of it — so it is asked about one Job rather than swept.
 """
 
+[operations.get_job_resources]
+kind = "query"
+transport = "HTTP"
+helm_access = "Yes"
+description = "What one Job holds on this machine — its processes, what each is burning, the disk its worktree has taken, and when its own log was last written"
+notes = """
+**The other axis from `spend`.** That answers what a Job cost in model terms — `cost_micros`, `turns`, `ran_ms`, `drones` — and on the wedged Job of 4 Sep 2026 every one of the four read zero, which was true and told nobody anything: a Job between phases and a Job hung are the same four zeros. Establishing that the Job held no process at all took a process listing against Fleet's own pid, a `du` on the worktree and a look at a log file's mtime, none of which Armada served.
+
+**What counts as this Job's is decided rather than assumed.** It is the process Fleet recorded at the spawn and everything descended from it, so a Drone's session counts and so does a build it started. A Check Fleet ran and a repository's preparation commands are Fleet's children rather than the Drone's, and they are not counted — `held` is what says so, and `none` during those spans is a stated answer rather than an empty list.
+
+`held` is the reading that could not be got from a Job's record at all: whether the process Fleet believes is running exists, and whether it is the same process. `crates/fleet/src/process.rs` compares the start time written down at the spawn, so a recycled pid answers `replaced` rather than reading as alive.
+
+**Every figure carries `read_at`.** A process can exit between the sample and the render, and a panel drawing figures with no instant on them claims they are current for as long as it is open.
+
+**Absent is never empty.** `worktree` absent is a Job with no checkout — one at the approval gate, one already reclaimed — and is a different answer from a checkout that measures nothing. `bytes` absent is a walk that did not finish inside its bound, which is what keeps a 1.0 GB worktree from turning this into the timeout `#428` was.
+
+A route of its own rather than a field on `get_job`, which is read on every open of a Job and again on every event naming it. This one walks a process table and a directory; paying for that continuously to answer a question asked rarely is exactly what the Board's 250ms turn interval makes unaffordable.
+
+`helm_access` is `Yes` for the reason the other queries have it: reading the machine decides nothing, and it is three short lists.
+"""
+
 [operations.get_manifest]
 kind = "query"
 transport = "HTTP"
@@ -400,6 +421,29 @@ kind = "command"
 transport = "HTTP"
 helm_access = "No"
 description = "Rejects a dispatch, feeds pattern learning"
+
+[operations.examine_job]
+kind = "command"
+transport = "HTTP"
+helm_access = "Yes"
+description = "Go and look at this Job now, and answer with what was found"
+notes = """
+**The rung below intervene, and there was none.** Every other act on a Job either changes it or reads what it already recorded, so a person who suspected a Job was wedged had one move — end it — and no way to find out first whether ending it was warranted. That is why the Board milestone's Job was killed: not because killing was known to be right, but because establishing anything else meant leaving Armada.
+
+Five looks, each saying whether it could tell working from not: whether the process Fleet believes is running exists, whether the worktree is on disk, when anything was last written to the Job's own log, which span the Job is in and what is supposed to end it, and what Fleet's own liveness watch currently reads.
+
+**`cannot_tell` is a real answer and is never rounded up.** One look that cannot separate the two keeps the whole examination off `working` — an answer of "everything looks fine" on a plainly hung Job spends a person's suspicion and returns nothing. Two of the five can never say `not_working` at all and say so where they are drawn: a Job's log is quiet while a Drone works steadily, and a quiet Drone is what a long command looks like.
+
+**`working` reads as "this is as it should be"**, not as "a processor is busy". A Job that is over is over and a Job waiting for a person is waiting for a person; neither holds a process and neither is a fault. Under the other reading every finished Job would examine as broken.
+
+**A command rather than a query, and the line is worth stating.** It decodes no body and answers no 201, which are two of the three marks of a read. What makes it an act is what it leaves: the answer is written into the Job's own log, so it is on the record beside everything else Fleet did rather than in one person's terminal — the same reason a question a Drone asks is an event on a Job.
+
+**It costs no model call and cannot hang.** The reading underneath it is bounded and so is each look. An act pressed by somebody who already suspects a hang must not be the next thing that stops answering, which is `#428` read as a rule rather than as a bug.
+
+**Every status is examinable, terminal ones included.** The span it was found in is where a Job stalls before its first agent, and a Job can be wrong at every other point too — the act means *check this Job*, not *check preparation*.
+
+`helm_access` is `Yes`, which is where it differs from every other command but `redirect_drone`. Nothing it does changes the Job, and the whole value of the rung is that it is reachable before the ladder's destructive rungs are.
+"""
 
 [operations.file_report]
 kind = "command"

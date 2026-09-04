@@ -59,6 +59,9 @@ mod proposing;
 mod reclaimed;
 /// What a person says went wrong, with the Job's own record attached.
 mod report;
+/// What one Job holds on this machine, and what came of asking whether it is
+/// working. **The other axis from `spend`**, which answers the model's cost.
+mod resources;
 mod setup;
 mod turn;
 /// The two numbers both sides read, and what a mismatch between them means.
@@ -109,6 +112,9 @@ pub use overlap::{ScopeOverlap, SharedPath};
 pub use proposing::{ProposalInFlight, ProposalReach, ProposalStopped, StopProposal};
 pub use reclaimed::{ReclaimedBranch, ReclaimedWorktree, WorktreeReclaimed};
 pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, ReportOrigin};
+pub use resources::{
+    Asked, Finding, Held, JobExamined, JobProcess, JobResources, Look, WorktreeOnDisk,
+};
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
 pub use turn::{
     CallArguments, Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage, Voice, Withheld,

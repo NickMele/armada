@@ -136,6 +136,19 @@ const api: BridgeApi = {
   readHistory: (jobId: string | null): Promise<void> =>
     ipcRenderer.invoke(CHANNELS.readHistory, jobId),
 
+  // What the open Job holds on this machine. Read-only, and its own entry
+  // because it is its own operation: `watchJob` is re-read on every event
+  // naming the Job and this walks a process table and a directory.
+  readResources: (jobId: string | null): Promise<void> =>
+    ipcRenderer.invoke(CHANNELS.readResources, jobId),
+
+  // Ask Fleet to go and look now. **The rung below intervene**, and the one
+  // entry here that is an act and changes nothing: what it leaves is a line in
+  // the Job's own log. It costs no model call, and the answer arrives on the
+  // published state rather than coming back from the call.
+  examineJob: (jobId: string): Promise<void> =>
+    ipcRenderer.invoke(CHANNELS.examineJob, jobId),
+
   // What a Job's Drones claimed. Read-only, and a separate entry from the diff
   // below because they are two operations: this one is four lines per step and
   // that one is the patch, and a surface wanting only the claims must not have

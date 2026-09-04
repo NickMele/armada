@@ -10,7 +10,7 @@
 
 use ipc::{
     CallArguments, FleetCapacity, JobDetail, JobDiff, JobEvidence, JobHistory, JobId, JobList,
-    ManifestSummary, ModelChoices, WorkflowSummary, WorktreesHeld,
+    JobResources, ManifestSummary, ModelChoices, WorkflowSummary, WorktreesHeld,
 };
 
 use super::FakeDaemon;
@@ -53,6 +53,17 @@ impl Queries for FakeDaemon {
         };
         let at = job.status;
         Ok(shapes::history(job_id, at))
+    }
+
+    /// **The refusal is what matters here too**: an id naming nothing is a 404
+    /// rather than a panel of empty lists, which is the one thing a client
+    /// cannot tell apart on its own.
+    async fn get_job_resources(&self, job_id: JobId) -> Result<JobResources, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        if !jobs.iter().any(|job| job.id == job_id) {
+            return Err(self.no_such_job(&job_id));
+        }
+        Ok(shapes::resources(job_id))
     }
 
     async fn get_evidence(&self, job_id: JobId) -> Result<JobEvidence, Refusal> {

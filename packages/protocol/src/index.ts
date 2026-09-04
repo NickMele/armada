@@ -27,6 +27,7 @@ export * from "./proposing";
 export * from "./reads";
 export * from "./reclaimed";
 export * from "./report";
+export * from "./resources";
 export * from "./setup";
 export * from "./turn";
 export * from "./version";

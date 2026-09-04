@@ -138,3 +138,7 @@
    the rule at the head of this file: a stylesheet the app does not import
    renders its component as a vertical stack with its class names on. */
 @import "./compositions/HeldWorktree/HeldWorktree.css";
+
+/* What one Job holds on the machine. A card and not a well: the act on it makes
+   it something to be acted on. */
+@import "./compositions/JobResources/JobResources.css";

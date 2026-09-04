@@ -1,0 +1,225 @@
+/* What a job holds on the machine, and what came of asking whether it works.
+
+   A card and not a well: the act on it makes it something to be acted on,
+   which is the line the design system draws between the two. */
+.armada-holds {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--pad-card);
+  border: var(--border-width) solid var(--edge-card);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+}
+
+.armada-holds__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The sentence a person came for, read before any figure. Sans and body text:
+   it is the one line here that is not machine-derived. */
+.armada-holds__verdict {
+  min-width: 0;
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-body);
+}
+
+/* A finding that says the job is not working takes the error hue on the text
+   alone. No tint and no box: a 12% tint in a chip is what every job status is,
+   and this must not read as one. */
+.armada-holds__verdict[data-found="not_working"] {
+  color: var(--error);
+}
+
+/* Could-not-tell is not a failure and must not be drawn as one, and it is not
+   a pass either. Muted, which is the register of a fact nobody can act on. */
+.armada-holds__verdict[data-found="cannot_tell"] {
+  color: var(--fg-muted);
+}
+
+.armada-holds__looks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One look. The leading edge carries the finding, which is what lets a person
+   scan the column for the rows that came back short. */
+.armada-holds__look {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-inline-start: var(--space-3);
+  border-inline-start: var(--border-width) solid var(--edge-card);
+}
+
+.armada-holds__look[data-found="working"] {
+  border-inline-start-color: var(--step-advanced);
+}
+
+.armada-holds__look[data-found="not_working"] {
+  border-inline-start-color: var(--error);
+}
+
+.armada-holds__look[data-found="cannot_tell"] {
+  border-inline-start-color: var(--fg-subtle);
+}
+
+.armada-holds__asked {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-label);
+}
+
+.armada-holds__said {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--text-body);
+}
+
+.armada-holds__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.armada-holds__field {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-holds__field-name {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--text-label);
+}
+
+/* Everything machine-derived. The typography rule, applied once here rather
+   than restated on each of the seven values that need it. */
+.armada-holds__mono {
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Nothing is running. Prose in the failed treatment rather than an empty
+   table, because an empty table under a heading is how this went unnoticed. */
+.armada-holds__nothing {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+/* A leading edge and never a box, which is the error treatment. */
+.armada-holds__nothing[data-loud] {
+  padding-inline-start: var(--space-3);
+  border-inline-start: var(--error-edge) solid var(--error);
+  color: var(--text-body);
+}
+
+.armada-holds__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+.armada-holds__table th {
+  padding: var(--space-1) var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: var(--weight-medium);
+  color: var(--text-label);
+  text-align: start;
+}
+
+.armada-holds__table td {
+  padding: var(--space-1) var(--space-2);
+  color: var(--fg-muted);
+  vertical-align: baseline;
+}
+
+/* The one fleet wrote down, told from the ones descended from it. A weight
+   change and not a hue: it leads the list already, and a hue here would
+   compete with the finding edges above. */
+.armada-holds__table tr[data-recorded] td {
+  color: var(--text-body);
+}
+
+.armada-holds__table td:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-holds__pid {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-holds__disk {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  color: var(--fg-muted);
+}
+
+/* The figure a person acts on directly. Body text against the path beside it,
+   because seventy-four worktrees once took 220 GB and nothing said so. */
+.armada-holds__size {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--text-body);
+}
+
+.armada-holds__note {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+/* When the figures above were true. Last rather than a caption, because it
+   qualifies everything over it. */
+.armada-holds__read-at {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}

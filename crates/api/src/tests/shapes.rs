@@ -15,10 +15,11 @@
 
 use ipc::mcp::{CheckRan, CheckReport};
 use ipc::{
-    Actor, CallArguments, EvidenceType, FleetCapacity, Instant, JobDetail, JobDiff, JobEvidence,
-    JobHistory, JobId, JobStatus, JobSummary, ManifestId, ManifestSummary, ModelChoices, Movement,
-    Origin, ReclaimedBranch, ReclaimedWorktree, Recorded, RunId, StatusMoved, StepId, Submitted,
-    Urgency, Work, WorkflowId, WorkflowSummary, WorktreeReclaimed,
+    Actor, Asked, CallArguments, EvidenceType, Finding, FleetCapacity, Held, Instant, JobDetail,
+    JobDiff, JobEvidence, JobExamined, JobHistory, JobId, JobProcess, JobResources, JobStatus,
+    JobSummary, Look, ManifestId, ManifestSummary, ModelChoices, Movement, NotedField, Origin,
+    ReclaimedBranch, ReclaimedWorktree, Recorded, RunId, StatusMoved, StepId, Submitted, Urgency,
+    Work, WorkflowId, WorkflowSummary, WorktreeReclaimed,
 };
 
 /// A spelling the registry has. Panics in a test rather than returning an
@@ -239,6 +240,61 @@ pub fn diff(job_id: JobId) -> JobDiff {
                 "--- a/crates/store/src/read.rs\n+++ b/crates/store/src/read.rs\n".to_string(),
             ),
         }),
+    }
+}
+
+/// What one Job holds on the machine. **A reading with something in it** —
+/// the fake spawns nothing, so what it proves is the shape a panel draws from
+/// and not any figure.
+pub fn resources(job_id: JobId) -> JobResources {
+    JobResources {
+        job_id,
+        read_at: Instant::carried("2026-09-04T04:07:00.366Z"),
+        held: Held::Running,
+        processes: vec![JobProcess {
+            pid: 41233,
+            command: "node".to_string(),
+            cpu_percent: 12.4,
+            memory_bytes: 402_653_184,
+            running_for: "06:12".to_string(),
+            recorded: true,
+        }],
+        worktree: Some(ipc::WorktreeOnDisk {
+            path: "/repo/.armada/worktrees/01JOB".to_string(),
+            branch: "armada/01JOB".to_string(),
+            bytes: Some(1_073_741_824),
+        }),
+        wrote_last_at: Some(Instant::carried("2026-09-04T04:06:12.001Z")),
+    }
+}
+
+/// What Fleet found when somebody asked it to look. **One look that could not
+/// tell**, so the whole answer is `cannot_tell` — which is the rule the DTO
+/// exists to make visible.
+pub fn examined(job_id: JobId) -> JobExamined {
+    JobExamined {
+        job_id: job_id.clone(),
+        looked_at: Instant::carried("2026-09-04T04:07:00.366Z"),
+        found: Finding::CannotTell,
+        looks: vec![
+            Look {
+                asked: Asked::Process,
+                found: Finding::Working,
+                said: "the process Fleet recorded is running".to_string(),
+                fields: vec![NotedField {
+                    name: "pid".to_string(),
+                    value: "41233".to_string(),
+                }],
+            },
+            Look {
+                asked: Asked::Writing,
+                found: Finding::CannotTell,
+                said: "nothing has been written to this Job's log lately, which settles nothing on its own"
+                    .to_string(),
+                fields: vec![],
+            },
+        ],
+        resources: resources(job_id),
     }
 }
 

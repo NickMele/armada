@@ -16,8 +16,8 @@
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Commands, Refusal};
 use ipc::{
-    ChangesRequested, JobForgotten, JobId, JobSummary, Overruled, ProposeJob, Redirection,
-    Redispatched, WorktreeReclaimed,
+    ChangesRequested, JobExamined, JobForgotten, JobId, JobSummary, Overruled, ProposeJob,
+    Redirection, Redispatched, WorktreeReclaimed,
 };
 
 use crate::adrift::Adrift;
@@ -178,6 +178,21 @@ where
             .await
             .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
+    }
+
+    /// Go and look at this Job now. **The one act here that moves nothing** —
+    /// what it leaves is a line in the Job's own log saying somebody asked and
+    /// what was found, which is why it is a command rather than a read.
+    ///
+    /// **The redaction is `crate::resources`'s.** A process crosses as its
+    /// executable's name and never its argument vector, which carries absolute
+    /// paths and whatever a Check was invoked with.
+    async fn examine_job(&self, job_id: JobId) -> Result<JobExamined, Refusal> {
+        let job = self
+            .load(&job_id.to_domain())
+            .await
+            .map_err(|why| self.refusal(why))?;
+        self.examined(&job).await.map_err(|why| self.refusal(why))
     }
 
     /// The record, gone. **Nothing is redacted here** — there is no Job left
