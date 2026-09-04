@@ -176,4 +176,6 @@ fn resolve_step(step: &Step, manifest: &Manifest, unknown: &mut Vec<UnknownCheck
         step.model().cloned(),
     )
     .dispatching(step.may_dispatch_jobs())
+    .quiet_after(step.quiet_after_seconds())
+    .poking(step.poke_limit())
 }

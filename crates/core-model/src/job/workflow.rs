@@ -266,6 +266,48 @@ pub struct ResolvedStep {
     /// Whether a Drone on this step is given the tool that creates Jobs.
     /// **False on every step that does not say otherwise.**
     may_dispatch_jobs: bool,
+    /// How long this step's Drone may say nothing before Fleet pokes it, in
+    /// seconds. **`None` is the step declaring none**, and none means the
+    /// value Fleet is running with rather than a number restated here.
+    ///
+    /// # A frozen override beneath a live setting, and which one wins
+    ///
+    /// `crates/config/settings.toml` marks both halves of the pair `lifetime =
+    /// "Live"`, and this field is part of a WorkflowDef frozen at Job
+    /// creation. The two say different things about different tiers, and the
+    /// order between them is: **the step's override wins where it exists, and
+    /// `Live` governs the tier an absent override falls back to.**
+    ///
+    /// It could not be otherwise without giving up the freeze. Reading this
+    /// live would mean re-reading `.armada/workflows/`, which is the one thing
+    /// this module exists to refuse — an edit to the file would move a running
+    /// Job's patience under an approval nobody re-gave.
+    ///
+    /// **And `Live` stays honest**, because the fallback is resolved at each
+    /// step boundary rather than once per Job: a Job whose steps declare
+    /// nothing picks up a changed setting at its next step, with no restart and
+    /// no redispatch.
+    ///
+    /// Seconds, and the unit is in the name, following the schema's
+    /// `heartbeat_interval_minutes`. A `u32` rather than a `Duration` because
+    /// what the file wrote is what the row holds; `fleet::Liveness` is where it
+    /// becomes a duration, once.
+    quiet_after_seconds: Option<u32>,
+    /// How many nudges this step's quiet Drone gets before the Job escalates as
+    /// stalled. **`None` is the step declaring none**, with
+    /// [`quiet_after_seconds`](Self::quiet_after_seconds)'s meaning and its
+    /// live-versus-frozen answer.
+    ///
+    /// **A second `Option` and not the other half of one**, which `#60` decided
+    /// rather than assumed: a step wanting longer between pokes does not
+    /// thereby want more pokes, so a step overriding either half must not have
+    /// to restate the other. Two fields is what makes that true at the call
+    /// site instead of by care.
+    ///
+    /// `Some(0)` is a legal sentence and is not `None`: it is a step saying its
+    /// Drone gets no nudge at all, and the first silence past the threshold
+    /// escalates.
+    poke_limit: Option<u32>,
 }
 
 impl ResolvedStep {
@@ -299,6 +341,10 @@ impl ResolvedStep {
             // Set by the builder below: a tenth parameter would make ten
             // callers state a value that is false on all but one step.
             may_dispatch_jobs: false,
+            // The same, and more so: two more parameters would make ten
+            // callers state a `None` about a dial almost no step touches.
+            quiet_after_seconds: None,
+            poke_limit: None,
         }
     }
 
@@ -306,6 +352,23 @@ impl ResolvedStep {
     /// given it.
     pub fn dispatching(mut self, may: bool) -> ResolvedStep {
         self.may_dispatch_jobs = may;
+        self
+    }
+
+    /// How long this step's Drone may be silent, where it says.
+    ///
+    /// **Its own builder rather than a pair with [`poking`](Self::poking)**,
+    /// which is the whole of "two settings, not one" made visible: a caller
+    /// setting one of them does not touch the other, and neither can be set by
+    /// accident while writing the other down.
+    pub fn quiet_after(mut self, seconds: Option<u32>) -> ResolvedStep {
+        self.quiet_after_seconds = seconds;
+        self
+    }
+
+    /// How many nudges this step's quiet Drone gets, where it says.
+    pub fn poking(mut self, limit: Option<u32>) -> ResolvedStep {
+        self.poke_limit = limit;
         self
     }
 
@@ -414,6 +477,27 @@ impl ResolvedStep {
     /// toolbelt is built, and again where a call of it arrives.
     pub fn may_dispatch_jobs(&self) -> bool {
         self.may_dispatch_jobs
+    }
+
+    /// How long this step's Drone may say nothing, in seconds, where the step
+    /// declares it. **`None` on almost every step**, and none is Fleet's
+    /// standing value rather than a number this record knows — see the field
+    /// for why one tier is frozen and the other is live.
+    ///
+    /// The resolution is `fleet::Liveness::at` and is spelled nowhere else. It
+    /// is not spelled here because this record has no access to what it would
+    /// fall back to, and a default invented on this side would be a second
+    /// place the shipped number lives.
+    pub fn quiet_after_seconds(&self) -> Option<u32> {
+        self.quiet_after_seconds
+    }
+
+    /// How many nudges this step's quiet Drone gets, where the step declares
+    /// it. **`None` on almost every step**, with
+    /// [`quiet_after_seconds`](Self::quiet_after_seconds)'s meaning — and read
+    /// independently of it, because the two fall back independently.
+    pub fn poke_limit(&self) -> Option<u32> {
+        self.poke_limit
     }
 
     /// How many model calls one pass over this step makes. Latency rather than

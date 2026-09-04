@@ -27,8 +27,8 @@ use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
-    Actor, Component, Envelope, EscalationTrigger, FieldValue, JobId, JobStatus, Level, StepId,
-    Target,
+    Actor, Component, Envelope, EscalationTrigger, FieldValue, JobId, JobStatus, Level,
+    ResolvedStep, StepId, Target,
 };
 
 use crate::adrift::Adrift;
@@ -57,11 +57,12 @@ use crate::working::{StoodDown, Working};
 /// already resets at the boundary, because `crate::working::Working` is
 /// per step.
 ///
-/// **What is here is the constant, and neither tier is wired.** Resolution
-/// wants the pair on the slot at step start rather than a read per turn:
-/// `watch_silence` compares against the threshold before it touches the store,
-/// and a per-step value read off the Job would cost that read every turn on
-/// every healthy Drone.
+/// **Resolved once, at the step boundary, and held on the slot.** [`at`](
+/// Liveness::at) is the resolution and `crate::working::Working` is where the
+/// answer sits, because `watch_silence` compares against the threshold before
+/// it touches the store: a per-step value read off the Job would cost that read
+/// every turn on every healthy Drone, which is the one reading this vigil is
+/// built to avoid.
 ///
 /// [`StepNorms`]: crate::StepNorms
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,6 +89,57 @@ impl Liveness {
     /// `crates/config/settings.toml`, which is Fleet's own.
     pub fn pokes(&self) -> u32 {
         self.pokes
+    }
+
+    /// What this step gets, given what Fleet is running with.
+    ///
+    /// # The chain is two layers, and one of them is not built
+    ///
+    /// `crates/config/settings.toml` says the pair resolves *Kit → Manifest*,
+    /// and there is no Kit anywhere in this workspace. What exists is the
+    /// composition root's constant — `armada::serve::PROVISIONAL_LIVENESS`,
+    /// which is `self` here — and the step, which is this argument. The
+    /// Manifest tier is a key `armada.yml` does not carry, and `#60` did not
+    /// add one: a key ahead of the code that reads it is the same defect this
+    /// issue is about, wearing the other hat.
+    ///
+    /// # Which wins when a live setting meets a frozen step
+    ///
+    /// Both rows are `lifetime = "Live"` and a step override rides a
+    /// WorkflowDef frozen at Job creation. **The step's override wins where it
+    /// exists, and `Live` governs the tier it falls back to** — which is not a
+    /// compromise between the two words but what each of them is about. A
+    /// setting is live because a person may change what Fleet is running with
+    /// and have it take effect; a frozen step is frozen because an edit to
+    /// `.armada/workflows/` must not move a running Job's terms under an
+    /// approval nobody re-gave. Neither claim reaches the other's tier.
+    ///
+    /// **And nothing here is stale for it**, because this is called at each
+    /// step boundary rather than once per Job: a Job whose steps declare
+    /// nothing follows a changed setting into its next step, with no restart
+    /// and no redispatch. What a Job cannot do is have its *declared* patience
+    /// change underneath it, which is the freeze working.
+    ///
+    /// # Two settings, resolved separately
+    ///
+    /// Each half falls back on its own. A step naming only
+    /// `quiet_after_seconds` gets its own patience and Fleet's poke budget,
+    /// because wanting longer between pokes is not wanting more pokes — and a
+    /// resolution that took the pair together would make overriding either half
+    /// mean restating both.
+    ///
+    /// **Nothing aggregates.** The value in force is the watched step's, so a
+    /// Job spanning four steps is four independent patiences — never a sum and
+    /// never the strictest of them. The poke budget resets with it, because the
+    /// slot that counts spent pokes is per step already.
+    pub fn at(self, step: &ResolvedStep) -> Liveness {
+        Liveness {
+            quiet_after: step
+                .quiet_after_seconds()
+                .map(|seconds| Duration::from_secs(u64::from(seconds)))
+                .unwrap_or(self.quiet_after),
+            pokes: step.poke_limit().unwrap_or(self.pokes),
+        }
     }
 }
 
@@ -239,7 +291,12 @@ where
         }
         let now = self.now();
         let after = at_work.quiet_for(&now);
-        if after < self.liveness().quiet_after() {
+        // **The step's own, off the slot.** It was resolved once at the
+        // boundary against the frozen step, so a formatting step and a large
+        // refactor are compared against different thresholds here — which is
+        // the whole of `#60` — and neither costs a read to find out.
+        let liveness = at_work.liveness();
+        if after < liveness.quiet_after() {
             return Ok(None);
         }
         let (job, step, _) = at_work.standing();
@@ -259,7 +316,7 @@ where
             }
             return Ok(None);
         }
-        let said = if spent < self.liveness().pokes() {
+        let said = if spent < liveness.pokes() {
             self.poke(working, after).await
         } else {
             self.move_job(
