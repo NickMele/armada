@@ -100,7 +100,11 @@ Where a worktree and its log live on disk is in `../contracts/system-architectur
 
 **A worktree outlives every Drone that uses it.** It is made once, when the Job dispatches, and held until retention sweeps it — so it outlives each step's Drone by construction, as well as the two acts that end one early. On a **person's** scope revision Fleet terminates the Drone, re-resolves configuration against the new Manifest set, and spawns a fresh Drone **on the same worktree and branch** — the same path [Pilot](pilot.md)'s Restart Step and every ordinary step boundary use.
 
+**A Drone declares its own paths every step, and that is not the Job's `write_targets`.** `declare_scope` says where this step's work will be, after the code has been read, and the gate measures the real diff against it. The Job's list is what a person mentioned when asking, it is partial by design, and it meets no diff — [Change a Job's scope](../journeys/change-a-jobs-scope.md) holds the pair.
+
 **A Drone asking to widen costs none of that**, and it is the common case. It asks through a tool, a [Judge](judge.md) answers whether the paths belong to the step it was given, and a Judge call ends nothing — the Job is `running` throughout and the Drone keeps its session. Scope is not a permission system: a declaration never bound writes, and it exists so that drift is detectable, which makes *does this make sense for this step* a Judge's question rather than a person's. A refusal escalates, so a person is met by the exception rather than by every request. [Change a Job's scope](../journeys/change-a-jobs-scope.md) is the flow.
+
+**A Drone on a Job whose `write_targets` is null has no widening to ask for.** Nothing is outside a list nobody stated, so the request is refused before any call and the Drone declares its step's paths and gets on with the work.
 
 **A narrowing proceeds unchallenged.** Nothing in a Drone's toolset reaches one — it hands back scope already held, so there is nothing to ask about — and it is a person's act.
 
