@@ -1,6 +1,7 @@
 //! The boundaries nothing lifts, at the gate, on every step.
 //!
-//! **Separate from `tests::scope` because the reach is what is under test.**
+//! **Separate from `tests::scope` because the reach is what is under test**, and
+//! named for the row the record carries rather than for the tier.
 //! That file is about a step's own `evidence_scope` — a boundary the step
 //! declared, scoped to the step that declared it, which a Judge may lift. This
 //! one is about the tier no step declares and no answer moves, which since
