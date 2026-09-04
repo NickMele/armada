@@ -192,6 +192,70 @@ const AHEAD: RunTreeStep[] = [
   },
 ];
 
+/**
+ * The run before anything has started. **Every step `not_started`**, which is
+ * the state the Job that prompted #437 sat in for six minutes while Fleet cut
+ * its worktree and installed its dependencies — and the reason those lines
+ * belong to no step.
+ */
+export const RUN_NOT_STARTED: RunTreeStep[] = [
+  {
+    id: "repro",
+    label: "Reproduction",
+    activity: "not_started",
+    current: true,
+    facts: [],
+    factsAbsent: "This step has not run, so it has produced nothing.",
+  },
+  {
+    id: "root_cause",
+    label: "Root cause",
+    activity: "not_started",
+    facts: [],
+    factsAbsent: "This step has not run, so it has produced nothing.",
+  },
+  {
+    id: "fix",
+    label: "Fix",
+    activity: "not_started",
+    facts: [],
+    factsAbsent: "This step has not run, so it has produced nothing.",
+  },
+];
+
+/**
+ * What Fleet has done to the Job itself, before any step is running.
+ *
+ * **Every one of these names Fleet**, and every one opens to what it carried.
+ * A grey line of prose in a column of openable entries is a second-class
+ * citizen in a stream whose whole claim is that it has one grammar — which is
+ * what the log-file-as-text rendering would have made these.
+ */
+export const FLEET_PREPARING: ActivityEntry[] = [
+  {
+    id: "f1",
+    at: "09:14:02",
+    actor: "fleet",
+    summary: "Worktree cut",
+    output: "branch  armada/job_2d90bb\nat      .armada/worktrees/job_2d90bb",
+  },
+  {
+    id: "f2",
+    at: "09:14:02",
+    actor: "fleet",
+    summary: "Preparation began",
+    output: "commands  3",
+  },
+  {
+    id: "f3",
+    at: "09:16:47",
+    actor: "fleet",
+    summary: "A preparation command failed",
+    named: "failed",
+    output: "command   pnpm install --frozen-lockfile\nexit      1",
+  },
+];
+
 /** The run while the Drone is working on Fix. */
 export const RUN_RUNNING: RunTreeStep[] = [
   ...BEHIND,

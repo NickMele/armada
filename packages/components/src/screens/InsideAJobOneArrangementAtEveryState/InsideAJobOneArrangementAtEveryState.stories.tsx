@@ -1,14 +1,17 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Button } from "../../primitives/Button/Button";
+import { ActivityLog } from "../../compositions/ActivityLog/ActivityLog";
 import { InsideAJob } from "./InsideAJobOneArrangementAtEveryState";
 import {
   BRIEF,
   CHAPTERS,
   ESCALATED_HEADING,
   FAILED_HEADING,
+  FLEET_PREPARING,
   HEADING,
   REPAIR_CHAPTERS,
   RUN_FAILED,
+  RUN_NOT_STARTED,
   RUN_REPAIRING,
   RUN_RUNNING,
   RUN_STOPPED,
@@ -437,6 +440,37 @@ export const Failed: Story = {
             ],
           },
           chapters: REPAIR_CHAPTERS,
+        }}
+      />
+    </div>
+  ),
+};
+
+/**
+ * **Nothing has started, and something is happening.** Fleet is cutting a
+ * worktree and running the repository's preparation commands; every step is
+ * `not_started` and no Drone exists, so the step's own activity log is empty
+ * and correct to be. What Armada has done sits above the run — #437.
+ *
+ * **Above the steps and not under the first one.** Attaching these to the step
+ * about to start reads as though it were running when it has not begun, which
+ * is the confusion that made a wedged Job look healthy.
+ */
+export const NoDroneYet: Story = {
+  render: () => (
+    <div className="armada-screen">
+      <InsideAJob
+        heading={{ ...HEADING, actions: JOB_ACTS }}
+        run={RUN_NOT_STARTED}
+        runElapsed="2m 45s"
+        fleet={<ActivityLog entries={FLEET_PREPARING} openId="f3" />}
+        where={WHERE}
+        brief={BRIEF}
+        step={{
+          label: "Reproduction",
+          fields: [{ label: "State", value: "not started" }],
+          chapters: [],
+          phasesAbsent: "This step has not started, so no gate has been asked anything.",
         }}
       />
     </div>

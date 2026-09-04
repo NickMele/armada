@@ -657,6 +657,7 @@ export function App() {
                 approving={state.approving.includes(reading.id)}
                 deciding={deciding === reading.id}
                 observed={state.observed}
+                journalled={state.journalled}
                 recorded={{
                   footprint: state.footprint,
                   evidence: state.evidence,
