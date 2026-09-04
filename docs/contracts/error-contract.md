@@ -249,6 +249,48 @@ placement — and not the colour either: there is one error red, and the
 [Design System](design-system.md) contract's error treatment says what
 separates a fault from a degraded condition.
 
+### Which class a failure is
+
+**The class is a claim about Fleet's state, not about how serious the
+failure is.** A fault is Armada unable to do the thing; degraded is Armada
+unable to refresh what it shows. **Degraded therefore asserts two things at
+once — the work is still happening, and only the reading of it stopped** —
+and a failure that cannot assert both is a fault.
+
+**Two questions decide it, and neither is "how bad is this".**
+
+| Ask | Degraded | Fault |
+| --- | --- | --- |
+| Is the work still going? | Yes, and Bridge knows it | No, or Bridge does not know |
+| What failed? | A reading | An act |
+
+**"Bridge does not know" is a fault.** An unknown is not a claim, and
+drawing one as a stale view sends somebody to wait for a daemon that may not
+exist. This is what separates a runtime file Bridge could not read from a
+socket that has gone silent: they look alike and only the second one
+established that Fleet is alive.
+
+**Whether it clears on its own decides nothing.** Version skew never
+resolves without somebody acting and is degraded, because Jobs progress
+throughout it. A command that timed out may well have been carried out and
+is a fault, because what failed was an act.
+
+**The class is stated by the failure, never by what renders it.** Only the
+thing that observed the failure knows Fleet's state, and a component that
+mints the class has to guess — which is how every Bridge failure came to
+draw as a fault, including the two where restarting Fleet is the wrong move.
+It sits beside the code, in `packages/shell/src/failures.ts`, and carries
+its argument there. See #344.
+
+**It is never derived from the code.** The one code Bridge does not mint is
+opaque to it — looked up, never parsed — so a lookup would read a value this
+contract forbids Bridge to read.
+
+**It is not a payload field.** What a person quotes is what crossed the
+wire plus what Bridge appends about itself; the class is Bridge's reading of
+a situation the payload already describes, and a row for it would be a
+second spelling of `connection`.
+
 ### What a person quotes
 
 **The payload is one artifact and one format.** Formatted text, aligned
@@ -265,16 +307,17 @@ and shows it always, so a reader meeting a payload without one cannot tell
 whether the failure carried none or whether the paste was cut short, and the
 payload is read away from the screen that would have answered that.
 
-**Bridge mints a code for each of its own faults.** Only one of the failures
-Bridge draws crosses the wire that guarantees one, and the code is what
-separates an error from a failed Job. See #228.
+**Bridge mints a code for each of its own failures.** Only one of the
+failures Bridge draws crosses the wire that guarantees one, and the code is
+what separates an error from a failed Job. See #228.
 
 **A Bridge code is declared beside the builder that raises it**, in
 `packages/shell/src/failures.ts`, and is namespaced `bridge.`. The prefix keeps
 the Rust set and the Bridge set disjoint without a collector spanning both —
 which is why the collection above may check each half against itself and
 decide nothing about the other. A Rust code that took the prefix fails, since
-it is the one thing that would make that reading wrong.
+it is the one thing that would make that reading wrong. The failure's class is
+declared in the same place, for the same reason.
 
 **`none` is a fact, not a minted code.** No failure Bridge draws renders it; it
 is what a payload assembled outside those builders shows.

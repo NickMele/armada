@@ -21,6 +21,14 @@ import { FailureNotice } from "./FailureNotice";
  * story here is the visible half of that: `ARM-0412` came off a `WireError`,
  * and every `bridge.*` value below was minted by the process that raised it.
  *
+ * **Every one of them also carries a class, and for a while every one of them
+ * drew the same class.** `kind` was a literal inside the component, so a Fleet
+ * that is up and working rendered in the same red as a Fleet that is gone —
+ * and the two need opposite things done about them. The stories below are the
+ * visible half of the repair: `Fleet is unreachable` and `Fleet speaks another
+ * protocol` are degraded, and `The two classes, side by side` puts one against
+ * a fault so the difference is something you look at rather than infer.
+ *
  * Every story points at a log as a machine value — mono, copy on click, no
  * `copy` glyph, a toast confirms. A run id appears on the one failure that
  * really has one, labelled as what it is: Fleet mints it once per process, so
@@ -84,6 +92,7 @@ function Acts({ reload = true, dismiss = false }: { reload?: boolean; dismiss?: 
  */
 export const FleetIsNotRunningNoFile: Story = {
   args: {
+    kind: "fault",
     headline: "Fleet is not running",
     code: "bridge.fleet.not_running",
     next: "Start Fleet. Bridge reconnects on its own.",
@@ -107,6 +116,7 @@ export const FleetIsNotRunningNoFile: Story = {
  */
 export const FleetIsNotRunningDeadPid: Story = {
   args: {
+    kind: "fault",
     headline: "Fleet is not running",
     code: "bridge.fleet.not_running",
     next: "Start Fleet. Bridge reconnects on its own.",
@@ -131,6 +141,7 @@ export const FleetIsNotRunningDeadPid: Story = {
  */
 export const FleetIsNotRunningPidReused: Story = {
   args: {
+    kind: "fault",
     headline: "Fleet is not running",
     code: "bridge.fleet.not_running",
     next: "Start Fleet. Bridge reconnects on its own.",
@@ -151,12 +162,20 @@ export const FleetIsNotRunningPidReused: Story = {
 };
 
 /**
- * **Answer four: running, and silent.** The pid checks out and the socket does
- * not answer. **This is the one worth retrying**, and it is the one where
- * restarting Fleet is the wrong fix — so the sentence does not say to.
+ * **Answer four: running, and silent — and the first of the two degraded
+ * ones.** The pid checks out and the socket does not answer, so Fleet is alive,
+ * Jobs are progressing, and what stopped is Bridge's reading of them. That is
+ * the contract's definition of degraded exactly, and the design system names
+ * this case by hand.
+ *
+ * **What the class is worth is visible against the three above it.** Neutral on
+ * the narrower edge with an amber dot and no red anywhere: nothing here is
+ * broken. The three answers above are red because Fleet is gone or unproven,
+ * and their fix is to start it — which is the worst thing to do here.
  */
 export const FleetIsUnreachable: Story = {
   args: {
+    kind: "degraded",
     headline: "Fleet unreachable",
     code: "bridge.fleet.unreachable",
     next: "Fleet is up and not answering. What is on the board is not live.",
@@ -196,6 +215,7 @@ export const FleetIsUnreachable: Story = {
  */
 export const TheRendererThrew: Story = {
   args: {
+    kind: "fault",
     headline: "Bridge could not draw the job list",
     code: "bridge.render.boundary",
     next: "Reload Bridge. Fleet keeps running and jobs keep progressing.",
@@ -255,6 +275,7 @@ export const TheRendererThrew: Story = {
  */
 export const AJobCannotBeRead: Story = {
   args: {
+    kind: "fault",
     headline: "Job 01K2Y0X6R4B7QW9V3N5T8CJ1MF did not load",
     code: "bridge.job.unreadable",
     next: "Every other job on the board is unaffected. Read the fault, or read the job's log.",
@@ -295,6 +316,7 @@ export const AJobCannotBeRead: Story = {
  */
 export const FleetRefusedTheCommand: Story = {
   args: {
+    kind: "fault",
     headline: "Manifest 01K1M8Z5V2 is not one Fleet holds",
     code: "ARM-0412",
     next: "Nothing was sent. Change what the command names, or read the log.",
@@ -319,6 +341,99 @@ export const FleetRefusedTheCommand: Story = {
 };
 
 /**
+ * **Fleet speaks another protocol, and Bridge will not open a socket — the
+ * second degraded one.** The pid was verified and the socket answered with a
+ * version, so Fleet is alive and dispatching; Bridge declined to read it rather
+ * than failed to. Independent lifetimes are the point, so what a person has is
+ * a stale board rather than a stopped fleet.
+ *
+ * **It never clears on a retry, and it is still not a fault.** The class is
+ * about whether the work is still happening, not about whether the condition
+ * heals itself. Somebody has to act, and the sentence says so — under a neutral
+ * edge, because the thing they act on is a version and not a broken daemon.
+ */
+export const FleetSpeaksAnotherProtocol: Story = {
+  args: {
+    kind: "degraded",
+    headline: "Fleet speaks a protocol Bridge cannot read",
+    code: "bridge.fleet.version_skew",
+    next: "Jobs keep running. Restart Fleet on the matching build to see the board again.",
+    detailsLabel: "What each side speaks",
+    details: [
+      { label: "Fleet", value: "6.0" },
+      { label: "Bridge", value: "5.2" },
+      { label: "Pid", value: "48221" },
+      { label: "Port", value: "7773" },
+    ],
+    values: [{ icon: File, iconLabel: "Log", value: AUDIT, copyValue: AUDIT }],
+    note: "Bridge did not open a socket. A message from a Fleet on another protocol is not one Bridge can read.",
+    actions: <Acts />,
+  },
+};
+
+/**
+ * **The two classes, side by side — the story that stops this regressing.**
+ *
+ * Both of these were red for as long as the class was a literal inside the
+ * component, and the distinction the error contract draws existed nowhere a
+ * person could see it. It is a claim about Fleet's state and not about a red:
+ * the notice on the left is a Fleet that is gone, and the one on the right is a
+ * Fleet that is alive, running jobs, and merely unreadable.
+ *
+ * Three channels differ and none of them is a new value: a 3px red edge against
+ * a 2px neutral one, a red headline against `--fg-default`, and an amber dot on
+ * the degraded one only. The chips differ on the same axis. **The sentences
+ * differ too, and that is the point** — one says start Fleet, and the other
+ * must never say it.
+ */
+export const TheTwoClassesSideBySide: Story = {
+  render: () => (
+    <div style={{ display: "grid", gap: "var(--space-6)", maxWidth: "34rem" }}>
+      <FailureNotice
+        kind="fault"
+        headline="Fleet is not running"
+        code="bridge.fleet.not_running"
+        next="Start Fleet. Bridge reconnects on its own."
+        detailsLabel="What the runtime file answered"
+        details={[
+          { label: "Answer", value: "pid_dead" },
+          { label: "Pid", value: "48221" },
+        ]}
+        note="Fleet exited without cleaning up. The file names a pid nothing holds."
+      />
+      <FailureNotice
+        kind="degraded"
+        headline="Fleet unreachable"
+        code="bridge.fleet.unreachable"
+        next="Fleet is up and not answering. What is on the board is not live."
+        detailsLabel="What the connection answered"
+        details={[
+          { label: "Pid", value: "48221" },
+          { label: "Silent for", value: "1m" },
+        ]}
+        note="Bridge is retrying every 2 seconds. Jobs keep progressing either way."
+      />
+    </div>
+  ),
+  /**
+   * **The assertion is that the two are not the same object**, which is what a
+   * literal made them. `data-error-class` is what the treatment already puts on
+   * the section and the chip, so this checks the rendered claim rather than the
+   * prop that produced it — a second literal would fail here.
+   */
+  play: async ({ canvasElement }) => {
+    const notices = canvasElement.querySelectorAll("[data-error-class]");
+    const classes = [...notices].map((at) => at.getAttribute("data-error-class"));
+
+    // Two notices and two chips, and the chip agrees with the notice it is in.
+    await expect(classes).toEqual(["fault", "fault", "degraded", "degraded"]);
+
+    // The dot is the degraded class's own channel, and a fault has none.
+    await expect(canvasElement.querySelectorAll(".armada-failure__dot")).toHaveLength(1);
+  },
+};
+
+/**
  * **The smallest legal notice.** No details to fold, no machine value to copy
  * — a failure that still names itself and still says what to do, because a
  * failure with nothing to do is drawn as the dead end it is rather than left
@@ -330,6 +445,7 @@ export const FleetRefusedTheCommand: Story = {
  */
 export const NothingButTheSentence: Story = {
   args: {
+    kind: "fault",
     headline: "Bridge could not reach the main process",
     code: "bridge.uncaught.rejection",
     next: "Reload Bridge. If it happens again, quit and reopen.",
