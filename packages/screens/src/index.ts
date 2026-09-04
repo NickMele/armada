@@ -51,4 +51,5 @@ export * from "./StepActs";
 export * from "./steering";
 export * from "./stopped";
 export * from "./story";
+export * from "./waiting";
 export * from "./work";
