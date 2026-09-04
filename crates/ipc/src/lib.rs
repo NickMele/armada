@@ -42,6 +42,9 @@ mod history;
 mod holding;
 mod ids;
 mod job;
+/// What Fleet did to a Job, out of the Job's own log. **The third voice the
+/// activity log was designed around and nothing produced.**
+mod journal;
 mod judged;
 /// The Evidence tool's transport. **A different seam** — Fleet to Drone, not
 /// Fleet to Bridge — so it is a module rather than a flat re-export and none of
@@ -92,6 +95,9 @@ pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepM
 pub use holding::{HeldReason, WorktreeHeld, WorktreesHeld};
 pub use ids::{
     CriterionId, DroneId, Instant, JobId, ManifestId, ProposalId, QuestionId, StepId, WorkflowId,
+};
+pub use journal::{
+    JournalClosed, JournalMessage, JournalOpened, LogNote, NoteLevel, NotedField, Quiet,
 };
 pub use job::{
     AttachmentRef, DependencyEdge, JobForgotten, JobList, JobRequest, JobSummary, ProposeJob,
