@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
+import type { ErrorClass } from "../../errors/ErrorCode/ErrorCode";
 import { ErrorCode } from "../../errors/ErrorCode/ErrorCode";
 import { JobLogReference } from "../JobLogReference/JobLogReference";
 
@@ -16,12 +17,21 @@ import { JobLogReference } from "../JobLogReference/JobLogReference";
  * thing this exists to stop. The caller supplies the sentence, the details and
  * the actions, and every one of the three differs in all three.
  *
- * **This is a fault, and it takes the error treatment.** It predated it, and
- * for a while drew a fault in the escalation hue on a 12% tint inside a box,
- * carrying no code — four disagreements with a treatment whose whole argument
- * is that an error and a failed Job are both red and must never be mistaken
- * for each other. All four are closed: one red, a leading edge and never a
- * box, no tint on a data surface, and the code below. See #228.
+ * **This takes the error treatment, in whichever of its two classes the
+ * failure is.** It predated the treatment, and for a while drew a fault in the
+ * escalation hue on a 12% tint inside a box, carrying no code — four
+ * disagreements with a treatment whose whole argument is that an error and a
+ * failed Job are both red and must never be mistaken for each other. All four
+ * are closed: one red, a leading edge and never a box, no tint on a data
+ * surface, and the code below. See #228.
+ *
+ * **The fifth disagreement was that the class was a literal.** `kind="fault"`
+ * was passed to the chip from inside this component, so every failure Bridge
+ * built drew red no matter what it was a claim about — and the contract's
+ * separation of a fault from a degraded condition existed nowhere a person
+ * could see it. `kind` is a required prop for the same reason `code` is: the
+ * caller knows whether Fleet is alive and this does not, and a default would
+ * have restored the literal under another name. See #344.
  *
  * **The code is required, and a boundary fallback has one.** The treatment
  * says the code is always shown, and the reason it can say *always* is that
@@ -66,6 +76,17 @@ export type FailureMachineValue = {
 };
 
 export type FailureNoticeProps = {
+  /**
+   * Which of the two classes this failure is, stated by the failure and never
+   * defaulted here.
+   *
+   * **A fault is Armada unable to do the thing; degraded is Armada unable to
+   * refresh what it shows.** It is a claim about Fleet's state rather than
+   * about how loud the notice should be, and this component has no way to make
+   * it — `failures.ts` in `@armada/shell` is where each of Bridge's failures
+   * says which it is, and why.
+   */
+  kind: ErrorClass;
   /** What broke, in one sentence. Never what threw, and never an apology. */
   headline: string;
   /**
@@ -100,6 +121,7 @@ const FOLD_ICON = 16;
 const FOLD_STROKE = 2;
 
 export function FailureNotice({
+  kind,
   headline,
   code,
   next,
@@ -118,17 +140,32 @@ export function FailureNotice({
   const referenced = (values !== undefined && values.length > 0) || note !== undefined || actions !== undefined;
 
   return (
-    <section className="armada-failure" role="alert">
-      <div className="armada-failure__copy">
-        <span className="armada-failure__headline">{headline}</span>
-        <span className="armada-failure__next">{next}</span>
+    <section
+      className={`armada-failure armada-failure--${kind}`}
+      data-error-class={kind}
+      // A fault has stopped something and interrupts; degraded means what is
+      // on screen is stale, which is worth saying and not worth cutting a
+      // screen reader off for. The same split `ErrorNotice` makes.
+      role={kind === "fault" ? "alert" : "status"}
+    >
+      {/* The dot is the degraded class's third channel, beside the narrower
+          neutral edge and the unreddened headline. It sits on the first line's
+          optical centre rather than the block's, which is one spacing step
+          down at this type size. A fault has no dot: red is already its mark. */}
+      <div className="armada-failure__head">
+        {kind === "degraded" ? <span className="armada-failure__dot" aria-hidden="true" /> : null}
+        <div className="armada-failure__copy">
+          <span className="armada-failure__headline">{headline}</span>
+          <span className="armada-failure__next">{next}</span>
+        </div>
       </div>
 
       {/* The chip leads nothing and closes nothing — it sits under the copy,
           where the error treatment puts it, so the sentence is what is read
-          first and the value a person quotes is what is read next. */}
+          first and the value a person quotes is what is read next. It takes
+          the failure's class, not this component's opinion of it. */}
       <div className="armada-failure__code">
-        <ErrorCode kind="fault" code={code} />
+        <ErrorCode kind={kind} code={code} />
       </div>
 
       {folded ? (

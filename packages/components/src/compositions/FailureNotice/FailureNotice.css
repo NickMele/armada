@@ -1,4 +1,4 @@
-/* Failure notice — a fault, in the error treatment.
+/* Failure notice — an error in the treatment, in whichever of its two classes.
 
    It was drawn in the escalation hue on a 12% tint inside a box, which is the
    status treatment exactly: a 12% tint in a chip is what every Job status is,
@@ -11,17 +11,61 @@
    filled alert and the edge points at what failed, which a frame does not.
 
    Flat, because it is a standing condition on a surface rather than a floating
-   layer. No shadow. */
+   layer. No shadow.
+
+   It drew the fault class for every failure for a while, because the class was
+   a literal in the component rather than a property of the failure. The two
+   classes now differ here on the same three channels ErrorNotice uses, and
+   nothing below is a value this file invented. #344. */
 .armada-failure {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   padding-inline-start: var(--space-3);
-  border-inline-start: var(--error-edge) solid var(--error);
+  border-inline-start-style: solid;
   color: var(--fg-default);
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);
+}
+
+/* Armada cannot do the thing. Red on the wider edge, and the headline red too:
+   an outcome states itself in both channels. */
+.armada-failure--fault {
+  border-inline-start-width: var(--error-edge);
+  border-inline-start-color: var(--error);
+}
+
+.armada-failure--fault .armada-failure__headline {
+  color: var(--error);
+}
+
+/* Armada cannot refresh what it is showing — Fleet is alive and doing the work
+   and Bridge cannot read it. Neutral on the narrower edge, --fg-default
+   headline, and an amber dot: nothing here is broken, so nothing here is red.
+   Sending somebody to restart a live Fleet is what a red edge would cost. */
+.armada-failure--degraded {
+  border-inline-start-width: var(--degraded-edge);
+  border-inline-start-color: var(--degraded);
+}
+
+/* The dot beside the first line, not the block. A 6px dot inside a 22px line
+   box is 8px down, which is one spacing step exactly — the same offset
+   ErrorNotice takes, because the headline is the same size in both. */
+.armada-failure__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-failure__dot {
+  flex: none;
+  width: var(--dot);
+  height: var(--dot);
+  margin-block-start: var(--space-2);
+  border-radius: 50%;
+  background: var(--degraded-dot);
 }
 
 /* The code — off the wire, or minted by Bridge where the failure never crossed
@@ -33,15 +77,17 @@
 
 .armada-failure__copy {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: var(--space-1);
   min-width: 0;
   text-wrap: pretty;
 }
 
-/* An outcome states itself in both channels: the edge and the headline. */
+/* Neutral by default, and reddened only by the fault modifier above. A
+   degraded headline takes --fg-default: what it says is true, and nothing it
+   names is broken. */
 .armada-failure__headline {
-  color: var(--error);
   font-weight: var(--weight-medium);
 }
 
