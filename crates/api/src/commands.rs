@@ -19,10 +19,10 @@ use ipc::{
 };
 
 use crate::answers::{answer, refused, undecodable};
-use crate::daemon::Daemon;
+use crate::daemon::Commands;
 use crate::routes::Served;
 
-pub(crate) async fn propose_job<D: Daemon>(
+pub(crate) async fn propose_job<D: Commands>(
     State(served): State<Served<D>>,
     body: Bytes,
 ) -> Response {
@@ -43,7 +43,7 @@ pub(crate) async fn propose_job<D: Daemon>(
 /// The other way a Job reaches the gate: a person describes the work and the
 /// proposer reads it. **The same 201 and the same gate** — what differs is who
 /// filled the workflow in, and that one request can be several Jobs.
-pub(crate) async fn propose_from_request<D: Daemon>(
+pub(crate) async fn propose_from_request<D: Commands>(
     State(served): State<Served<D>>,
     body: Bytes,
 ) -> Response {
@@ -62,7 +62,7 @@ pub(crate) async fn propose_from_request<D: Daemon>(
 /// **200 on both arms**, including the one where there was nothing to stop.
 /// `ipc::ProposalStopped` carries which, and a 404 for a proposal that has just
 /// landed would report a failure to somebody whose Jobs are on the board.
-pub(crate) async fn stop_proposal<D: Daemon>(
+pub(crate) async fn stop_proposal<D: Commands>(
     State(served): State<Served<D>>,
     body: Bytes,
 ) -> Response {
@@ -76,7 +76,7 @@ pub(crate) async fn stop_proposal<D: Daemon>(
     }
 }
 
-pub(crate) async fn approve_dispatch<D: Daemon>(
+pub(crate) async fn approve_dispatch<D: Commands>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
 ) -> Response {
@@ -96,7 +96,7 @@ pub(crate) async fn approve_dispatch<D: Daemon>(
 ///
 /// 409 anywhere but `awaiting_review`, which is what keeps it from becoming the
 /// dispatch gate under a second name.
-pub(crate) async fn approve_review<D: Daemon>(
+pub(crate) async fn approve_review<D: Commands>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
 ) -> Response {
@@ -111,7 +111,7 @@ pub(crate) async fn approve_review<D: Daemon>(
 /// spawned.
 ///
 /// 409 where the Drone is gone: there is nobody to tell.
-pub(crate) async fn request_changes<D: Daemon>(
+pub(crate) async fn request_changes<D: Commands>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
     body: Bytes,
@@ -133,7 +133,7 @@ pub(crate) async fn request_changes<D: Daemon>(
 /// A verdict on the work, and the Job is over. **Terminal**, which is what
 /// separates it from `request_changes` — and it is not `kill_job`, which clears
 /// the Board and carries no verdict at all.
-pub(crate) async fn reject_job<D: Daemon>(
+pub(crate) async fn reject_job<D: Commands>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
 ) -> Response {
@@ -151,7 +151,7 @@ pub(crate) async fn reject_job<D: Daemon>(
 /// never weighed the work and a gaming flag are not opinions to be overruled,
 /// and a failed mechanical Check is terminal and reaches this route as a Job
 /// with no stopped step. 422 on a blank reason.
-pub(crate) async fn override_verdict<D: Daemon>(
+pub(crate) async fn override_verdict<D: Commands>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
     body: Bytes,
@@ -179,7 +179,7 @@ pub(crate) async fn override_verdict<D: Daemon>(
 /// `escalated` Job stopped on `gate_undecided`, and 409 again on a Job this
 /// Fleet is no longer standing at, where the baseline the first reading used
 /// went with the slot and `restart_step` is what applies.
-pub(crate) async fn rerun_gate<D: Daemon>(
+pub(crate) async fn rerun_gate<D: Commands>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
 ) -> Response {
@@ -191,7 +191,7 @@ pub(crate) async fn rerun_gate<D: Daemon>(
 
 /// The process, not the unit of work. What comes back is the Job the Drone was
 /// on, which is still there.
-pub(crate) async fn kill_drone<D: Daemon>(
+pub(crate) async fn kill_drone<D: Commands>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
 ) -> Response {
@@ -205,7 +205,7 @@ pub(crate) async fn kill_drone<D: Daemon>(
 /// because two of the edges into `killed` leave a status no
 /// Drone has ever existed under, and neither one can be spelled as killing a
 /// Drone.
-pub(crate) async fn kill_job<D: Daemon>(
+pub(crate) async fn kill_job<D: Commands>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
 ) -> Response {
@@ -222,7 +222,7 @@ pub(crate) async fn kill_job<D: Daemon>(
 /// still in flight, and this only clears a Board of work that has already
 /// finished. It does not touch the worktree or the branch — `armada clean`
 /// keeps that concern.
-pub(crate) async fn forget_job<D: Daemon>(
+pub(crate) async fn forget_job<D: Commands>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
 ) -> Response {
@@ -238,7 +238,7 @@ pub(crate) async fn forget_job<D: Daemon>(
 /// 409 where the Job is not yet terminal, for `forget_job`'s reason. 200 where
 /// either half was left standing: a branch holding commits the base cannot
 /// reach is kept on purpose, and the answer names it rather than failing.
-pub(crate) async fn reclaim_worktree<D: Daemon>(
+pub(crate) async fn reclaim_worktree<D: Commands>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
 ) -> Response {
@@ -255,7 +255,7 @@ pub(crate) async fn reclaim_worktree<D: Daemon>(
 /// Mint a replacement for a stopped Job. **Two Jobs come back**, and
 /// the answer is 200 rather than 201 because the act a caller asked for is the
 /// recovery, not the creation — the new Job's id is in the body.
-pub(crate) async fn redispatch_job<D: Daemon>(
+pub(crate) async fn redispatch_job<D: Commands>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
 ) -> Response {
@@ -270,7 +270,7 @@ pub(crate) async fn redispatch_job<D: Daemon>(
 /// thrown away.
 ///
 /// 409 where the Drone is gone, naming `restart_step` as the act that applies.
-pub(crate) async fn redirect_drone<D: Daemon>(
+pub(crate) async fn redirect_drone<D: Commands>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
     body: Bytes,
@@ -292,7 +292,7 @@ pub(crate) async fn redirect_drone<D: Daemon>(
 /// Answer the question a Drone asked. **The Job comes back unchanged**: what
 /// moved is the Drone, handed the answer as a turn. 409 where nothing waits,
 /// where the id names an answered question, or where the label was not offered.
-pub(crate) async fn answer_question<D: Daemon>(
+pub(crate) async fn answer_question<D: Commands>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
     body: Bytes,
@@ -321,7 +321,7 @@ pub(crate) async fn answer_question<D: Daemon>(
 /// 409 where the Drone is alive, where the worktree is gone, and where a note
 /// is already waiting on the Job. 422 on a note with nothing in it — which is
 /// not the same request as one with no note.
-pub(crate) async fn restart_step<D: Daemon>(
+pub(crate) async fn restart_step<D: Commands>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
     body: Bytes,
@@ -355,7 +355,7 @@ pub(crate) async fn restart_step<D: Daemon>(
 /// 422 on a blank sentence. The record was already served by three other
 /// routes before anybody pressed anything, so a filing with the bundle and no
 /// sentence has added nothing at all.
-pub(crate) async fn file_report<D: Daemon>(
+pub(crate) async fn file_report<D: Commands>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
     body: Bytes,

@@ -29,7 +29,7 @@ use axum::routing::post;
 use axum::Router;
 use ipc::mcp::{self, Answered, Incoming};
 
-use crate::daemon::Daemon;
+use crate::daemon::Tools;
 use crate::routes::Served;
 
 /// Where the Evidence tool is served.
@@ -77,7 +77,7 @@ impl Caller {
     }
 }
 
-pub fn mounted<D: Daemon>() -> Router<Served<D>> {
+pub fn mounted<D: Tools>() -> Router<Served<D>> {
     Router::new().route(MCP_PATH, post(called::<D>).get(no_stream).delete(no_stream))
 }
 
@@ -99,7 +99,7 @@ fn who_called(parts: &axum::http::request::Parts) -> Caller {
 /// A notification is acknowledged with 202 and no body, because JSON-RPC
 /// forbids answering one and an empty 200 would be a response with no id that
 /// a client has to guess about.
-async fn called<D: Daemon>(
+async fn called<D: Tools>(
     State(served): State<Served<D>>,
     request: axum::extract::Request,
 ) -> Response {
@@ -146,7 +146,7 @@ async fn called<D: Daemon>(
         // with what they printed, which is minutes rather than milliseconds. It
         // adds nothing to the unbounded-sink risk this module's comment names —
         // it is still one reply on the Drone's own connection — and what bounds
-        // the cost is `Daemon::run_checks`'s, not the transport's.
+        // the cost is `Tools::run_checks`'s, not the transport's.
         Incoming::RunChecks { id } => match served.daemon().run_checks(caller).await {
             Ok(report) => Answered::Checked { id, report },
             Err(why) => Answered::Refused { id, why },

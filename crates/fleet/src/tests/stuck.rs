@@ -203,7 +203,7 @@ async fn settled(fleet: &Fixture) {
 
 /// One Job as the wire serves it.
 async fn detail(fleet: &Fixture, job: &JobId) -> ipc::JobDetail {
-    api::Daemon::get_job(fleet, ipc::JobId::from(job))
+    api::Queries::get_job(fleet, ipc::JobId::from(job))
         .await
         .expect("a Job that exists")
 }
@@ -302,7 +302,7 @@ async fn a_restart_onto_a_gone_worktree_answers_409_over_the_wire() {
     until_reaped(&fleet).await;
     delete_the_worktree(&home, &job);
 
-    let refusal = api::Daemon::restart_step(&fleet, ipc::JobId::from(&job), None)
+    let refusal = api::Commands::restart_step(&fleet, ipc::JobId::from(&job), None)
         .await
         .expect_err("the worktree was just deleted");
 

@@ -15,7 +15,7 @@
 //! makes a spent budget testable at all. A test that calls `turn` once and
 //! asserts a failure would pass against a system with no retries in it.
 
-use api::Daemon;
+use api::Queries;
 use core_model::{EscalationTrigger, JobStatus, StepId, StepState, StepVerdict};
 use testkit::{FakeWorkProduct, Gate, Sketch};
 

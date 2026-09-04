@@ -12,7 +12,7 @@
 use std::time::Duration;
 
 use adapter_traits::{DroneEvent, Speaker};
-use api::Daemon;
+use api::Queries;
 use store::Spend;
 use testkit::FakeWorkProduct;
 

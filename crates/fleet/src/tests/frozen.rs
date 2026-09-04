@@ -122,7 +122,7 @@ async fn what_a_person_is_shown_is_what_the_job_froze() {
     };
 
     let after = a_fleet_holding(&home, changed(), two_steps_edited(), 100);
-    let detail = api::Daemon::get_job(&after, ipc::JobId::from(&job_id))
+    let detail = api::Queries::get_job(&after, ipc::JobId::from(&job_id))
         .await
         .expect("the Job reads");
     let checks = detail.steps[0]
@@ -184,7 +184,7 @@ async fn a_steps_label_and_its_checks_command_are_the_ones_the_job_froze() {
         gated_on("Renamed since", "cargo build --some-other-way"),
         100,
     );
-    let detail = api::Daemon::get_job(&after, ipc::JobId::from(&job_id))
+    let detail = api::Queries::get_job(&after, ipc::JobId::from(&job_id))
         .await
         .expect("the Job reads");
 

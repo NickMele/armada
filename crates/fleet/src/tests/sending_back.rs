@@ -494,7 +494,7 @@ async fn a_step_sent_back_twice_files_each_pass_apart_from_the_last() {
 /// One Job, as `GET /jobs/:job_id` serves it. The wire answer and not the
 /// record, because what `#212` is about is the difference between the two.
 async fn detail(fleet: &Fixture, job: &core_model::JobId) -> ipc::JobDetail {
-    api::Daemon::get_job(fleet, ipc::JobId::from(job))
+    api::Queries::get_job(fleet, ipc::JobId::from(job))
         .await
         .expect("a Job that exists")
 }
