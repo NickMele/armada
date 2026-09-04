@@ -13,7 +13,7 @@ use core_model::StepId;
 use crate::error::{Fault, LoadError};
 use crate::loops::GateVerdict;
 use crate::tests::{fault_at, named, refusals, roster};
-use crate::workflow::WorkflowDef;
+use crate::workflow::{Structure, WorkflowDef};
 
 /// A two-step design loop: `draft`, then a human gate that sends it back.
 const DESIGN_PLAN: &str = "
@@ -44,9 +44,17 @@ fn parsed(structure: &str, steps: &str) -> Result<WorkflowDef, LoadError> {
 /// The shape `workflows.toml` calls Armada's only instantiated loop, loading
 /// whole for the first time: `draft -> present`, with `request_changes` routing
 /// back to `draft` and a cap of five on how often.
+///
+/// **The blocker written against `structure: loop` had expired.** It said a
+/// return needs a verdict, which needs a Judge or a human gate, and that
+/// neither existed — and both do: `human_always` is a carried gate that
+/// `fleet::gate` holds a step at, and a panel runs from `judge_checks`. The
+/// structure is asserted here rather than beside the other `structure` tests,
+/// because it does not stand on its own: `loop` is checked against the wiring.
 #[test]
 fn a_loop_carries_its_edge_and_its_cap_onto_the_step() {
     let def = parsed("loop", DESIGN_PLAN).expect("the design loop");
+    assert_eq!(def.structure(), Structure::Loop);
     let present = &def.steps()[1];
 
     assert_eq!(
@@ -234,6 +242,91 @@ fn a_linear_workflow_carrying_an_edge_is_still_a_contradiction_and_not_an_unknow
         fault_at(&refused, "steps[1].verdict_routing"),
         &Fault::ContradictsStructure {
             structure: "linear"
+        }
+    );
+}
+
+/// **The mirror, and it is the half that was never built.** A `loop` no step
+/// declares an edge for runs as a straight line while wearing the label of one
+/// that comes back — legal config, and what surfaces is a Job that advances off
+/// the end of a workflow its author believed would return.
+///
+/// Reported at `structure` rather than at a step: the absence is the file's,
+/// and there is no offending step to name.
+#[test]
+fn a_loop_that_declares_no_edge_is_refused() {
+    let refused = refusals(parsed(
+        "loop",
+        "
+  - id: draft
+    label: Draft
+    evidence_type: document
+    advance_gate: auto
+  - id: present
+    label: Present
+    evidence_type: document
+    advance_gate: human_always
+",
+    ));
+    assert_eq!(
+        fault_at(&refused, "structure"),
+        &Fault::ContradictsStructure { structure: "loop" }
+    );
+}
+
+/// The check is asked of what the file wrote, not of what parsed. A step that
+/// is dropped for its own unrelated fault — here a missing `label` — still
+/// declared the edge, and reporting the workflow as edgeless would send the
+/// author to `structure` for a fault sitting two lines below.
+#[test]
+fn a_loop_whose_routing_step_failed_to_parse_is_not_also_called_edgeless() {
+    let refused = refusals(parsed(
+        "loop",
+        "
+  - id: draft
+    label: Draft
+    evidence_type: document
+    advance_gate: auto
+  - id: present
+    evidence_type: document
+    advance_gate: human_always
+    verdict_routing:
+      request_changes: draft
+",
+    ));
+    assert_eq!(fault_at(&refused, "steps[1].label"), &Fault::Missing);
+    assert!(
+        !crate::tests::refused(&refused, "structure"),
+        "the edge is written on the step that failed: {refused:?}"
+    );
+}
+
+/// **An edge naming no step is a loop that cannot close**, and it is refused
+/// where it is written for the reason an unresolvable artifact target is: the
+/// only other place it would be found is a Job with a worktree, a Drone and a
+/// person standing at a gate with nowhere to send the work back to.
+#[test]
+fn an_edge_that_names_no_step_is_refused() {
+    let refused = refusals(parsed(
+        "loop",
+        "
+  - id: draft
+    label: Draft
+    evidence_type: document
+    advance_gate: auto
+  - id: present
+    label: Present
+    evidence_type: document
+    advance_gate: human_always
+    verdict_routing:
+      request_changes: redraft
+",
+    ));
+    assert_eq!(
+        fault_at(&refused, "steps[1].verdict_routing.request_changes"),
+        &Fault::RoutesToNoSuchStep {
+            value: "redraft".to_string(),
+            declared: vec!["draft".to_string(), "present".to_string()],
         }
     );
 }

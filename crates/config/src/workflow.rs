@@ -383,21 +383,36 @@ fn read(path: &Path, root: &Value, roster: &Roster, out: &mut Vec<Refusal>) -> O
         )
     });
 
+    let items = top
+        .required("steps", out)
+        .and_then(|value| yaml::list("steps", value, out))
+        .unwrap_or_default();
     // Paired with the file position each step came from, because a step that
     // failed to parse is dropped and the duplicate-id report below has to name
     // the line the author wrote rather than the index in a shortened list.
-    let placed: Vec<(usize, Step)> = top
-        .required("steps", out)
-        .and_then(|value| yaml::list("steps", value, out))
-        .map(|items| {
-            items
-                .iter()
-                .enumerate()
-                .filter_map(|(n, (at, item))| Some((n, step(at, item, structure, roster, out)?)))
-                .collect()
-        })
-        .unwrap_or_default();
+    let placed: Vec<(usize, Step)> = items
+        .iter()
+        .enumerate()
+        .filter_map(|(n, (at, item))| Some((n, step(at, item, structure, roster, out)?)))
+        .collect();
     top.close(TOP_LEVEL, out);
+
+    // **The other half of the rule `loops` holds the linear half of.** The
+    // structure field is redundant with `verdict_routing` by construction and
+    // that redundancy is the whole value of the field: without this, `loop` is
+    // a label a file can wear while running as a straight line, and what
+    // surfaces is a Job that advances off the end of a workflow its author
+    // believed would come back.
+    //
+    // Reported at `structure` rather than at a step, because the absence is the
+    // file's and there is no offending step to name. Asked of what the file
+    // wrote rather than of what parsed — `yaml::any_holds` for why.
+    if structure == Some(Structure::Loop) && !yaml::any_holds(&items, "verdict_routing") {
+        out.push(Refusal::new(
+            "structure",
+            Fault::ContradictsStructure { structure: "loop" },
+        ));
+    }
 
     // Duplicate step ids, reported on the second occurrence and naming the
     // first. Every per-step counter in the system is keyed by this value, so
@@ -416,6 +431,30 @@ fn read(path: &Path, root: &Value, roster: &Roster, out: &mut Vec<Refusal>) -> O
             }
         }
     }
+    // **An edge that names no step is a loop that cannot close.** Every other
+    // name in this crate is resolved where it is written rather than at the
+    // gate, for the reason `artifact_exists` gives: a step no Drone could pass
+    // costs a worktree, a Drone and a retry budget to discover. A routing
+    // target is the same name one layer up, and the layer that would otherwise
+    // find it is a Job standing at a human gate with nowhere to go.
+    //
+    // Read off the file for `yaml::any_holds`'s reason: a target step dropped
+    // for its own unrelated fault is still a step the author wrote.
+    let declared = yaml::text_values(&items, "id");
+    for (n, step) in &placed {
+        for (verdict, target) in step.verdict_routing() {
+            if !declared.contains(&target.as_str()) {
+                out.push(Refusal::new(
+                    format!("steps[{n}].verdict_routing.{}", verdict.as_wire()),
+                    Fault::RoutesToNoSuchStep {
+                        value: target.as_str().to_string(),
+                        declared: declared.iter().map(|id| (*id).to_string()).collect(),
+                    },
+                ));
+            }
+        }
+    }
+
     let steps: Vec<Step> = placed.iter().map(|(_, step)| step.clone()).collect();
 
     Some(WorkflowDef {

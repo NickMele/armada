@@ -146,6 +146,20 @@ pub enum Fault {
     /// because split they never fire. The same half-a-statement shape as
     /// [`Fault::PlanWithoutAScope`].
     CapWithoutALoop,
+    /// **A `verdict_routing` target naming no step the file declares.** The
+    /// loop cannot close: the Job reaches its gate, is told to go back, and
+    /// there is nothing to go back to. Refused where it is written for
+    /// [`Fault::NotAnArtifactPath`]'s reason — the layer that would otherwise
+    /// find it is a Job that already has a worktree, a Drone and a person
+    /// standing at the gate.
+    RoutesToNoSuchStep {
+        value: String,
+        /// The ids the file writes, in order, so the message can name them.
+        /// Owned rather than borrowed, and read off the document rather than
+        /// off the parsed steps: a step dropped for its own unrelated fault is
+        /// still a step the author declared.
+        declared: Vec<String>,
+    },
     /// **`context_paths` in a definition.** The schema puts it on the resolved
     /// object: the Drone supplies the paths at declaration time and Fleet
     /// validates them, so at definition time there is nothing to author.
@@ -292,6 +306,15 @@ impl fmt::Display for Fault {
                 f,
                 "declares a routing edge, and the workflow declares `structure: {structure}`"
             ),
+            Fault::RoutesToNoSuchStep { value, declared } => {
+                let names: Vec<&str> = declared.iter().map(String::as_str).collect();
+                write!(
+                    f,
+                    "is `{value}`, which names no step in this workflow. It \
+                     declares {}",
+                    Listed(&names, "none")
+                )
+            }
             Fault::CapWithoutALoop => write!(
                 f,
                 "bounds a count the step does not keep: it declares no \

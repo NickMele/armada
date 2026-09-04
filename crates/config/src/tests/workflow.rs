@@ -164,20 +164,6 @@ fn a_step_needs_both_an_id_and_a_label() {
     assert_eq!(fault_at(&refused, "steps[1].id"), &Fault::Missing);
 }
 
-/// Both of the schema's structures load. The blocker written against `loop`
-/// named a Judge and a human gate that did not exist, and both do — the gate is
-/// `human_always` and `fleet::gate` holds a step at it, and a panel runs from
-/// `judge_checks`. What is still missing is a step-machine edge for the return
-/// and a counter to bound it, and neither is a thing the file could say.
-#[test]
-fn a_loop_workflow_declares_its_structure_and_loads() {
-    let def = parse(
-        "version: 1\nworkflow_id: fixture\nname: design_plan\nstructure: loop\nsteps:\n  - id: draft\n    label: Draft\n    advance_gate: auto\n",
-    )
-    .expect("a loop declaration");
-    assert_eq!(def.structure(), Structure::Loop);
-}
-
 /// A third value is still a value the schema does not have, and the message
 /// says so rather than reading as a milestone that has not arrived.
 #[test]

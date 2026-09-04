@@ -341,3 +341,40 @@ pub(crate) fn word<T: Copy>(
     out.push(Refusal::new(key, fault));
     None
 }
+
+/// Whether any mapping in a list writes `name` at all.
+///
+/// **Asked of the file rather than of what parsed.** A step is dropped when
+/// anything on it is refused — a missing `label`, a model this machine does not
+/// offer — so a cross-step check run against the survivors would tell a
+/// workflow it declares no loop edge while the edge is sitting plainly on one
+/// of its steps, and send the author to the wrong line for a fault they do not
+/// have.
+pub(crate) fn any_holds(items: &[(String, &Value)], name: &str) -> bool {
+    items.iter().any(|(_, item)| at_key(item, name).is_some())
+}
+
+/// The text at `name` in each mapping of a list, skipping any that is absent or
+/// is not text. For the same cross-step checks, and read off the file for
+/// [`any_holds`]'s reason.
+pub(crate) fn text_values<'a>(items: &'a [(String, &'a Value)], name: &str) -> Vec<&'a str> {
+    items
+        .iter()
+        .filter_map(|(_, item)| match at_key(item, name) {
+            Some(Value::String(found)) => Some(found.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The value at `name` inside a mapping, or [`None`] where there is no mapping
+/// or no such key. Nothing is refused here: every one of these values is read
+/// properly somewhere else, and this is the second, cross-item look.
+fn at_key<'a>(value: &'a Value, name: &str) -> Option<&'a Value> {
+    let Value::Mapping(map) = value else {
+        return None;
+    };
+    map.iter()
+        .find(|(key, _)| matches!(key, Value::String(key) if key == name))
+        .map(|(_, held)| held)
+}
