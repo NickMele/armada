@@ -16,15 +16,15 @@
 //! missing from the list and is the plainest member of it.
 //!
 //! **Every one is written from the definition and from nothing else**, which is
-//! `briefing`'s narrowing carried across: a `ResolvedCheck`'s `run` string is
-//! not readable from here, and [`Delivering`] names a path in the Drone's own
+//! `briefing`'s narrowing carried across: [`Checking`] names its Checks and
+//! not what they run, and [`Delivering`] names a path in the Drone's own
 //! worktree. [`Splitting`] reads one step further, because what a step's
 //! product *becomes* is a fact about the step after it — and names no workflow.
 //!
 //! Four of the five carry **drafted wording**. Sanctioned copy is
 //! `docs/contracts/agent-prompt.md`'s to write and it has none for them yet.
 
-use core_model::{FrozenWorkflow, RepoPath, ResolvedStep, StepId};
+use core_model::{FrozenWorkflow, RepoPath, ResolvedCheck, ResolvedStep, StepId};
 
 /// The file a step is asked to write, where it declares one.
 ///
@@ -116,14 +116,50 @@ impl Checking {
     /// every call with a refusal, and a Drone pointed at a tool that refuses it
     /// is a Drone reading a denial as a broken system. That is the defect this
     /// capability exists to close, arriving from the other side.
+    ///
+    /// **It is also what keeps the list from being empty.** A heading with
+    /// nothing under it says a list exists and then withholds it, which is
+    /// worse than the unnamed offer; the same emptiness returns `None` here.
+    ///
+    /// **Named by [`label`](core_model::ResolvedCheck::label), never by
+    /// command, and never as a menu.** Unnamed, the offer left a Drone no way
+    /// to tell whether a call answered the question it had but to spend one —
+    /// the guessing the tool exists to replace, a step earlier. A label is the
+    /// word the report comes back carrying, so offer and answer line up row
+    /// for row; a `run` string is what `docs/concepts/drone.md` keeps out of
+    /// every block. One ask runs the whole declaration, because a Drone that
+    /// could pick could skip the Check that would have caught its mistake.
+    ///
+    /// **And the caveat rides only where it is true.** A named list a Drone
+    /// acts on is worse than the vague sentence it replaces if what runs is
+    /// sometimes less, so a step holding a path-scoped Check says so — on the
+    /// same reading `crate::dry_run` skips by, and never in schema words.
     pub fn at(step: &ResolvedStep) -> Option<Checking> {
         if step.checks().is_empty() {
             return None;
         }
-        Some(Checking(String::from(
-            "FINDING OUT WHERE YOU STAND\n\nYou can ask for the checks that \
-             gate this part to be run against your worktree, and you will be \
-             told what each one did and where its output was written. Use it \
+        let mut block = String::from(
+            "FINDING OUT WHERE YOU STAND\n\nThese are the checks that gate \
+             this part:\n",
+        );
+        for check in step.checks() {
+            block.push_str("\n  - ");
+            block.push_str(check.label());
+        }
+        block.push_str(
+            "\n\nYou can ask for them to be run against your worktree, and you \
+             will be told what each one did and where its output was written. \
+             One ask runs the whole list and you do not choose from it.",
+        );
+        if step.checks().iter().any(ResolvedCheck::needs_changed_paths) {
+            block.push_str(
+                " A check on this list that covers only certain files comes \
+                 back skipped rather than run, where your changes have not \
+                 touched them.",
+            );
+        }
+        block.push_str(
+            " Use it \
              when you want to know whether the work holds up rather than \
              guessing — and note that it takes as long as the checks take.\n\n\
              It is not a verdict and it advances nothing. A run in which \
@@ -132,7 +168,8 @@ impl Checking {
              Submitting is still the only way to report. There is a limit on \
              how many times one part may ask, and you do not have to ask at \
              all.",
-        )))
+        );
+        Some(Checking(block))
     }
 
     /// The block, exactly as it reaches a Drone.

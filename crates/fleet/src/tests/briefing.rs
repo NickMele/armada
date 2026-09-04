@@ -4,7 +4,11 @@
 //! here — a test that pinned the copy would make every contract edit a Rust
 //! change. What is asserted is the structure the contract's M1 rendering
 //! requires, and the rule `docs/concepts/drone.md` puts on every Drone-facing
-//! surface: **a Drone is never told what the Checks are.**
+//! surface: **a Drone is told which Checks gate its step and never what any of
+//! them runs.** The dry-run offer is the one place the first half is asserted
+//! against the rendered text rather than against a call, because "the checks
+//! that gate this part" is a sentence that reads as though it named them and
+//! passes any test that only asks whether the block is there.
 //!
 //! The last two groups are about moments rather than renderings. A step
 //! boundary drives a whole Fleet, because the defect it is about was not in any
@@ -165,14 +169,102 @@ fn the_baseline_describes_the_tool_rather_than_naming_it() {
     assert!(!BASELINE.to_lowercase().contains("submit_evidence"));
 }
 
-/// The rule that governs every Drone-facing surface. A Drone told the Check
-/// satisfies the Check.
+/// The half of the rule that survived: a Drone told the command satisfies the
+/// command. **`expect_exit_code` is a bar and so is the command line**, and
+/// neither is anywhere in the turn.
 #[test]
-fn a_drone_is_never_told_what_the_checks_are() {
+fn a_drone_is_never_told_what_a_check_runs() {
     let said = turn_at("implement");
-    assert!(!said.contains("cargo nextest run"), "the command");
-    assert!(!said.contains("suite"), "the Check's name");
-    assert!(!said.contains("exit"), "what it is expected to exit with");
+    assert!(!said.contains("cargo nextest run"), "the command: {said}");
+    assert!(
+        !said.contains("exit"),
+        "what it is expected to exit with: {said}"
+    );
+}
+
+/// And the half that did not. **The rendered sentence, not a call** — the
+/// phrase this replaces was "the checks that gate this part", which reads as
+/// though it named them, so a test asserting the block is present passes
+/// identically before and after. What is asserted is the step's own Check on
+/// the line under the heading.
+#[test]
+fn the_offer_names_the_checks_that_gate_this_step() {
+    let said = turn_at("implement");
+    assert!(
+        said.contains("These are the checks that gate this part:\n\n  - suite"),
+        "the step declares `suite` and the offer says so: {said}"
+    );
+    assert!(
+        said.contains("One ask runs the whole list and you do not choose from it."),
+        "a list a Drone could pick from is one it could pick around: {said}"
+    );
+    assert!(
+        !said.contains("comes back skipped"),
+        "every Check on this step runs, so it carries no caveat about one that \
+         might not: {said}"
+    );
+}
+
+/// A named list is a promise, and a path-scoped Check is where it is not kept:
+/// a Drone reads `suite`, calls for exactly that, and gets a skip. **The
+/// report's skipped row says so after the call was spent**, and #376 is about
+/// deciding before — so the block says it, in the same breath as the list and
+/// never in the workflow's words.
+#[test]
+fn a_step_with_a_path_scoped_check_says_one_may_come_back_skipped() {
+    let workflow = testkit::frozen(&[Sketch {
+        id: "implement",
+        label: "Implement",
+        evidence_type: Some("diff"),
+        gates: &[Gate::Check {
+            name: "suite",
+            run: "cargo nextest run --workspace",
+            expect_exit_code: 0,
+            when: &["crates/**"],
+        }],
+        judged_on: &[],
+        scope: None,
+        gaming: None,
+    }]);
+    let said = first_turn(
+        &a_job(),
+        &workflow,
+        &StepId::new("implement"),
+        &Crossed::nothing(),
+    )
+    .expect("a prompt")
+    .as_str()
+    .to_string();
+
+    assert!(
+        said.contains(
+            "A check on this list that covers only certain files comes back \
+             skipped rather than run"
+        ),
+        "the list is a promise and this is where it is not kept: {said}"
+    );
+    assert!(
+        !said.contains("crates/**"),
+        "the caveat is about the Drone's own changes, not about the paths the \
+         workflow scoped the Check to — a Drone does not write the workflow: \
+         {said}"
+    );
+}
+
+/// A step with no Checks makes no offer at all, so the sentence never
+/// degenerates into a heading with nothing under it. **That is worse than the
+/// unnamed phrase it replaces** — it says a list exists and then withholds it.
+#[test]
+fn a_step_with_no_checks_names_none_and_offers_nothing() {
+    let said = turn_at("summarise");
+    assert!(
+        !said.contains("FINDING OUT WHERE YOU STAND"),
+        "no block, rather than an empty one: {said}"
+    );
+    assert!(
+        !said.contains("gate this part"),
+        "and no dangling colon: {said}"
+    );
 }
 
 /// The stop sits inside the list, and later parts carry the prohibition. Where

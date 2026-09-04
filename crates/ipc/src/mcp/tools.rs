@@ -465,21 +465,36 @@ pub(crate) fn listed() -> Vec<Value> {
 /// briefing — but what a description still has to do is stop a Drone reading a
 /// green run as a finished step.
 ///
-/// It names no Check and offers no way to. `docs/concepts/drone.md` used to
-/// keep the Checks from a Drone entirely; what replaced that is the Judge and
-/// the gaming patterns, not a parameter through which a Drone picks its own
-/// bar.
+/// It offers no way to pick a Check. `docs/concepts/drone.md` used to keep the
+/// Checks from a Drone entirely; what replaced that is the Judge and the gaming
+/// patterns, not a parameter through which a Drone picks its own bar.
+///
+/// **It points at the brief rather than naming the Checks itself.** Which
+/// Checks gate a part is a fact about the part, and this description is
+/// assembled once with no step in hand — `Answered::Tools` carries none, and
+/// threading one in would make a static list into per-step state that a client
+/// is free to cache past the boundary it was true at. `fleet::terms::Checking`
+/// names them, per step, in the same session. Two places naming them would be
+/// two places to disagree; this one says where the list is, which is the answer
+/// a Drone deciding whether to spend a call actually needs.
+///
+/// **It says what a brief naming none means.** A part with no Checks is offered
+/// no block at all, so a Drone sent looking for a list that is not there would
+/// be left to work out whether it had missed something or the tool was broken.
 fn checks_tool() -> Value {
     json!({
         "name": CHECKS_TOOL,
         "description":
-            "Run the checks that gate the part you are on, in your worktree, and \
-             get back what each one did and where its output was written. Call \
-             it when you want to know whether the work holds up, before you \
+            "Run the checks that gate the part you are on — the ones your brief \
+             names under FINDING OUT WHERE YOU STAND — in your worktree, and get \
+             back what each one did and where its output was written. It runs \
+             all of them and takes no arguments; there is nothing to choose. \
+             Call it when you want to know whether the work holds up, before you \
              submit. It is not a verdict and it advances nothing — the checks \
              are run again when you submit, and only that run decides anything. \
-             There is a limit on how many times one part may ask, and a second \
-             call while one is still running is refused.",
+             There is a limit on how many times one part may ask, a second call \
+             while one is still running is refused, and a part whose brief names \
+             no checks has none to run.",
         "inputSchema": {
             "type": "object",
             "properties": {},
