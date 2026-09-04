@@ -95,14 +95,18 @@ export function HeldWorktree({
           <span className="armada-held__title">{held.job_title}</span>
         )}
         {badge === null ? (
-          /* The registry carries no verb or glyph for this status — `escalated`
-             is the one a held worktree meets — so there is no badge to draw and
-             none is invented. **The wire's own spelling renders instead**,
-             which is `ChangedFiles`'s answer to the same gap: the value is the
-             registry key, so showing it is not a second vocabulary, and a blank
-             where a status goes leaves a person unable to tell an escalated job
-             from a finished one. Reported rather than papered over — the fix is
-             a row in `enum-verbs.toml`. */
+          /* A status spelling this build's registry has no row for, which is
+             Bridge behind Fleet rather than a bad message. **The wire's own
+             spelling renders instead**, which is `reading.ts`'s answer to the
+             same case: the value is the registry key, so showing it is not a
+             second vocabulary, and a blank where a status goes leaves a person
+             unable to tell one job from another.
+
+             **`escalated` stood here and no longer does.** It carried no verb
+             and no glyph, so this arm was drawing a status the registry does
+             name — #400 gave it `needs you` and `megaphone`, and every status
+             `enum-verbs.toml` carries now draws a badge. What is left is the
+             unknown value, which no registry row can close. */
           <span className="armada-held__unworded">{held.status}</span>
         ) : (
           <Badge status={badge.status} icon={badge.icon}>

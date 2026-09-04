@@ -1,16 +1,17 @@
-import { app, BrowserWindow, ipcMain, nativeImage } from "electron";
+import { app, BrowserWindow, ipcMain, nativeImage, Notification } from "electron";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import tokens from "@armada/tokens/tokens.json";
 import { CHANNELS, NOTHING_YET } from "../shared/bridge";
-import type { BridgeState } from "../shared/bridge";
+import type { BridgeState, Summons } from "../shared/bridge";
 import type { Draft } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
 import type { Artifact } from "@armada/protocol";
 import { FleetConnection } from "./connection";
 import { openArtifact } from "./open";
+import { Attention } from "./telling";
 
 // Bridge's window, and the one connection under it.
 //
@@ -112,7 +113,71 @@ function publish(state: BridgeState): void {
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) window.webContents.send(CHANNELS.changed, state);
   }
+  // **Here rather than on chosen events**, because what decides a notification
+  // is the needs-you set changing and this is the one funnel every change to
+  // the list passes through. `readAt` is what tells a publish that carries a
+  // reading from one that carries only a connection state.
+  attention.read(state.jobs, state.readAt);
 }
+
+/**
+ * A press on a notification, waiting for a window to hand it to.
+ *
+ * **The press outlives the absence of a window, and that is the point.** The
+ * whole feature is being told with Bridge closed, so a click that arrived with
+ * nothing on screen has to open one and land in the right place rather than
+ * open one at whatever it was last showing.
+ */
+let summoned: Summons | null = null;
+
+/**
+ * Go where a pressed notification says.
+ *
+ * A window that exists is raised and told. With none, one is opened and the
+ * press is held until that window asks for state — which every window does on
+ * mount, having already installed its listener, so nothing races.
+ */
+function summon(to: Summons): void {
+  summoned = to;
+  const [window] = BrowserWindow.getAllWindows();
+  if (window === undefined || window.isDestroyed()) {
+    createWindow();
+    return;
+  }
+  if (window.isMinimized()) window.restore();
+  window.show();
+  window.focus();
+  hand(window);
+}
+
+/** Hand over a held press, if there is one. Nothing is handed twice. */
+function hand(window: BrowserWindow): void {
+  if (summoned === null || window.isDestroyed()) return;
+  window.webContents.send(CHANNELS.summoned, summoned);
+  summoned = null;
+}
+
+/**
+ * What Armada says when a Job starts waiting, and what the dock says while one
+ * is. The rule and the words are `telling.ts`'s; these are the two effects.
+ *
+ * **Nothing here asks for permission.** The first `show()` is what makes macOS
+ * ask, once, and a refusal turns this into a no-op with the rest of Bridge
+ * untouched — see `telling.ts`. `isSupported` is the platform question rather
+ * than the person's, and it is the only one this process can actually answer.
+ */
+const attention = new Attention({
+  show: (told) => {
+    if (!Notification.isSupported()) return;
+    const banner = new Notification({ title: told.title, body: told.body });
+    banner.on("click", () => summon({ jobId: told.jobId }));
+    banner.show();
+  },
+  // The standing count, and the one signal that survives a refused permission.
+  // `dock` is macOS's; nothing else in this workspace has a tile to badge.
+  count: (waiting) => app.dock?.setBadge(waiting === 0 ? "" : String(waiting)),
+  now: () => Date.now(),
+});
 
 void app.whenReady().then(() => {
   wearTheMark();
@@ -128,7 +193,16 @@ void app.whenReady().then(() => {
   // Awaited, because `state()` brings the connection current first — a window
   // reload is a fresh reader and gets what exists rather than what main last
   // heard about. See `FleetConnection.state`.
-  ipcMain.handle(CHANNELS.state, () => connection?.state());
+  ipcMain.handle(CHANNELS.state, async (event) => {
+    const state = await connection?.state();
+    // A fresh window asks for state on mount with its listener already
+    // installed, so this is the moment a press held while there was no window
+    // can be handed over — and the only one that needs no second channel to
+    // announce readiness.
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (window !== null) hand(window);
+    return state;
+  });
   // Every act on a Job is reached through `commands` — see `command.ts`, which
   // holds them because they are HTTP and the connection is a socket.
   ipcMain.handle(CHANNELS.proposeJob, (_event, draft: Draft) =>
@@ -290,8 +364,16 @@ void app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
-  // Fleet is a daemon and not a subprocess of this window. Closing Bridge drops
-  // the connection and nothing else.
+  // **On macOS the connection stays up with the window closed, and this feature
+  // rests on that.** Fleet is a daemon rather than a subprocess of the window,
+  // so Jobs progress either way — but a Bridge that stopped reading would have
+  // nothing left to notice a Job starting to wait, and telling somebody who is
+  // away from the app is the whole point. The app is still running; what it
+  // costs is one socket.
+  //
+  // Everywhere else the app quits, which stops the connection on its way out.
+  if (process.platform === "darwin") return;
   connection?.stop();
-  if (process.platform !== "darwin") app.quit();
+  attention.close();
+  app.quit();
 });

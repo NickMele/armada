@@ -11,6 +11,7 @@ import {
   Eye,
   FileQuestionMark,
   Link,
+  Megaphone,
   OctagonAlert,
   Power,
   RefreshCw,
@@ -39,10 +40,15 @@ export default meta;
 type Story = StoryObj<typeof Badge>;
 
 /**
- * `not_started` and `escalated` have a status token and no glyph in
- * `packages/icons/icons.toml`. The contract makes an icon mandatory on every
- * state, so these two render short a channel — visibly ragged in a column,
- * which is the failure being reported rather than papered over.
+ * `not_started` has a status token and no glyph in `packages/icons/icons.toml`.
+ * The contract makes an icon mandatory on every state, so it renders short a
+ * channel — visibly ragged in a column, which is the failure being reported
+ * rather than papered over.
+ *
+ * **`escalated` was the second one and is not any more.** It draws `megaphone`
+ * in `needs you` since #400: it is a status a surface can be handed with no
+ * escalation reason beside it, and a status that renders only its reason had
+ * nothing to draw there.
  */
 const NO_GLYPH_IN_REGISTRY = undefined as unknown as LucideIcon;
 
@@ -96,8 +102,13 @@ export const AwaitingAttestation: Story = {
   args: { status: "awaiting-attestation", icon: Stamp, children: "Awaiting attestation" },
 };
 
+/**
+ * The status's own badge, which stands where no escalation reason is set — the
+ * reason's verb and glyph replace it the moment one is, the same handover
+ * `queued` has above.
+ */
 export const Escalated: Story = {
-  args: { status: "escalated", icon: NO_GLYPH_IN_REGISTRY, children: "Escalated" },
+  args: { status: "escalated", icon: Megaphone, children: "Needs you" },
 };
 
 export const CompletedSuccess: Story = {

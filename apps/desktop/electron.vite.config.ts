@@ -53,7 +53,18 @@ export default defineConfig({
   // exception — it is data this build reads, and inlining it means no runtime
   // resolution of a JSON file through a workspace symlink.
   main: {
-    build: { lib: { entry: 'src/main/index.ts' } },
+    // **`no-external` is what keeps `lucide-react` out of a Node bundle.** Main
+    // reads the Board's needs-you rule so it can notify about a job that has
+    // started waiting, and that rule reads the generated vocabulary — one module
+    // that also carries the glyph for every status. Rollup keeps a bare
+    // `require` for an external whose bindings it dropped unless it is told the
+    // module has no side effects, so without this line the main process loads an
+    // icon library it never calls. Measured: the require is there with the
+    // default and gone with this.
+    build: {
+      lib: { entry: 'src/main/index.ts' },
+      rollupOptions: { treeshake: { moduleSideEffects: 'no-external' } },
+    },
     // **No workspace package is external.** `externalizeDepsPlugin` leaves a
     // dependency for Node to resolve at runtime, which is right for something
     // published as JavaScript and wrong for every `@armada/*`: they are

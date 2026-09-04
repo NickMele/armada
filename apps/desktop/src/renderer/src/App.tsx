@@ -96,6 +96,11 @@ export function App() {
   // not a router: which Job is open, or none. The row is the control that sets
   // it and Escape is what clears it.
   const [openJob, setOpenJob] = useState<string | null>(null);
+  // The tab a pressed notification asked for, until the Board is on screen to
+  // take it. **Held for one render rather than set straight away**: the press
+  // may have arrived over the composer or over a Job, so the surface it wants
+  // is not mounted yet and `reach` is whatever the last one left.
+  const [landing, setLanding] = useState<BoardTab | null>(null);
   // Whether the open Job's turns socket is held open. **Not navigation, and not
   // a control either.** It was navigation while watching swapped the surface
   // for a transcript, and then a tab; the turns are the open step's activity
@@ -186,6 +191,36 @@ export function App() {
   }, [observing, openJob]);
 
   useEffect(() => watchUncaught(setUncaught), []);
+
+  // **Where a pressed notification says to go, and it always goes somewhere.**
+  // A press that raised the window and left it on whatever it was last showing
+  // is a press that did nothing, which is the one outcome that teaches somebody
+  // to stop pressing them.
+  //
+  // One Job opens that Job. Several open the set they came from — the Needs-you
+  // tab — because picking one of four for somebody is choosing on their behalf.
+  // Either way the overlays come down first: the press asked for the Board or a
+  // Job, not for the composer that happened to be up.
+  useEffect(
+    () =>
+      window.armada.onSummoned((to) => {
+        setComposing(false);
+        setAuditing(false);
+        setClearing(false);
+        setOpenJob(to.jobId);
+        if (to.jobId === null) setLanding("needs-you");
+      }),
+    [],
+  );
+
+  // The Board is mounted by the time an effect runs, so this is where the tab
+  // asked for above is actually set — the handler that asked could only have
+  // reached the surface it was leaving.
+  useEffect(() => {
+    if (landing === null) return;
+    reach.current?.tab(landing);
+    setLanding(null);
+  }, [landing]);
 
   // The scope starts on the first Manifest Fleet names, and stays where a
   // person put it when the roster is re-read.

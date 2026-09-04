@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 import { CHANNELS } from "../shared/bridge";
-import type { BridgeApi, BridgeState } from "../shared/bridge";
+import type { BridgeApi, BridgeState, Summons } from "../shared/bridge";
 import type { CallRead, ClearOutcome, Draft, Outcome, Proposed } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
 import type { Artifact, Opened } from "@armada/protocol";
@@ -200,6 +200,23 @@ const api: BridgeApi = {
   // only in which file and none of them changes anything about the Job.
   openArtifact: (jobId: string, what: Artifact): Promise<Opened> =>
     ipcRenderer.invoke(CHANNELS.openArtifact, jobId, what),
+
+  // Where a pressed notification says to go. **The only entry here that the
+  // renderer does not initiate** — every other one is the window asking, and
+  // this is main handing over a press that happened outside it, possibly with
+  // no window on screen at the time.
+  //
+  // `subscribe`'s shape, and for its reason: a listener plus the function that
+  // removes it, so a component that mounts twice does not leave one behind. It
+  // reaches nothing and grants nothing: what arrives is a Job id this window
+  // already draws, or `null` for the set.
+  onSummoned: (onGo: (to: Summons) => void): (() => void) => {
+    const handler = (_event: unknown, to: Summons): void => onGo(to);
+    ipcRenderer.on(CHANNELS.summoned, handler);
+    return () => {
+      ipcRenderer.removeListener(CHANNELS.summoned, handler);
+    };
+  },
 };
 
 contextBridge.exposeInMainWorld("armada", api);

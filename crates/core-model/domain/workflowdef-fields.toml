@@ -88,6 +88,8 @@ open_questions = ["Is there an aggregate attempt bound on a looping step, given 
 notes = """
 Supplies the default value a step uses when it does not set its own. Members in use across the samples: `retry_limit`, `iteration_cap`, `attempt_cap`, `judge_call_cap`, `fan_out_cap`, `fan_out_rate`, `heartbeat_interval_minutes`, `poke_limit`.
 
+`quiet_after_seconds` is a member no sample carries, added with `#60`. It is the other half of `poke_limit` — how long a Drone may say nothing before Fleet nudges it, against how many nudges it gets — and the two were split across registries: `poke_limit` was named here from the start and `quiet_after` lived only in `crates/config/settings.toml`, where it was called a heartbeat timeout. A pair that resolves as one value and is written down in two places under two vocabularies is how one half gets configured and the other stays a constant, which is what `#60` found.
+
 `attempt_cap` bounds total attempts across all iterations of a step: `retry_count` resets on a loop return by design, so at defaults fifteen attempts pass unobserved and `completed_failed` is unreachable on a looping step — `loop_cap` always fires first. It is overridable per step, `unbounded` is a legal value, and it is a runaway guard for unattended work rather than a safety limit, since a person watching a loop kills a Job that is not converging.
 
 `judge_call_cap` bounds `criteria × panel_size` per step, for the same reason: each call sits at a gate someone is waiting behind and is a chance to trip `max_context_size`, which escalates. It is live because `acceptance_criteria[]` may be appended at an approved widening, so the left factor can climb mid-Job. Every sample carrying a `default_gate_policy` block sets both caps, at 15 and 12 — today's effective products, so stating them changes no behaviour.
@@ -291,6 +293,36 @@ Better attested than `on_fail`, but still undefined: Workflow names it only as a
 Unspecified: whether `escalate:<trigger>` is a general syntax or the only legal value, whether a `step_id` is acceptable here as it is for `on_fail`, and whether the field is required on any step carrying a `gaming_check`.
 """
 
+[fields.poke_limit]
+type = "int"
+concern = "Retry and loops"
+parent = "steps[]"
+purpose = "How many nudges a Drone that has gone quiet gets on this step before the Job escalates as stalled."
+notes = """
+Defaulted from `default_gate_policy.poke_limit`, which has named it since the schema was written; this row states the step tier the object's members always implied, the way `iteration_cap` does. `crates/config/settings.toml`'s `poke-limit-poke-limit` is the Kit and Manifest half and carries the argument for the number.
+
+A liveness counter — nothing arrived at all — and not a content counter. The evidence clarification-round cap is the one that counts submissions that arrived and were insufficient; both end at the `stalled` trigger and they advance independently.
+
+The budget is per step and resets at the boundary, because the slot that counts spent pokes belongs to one Drone and a Drone belongs to one step. A Job spanning four steps does not carry a poke into the next one.
+"""
+why = "It is the count half of a pair whose duration half was configurable only as a constant, so setting one without the other changed the shape of the wait rather than its length."
+
+[fields.quiet_after_seconds]
+type = "int"
+concern = "Retry and loops"
+parent = "steps[]"
+purpose = "How long this step's Drone may say nothing before Fleet pokes it. Seconds."
+notes = """
+Defaulted from `default_gate_policy.quiet_after_seconds`. Added with `#60`: the value existed as `crates/config/settings.toml`'s `drone-silence-threshold-quiet-after` row and had no step tier anywhere, so `fleet::Liveness` was a constant and a formatting step and a large refactor waited the same two minutes.
+
+**Seconds, and the unit is in the key**, following `heartbeat_interval_minutes` — the schema spells a duration as an int naming its own unit rather than as a parsed string. Minutes is too coarse here: `docs/spikes/009-how-long-does-a-step-take.md` puts the honest band at 79s and the stuck steps it caught at 147s, 409s and 1636s, so the interesting differences are inside one minute.
+
+**It measures silence, never elapsed time.** A step that legitimately runs for half an hour does not need a large value; a step whose Drone legitimately goes quiet for four minutes inside one command does. Those are different questions and only the second one is this field.
+
+Paired with `poke_limit` and deliberately not merged into it. Two steps can want the same total wait built differently — one long patience and one poke, or a short one and four — and a single key cannot say which.
+"""
+why = "Patience is a property of the work, and one number for every kind of work is the thing `#60` was opened to end."
+
 [fields.ref_source]
 type = "enum"
 concern = "Structure"
@@ -379,7 +411,7 @@ No sample carries one yet.
 [fields."steps[]"]
 type = "array[step]"
 concern = "Structure"
-sub_items = ["id", "label", "model", "mechanical_checks", "judge_checks", "evidence_scope", "evidence_type", "advance_gate", "retry_limit", "verdict_routing", "iteration_cap", "hard_prerequisite", "on_fail", "on_gaming_flag", "declare_plan_at"]
+sub_items = ["id", "label", "model", "mechanical_checks", "judge_checks", "evidence_scope", "evidence_type", "advance_gate", "retry_limit", "verdict_routing", "iteration_cap", "hard_prerequisite", "on_fail", "on_gaming_flag", "declare_plan_at", "quiet_after_seconds", "poke_limit"]
 purpose = "The ordered set of steps. Everything nested under this row is a field of a step, not of the WorkflowDef."
 notes = """
 Ordered, and loop-capable: `structure: "loop"` means a step returns to an earlier one by `verdict_routing`, not that the array is unordered.
