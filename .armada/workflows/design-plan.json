@@ -18,16 +18,13 @@
 # re-presented an unchanged document, and it now sends the work back to `draft`
 # the way the design says.
 #
-# **A Job goes round once, and the second return has nowhere to land.** The
-# loop return re-enters `draft` and leaves `present` reading `running`, which is
-# how a step at a human gate already behaves and is what #263 settled — the
-# alternatives were a seventh step state, which breaks the wire, and `stopped`,
-# whose registry meaning is "retries spent". When the redrafted plan advances,
-# Fleet walks forward onto `present` and finds it already `running`, and there
-# is no self-edge. `crates/fleet/src/tests/looping.rs` pins the refusal by name.
-# The cap stays at the designed five rather than being lowered to one to hide
-# it: the bound is a property of the design, and the state the gate holds
-# between passes is a property of the machine.
+# **A Job goes round the loop as many times as the cap buys**, and the cap is
+# the designed five. The return re-enters `draft` and leaves `present` reading
+# `running` — how a step at a human gate already behaves, and what #263 settled
+# against a seventh step state — so the pass that follows walks forward into a
+# step that never left, over the one self-edge in the step machine.
+# `crates/fleet/src/tests/looping.rs` drives this file, off disk, round twice
+# and then into a spent cap.
 #
 # **This workflow carries no Judge, and that is a decision rather than an
 # omission.** The designed `design-plan.json` carries none either. Design Plan

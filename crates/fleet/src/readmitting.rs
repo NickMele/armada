@@ -333,7 +333,11 @@ where
                 Ok((job, step.clone()))
             }
             Owed::Overruled { next, .. } | Owed::AfterADispatch { next, .. } => {
-                let job = self.move_step(&job, next, StepTarget::Running).await?;
+                // `entering` for `crate::dispatch`'s reason: the step a
+                // forward walk arrives at is already `running` where a loop
+                // came round to it, and the two entrances walk different edges.
+                let entering = self.entering(&job, next);
+                let job = self.move_step(&job, next, entering).await?;
                 Ok((job, next.clone()))
             }
         }

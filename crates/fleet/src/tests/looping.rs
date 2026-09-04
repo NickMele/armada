@@ -11,14 +11,16 @@
 //!
 //! # What each case pins
 //!
-//! Where the work goes, whose count the pass is charged to, what the cap does
-//! when it is spent — and, in the last case, the one thing this wave did not
-//! close: what state the *gate* step is left in between passes, which is what
-//! stops a second pass reaching it.
+//! Where the work goes, whose count the pass is charged to, that the loop comes
+//! round and is filed apart from the pass before it, and what the cap does when
+//! it is spent.
 
-use core_model::{IllegalStepTransition, JobStatus, StepId, StepState};
+use adapter_traits::WorktreeSpec;
+use core_model::{EvidenceType, JobStatus, StepId, StepState};
 use testkit::FakeWorkProduct;
+use verification::{Claimed, NotClaimed, ShownBy};
 
+use crate::evidence::Call;
 use crate::resume::Redirection;
 use crate::tests::daemon::{
     a_proposal_for, diff_evidence, fittings, manifest, note_evidence, one, worktree_directory,
@@ -26,7 +28,6 @@ use crate::tests::daemon::{
 use crate::tests::reviewing::Fixture;
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
-use crate::Adrift;
 
 /// `two_steps_gated_on_a_person`'s two steps, wired as a loop: `summarise`'s `request_changes` routes
 /// back to `implement`, bounded by `cap` passes.
@@ -219,30 +220,20 @@ async fn a_spent_cap_escalates_as_loop_cap_and_not_as_a_failure() {
     );
 }
 
-/// **The second pass does not close, and this is where it stops.** A loop return
-/// re-enters the routed-to step and leaves the *gate* step `running` — which is
-/// the shape `#263` settled, because the alternatives were a seventh
-/// `StepState` (a wire break, and Bridge to its /v0 lifeboat) and `stopped`,
-/// whose registry meaning is "retries spent".
+/// **The second pass closes.** A return leaves the gate step `running` — the
+/// shape `#263` settled, because a seventh `StepState` breaks the wire and
+/// `stopped` means "retries spent" — so the forward walk after a redraft
+/// arrives at a step that never left. `running -> running` is the edge that
+/// records that arrival, and [`StepTarget::Revisited`] is the only thing that
+/// walks it.
 ///
-/// The consequence was not settled with it. When the redone draft advances,
-/// `crate::dispatch` walks forward onto the gate step and finds it already
-/// `running`, and there is no self-edge: `advanced -> running` is the loop's
-/// own edge and `running -> running` is not an edge at all. So a pass is a
-/// return and a redraft, and the *second* arrival at the gate has nowhere to be
-/// recorded.
-///
-/// **What the four states leave** is why this is a decision and not an
-/// oversight. `advanced` writes `passed` over a gate the person declined;
-/// `stopped` and `retrying` both say something failed and `retrying` needs a
-/// trigger there is none of; `not_started` would re-enter cleanly and renders a
-/// worked step as never run. Each is a different lie, and which one the record
-/// should tell is the owner's.
-///
-/// Asserted rather than left to be discovered: a refusal named in a test is
-/// where the next person starts, and a `#[ignore]` is where they do not.
+/// **The row is a boundary, not a change of state.** What turns on it is the
+/// attempt: `store::attempt` counts entries into `running`, so without it the
+/// second pass's checks, judgments and evidence file under the first pass's
+/// ordinal — which is the defect `store::attempt` exists to close, arriving
+/// from the other direction.
 #[tokio::test]
-async fn a_second_pass_cannot_re_enter_the_gate_step_yet() {
+async fn a_second_pass_reaches_the_gate_and_is_filed_apart_from_the_first() {
     let home = TempDir::new();
     let fleet = a_fleet_running_a_loop(&home, FakeWorkProduct::changed(&["src/log.rs"]), 5);
     let job_id = at_the_loop_s_gate(&fleet, &home).await;
@@ -253,21 +244,246 @@ async fn a_second_pass_cannot_re_enter_the_gate_step_yet() {
         .expect("the first return is inside a cap of five");
     assert_eq!(sent_back.current_step_id(), Some(&drafted()));
 
-    // The redraft is submitted and clears its own gate. The forward walk onto
-    // the step that sent it back is what has nowhere to go.
+    // The redraft is submitted, clears its own gate, and the Job walks forward
+    // onto the step that sent it back.
     submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("the second draft is reported");
-    let refused = fleet.turn().await;
-    assert!(
-        matches!(
-            refused,
-            Err(Adrift::IllegalStepMove(IllegalStepTransition::NoSuchEdge {
-                from: StepState::Running,
-                to: StepState::Running,
-                ..
-            }))
-        ),
-        "the gap is the gate step's own state between passes, and it is this one: {refused:?}"
+    fleet.turn().await.expect("the draft's gate runs again");
+
+    let round = fleet.load(&job_id).await.expect("the Job is there");
+    assert_eq!(
+        round.current_step_id(),
+        Some(&gate()),
+        "the loop came round to the step that asked for another draft"
+    );
+    assert_eq!(
+        round.step(&drafted()).map(|step| step.state()),
+        Some(StepState::Advanced)
+    );
+    assert_eq!(
+        round.step(&gate()).map(|step| step.state()),
+        Some(StepState::Running)
+    );
+
+    let store = fleet.store();
+    let store = store.lock().await;
+    assert_eq!(
+        store
+            .step_attempt(&job_id, &gate())
+            .expect("counted")
+            .number(),
+        2,
+        "the gate is on its second run, so its second reading is filed apart"
+    );
+    assert_eq!(
+        store
+            .step_spent(&job_id, &gate())
+            .expect("counted")
+            .number(),
+        1,
+        "and on a fresh retry budget, because a re-entry as designed is one"
+    );
+    assert_eq!(
+        store
+            .step_iteration(&job_id, &gate())
+            .expect("counted")
+            .number(),
+        2,
+        "one loop is one pass — the arrival charges nothing the return charged"
+    );
+}
+
+/// The whole claim, end to end: two `request_changes` passes and then a cap
+/// with nothing left in it. A cap of two buys two passes, so the second
+/// verdict is the one that stops.
+#[tokio::test]
+async fn two_passes_and_then_the_cap_is_spent() {
+    let home = TempDir::new();
+    let fleet = a_fleet_running_a_loop(&home, FakeWorkProduct::changed(&["src/log.rs"]), 2);
+    let job_id = at_the_loop_s_gate(&fleet, &home).await;
+
+    let sent_back = fleet
+        .request_changes(&job_id, &said("draft it again"))
+        .await
+        .expect("the first return is inside a cap of two");
+    assert_eq!(sent_back.current_step_id(), Some(&drafted()));
+
+    // Round the loop: the redraft is worked, clears, and the gate is reached a
+    // second time with a fresh Drone on it.
+    submitted_by_the_one(&fleet, diff_evidence())
+        .await
+        .expect("the second draft is reported");
+    fleet.turn().await.expect("the draft's gate runs again");
+    submitted_by_the_one(&fleet, note_evidence())
+        .await
+        .expect("the second summary is reported");
+    fleet.turn().await.expect("the human gate runs again");
+
+    let held = fleet.load(&job_id).await.expect("the Job is there");
+    assert_eq!(
+        held.status(),
+        JobStatus::AwaitingReview,
+        "the second pass is a real pass and reaches a person"
+    );
+
+    let stopped = fleet
+        .request_changes(&job_id, &said("and again"))
+        .await
+        .expect("the verdict is answered even where the loop is spent");
+    assert_eq!(
+        stopped.status(),
+        JobStatus::Escalated,
+        "two passes is what a cap of two buys, and the third verdict has nowhere to go"
+    );
+    assert_eq!(
+        stopped.step(&gate()).map(|step| step.state()),
+        Some(StepState::Stopped)
+    );
+}
+
+// ------------------------------------------------- the definition that ships
+
+/// The workflow this repository actually ships, resolved against the fixture
+/// Manifest — which it needs nothing from, since its only check is
+/// `artifact_exists`.
+///
+/// **Read off disk rather than restated here.** `tests::daemon`'s fixtures are
+/// written for the tests that use them; this one is the file a person
+/// dispatches, and a test that retyped it would keep passing while the shipped
+/// definition lost its loop.
+fn design_plan() -> config::ResolvedWorkflow {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../.armada/workflows/design-plan.json");
+    let text = std::fs::read_to_string(&path).expect("the shipped definition is there");
+    let def = config::WorkflowDef::parse(&path, &text, &config::Roster::offering_nothing())
+        .unwrap_or_else(|refused| panic!("the shipped design plan did not parse: {refused}"));
+    config::ResolvedWorkflow::resolve(&def, &manifest())
+        .unwrap_or_else(|refused| panic!("the shipped design plan did not resolve: {refused}"))
+}
+
+fn drafting() -> StepId {
+    StepId::new("draft")
+}
+
+fn presenting() -> StepId {
+    StepId::new("present")
+}
+
+fn document() -> Call<'static> {
+    Call {
+        evidence_type: EvidenceType::Document,
+        claimed: Claimed("The plan names the migration and its rollback."),
+        shown_by: ShownBy("`.armada/artifacts/draft.md`, written this step"),
+        not_claimed: NotClaimed(""),
+    }
+}
+
+/// The draft's whole gate is `artifact_exists`, and it reads the file's size —
+/// so the worktree has to hold one with something in it.
+fn wrote_the_plan(home: &TempDir, job: &core_model::JobId) {
+    let spec =
+        WorktreeSpec::for_job(&home.path().to_string_lossy(), job.as_str()).expect("a legal spec");
+    let at = std::path::Path::new(&spec.worktree_path()).join(".armada/artifacts");
+    std::fs::create_dir_all(&at).expect("a place for the artifact");
+    std::fs::write(at.join("draft.md"), "# Plan\n\nMigrate, then backfill.\n")
+        .expect("the plan is written");
+}
+
+/// **Design Plan, the loop it is described as, driven twice round and stopped.**
+///
+/// `workflows.toml` calls this Armada's only instantiated loop and said so
+/// while the file could not carry one. This is the assertion that the sentence
+/// is now true of the definition on disk: two `request_changes` verdicts each
+/// send the plan back to `draft`, the gate is reached again after each, and the
+/// third has no pass left to buy.
+///
+/// The cap is the designed five and the test spends three of them, so it
+/// asserts the loop rather than the bound — `two_passes_and_then_the_cap_is_spent`
+/// is where the arithmetic is pinned.
+#[tokio::test]
+async fn the_shipped_design_plan_goes_round_twice_and_then_stops() {
+    let home = TempDir::new();
+    let mut fittings = fittings(&home, FakeWorkProduct::changed(&["docs/plan.md"]));
+    fittings.workflows = one(design_plan());
+    let fleet = crate::daemon::Fleet::assembled(fittings);
+
+    let job = fleet
+        .propose(a_proposal_for("design the migration", "design_plan"))
+        .await
+        .expect("a Job at the approval gate");
+    worktree_directory(&home, job.id());
+    wrote_the_plan(&home, job.id());
+    let job_id = job.id().clone();
+    fleet.approve(&job_id).await.expect("it dispatches");
+
+    for pass in 1..=3 {
+        submitted_by_the_one(&fleet, document())
+            .await
+            .expect("the draft is reported");
+        fleet.turn().await.expect("the draft's gate runs");
+        submitted_by_the_one(&fleet, document())
+            .await
+            .expect("the plan is presented");
+        fleet.turn().await.expect("the human gate runs");
+
+        let held = fleet.load(&job_id).await.expect("the Job is there");
+        assert_eq!(
+            held.status(),
+            JobStatus::AwaitingReview,
+            "pass {pass} did not reach a person"
+        );
+        assert_eq!(held.current_step_id(), Some(&presenting()));
+
+        let answered = fleet
+            .request_changes(&job_id, &said("say what the rollback costs"))
+            .await
+            .expect("the verdict is answered");
+        if pass < 3 {
+            assert_eq!(
+                answered.current_step_id(),
+                Some(&drafting()),
+                "pass {pass} did not route back to the draft"
+            );
+            assert_eq!(
+                answered.step(&drafting()).map(|step| step.state()),
+                Some(StepState::Running)
+            );
+        }
+    }
+
+    let store = fleet.store();
+    let store = store.lock().await;
+    assert_eq!(
+        store
+            .step_iteration(&job_id, &presenting())
+            .expect("counted")
+            .number(),
+        4,
+        "three returns, and the gate that made all three is on its fourth pass"
+    );
+    assert_eq!(
+        store
+            .step_iteration(&job_id, &drafting())
+            .expect("counted")
+            .number(),
+        1,
+        "and the step redone three times has emitted nothing"
+    );
+    assert_eq!(
+        store
+            .step_attempt(&job_id, &presenting())
+            .expect("counted")
+            .number(),
+        3,
+        "the gate was worked three times, and each reading is filed apart"
+    );
+    assert_eq!(
+        store
+            .step_spent(&job_id, &drafting())
+            .expect("counted")
+            .number(),
+        1,
+        "no retry budget was spent on any of it: nothing failed"
     );
 }

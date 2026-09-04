@@ -3,27 +3,25 @@
 //! # There is no registry edge table, and this does not invent one
 //!
 //! `domain/step-states.toml` declares six states and says nothing about which
-//! moves are legal. [`STEP_EDGES`] is the set M1 walks, and says why each of
-//! them is there.
+//! moves are legal. [`STEP_EDGES`] is the set M1 walks, and says why each is.
 //!
 //! **`stopped -> running` is one edge for two acts**, and which of them a Job
 //! admits is decided by whether it holds a Drone — `fleet::resume`'s to ask,
-//! not this file's. **`stopped -> advanced` and `advanced -> running` are one
-//! edge for one each**, walked by [`StepTarget::Overridden`] and
-//! [`StepTarget::Returned`] alone — an open edge at the second would admit the
-//! redispatch `fleet::resume` refuses above this layer.
+//! not this file's. **`stopped -> advanced`, `advanced -> running` and
+//! `running -> running` are one edge for one each**, walked by
+//! [`StepTarget::Overridden`], [`StepTarget::Returned`] and
+//! [`StepTarget::Revisited`] alone — an open edge at any of the three would
+//! admit the redispatch `fleet::resume` refuses above this layer. The last is
+//! the loop's second half: a return leaves the emitting step `running`, so the
+//! pass after it walks forward into a step that never left.
 //!
-//! `awaiting_human` has its human advance gate now and is **still
-//! unreachable**: a step at that gate stays `running`, since `approve_review`
-//! advances it while the Job is still there. It stays declared on
-//! [`StepState`] — a stored row may render any of the six — with no target.
+//! `awaiting_human` has its gate now and is **still unreachable**: a step there
+//! stays `running`. It stays declared on [`StepState`], with no target.
 //!
 //! **The outer machine gates the inner one**, and [`ADVANCING_STATUSES`] is
-//! that rule — which is why a step stops *before* the Job escalates, and why a
-//! step move and a status move belong in one log in one order. It has two
+//! that rule — which is why a step stops *before* the Job escalates. It has two
 //! exceptions, [`overruled_while_frozen`] and [`taken_from_a_person`], each a
-//! predicate rather than a third entry in the list, for the reason given there.
-
+//! predicate rather than a third entry, for the reason given there.
 use core::fmt;
 
 use crate::job::escalation::{EscalationTrigger, StepLevelTrigger};
@@ -57,8 +55,8 @@ pub struct StepEdge {
 /// would never increment it and the second run's verdicts would overwrite the
 /// first's. `docs/concepts/workflow.md` wants the opposite: *"keeping all the
 /// verdicts is what shows the same note went unaddressed three times."* And
-/// there is no self-edge here, so a third failure could not be recorded at all
-/// from a step that was already `retrying`.
+/// `retrying` has no self-edge — the table's one belongs to the loop — so a
+/// third failure could not be recorded at all from a step already there.
 ///
 /// What passing through leaves behind is a log saying which entries into
 /// `running` were the machine handing work back and which were a person
@@ -77,9 +75,27 @@ pub static STEP_EDGES: &[StepEdge] = &[
     // step redone on purpose because a later one routed a verdict back to it,
     // and `workflowdef-fields.toml` refuses the conflation in two places.
     //
-    // It is the only edge into `running` that says a step is on a new pass,
-    // which is what makes `Iteration` derivable off the log with no column.
+    // It is what makes `Iteration` derivable off the log with no column: the
+    // pass is charged to the step named on the row, not to the step that moved.
     step_edge(StepState::Advanced, StepState::Running),
+    // **The other half of a loop, and the only self-edge in the table.** A
+    // return leaves the *emitting* step `running` — a step at a human gate
+    // stays `running`, and #263 refused a seventh state to say otherwise — so
+    // when the loop comes round the forward walk arrives at a step that never
+    // left. Nothing could record that: `running -> running` did not exist, and
+    // the second pass stopped one move short of the gate that asked for it.
+    //
+    // **`running` is true on both sides, and that is why it is an edge rather
+    // than a state.** The step is being worked before and after; what did not
+    // exist is the boundary between the passes. `store::attempt` counts entries
+    // into `running`, so without this row a second pass's checks, judgments and
+    // evidence all filed under the first pass's ordinal — the defect
+    // `store::attempt` exists to close, arriving from the other direction.
+    //
+    // Walked by [`StepTarget::Revisited`] alone, narrowed as `advanced ->
+    // running` is: an open self-edge would legalise re-entering a step that is
+    // already being worked, which is a redispatch with no move in it.
+    step_edge(StepState::Running, StepState::Running),
 ];
 
 const fn step_edge(from: StepState, to: StepState) -> StepEdge {
@@ -225,13 +241,39 @@ pub enum StepTarget {
     /// cap allowed it: this type cannot see a workflow, and
     /// [`ResolvedStep::may_return`](crate::ResolvedStep::may_return) owns that.
     Returned(StepId),
+    /// The loop came round, and the Job has walked forward into this step
+    /// again.
+    ///
+    /// **The counterpart of [`Returned`](StepTarget::Returned), one move later
+    /// and in the other direction.** That one is a *later* step sending work
+    /// back; this is the work arriving back. The step it arrives at is the one
+    /// that emitted the verdict, which a return left `running` — so this walks
+    /// the table's only self-edge, and it is the only target that may.
+    ///
+    /// **It carries nothing, and there is nothing to carry.** No gate refused
+    /// it, so there is no trigger; the pass was charged to this step at the
+    /// return, so charging it again here would count one loop twice. What the
+    /// row exists for is the boundary: `store::attempt` counts entries into
+    /// `running`, and without one the second pass files its checks, judgments
+    /// and evidence over the first pass's.
+    ///
+    /// **Not [`Running`](StepTarget::Running) across the same edge.** That is a
+    /// dispatch or a resume, and onto a step already being worked it is a
+    /// redispatch with no move in it — [`StepIsAlreadyRunning`] refuses it,
+    /// exactly as [`StepAlreadyAdvanced`] refuses the other narrowed edge.
+    ///
+    /// [`StepIsAlreadyRunning`]: IllegalStepTransition::StepIsAlreadyRunning
+    /// [`StepAlreadyAdvanced`]: IllegalStepTransition::StepAlreadyAdvanced
+    Revisited,
 }
 
 impl StepTarget {
     /// The state this target arrives at.
     pub fn state(&self) -> StepState {
         match self {
-            StepTarget::Running | StepTarget::Returned(_) => StepState::Running,
+            StepTarget::Running | StepTarget::Returned(_) | StepTarget::Revisited => {
+                StepState::Running
+            }
             StepTarget::Advanced | StepTarget::Overridden(_) => StepState::Advanced,
             StepTarget::Stopped(_) => StepState::Stopped,
             StepTarget::Retrying(_) => StepState::Retrying,
@@ -247,14 +289,20 @@ impl StepTarget {
     /// again — so the three had to agree, and a fourth caller matching on the
     /// variants would be a fourth place they could stop agreeing.
     pub fn begins_a_run(&self) -> bool {
-        matches!(self, StepTarget::Running | StepTarget::Returned(_))
+        matches!(
+            self,
+            StepTarget::Running | StepTarget::Returned(_) | StepTarget::Revisited
+        )
     }
 
     /// What qualifies the move, where the destination stores one. `None` on the
     /// two that do not, for [`StepEdge`]'s reason.
     pub fn why(&self) -> Option<StepLevelTrigger> {
         match self {
-            StepTarget::Running | StepTarget::Advanced | StepTarget::Returned(_) => None,
+            StepTarget::Running
+            | StepTarget::Advanced
+            | StepTarget::Returned(_)
+            | StepTarget::Revisited => None,
             StepTarget::Stopped(why) | StepTarget::Overridden(why) | StepTarget::Retrying(why) => {
                 Some(*why)
             }
@@ -272,6 +320,7 @@ impl StepTarget {
             StepTarget::Returned(by) => Some(by),
             StepTarget::Running
             | StepTarget::Advanced
+            | StepTarget::Revisited
             | StepTarget::Stopped(_)
             | StepTarget::Overridden(_)
             | StepTarget::Retrying(_) => None,
@@ -313,6 +362,11 @@ impl StepTarget {
         if by.is_some() {
             return None;
         }
+        // The loop's other half, told apart the same way and by the same
+        // column: the only edge that leaves `running` for `running`.
+        if from == StepState::Running && state == StepState::Running && why.is_none() {
+            return Some(StepTarget::Revisited);
+        }
         match (state, why) {
             (StepState::Running, None) => Some(StepTarget::Running),
             (StepState::Advanced, None) => Some(StepTarget::Advanced),
@@ -347,9 +401,10 @@ pub enum IllegalStepTransition {
     /// and naming an exception inside the refusal for everything else would
     /// read as an invitation to find another.
     StepsAreFrozen { step_id: StepId, status: JobStatus },
-    /// Both states exist and no edge joins them. A move from a state to itself
-    /// lands here: no self-edge is declared, and a move that changes nothing
-    /// would still write an event.
+    /// Both states exist and no edge joins them. Every move from a state to
+    /// itself lands here but one: `running -> running` is the table's only
+    /// self-edge, because a loop's second pass has to record a boundary that
+    /// changes no state.
     NoSuchEdge {
         step_id: StepId,
         from: StepState,
@@ -375,6 +430,25 @@ pub enum IllegalStepTransition {
     /// layer and calls a redispatch. Without this the edge would quietly make
     /// that act legal in the machine the refusal sits on top of.
     StepAlreadyAdvanced { step_id: StepId },
+    /// A step already being worked was dispatched into rather than revisited.
+    ///
+    /// The third narrowing, and the same shape as the two above.
+    /// `running -> running` exists so a loop's second pass has a boundary to be
+    /// recorded at, and [`StepTarget::Revisited`] is the only thing that walks
+    /// it. A plain [`StepTarget::Running`] across it is a dispatch or a resume
+    /// onto work a Drone is already doing — a redispatch with no move in it,
+    /// and one that would silently be legal the moment the edge existed.
+    StepIsAlreadyRunning { step_id: StepId },
+    /// A revisit was aimed at a step that is not being worked.
+    ///
+    /// The other half of that narrowing, as [`NotAnAdvancedStep`] is of the
+    /// return's. A revisit says the loop came round to a step that never left
+    /// `running`; onto a step that is `not_started`, `advanced`, `retrying` or
+    /// `stopped` it is a dispatch, a return, a retry or a restart wearing a
+    /// loop's name, and each of those has its own target already.
+    ///
+    /// [`NotAnAdvancedStep`]: Self::NotAnAdvancedStep
+    NotARunningStep { step_id: StepId, from: StepState },
     /// A loop return was aimed at a step that has not advanced.
     ///
     /// The other half of the narrowing. [`StepTarget::Returned`] says a later
@@ -417,6 +491,18 @@ impl fmt::Display for IllegalStepTransition {
                 "step `{}` has advanced, so it is entered again only as a loop return; running \
                  it again otherwise is a redispatch",
                 step_id.as_str()
+            ),
+            IllegalStepTransition::StepIsAlreadyRunning { step_id } => write!(
+                f,
+                "step `{}` is being worked, so it is entered again only when the loop comes \
+                 round; running it again otherwise is a redispatch",
+                step_id.as_str()
+            ),
+            IllegalStepTransition::NotARunningStep { step_id, from } => write!(
+                f,
+                "step `{}` is {} and a loop comes round only to a step that is being worked",
+                step_id.as_str(),
+                from.as_wire()
             ),
             IllegalStepTransition::NotAnAdvancedStep { step_id, from } => write!(
                 f,
@@ -521,6 +607,19 @@ pub(crate) fn admits_step(
     }
     if from != StepState::Advanced && matches!(to, StepTarget::Returned(_)) {
         return Err(IllegalStepTransition::NotAnAdvancedStep {
+            step_id: step_id.clone(),
+            from,
+        });
+    }
+    // The third narrowed edge, and the reason it is safe to declare a self-edge
+    // at all: `running -> running` is the loop's boundary row and nothing else.
+    if from == StepState::Running && matches!(to, StepTarget::Running) {
+        return Err(IllegalStepTransition::StepIsAlreadyRunning {
+            step_id: step_id.clone(),
+        });
+    }
+    if from != StepState::Running && matches!(to, StepTarget::Revisited) {
+        return Err(IllegalStepTransition::NotARunningStep {
             step_id: step_id.clone(),
             from,
         });

@@ -25,8 +25,8 @@
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
 use core_model::{
-    Actor, Branch, EscalationTrigger, Job, JobId, StepId, StepLevelTrigger, StepTarget, Target,
-    Transitioned,
+    Actor, Branch, EscalationTrigger, Job, JobId, StepId, StepLevelTrigger, StepState, StepTarget,
+    Target, Transitioned,
 };
 use verification::OutcomeTurn;
 
@@ -240,7 +240,8 @@ where
                     self.stood_down(job_id, working).await?;
                     return Ok(());
                 }
-                let job = self.move_step(&job, &next, StepTarget::Running).await?;
+                let entering = self.entering(&job, &next);
+                let job = self.move_step(&job, &next, entering).await?;
                 // Every step's evidence as the record holds it, read after
                 // `crate::settling` wrote this step's. `Produced::before`
                 // takes the one strictly-earlier row it wants out of it.
@@ -664,6 +665,28 @@ where
         to: StepTarget,
     ) -> Result<Job, Adrift> {
         self.move_step_by(job, step, to, Actor::Fleet).await
+    }
+
+    /// The target that enters a step, given where that step already stands.
+    ///
+    /// **One place asks it, because a forward walk cannot tell by looking.**
+    /// Every step of every linear workflow is entered as
+    /// [`StepTarget::Running`]; a step a loop has come round to is already
+    /// `running`, because a return leaves the emitting step there, and entering
+    /// it again is [`StepTarget::Revisited`]. The two walk different edges and
+    /// the machine refuses each in the other's place, so a call site choosing
+    /// by hand is a call site that can be wrong — and the three that walk
+    /// forward would each have had to choose.
+    ///
+    /// **It never invents a return.** A step that has `advanced` answers
+    /// [`StepTarget::Running`] here and the machine refuses it, which is
+    /// `StepAlreadyAdvanced` and is the redispatch refusal doing its job: a
+    /// return needs the step that routed it, and this cannot see one.
+    pub(crate) fn entering(&self, job: &Job, step: &StepId) -> StepTarget {
+        match job.step(step).map(|row| row.state()) {
+            Some(StepState::Running) => StepTarget::Revisited,
+            _ => StepTarget::Running,
+        }
     }
 
     /// The same move, said by somebody other than Fleet.

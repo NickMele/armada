@@ -101,8 +101,11 @@ where
         };
         // The next step is entered here for the same reason, and it is what
         // re-admission reads to know where to put the Drone: `current_step_id`
-        // moves when a step enters `running` and nothing else moves it.
-        let job = self.move_step(&job, next.id(), StepTarget::Running).await?;
+        // moves when a step enters `running` and nothing else moves it. Which
+        // target enters it is `entering`'s to say — a loop that came round
+        // arrives at a step already being worked.
+        let entering = self.entering(&job, next.id());
+        let job = self.move_step(&job, next.id(), entering).await?;
         // The actor is **human**. A person took the Job out of the gate; Fleet
         // only decides which turn it gets a process back.
         self.move_job(&job, Target::Queued, Actor::Human).await?;

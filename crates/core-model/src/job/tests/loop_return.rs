@@ -203,16 +203,16 @@ fn a_return_onto_a_step_that_has_not_advanced_is_refused_from_every_state() {
         })
     );
 
-    // The one that never reaches the narrowing: there is no self-edge in the
-    // table, so a return onto the step being worked is refused as the missing
-    // edge it is. The edge table answers first, and it answers correctly.
+    // The one that used to be refused as a missing edge and is not any more:
+    // the self-edge exists now, so a return onto the step being worked reaches
+    // the narrowing and is refused as the act it actually is. `Revisited` is
+    // what walks that edge, and a return is not it.
     let running = step(&fresh, &first(), StepTarget::Running);
     assert_eq!(
         running.transition_step(&first(), returned(), Actor::Fleet, when()),
-        Err(IllegalStepTransition::NoSuchEdge {
+        Err(IllegalStepTransition::NotAnAdvancedStep {
             step_id: first(),
             from: StepState::Running,
-            to: StepState::Running,
         })
     );
 
@@ -270,16 +270,121 @@ fn a_stored_return_is_told_from_a_stored_dispatch_by_the_state_it_left() {
     );
     for from in [
         StepState::NotStarted,
-        StepState::Running,
         StepState::Retrying,
         StepState::Stopped,
     ] {
         assert_eq!(
             StepTarget::arriving_at(from, StepState::Running, None, None),
             Some(StepTarget::Running),
-            "only `advanced` is a loop's origin"
+            "only `advanced` is a loop return's origin"
         );
     }
+    // The loop's other half, told apart the same way: two edges arrive at
+    // `running` carrying nothing, and the state left behind is all there is.
+    assert_eq!(
+        StepTarget::arriving_at(StepState::Running, StepState::Running, None, None),
+        Some(StepTarget::Revisited),
+        "a step that was already running was revisited, not dispatched into"
+    );
+}
+
+// ------------------------------------------------------- the loop's other half
+
+/// **The second pass reaches the step that asked for it.** A return leaves the
+/// emitting step `running`, so the forward walk that follows arrives at a step
+/// that never left — and until `#263` there was no edge for that arrival at
+/// all, so the loop stopped one move short of closing.
+#[test]
+fn the_loop_comes_round_to_the_step_that_sent_the_work_back() {
+    let job = a_pass_over_both_steps();
+    let job = step(&job, &first(), returned());
+    assert_eq!(
+        job.step(&second()).expect("the row is there").state(),
+        StepState::Running,
+        "the emitting step is where the return left it"
+    );
+
+    // The redone step passes again, and the Job walks forward into the gate.
+    let job = step(&job, &first(), StepTarget::Advanced);
+    let job = step_at(&job, &second(), StepTarget::Revisited, later());
+    let gate = job.step(&second()).expect("the row is there");
+    assert_eq!(gate.state(), StepState::Running);
+    assert_eq!(
+        gate.entered_at(),
+        &later(),
+        "a new pass, so a new clock — which is what `store::attempt` counts"
+    );
+    assert_eq!(
+        job.current_step_id(),
+        Some(&second()),
+        "and the cursor followed the work forward"
+    );
+}
+
+/// The narrowing that makes the self-edge safe to declare. Without it the edge
+/// would legalise entering a step a Drone is already working, which is a
+/// redispatch with no move in it.
+#[test]
+fn a_step_being_worked_cannot_be_dispatched_into_as_if_it_were_idle() {
+    let job = a_pass_over_both_steps();
+    assert_eq!(
+        job.transition_step(&second(), StepTarget::Running, Actor::Fleet, when()),
+        Err(IllegalStepTransition::StepIsAlreadyRunning { step_id: second() })
+    );
+}
+
+/// The other half of that narrowing. A revisit onto a step that is not being
+/// worked is a dispatch, a return, a retry or a restart wearing a loop's name.
+#[test]
+fn a_revisit_onto_a_step_that_is_not_being_worked_is_refused_from_every_state() {
+    let fresh = reach(JobStatus::Running);
+    assert_eq!(
+        fresh.transition_step(&first(), StepTarget::Revisited, Actor::Fleet, when()),
+        Err(IllegalStepTransition::NotARunningStep {
+            step_id: first(),
+            from: StepState::NotStarted,
+        })
+    );
+
+    let running = step(&fresh, &first(), StepTarget::Running);
+    let advanced = step(&running, &first(), StepTarget::Advanced);
+    assert_eq!(
+        advanced.transition_step(&first(), StepTarget::Revisited, Actor::Fleet, when()),
+        Err(IllegalStepTransition::NotARunningStep {
+            step_id: first(),
+            from: StepState::Advanced,
+        }),
+        "an advanced step is returned to, and a return names who sent the work back"
+    );
+
+    let stopped = step(&running, &first(), StepTarget::Stopped(gate_failure()));
+    assert_eq!(
+        stopped.transition_step(&first(), StepTarget::Revisited, Actor::Fleet, when()),
+        Err(IllegalStepTransition::NotARunningStep {
+            step_id: first(),
+            from: StepState::Stopped,
+        })
+    );
+}
+
+/// A revisit charges no pass. The loop was counted where it was declared — on
+/// the return — and counting it again on the arrival would read one loop as
+/// two, which is the whole reason this target carries no step id.
+#[test]
+fn a_revisit_carries_nothing_and_charges_no_pass() {
+    assert_eq!(StepTarget::Revisited.why(), None);
+    assert_eq!(StepTarget::Revisited.returned_by(), None);
+    assert!(StepTarget::Revisited.begins_a_run());
+
+    let job = a_pass_over_both_steps();
+    let job = step(&job, &first(), returned());
+    let job = step(&job, &first(), StepTarget::Advanced);
+    let moved = job
+        .transition_step(&second(), StepTarget::Revisited, Actor::Fleet, later())
+        .expect("running -> running is an edge");
+    assert_eq!(moved.event.returned_by(), None);
+    assert_eq!(moved.event.from(), StepState::Running);
+    assert_eq!(moved.event.to(), StepState::Running);
 }
 
 /// The three things that turn on "is this a run of the step" ask one question,

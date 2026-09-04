@@ -303,3 +303,105 @@ fn a_job_that_looped_reads_back_off_its_own_log() {
         "and the cursor came back where the return put it"
     );
 }
+
+/// **The gate's own second pass, and the row that makes it one.** A return
+/// leaves the emitting step `running`, so the loop coming round to it walks
+/// `running -> running` — the boundary, not a change of state.
+///
+/// Two things turn on the row and both are asserted here: the gate's attempt
+/// climbs, so the second pass's checks and judgments are filed apart from the
+/// first's rather than over them; and its retry budget resets, because a
+/// re-entry as designed is a fresh one whichever of the loop's two edges
+/// carried it.
+#[test]
+fn the_loop_coming_round_opens_a_pass_on_the_gate_that_asked_for_it() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    let id = "01CAMEROUND";
+    let job = job_id(id);
+
+    let running = a_pass_over_both_steps(&mut store, id);
+    assert_eq!(
+        store.step_attempt(&job, &gate()).expect("counted").number(),
+        1
+    );
+
+    let running = loop_back(&mut store, &running, "10:05");
+    let running = cleared_again(&mut store, &running, "10:06");
+    let running = moved(
+        &mut store,
+        &running,
+        &gate(),
+        StepTarget::Revisited,
+        "10:07",
+    );
+
+    assert_eq!(
+        store.step_attempt(&job, &gate()).expect("counted").number(),
+        2,
+        "the second pass files its own checks and judgments, and not over the first's"
+    );
+    assert_eq!(
+        store.step_spent(&job, &gate()).expect("counted").number(),
+        1,
+        "and it opens a fresh retry budget, as the return did for the step it redid"
+    );
+    assert_eq!(
+        store
+            .step_iteration(&job, &gate())
+            .expect("counted")
+            .number(),
+        2,
+        "one loop is one pass: the arrival charges nothing the return already charged"
+    );
+
+    // A failure inside the gate's second pass spends that pass's budget and
+    // leaves the count of passes alone — the same separation the draft has.
+    let running = moved(
+        &mut store,
+        &running,
+        &gate(),
+        StepTarget::Stopped(
+            StepLevelTrigger::of(EscalationTrigger::GateFailure).expect("step-level"),
+        ),
+        "10:08",
+    );
+    moved(&mut store, &running, &gate(), StepTarget::Running, "10:09");
+    assert_eq!(
+        store.step_spent(&job, &gate()).expect("counted").number(),
+        2
+    );
+    assert_eq!(
+        store
+            .step_iteration(&job, &gate())
+            .expect("counted")
+            .number(),
+        2
+    );
+}
+
+/// The whole log, read back. A Job that looped and came round is rebuilt off
+/// its own rows or it is not readable at all — and both of the loop's edges
+/// carry no trigger, so the state each left is the only thing that names them.
+#[test]
+fn a_job_that_went_round_and_came_back_reads_off_its_own_log() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    let id = "01FULLLOOP";
+    let job = job_id(id);
+
+    let running = a_pass_over_both_steps(&mut store, id);
+    let running = loop_back(&mut store, &running, "10:05");
+    let running = cleared_again(&mut store, &running, "10:06");
+    let round = moved(
+        &mut store,
+        &running,
+        &gate(),
+        StepTarget::Revisited,
+        "10:07",
+    );
+
+    let read = store.load_job(&job).expect("the job reads back");
+    assert_eq!(read, round, "the fold rebuilds what the moves left");
+    assert_eq!(read.current_step_id(), Some(&gate()));
+}
