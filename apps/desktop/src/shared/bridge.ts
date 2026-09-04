@@ -62,6 +62,18 @@ export function identifying(state: BridgeState): BridgeState {
   return { ...state, bridge: { ...state.bridge, fleetProtocol } };
 }
 
+/**
+ * Where a pressed notification lands.
+ *
+ * **A job, or the set.** A telling about one job opens that job. A telling
+ * about several cannot open one of them without choosing for somebody, so it
+ * lands on the Needs-you tab — which is the set the notification was derived
+ * from, and the same one keyboard `2` reaches.
+ *
+ * It travels main → renderer only. Nothing the renderer sends can produce one.
+ */
+export type Summons = { jobId: string | null };
+
 /** Everything the renderer draws, published by main and never assembled twice. */
 export type BridgeState = {
   connection: Connection;
@@ -476,6 +488,19 @@ export type BridgeApi = {
    * than derived, and it is not a path.
    */
   openArtifact: (jobId: string, what: Artifact) => Promise<Opened>;
+  /**
+   * Where a pressed notification says to go.
+   *
+   * **The one entry here the renderer cannot initiate.** Every other capability
+   * is the window asking Fleet for something; this is main handing over a press
+   * that happened outside the window — possibly while there was no window — and
+   * the renderer's only part is to go there.
+   *
+   * It grants nothing: what arrives is a job id this window already draws, or
+   * `null`. Subscribing twice is two callbacks, and the returned function is
+   * how one stops.
+   */
+  onSummoned: (onGo: (to: Summons) => void) => () => void;
 };
 
 /**
@@ -540,4 +565,5 @@ export const CHANNELS = {
   requestChanges: "bridge:request-changes",
   rejectWork: "bridge:reject-work",
   openArtifact: "bridge:open-artifact",
+  summoned: "bridge:summoned",
 } as const;
