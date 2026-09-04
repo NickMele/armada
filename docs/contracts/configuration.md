@@ -130,13 +130,22 @@ declares nothing follows an edit into its next step.
 `checks:` or `commands:` edit is *Frozen for the Job* — every workflow was
 resolved against the registry the file declared at start, and adopting a new one
 would leave a resolved step pointing at a Check the Manifest no longer agrees
-with. Such a change is named on the daemon's console as needing a restart rather
-than swallowed. And the live pair is resolved once per step and held for as long
-as the Drone is, so a save cannot move the terms a running step began under.
+with. Such a change is named as needing a restart rather than swallowed — on the
+daemon's console, and, since `#446`, on the wire as well, so a person running
+Bridge learns it too. And the live pair is resolved once per step and held for as
+long as the Drone is, so a save cannot move the terms a running step began under.
 
 **A save that will not parse changes nothing.** The last good configuration stays
-in force and the refusal is printed. A fleet that stopped because somebody
+in force and the refusal is reported. A fleet that stopped because somebody
 mistyped a number would be worse than one that ignored the edit.
+
+**The refusal is a standing reading, not a line that scrolls past.** Until `#446`
+it was printed and nothing else, which meant a person running Bridge edited the
+file, saw no change and had nowhere to find out why. `get_manifest_reading`
+answers for Fleet's last read and `manifest.reread` pushes it, so a Bridge opened
+a minute after the save still learns that the file was refused — and every fault
+crosses, not the first, because a person correcting a file from a message naming
+one fault meets the next one on the following save.
 
 ## Two tiers of path boundary, and only one of them is configuration
 
@@ -323,5 +332,24 @@ That day also closes the one gap it cannot close now. A setting nothing reads is
   Manifest's `id`. Position validation, the VCS-root walk, one schema
   validated by position, exit-code-only Checks, and Commands as their own
   ungated grant are already decided and not open for re-litigation.
+
+- **[deliverable-location]** Should a step's deliverable go on living inside
+  `.armada/`, or somewhere outside it?
+  `.armada` is an absolute boundary — the tier no Judge can lift and no key can
+  widen, because it holds the workflow definitions a step is judged by. Seven
+  shipped workflows nonetheless send a step's deliverable to
+  `.armada/artifacts/`, by a `mechanical_checks[].target` a Drone did not choose
+  and cannot move, and Fleet opens exactly that path at the gate to build the
+  Judge's brief. `#431` carved that directory out of the boundary, compiled in
+  beside it, so the deliverable works and the tier still has no key.
+  What decides it: whether a boundary with a hole in it is the shape wanted, or
+  whether a deliverable simply does not belong under a directory an agent is
+  otherwise forbidden. The carve-out is the smaller change and is in force; the
+  alternative is moving deliverables out of `.armada` entirely, which is a
+  workflow-schema change touching all seven and every repository's expectations
+  of where its artifacts land. Latent until now only because this repository
+  gitignores `.armada/*`, so an artifact never entered a diff and the gate never
+  saw one — a repository that does not ignore it meets this on its first `plan`
+  step.
 
 Also bearing on this document, and written where each belongs: `[adapter-admission-test]` in `adapters.md`. A question has one home — answering it in two places is how one of them goes stale.
