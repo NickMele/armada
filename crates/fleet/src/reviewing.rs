@@ -126,8 +126,8 @@ where
 
     /// Send the work back with a note. **The worktree and every step so far
     /// survive**: the Job is worked again at the same step and the note is what
-    /// it is worked against. The step does not move, which is the whole
-    /// difference between this and an approval.
+    /// it is worked against. The step does not advance, which is the whole
+    /// difference between this and an approval — it opens another pass, `#418`.
     ///
     /// **A Drone that is there is told, and nothing waits**: a turn injected
     /// into a live session, the Job back to `running`, no record of the words.
@@ -149,21 +149,6 @@ where
     /// written down is one a Drone reads twice. Where a Job has no worktree
     /// left to put a Drone on there is nowhere for the note to go at all, and
     /// it refuses before anything moves: [`Adrift::NoDroneToTell`].
-    ///
-    /// **The re-queue ends the pass and the injection does not**, which is
-    /// `#418` and is the same split. Told into a live session, the run carries
-    /// on: one Drone, one session, and a resubmission inside a run supersedes
-    /// rather than opening a new one. Written down, the Drone that answers the
-    /// note is a *different* process — the gate stood the first one down and
-    /// its session cannot be reopened — so the work after the note is somebody
-    /// else's, and filing it under the first one's ordinal writes over the only
-    /// account of what the note was about. So the second path takes
-    /// [`StepTarget::Revisited`] and the first takes nothing.
-    ///
-    /// **It opens a pass and does not spend one.** `store::step_spent` resets
-    /// at that edge, as `retry_count`'s registry row says a re-entry as
-    /// designed must — nothing failed here, and a Job that could die of being
-    /// reviewed is the fix overshooting into the defect beside it.
     pub async fn request_changes(&self, job_id: &JobId, note: &Redirection) -> Result<Job, Adrift> {
         let slot = self.slot_for(job_id).await;
         let mut working = slot.lock().await;
@@ -222,17 +207,27 @@ where
         // with the person's words nowhere, which is the failure the whole
         // refusal existed to prevent, arriving one line later.
         let waiting = self.hold_the_note(&job, note, Said::AtTheGate).await?;
-        // **The pass ends here, and the record has to say so** — `#418`. The
-        // step does not move, so nothing entered `running` and
-        // `store::attempt` had nothing to count; the fresh Drone wrote its
-        // Checks, evidence and judgments over the ones the note was about, and
-        // a step sent back twice read as a step that passed first time.
-        // `StepTarget::Revisited` is the boundary `#263` gave the loop for the
-        // same reason, reaching the road a person walks.
+        // **The pass ends here, and the record has to say so** — `#418`.
+        // Nothing entered `running`, so `store::attempt` had nothing to count
+        // and the fresh Drone wrote its Checks, evidence and judgments over the
+        // ones the note was about: a step sent back twice read as one that
+        // passed first time. `StepTarget::Revisited` is the boundary `#263`
+        // gave the loop, on the road a person walks.
+        //
+        // **Only this path, and the injection above takes none.** There the run
+        // carries on — one Drone, one session, and a resubmission inside a run
+        // supersedes. Here the gate stood that Drone down and its session
+        // cannot be reopened, so the work after the note is a different
+        // process's and the first one's record is the only account of what the
+        // note was about.
+        //
+        // **It opens a pass and spends none.** `store::step_spent` resets at
+        // this edge, as `retry_count`'s registry row says a re-entry as designed
+        // must; nothing failed, and a Job that could die of being reviewed is
+        // this fix overshooting into the defect beside it.
         //
         // **While the Job is still `awaiting_review`**, which is in
-        // `ADVANCING_STATUSES` only until the move below leaves it — the order
-        // `approve_review` keeps for both of its step moves.
+        // `ADVANCING_STATUSES` only until the move below leaves it.
         let waiting = self
             .move_step_by(&waiting, &step, StepTarget::Revisited, Actor::Human)
             .await?;

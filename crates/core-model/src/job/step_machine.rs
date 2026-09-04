@@ -11,9 +11,9 @@
 //! `running -> running` are one edge for one each**, walked by
 //! [`StepTarget::Overridden`], [`StepTarget::Returned`] and
 //! [`StepTarget::Revisited`] alone — an open edge at any of the three would
-//! admit the redispatch `fleet::resume` refuses above this layer. The last is
-//! the loop's second half: a return leaves the emitting step `running`, so the
-//! pass after it walks forward into a step that never left.
+//! admit the redispatch `fleet::resume` refuses above this layer. The last is a
+//! second pass at a step that never left `running` — a loop coming round to the
+//! step that emitted the verdict, or a person sending the work back at a gate.
 //!
 //! `awaiting_human` has its gate now and is **still unreachable**: a step there
 //! stays `running`. It stays declared on [`StepState`], with no target.
@@ -250,27 +250,19 @@ pub enum StepTarget {
     ///
     /// **Two roads reach it and the row is the same on both.** The loop's is
     /// the counterpart of [`Returned`](StepTarget::Returned), one move later
-    /// and in the other direction: that one is a *later* step sending work
-    /// back, this is the work arriving back at the step that emitted the
+    /// and the other way: work arriving back at the step that emitted the
     /// verdict, which a return left `running`. The person's is `#418` —
-    /// `fleet::reviewing` re-queueing at the step a person was standing at,
-    /// which also never left `running`, because a step at a human gate does not
-    /// move while somebody reads it. Either way this walks the table's only
-    /// self-edge, and it is the only target that may.
+    /// `fleet::reviewing` re-queueing at the step somebody was standing at,
+    /// which never left `running` either. **Nothing tells them apart on the row
+    /// but the actor**, which was already there.
     ///
     /// **It carries nothing, and there is nothing to carry.** No gate refused
     /// it, so there is no trigger; the pass was charged to this step at the
     /// return, so charging it again here would count one loop twice. What the
     /// row exists for is the boundary: `store::attempt` counts entries into
     /// `running`, and without one the second pass files its checks, judgments
-    /// and evidence over the first pass's. **Nothing distinguishes the two
-    /// roads on the row but the actor**, which is enough and is already there —
-    /// Fleet walked the loop round, and a person sent the work back.
-    ///
-    /// **What it must not carry is a charge.** `store::step_spent` treats this
-    /// edge as opening a pass, so a person's note resets the retry budget
-    /// rather than spending it; a payload that made it a failure would let a
-    /// Job die of being reviewed.
+    /// and evidence over the first pass's. `store::step_spent` reads it as
+    /// opening a pass, so neither road spends a retry budget.
     ///
     /// **Not [`Running`](StepTarget::Running) across the same edge.** That is a
     /// dispatch or a resume, and onto a step already being worked it is a

@@ -457,6 +457,40 @@ async fn a_step_sent_back_twice_files_each_pass_apart_from_the_last() {
         vec![1, 2, 3],
         "each pass kept its own Checks rather than writing over the pass before it"
     );
+    drop(store);
+
+    // **And a person is shown them.** A record that tells the passes apart
+    // behind a wire that folds them back into one is half the fix: `get_job` is
+    // what job detail draws the run tree from.
+    let seen = detail(&fleet, &job_id).await;
+    let drawn = seen
+        .steps
+        .iter()
+        .find(|shown| shown.step_id.as_str() == "implement")
+        .expect("the step is on the wire");
+    assert_eq!(
+        drawn
+            .attempts
+            .iter()
+            .map(|run| run.attempt)
+            .collect::<Vec<_>>(),
+        vec![1, 2, 3],
+        "three passes are drawn, not the last one wearing the count of one"
+    );
+    assert_eq!(
+        drawn
+            .attempts
+            .iter()
+            .map(|run| run.outcome.as_wire())
+            .collect::<Vec<_>>(),
+        vec!["awaiting_human", "awaiting_human", "running"],
+        "the two a person ended say so, and the one still being reviewed is open"
+    );
+    assert!(
+        drawn.verdicts.is_empty(),
+        "and none of them claims a gate ruling: the tiers held every time, and \
+         what ended the first two was somebody asking again"
+    );
 }
 
 /// One Job, as `GET /jobs/:job_id` serves it. The wire answer and not the
