@@ -531,6 +531,7 @@ fn tables(text: &str) -> Vec<(String, usize)> {
     found
 }
 
+pub mod declared;
 pub mod edges;
 pub mod reachability;
 

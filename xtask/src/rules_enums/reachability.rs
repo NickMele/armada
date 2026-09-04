@@ -481,7 +481,7 @@ fn check_guards(
 }
 
 mod machine;
-mod reading;
+pub(super) mod reading;
 
 #[cfg(test)]
 mod tests;
