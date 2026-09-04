@@ -19,7 +19,7 @@ use crate::tests::daemon::{
     a_fleet, a_fleet_holding, a_fleet_holding_all, a_proposal, a_proposal_for, diff_evidence,
     workflow_named, worktree_directory,
 };
-use crate::tests::planted::the_drone_is_gone;
+use crate::tests::planted::the_drone_it_holds_is_gone;
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
 
@@ -217,13 +217,12 @@ async fn a_job_folds_its_drone_out_of_the_log() {
             .assigned_drone()
             .expect("a dispatched Job knows its Drone")
             .clone();
-        // **The Drone is ended here, not left to the drop.** Dropping the Fleet
-        // closes the pipe into `/bin/cat` and a `cat` with no stdin does exit —
-        // but not before the next Fleet asks, on a machine that is busy, and an
-        // uncollected child is a zombie that `ps` reports as held. Reconciliation
-        // then adopts it, correctly, and this case is about the other answer.
-        // `#443`.
-        the_drone_is_gone(&fleet).await;
+        // **The Drone is ended here, not left to the drop.** Dropping this
+        // Fleet closes the pipe and nothing more; whether the child has
+        // noticed, exited and been collected before the next line runs is the
+        // machine's decision, and a child still in the process table is one the
+        // second Fleet adopts. See `crate::tests::planted`.
+        the_drone_it_holds_is_gone(&fleet).await;
         (job.id().clone(), drone)
     };
 
@@ -234,8 +233,8 @@ async fn a_job_folds_its_drone_out_of_the_log() {
         "the column is not read back, so this came off the log"
     );
 
-    // A Drone is held in memory by the Fleet that spawned it, so a restart
-    // means it is gone and the record must stop naming it.
+    // A Drone whose process is gone is one no Fleet can pick back up, so the
+    // record must stop naming it.
     after.reconcile().await.unwrap();
     let reconciled = after.load(&job_id).await.unwrap();
     assert_eq!(reconciled.status(), JobStatus::Escalated);

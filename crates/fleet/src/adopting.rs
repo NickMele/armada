@@ -20,9 +20,9 @@
 //! adopted Drone can finish its step and be gated, because evidence arrives
 //! over the loopback and nothing a Drone says gates its own step. It cannot be
 //! handed back to, poked, redirected or told a verdict. **So it is silent to
-//! Fleet by construction**, and `crate::silence` escalates it once the quiet
-//! budget is spent — under `unheard` rather than `stalled`, off
-//! [`Session::unheard`].
+//! Fleet by construction**: `crate::silence` escalates it as `unheard` rather
+//! than `stalled` once the budget is spent, and `crate::stuck` withholds the
+//! redirect and the gate re-run. Both read [`Session::unheard`]. #442.
 
 use std::io;
 use std::num::NonZeroU32;
@@ -241,6 +241,13 @@ impl Session {
     /// lose the pipe should reach the same trigger without minting a second
     /// one, and a method called `is_adopted` at that call site would have
     /// written the cause into the badge.
+    ///
+    /// **Two callers now, and they are the two halves of one sentence.**
+    /// `crate::silence` says what the badge reads; `crate::stuck` says which
+    /// acts sit under it, withholding the redirect and the gate re-run because
+    /// both need the pipe, and `crate::resume` ends the Drone rather than
+    /// refusing a restart over it. A badge that says nothing is reading this
+    /// Drone, beside a button that speaks to it, is worse than either alone.
     ///
     /// **It is the same fact the six refusals below are**, read as a question
     /// instead of taken as an error. A caller deciding *what to say about* a

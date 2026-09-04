@@ -35,7 +35,6 @@ use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::resume::{Redirection, Roused};
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
-use crate::tests::planted::a_drone_that_leaves;
 use crate::tests::tmp::TempDir;
 
 type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
@@ -110,6 +109,15 @@ fn a_drone_that_only_ticks() -> FakeHarness {
             kind: String::from("tool_progress"),
         }],
     )
+}
+
+/// A Drone that speaks once and leaves, emptying the slot under an escalation.
+///
+/// **It leaves after it has been told, and `crate::tests::planted` owns why**:
+/// `echo BUSY` alone races `start`'s first write, and a busy machine turns this
+/// fixture into a spawn that failed rather than a Drone that left.
+fn a_drone_that_leaves() -> FakeHarness {
+    crate::tests::planted::a_drone_that_leaves("BUSY").reading("BUSY", called())
 }
 
 /// A Fleet on one step with that Drone on it. **The Judge fails every call**:

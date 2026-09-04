@@ -31,7 +31,6 @@ use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::resume::Redirection;
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
-use crate::tests::planted::a_drone_that_leaves;
 use crate::tests::tmp::TempDir;
 
 type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
@@ -89,6 +88,16 @@ fn called() -> Vec<DroneEvent> {
 /// process.
 fn a_drone_that_stays() -> FakeHarness {
     FakeHarness::running("/bin/sh", &["-c", "echo BUSY; sleep 30"]).reading("BUSY", called())
+}
+
+/// A Drone that speaks once and leaves, emptying the slot under an escalation.
+///
+/// The last of the eight copies `#443` found. It said `echo BUSY` and nothing
+/// else, which leaves before it is told rather than after — see
+/// [`planted::a_drone_that_leaves`](crate::tests::planted::a_drone_that_leaves)
+/// for why that is a race against the spawn and not a Drone that left.
+fn a_drone_that_leaves() -> FakeHarness {
+    crate::tests::planted::a_drone_that_leaves("BUSY").reading("BUSY", called())
 }
 
 fn a_fleet_with(home: &TempDir, harness: FakeHarness) -> Fixture {

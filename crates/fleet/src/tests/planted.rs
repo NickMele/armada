@@ -1,7 +1,5 @@
-//! What a case plants under a Fleet: what time it is, what an id is, and when
-//! a real child starts and stops.
-//!
-//! # The two seams
+//! What a fixture plants: what time it is, what an id is, and when a Drone's
+//! process begins and ends.
 //!
 //! **`crate::clock` and `crate::mint` are the only two things in this workspace
 //! that enter the process**, and both are held by Fleet so that everything
@@ -9,21 +7,22 @@
 //! affordable because a test can plant these — a fixture that read the real
 //! clock would assert against the second it happened to run in.
 //!
-//! # And the third thing, which is a process
+//! # The third thing, which is not a seam
 //!
-//! A Drone is a real detached child in most of this suite, and a case that
-//! needs one *started* or one *finished* has to be able to say so. `#443` is
-//! what it costs when it cannot: eleven cases across seven files got their
-//! Drone's lifetime from a shell script and the scheduler, and on a machine at
-//! load 80 the scheduler answered differently. Neither shape below sleeps and
-//! neither polls — each of them is a point the operating system will not move.
+//! A Drone is a real child, and the two ends of its life are the only part of
+//! these fixtures the operating system decides. `#443`: three cases assumed a
+//! child would be gone by the time the next line ran and one assumed a child
+//! would still be there, and both assumptions held on an idle machine and
+//! failed at load average 17. **Neither is a wait to be lengthened** — a sleep
+//! tuned on a quiet machine is the same bug with a bigger number — so the two
+//! helpers below make the ends of a Drone's life something a test states rather
+//! than something it hopes for.
 //!
 //! Here rather than in `tests::daemon`, which is a Fleet over a temporary
-//! directory and is a different subject from the seams it hands one.
+//! directory and is a different subject from what it is handed.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use adapter_traits::{CallDetail, DroneEvent};
 use core_model::{Timestamp, Ulid};
 use testkit::{FakeHarness, FakeVcs, FakeWorkProduct};
 
@@ -122,71 +121,59 @@ impl Mint for Counted {
     }
 }
 
-/// A Drone that says one thing and then leaves — **once it has been told**.
-///
-/// **The read is the whole fixture.** `crate::drone::start` writes the opening
-/// brief into the Drone's stdin and checks the write, so a program that has
-/// already exited when the write lands answers `EPIPE` and the spawn fails as
-/// `DroneNotStarted::DiedBeforeItWasTold`. That is a real Drone failing to
-/// start, faithfully reported — and it is not what any case wanting an empty
-/// slot is about. `echo BUSY` on its own raced that write and lost it: five
-/// cases panicked at their own `approve`, on a machine at load 80, having said
-/// nothing about the act under test.
-///
-/// **It reads before it speaks, rather than after.** Printing first and reading
-/// second would also keep a reader on the pipe, but it leaves the event racing
-/// the dispatch a case takes its baseline from. Blocking first orders the two
-/// the only way that cannot come out backwards, and it is the shape
-/// `crate::tests::transcript::SAYS_THREE` has always had — which is why that
-/// file never flaked.
-///
-/// One tool call, because that is the cheapest thing a Drone that is turning
-/// emits and every case that took this shape scripted the same one.
-pub fn a_drone_that_leaves() -> FakeHarness {
-    FakeHarness::running("/bin/sh", &["-c", "IFS= read -r _; echo BUSY"]).reading(
-        "BUSY",
-        vec![DroneEvent::Called {
-            tool: String::from("Read"),
-            call: String::from("a-call"),
-            detail: CallDetail::of("a file"),
-        }],
-    )
-}
+// ------------------------------------------- when a Drone's process ends
 
-/// End the Drone in this Fleet's one slot, for certain, and say which pid it
-/// was.
+/// End the Drone this Fleet is holding, and do not come back until the
+/// operating system has collected it.
 ///
-/// **What dropping the Fleet does not give you.** Dropping it closes the pipe
-/// into a `/bin/cat` Drone, and a `cat` that has lost its stdin does exit —
-/// eventually. *Eventually* is the scheduler's word: on a loaded machine the
-/// child has not been run since the write end closed, and on one that did run
-/// it the child is a **zombie** until Tokio's `SIGCHLD` reaper gets a turn,
-/// because nothing waits on a `Child` that was dropped with its Fleet.
+/// **The fixture a restart case needs, and it is a reap rather than a wait.**
+/// Dropping a Fleet does not end its Drone — `crate::detach` calls
+/// `libc::setsid()` on every spawn precisely so that it does not — it only
+/// drops the write end of the pipe the child is reading. What follows is three
+/// things the machine schedules: the child noticing end-of-file, the child
+/// exiting, and tokio's orphan queue collecting it. Until the last of those the
+/// pid is a zombie, `ps` still reports when it started, and
+/// [`crate::holder_of`] therefore answers `Held` — which since `#409` is a
+/// Drone the next Fleet **adopts** rather than one it reports vanished.
 ///
-/// `crate::holder_of` asks `ps -o lstart=`, and `ps` reports a zombie with the
-/// start time it was born with — measured, not assumed. So `crate::reattaching`
-/// finds the recorded pid held at the recorded instant and **adopts** the
-/// Drone, which is `crate::adopting` behaving exactly as `#409` specified. The
-/// six cases that failed were asserting the answer reconciliation gave before
-/// there was anything to adopt.
+/// [`LiveSession::terminate`] is the whole of the guarantee: it signals the
+/// group, signals the pid, and *waits*, so by the time this returns the pid
+/// names nothing. Nothing here polls and nothing here sleeps.
 ///
-/// `DroneSession::terminate` is the one act on a Drone with no *eventually* in
-/// it: it ends the process group, signals the pid, and `wait`s. **The `await`
-/// returning is the guarantee** — the child has been collected and the pid is
-/// the operating system's again — so there is no probe here to confirm it and
-/// no window for one to be taken in. A case calls this before it throws its
-/// Fleet away, and what the next Fleet reads is then fixed.
-pub async fn the_drone_is_gone(fleet: &Fleet<FakeHarness, FakeVcs, FakeWorkProduct>) -> u32 {
+/// **The process stays real.** Two of the cases that need this are about what
+/// survives a Fleet restart, so the Drone is a child that was genuinely spawned
+/// and genuinely died; what the fixture removes is the uncertainty about
+/// *when*, not the process.
+pub async fn the_drone_it_holds_is_gone(fleet: &Fleet<FakeHarness, FakeVcs, FakeWorkProduct>) {
     let slot = fleet.the_only_slot().await;
     let held = slot.lock().await;
     let working = held
         .as_ref()
-        .expect("a Drone is in the slot, or there is nothing for this to make gone");
-    let pid = working.session().pid();
+        .expect("a Fleet that dispatched a Job is holding its Drone");
     working
         .session()
         .terminate()
         .await
-        .expect("the Drone ends and is collected");
-    pid
+        .expect("a Drone this Fleet spawned is one it can end");
+}
+
+/// A Drone that says one line and leaves — **after it has been told, never
+/// before.**
+///
+/// `IFS= read -r _` is the whole of it, and `crate::tests::group` spells the
+/// same line for the same reason. [`crate::drone::start`] writes the first turn
+/// into a pipe the child is holding open; a child that had already exited has
+/// closed the read end, so the write answers `EPIPE` and the spawn fails with
+/// [`DiedBeforeItWasTold`](crate::drone::DroneNotStarted::DiedBeforeItWasTold).
+/// **`echo BUSY` on its own is therefore not a Drone that leaves but a race
+/// against the spawn**, and a busy machine loses it: measured on 2026-09-04 at
+/// load average 40, a full run of this crate's suite lost it two to four times
+/// in seven hundred tests.
+///
+/// Reading first costs the case nothing, because a Drone that leaves is only
+/// ever wanted for the slot it empties and the step it strands — and it still
+/// leaves, one turn later, without anything having waited.
+pub fn a_drone_that_leaves(saying: &str) -> FakeHarness {
+    let says_it_then_waits_to_be_told = format!("echo {saying}; IFS= read -r _");
+    FakeHarness::running("/bin/sh", &["-c", says_it_then_waits_to_be_told.as_str()])
 }

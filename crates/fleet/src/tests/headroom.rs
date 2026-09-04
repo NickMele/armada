@@ -29,7 +29,6 @@ use crate::headroom::{
     Short, Spare, TheMachine,
 };
 use crate::tests::daemon::{a_proposal, fittings, worktree_directory};
-use crate::tests::planted::a_drone_that_leaves;
 use crate::tests::tmp::TempDir;
 
 type Fixture = Fleet<testkit::FakeHarness, testkit::FakeVcs, FakeWorkProduct>;
@@ -421,6 +420,23 @@ async fn a_running_job_is_left_alone_when_the_machine_fills() {
 }
 
 // ----------------------------------------------- a person's act, and the queue
+
+/// A Drone that speaks once and leaves, so the slot empties and a restart is
+/// not refused for the reason `restarting` names — `DroneStillThere`.
+///
+/// **It leaves after it has been told**, and `crate::tests::planted` owns why:
+/// `echo BUSY` alone races `start`'s first write, and a busy machine turns this
+/// into a spawn that failed rather than a Drone that left.
+fn a_drone_that_leaves() -> testkit::FakeHarness {
+    crate::tests::planted::a_drone_that_leaves("BUSY").reading(
+        "BUSY",
+        vec![adapter_traits::DroneEvent::Called {
+            tool: String::from("Read"),
+            call: String::from("a-call"),
+            detail: adapter_traits::CallDetail::of("a file"),
+        }],
+    )
+}
 
 /// A Fleet whose Drone leaves on its own, reading a machine the test holds.
 fn watching_a_drone_that_leaves(home: &TempDir, plant: &Arc<Plant>) -> Fixture {

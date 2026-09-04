@@ -246,6 +246,19 @@ So the question a surface asks is where the Job stands:
 | Mid-step, a Drone working | Yes — a turn into the session | No. The step has not stopped |
 | Mid-step, the step stopped | Yes — a turn into the session | Yes |
 | At a boundary, between steps | Yes — it waits, and opens the next Drone's brief | No. There is no stopped step to restart |
+| Mid-step, a Drone nothing can be said to | No. There is nothing to speak into | Yes, where a step stopped — and it ends the Drone on the way |
+
+**The last row is adoption, and it is the one case where a process exists and
+the question above still answers "no".** A Drone that outlived its Fleet is put
+back on its Job with both pipes dead ([Drone](drone.md)), so a redirect into one
+is a refusal and nothing else. That is a fact about the pipe rather than about
+where the Job stands, which is why it is a row here rather than an exception to
+the rule: the Job stands mid-step, and the act it admits is the restart. **The
+restart ends the unreadable Drone rather than refusing over it** — ending an
+orphan is the one thing Fleet can still do to one, and refusing instead left a
+person with every act on the Job declined. A gate re-run is withheld on the same
+reading, because it too finishes by telling the Drone what the second ruling
+was.
 
 **The boundary a person actually stands at is a human advance gate, and the act
 there is spelled `request_changes`.** It is the same act by the row above — a
@@ -321,12 +334,19 @@ which used to exist only as refusals. Before it, a person read `stalled` and
 worked out which of five acts applied by pressing buttons.
 
 **And Fleet decides it, because four of the facts are Fleet's alone.** Whether
-the slot still holds the Drone, whether the worktree is still on disk, whether
+a Drone Fleet can still say something to is on the Job, whether the worktree is
+still on disk, whether
 the stopped step's Checks passed, whether Fleet still holds the workflow. A
 client that derives recoverability from `status`, `current_step_id` and
 `assigned_drone` gets four of the five refusals right and cannot get the
 fifth — a missing worktree is a `path.is_dir()`, so `worktree_on_disk` crosses
 beside the acts and a surface can say *why* a restart is not offered.
+
+**The first of those four is a session and not a slot**, which is the row above
+arriving here: a Drone in the working slot that Fleet cannot speak to reads as
+present to every question but the one the redirect and the gate re-run ask. It
+was read as a full slot until a person met an adopted Drone, was offered the
+redirect, typed a note and had it refused.
 
 **It does not claim the trigger is true.** A Drone whose worktree was deleted
 under it escalated as `stalled`, which is the nearest trigger and the wrong
