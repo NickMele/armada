@@ -73,6 +73,29 @@ sentence that was wrong in a question is right there — see
 `docs/practices/writing-an-issue.md`, which is the same rule for a different
 reader: consequence first, mechanism under a heading.
 
+## It is not only questions
+
+**Anything written for a person to read takes the same shape**, and an artifact
+most of all — a page is read once, alone, without you there to translate.
+
+Asked what a new screen was for, the answer that worked was not *it lists held
+worktrees with their `HeldReason`*:
+
+> Every Job gets its own copy of the repository to work in — that's how two
+> agents don't trample each other. When the Job's over, that copy is just disk
+> sitting there. It's how this machine once ended up with 74 of them and 220 GB,
+> and three agents killed mid-run at zero bytes free.
+
+Then the mechanism, once the reader knows why they should care. **The number is
+doing work there**: 74 and 220 GB are what makes *disk sitting there* a problem
+rather than a phrase. Reach for the real measurement, the real incident, the real
+sentence somebody typed — a page that argues from a category persuades nobody who
+did not already agree.
+
+**In an artifact this is structural, not a flourish.** Lead a section with the
+situation, put the identifiers in the table underneath, and let a reader stop
+after the first paragraph having understood what the page is about.
+
 ## What this is not
 
 **It is not writing less.** The rewritten question is longer than the one it
