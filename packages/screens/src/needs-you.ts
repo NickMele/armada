@@ -25,7 +25,21 @@
 import { JOB_LIFECYCLE } from "@armada/components/src/generated/vocabulary";
 import type { JobSummary } from "@armada/protocol";
 import { instant } from "./duration";
-import type { StateTab } from "./board";
+
+/**
+ * The five tabs, in the order they are drawn and keyed.
+ *
+ * **Here rather than in `board.ts`, where the strip that draws them is.** A
+ * type import is erased at runtime and still typechecked, so leaving it there
+ * would pull the whole component barrel into main's project — the same cost
+ * this file exists to avoid, arriving through the type system instead of
+ * through the bundle. `board.ts` re-exports both, and the tab strip is still
+ * the only thing that draws them.
+ */
+export type BoardTab = "all" | "needs-you" | "running" | "queued" | "finished";
+
+/** The four a job can be in. `all` is not a state and holds every job. */
+export type StateTab = Exclude<BoardTab, "all">;
 
 /**
  * Which state tab a job is in, or `null` where this build's registry has no

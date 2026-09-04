@@ -75,12 +75,10 @@ import type { JobSummary } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
 import { instant } from "./duration";
 import { needsYou, needsYouClause, oldest, tabOf } from "./needs-you";
+import type { BoardTab } from "./needs-you";
 
-/** The five tabs, in the order they are drawn and keyed. */
-export type BoardTab = "all" | "needs-you" | "running" | "queued" | "finished";
-
-/** The four a job can be in. `all` is not a state and holds every job. */
-export type StateTab = Exclude<BoardTab, "all">;
+/** The tab names, defined beside the rule that sorts a job into one. */
+export type { BoardTab, StateTab } from "./needs-you";
 
 /**
  * The tabs, their labels, the key that selects each — `1` through `5`, in the
