@@ -246,10 +246,12 @@ Both problems in the brief are accepted as stated.
 ## Step activity — the rail
 
 The marks a rail row can take, distinct from the Job badge states. Six of
-these are `job_steps.state` values; `failed` is not — a refusal lands in
-`last_verdict` as `failed(<reason>)`, and the activity/verdict split is why:
-a step retrying after a refusal is `running` in activity and `failed` in
-verdict at the same moment, so one column cannot say both. A step may carry
+these are `job_steps.state` values; `failed` and `killed` are not — a refusal
+lands in `last_verdict` as `failed(<reason>)`, and the activity/verdict split
+is why: a step retrying after a refusal is `running` in activity and `failed`
+in verdict at the same moment, so one column cannot say both. `killed` is the
+Job's own status showing through, and it freezes the step where it stood
+rather than describing what the step did. A step may carry
 the Job glyph that means the same thing one level down — a step and a Job
 answer the same question at different scales, so a second silhouette for one
 meaning is the collision this document exists to prevent, and a rail row
@@ -258,9 +260,26 @@ claim. What a step may not do is reuse a badge glyph in a sense the badge
 does not carry.
 
 The common rail values borrow their glyph from the Job badge one level down
-— `advanced` (check), `running` (circle-dot), `waiting` (clock), `retrying`
-(rotate-cw, no hue). The full mapping is `packages/icons/icons.toml`, under
-`[conventions.step_activity_borrowing]`.
+— `advanced` (check), `running` (circle-dot), `awaiting_human` (eye),
+`retrying` (rotate-cw, no hue), `killed` (power, no hue). The roster is
+`[conventions.step_activity_borrowing]` in `packages/icons/icons.toml`, and
+the per-value assignment is `verbs.step_state` in
+`crates/core-model/domain/enum-verbs.toml`. This paragraph is the reasoning,
+not the lookup.
+
+**`awaiting_human` takes `eye`, and `clock` is refused.** This paragraph said
+`waiting` (clock) until 2026-09-04, which was a value the step machine does
+not have and a glyph the roster does not lend, and the two files each named
+the other as the authority. `clock` is `queued`'s badge: nobody is acting,
+and the row reads grey. A step at `awaiting_human` is the opposite claim — a
+person is waited on, `--step-waiting` aliases `--status-awaiting-review`, and
+`eye` is that badge's own glyph. Taking `clock` there would be a badge glyph
+in a sense the badge does not carry, which the paragraph above forbids.
+
+**`not_started` borrows nothing.** `circle-dashed` was minted for it, because
+each of the borrowings claims some activity happened or is happening and
+`not_started` is the state where none of that is true yet. It is a fallback:
+wherever a caller supplies the step's ordinal, the number draws instead.
 
 Two values carry more than a borrowed glyph:
 
