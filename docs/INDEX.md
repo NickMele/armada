@@ -150,6 +150,10 @@ approximations.
   — whether the peer-process identity of spike 10 holds at five Drones and under
   concurrent connections, how wide the lookup's window is and which way it fails
   when it closes, and what the same answer costs without `lsof`.
+- [`spikes/013-what-does-reading-the-diff-cost.md`](spikes/013-what-does-reading-the-diff-cost.md)
+  — what one gate's reading of a Job's worktree costs, and whether the size of
+  the diff or the load on the machine is what decides it. The measurement `#431`
+  waited on.
 
 Raw transcripts sit beside each record. A negative result is a result and stays.
 
