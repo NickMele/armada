@@ -1,4 +1,9 @@
-//! `armada.yml`: the seven keys, and everything that is not one of them.
+//! `armada.yml`: what M1 reads, and everything that is not one of them.
+//!
+//! The header and a test name counted the keys, and the count was already
+//! wrong before `#414` added `drone:` — it said seven where the module said
+//! eight and listed nine. Counting again would only move the number, so the
+//! counts are gone and the list lives in `crate::manifest`.
 
 use crate::error::Fault;
 use crate::manifest::Manifest;
@@ -30,8 +35,8 @@ fn parse(text: &str) -> Result<Manifest, crate::LoadError> {
 }
 
 #[test]
-fn the_seven_keys_parse_and_nothing_else_is_needed() {
-    let manifest = parse(WHOLE).expect("the seven keys");
+fn every_key_m1_reads_parses_and_nothing_else_is_needed() {
+    let manifest = parse(WHOLE).expect("every key M1 reads");
     assert_eq!(manifest.version(), 1);
     assert_eq!(manifest.id().as_str(), "armada");
     assert_eq!(manifest.base(), Some("main"));
@@ -46,7 +51,7 @@ fn the_seven_keys_parse_and_nothing_else_is_needed() {
 
 #[test]
 fn destructive_is_read_when_present_and_false_when_absent() {
-    let manifest = parse(WHOLE).expect("the seven keys");
+    let manifest = parse(WHOLE).expect("every key M1 reads");
     assert!(manifest.command("reset").expect("reset").is_destructive());
     assert!(!manifest.command("fmt").expect("fmt").is_destructive());
 }
@@ -98,7 +103,7 @@ fn a_section_m1_does_not_read_hard_fails_and_names_what_it_does_read() {
     };
     assert_eq!(
         *known,
-        ["version", "id", "base", "checks", "commands", "setup"]
+        ["version", "id", "base", "checks", "commands", "setup", "drone"]
     );
 }
 
@@ -319,7 +324,7 @@ fn a_required_command_arrives_resolved_to_the_line_that_runs() {
     // The whole reason it is resolved at load: a caller holds the name **and**
     // the command line, so a failure can say which entry of the file it was
     // and what was actually executed.
-    let manifest = parse(WHOLE).expect("the seven keys");
+    let manifest = parse(WHOLE).expect("every key M1 reads");
     let prepared = manifest.prepared_by();
     assert_eq!(prepared.len(), 1);
     assert_eq!(prepared[0].name(), "fmt");
@@ -450,4 +455,112 @@ fn every_bad_requirement_in_one_file_is_reported_in_one_pass() {
     ));
     assert!(refused_at(&refused, "setup.requires[0]"));
     assert!(refused_at(&refused, "setup.requires[1]"));
+}
+
+// `drone:` — the repository's own patience with a quiet Drone. `#414`.
+
+#[test]
+fn a_repository_says_how_long_its_drones_may_be_quiet_and_how_often_they_are_asked() {
+    let manifest =
+        parse("version: 1\nid: a\ndrone:\n  quiet_after_seconds: 300\n  poke_limit: 3\n")
+            .expect("both halves");
+    assert_eq!(manifest.quiet_after_seconds(), Some(300));
+    assert_eq!(manifest.poke_limit(), Some(3));
+}
+
+#[test]
+fn a_repository_that_says_nothing_defers_rather_than_defaulting() {
+    // Absent is not 120 and not 2. The chain is Fleet's constant, this section
+    // and the step, and only `fleet::Liveness::at` knows the order — a number
+    // invented here would be a second place it lives.
+    let manifest = parse(WHOLE).expect("a file with no `drone` section at all");
+    assert_eq!(manifest.quiet_after_seconds(), None);
+    assert_eq!(manifest.poke_limit(), None);
+}
+
+#[test]
+fn each_half_of_the_repository_value_is_written_on_its_own() {
+    // Two rows in `settings.toml` and not one pair, which is what buys this: a
+    // repository wanting more patience does not thereby want more pokes, and
+    // saying so does not mean restating a number it has no opinion about.
+    let patient =
+        parse("version: 1\nid: a\ndrone:\n  quiet_after_seconds: 300\n").expect("one half");
+    assert_eq!(patient.quiet_after_seconds(), Some(300));
+    assert_eq!(patient.poke_limit(), None);
+
+    let unasked = parse("version: 1\nid: a\ndrone:\n  poke_limit: 0\n").expect("the other half");
+    assert_eq!(unasked.quiet_after_seconds(), None);
+    assert_eq!(unasked.poke_limit(), Some(0));
+}
+
+#[test]
+fn zero_pokes_is_carried_and_zero_patience_is_refused() {
+    // The one place the two keys disagree, and each is right about its own. A
+    // `poke_limit: 0` says the first silence past the threshold escalates with
+    // no nudge, which somebody may mean; a `quiet_after_seconds: 0` says every
+    // Drone here is quiet the instant it is spawned, which nobody does. `#60`
+    // settled that at the step and the reading is unchanged by the value being
+    // written a tier up — one number read two ways is the drift this whole
+    // chain exists to avoid.
+    assert_eq!(
+        parse("version: 1\nid: a\ndrone:\n  poke_limit: 0\n")
+            .expect("no nudges at all")
+            .poke_limit(),
+        Some(0)
+    );
+    let refused = refusals(parse(
+        "version: 1\nid: a\ndrone:\n  quiet_after_seconds: 0\n",
+    ));
+    assert_eq!(
+        fault_at(&refused, "drone.quiet_after_seconds"),
+        &Fault::WrongType {
+            wanted: "a positive whole number",
+            found: "a number outside that range",
+        }
+    );
+}
+
+#[test]
+fn a_drone_section_that_declares_neither_key_is_refused() {
+    // `setup: {}`'s rule, for a section where both keys are optional: the
+    // author wrote the section and left it blank, which is a key to delete
+    // rather than a repository deferring. `Table::close` reports nothing for an
+    // empty table, so this is asked here or not at all.
+    let refused = refusals(parse("version: 1\nid: a\ndrone: {}\n"));
+    assert_eq!(fault_at(&refused, "drone"), &Fault::Empty);
+}
+
+#[test]
+fn a_key_the_drone_section_does_not_read_hard_fails_and_names_the_two_it_does() {
+    // `heartbeat_interval_minutes` is a real `settings.toml` row with a
+    // Manifest tier and nothing reading it, so it is exactly the key this
+    // refusal keeps out of a file until a reader exists.
+    let refused = refusals(parse(
+        "version: 1\nid: a\ndrone:\n  quiet_after_seconds: 300\n  heartbeat_interval_minutes: 5\n",
+    ));
+    assert!(matches!(
+        fault_at(&refused, "drone.heartbeat_interval_minutes"),
+        Fault::Unknown { known } if *known == ["quiet_after_seconds", "poke_limit"]
+    ));
+}
+
+#[test]
+fn a_patience_that_is_not_a_number_is_refused_by_name() {
+    let refused = refusals(parse(
+        "version: 1\nid: a\ndrone:\n  quiet_after_seconds: five minutes\n  poke_limit: lots\n",
+    ));
+    assert_eq!(
+        fault_at(&refused, "drone.quiet_after_seconds"),
+        &Fault::WrongType {
+            wanted: "a positive whole number",
+            found: "text",
+        }
+    );
+    assert_eq!(
+        fault_at(&refused, "drone.poke_limit"),
+        &Fault::WrongType {
+            wanted: "a whole number of zero or more",
+            found: "text",
+        }
+    );
 }
