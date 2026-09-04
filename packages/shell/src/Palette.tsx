@@ -43,11 +43,30 @@ import type { Action, ActionContext, PaletteEntry, PaletteSection } from "@armad
 /** A Job as a search result. It carries no binding, and that is not a gap. */
 export type PaletteJob = { id: string; label: string };
 
-/** A destination in the rail, with the digit that reaches it. */
+/**
+ * A destination in Bridge, with the digit that reaches it where it has one.
+ *
+ * **The digit is optional and that is a gap, named rather than filled.** The
+ * contract binds `⌘1–⌘4` to *Bridge surfaces in rail order* and `⌘5` to Helm,
+ * so a digit is a position in the rail and nothing else. A destination that is
+ * not in the rail has no position, and inventing one for it would either take
+ * a digit the rail owes to a surface named in `docs/concepts/bridge.md` or
+ * push Helm off `⌘5` — both of which change what a published binding says, and
+ * neither of which is a wiring decision.
+ *
+ * So a destination without a rail row is reached by name in here and by no
+ * digit. That is a smaller thing than it looks: the palette is the discovery
+ * surface, and the rule it exists to keep is that no action lives outside it.
+ */
 export type PaletteSurface = {
   id: string;
   label: string;
-  shortcut: string;
+  shortcut?: string;
+  /**
+   * Words that find it, never drawn. Only for a place a person already knows
+   * by another word — the control they reached it by before it was in here.
+   */
+  aliases?: readonly string[];
   icon: LucideIcon;
 };
 
@@ -187,12 +206,19 @@ export function Palette({
     // `bridge_surfaces` as a single row on purpose — its rule is rail order
     // rather than the digits — so the rail is what expands it, and a palette
     // built from that row alone would name no destination at all.
+    //
+    // **Places that are not in the rail come through here too**, which is what
+    // the optional digit above is for. They are destinations by every other
+    // measure — a title, a glyph in the registry's Navigation group, a screen
+    // that replaces the panel — and leaving them out is the exact failure this
+    // section is here to prevent.
     ...surfaces.map((surface) => ({
       id: `nav:${surface.id}`,
       section: NAVIGATION,
       label: surface.label,
-      shortcut: surface.shortcut,
       icon: surface.icon,
+      ...(surface.shortcut === undefined ? {} : { shortcut: surface.shortcut }),
+      ...(surface.aliases === undefined ? {} : { aliases: surface.aliases }),
     })),
     ...globalActs().map((action) => entryOf(action, NAVIGATION, dormant)),
     ...jobs.map((job) => ({ id: `job:${job.id}`, section: JOBS, label: job.label })),

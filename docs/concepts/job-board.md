@@ -78,7 +78,7 @@ with nothing behind it renders no count rather than a `0`.
 | Tab | What it holds |
 | --- | --- |
 | All | Every Job on the Board |
-| Needs you | The statuses that stop until a person reads them — `awaiting_approval`, `awaiting_attestation`, `awaiting_review`, `escalated` |
+| Needs you | The statuses that stop until a person reads them — `awaiting_approval`, `awaiting_attestation`, `awaiting_repair`, `awaiting_review`, `escalated` |
 | Running | Everything in flight, `piloted` included: a Job a person has taken over is still moving |
 | Queued | `queued`, whatever its reason |
 | Finished | Every terminal status |
