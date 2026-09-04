@@ -176,4 +176,13 @@ fn resolve_step(step: &Step, manifest: &Manifest, unknown: &mut Vec<UnknownCheck
         step.model().cloned(),
     )
     .dispatching(step.may_dispatch_jobs())
+    // **Both keys through one builder**, which is the shape `dispatching` set
+    // and the reason `frozen`'s ten positional arguments did not become
+    // twelve. The cap is a count and never an `Option` on the record: absent
+    // and "no loop here" are the same sentence, and `looping` states why zero
+    // is the fail-closed answer.
+    .looping(
+        step.verdict_routing().clone(),
+        step.iteration_cap().unwrap_or(0),
+    )
 }

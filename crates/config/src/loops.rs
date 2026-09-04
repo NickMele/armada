@@ -1,14 +1,12 @@
 //! `verdict_routing` and `iteration_cap` on a step: the loop edge, and the
 //! bound on how many times it may be taken.
 //!
-//! **These two are the exception to this crate's own rule, for one wave.**
-//! Everywhere else a key nothing reads is refused, because a field nothing
-//! reads is a promise the file makes and the system does not keep. These are
-//! read and carried while nothing routes on them: the step machine has no edge
-//! from `advanced` back to `running`, so `core-model` cannot yet express the
-//! return, and `iteration_count` is a `job_steps` column the schema records as
-//! deliberately absent. The promise is made deliberately and it is stated here
-//! rather than left to be discovered — #263's other half is what keeps it.
+//! **Both are read all the way through now.** They were carried for one wave
+//! while nothing routed on them, which this crate's own rule otherwise refuses:
+//! a field nothing reads is a promise the file makes and the system does not
+//! keep. `resolve` freezes the pair onto `ResolvedStep`, the step machine has
+//! the `advanced -> running` edge, and `fleet::reviewing` walks it — so the
+//! promise is kept and the exception is over.
 //!
 //! **A loop return is not a retry**, which is why there are two counters in the
 //! registry and not one. Nothing went wrong: a plan on its fourth honest draft
@@ -21,33 +19,18 @@
 //! bounds — the registry is explicit that a cap split from the count it bounds
 //! never fires, and `docs/journeys/triage-queue.md` settled the matching
 //! question about the count: `request_changes` increments the *gate* step's
-//! `iteration_count`, not the step it routes back to.
+//! `iteration_count`, not the step it routes back to. `store::step_iteration`
+//! counts it that way, off the emitting step named on the return's own row.
+//!
+//! **[`GateVerdict`] is `core-model`'s and is re-exported here.** A Job freezes
+//! `verdict_routing` and `store` reads it back off the row, so the type has to
+//! be reachable from the record — and `config` is downstream of both.
 
 use std::collections::BTreeMap;
 
 use crate::error::{Fault, Refusal};
 use crate::yaml::{self, Table};
-use core_model::StepId;
-
-/// A gate verdict that neither advances the Job nor ends it.
-///
-/// **One value, of the human gate's three.** `approve` advances and `reject`
-/// ends the Job, so neither has anywhere to be routed to — which is why this is
-/// an enum rather than the open string map the schema's JSON looks like. A
-/// second non-terminal verdict widens this and every `match` on it at once.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum GateVerdict {
-    RequestChanges,
-}
-
-impl GateVerdict {
-    /// The word the file writes.
-    pub fn as_wire(self) -> &'static str {
-        match self {
-            GateVerdict::RequestChanges => "request_changes",
-        }
-    }
-}
+use core_model::{GateVerdict, StepId};
 
 const VERDICT_CARRIED: &[(&str, GateVerdict)] = &[("request_changes", GateVerdict::RequestChanges)];
 const VERDICT_KEYS: &[&str] = &["request_changes"];

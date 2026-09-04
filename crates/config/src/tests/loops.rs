@@ -8,10 +8,11 @@
 //! is where that stays visible, because collapsing them would make every
 //! refusal read as a milestone that has not arrived.
 
-use core_model::StepId;
+use core_model::{GateVerdict, StepId};
 
 use crate::error::{BadReturn, Fault, LoadError};
-use crate::loops::GateVerdict;
+use crate::manifest::Manifest;
+use crate::resolve::ResolvedWorkflow;
 use crate::tests::{fault_at, named, refusals, roster};
 use crate::workflow::{Structure, WorkflowDef};
 
@@ -29,6 +30,13 @@ const DESIGN_PLAN: &str = "
       request_changes: draft
     iteration_cap: 5
 ";
+
+/// A Manifest with no Checks, which is all these steps need — none of them
+/// names one, and the cross-file question is not what this file is about.
+fn plain_manifest() -> Manifest {
+    Manifest::parse(&named("armada.yml"), "version: 1\nid: armada\nchecks: {}\n")
+        .expect("a manifest declaring no checks")
+}
 
 fn parsed(structure: &str, steps: &str) -> Result<WorkflowDef, LoadError> {
     WorkflowDef::parse(
@@ -406,4 +414,62 @@ fn a_target_that_is_strictly_earlier_is_the_only_one_that_loads() {
             .get(&GateVerdict::RequestChanges),
         Some(&StepId::new("draft".to_string()))
     );
+}
+
+/// **Parsing is not resolving**, and the keys were carried to the first and no
+/// further for one wave. This is the assertion that the pair reaches the record
+/// a Job freezes — where `fleet` reads it, and where `store` writes it down.
+#[test]
+fn the_loop_reaches_the_resolved_step_a_job_freezes() {
+    let def = parsed("loop", DESIGN_PLAN).expect("the design loop");
+    let manifest = plain_manifest();
+    let resolved = ResolvedWorkflow::resolve(&def, &manifest).expect("no step names a check");
+
+    let present = &resolved.steps()[1];
+    assert_eq!(
+        present.routes(GateVerdict::RequestChanges),
+        Some(&StepId::new("draft"))
+    );
+    assert_eq!(present.iteration_cap(), 5);
+
+    let draft = &resolved.steps()[0];
+    assert!(
+        !draft.closes_a_loop(),
+        "the step the loop returns to closes none of its own"
+    );
+    assert_eq!(
+        draft.iteration_cap(),
+        0,
+        "and its cap is the zero every step of every linear workflow carries"
+    );
+}
+
+/// The fail-closed default, where the file declares a route and no bound. The
+/// step permits no return at all rather than an unbounded one, which is the
+/// direction `ResolvedStep::looping` argues for: a Job that never terminates is
+/// the failure `structure` exists to catch.
+#[test]
+fn a_route_with_no_cap_freezes_as_a_loop_that_may_not_go_round() {
+    let def = parsed(
+        "loop",
+        "
+  - id: draft
+    label: Draft
+    evidence_type: document
+    advance_gate: auto
+  - id: present
+    label: Present
+    evidence_type: document
+    advance_gate: human_always
+    verdict_routing:
+      request_changes: draft
+",
+    )
+    .expect("a cap is not required to declare a route");
+    let manifest = plain_manifest();
+    let resolved = ResolvedWorkflow::resolve(&def, &manifest).expect("no step names a check");
+
+    let present = &resolved.steps()[1];
+    assert!(present.closes_a_loop());
+    assert_eq!(present.iteration_cap(), 0);
 }
