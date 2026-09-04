@@ -72,6 +72,14 @@ pub enum Moved {
         /// Why the step stopped, on the one move that stops it. The column pair
         /// is the same one a Job row's reason uses.
         why: Option<StepLevelTrigger>,
+        /// Which step routed a verdict back here, on the one move that is a
+        /// loop return. `None` on every other, and therefore on every row of
+        /// every linear workflow.
+        ///
+        /// **The step being redone is `step_id` and this is the step that sent
+        /// it back**; `store::step_iteration` counts by this one, because
+        /// `iteration_count` is the emitting step's.
+        returned_by: Option<StepId>,
     },
     /// A Drone arrived on a step of the Job or left it, and neither the Job
     /// nor the step moved. The pointer this folds to is the step's
@@ -152,7 +160,8 @@ pub(crate) fn replay(created: Job, events: &[RecordedEvent]) -> Result<Job, RowE
                 from,
                 to,
                 why,
-            } => step(&job, event, step_id, *from, *to, *why)?,
+                returned_by,
+            } => step(&job, event, step_id, *from, *to, *why, returned_by.clone())?,
             Moved::Drone {
                 step_id,
                 drone_id,
@@ -176,6 +185,7 @@ fn step(
     from: StepState,
     to: StepState,
     why: Option<StepLevelTrigger>,
+    returned_by: Option<StepId>,
 ) -> Result<Job, RowError> {
     let folded = job.step(step_id).map(|row| row.state());
     if folded != Some(from) {
@@ -190,13 +200,14 @@ fn step(
     // `from` as well as `to`, because the two arrivals at `running` are told
     // apart by where they came from and by nothing else: a loop return carries
     // no trigger to distinguish it the way an override does at `advanced`.
-    let target =
-        StepTarget::arriving_at(from, to, why).ok_or_else(|| RowError::StepStateNotReachable {
+    let target = StepTarget::arriving_at(from, to, why, returned_by).ok_or_else(|| {
+        RowError::StepStateNotReachable {
             job_id: event.job_id.clone(),
             seq: event.seq,
             step_id: step_id.clone(),
             state: to,
-        })?;
+        }
+    })?;
     Ok(job
         .transition_step(step_id, target, event.actor, event.at.clone())
         .map_err(|cause| RowError::IllegalRecordedStepTransition {
@@ -373,7 +384,8 @@ impl Store {
 }
 
 const SELECT_EVENTS: &str = "SELECT seq, job_id, kind, status_from, status_to, reason_kind,
-                             reason_value, step_id, state_from, state_to, drone_id, actor, at
+                             reason_value, step_id, state_from, state_to, returned_by, drone_id,
+                             actor, at
                              FROM job_events WHERE job_id = ?1 ORDER BY seq";
 
 /// One log row, of either kind.
@@ -455,6 +467,11 @@ fn moved(row: &Row<'_>) -> Result<Moved, RowError> {
                         column: "reason_value",
                         detail,
                     })?,
+                // Read as an option and never defaulted: whether it belongs on
+                // this row is `StepTarget::arriving_at`'s to say, and a null
+                // filled in here would be the fold deciding a return was not
+                // one.
+                returned_by: maybe(row, "returned_by")?.map(StepId::new),
             })
         }
         // The `kind` column is the presence, spelled by the domain enum itself,

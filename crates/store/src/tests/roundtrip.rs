@@ -5,9 +5,9 @@
 
 use core_model::{
     Actor, AdvanceGate, Attachment, CheckOutcome, ContextSource, Covers, CriterionId,
-    DeclarePlanAt, DroneId, EvidenceRef, EvidenceType, GamingPattern, Job, JobStatus, JobStep,
-    JudgeVerdict, Judgment, ModelName, PathPattern, Prerequisite, RedirectWaiting, RepoPath,
-    ResolvedCheck, StepCheck, StepEvidence, StepId, Target, Ulid, WriteTargets,
+    DeclarePlanAt, DroneId, EvidenceRef, EvidenceType, GamingPattern, GateVerdict, Job, JobStatus,
+    JobStep, JudgeVerdict, Judgment, ModelName, PathPattern, Prerequisite, RedirectWaiting,
+    RepoPath, ResolvedCheck, StepCheck, StepEvidence, StepId, Target, Ulid, WriteTargets,
 };
 
 use crate::tests::{created_at, job_id, open, sub_dispatched, top_level, TempDir};
@@ -439,6 +439,24 @@ fn the_frozen_workflow_comes_back_with_every_check_its_steps_declared() {
 
     let fix = workflow.step(&StepId::new("fix")).expect("the gated step");
     assert_eq!(fix.label(), "Fix");
+    // **The loop, as the pair it is frozen as.** A cap that came back without
+    // its routing is a step that stops on a return nothing asked for, and a
+    // routing that came back without its cap is a step that never returns at
+    // all — which is why `ResolvedStep::looping` takes both and this asserts
+    // both.
+    assert_eq!(
+        fix.routes(GateVerdict::RequestChanges),
+        Some(&StepId::new("reproduce"))
+    );
+    assert_eq!(fix.iteration_cap(), 5);
+    let reproduce = workflow
+        .step(&StepId::new("reproduce"))
+        .expect("the first step");
+    assert!(
+        !reproduce.closes_a_loop(),
+        "and a step that closes none comes back closing none"
+    );
+    assert_eq!(reproduce.iteration_cap(), 0);
     assert_eq!(
         fix.checks(),
         &[

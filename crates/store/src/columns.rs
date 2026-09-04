@@ -23,13 +23,16 @@
 //! would turn a Job written by a version that did not have the field into a Job
 //! quietly missing it, which is the failure the version number exists for.
 
+use std::collections::BTreeMap;
+
 use core_model::{
     AcceptanceCriterion, Actor, AdvanceGate, ContextSource, Covers, CriteriaOwed, CriterionId,
     CriterionSource, DeclarePlanAt, DependencyDirection, DependencyEdge, EscalationTrigger,
-    EvidenceRef, EvidenceScope, EvidenceType, FrozenWorkflow, GamingCheck, GamingPattern, JobId,
-    JudgeCheck, JudgeCriterion, ModelName, PathPattern, PilotReason, Prerequisite, RepoPath,
-    ResolvedCheck, ResolvedStep, ScopeRevision, ScopeRevisionOutcome, StepId, Timestamp,
-    TransitionReason, Ulid, WorkflowId, ARTIFACT_EXISTS, DIFF_NONEMPTY, MANIFEST_CHECK,
+    EvidenceRef, EvidenceScope, EvidenceType, FrozenWorkflow, GamingCheck, GamingPattern,
+    GateVerdict, JobId, JudgeCheck, JudgeCriterion, ModelName, PathPattern, PilotReason,
+    Prerequisite, RepoPath, ResolvedCheck, ResolvedStep, ScopeRevision, ScopeRevisionOutcome,
+    StepId, Timestamp, TransitionReason, Ulid, WorkflowId, ARTIFACT_EXISTS, DIFF_NONEMPTY,
+    MANIFEST_CHECK,
 };
 use serde_json::{json, Map, Value};
 
@@ -293,6 +296,20 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
             "evidence_type": step.evidence_type().map(|kind| kind.as_wire()),
             "advance_gate": step.advance_gate().as_wire(),
             "retry_limit": step.retry_limit(),
+            // The loop, written as the pair it is read as. Absent rather than
+            // an empty object where the step closes no loop, which is every
+            // step of every linear workflow and every row frozen before the
+            // keys existed — and `iteration_cap` rides with it, because a cap
+            // beside no routing is the half-statement `config` refuses in the
+            // file and `ResolvedStep::looping` refuses in the value.
+            "verdict_routing": step.closes_a_loop().then(|| {
+                step.verdict_routing().iter()
+                    .map(|(verdict, target)| {
+                        (verdict.as_wire().to_string(), Value::from(target.as_str()))
+                    })
+                    .collect::<Map<String, Value>>()
+            }),
+            "iteration_cap": step.closes_a_loop().then(|| step.iteration_cap()),
             // Null where the step named none, which is the ordinary shape and
             // the shape of every row written before a step could name one. It
             // is not backfilled with the Job's: absent is the step deferring,
@@ -400,7 +417,59 @@ fn read_step(entry: &Map<String, Value>) -> Result<ResolvedStep, Malformed> {
         read_retry_limit(entry)?,
         read_step_model(entry)?,
     )
-    .dispatching(read_may_dispatch_jobs(entry)?))
+    .dispatching(read_may_dispatch_jobs(entry)?)
+    .looping(read_verdict_routing(entry)?, read_iteration_cap(entry)?))
+}
+
+/// Where the step's gate verdicts route. **Absent and null both read as no
+/// loop**, which is every step of every linear workflow and every row frozen
+/// before the keys existed.
+///
+/// A verdict this build does not have is a refusal rather than a route
+/// dropped: a Job frozen with a loop that quietly came back linear would
+/// advance past a gate the workflow said routes backwards, and nothing would
+/// say so. A target is not checked against the step list here — `config`
+/// refused a route naming no step, naming itself or pointing ahead where the
+/// definition was parsed, and re-deciding it against a frozen record would be
+/// a second reading of a rule that already ran.
+fn read_verdict_routing(
+    entry: &Map<String, Value>,
+) -> Result<BTreeMap<GateVerdict, StepId>, Malformed> {
+    let routing = match entry.get("verdict_routing") {
+        None | Some(Value::Null) => return Ok(BTreeMap::new()),
+        Some(Value::Object(routing)) => routing,
+        Some(other) => return Err(format!("`verdict_routing` is {}", kind(other))),
+    };
+    let mut read = BTreeMap::new();
+    for (word, target) in routing {
+        let verdict = GateVerdict::from_wire(word)
+            .ok_or_else(|| format!("`verdict_routing` holds the verdict `{word}`"))?;
+        let Value::String(target) = target else {
+            return Err(format!("`verdict_routing.{word}` is {}", kind(target)));
+        };
+        read.insert(verdict, StepId::new(target));
+    }
+    Ok(read)
+}
+
+/// How many passes the step's loop declared. **Absent and null both read as
+/// zero**, which is the fail-closed default `ResolvedStep::looping` states: a
+/// loop that was wired and not capped stops on its first return and says so.
+///
+/// A value that is there and is not a count is a refusal rather than a zero,
+/// for [`read_retry_limit`]'s reason — a Job frozen with a cap must not lose it
+/// quietly, because losing it is a Job that stops on a draft it was entitled to
+/// redo.
+fn read_iteration_cap(entry: &Map<String, Value>) -> Result<u32, Malformed> {
+    match entry.get("iteration_cap") {
+        None | Some(Value::Null) => Ok(0),
+        Some(Value::Number(found)) => found
+            .as_u64()
+            .filter(|n| *n <= u64::from(u32::MAX))
+            .and_then(|n| u32::try_from(n).ok())
+            .ok_or_else(|| format!("`iteration_cap` holds `{found}`")),
+        Some(other) => Err(format!("`iteration_cap` is {}", kind(other))),
+    }
 }
 
 /// What the step asked to be run as. **Absent and null both read as none**,

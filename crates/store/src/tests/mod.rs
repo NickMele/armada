@@ -30,13 +30,15 @@ mod roundtrip;
 mod spend;
 mod tmp;
 
+use std::collections::BTreeMap;
+
 use core_model::{
     AcceptanceCriterion, Actor, AdvanceGate, Attachment, ContextSource, Covers, CriterionId,
     CriterionSource, DeclarePlanAt, DependencyDirection, DependencyEdge, DispatchOrigin,
     EvidenceRef, EvidenceScope, EvidenceType, Facts, FrozenWorkflow, GamingCheck, GamingPattern,
-    GateManifest, GateOutcome, Job, JobId, JudgeCheck, JudgeCriterion, ManifestId, ModelName,
-    NewJob, NotRunReason, PathPattern, Prerequisite, RepoPath, ResolvedCheck, ResolvedStep,
-    ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, Subject, Timestamp, Title,
+    GateManifest, GateOutcome, GateVerdict, Job, JobId, JudgeCheck, JudgeCriterion, ManifestId,
+    ModelName, NewJob, NotRunReason, PathPattern, Prerequisite, RepoPath, ResolvedCheck,
+    ResolvedStep, ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, Subject, Timestamp, Title,
     TopLevelOrigin, Ulid, Urgency, WorkflowId, WriteTargets,
 };
 
@@ -157,6 +159,15 @@ pub fn workflow() -> FrozenWorkflow {
                 // — and a column that lost the difference would silently spawn
                 // every step on the Job's model again.
                 Some(ModelName::new("the-steps-own-model").expect("a model name")),
+            )
+            // Carried on the shared fixture for `when`'s reason: one step
+            // closes a loop and one closes none, so every round trip in this
+            // crate walks the pair and its absence. A frozen loop that came
+            // back empty is a Job whose gate advances past a verdict the
+            // workflow said routes backwards, and nothing would say so.
+            .looping(
+                BTreeMap::from([(GateVerdict::RequestChanges, StepId::new("reproduce"))]),
+                5,
             ),
         ],
     )

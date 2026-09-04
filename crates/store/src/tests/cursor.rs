@@ -225,6 +225,7 @@ fn the_log_holds_both_machines_in_one_order() {
             from: StepState::NotStarted,
             to: StepState::Running,
             why: None,
+            returned_by: None,
         }
     );
     assert_eq!(
