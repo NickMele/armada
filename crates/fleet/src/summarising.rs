@@ -1,9 +1,9 @@
 //! What a Job looks like as a Board row, and why one that is queued has not
 //! started.
 //!
-//! **Split from the trait impl, not from a line count.** `serving` is the
-//! operations — one method per row of the inventory, each answering what a
-//! caller asked. These are what several of those methods need in common, and
+//! **Split from the trait impls, not from a line count.** `serving` and
+//! `commanding` are the operations — one method per row of the inventory, each
+//! answering what a caller asked. These are what several of them need, and
 //! neither is an operation: `summarised` is called on every Job in a list, and
 //! `queued_reason` is a read of the whole board taken to answer about one row.
 //!

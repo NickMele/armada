@@ -487,7 +487,7 @@ async fn a_job_with_no_transcript_at_all_answers_with_nothing() {
 /// watched, and the rows the Drone is producing reach the viewer.
 #[tokio::test]
 async fn a_running_drone_can_be_watched_and_a_finished_one_leaves_its_history() {
-    use api::Daemon;
+    use api::Queries;
 
     let home = TempDir::new();
     let fleet = crate::tests::daemon::a_fleet(&home, FakeWorkProduct::untouched());

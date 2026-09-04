@@ -20,7 +20,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use api::Daemon;
+use api::Queries;
 use testkit::FakeWorkProduct;
 
 use crate::daemon::{Fittings, Fleet};

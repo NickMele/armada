@@ -14,7 +14,7 @@ use axum::response::Response;
 use ipc::{JobId, Missed, Resync, StreamMessage, PROTOCOL_VERSION};
 
 use crate::answers::refused;
-use crate::daemon::Daemon;
+use crate::daemon::Queries;
 use crate::routes::Served;
 use crate::stream::Next;
 
@@ -26,7 +26,7 @@ use crate::stream::Next;
 /// a 404 the caller reads at the moment they asked rather than a socket that
 /// opens and says nothing. What comes back already holds the subscription and
 /// the history, in that order.
-pub(crate) async fn observe_job<D: Daemon>(
+pub(crate) async fn observe_job<D: Queries>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
     upgrade: WebSocketUpgrade,
@@ -43,14 +43,14 @@ pub(crate) async fn observe_job<D: Daemon>(
 /// Nothing is read from the socket. The stream is one-directional by design:
 /// there is no subscribe message to read, and a connection that carried state
 /// would be a connection that is expensive to drop and remake.
-pub(crate) async fn events<D: Daemon>(
+pub(crate) async fn events<D: Queries>(
     State(served): State<Served<D>>,
     upgrade: WebSocketUpgrade,
 ) -> Response {
     upgrade.on_upgrade(move |socket| watch(socket, served))
 }
 
-async fn watch<D: Daemon>(mut socket: WebSocket, served: Served<D>) {
+async fn watch<D: Queries>(mut socket: WebSocket, served: Served<D>) {
     // Subscribe first, then snapshot. The other order drops whatever lands in
     // between; this order can only repeat, and a repeat is detectable.
     let mut subscription = served.events().subscribe();
@@ -79,7 +79,7 @@ async fn watch<D: Daemon>(mut socket: WebSocket, served: Served<D>) {
 /// A daemon that cannot answer closes the socket rather than sending a partial
 /// snapshot: there is no error message on this stream, and a client that
 /// reconnects gets a whole answer or none.
-async fn resync<D: Daemon>(socket: &mut WebSocket, served: &Served<D>) -> bool {
+async fn resync<D: Queries>(socket: &mut WebSocket, served: &Served<D>) -> bool {
     let cursor = served.events().cursor();
     let Ok(jobs) = served.daemon().list_jobs().await else {
         return false;

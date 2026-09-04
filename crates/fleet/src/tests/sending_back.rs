@@ -385,7 +385,7 @@ async fn a_note_waiting_behind_a_busy_fleet_is_on_the_wire_until_it_is_delivered
 /// One Job, as `GET /jobs/:job_id` serves it. The wire answer and not the
 /// record, because what `#212` is about is the difference between the two.
 async fn detail(fleet: &Fixture, job: &core_model::JobId) -> ipc::JobDetail {
-    api::Daemon::get_job(fleet, ipc::JobId::from(job))
+    api::Queries::get_job(fleet, ipc::JobId::from(job))
         .await
         .expect("a Job that exists")
 }

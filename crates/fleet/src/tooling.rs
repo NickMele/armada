@@ -1,4 +1,4 @@
-//! The tools a Drone calls, served over a real Fleet.
+//! `api::Tools`, implemented over a real Fleet: the tools a Drone calls.
 //!
 //! **These are not operations.** `crates/ipc/operations.toml` is the authority
 //! on the operation set and holds no row for any of them — they come off the
@@ -15,10 +15,19 @@
 //! **Each one converts and maps, and decides nothing.** The binding — which
 //! Job, which step, whether the caller was allowed to ask — is made under the
 //! slot lock by the `Fleet` method each of these calls.
+//!
+//! **These were six delegating signatures until #434.** Moving the bodies here
+//! left the trait's own methods behind in `serving`, forwarding a call each.
+//! `api::Tools` is a whole trait, so this is the whole implementation and there
+//! is nothing to forward — which is why each carries the tool's own name rather
+//! than a private one invented to dodge a clash: `Fleet::ask_question` and the
+//! rest are inherent, and inherent is what a `Fleet::` path resolves to.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
+use api::Tools;
 use ipc::mcp::{
-    CheckReport, DeclareScope, DispatchJob, NotRecorded, Receipt, RequestScope, SubmitEvidence,
+    AskQuestion, CheckReport, DeclareScope, DispatchJob, NotRecorded, Receipt, RequestScope,
+    SubmitEvidence,
 };
 
 use crate::daemon::Fleet;
@@ -45,16 +54,27 @@ where
             because: why.to_string(),
         })
     }
+}
 
+impl<H, V, W> Tools for Fleet<H, V, W>
+where
+    H: AgentHarness + Send + Sync + 'static,
+    H::Error: std::error::Error + Send + Sync + 'static,
+    V: Vcs + Delivery + Send + Sync + 'static,
+    V::Error: std::error::Error + Send + Sync + 'static,
+    V::CommitError: std::error::Error + Send + Sync + 'static,
+    W: WorkProduct + Send + Sync + 'static,
+    W::Error: std::error::Error + Send + Sync + 'static,
+{
     /// The working Drone asking a person something it cannot answer from the
     /// repository. Binding and refusals are `Fleet::ask_question`'s, under the
     /// slot lock. **The receipt says taken, never answered**: what a person
     /// chose arrives as a later turn, which is why this does not block — see
     /// `crate::questioning`.
-    pub(crate) async fn asked(
+    async fn ask_question(
         &self,
         caller: api::Caller,
-        asking: ipc::mcp::AskQuestion,
+        asking: AskQuestion,
     ) -> Result<Receipt, NotRecorded> {
         let job = self.placed(&caller)?;
         Fleet::ask_question(self, &job, asking).await?;
@@ -68,7 +88,7 @@ where
     /// The binding — which Job, which step, which evidence type — is
     /// `Fleet::record_evidence`'s, under the lock that makes it a single
     /// decision.
-    pub(crate) async fn submitted(
+    async fn submit_evidence(
         &self,
         caller: api::Caller,
         submission: SubmitEvidence,
@@ -86,7 +106,7 @@ where
     /// which Job, which step — is `Fleet::declare_scope`'s, under the slot
     /// lock, and a refusal comes back through the tool so a Drone can read it
     /// and declare again.
-    pub(crate) async fn declared(
+    async fn declare_scope(
         &self,
         caller: api::Caller,
         declaration: DeclareScope,
@@ -101,7 +121,7 @@ where
     /// The working Drone asking the task's own scope to grow. Held open while
     /// a Judge call runs, and **every outcome comes back through the tool** —
     /// a Drone told nothing writes the file anyway.
-    pub(crate) async fn widened(
+    async fn request_scope(
         &self,
         caller: api::Caller,
         request: RequestScope,
@@ -119,7 +139,7 @@ where
     ///
     /// **What comes back is a report and never a verdict.** The step is exactly
     /// where it was when the call arrived, whatever the Checks said.
-    pub(crate) async fn checked(&self, caller: api::Caller) -> Result<CheckReport, NotRecorded> {
+    async fn run_checks(&self, caller: api::Caller) -> Result<CheckReport, NotRecorded> {
         let job = self.placed(&caller)?;
         Ok(Fleet::run_checks(self, &job).await?)
     }
@@ -130,7 +150,7 @@ where
     /// about the Job the call was made on, and this one answers with the id of
     /// a record that did not exist a moment ago. `crate::sub_dispatch` holds
     /// whether the caller was allowed to ask.
-    pub(crate) async fn dispatched(
+    async fn dispatch_job(
         &self,
         caller: api::Caller,
         dispatch: DispatchJob,

@@ -21,7 +21,7 @@
 //! the edge over refusing the act while the cap is spent, so a person is told
 //! the Job is waiting and not told to press the button again later.
 
-use api::Daemon;
+use api::Queries;
 use core_model::{
     Actor, EscalationTrigger, JobId, JobStatus, StepId, StepLevelTrigger, StepState, StepTarget,
     Target,

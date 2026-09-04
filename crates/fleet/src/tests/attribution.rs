@@ -22,7 +22,7 @@
 use std::sync::Arc;
 
 use adapter_traits::Change;
-use api::Daemon;
+use api::Queries;
 use ipc::mcp::DeclareScope;
 use testkit::{FakeWorkProduct, Scoped};
 

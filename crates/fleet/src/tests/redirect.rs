@@ -486,7 +486,7 @@ async fn a_redirect_with_no_drone_answers_409_over_the_wire() {
     let job = stalled(&fleet, &home).await;
     until_reaped(&fleet).await;
 
-    let refusal = api::Daemon::redirect_drone(
+    let refusal = api::Commands::redirect_drone(
         &fleet,
         ipc::JobId::from(&job),
         ipc::Redirection {
@@ -509,7 +509,7 @@ async fn a_restart_with_the_drone_still_there_answers_409_over_the_wire() {
     let fleet = a_fleet_with(&home, a_drone_that_answers());
     let job = refused(&fleet, &home).await;
 
-    let refusal = api::Daemon::restart_step(&fleet, ipc::JobId::from(&job), None)
+    let refusal = api::Commands::restart_step(&fleet, ipc::JobId::from(&job), None)
         .await
         .expect_err("the Drone `refused` left in the slot is still there");
 
@@ -819,7 +819,7 @@ async fn a_redirect_onto_a_stopped_step_starts_the_step_clock_again() {
 /// One Job, as `GET /jobs/:job_id` serves it. The wire answer and not the
 /// record, because the wait is on the first and in the second is nowhere.
 async fn detail(fleet: &Fixture, job: &JobId) -> ipc::JobDetail {
-    api::Daemon::get_job(fleet, ipc::JobId::from(job))
+    api::Queries::get_job(fleet, ipc::JobId::from(job))
         .await
         .expect("a Job that exists")
 }
