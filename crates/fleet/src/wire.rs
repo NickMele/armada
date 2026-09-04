@@ -327,33 +327,24 @@ fn narrowed(events: &[RecordedEvent]) -> Vec<StepMove> {
 
 /// What Fleet knows about a Job's steps beyond the `job_steps` rows.
 ///
-/// **The declaration comes from the Job's own frozen workflow**, which is
-/// also what the gate runs — so what a person is shown and what actually
-/// gates the step are one value rather than two that can drift.
+/// **Nothing here is read off the Job.** That row carries the trigger the gate
+/// stopped on and nothing else, so a refusal's citation and a gaming finding's
+/// pattern arrive as `judged` and `flagged` read from the store beside `ran`.
+/// The declaration comes from the workflow the Job froze, which is also what
+/// the gate runs, so what a person is shown cannot drift from what gates the
+/// step.
 ///
-/// `declares` stays an `Option` and is now absent only where the frozen
-/// workflow does not declare the step at all. That cannot happen through
-/// this crate, since the `job_steps` rows are seeded from those steps; it is
-/// kept because "Fleet cannot say" and "the step declares nothing" are
-/// different sentences on the wire and a row written by something else
-/// should not read as the second.
-/// `judged` and `flagged` are read from the store beside `ran` and never
-/// off the Job: the `job_steps` row carries the trigger the gate stopped on
-/// and nothing else, so a refusal's citation and a gaming finding's pattern
-/// — the whole of what an escalated Job has to say — live in their own
-/// tables and arrive here.
+/// **`ran` and `judged` are every attempt's rows, stamped with the attempt**,
+/// which is what tells a retried step's Checks and Judge answers apart by run
+/// rather than merging them into one. `flagged` stays latest-only: the run tree
+/// draws no Flagged fact.
 ///
-/// **`ran` and `judged` are every attempt's rows, not the latest's.** Each
-/// group is stamped with the attempt it belongs to before it crosses, which is
-/// what lets a retried step's Checks and Judge answers be told apart by run
-/// rather than merged into one. `flagged` stays latest-only, on the scope this
-/// change draws deliberately: the run tree draws no Flagged fact today.
+/// `declares` is absent only where the frozen workflow does not declare the
+/// step, which this crate cannot produce — kept because "Fleet cannot say" and
+/// "the step declares nothing" are different sentences on the wire.
 ///
-/// **A free function taking the mark rather than a method taking Fleet.** The
-/// one thing here that is not a row is the Judge call in flight, and that is a
-/// read of one shared value — so the only thing this needs of Fleet is
-/// [`Aloft`], and asking for that rather than for the daemon is what keeps it
-/// in this file. `serving.rs` is the trait impl; its helpers live here.
+/// [`Aloft`] rather than the daemon, because the one thing here that is not a
+/// row is the Judge call in flight.
 pub(crate) fn step_facts(
     aloft: &Aloft,
     repo_root: &str,
