@@ -11,15 +11,17 @@
 //! somebody designed, and deleting it to satisfy the label would have removed
 //! a step rather than corrected one.
 //!
-//! **Every sample is still refused, and that is not the same claim.** M1 carries
-//! `linear` only, so a loop is refused for its structure; the two linear ones
-//! are refused for keys this milestone defers. Refused for a reason a later
-//! milestone removes is different from refused for being wrong, and this file
-//! exists to keep those apart.
+//! **Every sample is still refused, and that is not the same claim.** None of
+//! them is refused for its structure any more — both values are carried — and
+//! every one of them is still short of `label` on every step and still carries
+//! keys this milestone defers. Refused for a reason a later milestone removes
+//! is different from refused for being wrong, and this file exists to keep
+//! those apart.
 
 use std::path::{Path, PathBuf};
 
 use crate::error::{Fault, LoadError, Refusal};
+use crate::tests::refused;
 use crate::workflow::WorkflowDef;
 
 /// Every sample, and whether the audit's finding holds against it.
@@ -42,7 +44,8 @@ enum Verdict {
     LinearWithRouting,
     /// `structure: linear` and no routing edge. Refused for the M1 slice only.
     LinearAndConsistent,
-    /// `structure: loop`, which M1 does not carry. Its routing edge is legal.
+    /// `structure: loop`, carried since #263, with a routing edge that is what
+    /// declares the loop rather than what contradicts the label.
     Loop,
 }
 
@@ -100,21 +103,19 @@ fn no_sample_declares_a_structure_its_own_routing_contradicts() {
 }
 
 #[test]
-fn the_loop_sample_is_refused_for_its_structure_and_not_for_its_routing() {
-    // `design_plan` is the control for the test above: the same
-    // `verdict_routing` that contradicts `linear` is what declares the loop
-    // here, and refusing it as a contradiction would be wrong.
-    let refusals = load("design-plan.json");
-    assert_eq!(
-        refusals
-            .iter()
-            .find(|r| r.key == "structure")
-            .map(|r| &r.fault),
-        Some(&Fault::OutsideM1 {
-            value: "loop".to_string(),
-            carried: &["linear"],
-        })
-    );
+fn no_sample_is_refused_for_its_structure() {
+    // Until #263 this asserted the opposite of itself against one file: that
+    // `design-plan.json` was refused for declaring `loop`. That was the whole
+    // sample-level statement of the deferral, so it is where the deferral ends.
+    // Asked of every sample rather than of the one, because both values are
+    // carried now and there is no sample left that a structure could refuse.
+    for (name, _) in SAMPLES {
+        let refusals = load(name);
+        assert!(
+            !refused(&refusals, "structure"),
+            "{name} is refused for its structure: {refusals:?}"
+        );
+    }
 }
 
 #[test]
