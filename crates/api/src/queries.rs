@@ -16,10 +16,10 @@ use axum::response::Response;
 use ipc::JobId;
 
 use crate::answers::{answer, refused};
-use crate::daemon::Daemon;
+use crate::daemon::Queries;
 use crate::routes::Served;
 
-pub(crate) async fn list_jobs<D: Daemon>(State(served): State<Served<D>>) -> Response {
+pub(crate) async fn list_jobs<D: Queries>(State(served): State<Served<D>>) -> Response {
     match served.daemon().list_jobs().await {
         Ok(jobs) => answer(StatusCode::OK, &jobs, served.run_id()),
         Err(refusal) => refused(refusal),
@@ -31,7 +31,7 @@ pub(crate) async fn list_jobs<D: Daemon>(State(served): State<Served<D>>) -> Res
 /// **Its own route rather than a field on `/jobs`.** That read is a list of
 /// Jobs and is made on every Board refresh; this is three values about Fleet,
 /// asked for by the surface that draws Fleet's state.
-pub(crate) async fn get_capacity<D: Daemon>(State(served): State<Served<D>>) -> Response {
+pub(crate) async fn get_capacity<D: Queries>(State(served): State<Served<D>>) -> Response {
     match served.daemon().get_capacity().await {
         Ok(capacity) => answer(StatusCode::OK, &capacity, served.run_id()),
         Err(refusal) => refused(refusal),
@@ -40,7 +40,7 @@ pub(crate) async fn get_capacity<D: Daemon>(State(served): State<Served<D>>) -> 
 
 /// One Job in full. **The Board row plus what the list redacts** — the steps
 /// and where each got to, the criteria, the branch, the brief.
-pub(crate) async fn get_job<D: Daemon>(
+pub(crate) async fn get_job<D: Queries>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
 ) -> Response {
@@ -57,7 +57,7 @@ pub(crate) async fn get_job<D: Daemon>(
 /// Its own route because a history has no bound and a detail view is fetched to
 /// draw a summary. Nothing here folds: the rows are read and rendered, and
 /// `crates/store/src/fold.rs` stays the only thing that replays them.
-pub(crate) async fn get_job_events<D: Daemon>(
+pub(crate) async fn get_job_events<D: Queries>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
 ) -> Response {
@@ -72,7 +72,7 @@ pub(crate) async fn get_job_events<D: Daemon>(
 ///
 /// Its own route beside the diff rather than folded into it: this is a few
 /// sentences per step and that is however large the work is.
-pub(crate) async fn get_evidence<D: Daemon>(
+pub(crate) async fn get_evidence<D: Queries>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
 ) -> Response {
@@ -85,7 +85,7 @@ pub(crate) async fn get_evidence<D: Daemon>(
 /// One Job's whole patch. **The expensive read, on the one route that asks for
 /// it** — `get_job` is fetched on every open to draw a summary, and the bytes
 /// are what a person reading a diff needs and nothing else does.
-pub(crate) async fn get_diff<D: Daemon>(
+pub(crate) async fn get_diff<D: Queries>(
     State(served): State<Served<D>>,
     Path(job_id): Path<String>,
 ) -> Response {
@@ -111,7 +111,7 @@ pub(crate) async fn get_diff<D: Daemon>(
 /// 404 where the Job is unknown. 422 where the Job is known and nothing in its
 /// transcripts carries that call id — the request is well-formed and the value
 /// in it names nothing, which is a different thing from the Job not existing.
-pub(crate) async fn get_call<D: Daemon>(
+pub(crate) async fn get_call<D: Queries>(
     State(served): State<Served<D>>,
     Path((job_id, call_id)): Path<(String, String)>,
 ) -> Response {
@@ -127,21 +127,21 @@ pub(crate) async fn get_call<D: Daemon>(
 
 /// The workflows a proposal may name. **The set Fleet will accept**, which is
 /// why it is served rather than left to a caller to know.
-pub(crate) async fn list_workflows<D: Daemon>(State(served): State<Served<D>>) -> Response {
+pub(crate) async fn list_workflows<D: Queries>(State(served): State<Served<D>>) -> Response {
     match served.daemon().list_workflows().await {
         Ok(workflows) => answer(StatusCode::OK, &workflows, served.run_id()),
         Err(refusal) => refused(refusal),
     }
 }
 
-pub(crate) async fn list_manifests<D: Daemon>(State(served): State<Served<D>>) -> Response {
+pub(crate) async fn list_manifests<D: Queries>(State(served): State<Served<D>>) -> Response {
     match served.daemon().list_manifests().await {
         Ok(manifests) => answer(StatusCode::OK, &manifests, served.run_id()),
         Err(refusal) => refused(refusal),
     }
 }
 
-pub(crate) async fn list_models<D: Daemon>(State(served): State<Served<D>>) -> Response {
+pub(crate) async fn list_models<D: Queries>(State(served): State<Served<D>>) -> Response {
     match served.daemon().list_models().await {
         Ok(models) => answer(StatusCode::OK, &models, served.run_id()),
         Err(refusal) => refused(refusal),
@@ -153,7 +153,7 @@ pub(crate) async fn list_models<D: Daemon>(State(served): State<Served<D>>) -> R
 /// **Not under `/jobs`**, and that is the shape of the claim: a report survives
 /// `armada clean` taking its Job away, so it is a record of its own rather than
 /// a row beneath one.
-pub(crate) async fn list_reports<D: Daemon>(State(served): State<Served<D>>) -> Response {
+pub(crate) async fn list_reports<D: Queries>(State(served): State<Served<D>>) -> Response {
     match served.daemon().list_reports().await {
         Ok(reports) => answer(StatusCode::OK, &reports, served.run_id()),
         Err(refusal) => refused(refusal),
@@ -167,7 +167,7 @@ pub(crate) async fn list_reports<D: Daemon>(State(served): State<Served<D>>) -> 
 ///
 /// A piloted Job's worktree is not in the answer. Fleet drops it — `#367` — so
 /// there is nothing here to filter and nothing a client could show by mistake.
-pub(crate) async fn list_worktrees<D: Daemon>(State(served): State<Served<D>>) -> Response {
+pub(crate) async fn list_worktrees<D: Queries>(State(served): State<Served<D>>) -> Response {
     match served.daemon().list_worktrees().await {
         Ok(held) => answer(StatusCode::OK, &held, served.run_id()),
         Err(refusal) => refused(refusal),

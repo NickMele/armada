@@ -47,12 +47,13 @@ mod tests;
 pub use answered::{Answered, Printed};
 pub use converging::{Convergence, ConvergenceBrief, NotConverging};
 pub use drift::{drift_criterion, DECLARED_PLAN_DRIFT};
-pub use forbidden::{forbidden, forbidden_among, Forbidden};
+pub use forbidden::{forbidden, forbidden_among, out_of_bounds, Forbidden};
 pub use gaming::{in_the_diff, judged_patterns, Baseline, Flagged, GamingBrief};
 pub use gate::{decide, Accepted, NotWhatTheStepAsked, Verdict};
 pub use judge::{field, Brief, Refusals, Unreadable};
 pub use mechanical::{
     Artifact, CheckFailed, ChecksOutstanding, Exit, NeverRan, Observed, Ran, EVIDENCE_SCOPE,
+    OUT_OF_BOUNDS,
 };
 pub use outcome::{OutcomeTurn, TheBaseMoved, Verified};
 pub use product::{

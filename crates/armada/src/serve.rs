@@ -39,6 +39,7 @@ use fleet::{
 use ipc::PROTOCOL_VERSION;
 use store::Store;
 
+use crate::watching;
 use crate::{
     agent_binary, judge_model, model_choices, proposer_model, Setup, AGENT_BINARY, JUDGE_MODEL,
     MODEL, PROPOSER_MODEL,
@@ -385,7 +386,31 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     // Two things need this Fleet and both get it. The router serves it and the
     // loop below turns it; a Fleet only one of them could hold would be either
     // unserved or — as it was — dispatched and never settled.
-    let fleet = Arc::new(assemble(&machine, setup, bound.port(), machine_facts)?);
+    let Assembled { fleet, reloads } = assemble(&machine, setup, bound.port(), machine_facts)?;
+    let fleet = Arc::new(fleet);
+
+    // **Started before anything is dispatched**, so an edit made while the
+    // reconciliation runs is in force at the first step boundary after it. A
+    // watch that will not start is carried out and Fleet serves anyway: the
+    // Manifest that was read is still the one in force, which is exactly where
+    // this was before `#430`.
+    let manifest_file = reloads.path().to_path_buf();
+    let _watching = match watching::watch(reloads, {
+        let file = manifest_file.clone();
+        move |read| watching::say(read, &file)
+    }) {
+        Ok(watching) => {
+            println!("watching {} for edits", manifest_file.display());
+            Some(watching)
+        }
+        Err(why) => {
+            eprintln!(
+                "{} will not be watched, so an edit to it needs a restart: {why}",
+                manifest_file.display()
+            );
+            None
+        }
+    };
 
     // **Nothing runs until this has.** A Job the store says was running is
     // asked about: a Drone is spawned into a session of its own, so it outlives
@@ -521,12 +546,23 @@ fn machine_facts() -> Result<MachineFacts, Box<dyn Error>> {
 /// resolved at this one point and handed down. Nothing below reads its own
 /// inputs from the process — which is what lets `fleet` be driven by a test
 /// that plants a fixed instant and a countable id.
+/// A Fleet, and the one handle that may re-read the Manifest it holds.
+///
+/// **Two things and not one**, because they go to different places: the Fleet
+/// is shared with the router and the turn loop, and the reload handle goes to
+/// the watch and nowhere else. Fleet is never given a way to move its own
+/// configuration — see `config::live`.
+struct Assembled {
+    fleet: Fleet<HeadlessAgent, GitVcs, GitVcs>,
+    reloads: config::Reloads,
+}
+
 fn assemble(
     machine: &std::path::Path,
     setup: Setup,
     port: u16,
     facts: MachineFacts,
-) -> Result<Fleet<HeadlessAgent, GitVcs, GitVcs>, Box<dyn Error>> {
+) -> Result<Assembled, Box<dyn Error>> {
     let MachineFacts {
         home,
         user,
@@ -554,7 +590,7 @@ fn assemble(
     )?;
 
     let root = setup.root().to_path_buf();
-    let (manifest, workflows) = setup.into_parts();
+    let (manifest, workflows, reloads) = setup.into_parts();
     // The Judge runs the program the Drone runs, so a machine that named one
     // through the override names both — a second variable would let the two
     // disagree about which binary is installed.
@@ -568,7 +604,7 @@ fn assemble(
     // worktree is cut beneath it, so it is the disk that actually fills.
     let repo_root = root.canonicalize()?.to_string_lossy().to_string();
 
-    Ok(Fleet::assembled(Fittings {
+    let fleet = Fleet::assembled(Fittings {
         store: Store::open(&machine.join(STORE_FILE))?,
         harness: agent,
         vcs: GitVcs::new(),
@@ -619,7 +655,8 @@ fn assemble(
         links: Arc::new(IssueLookup),
         models,
         events: api::Broadcaster::new(),
-    }))
+    });
+    Ok(Assembled { fleet, reloads })
 }
 
 /// The two per-user directories on a Drone's `PATH`, before the system ones.

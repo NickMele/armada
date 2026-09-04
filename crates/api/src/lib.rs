@@ -3,11 +3,12 @@
 //! **This crate does not depend on `fleet`**, which is what makes the daemon
 //! core drivable in tests with zero network. The two run as one process and
 //! talk over an in-process channel; the seam is real even though the process
-//! boundary is not. [`Daemon`] is stated here and implemented in `fleet`, so
-//! the dependency points one way and `cargo tree -p api` names no `fleet`. The
-//! trait speaks `ipc` DTOs and nothing else: **no `core_model` type appears
-//! anywhere in this crate**, so there is no shape here through which a domain
-//! field could reach the wire unredacted.
+//! boundary is not. [`Queries`], [`Commands`] and [`Tools`] are stated here and
+//! implemented in `fleet`, so the dependency points one way and
+//! `cargo tree -p api` names no `fleet`; [`Daemon`] is the three together and
+//! the bound [`router`] takes. They speak `ipc` DTOs and nothing else: **no
+//! `core_model` type appears anywhere in this crate**, so there is no shape
+//! here through which a domain field could reach the wire unredacted.
 //!
 //! **axum, with its built-in WebSocket upgrade as an extractor in the same
 //! router**, so there is no second port and no assembly step. gRPC and `tonic`
@@ -39,7 +40,7 @@ mod stream;
 #[cfg(test)]
 mod tests;
 
-pub use daemon::{Daemon, Refusal};
+pub use daemon::{Commands, Daemon, Queries, Refusal, Tools};
 pub use journal::{Journal, Reading, FOLLOW};
 pub use mcp::{Caller, MCP_PATH};
 pub use observing::{Feed, Observed, Seen, Turns, Watch, WATCHING};

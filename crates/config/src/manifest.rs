@@ -31,6 +31,7 @@ use core_model::{Covers, ManifestId, PathPattern, Prerequisite, Ulid};
 use serde_yaml_ng::Value;
 
 use crate::error::{Fault, LoadError, Refusal};
+use crate::live::{Cell, Patience, Reloads};
 use crate::yaml::{self, Table};
 
 /// The keys M1 reads at the top level of an `armada.yml`.
@@ -161,8 +162,9 @@ pub struct Manifest {
     checks: BTreeMap<String, Check>,
     commands: BTreeMap<String, Command>,
     prepared_by: Vec<Preparation>,
-    quiet_after_seconds: Option<u32>,
-    poke_limit: Option<u32>,
+    /// The two `lifetime = "Live"` keys, behind a cell every clone shares.
+    /// See [`crate::live`] for why these and not the whole file.
+    live: Cell,
 }
 
 impl Manifest {
@@ -173,6 +175,18 @@ impl Manifest {
             cause,
         })?;
         Manifest::parse(path, &text)
+    }
+
+    /// Read it, and hand back the one handle that may re-read it.
+    ///
+    /// **The only way to get a [`Reloads`].** A Manifest from
+    /// [`load`](Manifest::load) or [`parse`](Manifest::parse) is one nothing
+    /// can move, which is what keeps the writer with whoever opened the file
+    /// rather than with everyone holding the value.
+    pub fn reloadable(path: &Path) -> Result<(Manifest, Reloads), LoadError> {
+        let manifest = Manifest::load(path)?;
+        let reloads = Reloads::of(path.to_path_buf(), manifest.live.clone(), &manifest);
+        Ok((manifest, reloads))
     }
 
     /// Validate an `armada.yml` already in hand.
@@ -277,8 +291,11 @@ impl Manifest {
     /// repository whose Drones are quiet the instant they are spawned is a
     /// sentence nobody means. [`poke_limit`](Manifest::poke_limit) disagrees
     /// about zero, and is right to.
+    /// **Read through the live cell, so an `armada.yml` saved under a running
+    /// Fleet is answered here.** `#430`. The read is one uncontended lock over
+    /// two integers and happens at a step boundary, never inside a step.
     pub fn quiet_after_seconds(&self) -> Option<u32> {
-        self.quiet_after_seconds
+        self.live.read().quiet_after_seconds
     }
 
     /// How many nudges a quiet Drone gets in this repository before the Job
@@ -293,8 +310,15 @@ impl Manifest {
     /// Drone in this repository gets no nudge at all and the first silence past
     /// the threshold escalates — legitimate where a poke costs a model run and
     /// buys nothing.
+    /// Read through the live cell, for
+    /// [`quiet_after_seconds`](Manifest::quiet_after_seconds)'s reason.
     pub fn poke_limit(&self) -> Option<u32> {
-        self.poke_limit
+        self.live.read().poke_limit
+    }
+
+    /// Both live keys at once, for the one caller that adopts them together.
+    pub(crate) fn patience(&self) -> Patience {
+        self.live.read()
     }
 }
 
@@ -358,8 +382,10 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         checks,
         commands,
         prepared_by,
-        quiet_after_seconds,
-        poke_limit,
+        live: Cell::holding(Patience {
+            quiet_after_seconds,
+            poke_limit,
+        }),
     })
 }
 

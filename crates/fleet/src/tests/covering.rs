@@ -181,11 +181,14 @@ async fn a_rename_out_of_a_covered_directory_still_runs_the_check() {
 }
 
 #[tokio::test]
-async fn a_step_whose_checks_declare_no_paths_never_reads_the_diff_for_one() {
-    // The cold-by-default half. `workflow` declares no `when` anywhere, so the
-    // gate asks for a file list only where `diff_nonempty` or an evidence scope
-    // wants one — and neither does here. What it reads is the footprint, which
-    // is a different question and a different call.
+async fn a_step_whose_checks_declare_no_paths_reads_the_diff_once_and_no_more() {
+    // **This used to assert the opposite**, and `#431` is why it does not. The
+    // gate was cold unless a Check declared `when` or the step declared an
+    // evidence scope, which is what left the absolute tier unchecked on
+    // fourteen of the twenty-three shipped steps. It now reads on every step —
+    // and still exactly once, which is the claim left standing here: one
+    // reading answers the Checks' coverage, the scope tier and the floor, so a
+    // step does not pay per question.
     let workflow = workflow("/usr/bin/true");
     let worktree = worktree();
     let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
@@ -207,9 +210,9 @@ async fn a_step_whose_checks_declare_no_paths_never_reads_the_diff_for_one() {
     .await;
 
     assert!(ruling.advanced(), "the ruling was {ruling:?}");
-    assert!(
-        work.listed().is_empty(),
-        "no Check declares `when`, so no file list was read: {:?}",
-        work.listed()
+    assert_eq!(
+        work.listed(),
+        vec![worktree.path().to_string()],
+        "one reading of one worktree, whatever the step declared"
     );
 }

@@ -201,3 +201,62 @@ async fn preparation_runs_once_for_the_worktree_and_not_once_per_drone() {
         JobStatus::CompletedSuccess
     );
 }
+
+/// **(e)** The Job's log names each command as it is attempted, not the set as
+/// a whole.
+///
+/// **The line before the spawn is the one that was missing.** The pair that
+/// opened and closed the whole span named `requires: bootstrap, browsers`, so a
+/// run that died on the first of two read identically to one that never began —
+/// which is what made #435 take a process listing to diagnose. Two commands
+/// here and the second fails, so what the log has to be able to say is that one
+/// finished and the other was tried.
+#[tokio::test]
+async fn the_log_names_each_command_as_it_is_attempted() {
+    let home = TempDir::new();
+    let mut fittings = fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    fittings.manifest = Manifest::parse(
+        Path::new("armada.yml"),
+        "version: 1\nid: 01FIXTUREMANIFEST\ncommands:\n\
+         \x20 bootstrap:\n    run: /bin/mkdir prepared\n\
+         \x20 browsers:\n    run: /usr/bin/false\n\
+         setup:\n  requires: [bootstrap, browsers]\n",
+    )
+    .expect("a manifest that requires two commands");
+    let fleet = Fleet::assembled(fittings);
+
+    let job = fleet
+        .propose(a_proposal("a Job whose second preparation fails"))
+        .await
+        .expect("proposed");
+    worktree_directory(&home, job.id());
+    fleet
+        .approve(job.id())
+        .await
+        .expect_err("the second command fails");
+
+    let log = std::fs::read_to_string(crate::transcript::log_of(&fleet.host().repo_root, job.id()))
+        .expect("the Job has a log");
+    let starting: Vec<&str> = log
+        .lines()
+        .filter(|line| line.contains("a preparation command is starting"))
+        .collect();
+    assert_eq!(
+        starting.len(),
+        2,
+        "both commands were named as they were tried, not just the set: {log}"
+    );
+    assert!(starting[0].contains("bootstrap") && starting[0].contains("/bin/mkdir prepared"));
+    assert!(starting[1].contains("browsers") && starting[1].contains("/usr/bin/false"));
+    assert_eq!(
+        log.lines()
+            .filter(|line| line.contains("a preparation command finished"))
+            .count(),
+        1,
+        "one of the two got as far as finishing, and the log says which: {log}"
+    );
+    assert!(
+        !log.contains("the worktree is prepared"),
+        "the span never closed, so nothing may claim it did"
+    );
+}

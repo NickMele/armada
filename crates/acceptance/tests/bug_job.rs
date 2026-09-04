@@ -114,10 +114,22 @@ async fn a_bug_job_runs_from_awaiting_approval_to_completed_success() {
         Some(&bench.step(1)),
         "the cursor is never cleared — a finished Job still points at its last step"
     );
-    assert_eq!(
-        bench.work.asked(),
-        vec![run.worktree.path().to_string()],
-        "the gate read the diff itself, once, in the Job's own worktree"
+    // **Whose worktree, and whose reading.** The count moved when `#431` made
+    // the gate read on every step rather than only where a Check or a scope
+    // asked; what the claim is about is that the reading is Fleet's own and is
+    // of this Job's tree, which no count carries.
+    assert!(
+        !bench.work.asked().is_empty(),
+        "the gate read the diff itself"
+    );
+    assert!(
+        bench
+            .work
+            .asked()
+            .iter()
+            .all(|asked| asked == run.worktree.path()),
+        "the gate read the diff in the Job's own worktree: {:?}",
+        bench.work.asked()
     );
 }
 

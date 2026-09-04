@@ -292,7 +292,7 @@ async fn a_parent_waiting_for_its_children_gives_up_its_slot() {
 /// have produced — `readmitting::Owed::resumption` holds why there is not one.
 #[tokio::test]
 async fn a_waiting_parent_reads_as_blocked_and_as_nobody_having_put_it_back() {
-    use api::Daemon;
+    use api::Queries;
 
     let home = TempDir::new();
     let (fleet, parent) = dispatching(&home).await;

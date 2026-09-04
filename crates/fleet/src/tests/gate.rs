@@ -371,7 +371,9 @@ async fn a_step_with_no_checks_advances_on_evidence_alone() {
     let worktree = worktree();
     let at_step = AtStep::named(workflow.frozen(), &StepId::new("summarise"), &worktree)
         .expect("the second step");
-    // Nothing is asked of the worktree, and nothing is run in it.
+    // Nothing is *run* in the worktree, and one thing is read of it: the
+    // changed-file list every gate takes since `#431`, which is what the floor
+    // below is answered over.
     let work = FakeWorkProduct::untouched();
 
     let ruling = rule_on(
@@ -391,9 +393,10 @@ async fn a_step_with_no_checks_advances_on_evidence_alone() {
 
     assert!(ruling.advanced());
     assert!(matches!(ruling, Ruling::Finished { .. }));
-    assert!(
-        work.asked().is_empty(),
-        "the diff was read for a step that declares none"
+    assert_eq!(
+        work.asked(),
+        vec![worktree.path().to_string()],
+        "one reading, and no Check ran on the strength of it"
     );
 }
 
@@ -569,7 +572,10 @@ async fn a_diff_that_cannot_be_read_decides_nothing_and_stops_the_job() {
     assert!(matches!(ruling, Ruling::CouldNotDecide { .. }));
     assert_eq!(
         ruling.undecided().map(|(artifact, _)| artifact),
-        Some("the Job's diff"),
+        // The changed-file list, because that is the first reading a gate takes
+        // since `#431`. It used to be the footprint, for the same worktree that
+        // would not open — what changed is which reading meets it first.
+        Some("the Job's changed files"),
         "what could not be read is carried out, or the stop says nothing"
     );
     let moved = apply(&running_job(), &ruling, at(NOW))
@@ -605,7 +611,11 @@ async fn the_diff_fleet_reads_is_of_the_job_s_own_worktree() {
     )
     .await;
 
-    assert_eq!(work.asked(), [worktree.path().to_string()]);
+    // **Which worktree, not how many readings.** The gate takes two of this
+    // step — the changed-file list and the footprint `diff_nonempty` compares —
+    // and the claim here is that neither of them is anybody else's tree.
+    assert!(!work.asked().is_empty(), "the worktree was read");
+    assert!(work.asked().iter().all(|asked| asked == worktree.path()));
 }
 
 // ------------------------------------------------------- what the Job then does

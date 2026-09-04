@@ -1,0 +1,12 @@
+SUMMARY none files=0 n=20 first=23643us min=13731us median=14396us p90=15157us max=23643us scan_median=0us
+SUMMARY realistic files=49 n=20 first=23891us min=15136us median=18323us p90=25300us max=37164us scan_median=10us
+SUMMARY large files=449 n=20 first=28830us min=19814us median=22310us p90=32939us max=45548us scan_median=46us
+SUMMARY none files=0 n=20 first=26803us min=18639us median=26443us p90=64268us max=103003us scan_median=0us
+SUMMARY realistic files=49 n=20 first=31708us min=19155us median=31708us p90=47038us max=75037us scan_median=10us
+SUMMARY large files=449 n=20 first=48857us min=24236us median=42902us p90=56094us max=158396us scan_median=46us
+SUMMARY none files=0 n=20 first=77157us min=21127us median=34458us p90=45133us max=77157us scan_median=0us
+SUMMARY realistic files=49 n=20 first=36604us min=22828us median=29812us p90=42035us max=96568us scan_median=10us
+SUMMARY large files=449 n=20 first=36204us min=24216us median=47747us p90=92231us max=156012us scan_median=46us
+SUMMARY none files=0 n=30 first=31922us min=13844us median=14966us p90=17498us max=31922us scan_median=0us
+SUMMARY realistic files=12 n=30 first=23692us min=16291us median=19544us p90=26252us max=28069us scan_median=3us
+SUMMARY large files=412 n=30 first=21294us min=15780us median=17960us p90=22659us max=25085us scan_median=37us
