@@ -15,20 +15,6 @@
 //! footprint alongside the declaration, and it returns a `Result`. Holding one
 //! is the fact that the two agreed.
 //!
-//! # Two tiers of boundary, and they resolve differently
-//!
-//! A step's `exclude_paths` is a boundary somebody set before anybody read the
-//! code, and `#417` split it from the one nothing lifts. What is here is the
-//! split: [`forbidden`](crate::forbidden) is absolute and answers over the
-//! footprint as well as the declaration, and `exclude_paths` answers over the
-//! declaration alone and is subject to [`Lifted`] — what a Judge has already
-//! cleared for this Job through `request_scope`.
-//!
-//! **A plan Fleet took must not fail at the gate for being the plan Fleet
-//! took.** That is why the lift reaches here rather than stopping at the tool:
-//! `declare_scope` and the gate resolve through this one function, so a
-//! boundary lifted for the declaration is lifted for the ruling too.
-//!
 //! # The direction is one-way, and that is not an oversight
 //!
 //! A **changed** file that is not declared is drift. A **declared** path that
@@ -170,10 +156,9 @@ impl core::fmt::Display for Reasoned<'_> {
 /// The excluded paths a Judge has already cleared for this Job.
 ///
 /// **There is no constructor taking paths.** One way in — [`Lifted::of`], off
-/// the Job's own scope revisions, and only the entries that took. So a boundary
-/// cannot be lifted by a caller assembling a list; the only thing that lifts one
-/// is a decision somebody recorded, which is `fleet::widening`'s to write and
-/// nothing else's.
+/// the Job's own scope revisions, and only the entries that took. A boundary is
+/// lifted by a recorded decision, which is `fleet::widening`'s to write, and by
+/// nothing a caller can assemble.
 ///
 /// **It reaches only the liftable tier.** `crate::forbidden` takes no argument
 /// at all, so there is no signature through which one of these could reach it.
@@ -190,10 +175,9 @@ impl Lifted {
     /// told apart by carrying no step, the way `fleet::widening` already tells
     /// it apart when it counts a step's one ask.
     ///
-    /// **Every remaining taken revision's `paths_added`**, not only the ones
-    /// that were excluded: a path a Judge cleared that no denylist named was
-    /// never blocked, so including it changes nothing and excluding it would
-    /// need this to hold the step's denylist too.
+    /// **Every remaining taken revision's `paths_added`**, not only the ones a
+    /// denylist named: one it did not name was never blocked, so carrying it
+    /// changes nothing and dropping it would need the step's list here too.
     pub fn of(job: &Job) -> Lifted {
         Lifted(
             job.scope_revisions()
@@ -221,10 +205,15 @@ impl InScope {
     /// reason: a gating fact that arrives from the thing being gated is not a
     /// fact.
     ///
-    /// **The absolute tier answers first, and over both lists.** A path nothing
-    /// lifts is not made ordinary by having been declared, and it is not made
-    /// drift by having been left undeclared — so the check runs before the
-    /// denylist and reads the footprint alongside the plan.
+    /// **Two tiers, and `#417` is the split.** [`forbidden`](crate::forbidden)
+    /// answers first and over both lists: a path nothing lifts is not made
+    /// ordinary by having been declared, and not made drift by having been left
+    /// undeclared. `exclude_paths` answers over the declaration alone and is
+    /// subject to `lifted`.
+    ///
+    /// **A plan Fleet took must not fail at the gate for being the plan Fleet
+    /// took**, which is why the lift reaches this function rather than stopping
+    /// at the tool: `declare_scope` and the gate both resolve here.
     ///
     /// `lifted` is what a Judge already cleared for this Job. It is required
     /// rather than optional so that a call site with a Job in hand cannot pass

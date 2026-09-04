@@ -2,40 +2,25 @@
 //!
 //! # Why this is a constant and not a key
 //!
-//! A step's `exclude_paths` is the *other* tier: a boundary somebody set
-//! before anybody read the code, which a Judge may lift when a Drone asks and
-//! the request makes sense. This list is what no answer reaches.
-//!
-//! **So it must not be stated anywhere a Drone can edit.** Every one of these
-//! lives inside the repository a Drone is given a worktree of — the workflow
-//! definitions under `.armada/`, the Checks in `armada.yml`, the hooks under
-//! `.git/`. A denylist that named them from inside that same repository could
-//! be edited by the thing it denies, and a widening that could reach the list
-//! naming it would be a Judge lifting the rules it is judged by. Compiled in,
-//! neither is possible: there is no file to edit and no key to widen.
+//! A step's `exclude_paths` is the *other* tier — a boundary somebody drew
+//! before anybody read the code, which a Judge may lift. This list is what no
+//! answer reaches, so it must not be stated anywhere a Drone can edit: every
+//! entry lives inside the repository a Drone has a worktree of, and a list
+//! naming them from inside it could be edited by the thing it denies.
 //!
 //! # What earns a place, and what does not
 //!
-//! Three things: **secrets**, **what decides which checks run**, and **what
-//! decides how the work is judged**. `crates/core-model/src/job/gaming.rs` is
-//! the argument — `check_config_edited` exists because a model will honour a
-//! frozen `run:` string exactly while narrowing what it runs, and the shortest
-//! version of that is editing the thing that says what to run at all.
+//! Secrets, and what decides how the work is checked and judged.
+//! `core_model::GamingPattern::CheckConfigEdited` is the argument: a model will
+//! honour a frozen `run:` string exactly while narrowing what it runs.
 //!
-//! **`Cargo.toml`, `package.json` and a Makefile are not here**, though the
-//! gaming check flags all three. They are ordinary files that ordinary work
-//! edits constantly, and a denylist that stopped a Job adding a dependency
-//! would be refusing the work rather than protecting it. The gaming check is
-//! the right instrument for those: it flags and a Judge reads. This one
-//! refuses and nobody reads.
-//!
-//! # It is repository-shaped, not workspace-shaped
-//!
-//! Matched against every segment of a path, so a nested `.env` in a
-//! sub-package is as covered as one at the root. A repository that needs its
-//! *own* absolute entry — this one's `xtask/src/rules.rs`, say — cannot state
-//! one; that is a workflow schema key and `#417` says why it was not built
-//! here.
+//! **`Cargo.toml`, `package.json` and a Makefile are not here**, though that
+//! same check flags all three. Ordinary work edits them constantly, and a
+//! boundary that stopped a Job adding a dependency would refuse the work
+//! rather than protect anything. There a Judge reads a flag; here nothing is
+//! asked. `#417` names the two gaps: a forge's CI directory, which
+//! `no_vendor_literal_outside_adapters` keeps out of this crate, and a
+//! repository's own entry, which needs a workflow schema key.
 
 use core_model::RepoPath;
 
@@ -63,7 +48,7 @@ struct Boundary {
     because: &'static str,
 }
 
-/// The whole of it. **Five entries, and each one is a thing that decides what
+/// The whole of it. **Four entries, and each one is a thing that decides what
 /// is true about the work rather than a thing the work is about.**
 const BOUNDARIES: &[Boundary] = &[
     Boundary {
@@ -76,12 +61,6 @@ const BOUNDARIES: &[Boundary] = &[
         reach: Reach::Exactly,
         because: "it holds the repository's own machinery, including the hooks \
                   a check runs through",
-    },
-    Boundary {
-        name: ".github",
-        reach: Reach::Exactly,
-        because: "it is the continuous integration configuration, which decides \
-                  which checks run at all",
     },
     Boundary {
         name: ".armada",
@@ -174,7 +153,6 @@ mod tests {
     fn the_files_that_say_what_runs_and_what_judges_are_absolute() {
         assert!(at("armada.yml").is_some());
         assert!(at(".armada/workflows/bug.json").is_some());
-        assert!(at(".github/workflows/ci.yml").is_some());
         assert!(at(".git/hooks/pre-commit").is_some());
     }
 
