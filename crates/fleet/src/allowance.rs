@@ -22,6 +22,7 @@ use store::{DroneSpend, Spend};
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
+use crate::working::{StoodDown, Working};
 
 /// A quantity of money, held as millionths of a dollar and named in the unit it
 /// was decided in.
@@ -157,9 +158,33 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
+    /// End the Drone in a slot and write down what it spent, in that order.
+    ///
+    /// **The one place a slot is stood down.** Every deliberate ending used to
+    /// pair [`Working::stood_down`] with [`record_spend`](Fleet::record_spend)
+    /// for itself, and `crate::dispatch`'s did not — so a Job that finished, or
+    /// whose gate-failure attempts ran out, was billed for every Drone but its
+    /// last. `#398`. The pairing is here rather than remembered at three call
+    /// sites, and [`Working::stood_down`] is called from nowhere else.
+    ///
+    /// **The order is the fold's, not this method's.** `Working::stood_down`
+    /// signals the process and drains the pipe before it folds, because the
+    /// terminating line carrying `total_cost_usd` is the last thing a Drone
+    /// says — a figure read before the drain is a figure read off a prefix.
+    ///
+    /// **A spend that will not write is returned and the ending is not undone.**
+    /// The process is already gone by then; what the caller decides is whether
+    /// the failure stops it, and the two that can return it do.
+    pub(crate) async fn stood_down_paying(&self, at_work: Working) -> Result<StoodDown, Adrift> {
+        let stood_down = at_work.stood_down(&self.now()).await;
+        self.record_spend(&stood_down.job, &stood_down.drone, &stood_down.spent)
+            .await?;
+        Ok(stood_down)
+    }
+
     /// Write down what one Drone of a Job spent.
     ///
-    /// **Called from both places a Drone's run ends**, and safe there because
+    /// **Called from every place a Drone's run ends**, and safe there because
     /// the record is keyed on the Drone: `store::record_drone_spend` is an
     /// upsert, so recording the same Drone twice writes the same row twice
     /// rather than billing the Job twice. That property is the store's and not

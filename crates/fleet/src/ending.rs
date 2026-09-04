@@ -209,13 +209,12 @@ where
         let job_id = at_work.standing().0;
         // **Not `boundary::stood_down`, and the difference is one log line.**
         // That one writes "the Drone was ended because its step ended", which
-        // is the sentence this whole defect is about being false. The three
-        // record-keeping calls beneath it are the same three; if a third reason
-        // ever ends a Drone deliberately, the reason belongs on
-        // `noted_stood_down` as a parameter rather than in a third copy here.
-        let stood_down = at_work.stood_down(&self.now()).await;
-        self.record_spend(&stood_down.job, &stood_down.drone, &stood_down.spent)
-            .await?;
+        // is the sentence this whole defect is about being false. What both
+        // reach for is `stood_down_paying`, which is the ending and the spend
+        // in the one order that makes the figure real; the reason a Drone was
+        // ended belongs on `noted_stood_down` as a parameter rather than in a
+        // second copy of that sentence here.
+        let stood_down = self.stood_down_paying(at_work).await?;
         self.every_exit_recorded(&job_id).await?;
         let job = self.load(&job_id).await?;
         let job = self.stopped_at_rest(&job).await?;

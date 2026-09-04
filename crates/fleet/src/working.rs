@@ -333,7 +333,8 @@ impl Working {
     /// slot that lies about a Drone — it would still answer `session()`,
     /// `heard()` and `standing()` — so there is no version of this taking
     /// `&mut self`. What the caller needs afterwards is [`StoodDown`], and
-    /// recording the exit is the caller's: this type reaches no store.
+    /// this type reaches no store: recording the exit and the spend is its one
+    /// caller's, `Fleet::stood_down_paying`, for `#398`'s reason.
     ///
     /// The order of the three acts is `crate::boundary`'s subject and each of
     /// them answers a failure the one before it causes. In one line each:
