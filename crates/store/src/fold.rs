@@ -187,8 +187,11 @@ fn step(
             recorded: from,
         });
     }
+    // `from` as well as `to`, because the two arrivals at `running` are told
+    // apart by where they came from and by nothing else: a loop return carries
+    // no trigger to distinguish it the way an override does at `advanced`.
     let target =
-        StepTarget::arriving_at(to, why).ok_or_else(|| RowError::StepStateNotReachable {
+        StepTarget::arriving_at(from, to, why).ok_or_else(|| RowError::StepStateNotReachable {
             job_id: event.job_id.clone(),
             seq: event.seq,
             step_id: step_id.clone(),

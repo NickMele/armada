@@ -22,6 +22,25 @@
 //! word for the unit — `attempt_cap` "bounds total attempts across all
 //! iterations of a step" — so this is what those counters get defined against
 //! rather than a third vocabulary beside them.
+//!
+//! # The second counter, and why it is a second type
+//!
+//! [`Iteration`] is the same discipline over the other edge. It counts the
+//! times the step's log says it entered `running` **from `advanced`**, which
+//! `step_machine::STEP_EDGES` makes the loop return and nothing else. So the
+//! pair is one log read two ways rather than two stored columns that can
+//! disagree — the standing `store::attempt` already earned, applied again.
+//!
+//! **Two types and not one number, because the two bound different things.**
+//! `retry_limit` is spent by failures and `iteration_cap` by returns, and
+//! `workflowdef-fields.toml` is emphatic that a return must never consume the
+//! retry budget: *"a plan on its fourth honest draft is not a gate failure."*
+//! One `u32` passed to both caps is a call site where the wrong one compiles.
+//!
+//! **What this still does not settle is whose count it is.** An [`Iteration`]
+//! read off a step's own log is that step's own passes. The registry's cap
+//! lives on the step that *emits* the routing verdict, and that step's move on
+//! a return is undecided — see [`Iteration`] itself.
 
 use core::fmt;
 use core::num::NonZeroU32;
@@ -101,5 +120,111 @@ mod tests {
     #[test]
     fn attempts_order_by_their_number() {
         assert!(Attempt::runs_begun(1) < Attempt::runs_begun(2));
+    }
+}
+
+/// Which pass over a step this is. One-based.
+///
+/// **The loop counterpart of [`Attempt`], and constructed the same two ways for
+/// the same reason**: [`returns_made`](Iteration::returns_made) derives it from
+/// the step's own log and [`stored`](Iteration::stored) validates one read back
+/// off a row. There is no constructor taking an arbitrary number, so nothing
+/// can hand a cap a count the history does not support.
+///
+/// # What it counts, and what it does not claim
+///
+/// The entries into `running` from `advanced` in this step's log. That edge is
+/// the loop return and only the loop return, so the count is an observation
+/// rather than a policy — exactly [`Attempt`]'s standing, and for the same
+/// reason: the questions the registry leaves open are about *whose* counter
+/// increments, and an observation about one step's log does not have to answer
+/// them to be true about that step.
+///
+/// **It is therefore not yet `iteration_count`.** `job-fields.toml` puts that
+/// counter on the step which *emits* the routing verdict, because the cap sits
+/// there and `workflows.toml` notes that a cap and a count on different steps
+/// means `loop_cap` never fires. The emitting step's own move on a return is
+/// undecided, so it has no return edge of its own to count yet, and this reads
+/// as the routed-to step's passes until it does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Iteration(NonZeroU32);
+
+impl Iteration {
+    /// The pass a step is on before anything has routed back to it. **Every
+    /// step of a linear workflow is on this one forever**, which is why the
+    /// type is not an `Option`: a step that has never looped is on its first
+    /// pass, not on no pass.
+    pub const FIRST: Iteration = Iteration(NonZeroU32::MIN);
+
+    /// The pass in progress, given how many times a step's log records it
+    /// entering `running` from `advanced`.
+    ///
+    /// **Off by one against the returns, deliberately.** A step redone once is
+    /// on its second pass, and the arithmetic lives here rather than at the
+    /// caller for the reason `ResolvedStep::may_hand_back` gives about the
+    /// retry budget: a caller adding the one itself is a second place the
+    /// off-by-one can be wrong.
+    pub fn returns_made(returns: u32) -> Iteration {
+        match returns.checked_add(1).and_then(NonZeroU32::new) {
+            Some(count) => Iteration(count),
+            // Unreachable off a real log — it would need four billion returns
+            // past a cap of five — and saturating is the only answer that is
+            // not a lie: the highest pass this type can name is nearer the
+            // truth than wrapping to the first.
+            None => Iteration(NonZeroU32::MAX),
+        }
+    }
+
+    /// A pass read back off a stored row. `None` on zero, which is not a pass
+    /// and is a malformed column rather than a first one.
+    pub fn stored(number: u32) -> Option<Iteration> {
+        NonZeroU32::new(number).map(Iteration)
+    }
+
+    /// The ordinal, for a rendering. One-based, so a rail reads "iteration 3 of
+    /// 5" off this and the cap without arithmetic of its own.
+    pub fn number(self) -> u32 {
+        self.0.get()
+    }
+}
+
+impl fmt::Display for Iteration {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.get())
+    }
+}
+
+#[cfg(test)]
+mod iteration_tests {
+    use super::Iteration;
+
+    #[test]
+    fn a_step_nothing_has_returned_to_is_on_its_first_pass() {
+        assert_eq!(Iteration::returns_made(0), Iteration::FIRST);
+        assert_eq!(Iteration::returns_made(0).number(), 1);
+    }
+
+    /// The off-by-one the type exists to own: one return, second pass.
+    #[test]
+    fn one_return_is_the_second_pass() {
+        assert_eq!(Iteration::returns_made(1).number(), 2);
+        assert_eq!(Iteration::returns_made(4).number(), 5);
+    }
+
+    #[test]
+    fn a_stored_zero_is_refused_rather_than_read_as_a_first_pass() {
+        assert_eq!(Iteration::stored(0), None);
+        assert_eq!(Iteration::stored(3), Some(Iteration::returns_made(2)));
+    }
+
+    #[test]
+    fn a_count_that_could_not_come_off_a_log_saturates_rather_than_wrapping() {
+        assert_eq!(Iteration::returns_made(u32::MAX).number(), u32::MAX);
+    }
+
+    /// The order is what a cap is asked against.
+    #[test]
+    fn passes_order_by_their_number() {
+        assert!(Iteration::returns_made(0) < Iteration::returns_made(1));
     }
 }

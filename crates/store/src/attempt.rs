@@ -19,13 +19,28 @@
 //! fold reads none of it**: an attempt is a coordinate on evidence about a
 //! `Job` state, never a way to reach one.
 //!
-//! A step runs twice by stopping first — `STEP_EDGES` has no `advanced ->
-//! running`, and `fleet::resume` holds that re-running an advanced step is a
-//! redispatch. Counting entries into `running` rather than back edges is what
-//! makes this survive the open question of a loop's return shape.
+//! Counting entries into `running` rather than back edges is what let this
+//! survive the open question of a loop's return shape, and it did: `STEP_EDGES`
+//! now carries `advanced -> running`, and a loop return increments the attempt
+//! like any other run, because it *is* another run — a fresh Drone works the
+//! step again and files its own checks, judgments and evidence.
+//!
+//! # The second count, off the same log
+//!
+//! [`Store::step_iteration`] reads the same table for the one edge that says a
+//! step is on a new pass. **Two reads of one append-only log, not two stored
+//! columns**, so the pair cannot disagree with each other or with the history.
+//!
+//! **What this breaks, and what has not been fixed here.**
+//! `ResolvedStep::may_hand_back` is asked with [`Store::step_attempt`], which
+//! now climbs across a loop return — so on a looping step the retry budget
+//! would be spent by iterations, which `workflowdef-fields.toml` refuses in
+//! terms: *"a loop return is not a retry ... it must not consume the retry
+//! budget."* The count that call wants is runs since the last return, and its
+//! only caller is `fleet::gate`. `#263`.
 
 use core_model::{
-    Attempt, CheckOutcome, CriterionId, EvidenceType, GamingFlag, GamingPattern, JobId,
+    Attempt, CheckOutcome, CriterionId, EvidenceType, GamingFlag, GamingPattern, Iteration, JobId,
     JudgeVerdict, Judgment, StepCheck, StepEvidence, StepId, Timestamp,
 };
 use rusqlite::{Connection, Row};
@@ -61,6 +76,29 @@ impl Store {
     /// anything recorded against a step before it was entered.
     pub fn step_attempt(&self, job_id: &JobId, step_id: &StepId) -> Result<Attempt, RowError> {
         attempt_now(&self.conn, job_id, step_id).map_err(RowError::Database)
+    }
+
+    /// Which pass over a step the work now belongs to.
+    ///
+    /// **Derived, never stored**, for [`step_attempt`](Store::step_attempt)'s
+    /// reason and out of the same table. `job-fields.toml` types
+    /// `iteration_count` a `job_steps` column; it is not one and neither is
+    /// `retry_count`, because a column beside an append-only log is a second
+    /// record of the same fact and a pair that can disagree.
+    ///
+    /// The count is over the one edge `STEP_EDGES` gives the loop return, so a
+    /// step nothing has routed back to is on its first pass — which is every
+    /// step of every linear workflow, and why the answer is never `None`.
+    ///
+    /// **It answers about the step named and makes no claim beyond it.**
+    /// `job-fields.toml` puts `iteration_count` on the step that *emits* the
+    /// routing verdict rather than the one routed to, and that step's own move
+    /// on a return is undecided — so it has no return edge of its own to count
+    /// yet. Asking this about the routed-to step is asking how many times that
+    /// step has been redone, which is true, renders, and is the number
+    /// `workflows.toml` describes the canvas drawing.
+    pub fn step_iteration(&self, job_id: &JobId, step_id: &StepId) -> Result<Iteration, RowError> {
+        iteration_now(&self.conn, job_id, step_id).map_err(RowError::Database)
     }
 
     /// What each of a Job's declared Checks did, **every run of every step**,
@@ -186,6 +224,30 @@ pub(crate) fn attempt_now(
         )
         .map_err(fault("counting a step's runs"))?;
     Ok(Attempt::runs_begun(runs.max(0) as u32))
+}
+
+/// The pass a step is on, over the connection or the transaction asking.
+///
+/// The mirror of [`attempt_now`] and the same shape, over the one edge that is
+/// a loop return: `advanced -> running` is walked by `StepTarget::Returned`
+/// alone, which `core_model::step_machine` narrows so that no dispatch or
+/// resume can write this row.
+pub(crate) fn iteration_now(
+    conn: &Connection,
+    job_id: &JobId,
+    step_id: &StepId,
+) -> Result<Iteration, DatabaseFault> {
+    let returns: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM job_events
+             WHERE job_id = ?1 AND step_id = ?2
+               AND kind = 'step_transition'
+               AND state_from = 'advanced' AND state_to = 'running'",
+            (job_id.as_str(), step_id.as_str()),
+            |row| row.get(0),
+        )
+        .map_err(fault("counting a step's loop returns"))?;
+    Ok(Iteration::returns_made(returns.max(0) as u32))
 }
 
 /// The three columns that say which run a row is from.

@@ -391,6 +391,19 @@ impl Job {
     /// a step may not be moved to.
     ///
     /// **Entering `running` is what moves `current_step_id`, and nothing
+    /// clears it — including backwards.** A loop return is the one move that
+    /// takes the cursor to a *lower* ordinal, and it is the target step's
+    /// cursor that moves: `verdict_routing` names where the work goes, and
+    /// where the work goes is where the next Drone is put. The step that
+    /// emitted the verdict is not moved by this call.
+    ///
+    /// **Which state that emitting step is left in is not decided here or
+    /// anywhere else yet** — `workflows.toml`'s `design_plan` row leaves it
+    /// open, and none of the six declared states says "ruled, and waiting for
+    /// the loop to come back". `fleet::gate` is where the second move will be
+    /// driven from when it is decided.
+    ///
+    /// **Entering `running` is what moves `current_step_id`, and nothing
     /// clears it.** `job-fields.toml` says the nested machine is "frozen
     /// otherwise, never cleared, still rendered", so a Job that advanced or
     /// stopped its last step still points at it — which is what a rail renders,
@@ -426,7 +439,7 @@ impl Job {
         );
         let mut job = self.clone();
         job.steps[index] = self.steps[index].moved_to(&to, at);
-        if matches!(to, StepTarget::Running) {
+        if to.begins_a_run() {
             job.current_step_id = Some(step_id.clone());
         }
         Ok(StepTransitioned { job, event })

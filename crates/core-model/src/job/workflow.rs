@@ -27,7 +27,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::job::attempt::Attempt;
+use crate::job::attempt::{Attempt, Iteration};
 use crate::job::covers::Covers;
 use crate::job::gaming::GamingCheck;
 use crate::job::ids::{ModelName, StepId, WorkflowId};
@@ -266,6 +266,16 @@ pub struct ResolvedStep {
     /// Whether a Drone on this step is given the tool that creates Jobs.
     /// **False on every step that does not say otherwise.**
     may_dispatch_jobs: bool,
+    /// How many passes over this step a loop may make before the cap is spent.
+    /// **Zero on a step no verdict routes back to**, which is every step of
+    /// every linear workflow — and a count rather than an `Option` for
+    /// [`retry_limit`](ResolvedStep::retry_limit)'s reason: absent and "no loop
+    /// here" are the same sentence, and two spellings of it could drift.
+    ///
+    /// **It lives on the step that emits the routing verdict**, which is where
+    /// `workflowdef-fields.toml` puts it: *"a cap split from the count it
+    /// bounds never fires."*
+    iteration_cap: u32,
 }
 
 impl ResolvedStep {
@@ -296,9 +306,12 @@ impl ResolvedStep {
             evidence_scope,
             retry_limit,
             model,
-            // Set by the builder below: a tenth parameter would make ten
-            // callers state a value that is false on all but one step.
+            // Set by the builders below: a tenth parameter would make ten
+            // callers state a value that is false on all but one step, and an
+            // eleventh a value that is zero on every step of every linear
+            // workflow.
             may_dispatch_jobs: false,
+            iteration_cap: 0,
         }
     }
 
@@ -306,6 +319,20 @@ impl ResolvedStep {
     /// given it.
     pub fn dispatching(mut self, may: bool) -> ResolvedStep {
         self.may_dispatch_jobs = may;
+        self
+    }
+
+    /// The loop cap, for the reason [`dispatching`](Self::dispatching) is a
+    /// builder: one step of one workflow carries one, and every other step
+    /// would be restating a zero.
+    ///
+    /// **Zero is the fail-closed default and that is deliberate.** A step whose
+    /// cap never arrived permits no return, so a loop that was wired and not
+    /// capped stops on its first return and says so. The other direction — a
+    /// missing cap meaning unbounded — is a Job that never terminates, which is
+    /// the failure `structure` exists to catch at load time.
+    pub fn looping(mut self, iteration_cap: u32) -> ResolvedStep {
+        self.iteration_cap = iteration_cap;
         self
     }
 
@@ -400,6 +427,42 @@ impl ResolvedStep {
     /// history.
     pub fn may_hand_back(&self, spent: Attempt) -> bool {
         spent.number() <= self.retry_limit
+    }
+
+    /// How many passes a loop may make over this step. **Zero on every step of
+    /// every linear workflow**, and on any step no verdict routes back to.
+    pub fn iteration_cap(&self) -> u32 {
+        self.iteration_cap
+    }
+
+    /// Whether the pass `now` may be redone once more, or the cap is spent.
+    ///
+    /// **The arithmetic is here and nowhere else**, for
+    /// [`may_hand_back`](ResolvedStep::may_hand_back)'s reason — and it is a
+    /// different arithmetic, which is why the two are separate calls taking
+    /// separate types. `retry_limit` counts hand-backs, so a limit of two is
+    /// worked three times. `iteration_cap` counts *passes*: with a cap of five
+    /// the fifth pass is the last, which is what `escalation-triggers.toml`
+    /// computes against when it says a looping step can burn
+    /// `retry_limit × iteration_cap` attempts, and what a rail reads when it
+    /// renders "iteration 3 of 5".
+    ///
+    /// **`iteration_cap`'s own purpose line says "ceiling on loop returns"**,
+    /// which would make a cap of five six passes. Two other statements in the
+    /// same registry say passes and one says returns, so passes wins here; the
+    /// row has been corrected to match rather than left to be read both ways.
+    ///
+    /// [`Iteration`] is the parameter for [`Attempt`]'s reason: there is no
+    /// constructor that invents one, so a caller cannot hand this a pass count
+    /// that disagrees with the step's log.
+    ///
+    /// **A spent cap is not a failure.** The Job does not fail the step, it
+    /// stops it under [`EscalationTrigger::LoopCap`](crate::EscalationTrigger)
+    /// — nothing went wrong, the loop did not converge — and `fleet::gate` is
+    /// what raises it, exactly as it raises `gate_failure` off
+    /// [`may_hand_back`](ResolvedStep::may_hand_back).
+    pub fn may_return(&self, now: Iteration) -> bool {
+        now.number() < self.iteration_cap
     }
 
     /// What this step asked to be run as. **`None` on most steps**, and on
