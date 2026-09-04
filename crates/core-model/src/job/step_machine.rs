@@ -92,6 +92,11 @@ pub static STEP_EDGES: &[StepEdge] = &[
     // evidence all filed under the first pass's ordinal — the defect
     // `store::attempt` exists to close, arriving from the other direction.
     //
+    // **A linear workflow reaches it too**, which #418 is: a person sending the
+    // work back at a human gate re-queues at the step they were standing at,
+    // and that step never left `running` either. Same edge, same reason, no
+    // loop in sight.
+    //
     // Walked by [`StepTarget::Revisited`] alone, narrowed as `advanced ->
     // running` is: an open self-edge would legalise re-entering a step that is
     // already being worked, which is a redispatch with no move in it.
@@ -241,21 +246,31 @@ pub enum StepTarget {
     /// cap allowed it: this type cannot see a workflow, and
     /// [`ResolvedStep::may_return`](crate::ResolvedStep::may_return) owns that.
     Returned(StepId),
-    /// The loop came round, and the Job has walked forward into this step
-    /// again.
+    /// Another pass at a step that never left `running`.
     ///
-    /// **The counterpart of [`Returned`](StepTarget::Returned), one move later
-    /// and in the other direction.** That one is a *later* step sending work
-    /// back; this is the work arriving back. The step it arrives at is the one
-    /// that emitted the verdict, which a return left `running` — so this walks
-    /// the table's only self-edge, and it is the only target that may.
+    /// **Two roads reach it and the row is the same on both.** The loop's is
+    /// the counterpart of [`Returned`](StepTarget::Returned), one move later
+    /// and in the other direction: that one is a *later* step sending work
+    /// back, this is the work arriving back at the step that emitted the
+    /// verdict, which a return left `running`. The person's is `#418` —
+    /// `fleet::reviewing` re-queueing at the step a person was standing at,
+    /// which also never left `running`, because a step at a human gate does not
+    /// move while somebody reads it. Either way this walks the table's only
+    /// self-edge, and it is the only target that may.
     ///
     /// **It carries nothing, and there is nothing to carry.** No gate refused
     /// it, so there is no trigger; the pass was charged to this step at the
     /// return, so charging it again here would count one loop twice. What the
     /// row exists for is the boundary: `store::attempt` counts entries into
     /// `running`, and without one the second pass files its checks, judgments
-    /// and evidence over the first pass's.
+    /// and evidence over the first pass's. **Nothing distinguishes the two
+    /// roads on the row but the actor**, which is enough and is already there —
+    /// Fleet walked the loop round, and a person sent the work back.
+    ///
+    /// **What it must not carry is a charge.** `store::step_spent` treats this
+    /// edge as opening a pass, so a person's note resets the retry budget
+    /// rather than spending it; a payload that made it a failure would let a
+    /// Job die of being reviewed.
     ///
     /// **Not [`Running`](StepTarget::Running) across the same edge.** That is a
     /// dispatch or a resume, and onto a step already being worked it is a
