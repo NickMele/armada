@@ -46,10 +46,14 @@
   color: var(--fg-muted);
 }
 
-/* Fleet is not there to ask. The DEGRADED treatment and not the error one:
-   an unreachable Fleet is Armada unable to refresh what it shows, not Armada
-   unable to do the thing, and a red edge here is what would send somebody to
-   restart a process that is running.
+/* There is nothing to ask, on either of the two readings that mean it. The
+   DEGRADED treatment and not the error one, for both: what has failed is this
+   panel's ability to refresh what it shows, not an act somebody asked for, and
+   a red edge is what would send somebody to restart a running process.
+
+   The same treatment on both, though their fixes differ, because the treatment
+   carries how loud a thing is and not what to do about it. The two sentences
+   carry that, and only one of them is on this panel at a time.
 
    The edge alone would not carry it. This card already draws a fault edge on
    the sentence below, so the two would differ by a pixel of width and nothing

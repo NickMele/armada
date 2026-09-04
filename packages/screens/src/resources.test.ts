@@ -7,11 +7,15 @@
 // because a read that failed and a read nobody had made were the same reading.
 // #462.
 //
-// The fix turns on the failure and not on the fact of failure, so these are the
-// cases that separate the two: a Fleet that is not there to ask, against a
-// Fleet that is there and answered badly, late, or with a refusal. Getting that
-// wrong in the other direction is just as bad — a panel that withdrew its act
-// on a timeout would take the next move away from somebody whose Fleet is fine.
+// The fix turns on the failure and not on the fact of failure, and on which of
+// two ways an attempt could not work. A Fleet that is not there is one; a Fleet
+// that is up and answering something Bridge cannot read is the other, and it
+// withdraws the act for the opposite reason — the disagreement is in the
+// builds, so the same request meets it again however alive Fleet is.
+//
+// A refusal and a wait that ran out keep the act. Getting that wrong is just as
+// bad as the original defect: a panel that withdrew its control on a timeout
+// would take the next move away from somebody whose Fleet is fine.
 
 import { describe, expect, it } from "vitest";
 
@@ -44,24 +48,34 @@ function transport(
 }
 
 describe("nothing to ask", () => {
-  it("withdraws the act where Bridge holds no connection", () => {
-    expect(nothingToAsk(failed({ ok: false, why: "not_connected" }))).toBe(true);
+  it("says Fleet is not there where Bridge holds no connection", () => {
+    expect(nothingToAsk(failed({ ok: false, why: "not_connected" }))).toBe("no_answer");
   });
 
-  it("withdraws the act where the request could not be sent", () => {
-    expect(nothingToAsk(transport("unreachable"))).toBe(true);
+  it("says Fleet is not there where the request could not be sent", () => {
+    expect(nothingToAsk(transport("unreachable"))).toBe("no_answer");
+  });
+
+  // Fleet is demonstrably up and it still withdraws the act, because what
+  // stops the answer is the two builds and not the daemon. A second press
+  // sends the same request down the same route to the same disagreement.
+  it("says the answer was unreadable where Fleet answered a status", () => {
+    expect(nothingToAsk(transport("unanswerable"))).toBe("unreadable");
+  });
+
+  // The two readings have opposite fixes — start Fleet, against rebuild the
+  // pair — so a caller that folded them into one flag would send somebody to
+  // restart a Fleet that is already running.
+  it("tells the two apart rather than reporting that something failed", () => {
+    expect(nothingToAsk(transport("unreachable"))).not.toBe(
+      nothingToAsk(transport("unanswerable")),
+    );
   });
 
   // Fleet may well have carried the read out. It is there, and a second press
   // is the reasonable move rather than a dead end.
   it("keeps the act where the read timed out", () => {
-    expect(nothingToAsk(transport("timed_out"))).toBe(false);
-  });
-
-  // Fleet answered a status. It is running, and the two disagree about the
-  // route — which is a thing to say, not a reason to take the control away.
-  it("keeps the act where Fleet answered something Bridge could not read", () => {
-    expect(nothingToAsk(transport("unanswerable"))).toBe(false);
+    expect(nothingToAsk(transport("timed_out"))).toBeUndefined();
   });
 
   it("keeps the act where Fleet refused the route", () => {
@@ -79,13 +93,13 @@ describe("nothing to ask", () => {
           },
         }),
       ),
-    ).toBe(false);
+    ).toBeUndefined();
   });
 
-  // The three states that are not a failure at all. `read` is the reading in
-  // hand, and `keepsLastGood` means a re-read that fails leaves it there.
+  // The states that are not a failure at all. `read` is the reading in hand,
+  // and `keepsLastGood` means a re-read that fails leaves it there.
   it("offers the act at every state that is not a failure", () => {
-    expect(nothingToAsk({ state: "none" })).toBe(false);
-    expect(nothingToAsk({ state: "reading", jobId: JOB })).toBe(false);
+    expect(nothingToAsk({ state: "none" })).toBeUndefined();
+    expect(nothingToAsk({ state: "reading", jobId: JOB })).toBeUndefined();
   });
 });

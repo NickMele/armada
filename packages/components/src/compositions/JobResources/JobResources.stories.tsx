@@ -220,8 +220,8 @@ export const NothingHasBeenRead: Story = {
  * **Not `lookFailed`.** That says one attempt did not come back, which invites
  * another. This says attempts are not the shape of the problem.
  */
-export const ThereIsNothingToAsk: Story = {
-  args: { reading: null, examined: null, unreachable: true, onExamine: () => {} },
+export const FleetIsNotAnswering: Story = {
+  args: { reading: null, examined: null, nothingToAsk: "no_answer", onExamine: () => {} },
   play: async ({ canvas }) => {
     await expect(
       canvas.getByText(/Fleet is not answering, so there is nothing to ask/),
@@ -230,5 +230,35 @@ export const ThereIsNothingToAsk: Story = {
     // The whole point: no control that asks Fleet, disabled or otherwise.
     await expect(canvas.queryByRole("button", { name: /Look now/ })).toBeNull();
     await expect(canvas.queryByText(/Looking costs no model call/)).toBeNull();
+  },
+};
+
+/**
+ * **Fleet answered, and Bridge could not read it.** The second reading, and it
+ * is not the first said differently: Fleet is demonstrably up here, so "not
+ * answering" would be false and pointing at the status bar would send a reader
+ * to a line saying Fleet running.
+ *
+ * **Fleet being alive is not a reason to keep the act.** What stops the answer
+ * is the two builds disagreeing about this route, so the same request meets
+ * the same disagreement and a restart brings back the Fleet that caused it.
+ * Attempts are not the shape of this problem either, which is why it withdraws
+ * the control rather than reading as one failed look.
+ *
+ * **Still degraded and still not red**, for the reason an unreachable Fleet is
+ * not: what has failed is this panel's ability to show a reading.
+ */
+export const BridgeCouldNotReadTheAnswer: Story = {
+  args: { reading: null, examined: null, nothingToAsk: "unreadable", onExamine: () => {} },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByText(/Fleet answered, and Bridge could not read the answer/),
+    ).toBeVisible();
+    await expect(canvas.getByText(/rebuilding both is what settles it/)).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: /Look now/ })).toBeNull();
+    // The two readings must not draw as one message. Neither the sentence that
+    // says Fleet is silent nor the pointer at a bar reading "Fleet running".
+    await expect(canvas.queryByText(/Fleet is not answering/)).toBeNull();
+    await expect(canvas.queryByText(/The status bar names/)).toBeNull();
   },
 };

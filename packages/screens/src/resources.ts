@@ -1,10 +1,10 @@
-// What the machine panel says when it has no reading, and the one failure
+// What the machine panel says when it has no reading, and the two failures
 // where it offers nothing to press.
 //
 // **Its own file because it is a decision, and a decision is unit-tested.** A
 // `play` that computed rather than read would be a unit test paying a browser's
-// price — `docs/practices/react.md` is explicit — and the case below is the one
-// where the screen either offers a person a next move or admits there is none.
+// price — `docs/practices/react.md` is explicit — and this is the decision that
+// either offers a person a next move or admits there is none.
 //
 // # Nothing to ask
 //
@@ -14,11 +14,19 @@
 // live `Look now`, because a read that failed and a read nobody had made drew
 // the same reading. #462.
 //
-// The act is withdrawn on the failure and never on the fact of failure. Fleet
-// refusing the route, answering a status Bridge cannot read, or taking longer
-// than the wait are all a Fleet that is there, and a panel that took its
-// control away on a timeout would strand somebody whose Fleet is fine.
+// The act is withdrawn on the failure and never on the fact of failure. A
+// refusal carries a code and a wait that ran out may already have been served,
+// so both leave the control where it is — a panel that withdrew its act on a
+// timeout would strand somebody whose Fleet is fine.
+//
+// Two of them withdraw it, for opposite reasons, and the panel says which. One
+// is a Fleet that is not there. The other is a Fleet that is demonstrably up
+// and answering something Bridge cannot read, which is structural rather than
+// transient: the same request down the same route meets the same disagreement,
+// and a restart brings back the build that caused it. #344 classifies that
+// same condition as a fault on the command seam, for the same reason.
 
+import type { NothingToAsk } from "@armada/components";
 import type { Holds } from "@armada/protocol";
 
 /**
@@ -50,30 +58,48 @@ export function whyNoReading(resources: Holds): string | undefined {
 }
 
 /**
- * Whether Fleet is the thing that did not answer, which is the one reading
- * where the panel offers no act at all.
+ * Whether pressing `Look now` could work, and where it could not, which of the
+ * two reasons it is. `undefined` leaves the act on the panel.
  *
  * **The failure decides it, never the fact that something failed.** Every
  * reading on that panel is Fleet's and its one control asks Fleet for another,
- * so the question is whether there is anything on the other end to ask — not
- * whether the last attempt worked. Fleet refusing this route, answering a
- * status Bridge cannot read, or taking longer than the wait are all a Fleet
- * that is there: pressing again is a reasonable move and the act stays.
- * `not_connected` and `unreachable` are the two where it is not.
+ * so the question is whether another attempt could answer — not whether the
+ * last one did.
  *
- * **`not_connected` is Bridge holding no port at all** — no runtime file, a pid
- * that did not verify, or a socket that has not come up. There is no address to
- * send to. **`unreachable` is the fetch itself failing**, which is the same
- * thing one layer down.
+ * **`no_answer` is Fleet not being on the other end.** `not_connected` is
+ * Bridge holding no port at all: no runtime file, a pid that did not verify, or
+ * a socket that has not come up, so there is no address to send to.
+ * `unreachable` is the fetch itself failing, which is the same thing one layer
+ * down. Starting Fleet is what fixes either.
  *
- * A kept reading is not this state: `keepsLastGood` holds the last good answer
+ * **`unreadable` is Fleet being up and the answer being unreadable.** Fleet
+ * returned a status and the body under it was not something Bridge could read,
+ * which is the two sides disagreeing about this route rather than a Job going
+ * wrong. Fleet being demonstrably alive is not a reason to keep the control:
+ * the disagreement is in the builds, so the same request meets it again, and
+ * a restart brings back the Fleet that caused it. Starting Fleet is the wrong
+ * fix, which is why this cannot share `no_answer`'s sentence.
+ *
+ * **`refused` and `timed_out` keep the act.** A refusal carries a code and is
+ * Fleet answering the route as designed; a wait that ran out may already have
+ * been served, and Fleet has its own budget. Both are a Fleet that is there.
+ *
+ * A kept reading is not any of this: `keepsLastGood` holds the last good answer
  * for the open Job, so `failed` here is a Job whose machine reading never
  * arrived.
  */
-export function nothingToAsk(resources: Holds): boolean {
-  if (resources.state !== "failed") return false;
+export function nothingToAsk(resources: Holds): NothingToAsk | undefined {
+  if (resources.state !== "failed") return undefined;
   const outcome = resources.outcome;
-  if (outcome.ok) return false;
-  if (outcome.why === "not_connected") return true;
-  return outcome.why === "transport" && outcome.fault.why === "unreachable";
+  if (outcome.ok) return undefined;
+  if (outcome.why === "not_connected") return "no_answer";
+  if (outcome.why !== "transport") return undefined;
+  switch (outcome.fault.why) {
+    case "unreachable":
+      return "no_answer";
+    case "unanswerable":
+      return "unreadable";
+    case "timed_out":
+      return undefined;
+  }
 }

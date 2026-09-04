@@ -588,7 +588,12 @@ export const NothingServesTheStep: Story = {
         run={[]}
         runAbsent="Fleet did not answer for this Job, so its steps are unknown."
         machine={
-          <JobResources reading={null} examined={null} unreachable onExamine={nothingPressedYet} />
+          <JobResources
+            reading={null}
+            examined={null}
+            nothingToAsk="no_answer"
+            onExamine={nothingPressedYet}
+          />
         }
         where={undefined}
         whereAbsent="Nothing serves this Job's paths, and no branch exists yet."

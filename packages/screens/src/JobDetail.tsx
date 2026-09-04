@@ -460,7 +460,7 @@ export function JobDetail({
           examined={looked?.state === "found" ? looked.examined : null}
           looking={looked?.state === "looking"}
           lookFailed={looked?.state === "failed" ? LOOK_FAILED : undefined}
-          unreachable={nothingToAsk(resources)}
+          nothingToAsk={nothingToAsk(resources)}
           onExamine={() => onExamine(job.id)}
         />
       }
