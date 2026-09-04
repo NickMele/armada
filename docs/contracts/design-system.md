@@ -775,7 +775,7 @@ anchor     top-aligned at 20% of viewport height, never centered
 input      --text-base · no border · --fg-default · placeholder --fg-subtle
            bottom rule --border-subtle
 row        32px · 12px padding · --text-sm · --fg-default
-           12px leading icon · shortcut right-aligned as kbd
+           16px leading icon · shortcut right-aligned as kbd
 active row --bg-hover
 section    --text-2xs · --fg-subtle
 ```
@@ -799,6 +799,15 @@ never chosen and the accent is reserved to interactive affordance, so
 weight is the channel left — and it is already in the type scale. **An
 alias hit marks nothing**, because the match was on a word that never
 renders and there is nothing on the lexicon term to mark.
+
+**The leading glyph read `12px` here until 2026-09-03.**
+[Iconography](iconography.md) is the authority on what a silhouette
+means and at what size it holds, and this line was transcribing it
+wrongly: every glyph the Navigation section draws is assigned 16px
+there, and `hard-drive`'s row records that its interior marks merge into
+the band above them below that size. The record was wrong rather than
+holding a second opinion, so it is the record that moved. A 32px row
+takes 16px comfortably.
 
 **A row that cannot act draws dimmed and says why**, in `--fg-subtle` at
 `--text-2xs`, beside its binding. Two kinds reach it: a binding the
