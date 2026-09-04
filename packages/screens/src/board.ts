@@ -15,7 +15,9 @@
 // No list of statuses is written here. `job-statuses.toml` says whether a Job
 // is over and what it is doing, the codegen carries both onto `JOB_LIFECYCLE`,
 // and the four state tabs are read off those two fields plus the one status the
-// `Queued` tab is named after:
+// `Queued` tab is named after. **`tabOf` itself is in `needs-you.ts` now**, so
+// that main can read the same rule; what it does is unchanged and the table
+// below is still what it does:
 //
 // | Tab | Rule |
 // |---|---|
@@ -68,10 +70,11 @@
 // strip is still a breakdown of what is on screen — and a tab that empties
 // under a search renders no count rather than a `0`.
 
-import { plural, JOB_LIFECYCLE } from "@armada/components";
+import { plural } from "@armada/components";
 import type { JobSummary } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
 import { instant } from "./duration";
+import { needsYou, needsYouClause, oldest, tabOf } from "./needs-you";
 
 /** The five tabs, in the order they are drawn and keyed. */
 export type BoardTab = "all" | "needs-you" | "running" | "queued" | "finished";
@@ -108,45 +111,16 @@ export const BOARD_TABS: readonly {
 export const FIRST_TAB: BoardTab = "all";
 
 /**
- * Which state tab a job is in, or `null` where this build's registry has no
- * lifecycle row for its status.
+ * The membership rule, and the sentence that counts it — re-exported so nothing
+ * that already reads them from here has to learn a second path.
  *
- * **`null` is a real answer and it is not a fifth tab.** Two things reach it: a
- * status this build's registry has never heard of, and one whose `terminal`,
- * `mode` and `who_is_acting` match none of the four rules. The first also has no
- * verb and no glyph, so the list already draws it as a named line beneath the
- * rows rather than as a row.
- *
- * Either way it counts under `All` and under no state tab, which makes the
- * counts stop summing — visibly, which is the point. A residual tab that
- * swallowed both would make a registry change look like nothing happened.
+ * **They live in `needs-you.ts` because main needs them too.** A notification
+ * fires when a job *enters* this set, and that decision is made in the process
+ * that holds the connection rather than in a window that may be closed — so the
+ * rule had to sit somewhere a Node bundle can reach without dragging React
+ * behind it. The rule itself did not change.
  */
-export function tabOf(job: JobSummary): StateTab | null {
-  const life = JOB_LIFECYCLE[job.status];
-  if (life === undefined) return null;
-  if (life.terminal) return "finished";
-  // **The one rule here that is not a lifecycle row, and it is first for a
-  // reason.** A drone waiting on an answer is on a `running` job whose
-  // `who_is_acting` is `Drone`, so every rule below would put it under Running
-  // — and a question on a job nobody has open would be invisible until somebody
-  // opened it. The registry cannot say this: it is a fact about a live slot
-  // rather than about a status, which is exactly why it rides on the row.
-  //
-  // It is above `terminal` in intent and below it in code because a terminal
-  // job has no drone left to be waiting, so the two can never both be true.
-  if (job.asking) return "needs-you";
-  // Before the actor, and not after it: `piloted` is `Working` with a person
-  // acting, and a job somebody has taken over is still moving.
-  if (life.mode === "Working") return "running";
-  if (life.whoIsActing === "Person") return "needs-you";
-  if (life.whoIsActing === "Drone") return "queued";
-  return null;
-}
-
-/** Whether a job is one of the ones waiting on a person. */
-export function needsYou(job: JobSummary): boolean {
-  return tabOf(job) === "needs-you";
-}
+export { needsYou, needsYouClause, oldest, tabOf } from "./needs-you";
 
 /** Whether a tab admits a job. `all` admits every one, including the unplaceable. */
 export function inTab(job: JobSummary, tab: BoardTab): boolean {
@@ -232,15 +206,6 @@ export function sorted(jobs: readonly JobSummary[], sort: BoardSort): JobSummary
   });
 }
 
-/** Oldest first, with an unreadable date last and the id as the tiebreak. */
-function oldest(a: JobSummary, b: JobSummary): number {
-  const left = instant(a.created_at);
-  const right = instant(b.created_at);
-  if (left === null) return right === null ? a.id.localeCompare(b.id) : 1;
-  if (right === null) return -1;
-  return left === right ? a.id.localeCompare(b.id) : left - right;
-}
-
 /**
  * The count, stating both numbers.
  *
@@ -280,12 +245,6 @@ export function countSentence(args: {
   const quoted = `“${args.query.trim()}”`;
   if (args.matched === 0) return `No jobs match ${quoted}. ${board}`;
   return `${plural(args.matched)} match ${quoted}. ${board}`;
-}
-
-/** "Nothing needs you", or how many do. */
-function needsYouClause(count: number): string {
-  if (count === 0) return "Nothing needs you.";
-  return count === 1 ? "1 job needs you." : `${count} jobs need you.`;
 }
 
 /**
