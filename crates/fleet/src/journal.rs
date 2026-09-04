@@ -1,34 +1,22 @@
 //! A Job's own log, read back off the disk and put on the wire.
 //!
-//! # The other side of the file the whole of Fleet writes
-//!
+//! **The other side of the file the whole of Fleet writes.**
 //! `crate::transcript::note` is called from nineteen modules — a worktree cut,
-//! a preparation run, a scope widened, a Drone adopted, a Job reclaimed — and
-//! every one of those lines went to `.armada/logs/<job-id>.jsonl` and was read
-//! by nothing. This reads it. Nothing over there changes, and nothing over
-//! there has to: a module that learns to write a new line is on this stream the
-//! moment it writes it.
+//! a preparation run, a scope widened, a Job reclaimed — and every one of those
+//! lines went nowhere. This reads them, so nothing over there changes and a
+//! module that learns to write a new line is on the stream at once.
 //!
-//! # A byte offset, not a row count
+//! **A byte offset, not a row count.** The file is append-only, so where a
+//! reader stopped is a position in it — which is what makes a viewer's cursor
+//! lossless rather than a count of what it missed. **A partial line is never
+//! consumed**: a reader can arrive between a write and its flush, so the cursor
+//! only advances to the last newline seen and the half-line is read whole next
+//! pass.
 //!
-//! The file is append-only, so where a reader stopped is a position in it. That
-//! is what makes a viewer's cursor cheap and, more to the point, **lossless** —
-//! a viewer that fell behind or reconnected reads from where it was rather than
-//! being handed a count of what it missed.
-//!
-//! **A partial line is never consumed.** Fleet appends a whole line per write,
-//! but a reader can arrive between the write and the flush, so the cursor only
-//! ever advances to the last newline seen. The half-line is read again on the
-//! next pass, whole.
-//!
-//! # The redaction is here
-//!
-//! An envelope carries `run_id`, `target`, `span`, `workspace` and a
-//! `component` — machine joining keys for somebody with `jq`, and none of them
-//! what a person watching a Job is asking. [`ipc::LogNote`] is the narrower
-//! thing, and this conversion is where a field added to the envelope is either
-//! carried or deliberately left behind. `docs/practices/protocol.md`: a domain
-//! type on the wire is a redaction decision nobody made.
+//! **The redaction is here.** An envelope carries joining keys a person
+//! watching a Job is not asking for; [`ipc::LogNote`] is the narrower thing,
+//! and this conversion is where a field added to the envelope is carried or
+//! deliberately left behind.
 
 use std::collections::{BTreeMap, VecDeque};
 use std::fs::File;

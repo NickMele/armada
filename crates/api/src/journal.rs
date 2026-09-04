@@ -1,42 +1,25 @@
 //! Watching one Job's own log: a reader Fleet implements, and the socket that
 //! follows it.
 //!
-//! # The file is the channel
-//!
-//! Every other stream on this seam is a broadcast: something publishes, a
-//! subscriber listens, and a subscriber that falls behind loses the oldest and
-//! is told how many. This one reads the file Fleet already writes.
-//!
-//! That is not a shortcut. A Job's log has **twenty-six write sites across
-//! nineteen modules** in Fleet, plus the transcript writer's own two lines, and
-//! every one of them is a synchronous append through `fleet::transcript::note`.
-//! Threading a channel handle through all of them would be a change to every
-//! one of those modules; reading the file is a change to none, and it means the
-//! next thing that writes a line — a line per preparation command, say —
+//! **The file is the channel.** Every other stream here is a broadcast; this
+//! one reads the file Fleet already writes. A Job's log has twenty-six write
+//! sites across nineteen modules of Fleet, every one a synchronous append
+//! through `fleet::transcript::note` — a channel would be a change to all of
+//! them and a reader is a change to none, so the next thing that writes a line
 //! reaches this stream with no protocol change and no edit here.
 //!
-//! # What that buys, and it is the part worth stating
+//! **Nothing on this stream can be missed.** The cursor is a byte offset into
+//! the durable record, so a viewer that stalls reads the gap on its next pass
+//! rather than being handed a count. There is no queue between the writer and
+//! the socket, bounded or otherwise, so this adds nothing to the risk
+//! `docs/practices/protocol.md` names as its largest. Each send is awaited, as
+//! [`crate::observing::relay`] awaits its own. What it costs is [`FOLLOW`] of
+//! latency, against a handful of events a minute.
 //!
-//! **Nothing on this stream can be missed.** The reader holds a byte offset
-//! into a file that is the durable record, so a viewer that stalls for a minute
-//! reads the minute it missed on its next pass rather than being handed a
-//! count and an apology. There is no queue between the writer and the socket,
-//! bounded or otherwise, so this adds nothing to the risk
-//! `docs/practices/protocol.md` names as its largest — the WebSocket sink being
-//! unbounded from the application side. Each send is awaited, exactly as
-//! [`crate::observing::relay`] awaits its own, so a slow viewer slows its own
-//! task and nothing else.
-//!
-//! What it costs is latency: a note is drawn within [`FOLLOW`] of being
-//! written rather than at the instant. Fleet's own events are a handful per
-//! minute at their busiest, so that is a trade against nothing.
-//!
-//! # `api` does not open the file
-//!
-//! [`Journal`] is stated here and implemented in `fleet`, the same direction
-//! [`crate::Daemon`] points: `.armada/logs/` is Fleet's layout, the conversion
-//! from an envelope to a [`LogNote`] is a redaction decision, and both belong on
-//! the far side of this boundary. What crosses is `ipc` vocabulary.
+//! **`api` does not open the file.** [`Journal`] is stated here and implemented
+//! in `fleet`, the direction [`crate::Daemon`] already points: `.armada/logs/`
+//! is Fleet's layout and the conversion to a [`LogNote`] is a redaction
+//! decision. What crosses is `ipc` vocabulary.
 
 use std::sync::Arc;
 use std::time::Duration;

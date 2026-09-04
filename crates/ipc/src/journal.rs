@@ -1,52 +1,28 @@
 //! What Fleet did to a Job, as the Job's own log recorded it.
 //!
-//! # The third voice, and it reached nowhere
+//! **The third voice, and it reached nowhere.** `ActivityLog` is specified as
+//! one stream carrying the Drone's turns, Armada's injected turns and Fleet's
+//! own events. Two travelled [`observe_job`](crate::TurnMessage); the third
+//! went to `.armada/logs/<job-id>.jsonl` and was read by nothing, so a Job with
+//! no Drone on it drew a blank panel for the whole of preparation. **The
+//! missing half of a surface designed whole**, not a new record.
 //!
-//! `packages/components/src/compositions/ActivityLog/ActivityLog.tsx` opens by
-//! saying the log is one stream carrying the Drone's turns, Armada's injected
-//! turns and Fleet's own events. Two of the three travelled
-//! [`observe_job`](crate::TurnMessage); the third was written to
-//! `.armada/logs/<job-id>.jsonl` and read by nothing. So a Job with no Drone on
-//! it — cutting a worktree, installing dependencies, being reclaimed — showed
-//! an empty activity log for however long that took, which is exactly the span
-//! somebody opens it for. **This is the missing half of a surface that was
-//! designed whole**, not a new record: `docs/concepts/log-envelope.md` already
-//! owns the line and Fleet already writes it.
+//! **A note is not the envelope.** `run_id`, `target`, `span`, `workspace` and
+//! `component` are joining keys for somebody with `jq`, and none of them is
+//! what a person watching a Job is asking. `fleet::journal` is the conversion,
+//! and where a field added to the envelope is carried or left behind.
 //!
-//! # Notes, not envelopes
+//! **Every note names who.** [`LogNote::by`] is on the wire and is [`Voice`],
+//! the same closed set a turn carries, so a surface folding the two streams
+//! into one column attributes both the same way. Fleet is the only writer of a
+//! Job's log today, which is exactly why the field is stated.
 //!
-//! A [`LogNote`] is not the envelope. The envelope carries `run_id`, `target`,
-//! `span`, `workspace` and a `component` that names the emitter — machine
-//! joining keys for somebody reading the file with `jq`, and none of them is
-//! what a person watching a Job is asking. What crosses is the instant, the
-//! voice, how bad it is, the one line, the ids that place it, and the fields
-//! flattened to strings a surface can draw. The conversion is Fleet's, in
-//! `fleet::journal`, and it is where a field added to the envelope is either
-//! carried or deliberately left behind.
+//! **Every note opens to its payload.** [`NotedField`] carries the envelope's
+//! `fields`, because a Fleet event drawn as grey prose in a column of openable
+//! entries is a second-class citizen in a stream claiming one grammar.
 //!
-//! # Every note names who
-//!
-//! [`LogNote::by`] is on the wire rather than assumed by the reader, and it is
-//! [`Voice`] — the same closed set an `observe_job` row carries — so a surface
-//! folding the two streams into one column attributes both the same way.
-//! Fleet is the only writer of a Job's log today, which is exactly why the
-//! field is stated: a value everybody agrees on by convention is the one that
-//! goes wrong silently when a second writer arrives.
-//!
-//! # A note opens to its fields
-//!
-//! Every other entry in the activity log opens to its payload. A Fleet event
-//! rendered as a line of grey prose would be a second-class citizen in a stream
-//! whose whole claim is one grammar, so [`NotedField`] carries the envelope's
-//! `fields` as name-and-value pairs — the pid, the branch, the paths, the
-//! counts — and the surface draws them as the payload the row opens to.
-//!
-//! # Nothing here is bounded per note
-//!
-//! `Saw::Called` cuts a long argument because a Drone chooses its size. Every
-//! `msg` and every field value on this stream is Fleet's own writing, from a
-//! `format!` Fleet holds, so there is nothing to cut and no second route to
-//! fetch the rest from.
+//! Nothing here is bounded per note: every `msg` and every value is Fleet's own
+//! writing, so there is nothing to cut and no second route to fetch.
 
 use serde::{Deserialize, Serialize};
 
