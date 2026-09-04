@@ -1,9 +1,12 @@
 //! Reading a registry, and saying a set back.
 //!
-//! Split from [`super`] for size, and shared with [`super::machine`]. Nothing
-//! here compares anything — it is the parsing the gate has to do by hand,
-//! because it carries no `toml` and no `syn` for the reason
-//! [`crate::rules_enums`] gives.
+//! Split from [`super`] for size, and shared with [`super::machine`] and with
+//! [`crate::rules_enums::declared`], which reads `job-statuses.toml`'s arrays
+//! for a different comparison. Nothing here compares anything — it is the
+//! parsing the gate has to do by hand, because it carries no `toml` and no
+//! `syn` for the reason [`crate::rules_enums`] gives. **One reader for one
+//! file**: a second hand-rolled parser of the same rows is where the two
+//! would start disagreeing about what the file says.
 //!
 //! **What cannot be read is reported, never skipped.** A field this rule drops
 //! is a claim it does not check, and a rule that quietly checks less than it
@@ -16,16 +19,16 @@ use std::path::Path;
 use crate::Report;
 
 /// One `[prefix<key>]` table, and the arrays it declares.
-pub(super) struct Row {
-    pub(super) key: String,
-    pub(super) line: usize,
-    pub(super) arrays: BTreeMap<String, Array>,
+pub(in crate::rules_enums) struct Row {
+    pub(in crate::rules_enums) key: String,
+    pub(in crate::rules_enums) line: usize,
+    pub(in crate::rules_enums) arrays: BTreeMap<String, Array>,
 }
 
 /// One `key = ["a", "b"]`, and the line it is on.
-pub(super) struct Array {
-    pub(super) values: BTreeSet<String>,
-    pub(super) line: usize,
+pub(in crate::rules_enums) struct Array {
+    pub(in crate::rules_enums) values: BTreeSet<String>,
+    pub(in crate::rules_enums) line: usize,
 }
 
 /// Every `[prefix<key>]` table in a registry, with the arrays it declares.
@@ -33,7 +36,12 @@ pub(super) struct Array {
 /// `"""` blocks are skipped for the reason `rules_enums`'s reader skips them: a
 /// `notes` field quoting a bracketed line is prose, not a table. An array that
 /// does not close on its line is reported rather than dropped.
-pub(super) fn read_rows(text: &str, prefix: &str, path: &str, report: &mut Report) -> Vec<Row> {
+pub(in crate::rules_enums) fn read_rows(
+    text: &str,
+    prefix: &str,
+    path: &str,
+    report: &mut Report,
+) -> Vec<Row> {
     let mut rows: Vec<Row> = Vec::new();
     let mut in_string = false;
     for (n, raw) in text.lines().enumerate() {
@@ -89,7 +97,12 @@ pub(super) fn read_rows(text: &str, prefix: &str, path: &str, report: &mut Repor
 }
 
 /// A file, or a finding naming what could not be read.
-pub(super) fn read(root: &Path, path: &str, what: &str, report: &mut Report) -> Option<String> {
+pub(in crate::rules_enums) fn read(
+    root: &Path,
+    path: &str,
+    what: &str,
+    report: &mut Report,
+) -> Option<String> {
     match fs::read_to_string(root.join(path)) {
         Ok(text) => Some(text),
         Err(_) => {
@@ -101,14 +114,17 @@ pub(super) fn read(root: &Path, path: &str, what: &str, report: &mut Report) -> 
 
 /// A variant identifier as the wire spelling it carries. The qualifier is
 /// optional, for the reason `rules_enums::edges`'s reader makes it optional.
-pub(super) fn spelled(arg: &str, variants: &BTreeMap<String, String>) -> Option<String> {
+pub(in crate::rules_enums) fn spelled(
+    arg: &str,
+    variants: &BTreeMap<String, String>,
+) -> Option<String> {
     variants
         .get(arg.rsplit("::").next().unwrap_or(arg).trim())
         .cloned()
 }
 
 /// Variant names as wire spellings, naming any that has none.
-pub(super) fn resolve(
+pub(in crate::rules_enums) fn resolve(
     variants: &[String],
     spellings: &BTreeMap<String, String>,
     enum_name: &str,
@@ -131,18 +147,21 @@ pub(super) fn resolve(
 }
 
 /// What is in the first and not the second.
-pub(super) fn difference(left: &BTreeSet<String>, right: &BTreeSet<String>) -> BTreeSet<String> {
+pub(in crate::rules_enums) fn difference(
+    left: &BTreeSet<String>,
+    right: &BTreeSet<String>,
+) -> BTreeSet<String> {
     left.difference(right).cloned().collect()
 }
 
 /// A set as a finding should say it. `nothing` rather than `[]`, because an
 /// empty bracket in a sentence reads as a formatting slip.
-pub(super) fn list<'a>(values: impl IntoIterator<Item = &'a String>) -> String {
+pub(in crate::rules_enums) fn list<'a>(values: impl IntoIterator<Item = &'a String>) -> String {
     let values: Vec<&str> = values.into_iter().map(String::as_str).collect();
     strs(&values.into_iter().collect())
 }
 
-pub(super) fn strs(values: &BTreeSet<&str>) -> String {
+pub(in crate::rules_enums) fn strs(values: &BTreeSet<&str>) -> String {
     if values.is_empty() {
         return "nothing".to_string();
     }
