@@ -140,8 +140,11 @@ Added 3 September 2026, with `#417`. A step's `exclude_paths` held two kinds of 
 | At `declare_scope` | Refused, and the refusal names `request_scope` | Refused, and the refusal says asking will not change it |
 | At `request_scope` | The Judge is asked whether the paths belong to the step | Refused before any call. There is no answer that lifts it |
 | At the gate | Answered over the declaration, and a cleared path passes | Answered over the declaration **and the footprint** |
+| Which steps it reaches | The step that declared one, and no other | **Every step**, declared or not — the gate reads the worktree on all of them |
 
 **The absolute tier is not a key, and that is the whole of why it holds.** Every path in it lives inside the repository a Drone has a worktree of — `.git`, `.armada`, `armada.yml`, `.env` and its family. A list naming them from inside that same repository could be edited by the thing it denies, and a Judge that could lift the rules it is judged by is not a boundary. There is no file to edit and no key to widen.
+
+**`.armada/artifacts/` is inside `.armada` and is not a boundary.** It is where seven shipped workflows send a step's deliverable, by a `mechanical_checks[].target` a Drone did not choose and cannot move, and where Fleet opens the file it puts in the Judge's brief. A boundary that refused it would refuse the work rather than protect anything — the same test `Cargo.toml` is kept out by. It is compiled in beside the boundary it narrows, so it is not an exception a caller can supply and there is still no key to widen.
 
 **A forge's continuous-integration directory is not in it, and cannot be as things stand.** Naming one inside `verification` is `no_vendor_literal_outside_adapters` exactly — a forge is the adapter layer's to know, and that rule has no exception mechanism by design. Reaching it would mean the VCS adapter declaring where its forge keeps that configuration and Fleet handing it down, which is a change to `adapter-traits` and `adapters`. Until then a step's own `exclude_paths` is where a repository names it, in the tier a Judge may lift.
 
