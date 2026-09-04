@@ -24,8 +24,8 @@
 //! work across and puts it back. See `adapters`' delivery module.
 
 use adapter_traits::{
-    AgentHarness, Base, BroughtUpToDate, Delivery, Opened, Pushed, Standing, Vcs, WorkProduct,
-    Worktree,
+    AgentHarness, Base, BroughtUpToDate, Changed, Delivery, Opened, Pushed, Standing, Vcs,
+    WorkProduct, Worktree,
 };
 use core_model::Job;
 use verification::TheBaseMoved;
@@ -196,7 +196,16 @@ where
             .vcs()
             .base_on_the_remote(worktree, base)
             .map_err(|why| Adrift::from_delivery(job.id(), why))?;
-        let review = review_of(job, &checks, base, &remote);
+        // **The cheap reading, not the counted one.** `counted_files` costs the
+        // patch and is already spent once, at the transition that ends a Job;
+        // this is the delta walk. A worktree that will not answer leaves the
+        // section saying nothing changed rather than failing a delivery whose
+        // work is already committed and pushed.
+        let changed = self
+            .work()
+            .changed_files(worktree)
+            .unwrap_or_else(|_| Changed::nothing());
+        let review = review_of(job, &checks, base, &remote, &changed);
         self.vcs()
             .open_for_review(worktree, base, &review)
             .map_err(|why| Adrift::from_delivery(job.id(), why))

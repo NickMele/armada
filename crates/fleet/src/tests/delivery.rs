@@ -334,7 +334,26 @@ async fn the_pull_request_body_is_assembled_from_what_was_checked() {
         body.contains("the symptom is gone"),
         "and what it had to satisfy: {body}"
     );
-    assert!(body.contains("## What was checked"), "{body}");
+    for heading in [
+        "## Why was the change needed?",
+        "## What is the outcome of the change",
+        "## Risks",
+        "## Checks Evidence",
+    ] {
+        assert!(
+            body.contains(heading),
+            "the four headings `agent-copy.md` fixes, in every body that leaves Armada: {body}"
+        );
+    }
+    assert!(
+        body.find("## Risks") < body.find("## Checks Evidence"),
+        "risks before evidence — a body that ends on its passes reads as a claim \
+         that everything is fine: {body}"
+    );
+    assert!(
+        body.contains("- `src/log.rs` — modified"),
+        "and the outcome section is what the record can prove it changed: {body}"
+    );
     assert!(
         body.contains("**Implement** — advanced") && body.contains("**Summarise** — advanced"),
         "every step with its verdict: {body}"
