@@ -295,6 +295,46 @@ impl Job {
         job
     }
 
+    /// Append a scope revision, and take its paths into the Job's own scope
+    /// where it took.
+    ///
+    /// **The fifth mutator, and the second the log does not describe.** It
+    /// takes `&self` and returns a new `Job` like the other four, so the
+    /// no-setter property is unchanged.
+    ///
+    /// **A revision that did not take still lands here.** The history is
+    /// append-only and its entries include revisions that did not take —
+    /// *was this ever asked* is a question people ask later — so the entry is
+    /// written either way and only [`ScopeRevisionOutcome::took`] moves
+    /// `write_targets`.
+    ///
+    /// **Widening only, and there is no path removal here.** A narrowing hands
+    /// back scope already held and is a person's act; nothing in a Drone's
+    /// toolset reaches one, so nothing in this method does either. A revision
+    /// carrying `paths_removed` would be a second act wearing this one's name.
+    ///
+    /// It is a no-op on a Job whose scope is undetermined: `None` is not empty
+    /// — nothing is outside a scope nobody has stated, so there is nothing for
+    /// an addition to be an addition *to*. The refusal is the caller's, before
+    /// a call is ever made; this is the property held where the caller is
+    /// wrong.
+    pub fn scope_revised(&self, revision: ScopeRevision) -> Job {
+        let mut job = self.clone();
+        if revision.outcome.took_effect() {
+            if let Some(held) = &job.write_targets {
+                let mut paths = held.paths().to_vec();
+                for path in &revision.paths_added {
+                    if !paths.contains(path) {
+                        paths.push(path.clone());
+                    }
+                }
+                job.write_targets = Some(WriteTargets::of(paths));
+            }
+        }
+        job.scope_revisions.push(revision);
+        job
+    }
+
     /// Record that a Drone is now working one step of this Job.
     ///
     /// **Refuses where one already is on that step, and the refusal narrowed

@@ -278,8 +278,12 @@ where
 ///
 /// `atomic_before` is `false` because there was no before — the Job did not
 /// exist. `outcome` is `took` because entry zero is the scope the Job actually
-/// carries; the registry names the field and no value set, so this is the word
-/// this file chose and it is reported as such.
+/// carries; the registry names the field and no value set, so the word was
+/// chosen here and it is reported as such. It is spelled through
+/// [`ScopeRevisionOutcome::took`] rather than as a literal, because a second
+/// writer of this history now exists — `crate::widening` — and two spellings
+/// of one outcome would make "did this take" a comparison each reader wrote
+/// for itself.
 fn entry_zero(
     write_targets: Option<&WriteTargets>,
     atomic: bool,
@@ -299,7 +303,7 @@ fn entry_zero(
         atomic_before: false,
         atomic_after: atomic,
         rationale: stated.rationale(),
-        outcome: ScopeRevisionOutcome::recorded("took"),
+        outcome: ScopeRevisionOutcome::took(),
         approved_by: stated.actor(),
         at: at.clone(),
     }
