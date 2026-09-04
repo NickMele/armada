@@ -60,6 +60,7 @@ mod linking;
 mod looping;
 mod modelling;
 mod noticing;
+mod out_of_bounds;
 mod overlap;
 mod overruling;
 mod peer;

@@ -331,8 +331,7 @@ async fn nothing_can_submit_to_a_job_a_person_is_holding_at_a_gate() {
 /// find by a route that knows nothing about why.
 ///
 /// It escalates now, on a trigger that says the gate could not decide rather
-/// than that the work failed, and the artifact is in the Job's log where the
-/// person watching was looking.
+/// than that the work failed, and the artifact is named in the Job's log.
 #[tokio::test]
 async fn a_gate_that_cannot_read_its_artifact_escalates_and_names_the_artifact() {
     let home = TempDir::new();
@@ -384,7 +383,9 @@ async fn a_gate_that_cannot_read_its_artifact_escalates_and_names_the_artifact()
         "a gate that reads nothing and writes nothing is the whole defect: {written}"
     );
     assert!(
-        written.contains("the Job's diff"),
+        // The changed-file list rather than the footprint: `#431` made that
+        // the first reading a gate takes.
+        written.contains("the Job's changed files"),
         "the artifact is named, not just the fact that something went wrong: {written}"
     );
     assert!(

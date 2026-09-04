@@ -26,6 +26,7 @@ use std::time::Duration;
 use config::{ResolvedCheck, ResolvedStep};
 use core_model::{CheckOutcome, StepCheck};
 
+use crate::forbidden::{reaches, Forbidden};
 use crate::scope::OutsideScope;
 
 /// What the scope check is written down as, where a step declares one.
@@ -34,6 +35,20 @@ use crate::scope::OutsideScope;
 /// `evidence_scope` answering — so it is named by the field that asked for it,
 /// the way `diff_nonempty` is named by its kind.
 pub const EVIDENCE_SCOPE: &str = "evidence_scope";
+
+/// What the absolute tier is written down as, whatever the step declared.
+///
+/// **Not named by a field, because no field asks for it.** Every other row in
+/// this module is named by the thing that wanted it — a Manifest Check by its
+/// entry, the scope check by `evidence_scope` — and a step can reach a boundary
+/// nothing lifts having declared nothing at all. So it is named by what it is,
+/// in the words the refusal already used before this row existed.
+///
+/// **One name for both doors.** A step that declared a scope meets the same
+/// boundary through [`OutsideScope::Forbidden`], and that failure is written
+/// down under this name too: the record must not say the boundary is one rule
+/// on a step with a scope and another on a step without.
+pub const OUT_OF_BOUNDS: &str = "out_of_bounds";
 
 /// How a Check's process ended. The fact, before anything decides what it
 /// means.
@@ -222,6 +237,21 @@ pub enum CheckFailed {
     /// where the mechanical tier held, so folding drift in made the look
     /// `docs/concepts/judge.md` calls mandatory unreachable.
     OutOfScope(OutsideScope),
+    /// The step's footprint reaches a boundary nothing lifts.
+    ///
+    /// **The floor, and it is reached without a declaration.** Every other
+    /// variant here answers something the step asked for — a Check it declared,
+    /// an artifact it named, a scope it carried. This one answers where the
+    /// step asked for nothing, which is why it is its own variant rather than
+    /// an [`OutsideScope`] carried inside `OutOfScope`: a step that declared no
+    /// evidence scope failing a scope check is a sentence nobody can act on.
+    ///
+    /// **It says the same thing as [`OutsideScope::Forbidden`] and is written
+    /// down under the same name.** The two are separate because they are
+    /// reached differently — one over a declaration and a footprint, this one
+    /// over a footprint alone — and identical in what a person is told, which
+    /// [`OUT_OF_BOUNDS`] and [`reaches`] are what keep true.
+    OutOfBounds { paths: Vec<Forbidden> },
 }
 
 impl CheckFailed {
@@ -235,7 +265,8 @@ impl CheckFailed {
             CheckFailed::WrongExitCode { .. }
             | CheckFailed::DiffEmpty
             | CheckFailed::ArtifactNotThere { .. }
-            | CheckFailed::OutOfScope(_) => CheckOutcome::Failed,
+            | CheckFailed::OutOfScope(_)
+            | CheckFailed::OutOfBounds { .. } => CheckOutcome::Failed,
             CheckFailed::Signalled { .. } => CheckOutcome::Signalled,
             CheckFailed::TimedOut { .. } => CheckOutcome::TimedOut,
             CheckFailed::NeverRan { .. } => CheckOutcome::NeverRan,
@@ -266,6 +297,14 @@ impl CheckFailed {
             CheckFailed::OutOfScope(OutsideScope::NothingDeclared) => {
                 "the step declares which paths its work is in".to_string()
             }
+            // **The same sentence for both doors**, and it names no field: a
+            // step that declared nothing is measured against this too, so an
+            // expectation phrased as "what the step declared" would be a
+            // yardstick half the fleet never held.
+            CheckFailed::OutOfScope(OutsideScope::Forbidden { .. })
+            | CheckFailed::OutOfBounds { .. } => {
+                "the step touches nothing that is out of bounds for every task".to_string()
+            }
             CheckFailed::OutOfScope(_) => {
                 "the step declares only paths its evidence scope allows".to_string()
             }
@@ -291,6 +330,7 @@ impl CheckFailed {
                 Artifact::Missing => format!("nothing is at `{target}`"),
             },
             CheckFailed::OutOfScope(outside) => outside.to_string(),
+            CheckFailed::OutOfBounds { paths } => reaches(paths),
         }
     }
 
@@ -333,6 +373,14 @@ impl CheckFailed {
     /// [`Ran::recorded`]; the scope check declares no entry and so brings one.
     pub fn recorded(&self) -> Option<StepCheck> {
         match self {
+            CheckFailed::OutOfScope(OutsideScope::Forbidden { .. })
+            | CheckFailed::OutOfBounds { .. } => Some(StepCheck {
+                name: OUT_OF_BOUNDS.to_string(),
+                outcome: CheckOutcome::Failed,
+                expected: Some(self.expected()),
+                produced: Some(self.produced()),
+                output_path: None,
+            }),
             CheckFailed::OutOfScope(_) => Some(StepCheck {
                 name: EVIDENCE_SCOPE.to_string(),
                 outcome: CheckOutcome::Failed,

@@ -380,8 +380,12 @@ pub trait WorkProduct {
     /// have produced its text, and the one call that skips the per-file work
     /// answers totals only. Against this repository, release build: 1.3ms over
     /// 6 files and 105 lines, 25ms over 104 files and 7.7k, 90ms over 414 files
-    /// and 59k — where [`changed_files`](WorkProduct::changed_files) is a delta
-    /// walk costing under a microsecond over the same three.
+    /// and 59k — where [`changed_files`](WorkProduct::changed_files) costs
+    /// 15-19ms over all three, because it pays for the worktree walk and not
+    /// for the diff. Measured again in `docs/spikes/013`, which is where the
+    /// "under a microsecond" this line used to claim was found to be wrong by
+    /// four orders of magnitude: the walk is flat in the size of the change,
+    /// which is the property the sentence below rests on, and it is not free.
     ///
     /// **So this is called once, at the transition that ends a Job**, and never
     /// on the live seam: `fleet`'s watcher reads every two seconds inside a

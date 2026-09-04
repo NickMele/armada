@@ -38,8 +38,8 @@ use core_model::{
     Timestamp, Transitioned,
 };
 use verification::{
-    decide, Accepted, Answered, Baseline, CheckFailed, Delivered, InScope, Lifted, OutcomeTurn,
-    OutsideScope, Printed, Ran, Request, Submission, Verdict, Verified, A_DELIVERABLE,
+    decide, out_of_bounds, Accepted, Answered, Baseline, CheckFailed, Delivered, InScope, Lifted,
+    OutcomeTurn, OutsideScope, Printed, Ran, Request, Submission, Verdict, Verified, A_DELIVERABLE,
 };
 
 use crate::at_step::AtStep;
@@ -119,27 +119,37 @@ where
         Ok(accepted) => accepted,
         Err(mismatch) => return Ruling::NotWhatTheStepAsked(mismatch),
     };
-    // **Read once, before the loop, and only where a Check asks for it.** A
-    // step whose Checks declare no `when` pays for nothing; a step with one
-    // pays for one reading, shared with the scope tier below rather than read
-    // twice for two questions about the same worktree.
-    let changed = match step.checks().iter().any(ResolvedCheck::needs_changed_paths)
-        || step.evidence_scope().is_some()
-    {
-        false => None,
-        true => match work.changed_files(at.worktree()) {
-            Ok(changed) => Some(changed),
-            Err(cause) => {
-                return Ruling::CouldNotDecide {
-                    artifact: "the Job's changed files",
-                    cause: Box::new(cause),
-                    checks: Vec::new(),
-                    output: Vec::new(),
-                }
+    // **Read once, before the loop, on every step.** It used to be read only
+    // where a Check asked for changed paths or the step declared an evidence
+    // scope, which left the absolute tier below unchecked on fourteen of the
+    // twenty-three shipped steps — every terminal one, and the whole of `epic`
+    // including the step that dispatches other Jobs. `#431` is that hole, and
+    // the reading is what closes it.
+    //
+    // **Measured before it was made unconditional**, in
+    // `docs/spikes/013-what-does-reading-the-diff-cost.md`: 14ms on a clean
+    // worktree, 18ms over 49 changed files, 22ms over 449, against a median
+    // step of 131s. The diff's size barely moves it — the walk of the worktree
+    // is the cost, and every step already pays for one of these in
+    // `crate::settling`, which reads the same files again for the step's own
+    // transcript row after this ruling is made.
+    //
+    // **A worktree that will not open now stops every step**, where before it
+    // stopped only the ones that asked. That is the honest answer rather than a
+    // regression: a gate that cannot read the worktree cannot say what the step
+    // did, and `CouldNotDecide` neither advances nor fails it.
+    let changed = match work.changed_files(at.worktree()) {
+        Ok(changed) => changed,
+        Err(cause) => {
+            return Ruling::CouldNotDecide {
+                artifact: "the Job's changed files",
+                cause: Box::new(cause),
+                checks: Vec::new(),
+                output: Vec::new(),
             }
-        },
+        }
     };
-    let touched: Vec<String> = changed.as_ref().map(Changed::paths).unwrap_or_default();
+    let touched: Vec<String> = Changed::paths(&changed);
 
     // **Against the step's own start, never the branch's.** A step that wrote
     // nothing used to pass this on the files an earlier step committed;
@@ -241,40 +251,39 @@ where
 
     let mut checks = ran.recorded();
     let mechanical = decide(accepted, &ran);
-    // The scope tier, and it answers into two tiers rather than one.
+    // **Two tiers with two reaches, and that is the design.** The liftable tier
+    // is the step's own `exclude_paths`, scoped to the step that declared one.
+    // The absolute tier is a boundary of the repository rather than of the
+    // step, so it answers on every step — including one that declares nothing,
+    // which is all `#431` moved.
+    //
     // `docs/concepts/judge.md` gives declared plan drift to the Judge and says
     // it does not fail the step, because legitimate investigation sometimes
     // moves the work. What stays mechanical is the other two: nothing drifted
     // where nothing was declared, and a denylist a model could excuse is not a
-    // denylist.
-    //
-    // This used to fold drift in here too, arguing that a step which did
-    // another step's work should never reach a model call. That was true about
-    // the cost and wrong about the consequence — the Judge is asked only where
-    // the mechanical tier held, so the same line made the mandatory look
+    // denylist. This used to fold drift in as well, arguing a step doing
+    // another step's work should never reach a model call — true about the cost
+    // and wrong about the consequence, since the Judge is asked only where the
+    // mechanical tier held, so the same line made the mandatory look
     // unreachable.
-    //
-    // **Cold unless the step declares an evidence scope**, which is what leaves
-    // a step without one behaving exactly as it did before.
-    //
-    // The paths are the reading taken before the Checks ran, not a second one:
-    // two readings of one worktree could disagree, and a scope answer derived
-    // from a different diff than the one a Check was skipped on would be two
-    // gates looking at two trees.
-    let (scope, off_plan) = match (step.evidence_scope(), changed.as_ref()) {
-        (None, _) => (None, Vec::new()),
-        // Unreachable — a step declaring a scope is exactly what makes the
-        // reading above happen. Carried rather than unwrapped, for the reason
-        // `Ran::of`'s error is.
-        (Some(_), None) => {
-            return Ruling::CouldNotDecide {
-                artifact: "the Job's changed files",
-                cause: "the step declares an evidence scope and no diff was read".into(),
-                checks,
-                output,
-            }
-        }
-        (Some(scope), Some(_)) => match InScope::resolved(scope, declared, lifted, &touched) {
+    let (scope, off_plan) = match step.evidence_scope() {
+        // **A floor, not a plan.** There is still no drift check here, no
+        // declaration to compare a diff against and nothing a Judge is asked.
+        // The only question left is the one no answer moves.
+        None => match out_of_bounds(&touched) {
+            found if found.is_empty() => (None, Vec::new()),
+            found => (Some(CheckFailed::OutOfBounds { paths: found }), Vec::new()),
+        },
+        // The scoped step's absolute tier is inside `InScope::resolved`, over
+        // the declaration and the footprint together — so the floor above is
+        // not repeated here, and a path declared but never written is caught by
+        // that half rather than missed by this one.
+        //
+        // The paths are the reading taken before the Checks ran, not a second
+        // one: two readings of one worktree could disagree, and a scope answer
+        // derived from a different diff than the one a Check was skipped on
+        // would be two gates looking at two trees.
+        Some(scope) => match InScope::resolved(scope, declared, lifted, &touched) {
             Ok(_) => (None, Vec::new()),
             Err(OutsideScope::Undeclared { changed }) => (None, changed),
             // A variant added to `OutsideScope` lands here and fails the

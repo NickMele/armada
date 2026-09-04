@@ -4,9 +4,11 @@
 //! declaration tags the step for a mandatory Judge look, and during the step it
 //! is recorded and the Drone may declare again.
 //!
-//! The third group is the one that matters most and asserts nothing new: a step
-//! carrying no `evidence_scope` reads no worktree for a scope it does not have
-//! and behaves exactly as it did before any of this existed.
+//! The third group is the one that matters most: a step carrying no
+//! `evidence_scope` is asked for no declaration, drifts from nothing and
+//! reaches no Judge about where its work went — and is still answered over the
+//! boundaries nothing lifts. That floor is `#431`, and it is the one thing on
+//! such a step that is not as it was before any of this existed.
 
 use std::sync::Arc;
 
@@ -47,7 +49,7 @@ fn a_diff_call<'a>() -> Call<'a> {
 
 /// One step, gated on nothing but its scope, so the only thing that can fail is
 /// the scope. A Check would put a second reason in every failure below.
-fn scoped(diff_check: bool, exclude: &[&str]) -> config::ResolvedWorkflow {
+pub(super) fn scoped(diff_check: bool, exclude: &[&str]) -> config::ResolvedWorkflow {
     testkit::resolved(&[Sketch {
         id: "implement",
         label: "Implement",
@@ -64,7 +66,7 @@ fn scoped(diff_check: bool, exclude: &[&str]) -> config::ResolvedWorkflow {
     }])
 }
 
-fn declared(paths: &[&str]) -> DeclaredPaths {
+pub(super) fn declared(paths: &[&str]) -> DeclaredPaths {
     DeclaredPaths::of(paths.iter().copied().map(RepoPath::new).collect())
 }
 
@@ -78,7 +80,7 @@ async fn ruled_on(
     ruled_by(&judging(), workflow, declared, changed).await
 }
 
-async fn ruled_by(
+pub(super) async fn ruled_by(
     judging: &Judging,
     workflow: &config::ResolvedWorkflow,
     declared: Option<&DeclaredPaths>,
@@ -618,12 +620,15 @@ async fn the_plan_does_not_survive_the_step_it_was_declared_for() {
 
 // ------------------------------------------------ a step that asked nothing
 
-/// **The whole of what a step with no evidence scope does differently: nothing.**
+/// **What a step with no evidence scope still does not get: a plan.**
 ///
-/// It reads no worktree for a scope it does not have, which is what keeps the
-/// check cold on every step written before one existed.
+/// No declaration is asked for, nothing drifts because there is nothing to
+/// drift from, and no Judge is asked about where the work went. What it gets
+/// since `#431` is the floor below this one — the absolute tier, over the
+/// footprint alone — and the reading that floor is answered over is the only
+/// thing that changed here.
 #[tokio::test]
-async fn a_step_with_no_scope_is_neither_checked_nor_read() {
+async fn a_step_with_no_scope_is_asked_nothing_it_did_not_declare() {
     let workflow = testkit::resolved(&[Sketch {
         id: "implement",
         label: "Implement",
@@ -654,10 +659,10 @@ async fn a_step_with_no_scope_is_neither_checked_nor_read() {
 
     assert!(ruling.advanced(), "{ruling:?}");
     assert_eq!(
-        work.asked().len(),
+        work.listed().len(),
         1,
-        "the worktree was read once, for `diff_nonempty`, and not again for a \
-         scope the step does not declare"
+        "the changed-file list is read once and answers the floor, the Checks' \
+         coverage and a scope tier this step does not declare"
     );
 }
 
@@ -676,7 +681,7 @@ async fn an_ungated_step_with_no_scope_advances_on_evidence_alone() {
     }]);
     let worktree = worktree();
     let at_step = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
-    let work = FakeWorkProduct::refusing("a repository nobody should have opened");
+    let work = FakeWorkProduct::changed(&["src/lib.rs"]);
 
     let ruling = rule_on(
         at_step,
