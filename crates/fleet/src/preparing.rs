@@ -56,11 +56,24 @@ where
     /// `crate::dispatch`'s and it is what makes a failure here impossible to
     /// read as a step that failed.
     ///
-    /// Both log lines are written whatever happens to them — `note` is a file
+    /// Every log line is written whatever happens to it — `note` is a file
     /// write and a Job is not escalated over a log — but they are not
     /// decoration. Preparation is the one span in a Job where minutes pass with
     /// no Drone, no transcript and nothing on the Board moving, and a Job that
     /// goes quiet is worse than one that fails loudly.
+    ///
+    /// **A line per command, and it is written before the spawn.** The pair
+    /// that opened and closed the whole set named `requires: bootstrap,
+    /// browsers` and nothing else, so a run that died on the first of two read
+    /// identically to one that never began — which is what made #435 take a
+    /// process listing to diagnose rather than a log read. The line before the
+    /// spawn is the one that was missing: with it, a log whose last entry is
+    /// *starting* names the command that is out, and a log whose last entry is
+    /// *finished* says the next one never got as far as being tried.
+    ///
+    /// **Which is diagnosis and not the fix.** What actually wedges here is
+    /// that nothing is watching — see [`crate::unattended`], which is the half
+    /// that moves the Job.
     pub(crate) async fn prepared(&self, job: &Job, worktree: &Worktree) -> Result<(), Adrift> {
         let required = self.manifest().prepared_by();
         if required.is_empty() {
@@ -70,60 +83,79 @@ where
         self.noted_preparing(
             job,
             "the worktree is being prepared before any Drone is put on it",
-            "requires",
-            FieldValue::Str(named.join(", ")),
+            &[("requires", FieldValue::Str(named.join(", ")))],
         );
 
         let began = Instant::now();
-        let ran = prepare(
-            required,
-            Path::new(worktree.path()),
-            self.budget().duration(),
-        )
-        .await;
-        let took = began.elapsed();
-        if let Err(cause) = ran {
-            // **`not_prepared`, not `interrupted`.** `interrupted` means a Job
-            // marked running has no matching OS process, so it sends whoever
-            // reads it hunting for a Drone that died. Nothing had been spawned
-            // here. `move_job` rather than a wrapper beside `interrupt`,
-            // because this is the only site that raises it — the trigger names
-            // the worktree and the `Adrift` beside it names the command.
-            self.move_job(
+        for command in required {
+            self.noted_preparing(
                 job,
-                Target::Escalated(EscalationTrigger::NotPrepared),
-                Actor::Fleet,
+                "a preparation command is starting",
+                &[
+                    ("command", FieldValue::Str(command.name().to_string())),
+                    ("run", FieldValue::Str(command.run().to_string())),
+                ],
+            );
+            let took = Instant::now();
+            if let Err(cause) = prepare_one(
+                command,
+                Path::new(worktree.path()),
+                self.budget().duration(),
             )
-            .await?;
-            return Err(Adrift::NotPrepared {
-                job: job.id().clone(),
-                cause: Box::new(cause),
-            });
+            .await
+            {
+                // **`not_prepared`, not `interrupted`.** `interrupted` means a
+                // Job marked running has no matching OS process, so it sends
+                // whoever reads it hunting for a Drone that died. Nothing had
+                // been spawned here. `move_job` rather than a wrapper beside
+                // `interrupt`, because this is the only site that raises it —
+                // the trigger names the worktree and the `Adrift` beside it
+                // names the command.
+                self.move_job(
+                    job,
+                    Target::Escalated(EscalationTrigger::NotPrepared),
+                    Actor::Fleet,
+                )
+                .await?;
+                return Err(Adrift::NotPrepared {
+                    job: job.id().clone(),
+                    cause: Box::new(cause),
+                });
+            }
+            self.noted_preparing(
+                job,
+                "a preparation command finished",
+                &[
+                    ("command", FieldValue::Str(command.name().to_string())),
+                    ("seconds", FieldValue::Int(took.elapsed().as_secs() as i64)),
+                ],
+            );
         }
         self.noted_preparing(
             job,
             "the worktree is prepared",
-            "seconds",
-            FieldValue::Int(took.as_secs() as i64),
+            &[("seconds", FieldValue::Int(began.elapsed().as_secs() as i64))],
         );
         Ok(())
     }
 
     /// One line in the Job's own log, where the person watching it is looking.
     ///
-    /// **`Info`, on both of them.** Neither says anything is wrong: a failure
-    /// is `Adrift`'s and `settling::noted_adrift` writes it at `Error` with the
+    /// **`Info`, on all of them.** None says anything is wrong: a failure is
+    /// `Adrift`'s and `settling::noted_adrift` writes it at `Error` with the
     /// command named, so a second line here would report one event twice.
-    fn noted_preparing(&self, job: &Job, said: &str, key: &'static str, value: FieldValue) {
-        let envelope = Envelope::new(
+    fn noted_preparing(&self, job: &Job, said: &str, fields: &[(&'static str, FieldValue)]) {
+        let mut envelope = Envelope::new(
             self.now(),
             Level::Info,
             Component::Fleet,
             self.run().clone(),
             said,
         )
-        .in_job(job.id().as_ulid().clone())
-        .with_field(key, value);
+        .in_job(job.id().as_ulid().clone());
+        for (key, value) in fields {
+            envelope = envelope.with_field(*key, value.clone());
+        }
         let _ = transcript::note(&self.host().repo_root, job.id(), &envelope);
     }
 }
@@ -135,35 +167,31 @@ where
 /// pane they scroll. The full capture is on the process's own stdout.
 const SAID_LIMIT: usize = 1_500;
 
-/// Run everything the Manifest requires before a step, in the worktree.
-///
-/// `Ok(())` where there was nothing to run, which is the ordinary case for a
-/// repository that declares no `setup`.
-///
-/// **In order, stopping at the first failure.** `[install, generate]` is a
-/// sequence, and carrying on past the first would produce the second's error
-/// about the first's job.
+/// One `setup.requires` entry, run.
 ///
 /// **Nothing but zero passes.** A Check may declare `expect_exit_code`; there
 /// is no reading of *the install failed and that was expected* that leaves a
 /// worktree a Job can work in. `CheckBudget` bounds it, because a cold install
 /// and a cold workspace build are the same minutes, and a second dial would be
 /// a second number nobody could find.
-pub(crate) async fn prepare(
-    required: &[Preparation],
+///
+/// **The budget bounds a command that started.** Everything upstream of the
+/// spawn — the future being dropped, the runtime going away — produces no exit
+/// for this to read and no `Exit::TimedOut` either, which is why the bound that
+/// catches #435 is not in here. See [`crate::unattended`].
+pub(crate) async fn prepare_one(
+    command: &Preparation,
     worktree: &Path,
     budget: Duration,
 ) -> Result<(), NotPrepared> {
-    for command in required {
-        let attempt = checks_runner::run(command.run(), worktree, budget).await;
-        if attempt.exit != Exit::Code(0) {
-            return Err(NotPrepared {
-                command: command.name().to_string(),
-                run: command.run().to_string(),
-                exit: attempt.exit,
-                output: attempt.output,
-            });
-        }
+    let attempt = checks_runner::run(command.run(), worktree, budget).await;
+    if attempt.exit != Exit::Code(0) {
+        return Err(NotPrepared {
+            command: command.name().to_string(),
+            run: command.run().to_string(),
+            exit: attempt.exit,
+            output: attempt.output,
+        });
     }
     Ok(())
 }
