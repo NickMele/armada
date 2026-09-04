@@ -27,14 +27,14 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use core_model::{
-    AdvanceGate, EvidenceScope, EvidenceType, JudgeCheck, ModelName, StepId, Ulid, WorkflowId,
-    ARTIFACT_EXISTS, DIFF_NONEMPTY, MANIFEST_CHECK,
+    AdvanceGate, EvidenceScope, EvidenceType, GateVerdict, JudgeCheck, ModelName, StepId, Ulid,
+    WorkflowId, ARTIFACT_EXISTS, DIFF_NONEMPTY, MANIFEST_CHECK,
 };
 use serde_yaml_ng::Value;
 
 use crate::error::{BadReturn, BadTarget, Fault, LoadError, Refusal};
 use crate::judge;
-use crate::loops::{self, GateVerdict, Looping};
+use crate::loops::{self, Looping};
 use crate::roster::{self, Roster};
 use crate::scope;
 use crate::yaml::{self, Table};

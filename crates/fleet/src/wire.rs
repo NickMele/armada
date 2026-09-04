@@ -105,11 +105,17 @@ pub(crate) fn recorded(event: &RecordedEvent) -> ipc::Recorded {
                 to: (*to).into(),
                 reason: ipc::Reason::of(reason),
             }),
+            // `returned_by` is deliberately not carried across. `ipc` is the
+            // protocol and adding a field to it is a Bridge rebuild and a Fleet
+            // restart; nothing on the other side renders a loop yet, and the
+            // pass a Job is on is a read of its own (`store::step_iteration`)
+            // rather than something a timeline row has to spell.
             Moved::Step {
                 step_id,
                 from,
                 to,
                 why,
+                ..
             } => ipc::Movement::Step(ipc::StepMoved {
                 step_id: step_id.into(),
                 from: (*from).into(),

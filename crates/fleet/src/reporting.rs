@@ -509,12 +509,21 @@ fn moved(event: &store::RecordedEvent) -> String {
             from,
             to,
             why,
+            returned_by,
         } => format!(
-            "{seq} {at} — step {} {} to {}{}",
+            "{seq} {at} — step {} {} to {}{}{}",
             step_id.as_str(),
             from.as_wire(),
             to.as_wire(),
             why.map(|trigger| format!(", {}", trigger.as_wire()))
+                .unwrap_or_default(),
+            // On a loop return only, where the line would otherwise read as a
+            // step being worked again with nothing saying who asked for it —
+            // and whose `iteration_count` the pass is charged to is exactly the
+            // question a person reading a looping Job's log has.
+            returned_by
+                .as_ref()
+                .map(|by| format!(", sent back by {}", by.as_str()))
                 .unwrap_or_default()
         ),
         store::Moved::Drone {

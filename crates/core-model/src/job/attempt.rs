@@ -6,23 +6,22 @@
 //! three times, which is the judgement `iteration_cap` exists to force."* A
 //! record keyed by step alone can only say what the last run found.
 //!
-//! # It is not `retry_count`, and it is not `iteration_count`
-//!
-//! Both are typed `job_steps` columns in `domain/job-fields.toml` and neither
-//! is one; `domain/workflows.toml` records that whose `retry_count` a backward
-//! jump increments is undefined. Naming this one of those would settle that
-//! silently.
+//! # Three types over one log, and no two of them are the same number
 //!
 //! **An [`Attempt`] counts something observed rather than something policy
 //! decides**: the times the step's log says it entered `running`. It is also
 //! the registry's own word for the unit — `attempt_cap` "bounds total attempts
-//! across all iterations of a step" — so those counters get defined against
-//! this rather than against a third vocabulary beside it.
+//! across all iterations of a step".
 //!
-//! [`Iteration`] is the same discipline over the other edge, and a second type
-//! rather than a second number: a return must never spend the retry budget,
-//! and one `u32` fits both caps.
-
+//! [`Iteration`] is the same discipline over the loop's edge, and [`Spent`] is
+//! the retry budget's own count, which resets where an attempt does not.
+//!
+//! **[`Spent`] exists because the wrong one compiled.**
+//! `ResolvedStep::may_hand_back` took an [`Attempt`], so a step on its second
+//! pass arrived at its retry gate with the first pass's runs already charged —
+//! and `retry_limit`'s registry row says the opposite: *"Resets on a loop
+//! return — re-entry as designed is a fresh attempt budget."* Three types, and
+//! no call site where two of them are interchangeable.
 use core::fmt;
 use core::num::NonZeroU32;
 
@@ -209,5 +208,78 @@ mod iteration_tests {
     #[test]
     fn passes_order_by_their_number() {
         assert!(Iteration::returns_made(0) < Iteration::returns_made(1));
+    }
+}
+
+/// How many of a step's runs the pass it is on has spent. One-based.
+///
+/// **The count `retry_limit` is asked against, and the only one.** It is not
+/// [`Attempt`], which keys every per-run record and therefore has to climb
+/// across a loop return so a second pass's verdicts do not overwrite a first
+/// pass's. This resets on that return, because `retry_limit`'s registry row
+/// says a re-entry as designed is a fresh budget — and it is a separate type
+/// precisely so that the two cannot be handed to the same call.
+///
+/// **Identical to [`Attempt`] on every step of every linear workflow**, which
+/// is why the mistake went unnoticed: nothing had ever returned, so the two
+/// readings of the log agreed.
+///
+/// Constructed one way only, from the step's own log, for [`Attempt`]'s reason.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Spent(NonZeroU32);
+
+impl Spent {
+    /// The run a pass is on before anything has been handed back inside it.
+    pub const FIRST: Spent = Spent(NonZeroU32::MIN);
+
+    /// The run this pass is on, given how many times the step has entered
+    /// `running` since the last verdict routed back to it.
+    ///
+    /// **Zero runs since the return is still the first of the pass**, for
+    /// [`Attempt::runs_begun`]'s reason: the return itself writes the row that
+    /// makes it one, and a record written between the two belongs to the run
+    /// it is part of.
+    pub fn runs_this_pass(entries_into_running: u32) -> Spent {
+        match NonZeroU32::new(entries_into_running) {
+            Some(count) => Spent(count),
+            None => Spent::FIRST,
+        }
+    }
+
+    /// The ordinal, for the arithmetic `ResolvedStep::may_hand_back` owns.
+    /// One-based.
+    pub fn number(self) -> u32 {
+        self.0.get()
+    }
+}
+
+impl fmt::Display for Spent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.get())
+    }
+}
+
+#[cfg(test)]
+mod spent_tests {
+    use super::{Attempt, Spent};
+
+    #[test]
+    fn a_pass_that_has_not_begun_a_run_is_still_on_its_first() {
+        assert_eq!(Spent::runs_this_pass(0), Spent::FIRST);
+        assert_eq!(Spent::runs_this_pass(0).number(), 1);
+    }
+
+    /// The reading that makes it a different number from [`Attempt`]: a step
+    /// worked four times across two passes is on the second run of the second
+    /// pass, and a budget of two still has room.
+    #[test]
+    fn the_budget_resets_where_the_attempt_keeps_climbing() {
+        assert_eq!(Attempt::runs_begun(4).number(), 4);
+        assert_eq!(Spent::runs_this_pass(2).number(), 2);
+    }
+
+    #[test]
+    fn runs_of_a_pass_order_by_their_number() {
+        assert!(Spent::runs_this_pass(1) < Spent::runs_this_pass(2));
     }
 }

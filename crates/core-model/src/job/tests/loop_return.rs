@@ -10,6 +10,8 @@
 //!
 //! Like every test beside it, nothing here constructs a step already moved.
 
+use alloc::collections::BTreeMap;
+
 use super::*;
 
 fn first() -> StepId {
@@ -37,9 +39,16 @@ fn step(job: &Job, step_id: &StepId, to: StepTarget) -> Job {
 }
 
 fn step_at(job: &Job, step_id: &StepId, to: StepTarget, at: Timestamp) -> Job {
+    let state = to.state();
     job.transition_step(step_id, to, Actor::Fleet, at)
-        .unwrap_or_else(|e| panic!("moving {} to {:?}: {e}", step_id.as_str(), to.state()))
+        .unwrap_or_else(|e| panic!("moving {} to {state:?}: {e}", step_id.as_str()))
         .job
+}
+
+/// The return Design Plan makes: `fix` is the step that emitted the verdict, so
+/// it is the step the pass is counted against.
+fn returned() -> StepTarget {
+    StepTarget::Returned(second())
 }
 
 /// The shape Design Plan draws: `repro` worked and passed, `fix` worked, and a
@@ -56,7 +65,7 @@ fn a_pass_over_both_steps() -> Job {
 #[test]
 fn a_loop_returns_to_a_step_that_already_advanced() {
     let job = a_pass_over_both_steps();
-    let job = step(&job, &first(), StepTarget::Returned);
+    let job = step(&job, &first(), returned());
     assert_eq!(
         job.step(&first()).expect("the row is there").state(),
         StepState::Running,
@@ -72,7 +81,7 @@ fn the_cursor_moves_back_to_the_step_the_loop_returns_to() {
     let job = a_pass_over_both_steps();
     assert_eq!(job.current_step_id(), Some(&second()));
 
-    let job = step(&job, &first(), StepTarget::Returned);
+    let job = step(&job, &first(), returned());
     assert_eq!(
         job.current_step_id(),
         Some(&first()),
@@ -98,7 +107,7 @@ fn a_return_re_enters_the_step_and_a_hand_back_does_not() {
         .entered_at()
         .clone();
 
-    let returned = step_at(&job, &first(), StepTarget::Returned, later());
+    let returned = step_at(&job, &first(), returned(), later());
     let row = returned.step(&first()).expect("the row is there");
     assert_eq!(row.entered_at(), &later(), "a new pass, so a new clock");
     assert_ne!(row.entered_at(), &opened);
@@ -122,7 +131,7 @@ fn a_return_re_enters_the_step_and_a_hand_back_does_not() {
 #[test]
 fn a_return_leaves_the_last_ruling_standing() {
     let job = a_pass_over_both_steps();
-    let job = step(&job, &first(), StepTarget::Returned);
+    let job = step(&job, &first(), returned());
     assert_eq!(
         job.step(&first()).expect("the row is there").last_verdict(),
         Some(StepVerdict::Passed),
@@ -140,7 +149,7 @@ fn a_loop_returns_beneath_the_status_a_human_gate_holds_the_job_at() {
     assert_eq!(job.status(), JobStatus::AwaitingReview);
 
     let returned = job
-        .transition_step(&first(), StepTarget::Returned, Actor::Human, when())
+        .transition_step(&first(), returned(), Actor::Human, when())
         .expect("awaiting_review is in ADVANCING_STATUSES");
     assert_eq!(
         returned
@@ -157,9 +166,9 @@ fn a_loop_returns_beneath_the_status_a_human_gate_holds_the_job_at() {
 #[test]
 fn a_step_returns_to_more_than_once() {
     let job = a_pass_over_both_steps();
-    let job = step(&job, &first(), StepTarget::Returned);
+    let job = step(&job, &first(), returned());
     let job = step(&job, &first(), StepTarget::Advanced);
-    let job = step(&job, &first(), StepTarget::Returned);
+    let job = step(&job, &first(), returned());
     assert_eq!(
         job.step(&first()).expect("the row is there").state(),
         StepState::Running
@@ -187,29 +196,29 @@ fn an_advanced_step_cannot_be_dispatched_into_as_if_it_had_never_run() {
 fn a_return_onto_a_step_that_has_not_advanced_is_refused_from_every_state() {
     let fresh = reach(JobStatus::Running);
     assert_eq!(
-        fresh.transition_step(&first(), StepTarget::Returned, Actor::Fleet, when()),
+        fresh.transition_step(&first(), returned(), Actor::Fleet, when()),
         Err(IllegalStepTransition::NotAnAdvancedStep {
             step_id: first(),
             from: StepState::NotStarted,
         })
     );
 
-    // The one that never reaches the narrowing: there is no self-edge in the
-    // table, so a return onto the step being worked is refused as the missing
-    // edge it is. The edge table answers first, and it answers correctly.
+    // The one that used to be refused as a missing edge and is not any more:
+    // the self-edge exists now, so a return onto the step being worked reaches
+    // the narrowing and is refused as the act it actually is. `Revisited` is
+    // what walks that edge, and a return is not it.
     let running = step(&fresh, &first(), StepTarget::Running);
     assert_eq!(
-        running.transition_step(&first(), StepTarget::Returned, Actor::Fleet, when()),
-        Err(IllegalStepTransition::NoSuchEdge {
+        running.transition_step(&first(), returned(), Actor::Fleet, when()),
+        Err(IllegalStepTransition::NotAnAdvancedStep {
             step_id: first(),
             from: StepState::Running,
-            to: StepState::Running,
         })
     );
 
     let retrying = step(&running, &first(), StepTarget::Retrying(gate_failure()));
     assert_eq!(
-        retrying.transition_step(&first(), StepTarget::Returned, Actor::Fleet, when()),
+        retrying.transition_step(&first(), returned(), Actor::Fleet, when()),
         Err(IllegalStepTransition::NotAnAdvancedStep {
             step_id: first(),
             from: StepState::Retrying,
@@ -218,7 +227,7 @@ fn a_return_onto_a_step_that_has_not_advanced_is_refused_from_every_state() {
 
     let stopped = step(&running, &first(), StepTarget::Stopped(gate_failure()));
     assert_eq!(
-        stopped.transition_step(&first(), StepTarget::Returned, Actor::Fleet, when()),
+        stopped.transition_step(&first(), returned(), Actor::Fleet, when()),
         Err(IllegalStepTransition::NotAnAdvancedStep {
             step_id: first(),
             from: StepState::Stopped,
@@ -234,7 +243,7 @@ fn a_loop_does_not_return_beneath_a_status_the_steps_are_frozen_under() {
     let job = a_pass_over_both_steps();
     let job = drive(&job, &[Target::Escalated(EscalationTrigger::Stalled)]);
     assert_eq!(
-        job.transition_step(&first(), StepTarget::Returned, Actor::Human, when()),
+        job.transition_step(&first(), returned(), Actor::Human, when()),
         Err(IllegalStepTransition::StepsAreFrozen {
             step_id: first(),
             status: JobStatus::Escalated,
@@ -251,28 +260,138 @@ fn a_loop_does_not_return_beneath_a_status_the_steps_are_frozen_under() {
 #[test]
 fn a_stored_return_is_told_from_a_stored_dispatch_by_the_state_it_left() {
     assert_eq!(
-        StepTarget::arriving_at(StepState::Advanced, StepState::Running, None),
-        Some(StepTarget::Returned)
+        StepTarget::arriving_at(
+            StepState::Advanced,
+            StepState::Running,
+            None,
+            Some(second())
+        ),
+        Some(returned())
     );
     for from in [
         StepState::NotStarted,
-        StepState::Running,
         StepState::Retrying,
         StepState::Stopped,
     ] {
         assert_eq!(
-            StepTarget::arriving_at(from, StepState::Running, None),
+            StepTarget::arriving_at(from, StepState::Running, None, None),
             Some(StepTarget::Running),
-            "only `advanced` is a loop's origin"
+            "only `advanced` is a loop return's origin"
         );
     }
+    // The loop's other half, told apart the same way: two edges arrive at
+    // `running` carrying nothing, and the state left behind is all there is.
+    assert_eq!(
+        StepTarget::arriving_at(StepState::Running, StepState::Running, None, None),
+        Some(StepTarget::Revisited),
+        "a step that was already running was revisited, not dispatched into"
+    );
+}
+
+// ------------------------------------------------------- the loop's other half
+
+/// **The second pass reaches the step that asked for it.** A return leaves the
+/// emitting step `running`, so the forward walk that follows arrives at a step
+/// that never left — and until `#263` there was no edge for that arrival at
+/// all, so the loop stopped one move short of closing.
+#[test]
+fn the_loop_comes_round_to_the_step_that_sent_the_work_back() {
+    let job = a_pass_over_both_steps();
+    let job = step(&job, &first(), returned());
+    assert_eq!(
+        job.step(&second()).expect("the row is there").state(),
+        StepState::Running,
+        "the emitting step is where the return left it"
+    );
+
+    // The redone step passes again, and the Job walks forward into the gate.
+    let job = step(&job, &first(), StepTarget::Advanced);
+    let job = step_at(&job, &second(), StepTarget::Revisited, later());
+    let gate = job.step(&second()).expect("the row is there");
+    assert_eq!(gate.state(), StepState::Running);
+    assert_eq!(
+        gate.entered_at(),
+        &later(),
+        "a new pass, so a new clock — which is what `store::attempt` counts"
+    );
+    assert_eq!(
+        job.current_step_id(),
+        Some(&second()),
+        "and the cursor followed the work forward"
+    );
+}
+
+/// The narrowing that makes the self-edge safe to declare. Without it the edge
+/// would legalise entering a step a Drone is already working, which is a
+/// redispatch with no move in it.
+#[test]
+fn a_step_being_worked_cannot_be_dispatched_into_as_if_it_were_idle() {
+    let job = a_pass_over_both_steps();
+    assert_eq!(
+        job.transition_step(&second(), StepTarget::Running, Actor::Fleet, when()),
+        Err(IllegalStepTransition::StepIsAlreadyRunning { step_id: second() })
+    );
+}
+
+/// The other half of that narrowing. A revisit onto a step that is not being
+/// worked is a dispatch, a return, a retry or a restart wearing a loop's name.
+#[test]
+fn a_revisit_onto_a_step_that_is_not_being_worked_is_refused_from_every_state() {
+    let fresh = reach(JobStatus::Running);
+    assert_eq!(
+        fresh.transition_step(&first(), StepTarget::Revisited, Actor::Fleet, when()),
+        Err(IllegalStepTransition::NotARunningStep {
+            step_id: first(),
+            from: StepState::NotStarted,
+        })
+    );
+
+    let running = step(&fresh, &first(), StepTarget::Running);
+    let advanced = step(&running, &first(), StepTarget::Advanced);
+    assert_eq!(
+        advanced.transition_step(&first(), StepTarget::Revisited, Actor::Fleet, when()),
+        Err(IllegalStepTransition::NotARunningStep {
+            step_id: first(),
+            from: StepState::Advanced,
+        }),
+        "an advanced step is returned to, and a return names who sent the work back"
+    );
+
+    let stopped = step(&running, &first(), StepTarget::Stopped(gate_failure()));
+    assert_eq!(
+        stopped.transition_step(&first(), StepTarget::Revisited, Actor::Fleet, when()),
+        Err(IllegalStepTransition::NotARunningStep {
+            step_id: first(),
+            from: StepState::Stopped,
+        })
+    );
+}
+
+/// A revisit charges no pass. The loop was counted where it was declared — on
+/// the return — and counting it again on the arrival would read one loop as
+/// two, which is the whole reason this target carries no step id.
+#[test]
+fn a_revisit_carries_nothing_and_charges_no_pass() {
+    assert_eq!(StepTarget::Revisited.why(), None);
+    assert_eq!(StepTarget::Revisited.returned_by(), None);
+    assert!(StepTarget::Revisited.begins_a_run());
+
+    let job = a_pass_over_both_steps();
+    let job = step(&job, &first(), returned());
+    let job = step(&job, &first(), StepTarget::Advanced);
+    let moved = job
+        .transition_step(&second(), StepTarget::Revisited, Actor::Fleet, later())
+        .expect("running -> running is an edge");
+    assert_eq!(moved.event.returned_by(), None);
+    assert_eq!(moved.event.from(), StepState::Running);
+    assert_eq!(moved.event.to(), StepState::Running);
 }
 
 /// The three things that turn on "is this a run of the step" ask one question,
 /// so they cannot drift apart.
 #[test]
 fn a_return_begins_a_run_and_the_moves_that_do_not_say_so() {
-    assert!(StepTarget::Returned.begins_a_run());
+    assert!(returned().begins_a_run());
     assert!(StepTarget::Running.begins_a_run());
     assert!(!StepTarget::Advanced.begins_a_run());
     assert!(!StepTarget::Stopped(gate_failure()).begins_a_run());
@@ -284,12 +403,87 @@ fn a_return_begins_a_run_and_the_moves_that_do_not_say_so() {
 #[test]
 fn a_return_carries_no_trigger_and_the_event_says_so() {
     let job = a_pass_over_both_steps();
-    let returned = job
-        .transition_step(&first(), StepTarget::Returned, Actor::Fleet, when())
+    let moved = job
+        .transition_step(&first(), returned(), Actor::Fleet, when())
         .expect("advanced -> running is an edge");
-    assert_eq!(returned.event.why(), None);
-    assert_eq!(returned.event.from(), StepState::Advanced);
-    assert_eq!(returned.event.to(), StepState::Running);
+    assert_eq!(moved.event.why(), None);
+    assert_eq!(moved.event.from(), StepState::Advanced);
+    assert_eq!(moved.event.to(), StepState::Running);
+    assert_eq!(
+        moved.event.returned_by(),
+        Some(&second()),
+        "no trigger, and the step that sent it back instead"
+    );
+}
+
+/// The decision this issue records: `iteration_count` is the emitting step's,
+/// and the emitting step makes no move of its own — so the row the routed-to
+/// step writes is the only place the attribution can live.
+#[test]
+fn the_return_names_the_step_that_caused_it_and_not_the_step_it_lands_on() {
+    let job = a_pass_over_both_steps();
+    let moved = job
+        .transition_step(&first(), returned(), Actor::Fleet, when())
+        .expect("advanced -> running is an edge");
+    assert_eq!(moved.event.step_id(), &first(), "the step that moved");
+    assert_eq!(
+        moved.event.returned_by(),
+        Some(&second()),
+        "the step whose iteration_count this pass is charged to"
+    );
+    assert_eq!(
+        moved.job.step(&second()).expect("the row is there").state(),
+        StepState::Running,
+        "and it is still `running`, which is how a step at a human gate reads"
+    );
+}
+
+/// A count attributed to a step the Job does not have is a count nobody can
+/// read back, so the machine refuses it where the moved step is refused.
+#[test]
+fn a_return_naming_a_step_the_job_does_not_have_is_refused() {
+    let job = a_pass_over_both_steps();
+    let stranger = StepId::new("present");
+    assert_eq!(
+        job.transition_step(
+            &first(),
+            StepTarget::Returned(stranger.clone()),
+            Actor::Fleet,
+            when()
+        ),
+        Err(IllegalStepTransition::NoSuchStep { step_id: stranger })
+    );
+}
+
+/// The mirror of the reason arm: a stored emitter on a move that stores none is
+/// a row this build cannot have written, and a return with none is a pass
+/// nobody's count was charged for.
+#[test]
+fn a_stored_emitter_belongs_to_the_return_and_to_no_other_move() {
+    assert_eq!(
+        StepTarget::arriving_at(StepState::Advanced, StepState::Running, None, None),
+        None,
+        "a return with no emitter cannot be attributed"
+    );
+    assert_eq!(
+        StepTarget::arriving_at(
+            StepState::Retrying,
+            StepState::Running,
+            None,
+            Some(second())
+        ),
+        None,
+        "and a hand-back's re-entry never carries one"
+    );
+    assert_eq!(
+        StepTarget::arriving_at(
+            StepState::Running,
+            StepState::Advanced,
+            None,
+            Some(second())
+        ),
+        None
+    );
 }
 
 // --------------------------------------------------------------- the cap
@@ -310,7 +504,7 @@ fn the_cap_bounds_passes_and_the_last_one_may_not_return() {
         0,
         None,
     )
-    .looping(5);
+    .looping(BTreeMap::from([(GateVerdict::RequestChanges, second())]), 5);
     assert_eq!(capped.iteration_cap(), 5);
     assert!(capped.may_return(Iteration::FIRST));
     assert!(capped.may_return(Iteration::returns_made(3)));
@@ -339,7 +533,7 @@ fn a_step_that_declared_no_cap_permits_no_return() {
     assert_eq!(plain.iteration_cap(), 0);
     assert!(!plain.may_return(Iteration::FIRST));
     assert!(
-        plain.may_hand_back(Attempt::FIRST),
+        plain.may_hand_back(Spent::FIRST),
         "and the retry budget is untouched by it: the two caps bound different things"
     );
 }

@@ -439,6 +439,9 @@ fn the_frozen_workflow_comes_back_with_every_check_its_steps_declared() {
 
     let fix = workflow.step(&StepId::new("fix")).expect("the gated step");
     assert_eq!(fix.label(), "Fix");
+    // The loop the fixture's gated step declares round-trips too, and it is
+    // asserted in `tests::iteration` beside the counts it bounds — this file
+    // is at the 900 the gate refuses at.
     assert_eq!(
         fix.checks(),
         &[

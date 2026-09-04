@@ -413,7 +413,7 @@ where
                 },
             },
         },
-        Verdict::Failed(failures) => match handed_back(step, at.attempt(), &failures, &printed) {
+        Verdict::Failed(failures) => match handed_back(step, at.spent(), &failures, &printed) {
             Some((tell, retrying)) => Ruling::HandedBack {
                 failures,
                 checks,
@@ -486,18 +486,24 @@ fn deliverable(step: &ResolvedStep, worktree: &Path) -> Option<Result<String, st
 ///    than `any`: a run that would fail identically on one check fails
 ///    identically.
 /// 2. **The step declared a budget and this run is inside it.**
-///    `may_hand_back` owns the arithmetic; `attempt` comes off the step's log.
+///    `may_hand_back` owns the arithmetic; `spent` comes off the step's log.
+///    **It is `Spent` and not `Attempt`, and the difference is a live defect
+///    this closes**: an attempt climbs across a loop return, so a step on its
+///    second honest draft arrived here with the first draft's runs already
+///    charged against a budget nothing had failed against.
+///    `workflowdef-fields.toml` on `retry_count`: *"Resets on a loop return —
+///    re-entry as designed is a fresh attempt budget."*
 /// 3. Neither of the above needs the Judge, a model call, or the store.
 fn handed_back(
     step: &config::ResolvedStep,
-    attempt: core_model::Attempt,
+    spent: core_model::Spent,
     failures: &[CheckFailed],
     printed: &[Printed<'_>],
 ) -> Option<(OutcomeTurn, StepLevelTrigger)> {
     if !failures.iter().all(CheckFailed::the_drone_can_answer) {
         return None;
     }
-    if !step.may_hand_back(attempt) {
+    if !step.may_hand_back(spent) {
         return None;
     }
     // `gate_failure` is what `docs/concepts/judge.md` gives the step evidence
@@ -507,6 +513,59 @@ fn handed_back(
     // a failure that a person sees is the safe direction to be wrong in.
     let retrying = StepLevelTrigger::of(EscalationTrigger::GateFailure)?;
     Some((OutcomeTurn::handed_back(step, failures, printed), retrying))
+}
+
+/// Where a `request_changes` at a step's human gate sends the Job.
+///
+/// **The decision and not the move**, which is this module's whole shape: the
+/// three answers below are reached with no store and no worktree, and
+/// `fleet::reviewing` is what writes each of them down. A person's verdict is
+/// applied there rather than here because nothing in this file has a Job to
+/// move — [`apply`] is the same seam on the other side of a ruling.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum SentBack {
+    /// The step declares no `verdict_routing`, so the work is redone where it
+    /// is. **Every step of every linear workflow answers this**, and it is what
+    /// `request_changes` did everywhere before a loop could be declared.
+    ToTheSameStep,
+    /// The verdict routes back to an earlier step and the cap has room for
+    /// another pass.
+    ToAnEarlierStep(StepId),
+    /// The verdict routes back and the loop is spent.
+    ///
+    /// **Nothing failed**, which is why the trigger is `loop_cap` and not
+    /// `gate_failure`: the work did not fall short of a bar, the loop did not
+    /// converge. `escalation-triggers.toml` is explicit that the count which
+    /// tripped it is `iteration_count` and never the retry budget.
+    NowhereLeft(StepLevelTrigger),
+}
+
+/// The answer, given the step's own declaration and the pass it is on.
+///
+/// **The pass is the emitting step's**, which is this step — `iteration_count`
+/// belongs to the gate that sends the work back, settled in
+/// `docs/journeys/triage-queue.md`, and `store::step_iteration` counts it that
+/// way. Asking with the routed-to step's count would bound the wrong loop.
+///
+/// The order is [`handed_back`]'s: the cheap structural question first, so a
+/// step that closes no loop never reaches the arithmetic. `may_return` owns
+/// that arithmetic and this function does not restate it.
+pub(crate) fn sent_back(step: &ResolvedStep, pass: core_model::Iteration) -> SentBack {
+    let Some(target) = step.routes(config::GateVerdict::RequestChanges) else {
+        return SentBack::ToTheSameStep;
+    };
+    if step.may_return(pass) {
+        return SentBack::ToAnEarlierStep(target.clone());
+    }
+    // Read rather than asserted, for the reason `handed_back` reads
+    // `gate_failure`: a registry that moved this to Job level would make a step
+    // stopped for a reason no step row could hold, and falling through to
+    // another pass is the safe direction to be wrong in — the cap is a bound on
+    // patience, not on correctness.
+    match StepLevelTrigger::of(EscalationTrigger::LoopCap) {
+        Some(spent) => SentBack::NowhereLeft(spent),
+        None => SentBack::ToAnEarlierStep(target.clone()),
+    }
 }
 
 /// The gaming look, where the step declares one. `None` is nothing flagged.

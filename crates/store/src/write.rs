@@ -272,8 +272,8 @@ impl Store {
         tx.execute(
             "INSERT INTO job_events (
                  kind, job_id, status_from, status_to, reason_kind, reason_value,
-                 step_id, state_from, state_to, actor, at
-             ) VALUES ('step_transition', ?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                 step_id, state_from, state_to, returned_by, actor, at
+             ) VALUES ('step_transition', ?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             rusqlite::params![
                 job_id,
                 event.under().as_wire(),
@@ -282,6 +282,10 @@ impl Store {
                 step_id,
                 event.from().as_wire(),
                 event.to().as_wire(),
+                // Null on every move but the loop return, which is what the
+                // shape trigger requires — the event carries it or it does not,
+                // and nothing here decides which.
+                event.returned_by().map(StepId::as_str),
                 event.actor().as_wire(),
                 event.at().as_str(),
             ],

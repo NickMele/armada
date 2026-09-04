@@ -38,16 +38,17 @@ mod yaml;
 mod tests;
 
 pub use error::{Fault, LoadError, Refusal, ResolveError, UnknownCheck};
-pub use loops::GateVerdict;
 pub use manifest::{Check, Command, Manifest, Preparation};
 pub use resolve::ResolvedWorkflow;
 pub use roster::Roster;
 pub use workflow::{MechanicalCheck, Step, Structure, WorkflowDef};
 
 // Re-exported, not re-declared. A Job carries its resolved workflow, so these
-// four are spelled in `core-model` where the record is — and every caller that
-// already said `config::ResolvedStep` still means the same type.
+// are spelled in `core-model` where the record is — and every caller that
+// already said `config::ResolvedStep` still means the same type. `GateVerdict`
+// joined them when a step's routing became something a Job freezes.
 pub use core_model::{
     AdvanceGate, ContextSource, Covers, DeclarePlanAt, DeclaredPaths, EvidenceScope, EvidenceType,
-    FrozenWorkflow, JudgeCheck, JudgeCriterion, PathPattern, ResolvedCheck, ResolvedStep,
+    FrozenWorkflow, GateVerdict, JudgeCheck, JudgeCriterion, PathPattern, ResolvedCheck,
+    ResolvedStep,
 };

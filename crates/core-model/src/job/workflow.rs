@@ -24,16 +24,18 @@
 //! one out to buy six lines costs a tenth positional argument on
 //! [`ResolvedStep::frozen`], at ten call sites in three crates — a worse shape.
 
+use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::job::attempt::{Attempt, Iteration};
+use crate::job::attempt::{Iteration, Spent};
 use crate::job::covers::Covers;
 use crate::job::gaming::GamingCheck;
 use crate::job::ids::{ModelName, StepId, WorkflowId};
 use crate::job::judge::JudgeCheck;
 use crate::job::prerequisite::Prerequisite;
 use crate::job::scope::EvidenceScope;
+use crate::job::verdict::GateVerdict;
 
 /// What a step produces as its work product.
 ///
@@ -276,6 +278,17 @@ pub struct ResolvedStep {
     /// `workflowdef-fields.toml` puts it: *"a cap split from the count it
     /// bounds never fires."*
     iteration_cap: u32,
+    /// Where a non-terminal gate verdict on this step sends the Job.
+    /// **Empty on every step of every linear workflow**, and on any step of a
+    /// loop that does not itself close it.
+    ///
+    /// A map rather than one target because the verdict is the key: `approve`
+    /// and `reject` have nowhere to go, so today there is one entry, and a
+    /// second non-terminal verdict is a second entry rather than a second
+    /// field. It is paired with [`iteration_cap`](ResolvedStep::iteration_cap)
+    /// by [`looping`](ResolvedStep::looping), which is the only way either
+    /// arrives — the registry refuses the two being split.
+    verdict_routing: BTreeMap<GateVerdict, StepId>,
     /// How long this step's Drone may say nothing before Fleet pokes it, in
     /// seconds. **`None` is the step declaring none**, and none means the
     /// value Fleet is running with rather than a number restated here.
@@ -336,13 +349,14 @@ impl ResolvedStep {
             evidence_scope,
             retry_limit,
             model,
-            // Set by the builders below, all four of them: a tenth parameter
-            // would make ten callers state a value that is false on all but
-            // one step, an eleventh a zero on every step of every linear
-            // workflow, and the last two a `None` about a dial almost no step
-            // touches.
+            // Set by the four builders below: a tenth parameter would make ten
+            // callers state a value that is false on all but one step, an
+            // eleventh and a twelfth a zero and an empty map on every step of
+            // every linear workflow, and the last two a `None` about a dial
+            // almost no step touches.
             may_dispatch_jobs: false,
             iteration_cap: 0,
+            verdict_routing: BTreeMap::new(),
             quiet_after_seconds: None,
             poke_limit: None,
         }
@@ -355,16 +369,30 @@ impl ResolvedStep {
         self
     }
 
-    /// The loop cap, for the reason [`dispatching`](Self::dispatching) is a
-    /// builder: one step of one workflow carries one, and every other step
-    /// would be restating a zero.
+    /// The loop this step closes: where its verdicts route, and how many
+    /// passes they may buy. A builder for the reason
+    /// [`dispatching`](Self::dispatching) is one: one step of one workflow
+    /// carries a loop, and every other step would be restating an empty map
+    /// and a zero.
+    ///
+    /// **Both at once, and never one without the other.**
+    /// `workflowdef-fields.toml` refuses the pair being split — *"a cap split
+    /// from the count it bounds never fires"* — and two builders would be two
+    /// chances to call one of them. `config` refuses the same pair in the file
+    /// it parses, as `Fault::CapWithoutALoop`; this is the same rule where the
+    /// value is constructed rather than read.
     ///
     /// **Zero is the fail-closed default and that is deliberate.** A step whose
     /// cap never arrived permits no return, so a loop that was wired and not
     /// capped stops on its first return and says so. The other direction — a
     /// missing cap meaning unbounded — is a Job that never terminates, which is
     /// the failure `structure` exists to catch at load time.
-    pub fn looping(mut self, iteration_cap: u32) -> ResolvedStep {
+    pub fn looping(
+        mut self,
+        verdict_routing: BTreeMap<GateVerdict, StepId>,
+        iteration_cap: u32,
+    ) -> ResolvedStep {
+        self.verdict_routing = verdict_routing;
         self.iteration_cap = iteration_cap;
         self
     }
@@ -471,18 +499,50 @@ impl ResolvedStep {
     /// times: the first run plus two. A caller comparing the two itself would
     /// be a second place the off-by-one lives.
     ///
-    /// [`Attempt`] is the parameter rather than a bare number because there is
-    /// no constructor that invents one — it is derived from the step's own log
-    /// — so a caller cannot hand this a run count that disagrees with the
-    /// history.
-    pub fn may_hand_back(&self, spent: Attempt) -> bool {
+    /// [`Spent`] is the parameter rather than a bare number because there is no
+    /// constructor that invents one — it is derived from the step's own log —
+    /// so a caller cannot hand this a run count that disagrees with the
+    /// history. **And it is `Spent` rather than [`Attempt`], which is the
+    /// defect #263 closes**: an `Attempt` climbs across a loop return, so a
+    /// looping step arrived here with an earlier pass's runs charged against a
+    /// budget nothing had failed against. `retry_limit`'s registry row is
+    /// explicit that it resets on a return, and the two types are what make
+    /// asking with the wrong one a compile error rather than a Job that stops
+    /// on its second honest draft.
+    pub fn may_hand_back(&self, spent: Spent) -> bool {
         spent.number() <= self.retry_limit
     }
 
     /// How many passes a loop may make over this step. **Zero on every step of
-    /// every linear workflow**, and on any step no verdict routes back to.
+    /// every linear workflow**, and on any step that closes no loop.
     pub fn iteration_cap(&self) -> u32 {
         self.iteration_cap
+    }
+
+    /// Every route this step's gate declares. **Empty is the ordinary case**,
+    /// and it is what a step of a linear workflow means.
+    pub fn verdict_routing(&self) -> &BTreeMap<GateVerdict, StepId> {
+        &self.verdict_routing
+    }
+
+    /// Where this step sends a verdict, or `None` where it sends it nowhere.
+    ///
+    /// **The question every caller actually asks**, so the map lookup is not
+    /// spelled at four call sites. `None` is the answer for every step of every
+    /// linear workflow and for every verdict a looping step does not route.
+    pub fn routes(&self, verdict: GateVerdict) -> Option<&StepId> {
+        self.verdict_routing.get(&verdict)
+    }
+
+    /// Whether this step closes a loop at all — whether anything it can answer
+    /// routes backwards.
+    ///
+    /// Asked separately from [`iteration_cap`](ResolvedStep::iteration_cap)
+    /// because a cap of zero is a real declaration on a real loop (*"the first
+    /// `request_changes` is the last"*) and reads identically to no loop when
+    /// only the number is looked at.
+    pub fn closes_a_loop(&self) -> bool {
+        !self.verdict_routing.is_empty()
     }
 
     /// Whether the pass `now` may be redone once more, or the cap is spent.

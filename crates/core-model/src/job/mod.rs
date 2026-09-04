@@ -45,12 +45,13 @@ mod step;
 mod step_machine;
 mod stuck;
 mod transition;
+mod verdict;
 mod workflow;
 
 #[cfg(test)]
 mod tests;
 
-pub use attempt::{Attempt, Iteration};
+pub use attempt::{Attempt, Iteration, Spent};
 pub use check::{CheckOutcome, StepCheck};
 pub use collision::{collisions, Collision, ScopeClaim};
 pub use covers::{BadPattern, Covers, PathPattern};
@@ -83,6 +84,7 @@ pub use stuck::{Recourse, Standing, Stuck};
 pub use transition::{
     CriteriaOwed, Edge, IllegalTransition, PilotReason, Target, TransitionReason, EDGES,
 };
+pub use verdict::GateVerdict;
 pub use workflow::{
     AdvanceGate, EvidenceType, FrozenWorkflow, ResolvedCheck, ResolvedStep, ARTIFACT_EXISTS,
     DIFF_NONEMPTY, MANIFEST_CHECK,

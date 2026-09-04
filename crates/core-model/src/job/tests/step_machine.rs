@@ -37,8 +37,9 @@ fn running() -> Job {
 /// Move a step, failing loudly. Fleet is the actor: it is the only thing that
 /// drives a transition.
 fn step(job: &Job, step_id: &StepId, to: StepTarget) -> Job {
+    let state = to.state();
     job.transition_step(step_id, to, Actor::Fleet, when())
-        .unwrap_or_else(|e| panic!("moving {} to {:?}: {e}", step_id.as_str(), to.state()))
+        .unwrap_or_else(|e| panic!("moving {} to {state:?}: {e}", step_id.as_str()))
         .job
 }
 
@@ -101,9 +102,17 @@ fn every_edge_in_the_table_is_admitted() {
         let qualified = edge.to == StepState::Stopped
             || edge.to == StepState::Retrying
             || (edge.to == StepState::Advanced && edge.from == StepState::Stopped);
-        let target =
-            StepTarget::arriving_at(edge.from, edge.to, qualified.then(gate_failure).flatten())
-                .expect("a table edge names a target");
+        // A loop return is the one edge whose target carries the step that
+        // caused it, and `second` is the only other step this Job has.
+        let returned_by =
+            (edge.from == StepState::Advanced && edge.to == StepState::Running).then(second);
+        let target = StepTarget::arriving_at(
+            edge.from,
+            edge.to,
+            qualified.then(gate_failure).flatten(),
+            returned_by,
+        )
+        .expect("a table edge names a target");
         let moved = step(&job, &first(), target);
         assert_eq!(
             moved.step(&first()).expect("the row is there").state(),
@@ -278,6 +287,7 @@ fn every_pair_the_table_does_not_name_is_refused() {
             {
                 continue;
             }
+            let arriving = to.state();
             match job.transition_step(&first(), to, Actor::Fleet, when()) {
                 Err(IllegalStepTransition::NoSuchEdge {
                     from: refused_from,
@@ -285,12 +295,12 @@ fn every_pair_the_table_does_not_name_is_refused() {
                     ..
                 }) => {
                     assert_eq!(refused_from, from);
-                    assert_eq!(refused_to, to.state());
+                    assert_eq!(refused_to, arriving);
                 }
                 other => panic!(
                     "{} -> {} is not an edge and was admitted: {other:?}",
                     from.as_wire(),
-                    to.state().as_wire()
+                    arriving.as_wire()
                 ),
             }
         }
@@ -321,16 +331,21 @@ fn the_two_states_m1_cannot_reach_have_no_target_to_arrive_by() {
     // has its gate and is still unreachable, because a step at that gate stays
     // `running` — `step_machine`'s own comment says what changing that costs.
     assert!(
-        StepTarget::arriving_at(StepState::Running, StepState::AwaitingHuman, None).is_none(),
+        StepTarget::arriving_at(StepState::Running, StepState::AwaitingHuman, None, None).is_none(),
         "awaiting_human needs a variant and two edges, and M1 has neither"
     );
     assert!(
-        StepTarget::arriving_at(StepState::Running, StepState::AwaitingHuman, gate_failure())
-            .is_none(),
+        StepTarget::arriving_at(
+            StepState::Running,
+            StepState::AwaitingHuman,
+            gate_failure(),
+            None
+        )
+        .is_none(),
         "and a trigger does not buy one"
     );
     assert!(
-        StepTarget::arriving_at(StepState::Running, StepState::NotStarted, None).is_none(),
+        StepTarget::arriving_at(StepState::Running, StepState::NotStarted, None, None).is_none(),
         "not_started is written at creation and is not a destination"
     );
 }
@@ -340,24 +355,32 @@ fn the_two_states_m1_cannot_reach_have_no_target_to_arrive_by() {
 /// what stops a stored row folding into a step that stopped for no reason.
 #[test]
 fn a_stored_state_and_its_reason_are_read_as_one_value() {
-    assert!(StepTarget::arriving_at(StepState::Running, StepState::Stopped, None).is_none());
-    assert!(
-        StepTarget::arriving_at(StepState::NotStarted, StepState::Running, gate_failure())
-            .is_none()
-    );
+    assert!(StepTarget::arriving_at(StepState::Running, StepState::Stopped, None, None).is_none());
+    assert!(StepTarget::arriving_at(
+        StepState::NotStarted,
+        StepState::Running,
+        gate_failure(),
+        None
+    )
+    .is_none());
     assert_eq!(
-        StepTarget::arriving_at(StepState::Running, StepState::Stopped, gate_failure()),
+        StepTarget::arriving_at(StepState::Running, StepState::Stopped, gate_failure(), None),
         gate_failure().map(StepTarget::Stopped)
     );
     // `advanced` is the one state two targets reach, and the trigger is what
     // tells them apart. Without the reason a stored override would fold back as
     // an ordinary pass, and the verdict a person overruled would be gone.
     assert_eq!(
-        StepTarget::arriving_at(StepState::Running, StepState::Advanced, None),
+        StepTarget::arriving_at(StepState::Running, StepState::Advanced, None, None),
         Some(StepTarget::Advanced)
     );
     assert_eq!(
-        StepTarget::arriving_at(StepState::Stopped, StepState::Advanced, gate_failure()),
+        StepTarget::arriving_at(
+            StepState::Stopped,
+            StepState::Advanced,
+            gate_failure(),
+            None
+        ),
         gate_failure().map(StepTarget::Overridden)
     );
 }

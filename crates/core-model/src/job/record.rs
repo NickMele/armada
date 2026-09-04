@@ -432,8 +432,10 @@ impl Job {
     ///
     /// **A loop return is the one move that takes the cursor backwards**, and
     /// it is the routed-*to* step's: the next Drone goes where the work goes.
-    /// The emitting step is not moved by this call, and what its own row does
-    /// on a return is undecided — see `workflowdef-fields.toml`.
+    /// The emitting step is not moved by this call and keeps reading `running`;
+    /// [`StepTarget::Returned`] names it, so the row says whose
+    /// `iteration_count` the pass belongs to. A return naming a step this Job
+    /// does not have is refused as [`NoSuchStep`](IllegalStepTransition::NoSuchStep).
     ///
     /// **Entering `running` is what moves `current_step_id`, and nothing
     /// clears it.** `job-fields.toml` says the nested machine is "frozen
@@ -457,6 +459,13 @@ impl Job {
             .ok_or_else(|| IllegalStepTransition::NoSuchStep {
                 step_id: step_id.clone(),
             })?;
+        if let StepTarget::Returned(by) = &to {
+            if !self.steps.iter().any(|row| row.step_id() == by) {
+                return Err(IllegalStepTransition::NoSuchStep {
+                    step_id: by.clone(),
+                });
+            }
+        }
         let from = self.steps[index].state();
         admits_step(self.status, step_id, from, &to)?;
 

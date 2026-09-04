@@ -171,13 +171,24 @@ where
             .await
             .step_attempt(&job_id, &step)
             .map_err(|cause| Adrift::Reading(store::LoadJobError::Unreadable(cause)))?;
+        // **The retry budget's own count, and not the attempt.** They are the
+        // same number until something loops and different afterwards: a return
+        // opens a fresh budget, which `retry_limit`'s registry row requires and
+        // the attempt must not do, because the records filed under it would
+        // overwrite the previous pass's.
+        let spent = self
+            .store()
+            .lock()
+            .await
+            .step_spent(&job_id, &step)
+            .map_err(|cause| Adrift::Reading(store::LoadJobError::Unreadable(cause)))?;
         // Read off the Job that is being ruled on, and off nothing else. The
         // borrow is the whole guarantee: `Request::of` takes a `&Job`, so the
         // yardstick the Judge is shown is the requester's frozen text and there
         // is no arrangement of this call that could substitute the Drone's.
         let request = Request::of(&job);
         let ruling = rule_on(
-            at.on_attempt(attempt),
+            at.on_attempt(attempt, spent),
             request,
             &landed.submission,
             declared.as_ref(),
