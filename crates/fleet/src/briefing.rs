@@ -499,6 +499,7 @@ impl Stopped {
             | EscalationTrigger::ResourceExhausted
             | EscalationTrigger::Silent
             | EscalationTrigger::Stalled
+            | EscalationTrigger::Unheard
             | EscalationTrigger::WouldNotStart => {
                 "An earlier attempt at this part stopped. The record holds no verdict \
                  against its work."

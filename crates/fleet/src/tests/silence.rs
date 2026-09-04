@@ -385,7 +385,13 @@ async fn a_drone_silent_past_the_threshold_is_poked_and_then_escalates() {
 
     let last = after_the_threshold(&fleet, &clock, "escalated the Job").await;
     assert!(
-        matches!(last.said, Vigil::Escalated { pokes: 2 }),
+        matches!(
+            last.said,
+            Vigil::Escalated {
+                pokes: 2,
+                found: EscalationTrigger::Stalled
+            }
+        ),
         "{:?}",
         last.said
     );
@@ -582,7 +588,13 @@ async fn a_step_that_asks_for_no_pokes_escalates_without_spending_one() {
 
     let said = after_the_threshold(&fleet, &clock, "escalated the Job").await;
     assert!(
-        matches!(said.said, Vigil::Escalated { pokes: 0 }),
+        matches!(
+            said.said,
+            Vigil::Escalated {
+                pokes: 0,
+                found: EscalationTrigger::Stalled
+            }
+        ),
         "the step's own budget was spent before it was offered: {:?}",
         said.said
     );
@@ -741,7 +753,13 @@ async fn a_repository_that_asks_for_no_pokes_keeps_fleets_threshold() {
 
     let said = after_the_threshold(&fleet, &clock, "escalated the Job").await;
     assert!(
-        matches!(said.said, Vigil::Escalated { pokes: 0 }),
+        matches!(
+            said.said,
+            Vigil::Escalated {
+                pokes: 0,
+                found: EscalationTrigger::Stalled
+            }
+        ),
         "the repository's budget was spent before it was offered: {:?}",
         said.said
     );

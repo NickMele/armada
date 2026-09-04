@@ -13,7 +13,13 @@
 //! | Reading | What | Then |
 //! |---|---|---|
 //! | At rest | the run Armada's last turn began has ended | the escalation, now |
-//! | Quiet | nothing for `quiet_after`, and the run has not ended | a poke, then `stalled` once `poke_limit` is spent |
+//! | Quiet | nothing for `quiet_after`, and the run has not ended | a poke, then an escalation once `poke_limit` is spent |
+//!
+//! **Two silences reach that escalation and it names which.** `stalled` is a
+//! Drone that stopped producing; `unheard` is a Drone producing normally into a
+//! pipe nothing holds the far end of, which is what a Fleet that restarted and
+//! adopted an orphan is left with. The clock reads the same on both, so the
+//! session is what tells them apart — [`heard_at_all`].
 //!
 //! **An ended run is not a gap, and poking one was `#314`.** A quiet Drone may
 //! be inside a long command, which is what the poke is for; one that has ended
@@ -211,8 +217,16 @@ pub enum Vigil {
     /// this road is reaching the right answer.
     NotPoked { spent: u32, cause: std::io::Error },
     /// The pokes are spent and the silence outlived them. The Job is
-    /// `escalated`, reason `stalled`.
-    Escalated { pokes: u32 },
+    /// `escalated`.
+    ///
+    /// **It carries the trigger because the silence has two readings**, and
+    /// the ladder cannot tell them apart from the clock alone. `stalled` is a
+    /// Drone that stopped producing; `unheard` is a Drone producing into a
+    /// pipe nothing holds the far end of. See [`heard_at_all`].
+    Escalated {
+        pokes: u32,
+        found: EscalationTrigger,
+    },
     /// The Drone's run ended with nothing submitted and nothing outstanding for
     /// it, so it was reaped, its step stopped and the Job escalated — without a
     /// poke being spent.
@@ -302,6 +316,12 @@ where
         }
         let (job, step, _) = at_work.standing();
         let spent = at_work.pokes();
+        // **Which of the two silences this is, off the slot.** The clock says
+        // how long and nothing about it says whose silence it was; the session
+        // is the only thing that knows whether anybody was ever listening.
+        // Free, and taken here with the rest of the slot's readings so the
+        // borrow ends before the roads below take the slot again.
+        let found = heard_at_all(at_work);
         // From here it costs a store read, and only from here. It is one read
         // per threshold rather than one per turn, because every road out of
         // this point restarts the clock.
@@ -320,20 +340,20 @@ where
         let said = if spent < liveness.pokes() {
             self.poke(working, after).await
         } else {
-            self.move_job(
-                &record,
-                Target::Escalated(EscalationTrigger::Stalled),
-                Actor::Fleet,
-            )
-            .await?;
+            self.move_job(&record, Target::Escalated(found), Actor::Fleet)
+                .await?;
             // **The Drone is not ended and the worktree is not touched.** It is
             // held exactly as every other escalation holds one, and a person
             // decides. `stalled`'s recommended action is a redispatch, which
-            // needs the worktree the Drone is sitting in.
+            // needs the worktree the Drone is sitting in — and `unheard`'s is
+            // not a redispatch at all, since that Drone is still working.
             if let Some(at_work) = working.as_mut() {
                 at_work.waiting(self.now());
             }
-            Vigil::Escalated { pokes: spent }
+            Vigil::Escalated {
+                pokes: spent,
+                found,
+            }
         };
         // Nothing was reaped on this road: the poke ladder holds its Drone.
         self.noted_quiet(&job, &step, after, &said, None);
@@ -479,6 +499,17 @@ where
                 Level::Warn,
                 "the Drone has gone quiet and the poke could not be sent",
             ),
+            // **Two sentences, because the escalation has two meanings.** A
+            // line saying the Drone stayed quiet through its pokes is false of
+            // an unheard one: no poke reached it, and it may have been talking
+            // the whole time.
+            Vigil::Escalated {
+                found: EscalationTrigger::Unheard,
+                ..
+            } => (
+                Level::Warn,
+                "the quiet budget ran out on a Drone Fleet cannot hear",
+            ),
             Vigil::Escalated { .. } => (
                 Level::Warn,
                 "the Drone stayed quiet through every poke it had",
@@ -502,7 +533,7 @@ where
             "pokes_spent",
             FieldValue::Int(i64::from(match said {
                 Vigil::Poked { spent } | Vigil::NotPoked { spent, .. } => *spent,
-                Vigil::Escalated { pokes } => *pokes,
+                Vigil::Escalated { pokes, .. } => *pokes,
                 // **Zero, and it is the interesting number.** What this line
                 // says is that the escalation was reached without spending the
                 // ladder at all.
@@ -540,8 +571,33 @@ where
 /// Which trigger the vigil escalated under, where it escalated at all.
 fn escalated_as(said: &Vigil) -> Option<EscalationTrigger> {
     match said {
-        Vigil::Escalated { .. } => Some(EscalationTrigger::Stalled),
-        Vigil::AtRest { found } => Some(found.clone()),
+        Vigil::Escalated { found, .. } | Vigil::AtRest { found } => Some(found.clone()),
         Vigil::Poked { .. } | Vigil::NotPoked { .. } => None,
+    }
+}
+
+/// Whether anybody was ever going to hear this Drone, and therefore which of
+/// the two silences the ladder just measured.
+///
+/// **`stalled` is a Drone that stopped and `unheard` is a Fleet that cannot
+/// listen**, and the ladder reads the same empty clock either way — so the
+/// clock cannot be what tells them apart. [`Session::unheard`] can: it answers
+/// whether there is a read end on the far side of this Drone's output at all.
+///
+/// **It asks the condition and never the cause.** A Fleet that restarted and
+/// adopted an orphan is the only way into it today; a second way would reach
+/// the same trigger through the same reading, without a second registry word.
+/// `crate::adopting` holds why the pipes cannot come back.
+///
+/// **A poke against an unheard Drone still spends its budget**, which is what
+/// puts this on the escalation rather than on the first reading. The
+/// escalation is not suppressed — nobody is watching that Drone and a person
+/// is owed that — and the budget is what gives an adopted Drone time to finish
+/// its step and be gated, which takes the Job out of `running` and stops the
+/// ladder before it ever gets here.
+fn heard_at_all(at_work: &Working) -> EscalationTrigger {
+    match at_work.session().unheard() {
+        true => EscalationTrigger::Unheard,
+        false => EscalationTrigger::Stalled,
     }
 }
