@@ -24,6 +24,7 @@
 //! leaves a person a worktree to redispatch onto.
 
 pub mod admitting;
+pub mod adopting;
 pub mod adrift;
 pub mod allowance;
 pub mod asked;
@@ -74,6 +75,7 @@ pub mod proposals;
 mod proposing;
 pub mod questioning;
 pub mod readmitting;
+pub mod readopting;
 mod reclaiming;
 pub mod redaction;
 pub mod redispatch;
@@ -108,6 +110,7 @@ pub mod working;
 #[cfg(test)]
 mod tests;
 
+pub use adopting::{reattaching, Adopted, Gap, Reattachment, Session};
 pub use adrift::Adrift;
 pub use allowance::{Allowance, Micros, Overspent};
 pub use asked::Asked;
@@ -138,6 +141,7 @@ pub use process::{holder_of, Holder, ProbeFailed, StartedAt};
 pub use proposal::{proposed, Proposing};
 pub use proposing::{NotProposed, Proposal, ProposedJob, Unresolved};
 pub use questioning::{Answer, NotAnswered, NotAsked, Question, Told};
+pub use readopting::Recovered;
 pub use redaction::Redactor;
 pub use redispatch::Replacement;
 pub use reporting::{Counted, Filed, NotFiled};

@@ -16,6 +16,7 @@
 //! - `peer` is the primitive `concurrency` rests on: a call attributed by the
 //!   connection it arrived on rather than by which Job was admitted first.
 
+mod adopting;
 mod allowance;
 mod asked;
 mod attachments;

@@ -59,7 +59,9 @@ What that gives up is a payload the vocabulary has no variant for: `Unrecognised
 | **What reads it** | Observe's backfill, and Debug's turn history. Nothing decodes it — the rows are already the vocabulary |
 | **What names it** | A line in the Job's log carrying `job_id`, `drone_id`, `step_id` and the path in `fields`. **The only record of the path**: `assigned_drone` on the step's row names the Drone while it is running, and is null again once it has exited — which is now at every step boundary, so a Job of four steps has four transcripts and that pointer can name at most one of them |
 
-**Fleet going away does not corrupt it.** Each row is flushed as it is written, so what was taken is on disk; the writer goes with Fleet, and Fleet never puts a Drone back onto a Job it did not spawn. A closing line in the Job log says how many rows the file holds.
+**Fleet going away does not corrupt it, and it does leave a hole.** Each row is flushed as it is written, so what was taken is on disk, and a closing line in the Job log says how many rows the file holds. What is not on disk is everything the Drone said after the pipe died — a Drone is spawned into a session of its own and outlives the Fleet that started it, so it keeps working and keeps writing into a pipe nothing is reading.
+
+**A Fleet that adopts that Drone reopens the same file** — one run, one transcript — and writes the stretch as its own first row: how long nothing was read, and that nothing the Drone says from here will be read either. The rows after it are Fleet's and Armada's alone. See [Drone](drone.md) for what adoption is and is not.
 
 ### The step a row was written under
 

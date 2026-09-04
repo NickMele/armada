@@ -23,20 +23,23 @@
 //! [`Working::heard`] answers with the whole run, because what anybody asks a
 //! transcript is what it folds to. A per-event accessor would invite reading a
 //! Drone's claim, which the gate exists to refuse.
+mod saying;
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use std::time::Duration;
 
-use adapter_traits::{AgentHarness, DroneEvent, Footprint, Worktree};
+use adapter_traits::{AgentHarness, Footprint, Worktree};
 use core_model::{DeclaredPaths, DroneId, JobId, RepoPath, StepId, Timestamp};
 use tokio::process::ChildStderr;
 
+use crate::adopting::{Adopted, Session};
 use crate::converging::{elapsed, Chain};
 use crate::drone::{Ending, Started};
 use crate::footprint::Publishing;
 use crate::questioning::Question;
-use crate::session::{DroneSession, LiveSession, Occasion};
+use crate::session::LiveSession;
 use crate::transcript::{Tap, Taps};
 use crate::watch::{Drained, Watching};
 use store::DroneSpend;
@@ -66,7 +69,11 @@ pub(crate) struct Working {
     /// [`stood_down`](Working::stood_down).
     step: StepId,
     worktree: Worktree,
-    session: DroneSession,
+    /// The Drone, and which kind it is. **A Fleet that restarted holds
+    /// [`Session::Adopted`]** — the same slot, the same acts offered, and every
+    /// one that speaks refused because there is no pipe to speak into. See
+    /// `crate::adopting`.
+    session: Session,
     transcript: Watching,
     /// The same sinks the reader task fans a Drone's lines out to, held here so
     /// that what **Armada and Fleet** did reaches the record too.
@@ -82,7 +89,13 @@ pub(crate) struct Working {
     /// Whatever the CLI complains about. **Never parsed**, and held rather than
     /// dropped: dropping it closes the pipe, and a Drone writing to a closed
     /// stderr takes a signal for it.
-    _complaints: ChildStderr,
+    ///
+    /// **`None` on an adopted Drone**, whose stderr went with the Fleet that
+    /// held it. Nothing here can reopen it, and the Drone has been writing into
+    /// a closed pipe since that moment — which is one of the reasons an orphan
+    /// is unlikely to survive long, and is not a reason to pretend Fleet still
+    /// has the far end.
+    _complaints: Option<ChildStderr>,
     /// Where the Drone said this step's work would be. **`None` until it
     /// declares**, which is a different answer from an empty declaration.
     declared: Option<DeclaredPaths>,
@@ -303,10 +316,69 @@ impl Working {
             drone,
             step,
             worktree,
-            session: started.session,
+            session: Session::Spawned(started.session),
             transcript: Watching::reading(started.transcript, harness, each.clone()),
             taps: each,
-            _complaints: started.complaints,
+            _complaints: Some(started.complaints),
+            declared: None,
+            drifted: Vec::new(),
+            step_began: at.clone(),
+            calls_before: 0,
+            rested_before: 0,
+            chain: Chain::Working,
+            heard_at: at,
+            heard: 0,
+            answering: None,
+            asked: None,
+            told_after: AtomicUsize::new(0),
+            pokes: 0,
+            publishing: Publishing::default(),
+            entered_with: None,
+            checking_since: None,
+            checked_for: Duration::ZERO,
+            dry_runs: 0,
+        }
+    }
+
+    /// Take a slot back over a Drone this Fleet did not spawn.
+    ///
+    /// **The same invariant [`holding`](Working::holding) keeps, assembled from
+    /// what a restart still has.** Which Job, which step, which worktree and
+    /// which process all come off the record; what is missing is the two pipes,
+    /// and the two fields that held them say so rather than being faked —
+    /// [`Watching::unheard`] for the transcript, `None` for the complaints.
+    ///
+    /// **The taps are a fresh handle onto the same file.** A transcript is
+    /// named by the `drone_id`, which has not changed, so Fleet appends to what
+    /// the Drone had already written instead of opening a second file that
+    /// splits one run in two. `Fleet::adopted` writes the gap row through them
+    /// before anything else.
+    ///
+    /// **Every counter starts at zero and that is a decision, not an
+    /// oversight.** `calls_before`, `rested_before` and `pokes` are readings of
+    /// what Fleet observed, and Fleet observed none of the gap — carrying a
+    /// count forward would measure this step against a norm using a number
+    /// nobody took. What is *not* zeroed is the spend, which is on the record
+    /// rather than in the slot: money the Drone spent is a fact about the world
+    /// and survives the restart in `job_drone_spend`. It is an undercount by
+    /// whatever the gap cost, because the harness reports a run's cost on the
+    /// terminating line that went into the dead pipe.
+    pub(crate) fn adopting(
+        adopted: Adopted,
+        worktree: Worktree,
+        taps: Taps,
+        at: Timestamp,
+    ) -> Working {
+        let each = taps.each();
+        Working {
+            job: adopted.job().clone(),
+            drone: adopted.drone().clone(),
+            step: adopted.step().clone(),
+            worktree,
+            session: Session::Adopted(adopted),
+            transcript: Watching::unheard(),
+            taps: each,
+            _complaints: None,
             declared: None,
             drifted: Vec::new(),
             step_began: at.clone(),
@@ -782,107 +854,7 @@ impl Working {
         self.session.exited().await
     }
 
-    pub(crate) fn session(&self) -> &DroneSession {
+    pub(crate) fn session(&self) -> &Session {
         &self.session
-    }
-
-    /// Write down something Armada or Fleet did, into this step's own record.
-    ///
-    /// **Never awaits and never fails**, for the reason
-    /// [`Tap`](crate::transcript::Tap) says: this is called from the loop that
-    /// advances the Job, and a record that could hold it up would make watching
-    /// a Job change its outcome. A row the sinks will not take is counted as
-    /// missed exactly as a Drone's is.
-    ///
-    /// **It is not a send.** Nothing here reaches the Drone; the caller has
-    /// already spoken to the session, or has decided not to, and this says what
-    /// happened. Pairing the two in one method was rejected on the failure it
-    /// hides — a turn that did not go down the pipe still belongs in the record,
-    /// and `crate::silence` counts a poke that failed to write as spent.
-    pub(crate) fn told(&self, by: ipc::Voice, saw: ipc::Saw) {
-        for tap in &self.taps {
-            tap.noted(by, saw.clone());
-        }
-    }
-
-    /// Write down a turn Armada put into this session, whole.
-    ///
-    /// The one caller shape: every send site has the rendered text in hand and
-    /// drops it, which is why the brief a step opened with was recoverable from
-    /// nowhere once the process had gone.
-    pub(crate) fn instructed(&self, occasion: Occasion, text: &str) {
-        self.owed_a_turn();
-        self.told(
-            ipc::Voice::Armada,
-            ipc::Saw::Instructed {
-                occasion: occasion.as_wire().to_string(),
-                text: text.to_string(),
-                // One block of prose, so there is no heading to name. Every
-                // occasion but the opening brief is one of these.
-                headings: Vec::new(),
-            },
-        );
-    }
-
-    /// Write down the brief a step opened with, and which of its lines
-    /// `crate::briefing` wrote as block headings.
-    ///
-    /// **A sibling of [`Working::instructed`] rather than an argument on it.**
-    /// The opening brief is the one turn assembled out of headed blocks, so a
-    /// `headings` argument on the common path would be six call sites saying
-    /// they have none. What the field is for is
-    /// `ipc::Saw::Instructed::headings`.
-    /// **It does not touch [`told_after`](Working::at_rest), and it must not.**
-    /// The opening brief went down the pipe inside `drone::start`, before this
-    /// slot existed — so by the time this runs the Drone may already have
-    /// finished the run that turn began, and taking a reading here would move
-    /// the baseline past an ending nobody had acted on. Zero is the reading the
-    /// opening turn deserves, and the field starts there.
-    pub(crate) fn briefed(&self, text: &str, headings: Vec<usize>) {
-        self.told(
-            ipc::Voice::Armada,
-            ipc::Saw::Instructed {
-                occasion: Occasion::Opening.as_wire().to_string(),
-                text: text.to_string(),
-                headings,
-            },
-        );
-    }
-
-    /// Armada has just put a turn into this session, so the Drone owes an
-    /// answer from here.
-    ///
-    /// **Called from the writer of the record and not from the six senders**,
-    /// which is what keeps it from being a rule six call sites have to
-    /// remember: every send site already writes down what it sent, before it
-    /// sends it, and that is the moment this is true.
-    fn owed_a_turn(&self) {
-        self.told_after
-            .store(self.transcript.progress().boundaries, Ordering::SeqCst);
-    }
-
-    pub(crate) fn transcript_ended(&self) -> bool {
-        self.transcript.transcript_ended()
-    }
-
-    /// Everything the Drone said. What `Ending::of` folds, and the only thing
-    /// anybody asks a transcript.
-    pub(crate) fn heard(&self) -> Vec<DroneEvent> {
-        self.transcript.events()
-    }
-
-    /// What this Drone's run has cost the Job so far.
-    ///
-    /// **A second fold over the same events `Ending::of` reads**, and not a
-    /// field on `Ending`: what the run cost and how it finished are different
-    /// questions, and a `Vanished` Drone still spent whatever it spent before
-    /// the stream stopped. The fold itself is `crate::allowance::spent`, which
-    /// is where the reason cost and turns fold differently is written down.
-    ///
-    /// The wall clock is measured from `step_began`, which is when this slot
-    /// was opened — a `Working` is built once per spawn, so that is the Drone's
-    /// own start and not the step's across a restart.
-    pub(crate) fn spent(&self, now: &Timestamp) -> DroneSpend {
-        crate::allowance::spent(&self.heard(), elapsed(&self.step_began, now))
     }
 }
