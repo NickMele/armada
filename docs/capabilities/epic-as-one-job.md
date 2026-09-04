@@ -195,10 +195,14 @@ into the step holding the tool — which is what makes the approval the dispatch
 | `create_sub_dispatched` reached | `crates/fleet/src/sub_dispatch.rs`, its only call site |
 | The parent standing down and coming back | `running -> queued`, `fleet::admitting`, `fleet::readmitting` |
 
-**No shipped workflow sets `may_dispatch_jobs`**, and
-`crates/config/tests/shipped.rs` asserts that none does. The step key is
-carried by the parser and by the frozen record, so a definition that wanted the
-grant could have it; the definition that will want it is the loop above.
+**Exactly one shipped workflow sets `may_dispatch_jobs`**, and
+`crates/config/tests/shipped.rs` asserts that it is the only one — the
+assertion used to be that *none* did, and flipping it was part of shipping this.
+The grant is `epic.json`'s `dispatch` step and nothing else in
+`.armada/workflows/` has it, which is the property worth holding: the step key
+is carried by the parser and by the frozen record, so any definition could ask
+for it, and a test is what makes a second one a deliberate act rather than a
+merge nobody read.
 
 ## What was decided, and how each one is held
 
