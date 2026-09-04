@@ -44,7 +44,7 @@
 mod bench;
 
 use core_model::{
-    Actor, EscalationTrigger, IllegalStepTransition, JobStatus, Recourse, Standing,
+    Actor, DroneStanding, EscalationTrigger, IllegalStepTransition, JobStatus, Recourse, Standing,
     StepLevelTrigger, StepState, StepTarget, Stuck, Target, TransitionReason,
 };
 use fleet::{aftermath, Aftermath, Ending, Left};
@@ -129,7 +129,7 @@ async fn a_step_stopped_for_silence_says_the_drone_went_quiet() {
     // Nothing was checked: no evidence was submitted, so the mechanical tier
     // never ran on this step, and the Drone that did not answer is gone.
     let standing = Standing {
-        drone_holding: false,
+        drone: DroneStanding::Gone,
         checks_passed: false,
         ..everything_still_there()
     };
@@ -218,7 +218,7 @@ async fn ending_a_drone_leaves_a_step_a_restart_can_land_on() {
     // keeps the work is not offered and the only one left throws away the step
     // that already advanced.
     let ended = Standing {
-        drone_holding: false,
+        drone: DroneStanding::Gone,
         ..live
     };
     let unmoved = received_detail(&opened(&run.job, reason.as_ref(), ended, &[]));
@@ -320,7 +320,7 @@ async fn the_worktree_decides_the_act_and_a_reclaim_leaves_the_record() {
     let (run, reason, refusal) = a_job_the_judge_refused().await;
     let facts = step_facts(&run.job, &[("fix", &refusal)]);
     let held = Standing {
-        drone_holding: false,
+        drone: DroneStanding::Gone,
         ..everything_still_there()
     };
     assert_eq!(
@@ -436,7 +436,7 @@ fn every_act_a_stopped_job_offers_is_one_fleet_serves() {
 /// is the fact those tests are about.
 fn everything_still_there() -> Standing {
     Standing {
-        drone_holding: true,
+        drone: DroneStanding::Speakable,
         worktree_on_disk: true,
         checks_passed: true,
         workflow_held: true,

@@ -18,7 +18,7 @@
 //! [`ipc::decode`], so a field a `skip_serializing_if` drops on the way out
 //! fails there rather than passing here.
 
-use core_model::{Branch, Job, Standing, Stuck, TransitionReason};
+use core_model::{Branch, DroneStanding, Job, Standing, Stuck, TransitionReason};
 use fleet::Ruling;
 use ipc::{CheckRun, Flagged, JobDetail, JobList, Judged, StepFacts};
 
@@ -107,7 +107,7 @@ pub fn step_facts(job: &Job, ruled: &[(&str, &Ruling)]) -> Vec<StepFacts> {
 /// is the ordinary shape at an escalation, and it is what this bench holds.
 pub fn standing(checks_passed: bool) -> Standing {
     Standing {
-        drone_holding: false,
+        drone: DroneStanding::Gone,
         worktree_on_disk: true,
         checks_passed,
         workflow_held: true,

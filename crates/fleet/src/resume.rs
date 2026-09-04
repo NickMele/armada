@@ -281,7 +281,7 @@ where
 
     /// Ask for a fresh Drone on the worktree the last one left. **The second
     /// act**, and what exists when there is no Drone to speak to: one that has
-    /// gone, or one that is there and unreadable and is ended here. #442.
+    /// gone, or one standing there unreadable, which this ends. #442, #452.
     ///
     /// **It asks; it does not start one.** The Job takes `-> queued` from
     /// either held status and `crate::readmitting` spawns when
@@ -293,9 +293,9 @@ where
     /// `None` is the plain restart, byte for byte. `Some` enters the road
     /// `request_changes` built — [`hold_the_note`](Fleet::hold_the_note).
     ///
-    /// **The step does not move here either**, because `store::attempt` counts
-    /// entries into `running` as runs and a run belongs to a Drone. It waits at
-    /// `stopped`, which a rail renders and re-admission reads.
+    /// **The step never enters `running` here**, because `store::attempt`
+    /// counts entries into `running` as runs and a run belongs to a Drone. It
+    /// waits at `stopped`, and is put there below where nothing had stopped it.
     ///
     /// **Every guard below does run here**, because each is a question about
     /// *now* — a Drone still speakable-to, a worktree still there, an exit
@@ -315,11 +315,13 @@ where
         // and a Job with none has no slot to hold.
         let slot = self.slot_of(job_id).await;
         let job = self.load(job_id).await?;
-        // **First, and the order is the refusals'.** A Job that is `running`,
-        // or escalated with no step stopped, hears which act applies instead —
-        // and hears it before "a Drone is still there", which is true of both
-        // and names neither.
-        self.stopped_step(&job)?;
+        // **First, and the order is the refusals'.** A Job that is `running`
+        // hears which act applies instead — and hears it before "a Drone is
+        // still there", which is true of both and names neither.
+        self.held_for_a_person(&job)?;
+        // Read before the slot is taken, because the slot is what decides
+        // whether its absence refuses.
+        let stopped = job.stopped_on().is_some();
         // **Held rather than glanced at.** Whether a Drone is standing here and
         // whether it is the kind this act ends are one decision at one instant,
         // and a lock let go between them is a Drone that arrived or left in the
@@ -336,6 +338,21 @@ where
             .and_then(Option::as_ref)
             .filter(|at_work| at_work.is(job_id))
             .map(|at_work| at_work.session().unheard());
+        // **A step that stopped, or a Drone nothing can be heard from.** The
+        // second is what a person meets after a Fleet restart: the step is
+        // still marked `running` because nothing ever stopped it, and the
+        // process on it cannot be told anything. `Stuck::of` offers the restart
+        // on exactly this pair, and the two readings have to agree — a Job that
+        // is offered an act and refused it is the defect #442 closed. #452.
+        //
+        // **An empty slot with no stopped step still refuses**, and hears the
+        // same sentence it always did: there is no process to end and no step
+        // to run again, which is `interrupted` and `resource_exhausted`.
+        if !stopped && standing != Some(true) {
+            return Err(Adrift::NoStepStopped {
+                job: job_id.clone(),
+            });
+        }
         // **The refusal is a session, not a process, and it always was.**
         // `DroneStillThere` gives its own reason — ending a live session to
         // spawn a replacement onto the same worktree throws away the context
@@ -377,6 +394,31 @@ where
         // roster: `crate::slots` states that order and a caller holding a slot
         // must not take it.
         drop(held);
+        // **The step is stopped here where nothing stopped it**, which is the
+        // other half of the case above. `crate::readmitting` reads the step's
+        // own state to decide which act put the Job back and what the fresh
+        // Drone is told, so a Job re-queued with its step still `running` would
+        // arrive as `Owed::Standing` — a person answering a human advance gate,
+        // which is not what happened and would open the Drone with the wrong
+        // sentence about the part before it.
+        //
+        // **`drone_killed`, and it is the truthful trigger rather than the
+        // convenient one.** A person pressed restart and the Drone was ended
+        // for it, which is `stopped_by_hand`'s own case; `unheard` is Job-level
+        // and cannot reach a step's `last_verdict` at all. It is the one
+        // `running -> stopped` the step machine admits beneath a frozen Job —
+        // `core_model::step_machine::taken_from_a_person`, #313 — and
+        // `Stuck::of` offers this act on that predicate's own three conditions.
+        //
+        // Reloaded first: `end_the_drone` cleared the record's Drone pointer
+        // above, so the copy in hand no longer says what the store does.
+        let job = match stopped {
+            true => job,
+            false => {
+                let job = self.load(job_id).await?;
+                self.stopped_by_hand(&job).await?
+            }
+        };
         // **Before the Job leaves `escalated`, and this used to be before the
         // spawn.** The record can still name a Drone on the step being
         // restarted: a Fleet that died holding one leaves exactly that, and

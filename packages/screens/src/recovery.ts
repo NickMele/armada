@@ -188,10 +188,11 @@ export function recourseOf(job: JobSummary, whole: JobWhole | null): Recourse {
   const offered = new Set(stuck.recourse);
   const overrule = offered.has(OVERRIDE_VERDICT) ? overruleOf(whole, stuck) : undefined;
   const reread = offered.has(RERUN_GATE) ? rereadOf(whole, stuck) : undefined;
-  // Exclusive, and Fleet is what made them exclusive: a redirect wants a live
-  // session and a restart wants the Drone gone, so no classification carries
-  // both. Read in that order anyway, because a Job holding a Drone is a Job a
-  // restart would throw a session away on.
+  // Exclusive, and Fleet is what made them exclusive: a redirect wants a
+  // session Fleet can speak to, and a restart wants no Drone working the step —
+  // gone already, or standing there unreadable and ended by the act. So no
+  // classification carries both. Read in that order anyway, because a Job
+  // holding a Drone is a Job a restart would throw a session away on.
   const act: Recourse["act"] = offered.has(REDIRECT_DRONE)
     ? "redirect"
     : offered.has(RESTART_STEP)
@@ -206,7 +207,13 @@ export function recourseOf(job: JobSummary, whole: JobWhole | null): Recourse {
     ...(overrule === undefined ? {} : { override_verdict: overruling(overrule) }),
     ...(reread === undefined ? {} : { rerun_gate: REREAD }),
     ...(act === "redirect" ? { redirect: REDIRECT } : {}),
-    ...(act === "restart_step" ? { restart_step: RESTART } : {}),
+    // **Which restart this is, off the fact Fleet sent.** The two readings take
+    // the same act and describe different things, and the trigger cannot tell
+    // them apart — a job with an unreadable drone reads `gate_failure` where
+    // its step stopped first.
+    ...(act === "restart_step"
+      ? { restart_step: stuck.drone_unheard ? RESTART_UNHEARD : RESTART }
+      : {}),
   };
   const drew: Recourse = { act, overrule, reread, redispatch, says, stands: "" };
   // **The answer to the last press leads.** A redirect that is waiting and one
@@ -433,6 +440,11 @@ export function onwards(overrule: Overrule): string {
  */
 function stalled(job: SummaryStatus, stuck: Stuck): string {
   if (!HELD_FOR_A_PERSON.includes(job.status)) return notResumable(job);
+  // **Ahead of the step, and only on this reading.** A job with an unreadable
+  // drone is offered the restart whether or not a step stopped, so the only
+  // thing that can have withheld it here is the worktree — and "no step to land
+  // on" would name a reason that is not the reason.
+  if (stuck.drone_unheard && !stuck.worktree_on_disk) return WORKTREE_GONE_UNHEARD;
   if (stuck.step_id === undefined) return NO_STEP_STOPPED;
   if (!stuck.worktree_on_disk) return WORKTREE_GONE;
   return NOTHING_STANDS;
@@ -463,6 +475,17 @@ const NO_STEP_STOPPED =
 const WORKTREE_GONE =
   "Nothing resumes this job. Its drone is gone and so is the worktree it was working in — " +
   "fleet read the disk, and there is nothing left for a fresh drone to take over.";
+
+/**
+ * `WorktreeGone` again, with the drone said truthfully. The sentence above is
+ * about a job whose drone has gone; this one is about a job whose drone is
+ * standing there and cannot be reached, where a restart would have applied and
+ * the disk is what took it away.
+ */
+const WORKTREE_GONE_UNHEARD =
+  "Nothing resumes this job. Its drone is still running and nothing is reading it, and the " +
+  "worktree it was working in is gone — fleet read the disk, and there is nothing left for a " +
+  "fresh drone to take over.";
 
 /** Held, a step stopped, a worktree on disk, and Fleet offers neither. */
 const NOTHING_STANDS =
@@ -529,18 +552,46 @@ const REDIRECT =
   "it as a new turn at the step above.";
 
 /**
- * `NoDroneToRedirect` stated the same way, and the worktree stated as the
- * settled fact it now is: Bridge read no filesystem and let the refusal arrive
- * on the press, and Fleet reads the disk before naming the act.
+ * What a restart does, said once, so the two sentences that reach it cannot
+ * come to describe different acts.
  *
- * **It no longer promises a drone immediately either.** A restart takes
- * `escalated -> queued` and admission starts it, bounded by the concurrency cap
- * and the machine as an approval is — `crates/fleet/src/readmitting.rs`. The
- * act is never refused for that; it stopped claiming the drone is already there.
+ * **It no longer promises a drone immediately.** A restart takes `escalated ->
+ * queued` and admission starts it, bounded by the concurrency cap and the
+ * machine as an approval is — `crates/fleet/src/readmitting.rs`. The act is
+ * never refused for that; it stopped claiming the drone is already there.
  */
-const RESTART =
-  "The drone is gone, so the job goes back in the queue and a fresh one takes over at the step " +
-  "above when there is room, resolving its toolset, model and environment again.";
+const RESTART_QUEUES =
+  "The job goes back in the queue and a fresh one takes over at the step above when there is " +
+  "room, resolving its toolset, model and environment again.";
+
+/**
+ * `NoDroneToRedirect` stated as the act it points at rather than as a refusal,
+ * and the worktree stated as the settled fact it now is: Bridge read no
+ * filesystem and let the refusal arrive on the press, and Fleet reads the disk
+ * before naming the act.
+ */
+const RESTART = `The drone is gone. ${RESTART_QUEUES}`;
+
+/**
+ * The same act on a job whose drone is still running.
+ *
+ * **Two sentences and not one, because both cases are real.** Restart applies
+ * where the drone has died and where it is alive and unreachable, and it does
+ * the right thing in each — so the button cannot pick one reading and say it
+ * everywhere. It said the drone was gone on a job whose drone was plainly
+ * working, which is a sentence a person can see is false.
+ *
+ * **What the words have to carry is that restarting ends it**, because that is
+ * the part a person would not guess from a job that looks like it is running.
+ * `stuck.drone_unheard` is the fact and fleet is what read it; nothing here
+ * infers this from the trigger, which in this exact case says `gate_failure`.
+ *
+ * **Not the code's word for it.** `unheard`, `session` and `adopted` name the
+ * mechanism, and the thing a person needs is what is true on their screen: the
+ * process is up, nothing is reading it, and restart is what ends that.
+ */
+const RESTART_UNHEARD =
+  `The drone is still running and nothing is reading it, so restarting ends it. ${RESTART_QUEUES}`;
 
 /** What replaces a Job that nothing resumes, or that nothing replaces either. */
 function replacement(redispatch: boolean): string {
