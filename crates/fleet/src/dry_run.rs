@@ -398,3 +398,13 @@ where
         let _ = transcript::note(&self.host().repo_root, plan.record.id(), &envelope);
     }
 }
+
+/// The refusal a Drone reads, from the tool's own error. **Beside the refusal**,
+/// which is where `crate::questioning` and `crate::widening` keep theirs.
+impl From<NotRun> for ipc::mcp::NotRecorded {
+    fn from(why: NotRun) -> ipc::mcp::NotRecorded {
+        ipc::mcp::NotRecorded {
+            because: why.to_string(),
+        }
+    }
+}

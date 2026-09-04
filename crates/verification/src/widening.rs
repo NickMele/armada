@@ -1,32 +1,18 @@
 //! The one call a Drone's request for more scope costs.
 //!
-//! # It answers consistency, never desirability
+//! **It answers consistency, never desirability.** Whether widening is wise is
+//! a person's, and this look exists precisely so that a person is not asked
+//! about every request.
 //!
-//! The question is whether the paths asked for belong to the step this Drone
-//! was given. Not whether widening is wise, not whether the work is good, not
-//! whether somebody would approve — those are a person's, and this look exists
-//! precisely so that a person is not asked about every request.
+//! **There is no parameter for the diff, the transcript or any count.**
+//! [`WideningBrief::about`] takes the step, the request, the scope, the paths
+//! and the Drone's reason — the question is about a plan rather than about
+//! work, and a call handed the diff would be answering
+//! [`ConvergenceBrief`](crate::ConvergenceBrief)'s question instead.
 //!
-//! # What the call is shown, and what it is denied
-//!
-//! [`WideningBrief::about`] takes the step, the request the whole Job answers,
-//! the scope the Job declared, the paths asked for and the Drone's own reason.
-//! **There is no parameter for the diff, the transcript or any count** — the
-//! question is about a plan rather than about work, and a call handed the diff
-//! would be answering the mid-step look's question instead
-//! ([`ConvergenceBrief`](crate::ConvergenceBrief)).
-//!
-//! The reason is the Drone's own words and is labelled as an argument rather
-//! than as a fact, the way [`Request`] is labelled as the standard rather than
-//! as something under judgment.
-//!
-//! # It is not a gate and cannot become one
-//!
-//! [`Widened`] shares no type with [`Verdict`](crate::Verdict) or
-//! [`Refusals`](crate::Refusals), and no function here takes one and answers
-//! either. Clearing a widening advances nothing and refusing one fails nothing:
-//! what follows a refusal is an escalation, which is a person being met by the
-//! exception.
+//! **It is not a gate and cannot become one.** [`Widened`] shares no type with
+//! [`Verdict`](crate::Verdict) or [`Refusals`](crate::Refusals): clearing a
+//! widening advances nothing and refusing one fails nothing.
 
 use core_model::{RepoPath, ResolvedStep, WriteTargets};
 

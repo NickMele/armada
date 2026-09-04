@@ -94,3 +94,4 @@ mod tmp;
 mod tools;
 mod transcript;
 mod watching;
+mod widening;

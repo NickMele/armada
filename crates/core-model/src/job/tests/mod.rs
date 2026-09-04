@@ -15,7 +15,8 @@
 //! This module is the scaffolding. [`machine`] tests what the registry says is
 //! legal for a Job; [`step_machine`] tests the inner half, which has no
 //! registry table to be read against; [`record`] tests what a Job is made of
-//! and what a transition records.
+//! and what a transition records; [`revisions`] the one field that grows after
+//! creation.
 
 use crate::envelope::{Actor, FieldValue, Timestamp, Ulid};
 use crate::job::*;
@@ -270,5 +271,6 @@ mod machine;
 mod models;
 mod note;
 mod record;
+mod revisions;
 mod step_machine;
 mod stuck;

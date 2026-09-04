@@ -38,7 +38,8 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::process::Command;
 use verification::{
     Accepted, Answered, Baseline, Brief, Convergence, ConvergenceBrief, Delivered, Flagged,
-    GamingBrief, NothingToJudge, Product, Reference, Refusals, Request, Unreadable,
+    GamingBrief, NothingToJudge, Product, Reference, Refusals, Request, Unreadable, Widened,
+    WideningBrief,
 };
 
 use crate::asked::Asked;
@@ -92,7 +93,7 @@ pub struct Judging {
     pub asked: Asked,
 }
 
-/// Which of Fleet's four Judge calls is out.
+/// Which of Fleet's five Judge calls is out.
 ///
 /// **Not a registry vocabulary, and deliberately not one.** `enum-verbs.toml`
 /// and `crates/core-model/domain/` own the words for what a Job or a step *is*
@@ -100,7 +101,7 @@ pub struct Judging {
 /// and read back. A look is something Fleet *does* for as long as it takes and
 /// then stops doing: nothing stores one, no transition names one, and a row in
 /// a registry of stored vocabularies would claim otherwise. The set is decided
-/// by the four call sites below, which is why it is spelled here and crosses as
+/// by the five call sites below, which is why it is spelled here and crosses as
 /// a string, under the rule `ipc::Verdict::named` and `DeclaredCheck::kind`
 /// already cross under.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -113,6 +114,12 @@ pub enum Look {
     /// The second look, asking whether the evidence was gamed. It does not
     /// gate.
     Gaming,
+    /// The look at a request for more scope, asking whether the paths belong
+    /// to the step. **The only one made about a plan rather than about work**,
+    /// and the only one a Drone asks for: the other four are Fleet's own. It
+    /// is marked like every other call, so a person watching sees the wait
+    /// rather than a Drone that went quiet mid-step.
+    Widening,
     /// The mid-step look, asking whether the work is going anywhere.
     ///
     /// It neither gates nor judges — and it is here because it is a model call
@@ -130,6 +137,7 @@ impl Look {
             Look::Criterion => "criterion",
             Look::Drift => "drift",
             Look::Gaming => "gaming",
+            Look::Widening => "widening",
             Look::Convergence => "convergence",
         }
     }
@@ -579,6 +587,37 @@ pub(crate) async fn converging(
         step.id(),
         Calling {
             look: Look::Convergence,
+            criterion: None,
+            pattern: None,
+            model: &model,
+            nth: 1,
+            of: 1,
+        },
+    );
+    let said = said(judging.client.as_ref(), &ask, judging.budget).await?;
+    brief.read(&said).map_err(CallFailed::Unreadable)
+}
+
+/// Ask whether the paths a Drone wants belong to the step it was given.
+///
+/// **One call and no panel**, for [`converging`]'s reason: the answer has no
+/// veto for a panel to make stricter. It is outside `judge_call_cap`, which
+/// bounds `criteria x panel_size` over what a step *declared* — no declaration
+/// mentions this look, exactly as none mentions drift or convergence. What
+/// bounds it is one ask per step, which `crate::widening` holds because it is
+/// a fact about the Job's record rather than about a call.
+pub(crate) async fn widening(
+    step: &ResolvedStep,
+    brief: &WideningBrief,
+    judging: &Judging,
+) -> Result<Widened, CallFailed> {
+    let model = fleets_model(step, &judging.default_model)?;
+    let ask = Ask::put(model.clone(), brief.question(), judging.environment.clone())
+        .map_err(|_| CallFailed::NothingToAsk)?;
+    let _out = judging.marking.out(
+        step.id(),
+        Calling {
+            look: Look::Widening,
             criterion: None,
             pattern: None,
             model: &model,

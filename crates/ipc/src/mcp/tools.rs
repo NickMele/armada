@@ -28,6 +28,7 @@ use serde_json::{json, Map, Value};
 
 use super::ask::{ASK_FIELDS, ASK_TOOL, FEWEST_OPTIONS, MOST_OPTIONS};
 use super::dispatch::{DISPATCH_FIELDS, DISPATCH_TOOL};
+use super::widening::{WIDEN_FIELDS, WIDEN_TOOL};
 
 /// The Evidence tool's own name, bare. The client joins it to the server name
 /// to make the allowlist entry.
@@ -147,6 +148,11 @@ pub enum NotAnArgument {
     Blank {
         field: &'static str,
     },
+    /// A request for more scope that named no paths. **Refused rather than
+    /// taken as a call that did nothing**: the call costs a Judge call and one
+    /// is allowed per part, so a request for nothing would spend the only ask
+    /// the Drone had.
+    AskedForNothing,
 }
 
 impl core::fmt::Display for NotAnArgument {
@@ -155,8 +161,8 @@ impl core::fmt::Display for NotAnArgument {
             NotAnArgument::NoSuchTool { named } => write!(
                 out,
                 "there is no tool called `{named}`. The tools are `{TOOL}`, \
-                 `{SCOPE_TOOL}`, `{CHECKS_TOOL}`, `{DISPATCH_TOOL}` and \
-                 `{ASK_TOOL}`"
+                 `{SCOPE_TOOL}`, `{WIDEN_TOOL}`, `{CHECKS_TOOL}`, \
+                 `{DISPATCH_TOOL}` and `{ASK_TOOL}`"
             ),
             // The empty list is a real case now: `run_checks` takes nothing, so
             // a call of it with no arguments is a correct call and never
@@ -251,6 +257,11 @@ impl core::fmt::Display for NotAnArgument {
                 out,
                 "`{field}` is empty. It has to say something — call again with \
                  it filled in"
+            ),
+            NotAnArgument::AskedForNothing => out.write_str(
+                "you asked for no paths. Name the ones the work needs that the \
+                 task's scope does not already cover, or get on with the work \
+                 inside the scope you have",
             ),
         }
     }
@@ -355,6 +366,7 @@ pub(crate) fn named(name: &str) -> Result<&'static str, NotAnArgument> {
     match name {
         TOOL => Ok(TOOL),
         SCOPE_TOOL => Ok(SCOPE_TOOL),
+        WIDEN_TOOL => Ok(WIDEN_TOOL),
         CHECKS_TOOL => Ok(CHECKS_TOOL),
         DISPATCH_TOOL => Ok(DISPATCH_TOOL),
         ASK_TOOL => Ok(ASK_TOOL),
@@ -372,6 +384,10 @@ pub(crate) fn argumentless(tool: &'static str) -> NotAnArgument {
         SCOPE_TOOL => NotAnArgument::NoArguments {
             tool: SCOPE_TOOL,
             takes: SCOPE_FIELDS,
+        },
+        WIDEN_TOOL => NotAnArgument::NoArguments {
+            tool: WIDEN_TOOL,
+            takes: WIDEN_FIELDS,
         },
         ASK_TOOL => NotAnArgument::NoArguments {
             tool: ASK_TOOL,
@@ -435,6 +451,7 @@ pub(crate) fn listed() -> Vec<Value> {
         evidence_tool(),
         scope_tool(),
         checks_tool(),
+        super::widening::widen_tool(),
         super::dispatch::dispatch_tool(),
         super::ask::ask_tool(),
     ]

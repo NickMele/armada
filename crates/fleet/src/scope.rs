@@ -343,3 +343,13 @@ impl Error for NotDeclared {
         }
     }
 }
+
+/// The refusal a Drone reads, from the tool's own error. **Beside the refusal**,
+/// which is where `crate::questioning` and `crate::widening` keep theirs.
+impl From<NotDeclared> for ipc::mcp::NotRecorded {
+    fn from(why: NotDeclared) -> ipc::mcp::NotRecorded {
+        ipc::mcp::NotRecorded {
+            because: why.to_string(),
+        }
+    }
+}

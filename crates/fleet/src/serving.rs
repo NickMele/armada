@@ -23,7 +23,9 @@
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Daemon, Observed, Refusal};
-use ipc::mcp::{CheckReport, DeclareScope, DispatchJob, NotRecorded, Receipt, SubmitEvidence};
+use ipc::mcp::{
+    CheckReport, DeclareScope, DispatchJob, NotRecorded, Receipt, RequestScope, SubmitEvidence,
+};
 use ipc::{
     CallArguments, ChangesRequested, FleetCapacity, JobDelivery, JobDetail, JobDiff, JobEvidence,
     JobForgotten, JobHistory, JobId, JobList, JobSpend, JobSummary, ManifestId, ManifestSummary,
@@ -829,14 +831,25 @@ where
         declaration: DeclareScope,
     ) -> Result<Receipt, NotRecorded> {
         let job = self.placed(&caller)?;
-        match Fleet::declare_scope(self, &job, &declaration).await {
-            Ok(declared) => Ok(Receipt {
-                word: declared.word().to_string(),
-            }),
-            Err(why) => Err(NotRecorded {
-                because: why.to_string(),
-            }),
-        }
+        let declared = Fleet::declare_scope(self, &job, &declaration).await?;
+        Ok(Receipt {
+            word: declared.word().to_string(),
+        })
+    }
+
+    /// The working Drone asking the task's own scope to grow. Held open while
+    /// a Judge call runs, and **every outcome comes back through the tool** —
+    /// a Drone told nothing writes the file anyway.
+    async fn request_scope(
+        &self,
+        caller: api::Caller,
+        request: RequestScope,
+    ) -> Result<Receipt, NotRecorded> {
+        let job = self.placed(&caller)?;
+        let widened = Fleet::request_scope(self, &job, &request).await?;
+        Ok(Receipt {
+            word: widened.word().to_string(),
+        })
     }
 
     /// The Drone asking whether its work passes.
@@ -849,11 +862,7 @@ where
     /// where it was when the call arrived, whatever the Checks said.
     async fn run_checks(&self, caller: api::Caller) -> Result<CheckReport, NotRecorded> {
         let job = self.placed(&caller)?;
-        Fleet::run_checks(self, &job)
-            .await
-            .map_err(|why| NotRecorded {
-                because: why.to_string(),
-            })
+        Ok(Fleet::run_checks(self, &job).await?)
     }
 
     /// The Drone asking for one more Job to exist.
@@ -880,9 +889,7 @@ where
             Ok(minted) => Ok(Receipt {
                 word: minted.as_str().to_string(),
             }),
-            Err(why) => Err(NotRecorded {
-                because: why.to_string(),
-            }),
+            Err(why) => Err(why.into()),
         }
     }
 }

@@ -1,36 +1,20 @@
 //! Appending to a Job's scope history after the Job was inserted.
 //!
-//! # The one column with two writers
+//! **The scope moves with the entry or neither moves**, in one transaction. A
+//! history saying a widening took, beside a `job_write_targets` that did not,
+//! is a scope the drift check would measure against and the record would
+//! contradict.
 //!
-//! [`insert_job`](Store::insert_job) says creation is not an update and that
-//! there is no method there that would make it one — true of every column it
-//! writes, and it stays true: this does not update the Job row's other columns,
-//! and there is no path through it by which a title, a status or a workflow
-//! could move. What it writes is `scope_revisions` and the paths that entry
-//! took, which is one act.
+//! **It writes the whole list**, because `scope_revisions[]` is one TEXT column
+//! and there is no row to append — the list is the one the caller already holds,
+//! folded by `Job::scope_revised`. So the write is last-writer-wins, and what
+//! stops that mattering is upstream: one asker, in a Job's working slot, under
+//! that slot's lock, at most once per step. A second asker needs the column
+//! read back inside this transaction, and nothing here pretends it already is.
 //!
-//! # The whole list, because the column is the whole list
-//!
-//! `scope_revisions[]` is `storage = "Column"` in
-//! `crates/core-model/domain/job-fields.toml`, so the history is one TEXT
-//! value and there is no row to append. What is written is the list the caller
-//! already holds, folded by `Job::scope_revised` — this does not re-read the
-//! column and does not decide what the list should contain.
-//!
-//! **So the write is last-writer-wins, and what stops that mattering is
-//! upstream.** A revision is asked for by the Drone in a Job's working slot,
-//! under that slot's lock, and at most once per step; two overlapping folds of
-//! one Job's history are a thing no caller can produce. A second asker would
-//! need this to read the column back inside the transaction, and that is the
-//! change to make rather than a lock held out here.
-//!
-//! # The scope moves with the entry, or neither moves
-//!
-//! `job_write_targets` is replaced from the Job the caller folded the entry
-//! into, in the same transaction as the history. A history saying a widening
-//! took, beside a scope that did not take it, is the disagreement the whole
-//! feature exists to make impossible — the drift check would then measure
-//! against a scope the record says was corrected.
+//! It updates two things and no others: a title, a status or a workflow has no
+//! path through here, so [`insert_job`](Store::insert_job)'s rule that creation
+//! is not an update is unbroken.
 
 use core_model::{Job, WriteTargets};
 

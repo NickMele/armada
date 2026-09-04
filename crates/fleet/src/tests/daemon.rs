@@ -438,15 +438,17 @@ pub fn a_proposal_for(title: &str, workflow_id: &str) -> ipc::ProposeJob {
 /// The workflow is an argument because the Judge is cold by default: the
 /// fixture workflow declares no criterion, so a Fleet that only swapped the
 /// client would never make a call.
+/// `impl Into<Arc<_>>` so a case that asserts **what the call was asked** can
+/// keep a handle on the judge, which records the questions.
 pub fn a_fleet_judged_by(
     home: &TempDir,
     work: FakeWorkProduct,
     workflow: config::ResolvedWorkflow,
-    judge: FakeJudge,
+    judge: impl Into<Arc<FakeJudge>>,
 ) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings = fittings(home, work);
     fittings.workflows = one(workflow);
-    fittings.judge = Arc::new(judge);
+    fittings.judge = judge.into();
     Fleet::assembled(fittings)
 }
 

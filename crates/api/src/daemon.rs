@@ -27,7 +27,8 @@ use std::future::Future;
 use crate::mcp::Caller;
 use crate::observing::Observed;
 use ipc::mcp::{
-    AskQuestion, CheckReport, DeclareScope, DispatchJob, NotRecorded, Receipt, SubmitEvidence,
+    AskQuestion, CheckReport, DeclareScope, DispatchJob, NotRecorded, Receipt, RequestScope,
+    SubmitEvidence,
 };
 use ipc::{
     CallArguments, ChangesRequested, ChosenAnswer, FileReport, FleetCapacity, JobDetail, JobDiff,
@@ -604,8 +605,8 @@ pub trait Daemon: Send + Sync + 'static {
     /// `submit_evidence` — the Evidence tool, called by the Drone that is
     /// working. **Not an inventory operation and not Bridge's**: its caller is
     /// a Drone rather than Bridge, which is why its refusal is [`NotRecorded`]
-    /// rather than [`Refusal`]. [`Daemon::declare_scope`] and
-    /// [`Daemon::run_checks`] are the other two.
+    /// rather than [`Refusal`]. [`Daemon::declare_scope`],
+    /// [`Daemon::run_checks`] and [`Daemon::request_scope`] are the others.
     ///
     /// **The submission is bound to a Job the caller never names.** There is no
     /// `job_id` parameter and no `step_id`, so there is nothing to forge: the
@@ -671,6 +672,37 @@ pub trait Daemon: Send + Sync + 'static {
         &self,
         caller: Caller,
         declaration: DeclareScope,
+    ) -> impl Future<Output = Result<Receipt, NotRecorded>> + Send;
+
+    /// `request_scope` — the working Drone asks the **task's** stated scope to
+    /// grow, because the work it was given needs a path the task does not name.
+    ///
+    /// # The other scope call, and what makes it a different call
+    ///
+    /// [`declare_scope`](Daemon::declare_scope) states where a part's work will
+    /// be, is replaced by calling it again, and decides nothing. This asks for
+    /// the Job's own scope to change, which is a claim about the whole task —
+    /// so it is answered rather than taken, and the answer is a Judge's.
+    ///
+    /// # It blocks, and what bounds the wait is a Judge budget
+    ///
+    /// [`run_checks`](Daemon::run_checks) is the other call held open, and this
+    /// is held open for the same reason: the outcome *is* the answer. What it
+    /// is **not** is [`ask_question`](Daemon::ask_question) — that one cannot
+    /// be waited for because a person's wait has no budget, and this one is a
+    /// model call with one on it.
+    ///
+    /// **Nothing moves while the call is out.** The Job is `running` when it is
+    /// made and `running` when it returns, so the Drone keeps its session and
+    /// its working slot and carries on the moment it answers. A refusal is the
+    /// exception and escalates.
+    ///
+    /// Bound to a Job and a step the caller never names, for
+    /// [`submit_evidence`](Daemon::submit_evidence)'s reason.
+    fn request_scope(
+        &self,
+        caller: Caller,
+        request: RequestScope,
     ) -> impl Future<Output = Result<Receipt, NotRecorded>> + Send;
 
     /// `dispatch_job` — the working Drone asks for one more Job to exist, as a

@@ -44,6 +44,7 @@ pub struct FakeDaemon {
     pub submitted: Mutex<Vec<SubmitEvidence>>,
     /// Every scope declaration taken, in arrival order.
     pub declared: Mutex<Vec<DeclareScope>>,
+    pub requested: Mutex<Vec<ipc::mcp::RequestScope>>,
     /// Every question taken, in arrival order.
     pub asked: Mutex<Vec<ipc::mcp::AskQuestion>>,
     /// Every Job a Drone asked to have created, in arrival order.
@@ -75,6 +76,7 @@ impl FakeDaemon {
             minted: AtomicU64::new(0),
             submitted: Mutex::new(Vec::new()),
             declared: Mutex::new(Vec::new()),
+            requested: Mutex::new(Vec::new()),
             asked: Mutex::new(Vec::new()),
             dispatched: Mutex::new(Vec::new()),
             checked: AtomicU64::new(0),
@@ -144,6 +146,26 @@ impl FakeDaemon {
             at: Instant::carried("2026-08-26T09:00:00.000Z"),
         }));
         Ok(moved)
+    }
+}
+
+impl FakeDaemon {
+    /// Every Drone tool refuses on the one thing this daemon can see: nothing
+    /// is being worked. **One reading, five callers** — five copies of it drift
+    /// into five different sentences about one condition.
+    fn while_working(&self, about: &str) -> Result<(), NotRecorded> {
+        let running = self
+            .jobs
+            .lock()
+            .expect("not poisoned")
+            .iter()
+            .any(|job| job.status.as_wire() == "running");
+        match running {
+            true => Ok(()),
+            false => Err(NotRecorded {
+                because: format!("no Job is being worked, so there is no {about}"),
+            }),
+        }
     }
 }
 
@@ -740,19 +762,7 @@ impl Daemon for FakeDaemon {
         _caller: crate::Caller,
         submission: SubmitEvidence,
     ) -> Result<Receipt, NotRecorded> {
-        let running = self
-            .jobs
-            .lock()
-            .expect("not poisoned")
-            .iter()
-            .any(|job| job.status.as_wire() == "running");
-        if !running {
-            return Err(NotRecorded {
-                because: "no Job is being worked, so there is no step for this \
-                          submission to be against"
-                    .to_string(),
-            });
-        }
+        self.while_working("submission to be against")?;
         self.submitted
             .lock()
             .expect("not poisoned")
@@ -767,25 +777,27 @@ impl Daemon for FakeDaemon {
         _caller: crate::Caller,
         declaration: DeclareScope,
     ) -> Result<Receipt, NotRecorded> {
-        let running = self
-            .jobs
-            .lock()
-            .expect("not poisoned")
-            .iter()
-            .any(|job| job.status.as_wire() == "running");
-        if !running {
-            return Err(NotRecorded {
-                because: "no Job is being worked, so there is no step for this \
-                          declaration to be about"
-                    .to_string(),
-            });
-        }
+        self.while_working("declaration to be about")?;
         self.declared
             .lock()
             .expect("not poisoned")
             .push(declaration);
         Ok(Receipt {
             word: "declared".to_string(),
+        })
+    }
+
+    /// A request for more scope. **No Judge here** — what a real Fleet does
+    /// with one is `fleet::widening`'s and is tested there.
+    async fn request_scope(
+        &self,
+        _caller: crate::Caller,
+        request: ipc::mcp::RequestScope,
+    ) -> Result<Receipt, NotRecorded> {
+        self.while_working("request to be about")?;
+        self.requested.lock().expect("not poisoned").push(request);
+        Ok(Receipt {
+            word: "widened".to_string(),
         })
     }
 
@@ -797,19 +809,7 @@ impl Daemon for FakeDaemon {
         _caller: crate::Caller,
         asking: ipc::mcp::AskQuestion,
     ) -> Result<Receipt, NotRecorded> {
-        let running = self
-            .jobs
-            .lock()
-            .expect("not poisoned")
-            .iter()
-            .any(|job| job.status.as_wire() == "running");
-        if !running {
-            return Err(NotRecorded {
-                because: "no Job is being worked, so there is no step for this \
-                          question to be about"
-                    .to_string(),
-            });
-        }
+        self.while_working("question to be about")?;
         self.asked.lock().expect("not poisoned").push(asking);
         Ok(Receipt {
             word: "asked".to_string(),
@@ -817,17 +817,7 @@ impl Daemon for FakeDaemon {
     }
 
     async fn run_checks(&self, _caller: crate::Caller) -> Result<CheckReport, NotRecorded> {
-        let running = self
-            .jobs
-            .lock()
-            .expect("not poisoned")
-            .iter()
-            .any(|job| job.status.as_wire() == "running");
-        if !running {
-            return Err(NotRecorded {
-                because: "no Job is being worked, so there are no checks to run".to_string(),
-            });
-        }
+        self.while_working("checks to run")?;
         self.checked.fetch_add(1, Ordering::SeqCst);
         Ok(shapes::check_report())
     }
@@ -841,18 +831,7 @@ impl Daemon for FakeDaemon {
         _caller: crate::Caller,
         dispatch: DispatchJob,
     ) -> Result<Receipt, NotRecorded> {
-        let running = self
-            .jobs
-            .lock()
-            .expect("not poisoned")
-            .iter()
-            .any(|job| job.status.as_wire() == "running");
-        if !running {
-            return Err(NotRecorded {
-                because: "no Job is being worked, so there is no task these Jobs                           would belong to"
-                    .to_string(),
-            });
-        }
+        self.while_working("Jobs would belong to")?;
         self.dispatched.lock().expect("not poisoned").push(dispatch);
         Ok(Receipt {
             word: "01M0DISPATCHEDCHILD0000000".to_string(),
