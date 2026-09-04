@@ -25,7 +25,7 @@ use adapter_traits::{Change, Footprint};
 use config::ResolvedWorkflow;
 use core_model::CheckOutcome;
 use testkit::{FakeWorkProduct, Gate, Sketch};
-use verification::{CheckFailed, Request};
+use verification::{CheckFailed, Lifted, Request};
 
 use crate::at_step::AtStep;
 use crate::gate::{rule_on, Ruling};
@@ -64,6 +64,7 @@ async fn ruling_over(work: &FakeWorkProduct) -> Ruling {
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         work,
@@ -195,6 +196,7 @@ async fn a_step_whose_checks_declare_no_paths_never_reads_the_diff_for_one() {
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,

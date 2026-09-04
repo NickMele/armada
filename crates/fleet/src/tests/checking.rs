@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use adapter_traits::{Footprint, Worktree};
 use core_model::CheckOutcome;
 use testkit::{FakeWorkProduct, Gate, Sketch};
-use verification::Request;
+use verification::{Lifted, Request};
 
 use crate::at_step::AtStep;
 use crate::gate::{rule_on, CheckBudget, Ruling};
@@ -51,6 +51,7 @@ async fn ruled<'a>(gates: &'a [Gate<'a>], budget: Duration, touched: &[&str]) ->
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,
@@ -238,6 +239,7 @@ async fn ruled_on_a_file(target: &str, write: impl FnOnce(&std::path::Path)) -> 
         Request::of(testkit::asked_for()),
         &crate::tests::gate::note_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &FakeWorkProduct::changed(&[".armada/artifacts/plan.md"]),

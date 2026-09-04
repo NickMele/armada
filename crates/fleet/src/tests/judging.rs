@@ -27,7 +27,7 @@ use core_model::{
 use testkit::{FakeJudge, FakeWorkProduct, Gate, Scoped, Sketch};
 
 use ipc::{JobDetail, RunId};
-use verification::Request;
+use verification::{Lifted, Request};
 
 use crate::asked::Asked;
 use crate::at_step::AtStep;
@@ -85,6 +85,7 @@ async fn ruled(judge: FakeJudge, worktree: &Worktree) -> Ruling {
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,
@@ -185,6 +186,7 @@ async fn a_failed_check_holds_the_job_somewhere_else_than_a_refusal() {
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,
@@ -394,6 +396,7 @@ async fn a_step_that_declares_no_criterion_never_asks() {
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,
@@ -445,6 +448,7 @@ async fn a_failing_check_never_reaches_the_judge() {
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,
@@ -487,6 +491,7 @@ async fn the_call_carries_the_patch_and_the_facts_and_nothing_the_drone_wrote() 
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,
@@ -565,6 +570,7 @@ async fn a_step_whose_work_product_is_a_note_is_judged_against_the_note() {
         Request::of(testkit::asked_for()),
         &note_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,
@@ -616,6 +622,7 @@ async fn a_later_step_is_measured_against_what_an_earlier_one_established() {
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         Some(&declared),
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &recorded,
         &work,
@@ -662,6 +669,7 @@ async fn a_step_with_nothing_to_show_costs_no_call_and_draws_no_verdict() {
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         Some(&declared),
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &FakeWorkProduct::untouched(),
@@ -717,6 +725,7 @@ async fn a_criterion_asking_what_was_requested_reaches_a_call_that_carries_it() 
         Request::of(&asked_for),
         &note_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &FakeWorkProduct::untouched(),
@@ -769,6 +778,7 @@ async fn while_judging(judge: FakeJudge, worktree: &Worktree) -> (Vec<ipc::JobJu
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,

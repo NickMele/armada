@@ -17,7 +17,7 @@ use std::sync::Arc;
 use adapter_traits::{Footprint, Worktree};
 use config::ResolvedWorkflow;
 use testkit::{FakeJudge, FakeWorkProduct, Gate, Sketch};
-use verification::Request;
+use verification::{Lifted, Request};
 
 use crate::at_step::AtStep;
 use crate::gate::{rule_on, Ruling};
@@ -60,6 +60,7 @@ async fn ruled_on_a_deliverable(judge: Arc<FakeJudge>, contents: Option<&str>) -
         Request::of(testkit::asked_for()),
         &note_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &FakeWorkProduct::changed(&[]),
@@ -172,6 +173,7 @@ async fn a_deliverable_that_is_not_text_decides_neither_way() {
         Request::of(testkit::asked_for()),
         &note_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &FakeWorkProduct::changed(&[]),

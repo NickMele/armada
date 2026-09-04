@@ -43,7 +43,6 @@
           "ticket"
         ],
         "exclude_paths": [
-          ".env",
           "node_modules/"
         ],
         "max_context_size": 20,

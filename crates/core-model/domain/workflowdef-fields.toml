@@ -123,9 +123,17 @@ At the M1 gate this field drives nothing a Drone can observe. The Evidence tool 
 type = "array[path]"
 concern = "Verification"
 parent = "evidence_scope"
-purpose = "Explicit denylist — secrets, unrelated modules. Optional."
-notes = "Applied after `context_paths` resolves, so it wins over anything the Drone declared or the Manifest defaulted. Optional, with no stated default."
-why = "A denylist that resolved first could be widened by a later declaration."
+purpose = "The unrelated modules this kind of work should stay out of. Optional."
+notes = """
+Applied after `context_paths` resolves, so it wins over anything the Drone declared or the Manifest defaulted. Optional, with no stated default.
+
+**It is the liftable tier, and `#417` is what made that true.** An entry here is a boundary an author drew before anybody had read the code, so a Drone that finds its fix genuinely needs one of these paths asks with `request_scope` and a Judge answers whether the paths belong to the step. A cleared path is declarable, and it stays cleared at the gate — the Job's scope revisions carry it.
+
+**Secrets are no longer an example of this field, and were removed from all nine shipped blocks.** They are the other tier: boundaries nothing lifts, stated in no definition and named by no key, because every one of them lives inside the repository a Drone has a worktree of and a list a Drone could edit is not a boundary. `docs/contracts/configuration.md` holds both tiers and the reason the second is compiled in.
+
+What is left in the shipped definitions is `node_modules/` and `target/` — generated output, which decides nothing about what is checked or judged, and which a Judge asked about would refuse on its own.
+"""
+why = "A denylist that resolved first could be widened by a later declaration. Splitting it in two came later, and for the opposite reason: one list that refused everything the same way left a Drone blocked by a guess with no route but to fail its step."
 
 [fields.hard_prerequisite]
 type = "bool"

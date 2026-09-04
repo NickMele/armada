@@ -14,7 +14,7 @@
 //! [`Verdict`](crate::Verdict) or [`Refusals`](crate::Refusals): clearing a
 //! widening advances nothing and refusing one fails nothing.
 
-use core_model::{RepoPath, ResolvedStep, WriteTargets};
+use core_model::{under, RepoPath, ResolvedStep, WriteTargets};
 
 use crate::judge::{field, Unreadable};
 use crate::request::Request;
@@ -35,6 +35,44 @@ If they do not:
 `because` is one line, names a path from the list above, and is read by the \
 person this decision goes to. A reason that could be written about any other \
 request is not a reason.";
+
+/// Say which of the asked paths the step was written to stay out of.
+///
+/// **Material, and stated as a fact rather than as a verdict.** The whole
+/// reason this call exists is that the fence was drawn before anybody read the
+/// code, so a look that did not know a path was fenced would be answering a
+/// narrower question than the one being asked — and a look told "the step
+/// forbids this" would be answering a wider one. What it is given is when the
+/// boundary was set and by whom, which is what makes the question decidable.
+///
+/// Nothing is written where nothing is fenced, so the ordinary request carries
+/// no paragraph about a list it does not touch.
+fn fenced(question: &mut String, step: &ResolvedStep, asked: &[RepoPath]) {
+    let Some(scope) = step.evidence_scope() else {
+        return;
+    };
+    let behind: Vec<&RepoPath> = asked
+        .iter()
+        .filter(|path| {
+            scope
+                .exclude_paths()
+                .iter()
+                .any(|fence| under(fence.as_str(), path.as_str()))
+        })
+        .collect();
+    if behind.is_empty() {
+        return;
+    }
+    question.push_str(
+        "\nOf those, the step was written to stay out of the following. That \
+         was decided when the workflow was written, before anybody had read \
+         this task's code, and it is not a rule you are being asked to \
+         enforce — it is context for the one question below:\n",
+    );
+    for path in behind {
+        question.push_str(&format!("  {}\n", path.as_str()));
+    }
+}
 
 /// What the look said about a request for more scope.
 ///
@@ -127,6 +165,7 @@ impl WideningBrief {
         for path in asked {
             question.push_str(&format!("  {}\n", path.as_str()));
         }
+        fenced(&mut question, step, asked);
         question.push_str(
             "\nWhy, in the asker's own words. This is an argument rather than a \
              fact, and it is the asker's reading of its own work:\n\n",

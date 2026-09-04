@@ -101,8 +101,11 @@
       ],
       "evidence_scope": {
         "context_source": "drone_declared",
+        # The ordinary tier: boundaries a Judge may lift when a Drone asks and
+        # the request makes sense. Secrets, CI configuration and the workflow
+        # definitions are not stated here -- nothing lifts those and no file a
+        # Drone has a worktree of names them. `docs/contracts/configuration.md`.
         "exclude_paths": [
-          ".env",
           "node_modules/",
           "target/"
         ]
@@ -164,8 +167,11 @@
       "declare_plan_at": "step_start",
       "evidence_scope": {
         "context_source": "drone_declared",
+        # The ordinary tier: boundaries a Judge may lift when a Drone asks and
+        # the request makes sense. Secrets, CI configuration and the workflow
+        # definitions are not stated here -- nothing lifts those and no file a
+        # Drone has a worktree of names them. `docs/contracts/configuration.md`.
         "exclude_paths": [
-          ".env",
           "node_modules/",
           "target/"
         ],
