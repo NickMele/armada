@@ -19,14 +19,10 @@
 //! **So adoption is of the process and the record, never of the pipe.** An
 //! adopted Drone can finish its step and be gated, because evidence arrives
 //! over the loopback and nothing a Drone says gates its own step. It cannot be
-//! handed back to, poked, redirected or told a verdict.
-//!
-//! **So it is silent to Fleet by construction**, and the liveness ladder
-//! measures silence. It escalates this Drone once the quiet budget is spent —
-//! which is right, because nobody is watching it — under `unheard` rather than
-//! `stalled`, which would tell a person it stopped working. The reading the
-//! ladder takes is [`Session::unheard`], and it asks whether Fleet can read
-//! this Drone rather than whether it was adopted.
+//! handed back to, poked, redirected or told a verdict. **So it is silent to
+//! Fleet by construction**, and `crate::silence` escalates it once the quiet
+//! budget is spent — under `unheard` rather than `stalled`, off
+//! [`Session::unheard`].
 
 use std::io;
 use std::num::NonZeroU32;

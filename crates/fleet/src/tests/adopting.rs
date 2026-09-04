@@ -32,8 +32,9 @@ use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Sketch};
 
 use crate::daemon::Fleet;
 use crate::session::LiveSession;
-use crate::silence::{Liveness, Poke};
+use crate::silence::{Liveness, Poke, Quiet, Vigil};
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
+use crate::tests::planted::Held;
 use crate::tests::tmp::TempDir;
 
 type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
@@ -396,4 +397,128 @@ fn end(pid: u32) {
     let _ = std::process::Command::new("/bin/kill")
         .args(["-9", &pid.to_string()])
         .status();
+}
+
+/// **The word, and it is the whole of `#410`.** An adopted Drone is silent to
+/// Fleet by construction — both pipes died with the Fleet that held them — so
+/// the liveness ladder spends its budget on a Drone that is working normally
+/// and escalates the Job. That much is right: nobody is watching it, and a
+/// person is owed that. What was wrong was the word. `stalled` says the Drone
+/// stopped working, and sends a person to redispatch one that may be a
+/// submission away from clearing its step.
+///
+/// The clock is pushed rather than waited on, `crate::tests::silence`'s way.
+/// The poke budget is spent by pokes that fail at the pipe rather than by
+/// pokes that go unanswered, which is the ladder degrading onto a road that
+/// already existed.
+#[tokio::test]
+async fn an_adopted_drone_out_of_quiet_budget_is_escalated_as_unheard() {
+    let home = TempDir::new();
+    let first = a_fleet(&home, a_drone_that_keeps_working());
+    let job = started(&first, &home).await;
+    assert!(spoke(&first, 1).await, "the Drone never said anything");
+    let pid = pid_of(&first).await;
+    drop(first);
+    assert!(alive(pid), "the Drone was meant to outlive its Fleet");
+
+    let clock = Arc::new(Held::started());
+    let second = watched(&home, a_drone_that_keeps_working(), Arc::clone(&clock));
+    assert_eq!(
+        second.reconcile().await.expect("the boot read").adopted,
+        vec![job.clone()],
+        "the case is about an adopted Drone, so it has to have been adopted"
+    );
+
+    // Two pokes that cannot be delivered, and they count. **A pipe that will
+    // not take a write is not a Drone to try again at**, which is
+    // `Vigil::NotPoked`'s own rule and the reason an unheard Drone reaches the
+    // escalation along the ordinary ladder rather than by a road of its own.
+    for spent in 1..=2 {
+        let said = past_the_threshold(&second, &clock, "poked at the dead pipe").await;
+        assert!(
+            matches!(said.said, Vigil::NotPoked { spent: at, .. } if at == spent),
+            "{:?}",
+            said.said
+        );
+        assert_eq!(
+            second.load(&job).await.unwrap().status(),
+            JobStatus::Running,
+            "a spent poke escalates nothing"
+        );
+    }
+
+    let last = past_the_threshold(&second, &clock, "escalated the Job").await;
+    assert!(
+        matches!(
+            last.said,
+            Vigil::Escalated {
+                pokes: 2,
+                found: EscalationTrigger::Unheard
+            }
+        ),
+        "{:?}",
+        last.said
+    );
+
+    // **The claim.** A person meeting this Job is told nobody is reading its
+    // Drone, not that it stopped working.
+    let record = second.load(&job).await.unwrap();
+    assert_eq!(record.status(), JobStatus::Escalated);
+    assert_eq!(
+        second.last_reason(&job).await.unwrap(),
+        Some(TransitionReason::Escalation(EscalationTrigger::Unheard)),
+        "not `stalled`, which is a Drone that stopped producing"
+    );
+    // Job-level, like `stalled`: a Drone Fleet cannot hear is unhearable on
+    // every step it has left, so no step carries a verdict for it.
+    assert!(
+        record
+            .step(&StepId::new("implement"))
+            .expect("the step")
+            .last_verdict()
+            .is_none(),
+        "a Job-level trigger attaches to no step"
+    );
+
+    // **And the Drone is still there**, which is what makes `stalled` a lie
+    // rather than an imprecision: the process the ladder escalated over is
+    // running, in its worktree, with everything it has written on the branch.
+    assert!(alive(pid), "the ladder does not reap what it escalates");
+
+    end(pid);
+}
+
+/// The Fleet [`a_fleet`] builds, with a clock a case can push.
+///
+/// **Only the second Fleet needs one.** Every reading the ladder takes is
+/// against the clock of the Fleet holding the slot, and the Fleet that spawned
+/// this Drone is gone before any of them is taken.
+fn watched(home: &TempDir, harness: FakeHarness, clock: Arc<Held>) -> Fixture {
+    let mut fittings = fitted_with(
+        home,
+        FakeWorkProduct::changed(&["src/parse.rs"]).showing("+    panic!();\n"),
+        harness,
+    );
+    fittings.workflows = one(one_step());
+    fittings.clock = clock;
+    fittings.liveness = Liveness::of(QUIET_AFTER, 2);
+    fittings.judge = Arc::new(FakeJudge::that_fails("no model is asked about an adoption"));
+    Fleet::assembled(fittings)
+}
+
+/// What the ladder is measured against here: the shipped threshold, so what
+/// this exercises is the number that ships.
+const QUIET_AFTER: Duration = Duration::from_secs(120);
+
+/// Push the clock past the threshold and turn until the vigil says something.
+async fn past_the_threshold(fleet: &Fixture, clock: &Held, waiting_for: &str) -> Quiet {
+    clock.on(QUIET_AFTER.as_secs() + 60);
+    for _ in 0..400 {
+        let turned = fleet.turn().await.expect("a turn");
+        if let Some(quiet) = turned.each.into_iter().find_map(|worked| worked.quiet) {
+            return quiet;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    panic!("the vigil never {waiting_for}");
 }

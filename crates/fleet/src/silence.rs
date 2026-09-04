@@ -3,8 +3,8 @@
 //! # Silence is the signal. Elapsed time is not, and calls cannot be
 //!
 //! Spike 9 measured 31 completed steps: the longest silence inside an honest
-//! one was **79s**, against a step wall clock whose p90 was 437s. **Every
-//! stuck step was quiet, not long.** So neither tripwire in
+//! one was **79s**, against a step wall clock whose p90 was 437s. **Every stuck
+//! step was quiet, not long.** So neither tripwire in
 //! [`converging`](mod@crate::converging) reaches this, and the call count
 //! **cannot fire at all** on a Drone that has stopped making calls.
 //!
@@ -13,13 +13,7 @@
 //! | Reading | What | Then |
 //! |---|---|---|
 //! | At rest | the run Armada's last turn began has ended | the escalation, now |
-//! | Quiet | nothing for `quiet_after`, and the run has not ended | a poke, then an escalation once `poke_limit` is spent |
-//!
-//! **Two silences reach that escalation and it names which.** `stalled` is a
-//! Drone that stopped producing; `unheard` is a Drone producing normally into a
-//! pipe nothing holds the far end of, which is what a Fleet that restarted and
-//! adopted an orphan is left with. The clock reads the same on both, so the
-//! session is what tells them apart — [`heard_at_all`].
+//! | Quiet | nothing for `quiet_after`, and the run has not ended | a poke, then `stalled` once `poke_limit` is spent — or `unheard`, where the silence is Fleet's own and [`heard_at_all`] says which |
 //!
 //! **An ended run is not a gap, and poking one was `#314`.** A quiet Drone may
 //! be inside a long command, which is what the poke is for; one that has ended

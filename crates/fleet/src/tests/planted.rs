@@ -39,6 +39,47 @@ impl Clock for Ticking {
     }
 }
 
+/// A clock that ticks a second per reading, and jumps when a test says so.
+///
+/// **The one fixture clock a case can move**, which is what makes a threshold
+/// measured in minutes testable: sitting through it would be a test that is
+/// slow *and* timing-dependent, and the number under test would stop being the
+/// one that ships. `crate::tests::silence` pushes the liveness ladder with it
+/// and `crate::tests::adopting` pushes the same ladder against a Drone Fleet
+/// cannot hear — here rather than in either of them, because a second copy
+/// would be two clocks that could come to disagree about what a second is.
+pub struct Held {
+    ticks: AtomicU64,
+    pushed: AtomicU64,
+}
+
+impl Held {
+    pub fn started() -> Held {
+        Held {
+            ticks: AtomicU64::new(0),
+            pushed: AtomicU64::new(0),
+        }
+    }
+
+    /// Move the clock on. **Never backwards**, which `converging::elapsed`
+    /// reads as zero and which no machine should produce.
+    pub fn on(&self, seconds: u64) {
+        self.pushed.fetch_add(seconds, Ordering::SeqCst);
+    }
+}
+
+impl Clock for Held {
+    fn now(&self) -> Timestamp {
+        let at = self.ticks.fetch_add(1, Ordering::SeqCst) + self.pushed.load(Ordering::SeqCst);
+        Timestamp::from_rfc3339(format!(
+            "2026-08-26T{:02}:{:02}:{:02}.000Z",
+            (at / 3_600) % 24,
+            (at / 60) % 60,
+            at % 60
+        ))
+    }
+}
+
 /// Ids a test can write down. Twenty-six characters, and every one of them
 /// legal in a directory name and in a branch name, because `WorktreeSpec`
 /// refuses anything else.
