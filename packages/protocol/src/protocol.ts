@@ -271,6 +271,17 @@ export type Stuck = {
    * say *why* a restart is not offered rather than only that it is missing.
    */
   worktree_on_disk: boolean;
+  /**
+   * Whether a drone is standing on this job that fleet cannot hear.
+   *
+   * **The other fact no surface can compute**, and what a restart is about to
+   * do turns on it: a drone that outlived the fleet holding its pipes is alive
+   * and unreachable at once, so the button said it had gone beside a step in
+   * flight. The trigger does not answer this — here it reads `gate_failure`.
+   * False is every ordinary stopped job, including one whose drone really is
+   * gone. Both are real, and this is what tells them apart.
+   */
+  drone_unheard: boolean;
 };
 
 /**

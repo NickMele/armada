@@ -283,6 +283,25 @@ pub struct Stuck {
     /// than only inside them so that a screen can say *why* a restart is not
     /// offered instead of only that it is missing.
     pub worktree_on_disk: bool,
+    /// Whether a Drone is standing on this Job that Fleet cannot hear.
+    ///
+    /// **The other fact no surface can compute**, and the one that decides what
+    /// a restart is about to do. A Job whose agent outlived the Fleet that held
+    /// its pipes is running and unreachable at once: `stopped_by` reads
+    /// whatever escalated it, the Board shows a step in flight, and nothing on
+    /// the wire said which of those two a person was looking at. So Bridge
+    /// described restarting as taking over from a Drone that had gone, on the
+    /// one Job where it has not.
+    ///
+    /// **False is every ordinary stuck Job** — including one whose Drone really
+    /// is gone, which is the case the sentence used to be written for. Both are
+    /// real and the restart does the right thing in each; this is what lets a
+    /// surface say which one it is looking at.
+    ///
+    /// It is a fact and not an act. Whether the restart is on offer is still
+    /// `recourse`, decided here.
+    #[serde(default)]
+    pub drone_unheard: bool,
 }
 
 impl Stuck {
@@ -301,6 +320,7 @@ impl Stuck {
                 .map(Recourse::from)
                 .collect(),
             worktree_on_disk: stuck.standing().worktree_on_disk,
+            drone_unheard: stuck.standing().drone == core_model::DroneStanding::Unheard,
         }
     }
 }
