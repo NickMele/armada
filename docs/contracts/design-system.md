@@ -619,8 +619,8 @@ is the back-fill by hand that this section existed to prevent.
 
 ```
 ⌘K       command palette
-⌘1–⌘4    Bridge surfaces, in rail order
-⌘5       Helm, the digit after the last Bridge surface
+⌘1–⌘5    Bridge surfaces, in rail order
+⌘6       Helm, the digit after the last Bridge surface
 ⌘\       toggle sidebar
 ⌘[ ⌘]    back / forward
 Esc      close an overlay, or return to the list from a detail route
@@ -700,10 +700,18 @@ Three reversals against what stood before, each with a reason:
 **`x` for kill and every safety rule below are unchanged.** Neither was
 in play, and the destructive-key rule is what kept `x` off `k`.
 
-**`⌘1`–`⌘4` follow the rail, which is four destinations** — Job Board,
-Alerts, Doctor, Manifest — since Active Jobs, Reviews and the Activity
-Feed folded into the Board. The digits shift if the rail does; the rule
-is rail order, not the numbers.
+**`⌘1`–`⌘5` follow the rail** — Job Board, Alerts, Doctor, Manifest,
+Held worktrees — since Active Jobs, Reviews and the Activity Feed folded
+into the Board and Held worktrees joined at the end of it. The digits
+shift if the rail does; the rule is rail order, not the numbers.
+
+**Helm moved from `⌘5` to `⌘6` on 2026-09-03**, when Held worktrees
+became a rail surface. The rail reads in order and the newest surface
+goes last, so every surface anyone has learned keeps the key they learned
+and Helm's is the one binding that moves. It moved then rather than
+later, while one person is using it, and the palette displays the binding
+beside every entry — which is where a person finds out. A learned key
+does not move quietly, and this paragraph is the noise.
 
 **`1`–`5` and `⌘1`–`⌘5` are different acts on one row of keys.** One is
 modified and one is not, which is the whole separation. It was drawn
