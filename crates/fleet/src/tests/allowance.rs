@@ -309,41 +309,28 @@ async fn a_running_drone_is_not_stopped_by_the_cap() {
 
 // ------------------------------------------------------------ the recording
 
-/// **A Drone standing down writes what it spent, and the Job can read it back.**
-/// The other cases plant a spend; this one earns it, through the function a
-/// step boundary calls and against a harness whose Drone reports a real figure.
-#[tokio::test]
-async fn a_drone_standing_down_writes_what_it_spent() {
-    let home = TempDir::new();
+/// A Fleet with one running Job whose Drone has named its price and now waits
+/// to be ended, its terminating line certainly in the pipe.
+///
+/// **It waits for the line rather than assuming it arrived.** The child has to
+/// be scheduled before it can say anything, and ending the Drone signals it —
+/// so an ending reached immediately would drain a pipe the shell had not
+/// written to yet, which is a race about the test and not about the fold.
+async fn priced(home: &TempDir, cost_micros: u64, turns: u32) -> (Fixture, core_model::JobId) {
     let mut fittings: Fittings<testkit::FakeHarness, testkit::FakeVcs, FakeWorkProduct> =
         crate::tests::daemon::fitted_with(
-            &home,
+            home,
             FakeWorkProduct::changed(&["src/log.rs"]),
-            // A Drone that names its price and then waits to be ended, so the
-            // terminating line is certainly in the pipe when the boundary
-            // drains it. The whole run is `stood_down`'s to read.
             testkit::FakeHarness::running(
                 "/bin/sh",
                 &["-c", "echo PRICED; while IFS= read -r line; do :; done"],
             )
-            .reading(
-                "PRICED",
-                vec![DroneEvent::Ended {
-                    turns: 7,
-                    cost_micros: 146_473,
-                    refusals: 0,
-                }],
-            ),
+            .reading("PRICED", vec![ended(turns, cost_micros)]),
         );
     fittings.allowance = SHIPPED;
     let fleet = Fleet::assembled(fittings);
-    let job = approved(&fleet, &home, "a change whose Drone reports a price").await;
+    let job = approved(&fleet, home, "a change whose Drone reports a price").await;
 
-    // **Wait for the line rather than assuming it arrived.** The child has to
-    // be scheduled before it can say anything, and standing the Drone down
-    // signals it — so a boundary reached immediately would drain a pipe the
-    // shell had not written to yet, which is a race about the test and not
-    // about the fold.
     let slot = fleet.the_only_slot().await;
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
@@ -359,8 +346,29 @@ async fn a_drone_standing_down_writes_what_it_spent() {
         }
     })
     .await
-    .expect("the Drone said something before the boundary");
+    .expect("the Drone said something before the ending");
+    (fleet, job)
+}
 
+/// What the Job's own record says it has cost so far.
+async fn recorded(fleet: &Fixture, job: &core_model::JobId) -> Spend {
+    fleet
+        .store()
+        .lock()
+        .await
+        .spend_for(job)
+        .expect("the spend reads")
+}
+
+/// **A Drone standing down writes what it spent, and the Job can read it back.**
+/// The other cases plant a spend; this one earns it, through the function a
+/// step boundary calls and against a harness whose Drone reports a real figure.
+#[tokio::test]
+async fn a_drone_standing_down_writes_what_it_spent() {
+    let home = TempDir::new();
+    let (fleet, job) = priced(&home, 146_473, 7).await;
+
+    let slot = fleet.the_only_slot().await;
     let mut working = slot.lock().await;
     fleet
         .stood_down(&job, &mut working)
@@ -368,12 +376,7 @@ async fn a_drone_standing_down_writes_what_it_spent() {
         .expect("the Drone is ended and its exit recorded");
     drop(working);
 
-    let spent = fleet
-        .store()
-        .lock()
-        .await
-        .spend_for(&job)
-        .expect("the spend reads");
+    let spent = recorded(&fleet, &job).await;
     assert_eq!(
         spent.cost_micros, 146_473,
         "the figure the Drone reported, against the Job rather than the Drone"
@@ -382,5 +385,44 @@ async fn a_drone_standing_down_writes_what_it_spent() {
     assert_eq!(
         spent.drones, 1,
         "one Drone worked it, and the record says so"
+    );
+}
+
+/// **A Drone that is ended rather than stood down writes what it spent too**,
+/// and until `#398` it wrote nothing at all.
+///
+/// `end_the_drone` is the ending `Ruling::Finished` takes and, since #397, the
+/// one a Job whose gate-failure attempts are spent takes to `awaiting_repair` —
+/// the road a failing Check travels every time. So the run that went unrecorded
+/// was the one on the commonest unhappy path, and the Job's record was short by
+/// a whole Drone. The figure is spike 5's dearest measured run, $0.146.
+#[tokio::test]
+async fn a_drone_ended_rather_than_stood_down_writes_what_it_spent() {
+    let home = TempDir::new();
+    let (fleet, job) = priced(&home, 146_473, 7).await;
+
+    assert_eq!(
+        recorded(&fleet, &job).await,
+        Spend::default(),
+        "nothing is recorded while the Drone is still working"
+    );
+
+    let slot = fleet.the_only_slot().await;
+    let mut working = slot.lock().await;
+    fleet.end_the_drone(&mut working).await;
+    drop(working);
+
+    let spent = recorded(&fleet, &job).await;
+    assert_eq!(
+        spent.cost_micros, 146_473,
+        "what the Drone spent on its way out reaches the Job that paid for it"
+    );
+    assert_eq!(spent.turns, 7);
+    assert_eq!(spent.drones, 1);
+    assert_eq!(
+        SHIPPED.exceeded_by(&spent),
+        None,
+        "one run of this size is inside the shipped cap, which is the point: \
+         the cap is now reading a figure rather than a zero"
     );
 }

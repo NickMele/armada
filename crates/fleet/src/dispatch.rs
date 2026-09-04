@@ -520,23 +520,33 @@ where
     /// system will not signal, and there is nothing further to do about either:
     /// the slot is already free, and the Job has already moved.
     ///
-    /// The exit is recorded before the signal is sent, because the slot is
-    /// taken here and the id goes with it — and a `drone.exited` that never
-    /// landed would leave the Board showing a Drone on a Job that has none.
+    /// **What it spent goes onto the Job, and for a fortnight it did not.**
+    /// This is the ending [`Ruling::Finished`] takes and, since #397, the one a
+    /// Job whose gate-failure attempts are spent takes to `awaiting_repair` —
+    /// which is the road a failing Check travels every time. Its Drone was
+    /// signalled and dropped without a fold, so the Job's record showed every
+    /// Drone's cost but its last and `#51`'s cap was reading a number that was
+    /// short. `Fleet::stood_down_paying` is the pairing, shared with the two
+    /// endings that always had it, and the drain inside it is why the figure
+    /// is the whole run rather than a prefix of it.
+    ///
+    /// The ids are read before the slot is consumed, so a spend that will not
+    /// write still leaves a departure that can be. Neither refusal can return —
+    /// six callers end a Drone as part of moving a Job that has already
+    /// moved — so both go into that Job's own log rather than into a discard.
     pub(crate) async fn end_the_drone(&self, working: &mut Option<Working>) {
         let ended = match working.take() {
             Some(at_work) => {
                 let (job_id, step, _) = at_work.drone();
-                // This one cannot return — six callers end a Drone as part of
-                // moving a Job that has already moved — so the refusal goes
-                // into that Job's own log rather than into a discard. A
-                // departure nobody could write down is what leaves a Board
+                if let Err(why) = self.stood_down_paying(at_work).await {
+                    self.noted_adrift(&why);
+                }
+                // A departure nobody could write down is what leaves a Board
                 // showing a Drone on a Job that has none, and it used to leave
                 // nothing behind at all.
                 if let Err(why) = self.drone_left(&job_id, &step).await {
                     self.noted_adrift(&why);
                 }
-                let _ = at_work.session().terminate().await;
                 Some(job_id)
             }
             None => None,
