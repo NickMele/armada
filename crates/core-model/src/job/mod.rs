@@ -80,7 +80,7 @@ pub use step::{JobStep, StepEvidence, StepSeed, StepVerdict};
 pub use step_machine::{
     IllegalStepTransition, StepEdge, StepTarget, ADVANCING_STATUSES, STEP_EDGES,
 };
-pub use stuck::{Recourse, Standing, Stuck};
+pub use stuck::{DroneStanding, Recourse, Standing, Stuck};
 pub use transition::{
     CriteriaOwed, Edge, IllegalTransition, PilotReason, Target, TransitionReason, EDGES,
 };

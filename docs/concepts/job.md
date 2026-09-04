@@ -246,7 +246,7 @@ So the question a surface asks is where the Job stands:
 | Mid-step, a Drone working | Yes — a turn into the session | No. The step has not stopped |
 | Mid-step, the step stopped | Yes — a turn into the session | Yes |
 | At a boundary, between steps | Yes — it waits, and opens the next Drone's brief | No. There is no stopped step to restart |
-| Mid-step, a Drone nothing can be said to | No. There is nothing to speak into | Yes, where a step stopped — and it ends the Drone on the way |
+| Mid-step, a Drone nothing can be said to | No. There is nothing to speak into | Yes, whether or not a step stopped — and it ends the Drone on the way |
 
 **The last row is adoption, and it is the one case where a process exists and
 the question above still answers "no".** A Drone that outlived its Fleet is put
@@ -259,6 +259,22 @@ orphan is the one thing Fleet can still do to one, and refusing instead left a
 person with every act on the Job declined. A gate re-run is withheld on the same
 reading, because it too finishes by telling the Drone what the second ruling
 was.
+
+**And the row does not ask for a stopped step**, which is the correction that
+followed. An unreadable Drone escalates its *Job*, so on most of these Jobs
+nothing ever stopped the step — it reads `running` with a process on it that
+cannot be told anything, and the restart used to be withheld for want of a
+`stopped` row to land on. What was left was a redispatch, which throws away
+every step the Job had already finished, over a Drone the restart can end. So
+the step is stopped by the act instead: a person taking a Drone away is what
+happened, and that is the one move the inner machine admits beneath a Job
+parked for somebody.
+
+**It is the Drone that widened this and not the missing step.** Every other
+Job-level escalation is unchanged — `interrupted` and `would_not_start` have no
+process to end, `resource_exhausted` has no worktree left, and `stalled` has a
+Drone Fleet can speak to and is answered by the redirect. A rule relaxed to *no
+step stopped* would have offered a restart on all of them.
 
 **The boundary a person actually stands at is a human advance gate, and the act
 there is spelled `request_changes`.** It is the same act by the row above — a
@@ -302,8 +318,15 @@ for the same reason — no Drone is owed, so nothing is waiting on the bound.
 **Where a step-level escalation pays off.** Only a step-level trigger reaches a
 step's `last_verdict`, so only a step-level escalation names the step that
 stopped — and naming it is what makes restarting or *that step* coherent. A
-Job-level escalation has no step to resume, which is why `interrupted` and
+Job-level escalation names no step to resume, which is why `interrupted` and
 `resource_exhausted` leave redispatch and Pilot as the only moves.
+
+**Two Job-level triggers answer that differently, and each for its own reason.**
+`stalled` has a Drone holding its session, and a redirect operates on the Job
+rather than on a step — the paragraph below. `unheard` has a Drone that cannot
+be told anything, and the restart stops the step it is on rather than looking
+for one already stopped. Neither reads the trigger to decide: what Fleet reads
+is what is standing in the slot.
 
 **Redirect is the exception, and `stalled` is why.** A redirect operates on the
 Job rather than on a step, so it does not need a stopped step to act on. `stalled` is the one trigger that
@@ -347,6 +370,17 @@ arriving here: a Drone in the working slot that Fleet cannot speak to reads as
 present to every question but the one the redirect and the gate re-run ask. It
 was read as a full slot until a person met an adopted Drone, was offered the
 redirect, typed a note and had it refused.
+
+**And it answers three ways rather than two**, because the two absences are not
+one. An empty slot and a Drone nothing can read both refuse a redirect, and
+folding them left the rule able to say only that no redirect applies — where
+what the restart needs to know is which of the two it is, since the act ends a
+Drone that is standing there. So the fact crosses as well: `drone_unheard` rides
+beside `worktree_on_disk` for the same reason that one does. A surface cannot
+compute it, the trigger does not answer it — a Job in exactly this state reads
+`gate_failure` where its step stopped first — and a Restart button that
+described the Drone as gone was contradicting the step in flight on the same
+screen.
 
 **It does not claim the trigger is true.** A Drone whose worktree was deleted
 under it escalated as `stalled`, which is the nearest trigger and the wrong

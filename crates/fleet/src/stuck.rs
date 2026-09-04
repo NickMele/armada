@@ -23,7 +23,7 @@
 //! `Stuck::asked_of` answers first.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
-use core_model::{Job, Standing, StepCheck, StepId, Stuck, TransitionReason};
+use core_model::{DroneStanding, Job, Standing, StepCheck, StepId, Stuck, TransitionReason};
 
 use crate::daemon::Fleet;
 
@@ -59,7 +59,7 @@ where
     /// What Fleet knows about this Job that its record does not say.
     async fn standing_of(&self, job: &Job, ran: &[(StepId, Vec<StepCheck>)]) -> Standing {
         Standing {
-            drone_holding: self.a_drone_to_speak_to(job).await,
+            drone: self.whats_in_the_slot(job).await,
             // The same call `restart_step` and `override_verdict` make, so the
             // classification cannot say a worktree is there that they then
             // refuse to find.
@@ -69,7 +69,8 @@ where
         }
     }
 
-    /// Whether a Drone is on this Job **and Fleet can say something to it**.
+    /// What is standing in this Job's slot, and whether Fleet can say anything
+    /// to it.
     ///
     /// The slot and never `assigned_drone`: the record's pointer survives a
     /// Fleet restart and the pipe does not, and it is the pipe a redirect and a
@@ -83,18 +84,26 @@ where
     /// `crate::silence` makes to tell `stalled` from `unheard`, so a second way
     /// to lose the pipe withholds the same two acts unasked. #442.
     ///
+    /// **The two absences are told apart rather than folded**, which is #452.
+    /// An empty slot and an unreadable Drone both refuse a redirect; only one
+    /// of them leaves a Drone for the restart to end and a step for it to stop,
+    /// and folded into one word the rule could not say which.
+    ///
     /// **What is left is the act that works**: `Stuck::of`'s other arm offers a
     /// restart, which ends the unreadable Drone. An override and a redispatch
     /// end the Drone rather than speak to it, so neither is withheld.
     ///
     /// [`Session::unheard`]: crate::adopting::Session::unheard
-    async fn a_drone_to_speak_to(&self, job: &Job) -> bool {
+    async fn whats_in_the_slot(&self, job: &Job) -> DroneStanding {
         let Some(slot) = self.slot_of(job.id()).await else {
-            return false;
+            return DroneStanding::Gone;
         };
         let held = slot.lock().await;
-        held.as_ref()
-            .is_some_and(|at_work| at_work.is(job.id()) && !at_work.session().unheard())
+        match held.as_ref().filter(|at_work| at_work.is(job.id())) {
+            None => DroneStanding::Gone,
+            Some(at_work) if at_work.session().unheard() => DroneStanding::Unheard,
+            Some(_) => DroneStanding::Speakable,
+        }
     }
 }
 

@@ -28,8 +28,8 @@ use std::time::Duration;
 use adapter_traits::{CallDetail, DroneEvent};
 use config::ResolvedWorkflow;
 use core_model::{
-    Actor, EscalationTrigger, JobId, JobStatus, StepId, StepLevelTrigger, StepTarget, Target,
-    Timestamp, TransitionReason,
+    Actor, EscalationTrigger, JobId, JobStatus, JobStep, StepId, StepLevelTrigger, StepTarget,
+    StepVerdict, Target, Timestamp, TransitionReason,
 };
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Sketch};
 
@@ -600,12 +600,15 @@ async fn offered(fleet: &Fixture, job: &JobId) -> Vec<String> {
 /// redirect, and `Session::redirect` refuses one. A slot that is full was read
 /// as a pipe that is open, and adoption is the case where those come apart.
 ///
-/// **What is left is a redispatch and only a redispatch**, because `unheard` is
-/// Job-level and a restart needs a step that stopped. That is `stalled`'s own
-/// shape one act shorter, and the missing act is named in this file's report
-/// rather than papered over here.
+/// **And what is left is the restart, which was the second half of #442's
+/// report and is #452.** `unheard` is Job-level, so no step ever stopped
+/// underneath it — the step is still marked `running`, with a process on it
+/// nothing can be told. That used to fall through to a redispatch, which throws
+/// away every step the Job had finished, over a Drone the restart can simply
+/// end. The classification and the act are asserted in one case here, because
+/// an offer proved on its own is exactly what went wrong the first time.
 #[tokio::test]
-async fn an_unheard_job_is_not_offered_a_redirect_nothing_can_deliver() {
+async fn an_unheard_job_with_no_stopped_step_offers_the_restart_and_it_lands() {
     let home = TempDir::new();
     let (fleet, job, pid) = adopted(&home).await;
     let record = fleet.load(&job).await.unwrap();
@@ -620,11 +623,11 @@ async fn an_unheard_job_is_not_offered_a_redirect_nothing_can_deliver() {
 
     assert_eq!(
         offered(&fleet, &job).await,
-        ["redispatch_job"],
+        ["restart_step", "redispatch_job"],
         "the Drone is in the slot and there is no pipe into it"
     );
 
-    // **And the act that was withheld is the one Fleet refuses**, which is the
+    // **The act that was withheld is the one Fleet refuses**, which is the
     // agreement every case in `crate::tests::stuck` asserts: a classification
     // that offers what an act declines is a person pressing a button for a 409.
     let said = Redirection::saying("read tests/parse.rs first").expect("something to act on");
@@ -637,7 +640,52 @@ async fn an_unheard_job_is_not_offered_a_redirect_nothing_can_deliver() {
         "the refusal is the session's: {refused:?}"
     );
 
-    end(pid);
+    // **And the act that was offered is one Fleet takes.** It used to refuse
+    // here as `NoStepStopped`, which is the same defect one act over.
+    fleet
+        .restart_step(&job, None)
+        .await
+        .expect("the act the classification named");
+
+    assert!(
+        gone(pid).await,
+        "the group signal reached the process Fleet could not speak to"
+    );
+    // **The step was stopped on the way through, and the verdict says who.**
+    // Re-admission reads the step's own state to decide which act put the Job
+    // back, so a step left `running` would have opened the fresh Drone as
+    // though a person had accepted the part before it. The row keeps what
+    // stopped it across the move back into `running`, which is what makes this
+    // readable whether or not admission has already run.
+    let record = fleet.load(&job).await.unwrap();
+    let verdict = record
+        .step(&StepId::new("implement"))
+        .and_then(JobStep::last_verdict);
+    assert!(
+        matches!(verdict, Some(StepVerdict::Failed(why)) if why.trigger() == EscalationTrigger::DroneKilled),
+        "a person took the Drone away and the step says so: {verdict:?}"
+    );
+    assert_ne!(
+        record.status(),
+        JobStatus::Escalated,
+        "the Job left the status a person found it in: {:?}",
+        record.status()
+    );
+
+    // Nothing adopted is in the slot any more, whether or not admission has
+    // already put a fresh Drone there.
+    let slot = fleet.the_only_slot().await;
+    let held = slot.lock().await;
+    let still_adopted = held
+        .as_ref()
+        .and_then(|at_work| at_work.session().adopted())
+        .map(|adopted| adopted.pid());
+    assert_eq!(still_adopted, None, "the orphan is off the slot");
+    let fresh = held.as_ref().map(|at_work| at_work.session().pid());
+    drop(held);
+    if let Some(fresh) = fresh {
+        end(fresh);
+    }
 }
 
 /// **The act that works, offered where it can be taken.** A step that stopped
