@@ -17,7 +17,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use config::Manifest;
-use core_model::{EscalationTrigger, JobStatus, StepState, TransitionReason};
+use core_model::{EscalationTrigger, JobStatus, Recourse, StepState, TransitionReason};
 use testkit::{FakeHarness, FakeVcs, FakeWorkProduct};
 
 use crate::daemon::Fleet;
@@ -97,10 +97,24 @@ async fn a_dispatch_its_caller_stopped_waiting_for_is_escalated_on_the_next_turn
 
     let stopped = fleet.load(job.id()).await.expect("readable");
     assert_eq!(stopped.status(), JobStatus::Escalated);
+    let reason = fleet.last_reason(job.id()).await.unwrap();
     assert_eq!(
-        fleet.last_reason(job.id()).await.unwrap(),
+        reason,
         Some(TransitionReason::Escalation(EscalationTrigger::NotPrepared)),
         "not `interrupted`, which would send a reader after a Drone that never started"
+    );
+
+    // **The half that stops this being a dead end.** `#436` asks for a status
+    // that says so, names why, and offers at least one act — and a silent hang
+    // traded for a Job nobody can restart would be the worse of the two.
+    let stuck = fleet
+        .why_stuck(&stopped, reason.as_ref(), &[])
+        .await
+        .expect("an escalated Job carries an answer");
+    assert!(
+        stuck.admits(Recourse::Redispatch),
+        "the person is offered an act: {:?}",
+        stuck.recourse()
     );
 }
 
