@@ -417,6 +417,11 @@ async fn the_record_survives_a_fleet_restart() {
         submitted_by_the_one(&fleet, crate::tests::daemon::diff_evidence())
             .await
             .expect("the tool took it");
+        // **This case needs no `the_drone_it_holds_is_gone`, and the next
+        // person to sweep for one should not add it.** The gate refusing on
+        // the turn below is what ends this Drone: `dispatch` terminates a
+        // Drone whose step stopped, and `terminate` waits. The slot is empty
+        // by the time the block closes, so the fixture would panic here.
         fleet.turn().await.expect("the gate ruled");
         job.id().clone()
     };

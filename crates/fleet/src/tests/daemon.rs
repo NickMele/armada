@@ -46,6 +46,7 @@ use crate::judging::JudgeBudget;
 use crate::noticing::Noticing;
 use crate::silence::Liveness;
 use crate::slots::Concurrency;
+use crate::tests::planted::the_drone_it_holds_is_gone;
 pub use crate::tests::planted::{Counted, Ticking};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
@@ -720,6 +721,11 @@ async fn a_running_job_with_no_drone_is_interrupted_at_startup() {
             .unwrap();
         worktree_directory(&home, job.id());
         fleet.approve(job.id()).await.unwrap();
+        // **Ended here rather than left to the drop.** A Drone outlives the
+        // Fleet that spawned it by design, and one still in the process table
+        // is one the second Fleet adopts — which would leave this Job
+        // `running`. See `crate::tests::planted`.
+        the_drone_it_holds_is_gone(&fleet).await;
         job.id().clone()
     };
 

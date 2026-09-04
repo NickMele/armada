@@ -52,6 +52,35 @@ fn recording(at: &TempDir, drone: &str) -> Recording {
     .expect("a transcript opens under a directory that exists")
 }
 
+/// The transcript, once the writer has put `how_many` rows in it.
+///
+/// **Polled rather than slept on, and `#443` is why.** Dropping the `Watching`
+/// drops the `Recording` inside it, which closes the queue and lets the writer
+/// task drain — on a turn of the runtime that nothing here holds. Fifty
+/// milliseconds was enough on an idle machine and was not enough at load 147,
+/// where this read two of the three rows and called the record wrong.
+///
+/// `Recording::settled` is the exact answer and is out of reach: it consumes
+/// the `Recording`, which by then is an `Arc<dyn Tap>` inside the `Watching`.
+/// So this waits on the thing under assertion instead, and breaks the moment it
+/// arrives — a run that is right spends a poll, and only a run that is wrong
+/// spends the deadline.
+async fn rows_once_written(at: &TempDir, drone: &str, how_many: usize) -> String {
+    for _ in 0..A_WRITER_HAS_LONG_ENOUGH {
+        let written = rows(at, drone);
+        if written.lines().count() >= how_many {
+            return written;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    panic!("the writer never put {how_many} rows in {drone}'s transcript");
+}
+
+/// Five-millisecond polls, so six seconds. Generous for
+/// `crate::tests::resting`'s reason: it is only ever spent on a run that is
+/// already broken.
+const A_WRITER_HAS_LONG_ENOUGH: usize = 1_200;
+
 fn rows(at: &TempDir, drone: &str) -> String {
     let path = transcript_of(
         &at.path().to_string_lossy(),
@@ -135,12 +164,15 @@ async fn a_drone_is_handed_to_a_consumer_as_rows_and_never_as_the_wire_shape() {
     let drone = "01DRONEBBBBBBBBBBBBBBBBBBB";
     let recording = recording(&at, drone);
     three_lines_through(&at, vec![Arc::new(recording)]).await;
-    // The tee's own `Recording` is inside the `Watching`, which the reader task
-    // holds; dropping it here is what closes the queue and drains the writer.
-    tokio::time::sleep(Duration::from_millis(50)).await;
 
+    // The tee's own `Recording` is inside the `Watching`, which the reader task
+    // holds; dropping it above is what closes the queue and drains the writer.
     assert_eq!(
-        rows(&at, drone).lines().take(3).collect::<Vec<_>>(),
+        rows_once_written(&at, drone, 3)
+            .await
+            .lines()
+            .take(3)
+            .collect::<Vec<_>>(),
         vec![
             r#"{"ts":"2026-08-26T09:00:01.000Z","step":"implement","by":"drone","event":"said","text":"one"}"#,
             r#"{"ts":"2026-08-26T09:00:02.000Z","step":"implement","by":"drone","event":"said","text":"two"}"#,
@@ -160,14 +192,14 @@ async fn a_run_nobody_is_watching_writes_the_same_file() {
     ];
     three_lines_through(&watched, looking).await;
     three_lines_through(&alone, vec![Arc::new(recording(&alone, drone))]).await;
-    tokio::time::sleep(Duration::from_millis(50)).await;
 
+    let watched = rows_once_written(&watched, drone, 3).await;
+    let alone = rows_once_written(&alone, drone, 3).await;
     assert_eq!(
-        rows(&watched, drone),
-        rows(&alone, drone),
+        watched, alone,
         "the durable record does not depend on a window being open"
     );
-    assert!(!rows(&alone, drone).is_empty(), "and it is not empty");
+    assert!(!alone.is_empty(), "and it is not empty");
 }
 
 #[tokio::test]
