@@ -1,22 +1,37 @@
 //! The two upgrades, and what goes down each.
 //!
-//! **Two sockets and not one.** `/events` is global and carries every Job's
+//! **Three sockets and not one.** `/events` is global and carries every Job's
 //! state, because Bridge holds exactly one connection; `/jobs/:id/observe` is
-//! one Job's turns and is opened deliberately. A transcript row on the global
-//! stream would evict the state changes the Board is drawn from, and an
-//! eviction there is a full resync of every Job rather than a lost row.
+//! one Job's turns and `/jobs/:id/log` is what Fleet did to it, both opened
+//! deliberately on one Job. A transcript row on the global stream would evict
+//! the state changes the Board is drawn from, and an eviction there is a full
+//! resync of every Job rather than a lost row.
 //!
-//! Both are extractors in the same `Router`. There is no second port.
+//! **The third is not a fourth voice on the second.** `observe_job` exists
+//! only while a Drone is writing — it answers `nothing_writing` and closes on
+//! exactly the Job whose log this carries — and folding notes into `Saw` would
+//! be a variant an old Bridge's `switch` has no arm for, which
+//! `docs/practices/protocol.md` makes a major bump.
+//!
+//! All three are extractors in the same `Router`. There is no second port.
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, State};
+use axum::http::StatusCode;
 use axum::response::Response;
-use ipc::{JobId, Missed, Resync, StreamMessage, PROTOCOL_VERSION};
+use ipc::{JobId, Missed, Resync, StreamMessage, WireError, PROTOCOL_VERSION};
 
-use crate::answers::refused;
+use crate::answers::{problem, refused};
 use crate::daemon::Daemon;
 use crate::routes::Served;
 use crate::stream::Next;
+
+/// A listener built with no reader for a Job's own log.
+///
+/// **A fault and not an empty answer.** A stream that opened and stayed silent
+/// would read as a Job nothing is happening to, which is the exact reading this
+/// whole route exists to stop being wrong.
+pub(crate) const NO_JOURNAL: &str = "api.no_journal_reader";
 
 /// One Job's turns. **Per-Job, and not on `/events`** — that stream is one
 /// drop-oldest channel carrying every Job, and a transcript row on it would
@@ -35,6 +50,35 @@ pub(crate) async fn observe_job<D: Daemon>(
         Ok(observed) => upgrade.on_upgrade(move |socket| crate::observing::relay(socket, observed)),
         Err(refusal) => refused(refusal),
     }
+}
+
+/// One Job's own log: what Fleet did to it, as the Job's log recorded it.
+///
+/// **Per-Job and its own socket**, for the reasons at the top of this module.
+/// The Job is asked for **before** the upgrade, so an id that names nothing is
+/// a 404 the caller reads at the moment they asked — the same order
+/// [`observe_job`] takes, and once per connection rather than once per pass.
+pub(crate) async fn job_log<D: Daemon>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+    upgrade: WebSocketUpgrade,
+) -> Response {
+    let job_id = JobId::carried(job_id);
+    let Some(journal) = served.journal() else {
+        return problem(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &WireError::raised(
+                NO_JOURNAL,
+                "this Fleet was built with no reader for a Job's own log",
+                served.run_id().clone(),
+            )
+            .about_job(job_id),
+        );
+    };
+    if let Err(refusal) = served.daemon().get_job(job_id.clone()).await {
+        return refused(refusal);
+    }
+    upgrade.on_upgrade(move |socket| crate::journal::relay(socket, job_id, journal))
 }
 
 /// The event stream. **Global, and a client subscribes to nothing** — one
