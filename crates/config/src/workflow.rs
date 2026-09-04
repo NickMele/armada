@@ -1,11 +1,10 @@
 //! A WorkflowDef, in the slice M1 reads.
 //!
 //! **A field nothing reads is a promise the file makes and the system does not
-//! keep**, so this parser refuses one rather than ignoring it. `verdict_routing`,
-//! `iteration_cap`, `hard_prerequisite`, `default_gate_policy`, `on_fail` and
-//! `on_gaming_flag` are refused because there is no loop; `evidence_scope` and
-//! `declare_plan_at` are read, and [`crate::scope`] holds the two keys inside
-//! that block that are not.
+//! keep**, so this parser refuses one rather than ignoring it.
+//! `hard_prerequisite`, `default_gate_policy`, `on_fail` and `on_gaming_flag`
+//! are refused; `evidence_scope` and `declare_plan_at` are read, and
+//! [`crate::scope`] holds the two keys inside that block that are not.
 //!
 //! **Three closed sets, each narrowed.** [`Structure`], `AdvanceGate` and
 //! [`MechanicalCheck`] carry fewer variants than the schema has, and each is an
@@ -56,20 +55,37 @@ const STEP_KEYS: &[&str] = &[
     "may_dispatch_jobs",
 ];
 
-/// How the steps are wired. **One variant, of two.**
+/// How the steps are wired. **Both of the schema's two values.**
 ///
-/// `loop` is the schema's other value and M1 does not carry it: a loop returns
-/// to an earlier step by `verdict_routing`, which needs a verdict, which needs
-/// a Judge or a human gate. Neither exists yet, so a `loop` definition would
-/// load and then have no way to close its own loop.
+/// `loop` means a step returns to an earlier one by `verdict_routing` until it
+/// converges or spends its `iteration_cap`. What that return needs is a
+/// verdict, and a verdict now has two places to come from: `human_always` is a
+/// carried gate that `fleet::gate` holds a step at, and a Judge panel runs from
+/// `judge_checks`. The sentence that stood here until #263 said neither
+/// existed, and it had outlived both.
+///
+/// **What is still missing is underneath the parser rather than in it.** The
+/// step machine has no edge from `advanced` back to `running`, so the return
+/// itself is a move `core-model` cannot express; `iteration_count` is a
+/// `job_steps` column the schema records as deliberately absent, and it is not
+/// `retry_count`, because a plan on its fourth honest draft is not a gate
+/// failure; and `EscalationTrigger::LoopCap` exists with nothing raising it. So
+/// a `loop` definition loads here and nothing yet runs it, which is why no
+/// definition under `.armada/workflows/` declares one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Structure {
     Linear,
+    Loop,
 }
 
-const STRUCTURE_CARRIED: &[(&str, Structure)] = &[("linear", Structure::Linear)];
+const STRUCTURE_CARRIED: &[(&str, Structure)] =
+    &[("linear", Structure::Linear), ("loop", Structure::Loop)];
+/// The schema's whole set, and now also the carried set — so [`Fault::OutsideM1`]
+/// is unreachable at this key and the third argument to [`yaml::word`] is the
+/// same list as the second. Kept as an argument rather than collapsed, because
+/// the two lists mean different things everywhere else and only the caller
+/// knows when they have converged.
 const STRUCTURE_LEGAL: &[&str] = &["linear", "loop"];
-const STRUCTURE_M1: &[&str] = &["linear"];
 
 const GATE_LEGAL: &[&str] = &[
     "auto",
@@ -334,7 +350,7 @@ fn read(path: &Path, root: &Value, roster: &Roster, out: &mut Vec<Refusal>) -> O
             value,
             STRUCTURE_CARRIED,
             STRUCTURE_LEGAL,
-            STRUCTURE_M1,
+            STRUCTURE_LEGAL,
             out,
         )
     });
