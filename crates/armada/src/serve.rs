@@ -137,6 +137,12 @@ pub const PROVISIONAL_STEP_NORMS: StepNorms =
 /// How long a Drone may say nothing, and how many times it is asked before the
 /// Job escalates as `stalled`.
 ///
+/// **What a step declaring neither inherits**, rather than what every step
+/// gets: since `#60` a step may name `quiet_after_seconds`, `poke_limit` or
+/// both, and `fleet::Liveness::at` resolves each half against this pair at the
+/// step boundary. No shipped workflow names either yet, so these are still what
+/// a formatting step and a large refactor share.
+///
 /// **Provisional, and measured on one repository rather than on none** — the
 /// same steps as the norms above, from
 /// `docs/spikes/009-how-long-does-a-step-take.md`, plus the eight that never

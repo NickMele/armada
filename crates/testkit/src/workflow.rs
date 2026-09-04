@@ -73,6 +73,25 @@ pub struct Sketch<'a> {
     pub gaming: Option<Gaming<'a>>,
 }
 
+/// How patient one step is: how long its Drone may say nothing before Fleet
+/// pokes it, and how many nudges it gets.
+///
+/// **Per step rather than per fixture**, which is where this parts company with
+/// [`retried`]. That note says a whole-fixture argument holds until a test
+/// wants two steps with two different values — and that test is exactly what a
+/// per-step patience is for, because one number for every kind of work is the
+/// thing `#60` ended.
+///
+/// **Two `Option`s and not two numbers.** `None` writes no key at all, which is
+/// the step deferring to what Fleet is running with; the halves fall back
+/// separately, so a fixture can say one and leave the other alone.
+#[derive(Debug, Clone, Copy)]
+pub struct Patience<'a> {
+    pub step: &'a str,
+    pub quiet_after_seconds: Option<u32>,
+    pub poke_limit: Option<u32>,
+}
+
 /// A step's `gaming_check`, as a fixture writes it.
 ///
 /// **`flag_if` is written as the wire values a file carries**, not as the enum,
@@ -159,11 +178,18 @@ pub fn requiring(
     commands: &[(&str, &str)],
     requires: &[(&str, &[&str])],
 ) -> ResolvedWorkflow {
-    assembled(steps, 0, &[], commands, requires)
+    assembled(steps, 0, &[], commands, requires, &[])
+}
+
+/// The same fixture with some steps saying how long their own Drone may be
+/// quiet, and how often it is nudged. A step absent from `patience` declares
+/// neither, which is every other fixture in the workspace.
+pub fn patient(steps: &[Sketch<'_>], patience: &[Patience<'_>]) -> ResolvedWorkflow {
+    assembled(steps, 0, &[], &[], &[], patience)
 }
 
 fn built(steps: &[Sketch<'_>], retry_limit: u32, models: &[(&str, &str)]) -> ResolvedWorkflow {
-    assembled(steps, retry_limit, models, &[], &[])
+    assembled(steps, retry_limit, models, &[], &[], &[])
 }
 
 fn assembled(
@@ -172,11 +198,12 @@ fn assembled(
     models: &[(&str, &str)],
     commands: &[(&str, &str)],
     requires: &[(&str, &[&str])],
+    patience: &[Patience<'_>],
 ) -> ResolvedWorkflow {
     let roster = Roster::of(models.iter().map(|(_, model)| *model));
     let def = WorkflowDef::parse(
         Path::new("fixture-workflow.yml"),
-        &workflow_text(steps, retry_limit, models),
+        &workflow_text(steps, retry_limit, models, patience),
         &roster,
     )
     .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
@@ -197,7 +224,12 @@ pub fn frozen(steps: &[Sketch<'_>]) -> FrozenWorkflow {
     resolved(steps).frozen().clone()
 }
 
-fn workflow_text(steps: &[Sketch<'_>], retry_limit: u32, models: &[(&str, &str)]) -> String {
+fn workflow_text(
+    steps: &[Sketch<'_>],
+    retry_limit: u32,
+    models: &[(&str, &str)],
+    patience: &[Patience<'_>],
+) -> String {
     let mut text = String::from(
         "version: 1\nworkflow_id: fixture-workflow\nname: fixture\nstructure: linear\nsteps:\n",
     );
@@ -216,6 +248,17 @@ fn workflow_text(steps: &[Sketch<'_>], retry_limit: u32, models: &[(&str, &str)]
         }
         if let Some((_, model)) = models.iter().find(|(id, _)| *id == step.id) {
             text.push_str(&format!("    model: {model}\n"));
+        }
+        // Each half on its own, and no key at all where the fixture says
+        // nothing — which is what a step deferring to Fleet looks like in a
+        // real file, and is refused by neither reader.
+        if let Some(declared) = patience.iter().find(|held| held.step == step.id) {
+            if let Some(seconds) = declared.quiet_after_seconds {
+                text.push_str(&format!("    quiet_after_seconds: {seconds}\n"));
+            }
+            if let Some(limit) = declared.poke_limit {
+                text.push_str(&format!("    poke_limit: {limit}\n"));
+            }
         }
         if let Some(scope) = step.scope {
             if scope.at_step_start {

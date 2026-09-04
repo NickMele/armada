@@ -193,6 +193,10 @@ where
             started,
             Arc::clone(self.harness()),
             recording,
+            // This step's patience, resolved here and held for as long as the
+            // slot lives. Off `job`, which is the record the Job froze — the
+            // one place the step's own declaration exists.
+            self.liveness().at(job, step),
             self.now(),
         ));
         // The first row of this step's record, written by Armada, before the

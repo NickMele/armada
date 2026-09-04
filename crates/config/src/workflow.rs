@@ -56,6 +56,8 @@ const STEP_KEYS: &[&str] = &[
     "may_dispatch_jobs",
     "verdict_routing",
     "iteration_cap",
+    "quiet_after_seconds",
+    "poke_limit",
 ];
 
 /// How the steps are wired. **Both of the schema's two values.**
@@ -172,6 +174,8 @@ pub struct Step {
     may_dispatch_jobs: bool,
     verdict_routing: BTreeMap<GateVerdict, StepId>,
     iteration_cap: Option<u32>,
+    quiet_after_seconds: Option<u32>,
+    poke_limit: Option<u32>,
 }
 
 impl Step {
@@ -269,6 +273,23 @@ impl Step {
     /// another draft.
     pub fn iteration_cap(&self) -> Option<u32> {
         self.iteration_cap
+    }
+
+    /// How long this step's Drone may say nothing before Fleet pokes it, in
+    /// seconds. **`None` where the file declares none**, which is Fleet's
+    /// standing value — the fallback is spelled at `fleet::Liveness::at` and
+    /// never re-derived here, for [`model`](Step::model)'s reason.
+    pub fn quiet_after_seconds(&self) -> Option<u32> {
+        self.quiet_after_seconds
+    }
+
+    /// How many nudges this step's quiet Drone gets. **`None` where the file
+    /// declares none**, and read independently of
+    /// [`quiet_after_seconds`](Step::quiet_after_seconds) because the two fall
+    /// back independently: a step that wants longer between pokes does not
+    /// thereby want more pokes.
+    pub fn poke_limit(&self) -> Option<u32> {
+        self.poke_limit
     }
 }
 
@@ -581,6 +602,32 @@ fn step(
         None => Some(false),
         Some(value) => yaml::flag(&grant_key, value, out),
     };
+    // **Absent is Fleet's, and absent has to stay absent all the way to the
+    // record** — `ResolvedStep::quiet_after_seconds` says why. A step written
+    // with the number Fleet happens to ship would be a second place that
+    // number lives, and it would freeze a value marked live.
+    //
+    // **`positive`, so zero is refused rather than carried.** A
+    // `quiet_after_seconds: 0` is a step whose Drone is quiet the instant it is
+    // spawned, which pokes it on the first turn and escalates it on the third
+    // — a sentence nobody means, and the two keys disagree about zero for
+    // exactly the reason `counted` and `positive` were split.
+    //
+    // A refused value reads as absent from here, which is `model`'s
+    // arrangement and is safe for `model`'s reason: the refusal is already in
+    // `out`, and a definition with any refusal in it does not load at all.
+    let quiet_key = table.at("quiet_after_seconds");
+    let quiet_after_seconds = table
+        .optional("quiet_after_seconds")
+        .and_then(|value| yaml::positive(&quiet_key, value, out));
+    // **`counted`, because zero is a sentence here.** A step with
+    // `poke_limit: 0` says its Drone gets no nudge at all and the first
+    // silence past the threshold escalates, which is a legitimate thing to ask
+    // for on a step where a poke costs a model run and buys nothing.
+    let poke_key = table.at("poke_limit");
+    let poke_limit = table
+        .optional("poke_limit")
+        .and_then(|value| yaml::counted(&poke_key, value, out));
     let gate_key = table.at("advance_gate");
     let advance_gate = table
         .required("advance_gate", out)
@@ -660,6 +707,8 @@ fn step(
         may_dispatch_jobs: may_dispatch_jobs?,
         verdict_routing: routing,
         iteration_cap,
+        quiet_after_seconds,
+        poke_limit,
     })
 }
 

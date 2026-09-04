@@ -594,6 +594,84 @@ fn a_retry_budget_that_is_not_a_count_is_refused_rather_than_read_as_none() {
     );
 }
 
+/// **Each half on its own, which is the whole reason there are two keys.** A
+/// step that wants longer between pokes does not thereby want more pokes, so
+/// declaring one must leave the other deferring — and `None` here is what makes
+/// `fleet::Liveness::at` fall back for that half alone.
+#[test]
+fn a_step_carries_either_half_of_its_patience_without_the_other() {
+    let waits = bug_with(
+        "  - id: review\n    label: Review\n    advance_gate: auto\n    \
+         quiet_after_seconds: 900\n",
+    )
+    .expect("a step declaring how long its Drone may be quiet loads");
+    assert_eq!(waits.steps()[3].quiet_after_seconds(), Some(900));
+    assert_eq!(waits.steps()[3].poke_limit(), None);
+
+    let nudges =
+        bug_with("  - id: review\n    label: Review\n    advance_gate: auto\n    poke_limit: 5\n")
+            .expect("a step declaring how many nudges its Drone gets loads");
+    assert_eq!(nudges.steps()[3].poke_limit(), Some(5));
+    assert_eq!(nudges.steps()[3].quiet_after_seconds(), None);
+}
+
+/// **Absent is Fleet's, and a default invented here would be a second place the
+/// shipped number lives** — which is the state `#60` found: a value nobody
+/// could find because it was written down as a constant.
+#[test]
+fn a_step_that_declares_no_patience_has_none() {
+    let def = parse(BUG).expect("the worked example");
+    assert!(def
+        .steps()
+        .iter()
+        .all(|step| step.quiet_after_seconds().is_none() && step.poke_limit().is_none()));
+}
+
+/// The two keys disagree about zero, and each is right about its own.
+///
+/// A `poke_limit: 0` is a step saying its Drone gets no nudge at all, which is
+/// a sentence somebody is entitled to write. A `quiet_after_seconds: 0` is a
+/// step whose Drone is quiet the instant it is spawned — poked on the first
+/// turn and escalated by the third — which is nobody's intention.
+#[test]
+fn no_pokes_is_a_sentence_and_no_patience_is_not() {
+    let none =
+        bug_with("  - id: review\n    label: Review\n    advance_gate: auto\n    poke_limit: 0\n")
+            .expect("zero pokes is a legal budget");
+    assert_eq!(none.steps()[3].poke_limit(), Some(0));
+
+    let refused = refusals(bug_with(
+        "  - id: review\n    label: Review\n    advance_gate: auto\n    \
+         quiet_after_seconds: 0\n",
+    ));
+    assert!(
+        refused
+            .iter()
+            .any(|r| r.key == "steps[3].quiet_after_seconds"
+                && matches!(r.fault, Fault::WrongType { .. })),
+        "{refused:?}"
+    );
+}
+
+/// A file that wrote a patience meant to buy patience. Reading it as absent
+/// would put the step back on Fleet's value with nothing saying so — and the
+/// symptom is a Job that escalates as `stalled` in the middle of the work it
+/// declared itself slow for.
+#[test]
+fn a_patience_that_is_not_a_count_is_refused_rather_than_read_as_absent() {
+    let refused = refusals(bug_with(
+        "  - id: review\n    label: Review\n    advance_gate: auto\n    \
+         quiet_after_seconds: fifteen minutes\n",
+    ));
+    assert!(
+        refused
+            .iter()
+            .any(|r| r.key == "steps[3].quiet_after_seconds"
+                && matches!(r.fault, Fault::WrongType { .. })),
+        "{refused:?}"
+    );
+}
+
 #[test]
 fn an_evidence_type_outside_the_schema_is_refused() {
     // `review_findings` is used by a checked-in sample and is not among the
