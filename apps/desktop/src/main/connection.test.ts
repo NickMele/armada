@@ -10,6 +10,8 @@
 // a Job's transcript socket when the step's Drone exits, and nothing reopened
 // it, so the next step ran for ten minutes behind a panel reading `Nothing has
 // happened on this step yet.`
+//
+// And the second case: a Drone's question reaching the Board row it belongs on.
 
 import { once } from "node:events";
 import { createServer, type IncomingMessage, type Server } from "node:http";
@@ -233,4 +235,63 @@ it("reopens a Job's transcript on the event that says its next step is running",
     (state) => state.observed.state === "watching" && state.observed.turns.rows.length === 1,
   );
   expect(fleet.observing).toHaveLength(2);
+});
+
+it("puts a Drone's question on the Board row, and takes it off again", async () => {
+  const fleet = await serving();
+  const home = await runtimeFile(fleet.port);
+  const published = publishing();
+  const connection = new FleetConnection({
+    home,
+    publish: (state) => published.publish(state),
+    now: () => 1_756_840_000_000,
+  });
+  opened.push(() => connection.stop());
+
+  connection.start();
+  const stream = await fleet.events;
+  stream.send(
+    JSON.stringify({
+      message: "resync",
+      protocol_version: PROTOCOL_VERSION,
+      cursor: 1,
+      jobs: { jobs: [A_ROW], unreadable: [] },
+    }),
+  );
+  await published.until((state) => state.connection.state === "connected");
+
+  // The Job stays `running` for the whole of this. **The row's own flag is the
+  // only thing that moves**, and without it the Needs-you tab — the surface
+  // that exists so a question is not missed — never learns there is one.
+  stream.send(
+    JSON.stringify({
+      message: "event",
+      cursor: 2,
+      event: {
+        kind: "job.asking",
+        job_id: A_JOB,
+        step_id: "implement",
+        asking: { question_id: "q1", question: "Which one?", options: ["a", "b"] },
+        actor: "drone",
+        at: "2026-09-02T19:09:59.615Z",
+      },
+    }),
+  );
+  await published.until((state) => state.jobs[0]?.asking === true);
+
+  // The one coming back carries nothing, and that absence is the message.
+  stream.send(
+    JSON.stringify({
+      message: "event",
+      cursor: 3,
+      event: {
+        kind: "job.asking",
+        job_id: A_JOB,
+        step_id: "implement",
+        actor: "human",
+        at: "2026-09-02T19:11:00.000Z",
+      },
+    }),
+  );
+  await published.until((state) => state.jobs[0]?.asking === false);
 });

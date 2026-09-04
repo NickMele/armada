@@ -381,18 +381,43 @@ export class FleetConnection {
       return;
     }
 
-    if (event.kind === "job.judging" || event.kind === "job.asking") {
-      // **Re-read rather than fold**, and one arm for both because it is one
-      // argument. Each is served on the open Job's own field —
-      // `StepDetail.judging` and `asking` — which is what a Bridge opened
-      // mid-call or mid-question already reads, so folding either into a second
-      // copy would give one fact two homes and a surface would take whichever
-      // arrived last. The event is the wake-up; the detail is the answer.
+    if (event.kind === "job.judging") {
+      // **Re-read rather than fold.** The call is served on the open Job's own
+      // field, `StepDetail.judging`, which is what a Bridge opened mid-call
+      // already reads — so folding it into a second copy would give one fact
+      // two homes and a surface would take whichever arrived last. The event is
+      // the wake-up; the detail is the answer.
       //
       // Only the open Job's, for `job.files_changed`'s reason: nothing on the
-      // Board changes when either goes out. Two reads per Judge call, and two
-      // per question against a wait as long as a person takes.
+      // Board changes when a Judge call goes out. Two reads per call.
       this.publish({ connection });
+      this.refresh(fleet.port, event.job_id);
+      return;
+    }
+
+    if (event.kind === "job.asking") {
+      // **The row does change here, unlike a Judge call, and it was not being
+      // changed.** `JobSummary.asking` is the second arm of the Needs-you rule:
+      // a Job whose Drone has asked something is `running` with `who_is_acting`
+      // = `Drone`, and only that flag lifts it out of Running. Fleet builds it
+      // off the working slot, so every summary that travels with an event has
+      // it absent — which is why the wire publishes this event at all.
+      //
+      // Nothing folded it, so a question moved the row only on the next full
+      // re-read: the tab that exists to stop a question going unseen was the
+      // one thing that did not see it. The detail is still re-read, because
+      // what was asked and what each answer commits to live there; this is the
+      // one bit the Board needs and cannot get any other way.
+      //
+      // Absent `asking` is the question coming back, and `false` says so
+      // outright — the field's two readings are the same sentence.
+      const answered = event.asking !== undefined;
+      this.publish({
+        connection,
+        jobs: this.current.jobs.map((job) =>
+          job.id === event.job_id ? { ...job, asking: answered } : job,
+        ),
+      });
       this.refresh(fleet.port, event.job_id);
       return;
     }
