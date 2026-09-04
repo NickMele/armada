@@ -21,6 +21,7 @@ use crate::ids::ProposalId;
 use crate::ids::{CriterionId, DroneId, Instant, JobId, StepId};
 use crate::job::{JobForgotten, JobList, JobSummary};
 use crate::proposing::ProposalInFlight;
+use crate::reading::ManifestReading;
 use crate::version::ProtocolVersion;
 use crate::waiting::QuestionInFlight;
 
@@ -108,7 +109,24 @@ pub enum Event {
     JobLanded(JobLanded),
     #[serde(rename = "proposal.moved")]
     ProposalMoved(ProposalMoved),
+    #[serde(rename = "manifest.reread")]
+    ManifestReread(ManifestReading),
 }
+
+// `manifest.reread` carries [`ManifestReading`] itself rather than a payload
+// wrapping it, for [`JobForgotten`]'s stated reason: the answer to
+// `get_manifest_reading` and this event's body are **the same fact**, and
+// declaring it twice would be two shapes to keep in step for one sentence.
+//
+// It is the second kind here that names no Job — see [`ProposalMoved`] for the
+// first — and unlike that one it names no Drone and no step either. A Manifest
+// is Fleet's own, so there is nothing on the Board that moves when this
+// arrives and nothing for a client to fold into a row.
+//
+// **No `actor` and no `at` on the envelope**, which two other kinds also go
+// without. `at` would be a second copy of `ManifestReading::at`, and an actor
+// would have to claim either that Fleet decided something — it read a file — or
+// that a person did, when nobody pressed anything in Armada at all.
 
 /// A proposal went out, got somewhere, or came back.
 ///

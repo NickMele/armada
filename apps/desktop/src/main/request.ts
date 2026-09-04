@@ -7,7 +7,7 @@
 // what the socket believes.
 
 import type { CallRead, Holdings, Outcome, TransportFault } from "@armada/protocol";
-import type { FleetCapacity, JobSummary, WireError } from "@armada/protocol";
+import type { FleetCapacity, JobSummary, ManifestReading, WireError } from "@armada/protocol";
 import type { CallArguments } from "@armada/protocol";
 import type { ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
 import { HOST } from "./runtime-file";
@@ -184,6 +184,24 @@ export async function holdingsOf(port: number, held: Holdings): Promise<Holdings
 export async function capacityOf(port: number): Promise<FleetCapacity | null> {
   const answer = await ask(port, "GET", "/capacity");
   return answer.ok === true ? (answer.body as FleetCapacity) : null;
+}
+
+/**
+ * What Fleet's last read of `armada.yml` came to.
+ *
+ * **Two `null`s that mean the same thing on screen and are not the same fact.**
+ * Fleet answers `null` where it has not re-read the file since it started, and
+ * this answers `null` where the read itself failed. Both draw nothing, which is
+ * right — there is no reading to report either way — and neither is worth a
+ * third state a surface would have to say something about.
+ *
+ * Asked once per connection rather than on a timer: the reading changes when
+ * somebody saves a file, and `manifest.reread` is what says so. This is for the
+ * window that opened *after* the save, which an event cannot reach.
+ */
+export async function manifestReadingOf(port: number): Promise<ManifestReading | null> {
+  const answer = await ask(port, "GET", "/manifest/reading");
+  return answer.ok === true ? ((answer.body as ManifestReading | null) ?? null) : null;
 }
 
 /**

@@ -398,6 +398,26 @@ the id. A forget is a real deletion through `Store::forget_job`, and by the
 time the event is published there is no row left to carry. A client drops it
 rather than replacing it.
 
+### A fact about the fleet is a reading, not only an event
+
+`manifest.reread` says what Fleet's last read of `armada.yml` came to. It is the
+second kind naming no Job — `proposal.moved` is the first — and unlike that one
+it names no Drone and no step either: a Manifest is Fleet's own, so nothing on
+the Board moves when it arrives.
+
+**It is served as well as published, and that pairing is the point.** A refused
+Manifest is not an instant that passes. The file on disk and the values Fleet is
+running with go on disagreeing until somebody corrects the file, so the fact
+outlives any window that happened to be open when the save landed. An event
+alone would reach only whoever was looking; `get_manifest_reading` is what a
+Bridge opened a minute later asks. `FleetCapacity` is the same shape one fact
+over, and a doctor result would be the third.
+
+The rule that falls out: **a fleet-wide fact that persists gets a route and an
+event, not an event alone.** A fact that is true only in the instant it happens
+— a call going out, a step advancing — needs no route, because there is nothing
+left to ask about.
+
 ## The unmeasured risk: the WebSocket sink has no back-pressure
 
 This hasn't bitten anyone yet, which is exactly why it's the most dangerous

@@ -38,6 +38,19 @@ pub(crate) async fn get_capacity<D: Queries>(State(served): State<Served<D>>) ->
     }
 }
 
+/// What Fleet's last re-read of `armada.yml` came to.
+///
+/// **200 with `null` where Fleet has not re-read it**, rather than a 404. A
+/// Fleet still running on the Manifest it booted with is not a missing
+/// resource; it is a Fleet with nothing to report, and a client draws nothing
+/// either way.
+pub(crate) async fn get_manifest_reading<D: Queries>(State(served): State<Served<D>>) -> Response {
+    match served.daemon().get_manifest_reading().await {
+        Ok(reading) => answer(StatusCode::OK, &reading, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// One Job in full. **The Board row plus what the list redacts** — the steps
 /// and where each got to, the criteria, the branch, the brief.
 pub(crate) async fn get_job<D: Queries>(

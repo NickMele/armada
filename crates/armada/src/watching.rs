@@ -21,7 +21,9 @@
 use std::path::Path;
 use std::time::Duration;
 
-use config::{Adopted, LoadError, Reloads};
+use config::{Adopted, LoadError, Moved, Reloads};
+use core_model::Timestamp;
+use ipc::{ManifestFault, ManifestMoved, ManifestReading, ManifestRefused};
 use notify::{Config, PollWatcher, RecursiveMode, Watcher};
 use tokio::sync::mpsc;
 
@@ -174,10 +176,10 @@ pub(crate) async fn settling(
 
 /// What the daemon says on its console about one re-read.
 ///
-/// **Fleet has no log of its own** — every `core_model::Envelope` in this
-/// workspace is written into one Job's transcript, and a Manifest reload
-/// belongs to no Job. So this is the daemon's console, which is where every
-/// other Fleet-level fact in `crate::serve` goes.
+/// **Kept now that the same fact reaches Bridge.** `armada fleet start` in a
+/// terminal is a real way to run this, and somebody watching that window should
+/// not lose what it used to tell them because a second surface learned it. See
+/// [`reading`] for the half that crosses the wire.
 pub fn say(read: Result<Adopted, LoadError>, file: &Path) {
     match read {
         Ok(adopted) if adopted.is_quiet() => {}
@@ -206,5 +208,75 @@ pub fn say(read: Result<Adopted, LoadError>, file: &Path) {
             eprintln!("{why}");
             eprintln!("the configuration in force is unchanged; correct the file and save again");
         }
+    }
+}
+
+/// One re-read, in the vocabulary the wire carries.
+///
+/// **The conversion lives here because this is where both halves are in
+/// scope.** `docs/practices/protocol.md` puts a domain-to-DTO conversion at the
+/// Fleet boundary and keeps `ipc` types out of the crates below it; `config`
+/// knows nothing about a wire and `ipc` knows nothing about a Manifest, so the
+/// composition root that holds both is where somebody has to decide, field by
+/// field, what a person on another machine's screen gets to see.
+///
+/// **What is deliberately not carried is the file's contents.** A refusal names
+/// keys and says what is wrong with each; it never quotes the document. An
+/// `armada.yml` can hold a private base branch or a command line, and the whole
+/// point of a DTO is that a new field in it is a decision rather than whatever
+/// serde does by default.
+///
+/// The instant is passed in rather than read, which is [`ipc::Instant`]'s own
+/// rule: nothing in that crate produces one.
+pub fn reading(read: &Result<Adopted, LoadError>, file: &Path, at: Timestamp) -> ManifestReading {
+    ManifestReading {
+        path: file.display().to_string(),
+        at: ipc::Instant::from(&at),
+        moved: match read {
+            Ok(adopted) => adopted.moved().iter().map(moved).collect(),
+            // **A refusal moved nothing**, which is the fact beside the reason:
+            // the previous values are still running.
+            Err(_) => Vec::new(),
+        },
+        at_restart: match read {
+            Ok(adopted) => adopted
+                .at_restart()
+                .iter()
+                .map(|frozen| frozen.as_str().to_string())
+                .collect(),
+            Err(_) => Vec::new(),
+        },
+        refused: read.as_ref().err().map(refused),
+    }
+}
+
+/// One live key's move. Both ends travel, so a message can say what it was
+/// rather than that something was.
+fn moved(moved: &Moved) -> ManifestMoved {
+    ManifestMoved {
+        key: moved.key.as_str().to_string(),
+        before: moved.before,
+        after: moved.after,
+    }
+}
+
+/// Why a read did not take.
+///
+/// **`summary` is `LoadError`'s own sentence and is never rebuilt from
+/// `faults`.** A file that is not YAML at all has no keys to attribute anything
+/// to, and the parser's error is what carries the line and column — so the
+/// prose is what gets somebody to the line, and the key list is what gets them
+/// to the fields once there is a document to have fields.
+fn refused(why: &LoadError) -> ManifestRefused {
+    ManifestRefused {
+        summary: why.to_string(),
+        faults: why
+            .refusals()
+            .iter()
+            .map(|refusal| ManifestFault {
+                key: refusal.key.clone(),
+                fault: refusal.fault.to_string(),
+            })
+            .collect(),
     }
 }

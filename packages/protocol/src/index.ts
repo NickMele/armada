@@ -25,6 +25,7 @@ export * from "./judged";
 export * from "./proposal";
 export * from "./protocol";
 export * from "./proposing";
+export * from "./reading";
 export * from "./reads";
 export * from "./reclaimed";
 export * from "./report";

@@ -132,6 +132,24 @@ pub fn capacity() -> FleetCapacity {
     }
 }
 
+/// A refused re-read: the shape with the most in it, because a refusal carries
+/// what an adoption does not.
+pub fn manifest_reading() -> ipc::ManifestReading {
+    ipc::ManifestReading {
+        path: "armada.yml".to_string(),
+        at: ipc::Instant::carried("2026-09-04T09:00:00.000Z"),
+        moved: Vec::new(),
+        at_restart: Vec::new(),
+        refused: Some(ipc::ManifestRefused {
+            summary: "armada.yml was refused; `drone.poke_limit` is not a number".to_string(),
+            faults: vec![ipc::ManifestFault {
+                key: "drone.poke_limit".to_string(),
+                fault: "is not a number".to_string(),
+            }],
+        }),
+    }
+}
+
 /// One Job, with nothing the fake does not hold — except a step rail, which it
 /// holds because the rail is the shape a client draws a Job from.
 ///

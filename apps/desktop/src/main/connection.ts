@@ -39,7 +39,7 @@ import { ObserveSocket } from "./observe";
 import { JobReader } from "./reader";
 import { HeldReader } from "./holding";
 import { ReportsReader } from "./reports";
-import { ask, callArgumentsOf, capacityOf, holdingsOf } from "./request";
+import { ask, callArgumentsOf, capacityOf, holdingsOf, manifestReadingOf } from "./request";
 import { ReviewMaterial } from "./review";
 import { HOST, machinePath, read, startingIdentity } from "./runtime-file";
 
@@ -363,6 +363,12 @@ export class FleetConnection {
       // And how full the fleet is, which changes when a Job moves and is
       // therefore read again below on every status move.
       void this.readCapacity(fleet.port);
+      // And what Fleet's last read of `armada.yml` came to. **Once per
+      // connection and never again**, unlike capacity: it changes when somebody
+      // saves a file, and `manifest.reread` is what says so. This read is for
+      // the window that opened after the save — which is most windows, since a
+      // refusal stands until the file is corrected.
+      void this.readManifest(fleet.port);
       // A resync says nothing about the open Job's steps, so it is re-read.
       void this.watched.again(fleet.port);
       // A pane left open across a Fleet restart reopens its own socket. Only
@@ -507,6 +513,20 @@ export class FleetConnection {
       return;
     }
 
+    if (event.kind === "manifest.reread") {
+      // **Above the tail below, because there is no Job to find.** The tail
+      // reads `event.job_id` and treats a Job it does not hold as a missed
+      // message, so falling through to it would make every save Bridge sees
+      // trigger a full re-read of the board.
+      //
+      // The whole reading replaces what is held rather than merging into it.
+      // A read that took after one that was refused leaves nothing of the
+      // refusal standing, and a merge would keep the old fault on screen
+      // beside the news that the file is now fine.
+      this.publish({ connection, manifestReading: event });
+      return;
+    }
+
     const held = this.current.jobs.find((job) => job.id === event.job_id);
     if (held === undefined) {
       // `job.created` covers the ordinary case, so a move about a Job this
@@ -553,6 +573,16 @@ export class FleetConnection {
    */
   private async readCapacity(port: number): Promise<void> {
     this.publish({ capacity: await capacityOf(port) });
+  }
+
+  /**
+   * What Fleet's last read of its Manifest came to. **A failed read publishes
+   * `null`**, on `readCapacity`'s terms: there is no reading to report, and
+   * keeping the previous one would be a refusal drawn against a Fleet that was
+   * never asked.
+   */
+  private async readManifest(port: number): Promise<void> {
+    this.publish({ manifestReading: await manifestReadingOf(port) });
   }
 
   // -------------------------------------------- one Job, whole and recounted

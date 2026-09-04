@@ -28,8 +28,8 @@ use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Observed, Queries, Refusal};
 use ipc::{
     CallArguments, FleetCapacity, JobDelivery, JobDetail, JobDiff, JobEvidence, JobHistory, JobId,
-    JobList, JobResources, JobSpend, ManifestSummary, ModelChoices, Work, WorkflowSummary,
-    WorktreesHeld,
+    JobList, JobResources, JobSpend, ManifestReading, ManifestSummary, ModelChoices, Work,
+    WorkflowSummary, WorktreesHeld,
 };
 use store::LoadJobError;
 
@@ -105,6 +105,18 @@ where
         let mut slots = self.slots().lock().await;
         let room = self.room_for_another(&mut slots).await;
         Ok(FleetCapacity::of(slots.cap(), slots.count(), room.hold()))
+    }
+
+    /// What the last re-read of `armada.yml` came to, straight off what Fleet
+    /// is holding.
+    ///
+    /// **No lock but its own and no work at all.** The reading was assembled
+    /// when the file was read; this hands back the copy. `None` is a Fleet that
+    /// has not re-read the file since it started with it, which is a real
+    /// answer rather than a gap — the configuration in force is then the one it
+    /// booted on.
+    async fn get_manifest_reading(&self) -> Result<Option<ManifestReading>, Refusal> {
+        Ok(self.last_reading())
     }
 
     /// One Job in full, folded from its log like every other read.

@@ -30,7 +30,7 @@ import type {
   connectedTo,
 } from "@armada/protocol";
 import type { FileReport, FleetCapacity, JobDetail, JobFilesChanged, JobSummary, ProposalInFlight, Report, ReportList, UnreadableJob, WireError } from "@armada/protocol";
-import type { ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
+import type { ManifestReading, ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
 import type { Artifact, Opened } from "@armada/protocol";
 import type { Recorded } from "@armada/protocol";
 import type { Submitted, Work } from "@armada/protocol";
@@ -95,6 +95,23 @@ export type BridgeState = {
    * machine reading rides along on the same call.
    */
   capacity: FleetCapacity | null;
+  /**
+   * What Fleet's last read of `armada.yml` came to, or `null` because there
+   * has not been one.
+   *
+   * **The second piece of state here that is not about a Job**, beside
+   * `proposing` and for a related reason: a Manifest is Fleet's own, so there
+   * is no row it belongs to. Unlike `proposing` it is not this window's — every
+   * window watching this Fleet holds the same reading, because every one of
+   * them is running against the same configuration.
+   *
+   * **Read on connect as well as folded from `manifest.reread`.** A refusal is
+   * a standing condition, not an instant: the file and the values in force go
+   * on disagreeing until somebody fixes the file, so a window opened a minute
+   * after the save has to be able to find out. An event alone would tell only
+   * whoever happened to be looking.
+   */
+  manifestReading: ManifestReading | null;
   /** Events Fleet dropped before Bridge saw them, since the window opened. */
   missed: number;
   /** When the Jobs above were last current, in epoch milliseconds. */
@@ -573,6 +590,7 @@ export const NOTHING_YET: BridgeState = {
   jobs: [],
   unreadable: [],
   capacity: null,
+  manifestReading: null,
   missed: 0,
   readAt: null,
   approving: [],

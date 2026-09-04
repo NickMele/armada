@@ -10,7 +10,7 @@
 
 use ipc::{
     CallArguments, FleetCapacity, JobDetail, JobDiff, JobEvidence, JobHistory, JobId, JobList,
-    JobResources, ManifestSummary, ModelChoices, WorkflowSummary, WorktreesHeld,
+    JobResources, ManifestReading, ManifestSummary, ModelChoices, WorkflowSummary, WorktreesHeld,
 };
 
 use super::FakeDaemon;
@@ -34,6 +34,16 @@ impl Queries for FakeDaemon {
             return Err(self.fault("the fake was told not to answer"));
         }
         Ok(shapes::capacity())
+    }
+
+    /// **Always a reading, and always one worth saying.** The fake exists so a
+    /// route test has a shape to assert on; a `None` here would make the
+    /// ordinary case a test of the empty answer.
+    async fn get_manifest_reading(&self) -> Result<Option<ManifestReading>, Refusal> {
+        if *self.mute.lock().expect("not poisoned") {
+            return Err(self.fault("the fake was told not to answer"));
+        }
+        Ok(Some(shapes::manifest_reading()))
     }
 
     async fn get_job(&self, job_id: JobId) -> Result<JobDetail, Refusal> {

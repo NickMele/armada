@@ -88,6 +88,8 @@ pub mod questioning;
 pub mod readmitting;
 pub mod readopting;
 mod reclaiming;
+/// What the boot read found and what the reconciliation did about it.
+mod reconciled;
 pub mod redaction;
 pub mod redispatch;
 mod refusing;
@@ -136,7 +138,7 @@ pub use at_step::AtStep;
 pub use clock::{Clock, SystemClock};
 pub use converging::{NoReport, ReportNow, Stage, StepNorms, Tripwire, Wandering, FORCED_REPORT};
 pub use crossing::{Cleared, Crossed, Dispatched, Produced, Reconciling, Redirected};
-pub use daemon::{Fittings, Fleet, Host, Reconciled};
+pub use daemon::{Fittings, Fleet, Host};
 pub use delivery::Delivered;
 pub use detach::Detached;
 pub use drone::{
@@ -160,6 +162,7 @@ pub use proposal::{proposed, Proposing};
 pub use proposing::{NotProposed, Proposal, ProposedJob, Unresolved};
 pub use questioning::{Answer, NotAnswered, NotAsked, Question, Told};
 pub use readopting::Recovered;
+pub use reconciled::Reconciled;
 pub use redaction::Redactor;
 pub use redispatch::Replacement;
 pub use reporting::{Counted, Filed, NotFiled};

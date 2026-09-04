@@ -205,28 +205,9 @@ pub struct Fittings<H, V, W> {
     pub events: api::Broadcaster,
 }
 
-/// What the boot read found and what the reconciliation did about it.
-#[derive(Debug, Default)]
-pub struct Reconciled {
-    /// Jobs the store says were `running` and whose Drone is gone — **asked
-    /// about and answered**, not assumed. Every one is now `escalated`, reason
-    /// `interrupted`. A Job whose probe would not run is here too, and its log
-    /// line says the process may still be there.
-    pub interrupted: Vec<JobId>,
-    /// Jobs whose Drone outlived this Fleet's predecessor and was taken back
-    /// over. **Each is still where it was** — ordinarily `running` — with the
-    /// process in a slot, its pid attributing its own calls again, and a row in
-    /// its transcript saying what nothing observed. See `crate::readopting`.
-    pub adopted: Vec<JobId>,
-    /// Rows whose cached status disagreed with the log and were corrected.
-    pub repaired: usize,
-    /// Rows that would not rebuild at all. **Never dropped** — carried out so a
-    /// caller cannot end up holding a short list with nothing saying so.
-    pub unreadable: Vec<String>,
-    /// The Jobs dispatched on the way out, where the bound had room and they
-    /// were waiting. Empty on the ordinary boot.
-    pub admitted: Vec<JobId>,
-}
+mod rereading;
+
+use crate::reconciled::Reconciled;
 
 /// The daemon core: **the only writer of Job state.**
 pub struct Fleet<H, V, W> {
@@ -282,6 +263,12 @@ pub struct Fleet<H, V, W> {
     polling: Polling,
     noticing: Noticing,
     reclaiming: Reclaiming,
+    /// What this Fleet's last read of `armada.yml` came to. **Never written
+    /// down**, for `swept`'s reason: a reading that outlived the process would
+    /// describe a file this Fleet never read. `None` is a Fleet still running
+    /// on the Manifest it booted with, which is not a re-read at all. See
+    /// [`mod@rereading`], and `drones` for why the lock is `std`'s.
+    reading: std::sync::Mutex<Option<ipc::ManifestReading>>,
     /// When the reclaim sweep last ran. **Never written down**, for
     /// `sweeping`'s reason: what it decides is re-derived from git and the
     /// board every time, so a stamp that outlived the process would only make
@@ -376,6 +363,7 @@ where
             polling: fittings.polling,
             noticing: fittings.noticing,
             reclaiming: fittings.reclaiming,
+            reading: std::sync::Mutex::new(None),
             swept: Mutex::new(None),
             sweeping: Mutex::new(Sweep::default()),
             allowance: fittings.allowance,
@@ -799,6 +787,7 @@ where
     pub(crate) fn publish(&self, event: ipc::Event) {
         self.events.publish(event);
     }
+
     /// The per-Job transcript channels. Dispatch opens one, `serving`
     /// subscribes to it.
     pub(crate) fn turns(&self) -> &api::Turns {

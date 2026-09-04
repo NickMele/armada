@@ -32,7 +32,7 @@ use adapters::{GitVcs, HeadlessAgent, IssueLookup};
 use config::Roster;
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{
-    Allowance, Bytes, CheckBudget, Concurrency, DryRuns, Fittings, Fleet, Headroom, Host,
+    Allowance, Bytes, CheckBudget, Clock, Concurrency, DryRuns, Fittings, Fleet, Headroom, Host,
     JudgeBudget, Liveness, Micros, Mint, Noticing, Polling, Reclaiming, Spare, StepNorms,
     SystemClock, TheMachine, UlidMint,
 };
@@ -397,7 +397,18 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     let manifest_file = reloads.path().to_path_buf();
     let _watching = match watching::watch(reloads, {
         let file = manifest_file.clone();
-        move |read| watching::say(read, &file)
+        // **Both, and neither instead of the other.** The console is where a
+        // person running `armada fleet start` in a terminal reads this, and
+        // Fleet is where a person running Bridge does — the whole of `#446` is
+        // that only the first of those existed. `Fleet::reread` holds the
+        // reading as well as publishing it, so a Bridge opened after the save
+        // still learns that its Manifest was refused.
+        let fleet = Arc::clone(&fleet);
+        let clock = SystemClock::new();
+        move |read| {
+            fleet.reread(watching::reading(&read, &file, clock.now()));
+            watching::say(read, &file)
+        }
     }) {
         Ok(watching) => {
             println!("watching {} for edits", manifest_file.display());

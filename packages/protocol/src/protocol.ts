@@ -808,6 +808,17 @@ export type {
   StreamMessage,
 } from "./events";
 
+// Fleet's own reading of its Manifest, re-exported so `protocol.ts` stays the
+// one import for the wire vocabulary. It lives in `reading.ts` because that is
+// the cut `crates/ipc/src/reading.rs` makes, and because this file has no room:
+// it was at exactly 900 before `judged.ts` was taken out of it.
+export type {
+  ManifestFault,
+  ManifestMoved,
+  ManifestReading,
+  ManifestRefused,
+} from "./reading";
+
 // What is outstanding on a live drone and what a person sends it back,
 // re-exported so `protocol.ts` stays the one import for the wire vocabulary.
 // Cut out for `events.ts`'s reason — this file reached 900 again — and the cut
