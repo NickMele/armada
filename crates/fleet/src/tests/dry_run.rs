@@ -617,6 +617,52 @@ fn the_first_turn_offers_the_dry_run_and_says_it_is_not_a_pass() {
         "the offer is not the Check. Nothing here is written from a resolved \
          command: {said}"
     );
+    assert!(
+        said.contains("These are the checks that gate this part:\n\n  - suite\n  - diff_nonempty"),
+        "both kinds, by label, in the order the step declares them — the same \
+         words and the same order the report comes back in: {said}"
+    );
+}
+
+/// The tool's description sends a Drone to the block above by its heading, and
+/// a heading that moved would send it nowhere. **Two crates, one string, and
+/// nothing in the type system holding them together** — `ipc` assembles its
+/// tool list with no step in hand, so the names live in `fleet` and the
+/// description points at where they are.
+#[tokio::test]
+async fn the_tool_points_at_the_block_that_names_the_checks() {
+    let workflow = one_step("/usr/bin/true");
+    let step = workflow
+        .frozen()
+        .steps()
+        .iter()
+        .find(|step| step.id() == &StepId::new("implement"))
+        .expect("the step")
+        .clone();
+    let offer = Checking::at(&step).expect("an offer");
+    let heading = offer
+        .text()
+        .lines()
+        .next()
+        .expect("the block's own heading");
+
+    let home = TempDir::new();
+    let fleet = a_fleet_checking(
+        &home,
+        one_step("/usr/bin/true"),
+        Arc::new(Held::started()),
+        3,
+    );
+    let listed = post(
+        &router(&Arc::new(fleet)),
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
+    )
+    .await;
+
+    assert!(
+        listed.contains(heading),
+        "the description names the block `{heading}`: {listed}"
+    );
 }
 
 /// And a step with nothing to run is not offered it. A Drone pointed at a call

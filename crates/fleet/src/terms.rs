@@ -16,8 +16,8 @@
 //! missing from the list and is the plainest member of it.
 //!
 //! **Every one is written from the definition and from nothing else**, which is
-//! `briefing`'s narrowing carried across: a `ResolvedCheck`'s `run` string is
-//! not readable from here, and [`Delivering`] names a path in the Drone's own
+//! `briefing`'s narrowing carried across: [`Checking`] names its Checks and
+//! not what they run, and [`Delivering`] names a path in the Drone's own
 //! worktree. [`Splitting`] reads one step further, because what a step's
 //! product *becomes* is a fact about the step after it — and names no workflow.
 //!
@@ -116,14 +116,38 @@ impl Checking {
     /// every call with a refusal, and a Drone pointed at a tool that refuses it
     /// is a Drone reading a denial as a broken system. That is the defect this
     /// capability exists to close, arriving from the other side.
+    ///
+    /// **It is also what keeps the list from being empty.** A block reading
+    /// "the checks that gate this part:" with nothing under it is worse than
+    /// the unnamed offer it replaces — it says a list exists and then withholds
+    /// it. There is no such rendering, because the same emptiness that would
+    /// produce one returns `None` here and the block is not rendered at all.
+    ///
+    /// **Named by [`label`](core_model::ResolvedCheck::label), never by
+    /// command, and never as a menu.** Unnamed, the offer left a Drone no way
+    /// to tell whether a call answered the question it had but to spend one of
+    /// a bounded number of calls — the guessing the tool exists to replace,
+    /// arriving a step earlier. A label is the word the report comes back
+    /// carrying, so offer and answer line up row for row; a `run` string is
+    /// what `docs/concepts/drone.md` still keeps out of every block. One ask
+    /// runs the whole declaration, because a Drone that could pick could skip
+    /// the Check that would have caught its mistake.
     pub fn at(step: &ResolvedStep) -> Option<Checking> {
         if step.checks().is_empty() {
             return None;
         }
-        Some(Checking(String::from(
-            "FINDING OUT WHERE YOU STAND\n\nYou can ask for the checks that \
-             gate this part to be run against your worktree, and you will be \
-             told what each one did and where its output was written. Use it \
+        let mut block = String::from(
+            "FINDING OUT WHERE YOU STAND\n\nThese are the checks that gate \
+             this part:\n",
+        );
+        for check in step.checks() {
+            block.push_str("\n  - ");
+            block.push_str(check.label());
+        }
+        block.push_str(
+            "\n\nYou can ask for them to be run against your worktree, and you \
+             will be told what each one did and where its output was written. \
+             One ask runs the whole list and you do not choose from it. Use it \
              when you want to know whether the work holds up rather than \
              guessing — and note that it takes as long as the checks take.\n\n\
              It is not a verdict and it advances nothing. A run in which \
@@ -132,7 +156,8 @@ impl Checking {
              Submitting is still the only way to report. There is a limit on \
              how many times one part may ask, and you do not have to ask at \
              all.",
-        )))
+        );
+        Some(Checking(block))
     }
 
     /// The block, exactly as it reaches a Drone.

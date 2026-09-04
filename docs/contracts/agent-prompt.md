@@ -815,9 +815,12 @@ stalls on every step. Measured in
   positively — a turn where the part is coming back, and every other ending
   named as an ending.
 
-The rule they all serve — that a Drone is never told what the Checks are —
-is on [Drone](../concepts/drone.md), since it governs every Drone-facing
-surface rather than only these samples.
+The rule they all serve — that no block a Drone is given is written from a
+Check's command — is on [Drone](../concepts/drone.md), since it governs
+every Drone-facing surface rather than only these samples. **A Check's
+name is not its command**, and the dry-run offer names the step's Checks
+by name for the reason the offer exists at all: a Drone that cannot tell
+what a call would check can only spend one to find out.
 
 ### Bug, part 2 of 4
 
