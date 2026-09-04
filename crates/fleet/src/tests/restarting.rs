@@ -21,7 +21,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use adapter_traits::{BroughtUpToDate, CallDetail, DroneEvent, Standing};
+use adapter_traits::{BroughtUpToDate, Standing};
 use config::ResolvedWorkflow;
 use core_model::{
     Actor, DroneId, EscalationTrigger, JobId, JobStatus, StepId, StepLevelTrigger, StepTarget,
@@ -37,6 +37,7 @@ use crate::gate::Ruling;
 use crate::resume::Redirection;
 use crate::reviewing::Said;
 use crate::tests::daemon::{a_proposal, diff_evidence, fitted_with, one, worktree_directory};
+use crate::tests::planted::a_drone_that_leaves;
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
 use crate::transcript::transcript_of;
@@ -57,20 +58,6 @@ fn one_step() -> ResolvedWorkflow {
         scope: None,
         gaming: None,
     }])
-}
-
-fn called() -> Vec<DroneEvent> {
-    vec![DroneEvent::Called {
-        tool: String::from("Read"),
-        call: String::from("a-call"),
-        detail: CallDetail::of("a file"),
-    }]
-}
-
-/// A Drone that speaks once and leaves, emptying the slot. **A restart needs
-/// one**: `DroneStillThere` refuses the act while a process is there.
-fn a_drone_that_leaves() -> FakeHarness {
-    FakeHarness::running("/bin/sh", &["-c", "echo BUSY"]).reading("BUSY", called())
 }
 
 /// A repository three commits ahead of every branch in it, whose rebases

@@ -31,6 +31,7 @@ use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::resume::Redirection;
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
+use crate::tests::planted::a_drone_that_leaves;
 use crate::tests::tmp::TempDir;
 
 type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
@@ -88,11 +89,6 @@ fn called() -> Vec<DroneEvent> {
 /// process.
 fn a_drone_that_stays() -> FakeHarness {
     FakeHarness::running("/bin/sh", &["-c", "echo BUSY; sleep 30"]).reading("BUSY", called())
-}
-
-/// A Drone that speaks once and leaves, emptying the slot under an escalation.
-fn a_drone_that_leaves() -> FakeHarness {
-    FakeHarness::running("/bin/sh", &["-c", "echo BUSY"]).reading("BUSY", called())
 }
 
 fn a_fleet_with(home: &TempDir, harness: FakeHarness) -> Fixture {

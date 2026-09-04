@@ -417,6 +417,11 @@ async fn the_record_survives_a_fleet_restart() {
         submitted_by_the_one(&fleet, crate::tests::daemon::diff_evidence())
             .await
             .expect("the tool took it");
+        // **The gate refusing is what ends this Drone**, on the turn above:
+        // `dispatch` terminates a Drone whose step stopped, and `terminate`
+        // waits. So the slot is already empty here and there is nothing for
+        // `the_drone_is_gone` to end — which is why this case never flaked the
+        // way `#443`'s six did.
         fleet.turn().await.expect("the gate ruled");
         job.id().clone()
     };

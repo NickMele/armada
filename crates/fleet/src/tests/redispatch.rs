@@ -20,6 +20,7 @@ use crate::tests::daemon::{
     a_fleet, a_fleet_holding_all, a_fleet_minting_from, a_proposal, a_proposal_for, diff_evidence,
     workflow_named_gated_on_diff, worktree_directory,
 };
+use crate::tests::planted::the_drone_is_gone;
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
 
@@ -58,6 +59,13 @@ async fn an_escalated_job(home: &TempDir) -> JobId {
             .expect("a Job at the gate");
         worktree_directory(home, job.id());
         fleet.approve(job.id()).await.expect("released to run");
+        // **The Drone is ended here, not left to the drop.** Dropping the Fleet
+        // closes the pipe into `/bin/cat` and a `cat` with no stdin does exit —
+        // but not before the next Fleet asks, on a machine that is busy, and an
+        // uncollected child is a zombie that `ps` reports as held. Reconciliation
+        // then adopts it, correctly, and this case is about the other answer.
+        // `#443`.
+        the_drone_is_gone(&fleet).await;
         job.id().clone()
     };
     let restarted = a_fleet(home, FakeWorkProduct::changed(&["src/log.rs"]));

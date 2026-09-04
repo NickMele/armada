@@ -46,6 +46,7 @@ use crate::judging::JudgeBudget;
 use crate::noticing::Noticing;
 use crate::silence::Liveness;
 use crate::slots::Concurrency;
+use crate::tests::planted::the_drone_is_gone;
 pub use crate::tests::planted::{Counted, Ticking};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
@@ -720,6 +721,13 @@ async fn a_running_job_with_no_drone_is_interrupted_at_startup() {
             .unwrap();
         worktree_directory(&home, job.id());
         fleet.approve(job.id()).await.unwrap();
+        // **The Drone is ended here, not left to the drop.** Dropping the Fleet
+        // closes the pipe into `/bin/cat` and a `cat` with no stdin does exit —
+        // but not before the next Fleet asks, on a machine that is busy, and an
+        // uncollected child is a zombie that `ps` reports as held. Reconciliation
+        // then adopts it, correctly, and this case is about the other answer.
+        // `#443`.
+        the_drone_is_gone(&fleet).await;
         job.id().clone()
     };
 

@@ -19,6 +19,7 @@ use crate::tests::daemon::{
     a_fleet, a_fleet_holding, a_fleet_holding_all, a_proposal, a_proposal_for, diff_evidence,
     workflow_named, worktree_directory,
 };
+use crate::tests::planted::the_drone_is_gone;
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
 
@@ -216,6 +217,13 @@ async fn a_job_folds_its_drone_out_of_the_log() {
             .assigned_drone()
             .expect("a dispatched Job knows its Drone")
             .clone();
+        // **The Drone is ended here, not left to the drop.** Dropping the Fleet
+        // closes the pipe into `/bin/cat` and a `cat` with no stdin does exit —
+        // but not before the next Fleet asks, on a machine that is busy, and an
+        // uncollected child is a zombie that `ps` reports as held. Reconciliation
+        // then adopts it, correctly, and this case is about the other answer.
+        // `#443`.
+        the_drone_is_gone(&fleet).await;
         (job.id().clone(), drone)
     };
 

@@ -34,7 +34,7 @@ use crate::daemon::Fleet;
 use crate::session::LiveSession;
 use crate::silence::{Liveness, Poke, Quiet, Vigil};
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
-use crate::tests::planted::Held;
+use crate::tests::planted::{the_drone_is_gone, Held};
 use crate::tests::tmp::TempDir;
 
 type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
@@ -289,22 +289,22 @@ async fn an_adopted_drone_can_still_be_killed_by_a_person() {
 #[tokio::test]
 async fn a_drone_whose_process_is_gone_still_interrupts_its_job() {
     let home = TempDir::new();
-    let first = a_fleet(
-        &home,
-        // Long enough to be spawned and read, short enough to be gone before
-        // the second Fleet asks. The wait below is on the pid rather than on
-        // the clock, so nothing here races.
-        FakeHarness::running("/bin/sh", &["-c", "echo CALLED"]).reading("CALLED", vec![called()]),
-    );
+    let first = a_fleet(&home, a_drone_that_keeps_working());
     let job = started(&first, &home).await;
     assert!(spoke(&first, 1).await, "the Drone never said anything");
-    let pid = pid_of(&first).await;
+
+    // **The one case here that wants the process gone, and it ends it.** It
+    // used to run a Drone short enough to be over before the second Fleet
+    // asked, and then wait on `kill -0` — which succeeds on a zombie, so the
+    // wait could spend its whole thirty seconds on a child that had exited and
+    // not been collected. `#443`. `the_drone_is_gone` waits on the child
+    // itself, and the pid is free when it returns.
+    let pid = the_drone_is_gone(&first).await;
     drop(first);
-    let deadline = tokio::time::Instant::now() + A_CHILD_HAS_LONG_ENOUGH;
-    while alive(pid) && tokio::time::Instant::now() < deadline {
-        tokio::time::sleep(Duration::from_millis(5)).await;
-    }
-    assert!(!alive(pid), "the Drone was meant to have finished");
+    assert!(
+        !alive(pid),
+        "the Drone was ended and collected before the drop"
+    );
 
     let second = a_fleet(&home, a_drone_that_keeps_working());
     let reconciled = second.reconcile().await.expect("the boot read");
