@@ -31,6 +31,13 @@ use crate::ids::CriterionId;
 /// somebody lost.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Judged {
+    /// Which run of the step this verdict was answered on, counted from one.
+    /// **On the row rather than implied by position**, for
+    /// [`CheckRun::attempt`](crate::CheckRun::attempt)'s reason:
+    /// [`StepDetail::judged`](crate::StepDetail::judged) now holds every
+    /// attempt's rows rather than the latest's alone. The same ordinal
+    /// [`StepAttempt::attempt`](crate::StepAttempt) carries.
+    pub attempt: u32,
     /// Which criterion was asked. What a citation points at, and what stays
     /// meaningful at any panel size.
     pub criterion_id: CriterionId,
@@ -59,9 +66,15 @@ pub struct Judged {
     pub brief_path: Option<String>,
 }
 
-impl From<&core_model::Judgment> for Judged {
-    fn from(judgment: &core_model::Judgment) -> Judged {
+impl Judged {
+    /// The wire shape of one judgment, stamped with the run it belongs to.
+    ///
+    /// A named function rather than a `From` impl, for
+    /// [`CheckRun::of`](crate::CheckRun::of)'s reason: `core_model::Judgment`
+    /// carries no attempt of its own.
+    pub fn of(attempt: u32, judgment: &core_model::Judgment) -> Judged {
         Judged {
+            attempt,
             criterion_id: (&judgment.criterion_id).into(),
             verdict: judgment.verdict.into(),
             expected: judgment.expected.clone(),

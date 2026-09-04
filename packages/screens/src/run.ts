@@ -25,7 +25,14 @@ import type { RunTreeFact, RunTreePath, RunTreeStep, StepActivity } from "@armad
 
 import type { Turn } from "@armada/protocol";
 import { CHECK_ADVANCES, CHECK_OUTCOME, ESCALATION_REASON, STEP_STATE } from "@armada/components";
-import type { ChangedFile, CheckRun, JobDetail as JobWhole, StepAttempt, StepDetail } from "@armada/protocol";
+import type {
+  ChangedFile,
+  CheckRun,
+  JobDetail as JobWhole,
+  Judged,
+  StepAttempt,
+  StepDetail,
+} from "@armada/protocol";
 import { span } from "./duration";
 import { ordered } from "./facts";
 import { frozenBeneath } from "./frozen";
@@ -92,22 +99,31 @@ function factsOfStep(
   wrote: ChangedFile[],
 ): RunTreeFact[] {
   const facts: RunTreeFact[] = [];
+  const retried = step.attempts.length > 1;
 
-  // The runs, oldest first, one row each. **Never on a step run once** — a
+  // The runs, oldest first, one row each, each carrying its own Checks,
+  // Judge and Verdict nested beneath it. **Never on a step run once** — a
   // single `Attempt 1 advanced` beneath every row in the tree is a column of
-  // noise saying what the mark already says.
-  if (step.attempts.length > 1) facts.push(...step.attempts.map(attemptFact));
+  // noise saying what the mark already says, and there is no second attempt
+  // to tell its gate rows apart from.
+  if (retried) facts.push(...step.attempts.map((attempt) => attemptFact(step, attempt)));
 
   const produced = producedFact(wrote);
   if (produced !== undefined) facts.push(produced);
 
-  const checks = checksFact(step);
-  if (checks !== undefined) facts.push(checks);
+  // **Nested under the attempt that produced them instead, on a retried
+  // step.** `check_runs`, `judged` and `verdicts` all hold every attempt's
+  // rows now, and a flat fact drawn from all of them here would be exactly
+  // the "which attempt is this" ambiguity the nesting exists to remove.
+  if (!retried) {
+    const checks = checksFact(step, step.check_runs);
+    if (checks !== undefined) facts.push(checks);
 
-  const judge = judgeFact(step);
-  if (judge !== undefined) facts.push(judge);
+    const judge = judgeFact(step, step.judged);
+    if (judge !== undefined) facts.push(judge);
 
-  if (step.last_verdict !== undefined) facts.push(verdictFact(step.last_verdict));
+    if (step.last_verdict !== undefined) facts.push(verdictFact(step.last_verdict));
+  }
 
   // Served as a field rather than left as a pair to notice: a step reading
   // `advanced` beside a failed verdict is one a person overruled, and a tree
@@ -139,21 +155,45 @@ function verdictFact(verdict: { named: string; trigger?: string }): RunTreeFact 
 }
 
 /**
- * One run of the step: which it was, and what it came to.
+ * One run of the step: which it was, what it came to, and — nested beneath
+ * it — its own Checks, Judge and Verdict.
  *
  * **The outcome is the wire's own step state.** `enum-verbs.toml` carries no
  * `step_state` rows, so the spelling renders — and the escalation trigger the
  * run carried out of `running` rides beside it, because `refused` and
  * `refused · gate_failure` are different amounts of help and the second costs
  * nothing.
+ *
+ * **The children are this attempt's rows and nobody else's.** `check_runs`,
+ * `judged` and `verdicts` are filtered to `attempt.attempt` before either
+ * fact function sees them, which is what keeps a stopped first attempt's
+ * gate rows off a running second one.
  */
-function attemptFact(attempt: StepAttempt): RunTreeFact {
+function attemptFact(step: StepDetail, attempt: StepAttempt): RunTreeFact {
   const outcome = STEP_STATE[attempt.outcome]?.verb ?? attempt.outcome;
   const advanced = attempt.outcome === "advanced";
+  const children: RunTreeFact[] = [];
+
+  const checks = checksFact(
+    step,
+    step.check_runs.filter((run) => run.attempt === attempt.attempt),
+  );
+  if (checks !== undefined) children.push(checks);
+
+  const judge = judgeFact(
+    step,
+    step.judged.filter((judged) => judged.attempt === attempt.attempt),
+  );
+  if (judge !== undefined) children.push(judge);
+
+  const verdict = step.verdicts.find((verdict) => verdict.attempt === attempt.attempt);
+  if (verdict !== undefined) children.push(verdictFact(verdict));
+
   return {
     label: `Attempt ${attempt.attempt}`,
     value: attempt.why === undefined ? outcome : `${outcome} · ${attempt.why}`,
     named: advanced ? "advanced" : attempt.outcome === "running" ? undefined : "refused",
+    children: children.length === 0 ? undefined : children,
   };
 }
 
@@ -209,16 +249,20 @@ function producedBy(rows: readonly Turn[]): Map<string, ChangedFile[]> {
 }
 
 /**
- * What this step's Checks came to.
+ * What a step's Checks came to, over the runs handed in.
  *
  * **Absent and empty are two sentences.** `checks` absent is a Fleet that
  * cannot say — the Job names a workflow this Fleet does not hold — and empty is
  * a step that gates on nothing. Neither is "the Checks failed".
+ *
+ * **`runs` is the caller's to narrow.** A step run once passes every row in
+ * `check_runs`; a retried step's `attemptFact` passes one attempt's rows, so
+ * the same rule reads as that attempt's own Checks rather than the whole
+ * step's.
  */
-function checksFact(step: StepDetail): RunTreeFact | undefined {
+function checksFact(step: StepDetail, runs: CheckRun[]): RunTreeFact | undefined {
   if (step.checks === undefined) return { label: "Checks", value: "Fleet cannot say" };
   if (step.checks.length === 0) return { label: "Checks", value: "none declared" };
-  const runs = step.check_runs;
   if (runs.length === 0) return { label: "Checks", value: "not run" };
   const failed = runs.filter(didNotPass);
   return failed.length === 0
@@ -233,23 +277,25 @@ function checksFact(step: StepDetail): RunTreeFact | undefined {
 }
 
 /**
- * What this step's Judge came to. A declaration until it has answered, and a
- * count once it has — the criterion text and the citation are the panel's,
- * because each of them is a sentence.
+ * What a step's Judge came to, over the answers handed in. A declaration
+ * until it has answered, and a count once it has — the criterion text and the
+ * citation are the panel's, because each of them is a sentence.
+ *
+ * **`judged` is the caller's to narrow**, for [`checksFact`]'s reason.
  */
-function judgeFact(step: StepDetail): RunTreeFact | undefined {
+function judgeFact(step: StepDetail, judged: Judged[]): RunTreeFact | undefined {
   const declared = step.judge_checks;
   if (declared === undefined) return undefined;
-  if (step.judged.length === 0) {
+  if (judged.length === 0) {
     return declared.length === 0
       ? undefined
       : { label: "Judge", value: `${declared.length} declared`, named: undefined };
   }
-  const met = step.judged.filter((judged) => judged.verdict === "met").length;
+  const met = judged.filter((one) => one.verdict === "met").length;
   return {
     label: "Judge",
-    value: `${met} of ${step.judged.length} met`,
-    named: met === step.judged.length ? "passed" : "failed",
+    value: `${met} of ${judged.length} met`,
+    named: met === judged.length ? "passed" : "failed",
   };
 }
 

@@ -77,6 +77,7 @@ function step(over: Partial<StepDetail> = {}): StepDetail {
     judged: [],
     flagged: [],
     attempts: [],
+    verdicts: [],
     entered_at: "2026-09-02T13:11:00Z",
     updated_at: "2026-09-02T13:18:00Z",
     ...over,

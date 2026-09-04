@@ -18,7 +18,7 @@ use ipc::{
 };
 
 use crate::holding::{Held, Holding};
-use store::{LoadJobError, Moved, RecordedEvent, Store};
+use store::{Attempted, LoadJobError, Moved, RecordedEvent, Store};
 
 use crate::adrift::Adrift;
 use crate::evidence::NotSubmitted;
@@ -288,6 +288,12 @@ fn narrowed(events: &[RecordedEvent]) -> Vec<StepMove> {
 /// — the whole of what an escalated Job has to say — live in their own
 /// tables and arrive here.
 ///
+/// **`ran` and `judged` are every attempt's rows, not the latest's.** Each
+/// group is stamped with the attempt it belongs to before it crosses, which is
+/// what lets a retried step's Checks and Judge answers be told apart by run
+/// rather than merged into one. `flagged` stays latest-only, on the scope this
+/// change draws deliberately: the run tree draws no Flagged fact today.
+///
 /// **A free function taking the mark rather than a method taking Fleet.** The
 /// one thing here that is not a row is the Judge call in flight, and that is a
 /// read of one shared value — so the only thing this needs of Fleet is
@@ -297,8 +303,8 @@ pub(crate) fn step_facts(
     aloft: &Aloft,
     repo_root: &str,
     job: &Job,
-    ran: Vec<(core_model::StepId, Vec<core_model::StepCheck>)>,
-    judged: Vec<(core_model::StepId, Vec<core_model::Judgment>)>,
+    ran: Vec<Attempted<Vec<core_model::StepCheck>>>,
+    judged: Vec<Attempted<Vec<core_model::Judgment>>>,
     flagged: Vec<(core_model::StepId, Vec<core_model::GamingFlag>)>,
     moves: &[StepMove],
 ) -> Vec<StepFacts> {
@@ -330,14 +336,24 @@ pub(crate) fn step_facts(
                     .map(|declared| declared.checks().iter().map(declared_check).collect()),
                 ran: ran
                     .iter()
-                    .find(|(at, _)| at == step.step_id())
-                    .map(|(_, checks)| checks.iter().map(CheckRun::from).collect())
-                    .unwrap_or_default(),
+                    .filter(|group| &group.step_id == step.step_id())
+                    .flat_map(|group| {
+                        group
+                            .record
+                            .iter()
+                            .map(|check| CheckRun::of(group.attempt.number(), check))
+                    })
+                    .collect(),
                 judged: judged
                     .iter()
-                    .find(|(at, _)| at == step.step_id())
-                    .map(|(_, answers)| answers.iter().map(Judged::from).collect())
-                    .unwrap_or_default(),
+                    .filter(|group| &group.step_id == step.step_id())
+                    .flat_map(|group| {
+                        group
+                            .record
+                            .iter()
+                            .map(|answer| Judged::of(group.attempt.number(), answer))
+                    })
+                    .collect(),
                 flagged: flagged
                     .iter()
                     .find(|(at, _)| at == step.step_id())
@@ -356,6 +372,10 @@ pub(crate) fn step_facts(
                     .and_then(|declared| declared.deliverable())
                     .map(|target| kept_for(repo_root, job, step.step_id(), &attempts, target))
                     .unwrap_or_default(),
+                // Derived from `attempts` rather than read again: the mapping
+                // from `(outcome, why)` to a ruling lives once, on
+                // `StepAttempt` itself.
+                verdicts: ipc::StepAttempt::verdicts(&attempts),
                 attempts,
                 // The one fact here that is not a row. Read from the live slot
                 // as the answer is assembled, because nothing writes it down.

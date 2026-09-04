@@ -136,6 +136,13 @@ impl From<&core_model::JudgeCheck> for DeclaredJudge {
 /// One declared Check, as the gate found it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CheckRun {
+    /// Which run of the step produced it, counted from one. **On the row
+    /// rather than implied by position**, the way [`KeptDeliverable::attempt`]
+    /// is: [`StepDetail::check_runs`](crate::StepDetail::check_runs) now holds
+    /// every attempt's rows rather than the latest's alone, so a reader has to
+    /// be told which run a row is from rather than counting through the list.
+    /// The same ordinal [`StepAttempt::attempt`](crate::StepAttempt) carries.
+    pub attempt: u32,
     /// The Manifest Check's name, or the built-in's kind where it names none.
     /// The same word [`DeclaredCheck`] carries, so the two lists line up.
     pub name: String,
@@ -159,9 +166,17 @@ pub struct CheckRun {
     pub output_path: Option<String>,
 }
 
-impl From<&core_model::StepCheck> for CheckRun {
-    fn from(check: &core_model::StepCheck) -> CheckRun {
+impl CheckRun {
+    /// The wire shape of one Check's result, stamped with the run it belongs
+    /// to.
+    ///
+    /// A named function rather than a `From` impl: `core_model::StepCheck`
+    /// carries no attempt of its own — that ordinal is read off the store's
+    /// own per-attempt tables — so building one is an assembly out of two
+    /// sources rather than a conversion of one.
+    pub fn of(attempt: u32, check: &core_model::StepCheck) -> CheckRun {
         CheckRun {
+            attempt,
             name: check.name.clone(),
             outcome: check.outcome.into(),
             expected: check.expected.clone(),

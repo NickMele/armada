@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 import { FactChip, type FactChipNamed } from "../FactChip/FactChip";
 import { PathChip } from "../PathChip/PathChip";
-import { StepRow } from "../StepRow/StepRow";
+import { StepRow, type StepRowFact } from "../StepRow/StepRow";
 import type { StepActivity } from "../StepActivityMark/StepActivityMark";
 
 /**
@@ -88,6 +88,16 @@ export type RunTreeFact = {
    * the tree that must keep its full basename.
    */
   paths?: RunTreePath[];
+  /**
+   * That attempt's own Checks, Judge and Verdict, nested beneath its row.
+   *
+   * **Only an attempt fact carries these, and only on a step worked more than
+   * once.** A retried step's gate rows are per attempt now — `check_runs` and
+   * `judged` hold every run's, not the latest's — so a flat list under both
+   * attempts could not say which one a Checks row belonged to. One level
+   * deep: a child carries none of its own.
+   */
+  children?: RunTreeFact[];
 };
 
 export type RunTreeStep = {
@@ -175,6 +185,34 @@ export type RunTreeProps = {
 };
 
 /**
+ * One fact, drawn as `StepRow` takes it. **Recurses once, on `children`** —
+ * an attempt's own Checks, Judge and Verdict, and nothing deeper: `RunTreeFact`
+ * itself is one level, so there is nothing further to descend into.
+ */
+function drawFact(fact: RunTreeFact, onCopied: RunTreeProps["onCopied"]): StepRowFact {
+  return {
+    label: fact.label,
+    value: (
+      <>
+        {fact.value === undefined ? null : (
+          <FactChip named={fact.named as FactChipNamed | undefined}>{fact.value}</FactChip>
+        )}
+        {(fact.paths ?? []).map((path, p) => (
+          <PathChip
+            key={p}
+            directory={path.directory}
+            basename={path.basename}
+            note={path.note}
+            onCopy={onCopied}
+          />
+        ))}
+      </>
+    ),
+    children: fact.children?.map((child) => drawFact(child, onCopied)),
+  };
+}
+
+/**
  * **Facts stay as the reader left them; selecting a step does not open them.**
  *
  * The alternative — auto-expanding the selected step — was the obvious default
@@ -245,25 +283,7 @@ export function RunTree({
             pulsing={pulsing && (step.current ?? false)}
             factsId={`armada-run-facts-${step.id}`}
             factsAbsent={step.factsAbsent}
-            facts={(step.facts ?? []).map((fact) => ({
-              label: fact.label,
-              value: (
-                <>
-                  {fact.value === undefined ? null : (
-                    <FactChip named={fact.named as FactChipNamed | undefined}>{fact.value}</FactChip>
-                  )}
-                  {(fact.paths ?? []).map((path, p) => (
-                    <PathChip
-                      key={p}
-                      directory={path.directory}
-                      basename={path.basename}
-                      note={path.note}
-                      onCopy={onCopied}
-                    />
-                  ))}
-                </>
-              ),
-            }))}
+            facts={(step.facts ?? []).map((fact) => drawFact(fact, onCopied))}
           />
         </li>
       ))}
