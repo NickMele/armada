@@ -16,7 +16,7 @@ use super::*;
 /// Checks passed, the workflow still held. The ordinary escalation.
 fn all_there() -> Standing {
     Standing {
-        drone_holding: true,
+        drone: DroneStanding::Speakable,
         worktree_on_disk: true,
         checks_passed: true,
         workflow_held: true,
@@ -27,7 +27,16 @@ fn all_there() -> Standing {
 /// than a redirect.
 fn drone_gone() -> Standing {
     Standing {
-        drone_holding: false,
+        drone: DroneStanding::Gone,
+        ..all_there()
+    }
+}
+
+/// The same again, with a Drone standing on the Job that Fleet cannot hear —
+/// which is neither of the two above and is what #452 is about.
+fn drone_unheard() -> Standing {
+    Standing {
+        drone: DroneStanding::Unheard,
         ..all_there()
     }
 }
@@ -70,6 +79,22 @@ fn stalled() -> Job {
     )
 }
 
+/// The same shape again under the trigger for a Drone nobody is reading. It is
+/// Job-level, so nothing underneath it stopped either — the step is still
+/// `running`, with a process on it that cannot be told anything.
+fn unheard_job() -> Job {
+    let working = drive(&created(), &[Target::Queued, Target::Running])
+        .transition_step(
+            &StepId::new("repro"),
+            StepTarget::Running,
+            Actor::Fleet,
+            at("2026-08-26T09:02:00.000Z"),
+        )
+        .expect("not_started -> running")
+        .job;
+    drive(&working, &[Target::Escalated(EscalationTrigger::Unheard)])
+}
+
 fn classify(job: &Job, standing: Standing) -> Stuck {
     Stuck::of(job, None, standing).expect("a stopped Job is classified")
 }
@@ -108,6 +133,58 @@ fn a_stalled_job_over_a_live_drone_is_redirected_and_never_restarted() {
         [Recourse::Redirect, Recourse::Redispatch],
         "a live Drone and no stopped step leaves these two"
     );
+}
+
+/// The other Job-level shape, and the one #452 is about. Nothing stopped here
+/// either, and the restart still applies: the step is running beneath a Drone
+/// that cannot be heard, and the act ends it on the way through.
+///
+/// **The redirect is what is withheld**, on the same reading — there is no pipe
+/// to put a person's words into.
+#[test]
+fn an_unheard_drone_mid_step_is_restarted_and_never_redirected() {
+    let stuck = classify(&unheard_job(), drone_unheard());
+
+    assert_eq!(stuck.step(), None, "a Job-level trigger names no step");
+    assert_eq!(
+        stuck.recourse(),
+        [Recourse::RestartStep, Recourse::Redispatch],
+        "the act that ends the Drone applies where the two that speak to it do \
+         not"
+    );
+}
+
+/// **The widening is the Drone and not the missing stopped step**, which is the
+/// whole of what could have gone wrong here. Every other Job-level escalation —
+/// `interrupted`, `would_not_start`, `resource_exhausted` — has no process to
+/// end and no step to run again, and a rule relaxed to "no step stopped" would
+/// have offered all of them a restart that then refused.
+#[test]
+fn a_job_level_escalation_with_no_drone_at_all_is_still_only_replaced() {
+    let stuck = classify(&stalled(), drone_gone());
+
+    assert_eq!(
+        stuck.recourse(),
+        [Recourse::Redispatch],
+        "nothing stopped and nothing is standing there, so there is no step to \
+         put a fresh Drone on"
+    );
+}
+
+/// A restart wants somewhere to run, and that test is ahead of the Drone rather
+/// than beside it. An unheard Drone sitting in a worktree that has been
+/// reclaimed leaves the replacement and nothing else.
+#[test]
+fn an_unheard_drone_with_no_worktree_is_not_offered_the_restart() {
+    let stuck = classify(
+        &unheard_job(),
+        Standing {
+            worktree_on_disk: false,
+            ..drone_unheard()
+        },
+    );
+
+    assert_eq!(stuck.recourse(), [Recourse::Redispatch]);
 }
 
 /// The trigger a Job-level escalation carries is on the transition and nowhere

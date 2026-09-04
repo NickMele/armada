@@ -29,7 +29,7 @@ use alloc::vec::Vec;
 use crate::job::escalation::EscalationTrigger;
 use crate::job::ids::StepId;
 use crate::job::record::Job;
-use crate::job::status::JobStatus;
+use crate::job::status::{JobStatus, StepState};
 use crate::job::transition::TransitionReason;
 
 /// An act a person may take on a Job that stopped.
@@ -93,6 +93,29 @@ impl Recourse {
     }
 }
 
+/// What is standing in the slot Fleet keeps for a Job.
+///
+/// **Three values rather than two booleans**, because the slot is read once and
+/// answers once. A Drone Fleet can speak to and a Drone Fleet cannot hear are
+/// two readings of one thing, and a pair of flags would let a caller write both
+/// of them true — which is the shape of the defect #442 closed, where a full
+/// slot was read as an open pipe.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DroneStanding {
+    /// The slot holds no Drone for this Job. Ended, reaped, or never spawned.
+    Gone,
+    /// A Drone is standing here and Fleet can say something to it.
+    Speakable,
+    /// A Drone is standing here and Fleet holds no way of reading it.
+    ///
+    /// **Alive and unreachable, which is neither of the other two.** Adoption
+    /// is the road into it today — a Drone that outlived the Fleet holding its
+    /// pipes — and the registry's word for the condition is `unheard`. What it
+    /// withholds is every act that speaks to a Drone; what it leaves is the
+    /// restart, which ends it.
+    Unheard,
+}
+
 /// The four things Fleet knows about a stopped Job that its record does not
 /// say.
 ///
@@ -103,12 +126,12 @@ impl Recourse {
 /// true` by accident.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Standing {
-    /// Whether the slot Fleet keeps is holding **this** Job's Drone.
+    /// What is standing in the slot Fleet keeps for **this** Job.
     ///
     /// The slot and never the record: the record's `assigned_drone` survives a
     /// Fleet restart and the pipe does not, and it is the pipe a redirect and a
     /// gate re-run both need.
-    pub drone_holding: bool,
+    pub drone: DroneStanding,
     /// Whether the Job's worktree is still a directory on disk.
     ///
     /// **The fact no surface can compute.** Every act but a redirect and a
@@ -185,7 +208,7 @@ impl Stuck {
                     recourse.push(Recourse::OverrideVerdict);
                 }
                 if trigger.trigger() == EscalationTrigger::GateUndecided
-                    && standing.drone_holding
+                    && standing.drone == DroneStanding::Speakable
                     && standing.worktree_on_disk
                 {
                     recourse.push(Recourse::RerunGate);
@@ -199,12 +222,23 @@ impl Stuck {
             //
             // **Beneath `awaiting_repair` it is always the restart**, and that
             // is the status's own doing rather than a rule here: the Drone is
-            // stood down when the budget is spent, so `drone_holding` is false
-            // and the first arm cannot be taken. #208's redirect held the
-            // working slot for as long as a person took to read the failure.
-            if standing.drone_holding {
+            // stood down when the budget is spent, so nothing is standing in
+            // the slot and the first arm cannot be taken. #208's redirect held
+            // the working slot for as long as a person took to read the
+            // failure.
+            //
+            // **The restart takes a stopped step *or* a step nobody can be
+            // heard on**, and the second is #452. Those are two ways to reach
+            // one act and not two acts: a restart puts a fresh Drone on the
+            // step the Job is holding, and what it needs is that no Drone is
+            // working that step now. A step that stopped satisfies that because
+            // its Drone is gone; an unheard one satisfies it because the act
+            // ends the Drone on the way through.
+            if standing.drone == DroneStanding::Speakable {
                 recourse.push(Recourse::Redirect);
-            } else if stopped.is_some() && standing.worktree_on_disk {
+            } else if standing.worktree_on_disk
+                && (stopped.is_some() || unheard_mid_step(job, &standing))
+            {
                 recourse.push(Recourse::RestartStep);
             }
         }
@@ -283,6 +317,36 @@ impl Stuck {
     pub fn admits(&self, act: Recourse) -> bool {
         self.recourse.contains(&act)
     }
+}
+
+/// A step still `running`, beneath a Drone Fleet cannot hear, on a Job parked
+/// for a person.
+///
+/// # It is not "no step stopped"
+///
+/// **The Jobs this newly reaches are the ones whose slot holds an unheard
+/// Drone, and no others.** Every other Job-level escalation is untouched:
+/// `interrupted` and `would_not_start` have no process to end, `stalled` has
+/// one Fleet can speak to and is answered by the redirect, and
+/// `resource_exhausted` and `no_worktree` fail the worktree test one line up.
+/// Relaxing this to `stopped.is_none()` would offer a restart on all of them —
+/// a rule about every stuck Job, changed to fix one.
+///
+/// # The three tests are the move's own three
+///
+/// `step_machine::taken_from_a_person` admits exactly one `running -> stopped`
+/// beneath a frozen Job: `escalated`, from `running`, under `drone_killed`.
+/// That move is what `fleet::resume::restart_step` makes here — it ends the
+/// unheard Drone and stops the step it was on, because a person taking the
+/// Drone away is what happened. An offer resting on weaker conditions than the
+/// move it names is an offer the act refuses, which is the defect #442 closed
+/// one case over.
+fn unheard_mid_step(job: &Job, standing: &Standing) -> bool {
+    standing.drone == DroneStanding::Unheard
+        && job.status() == JobStatus::Escalated
+        && job
+            .current_step()
+            .is_some_and(|step| step.state() == StepState::Running)
 }
 
 /// Whether a replacement can be minted from this Job.
