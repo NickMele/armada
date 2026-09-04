@@ -18,8 +18,8 @@
 //! Every optional field is skipped when it has no value, the rule
 //! `docs/concepts/log-envelope.md` states for its own envelope: a client that
 //! receives `branch: null` cannot tell "no worktree yet" from "Fleet forgot".
-//! Evidence and a pointer to `.armada/logs/` are absent because nothing
-//! produces either, and a field that is always empty reads as working.
+//! Evidence is absent because nothing produces it and an always-empty field
+//! reads as working; the log, because `#437` serves it as a stream of its own.
 //!
 //! Two of a step's four declared facts are read off the Job's own frozen
 //! workflow rather than handed in — [`StepFacts`] says which, and why.
