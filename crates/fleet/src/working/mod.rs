@@ -23,12 +23,14 @@
 //! [`Working::heard`] answers with the whole run, because what anybody asks a
 //! transcript is what it folds to. A per-event accessor would invite reading a
 //! Drone's claim, which the gate exists to refuse.
+mod saying;
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use std::time::Duration;
 
-use adapter_traits::{AgentHarness, DroneEvent, Footprint, Worktree};
+use adapter_traits::{AgentHarness, Footprint, Worktree};
 use core_model::{DeclaredPaths, DroneId, JobId, RepoPath, StepId, Timestamp};
 use tokio::process::ChildStderr;
 
@@ -37,7 +39,7 @@ use crate::converging::{elapsed, Chain};
 use crate::drone::{Ending, Started};
 use crate::footprint::Publishing;
 use crate::questioning::Question;
-use crate::session::{LiveSession, Occasion};
+use crate::session::LiveSession;
 use crate::transcript::{Tap, Taps};
 use crate::watch::{Drained, Watching};
 use store::DroneSpend;
@@ -854,105 +856,5 @@ impl Working {
 
     pub(crate) fn session(&self) -> &Session {
         &self.session
-    }
-
-    /// Write down something Armada or Fleet did, into this step's own record.
-    ///
-    /// **Never awaits and never fails**, for the reason
-    /// [`Tap`](crate::transcript::Tap) says: this is called from the loop that
-    /// advances the Job, and a record that could hold it up would make watching
-    /// a Job change its outcome. A row the sinks will not take is counted as
-    /// missed exactly as a Drone's is.
-    ///
-    /// **It is not a send.** Nothing here reaches the Drone; the caller has
-    /// already spoken to the session, or has decided not to, and this says what
-    /// happened. Pairing the two in one method was rejected on the failure it
-    /// hides — a turn that did not go down the pipe still belongs in the record,
-    /// and `crate::silence` counts a poke that failed to write as spent.
-    pub(crate) fn told(&self, by: ipc::Voice, saw: ipc::Saw) {
-        for tap in &self.taps {
-            tap.noted(by, saw.clone());
-        }
-    }
-
-    /// Write down a turn Armada put into this session, whole.
-    ///
-    /// The one caller shape: every send site has the rendered text in hand and
-    /// drops it, which is why the brief a step opened with was recoverable from
-    /// nowhere once the process had gone.
-    pub(crate) fn instructed(&self, occasion: Occasion, text: &str) {
-        self.owed_a_turn();
-        self.told(
-            ipc::Voice::Armada,
-            ipc::Saw::Instructed {
-                occasion: occasion.as_wire().to_string(),
-                text: text.to_string(),
-                // One block of prose, so there is no heading to name. Every
-                // occasion but the opening brief is one of these.
-                headings: Vec::new(),
-            },
-        );
-    }
-
-    /// Write down the brief a step opened with, and which of its lines
-    /// `crate::briefing` wrote as block headings.
-    ///
-    /// **A sibling of [`Working::instructed`] rather than an argument on it.**
-    /// The opening brief is the one turn assembled out of headed blocks, so a
-    /// `headings` argument on the common path would be six call sites saying
-    /// they have none. What the field is for is
-    /// `ipc::Saw::Instructed::headings`.
-    /// **It does not touch [`told_after`](Working::at_rest), and it must not.**
-    /// The opening brief went down the pipe inside `drone::start`, before this
-    /// slot existed — so by the time this runs the Drone may already have
-    /// finished the run that turn began, and taking a reading here would move
-    /// the baseline past an ending nobody had acted on. Zero is the reading the
-    /// opening turn deserves, and the field starts there.
-    pub(crate) fn briefed(&self, text: &str, headings: Vec<usize>) {
-        self.told(
-            ipc::Voice::Armada,
-            ipc::Saw::Instructed {
-                occasion: Occasion::Opening.as_wire().to_string(),
-                text: text.to_string(),
-                headings,
-            },
-        );
-    }
-
-    /// Armada has just put a turn into this session, so the Drone owes an
-    /// answer from here.
-    ///
-    /// **Called from the writer of the record and not from the six senders**,
-    /// which is what keeps it from being a rule six call sites have to
-    /// remember: every send site already writes down what it sent, before it
-    /// sends it, and that is the moment this is true.
-    fn owed_a_turn(&self) {
-        self.told_after
-            .store(self.transcript.progress().boundaries, Ordering::SeqCst);
-    }
-
-    pub(crate) fn transcript_ended(&self) -> bool {
-        self.transcript.transcript_ended()
-    }
-
-    /// Everything the Drone said. What `Ending::of` folds, and the only thing
-    /// anybody asks a transcript.
-    pub(crate) fn heard(&self) -> Vec<DroneEvent> {
-        self.transcript.events()
-    }
-
-    /// What this Drone's run has cost the Job so far.
-    ///
-    /// **A second fold over the same events `Ending::of` reads**, and not a
-    /// field on `Ending`: what the run cost and how it finished are different
-    /// questions, and a `Vanished` Drone still spent whatever it spent before
-    /// the stream stopped. The fold itself is `crate::allowance::spent`, which
-    /// is where the reason cost and turns fold differently is written down.
-    ///
-    /// The wall clock is measured from `step_began`, which is when this slot
-    /// was opened — a `Working` is built once per spawn, so that is the Drone's
-    /// own start and not the step's across a restart.
-    pub(crate) fn spent(&self, now: &Timestamp) -> DroneSpend {
-        crate::allowance::spent(&self.heard(), elapsed(&self.step_began, now))
     }
 }

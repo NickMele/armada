@@ -4,47 +4,22 @@
 //! # What survives a Fleet restart, and what cannot
 //!
 //! `crate::detach` calls `libc::setsid()` on every spawn, so a Drone leads a
-//! session of its own and nothing signalled at Fleet reaches it. That is what
-//! makes an orphan possible. What it does not make possible is picking the
-//! conversation back up:
+//! session of its own. That is what makes an orphan possible; it is not what
+//! makes the conversation resumable.
 //!
 //! | | Survives | Why |
 //! |---|---|---|
-//! | The process, and its group | **Yes** | It is nobody's child now; `libc::setsid` is what put it out of reach |
+//! | The process and its group | **Yes** | It is nobody's child now |
 //! | The worktree, the branch, the uncommitted work | **Yes** | Nothing removes one on a process ending |
 //! | The record, the Job log, the transcript file | **Yes** | Fleet wrote them as it went |
-//! | The Drone's own calls back into Fleet | **Yes**, once the pid index is restored | They arrive on a fresh connection to the same loopback port, and `crate::peer` attributes them by pid and port pair |
-//! | Fleet reading the Drone's transcript | **No** | It is a pipe, and the read end went with the process that held it. No process can reopen another's stdout |
-//! | Fleet speaking to the Drone | **No** | Its stdin is the same pipe in the other direction, and the Drone saw end-of-file the moment Fleet died |
+//! | The Drone's own calls into Fleet | **Yes**, once the pid index is restored | They arrive on a fresh connection to the same loopback port, which `crate::peer` attributes by pid and port pair |
+//! | Fleet reading its transcript | **No** | A pipe, whose read end went with the process that held it |
+//! | Fleet speaking to it | **No** | The same pipe the other way, and the Drone saw end-of-file when Fleet died |
 //!
 //! **So adoption is of the process and the record, never of the pipe.** An
 //! adopted Drone can finish its step and be gated, because evidence arrives
-//! over the loopback rather than the pipe and nothing a Drone says gates its
-//! own step. It cannot be handed back to, poked, redirected or told a verdict,
-//! and everything it said while Fleet was gone is unrecoverable — it was
-//! written into a pipe with no reader.
-//!
-//! # The gap is written down rather than glossed
-//!
-//! Between the last line the previous Fleet read and this one starting, turns
-//! went past that nothing observed. A Drone that went wrong in there is now
-//! inside a Job that reads as healthy. [`Adopted::gap`] is that stretch, named
-//! from the transcript's own last row, and `Fleet::adopted` writes it into the
-//! Drone's transcript before anything else — so the file reads, in order: the
-//! last line Fleet read, what Fleet missed, and Fleet's own acts from here.
-//!
-//! **What is lost with it is money as well as turns.** The harness reports a
-//! run's cost on its terminating line, which went into the dead pipe, so an
-//! adopted Drone's recorded spend is an undercount by whatever it spent in the
-//! gap and there is no reading that recovers it.
-//!
-//! # The identity, and why a pid alone is refused
-//!
-//! Pids are reused. The store carries the pid **and** when the process started,
-//! and adoption compares that pair against what [`crate::holder_of`] says now —
-//! the same check `crate::runtime` makes about Fleet's own pid, for the same
-//! reason. A mismatch is not an adoption declined; it is a different process
-//! entirely, and signalling it would end somebody else's work.
+//! over the loopback and nothing a Drone says gates its own step. It cannot be
+//! handed back to, poked, redirected or told a verdict.
 
 use std::io;
 use std::num::NonZeroU32;

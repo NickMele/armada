@@ -37,7 +37,7 @@ The bottom four are recovery from a Job that stopped. The first is what a Job do
 | `running` | Alive — except in the moment between one step's Drone ending and the next one's starting | **Runs** | Held |
 | `awaiting_review` | Gone. The step at the gate passed its machine gates, which is what ends a Drone — it does not have to advance for the session to be over | Suspended | Held |
 | `escalated` | Alive where the step stopped mid-work, which is where escalation usually happens. Gone where the Job escalated at a boundary or with no step running | Suspended | Held |
-| `interrupted` | Gone. The process died; the Job did not | — | Held, and **never swept** |
+| `interrupted` | Gone, **asked and answered**. The process died; the Job did not | — | Held, and **never swept** |
 | Terminal | Gone | — | Held until past retention, then swept at Fleet start |
 
 **A human gate holds no Drone.** It used to hold one, idle — the PID, the worktree and the session all survived the wait — and that argument only ever held because one process spanned the whole Job. A step standing at the gate has submitted and passed everything a machine can ask of it, so its Drone has nothing left to do, and a session kept for the length of a wait a person may take a day over is a working slot held against every other Job. So it ends when the work does. What the gate does not cost is work: the worktree is held and the record is the carrier.
@@ -48,9 +48,19 @@ Two consequences follow, and both are paid rather than avoided. **Approving does
 
 **An `interrupted` worktree is never swept.** Why: it may hold uncommitted work. Fleet stops a Drone only at a cap, and even then the worktree survives — what a cap ends is the spending, never the work. A person decides what happens to it.
 
+## A Drone that outlives its Fleet is adopted
+
+**A Drone is spawned into a session of its own, so it survives a Fleet restart and keeps working.** On start, Fleet asks the machine what became of every process its record still names — the pid and the instant that process started, recorded at the spawn, because a pid alone is answered "yes, something is there" by a pid that came round. A Drone that is still the same process is **adopted**: the Job stays where it was, the process goes back into a working slot, and its own calls into Fleet are attributed again. One that is gone is `interrupted`, which is what reconciliation always said and is now what it found.
+
+**Adoption is of the process and the record, never of the session.** Both of a Drone's pipes died with the Fleet that held them and nothing can reopen another process's stdin or stdout. So an adopted Drone can be ended, and can submit — evidence travels over the loopback rather than the pipe, and nothing a Drone says gates its own step, so it can finish the step it was on and be gated normally. It cannot be poked, redirected, told a verdict or handed a step back, and nothing it says from here is recorded.
+
+**Two costs are paid rather than avoided.** The turns between the last line Fleet read and the restart are unrecoverable, and so is what they spent — the harness reports a run's cost on its terminating line, so an adopted Drone's recorded spend is an undercount. And Fleet is deaf rather than the Drone being silent, so the liveness ladder eventually escalates a healthy adopted Drone; the instinct is right and the trigger is wrong, because no escalation trigger means *unheard*.
+
+**A Drone that is there and cannot be adopted is ended** — the bound is spent, or its worktree has gone. Killing it and restarting the step is always correct and costs the half-finished turn, and the Job's log says which of the two happened and why. So does a row in the Drone's own transcript, written where the missing turns are.
+
 **The liveness clock suspends at a human gate.** Why: there is nothing there to hear from. The rule was written when a Drone waited the gate out — it had no activity by construction, so every gate outlasting the heartbeat timeout escalated its own Job as `stalled`, and Design Plan, which gates on a person every iteration, hit that first and hardest. It now holds twice over, because `assigned_drone` is null at the gate and a null pointer suspends the clock on its own.
 
-While suspended, Fleet stops expecting heartbeats and `poke_limit` does not advance. **What bounds a Job sitting at a gate is Drone/Job timeout and worktree cleanup policy, not the liveness timer.** Fleet still reconciles dead processes against live Jobs on restart; a gate has no process to be missing, so what that reconciliation catches is a Drone that died on a step being worked.
+While suspended, Fleet stops expecting heartbeats and `poke_limit` does not advance. **What bounds a Job sitting at a gate is Drone/Job timeout and worktree cleanup policy, not the liveness timer.** Fleet still reconciles processes against live Jobs on restart; a gate has no process to be missing, so what that reconciliation catches is a Drone that was on a step being worked — dead or, since adoption, alive.
 
 **A healthy Drone accepts Redirect and Kill.** Both are available on a non-escalated Drone rather than reserved for escalated ones.
 

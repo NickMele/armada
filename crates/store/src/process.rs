@@ -2,35 +2,27 @@
 //!
 //! # A pid held only in memory is a pid a restart has lost
 //!
-//! `fleet::Drones` indexes a Job against its Drone's pid, and `Working` holds
-//! the session that pid belongs to. Both are memory, so a Fleet that comes back
-//! knows a step still names a Drone and has no way to ask what became of the
-//! process — which is why reconciliation asserted the Drone was gone rather
-//! than checking. This table is the pid crossing that gap.
+//! `fleet::Drones` indexes a Job against its Drone's pid and `Working` holds
+//! the session it belongs to. Both are memory, so a Fleet that comes back knows
+//! a step still names a Drone and has no way to ask what became of the process
+//! — which is why reconciliation asserted it was gone rather than checking.
 //!
-//! # The pid is not the identity, and a row that carried only a pid would lie
+//! # The pid is not the identity, and a row carrying only a pid would lie
 //!
-//! Pids are reused. A row saying "Job X is pid 4096" is answered "yes,
-//! something is there" by every liveness check on the machine, including for a
-//! process that took the number after the Drone died. So the row carries the
-//! second half `fleet::process::holder_of` reads: **when the process started**,
-//! absolute, as the operating system reports it. The pair is the identity, and
-//! the same pair is what `fleet::runtime` already uses to tell one Fleet from
-//! the pid it left behind.
+//! Pids are reused, and "Job X is pid 4096" is answered "yes, something is
+//! there" by every liveness check on the machine — including about whatever
+//! took the number after the Drone died. So the row carries the second half
+//! `fleet::process::holder_of` reads: **when the process started**, absolute,
+//! as the operating system reports it. That pair is the identity, and it is
+//! what `fleet::runtime` already tells one Fleet from a recycled pid with.
 //!
-//! The column is `TEXT` and nothing here parses it. It is an identity token
+//! The column is `TEXT` and nothing here parses it — an identity token
 //! belonging to whoever took the reading, compared for equality and never for
-//! order — see `fleet::process::StartedAt`, which is the type on the other
-//! side of it.
+//! order. `fleet::process::StartedAt` is the type on the other side.
 //!
-//! # Not a fold cache
-//!
-//! There is no event for it and nothing in [`crate::read`] rebuilds it, for
-//! [`crate::spend`]'s reason: a process existing is not a move. What writes the
-//! row is the spawn, what deletes it is the departure, and the two are the same
-//! pair of moments that write and clear `job_steps.assigned_drone` — so a row
-//! here with no pointer beside it is a departure that half-happened, which is
-//! the one disagreement a reader should treat as a fault.
+//! **Not a fold cache.** No event carries it and nothing in [`crate::read`]
+//! rebuilds it, for [`crate::spend`]'s reason: a process existing is not a
+//! move. The spawn writes the row and the departure deletes it.
 
 use core_model::{DroneId, JobId, StepId, Timestamp, Ulid};
 

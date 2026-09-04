@@ -3,7 +3,7 @@
 //! Split from [`adopting`](mod@crate::adopting) on the seam that module draws:
 //! that one is the capability — what an orphan is, what can be done to it, and
 //! the six things that cannot — and this one is Fleet doing it. `#61` is the
-//! subject and `[orphaned-drone-on-restart]` was the question.
+//! subject, and `docs/concepts/drone.md` carries the decision this answers.
 //!
 //! # Three roads, and the record says which was taken
 //!
@@ -18,16 +18,10 @@
 //! correct and costs the half-finished turn. It is reached when the bound is
 //! spent or the worktree has gone, and the Job's log says which.
 //!
-//! # What the record says about the gap
-//!
-//! [`Gap`] is written into the Drone's own transcript, appended to the file the
-//! previous Fleet was writing, before Fleet does anything else with the slot.
-//! So the transcript reads in order: the last line Fleet read, one row saying
-//! how long nothing was read and that nothing it says from here will be either,
-//! and then Fleet's own acts. **A row and not only a log line**, because the
-//! transcript is where a person goes to find out what a Drone did, and a gap
-//! that is only in the log is a gap that does not appear in the place it
-//! happened.
+//! The [`Gap`] goes into the Drone's own transcript, appended to the file the
+//! previous Fleet was writing and before Fleet does anything else with the
+//! slot — a row rather than only a log line, because the transcript is where a
+//! person goes to find out what a Drone did.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{Component, Envelope, FieldValue, Job, Level};
