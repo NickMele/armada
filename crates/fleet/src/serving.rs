@@ -13,7 +13,9 @@
 //!
 //! **Which refusal a failure is, and the code it carries, is
 //! [`refusing`](mod@crate::refusing)'s** — every `WireError` below is raised
-//! through `Fleet::refusal`.
+//! through `Fleet::refusal`. The trait's other half, whose caller is a Drone
+//! and which refuses through no status code at all, is
+//! [`tooling`](mod@crate::tooling)'s.
 //!
 //! **The reason costs a second read, and is not derived.** `JobSummary` carries
 //! the reason its last transition stored, which is in `job_events` and not on
@@ -44,7 +46,7 @@ use crate::overruling::Overruling;
 use crate::reporting::Filed;
 use crate::resume::Redirection as Instruction;
 use crate::wire::{
-    canonical, declared, recorded, reported, step_facts, step_moves, submitted, told, worktree_held,
+    canonical, declared, recorded, reported, step_facts, step_moves, submitted, worktree_held,
 };
 
 impl<H, V, W> Daemon for Fleet<H, V, W>
@@ -786,117 +788,53 @@ where
         self.summarised(&job).await
     }
 
-    /// The working Drone asking a person something it cannot answer from the
-    /// repository. Binding and refusals are `Fleet::ask_question`'s, under the
-    /// slot lock. **The receipt says taken, never answered**: what a person
-    /// chose arrives as a later turn, which is why this does not block — see
-    /// `crate::questioning`.
+    // The rest of the trait is the other caller. **A Drone makes these calls,
+    // not a person**, and no row of `crates/ipc/operations.toml` names one:
+    // they answer a `Receipt` through `NotRecorded` rather than a DTO through
+    // `Fleet::refusal`, so nothing said above about the redaction or the
+    // refusal path is theirs. They are [`tooling`](mod@crate::tooling)'s.
+
     async fn ask_question(
         &self,
         caller: api::Caller,
         asking: ipc::mcp::AskQuestion,
     ) -> Result<Receipt, NotRecorded> {
-        let job = self.placed(&caller)?;
-        Fleet::ask_question(self, &job, asking).await?;
-        Ok(Receipt {
-            word: "asked".to_string(),
-        })
+        self.asked(caller, asking).await
     }
 
-    /// The Evidence tool. **The one method here whose caller is a Drone.**
-    ///
-    /// It converts and maps, and decides nothing: the binding — which Job, which
-    /// step, which evidence type — is `Fleet::record_evidence`'s, under the lock
-    /// that makes it a single decision.
-    ///
-    /// Every path answers 200 with `isError` rather than a status code, because
-    /// a Drone reads a tool error and can act on it, and a 4xx reaches the model
-    /// as a broken server — which is something it stops trying.
     async fn submit_evidence(
         &self,
         caller: api::Caller,
         submission: SubmitEvidence,
     ) -> Result<Receipt, NotRecorded> {
-        let job = self.placed(&caller)?;
-        match self.record_evidence(&job, &submission).await {
-            Ok(recorded) => Ok(Receipt {
-                word: recorded.word().to_string(),
-            }),
-            Err(why) => Err(told(why)),
-        }
+        self.submitted(caller, submission).await
     }
 
-    /// Where the working Drone says this step's work will be.
-    ///
-    /// The same shape as the call above and the same reason for it: the binding
-    /// — which Job, which step — is `Fleet::declare_scope`'s, under the slot
-    /// lock, and every refusal answers 200 with `isError` so a Drone can read
-    /// it and declare again.
     async fn declare_scope(
         &self,
         caller: api::Caller,
         declaration: DeclareScope,
     ) -> Result<Receipt, NotRecorded> {
-        let job = self.placed(&caller)?;
-        let declared = Fleet::declare_scope(self, &job, &declaration).await?;
-        Ok(Receipt {
-            word: declared.word().to_string(),
-        })
+        self.declared(caller, declaration).await
     }
 
-    /// The working Drone asking the task's own scope to grow. Held open while
-    /// a Judge call runs, and **every outcome comes back through the tool** —
-    /// a Drone told nothing writes the file anyway.
     async fn request_scope(
         &self,
         caller: api::Caller,
         request: RequestScope,
     ) -> Result<Receipt, NotRecorded> {
-        let job = self.placed(&caller)?;
-        let widened = Fleet::request_scope(self, &job, &request).await?;
-        Ok(Receipt {
-            word: widened.word().to_string(),
-        })
+        self.widened(caller, request).await
     }
 
-    /// The Drone asking whether its work passes.
-    ///
-    /// It converts and maps like the two above, and decides as little: which
-    /// Checks, what they are run against and what bounds the asking are all
-    /// `Fleet::run_checks`'s, under the slot lock that binds them to one step.
-    ///
-    /// **What comes back is a report and never a verdict.** The step is exactly
-    /// where it was when the call arrived, whatever the Checks said.
     async fn run_checks(&self, caller: api::Caller) -> Result<CheckReport, NotRecorded> {
-        let job = self.placed(&caller)?;
-        Ok(Fleet::run_checks(self, &job).await?)
+        self.checked(caller).await
     }
 
-    /// The Drone asking for one more Job to exist.
-    ///
-    /// The same shape as the three above: it places the caller, converts, and
-    /// decides nothing. **What is different is what a success is** — the other
-    /// three answer about the Job the call was made on, and this one answers
-    /// with the id of a record that did not exist a moment ago.
-    ///
-    /// `crate::sub_dispatch` holds whether the caller was allowed to ask, and
-    /// the refusal reaches the Drone as a tool error it can read rather than a
-    /// status code it can only retry.
     async fn dispatch_job(
         &self,
         caller: api::Caller,
         dispatch: DispatchJob,
     ) -> Result<Receipt, NotRecorded> {
-        let job = self.placed(&caller)?;
-        match Fleet::sub_dispatch(self, &job, &dispatch).await {
-            // The minted id, and nothing else. A Drone needs it to name this
-            // Job in a later call's `after`, and it needs nothing else — the
-            // Job's state is not knowable yet and a receipt implying it were
-            // would be the verdict `Receipt` exists to have no room for.
-            Ok(minted) => Ok(Receipt {
-                word: minted.as_str().to_string(),
-            }),
-            Err(why) => Err(why.into()),
-        }
+        self.dispatched(caller, dispatch).await
     }
 }
