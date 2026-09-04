@@ -252,12 +252,10 @@ export function InsideAJob({
               because it is what there is to read at the one moment the run has
               nothing in it. */}
           {/* **No well around it, unlike the log below.** `armada-inside__fleet`
-              bounds its content at 15rem and scrolls the surplus, which is right
-              for a stream that has no end and wrong for a reading that does: on
-              screen it cut the panel through the middle of a line, and what fell
-              below the fold was the process table, the disk figure and the
-              instant the figures were read at — the three things the panel is
-              for. It is a card in its own right and it draws its own surface. */}
+              bounds at 15rem and scrolls the surplus — right for a stream with
+              no end, wrong for a reading that ends. It cut the panel mid-line
+              and hid the table, the disk figure and the instant they were read
+              at. This is a card already and draws its own surface. */}
           {machine === undefined ? null : (
             <>
               <span className="armada-screen__eyebrow">{machineLabel}</span>

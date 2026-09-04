@@ -599,14 +599,19 @@ function examined(found: Finding, looks: Look[], reading: Held): JobExamined {
 
 /**
  * A Drone working, and the two processes that says. **The one Fleet wrote down
- * leads**, and the build it started is descended from it — which is the whole
- * reason the reading is a list and not a pid.
+ * leads**, and the build it started is descended from it — the same
+ * `cargo build --workspace --locked` the step's activity log is showing, which
+ * is the whole reason the reading is a list and not a pid.
+ *
+ * **Named by its command and never by its vendor.** A process is `node` or
+ * `cargo` here because that is what `ps` answers; the gate's rule against a
+ * vendor literal outside `crates/adapters` caught the first spelling of this.
  */
 export const HOLDS_RUNNING: Held = holds({
   processes: [
     {
       pid: 41233,
-      command: "claude",
+      command: "node",
       cpu_percent: 8.2,
       memory_bytes: 402_653_184,
       running_for: "06:11",
@@ -614,7 +619,7 @@ export const HOLDS_RUNNING: Held = holds({
     },
     {
       pid: 41287,
-      command: "node",
+      command: "cargo",
       cpu_percent: 61.4,
       memory_bytes: 268_435_456,
       running_for: "00:12",
@@ -669,7 +674,7 @@ export const HOLDS_IDLE: Held = holds({
   processes: [
     {
       pid: 41233,
-      command: "claude",
+      command: "node",
       cpu_percent: 0.1,
       memory_bytes: 536_870_912,
       running_for: "21:40",
