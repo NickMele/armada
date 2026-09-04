@@ -195,7 +195,18 @@ impl Declaring {
             );
         }
         if !scope.exclude_paths().is_empty() {
-            block.push_str("\n\nDo not name these, and do not change them:");
+            // **It says there is a route**, and until `#417` it did not. A
+            // Drone told only "do not name these" and then finding the fix
+            // needs one of them fails its part or works around it, and the
+            // person finds out at the end. These are boundaries set before
+            // anybody read the code, so whether one is right for this
+            // particular fix is a real question with a real answer.
+            block.push_str(
+                "\n\nThis part of the work is meant to stay out of these. If \
+                 the fix you find genuinely needs one of them, say so with the \
+                 scope request tool and say why — somebody will look at whether \
+                 it belongs here, and you keep working while they do:",
+            );
             for path in scope.exclude_paths() {
                 block.push_str("\n  - ");
                 block.push_str(path.as_str());
