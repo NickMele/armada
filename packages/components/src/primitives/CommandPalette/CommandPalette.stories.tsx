@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { Bell, ClipboardList, Settings, Stethoscope } from "lucide-react";
+import { Bell, ClipboardList, FileCog, HardDrive, Settings, Stethoscope } from "lucide-react";
 import { expect } from "storybook/test";
 
 import { actsIn, ALIASES, globalActs, type Action } from "../../actions";
@@ -27,18 +27,38 @@ type Story = StoryObj<typeof CommandPalette>;
 const CONTEXT = "job_2d90bb — coalesce the session refresh";
 
 /**
- * The rail, which is four destinations. Each glyph is the icon registry's own
- * assignment for that surface; the registry's `bridge_surfaces` row carries
- * none by design, because a fifth glyph standing for all four is not a thing —
- * which is also why the rail expands into rows here rather than that one row
- * being drawn. Helm is not among them: it is a sibling surface with a registry
- * row of its own, and it arrives through `globalActs`.
+ * Where a person can go: the rail's four destinations, and one that is not in
+ * the rail. Each glyph is the icon registry's own assignment for that surface;
+ * the registry's `bridge_surfaces` row carries none by design, because a fifth
+ * glyph standing for all four is not a thing — which is also why the rail
+ * expands into rows here rather than that one row being drawn. Helm is not
+ * among them: it is a sibling surface with a registry row of its own, and it
+ * arrives through `globalActs`.
+ *
+ * **`Held worktrees` carries no digit, and this is where that is visible.**
+ * `⌘1–⌘4` is bound to Bridge surfaces *in rail order*, so a digit is a place
+ * in the rail; the held worktrees are reached from the Board's head and have
+ * no such place, and the two digits going spare belong to Alerts and to Helm.
+ * A blank key column beside four filled ones is the honest drawing of that,
+ * and it is what a person looking for the missing binding should be shown.
+ *
+ * The Manifest drew `clipboard-list` here until this row was added — the Job
+ * Board's glyph, on a second destination, in the one place the set is read as
+ * a set. `file-cog` is the registry's assignment and its own row reserves it
+ * to the Manifest surface and the file.
  */
 const RAIL: PaletteEntry[] = [
   { id: "nav-board", section: "navigation", label: "Job Board", shortcut: "⌘1", icon: ClipboardList },
   { id: "nav-alerts", section: "navigation", label: "Alerts", shortcut: "⌘2", icon: Bell },
   { id: "nav-doctor", section: "navigation", label: "Doctor", shortcut: "⌘3", icon: Stethoscope },
-  { id: "nav-manifest", section: "navigation", label: "Manifest", shortcut: "⌘4", icon: ClipboardList },
+  { id: "nav-manifest", section: "navigation", label: "Manifest", shortcut: "⌘4", icon: FileCog },
+  {
+    id: "nav-worktrees",
+    section: "navigation",
+    label: "Held worktrees",
+    aliases: ["disk", "held disk"],
+    icon: HardDrive,
+  },
 ];
 
 /** Jobs carry no key. Opening a specific job is a search result, not an act. */
@@ -234,6 +254,45 @@ export const AnAliasFindsTheLexiconTerm: Story = {
     await expect(kill).toHaveAccessibleName("Kill x");
     await expect(kill.querySelector("mark")).toBeNull();
     await expect(canvas.queryByText("terminate")).toBeNull();
+  },
+};
+
+/**
+ * **A place with no binding is still a place.** The held worktrees are reached
+ * from the Board's head and sit in no rail slot, so there is no digit to draw
+ * beside them — and the row is here anyway, because the rule the palette keeps
+ * is that nothing exists outside it, not that everything has a key.
+ *
+ * The query is "disk", the word on the control that has reached this screen
+ * since it shipped. The row reads `Held worktrees`, which is the title of the
+ * screen it lands on.
+ */
+export const APlaceWithNoBindingIsStillFound: Story = {
+  args: { ...board, defaultQuery: "disk" },
+  /**
+   * Two things a rendering cannot state: the row was reached by a word that is
+   * not in its label, and its accessible name carries no binding where every
+   * other Navigation row's ends in one. The second is read after the query is
+   * cleared, because "disk" narrows Job Board away — and Job Board is the row
+   * the claim is against.
+   *
+   * Broken on purpose by dropping the aliases from the entry, which loses the
+   * row entirely and fails on the first line rather than on the name.
+   */
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByRole("option", { name: /Held worktrees/ })).toHaveAccessibleName(
+      "Held worktrees",
+    );
+
+    await userEvent.clear(canvas.getByRole("combobox"));
+
+    // Two caps and so two words: a chord is drawn as one `Kbd` per key.
+    await expect(canvas.getByRole("option", { name: /^Job Board/ })).toHaveAccessibleName(
+      "Job Board ⌘ 1",
+    );
+    await expect(canvas.getByRole("option", { name: /Held worktrees/ })).toHaveAccessibleName(
+      "Held worktrees",
+    );
   },
 };
 
