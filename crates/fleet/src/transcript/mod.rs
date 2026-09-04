@@ -43,7 +43,7 @@ use tokio::task::JoinHandle;
 use crate::clock::Clock;
 use row::Line;
 
-pub use backfill::{arguments, history, HISTORY};
+pub use backfill::{arguments, history, last_heard, HISTORY};
 
 /// How many rows may be waiting to be written.
 ///

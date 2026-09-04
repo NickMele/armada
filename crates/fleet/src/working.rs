@@ -32,11 +32,12 @@ use adapter_traits::{AgentHarness, DroneEvent, Footprint, Worktree};
 use core_model::{DeclaredPaths, DroneId, JobId, RepoPath, StepId, Timestamp};
 use tokio::process::ChildStderr;
 
+use crate::adopting::{Adopted, Session};
 use crate::converging::{elapsed, Chain};
 use crate::drone::{Ending, Started};
 use crate::footprint::Publishing;
 use crate::questioning::Question;
-use crate::session::{DroneSession, LiveSession, Occasion};
+use crate::session::{LiveSession, Occasion};
 use crate::transcript::{Tap, Taps};
 use crate::watch::{Drained, Watching};
 use store::DroneSpend;
@@ -66,7 +67,11 @@ pub(crate) struct Working {
     /// [`stood_down`](Working::stood_down).
     step: StepId,
     worktree: Worktree,
-    session: DroneSession,
+    /// The Drone, and which kind it is. **A Fleet that restarted holds
+    /// [`Session::Adopted`]** — the same slot, the same acts offered, and every
+    /// one that speaks refused because there is no pipe to speak into. See
+    /// `crate::adopting`.
+    session: Session,
     transcript: Watching,
     /// The same sinks the reader task fans a Drone's lines out to, held here so
     /// that what **Armada and Fleet** did reaches the record too.
@@ -82,7 +87,13 @@ pub(crate) struct Working {
     /// Whatever the CLI complains about. **Never parsed**, and held rather than
     /// dropped: dropping it closes the pipe, and a Drone writing to a closed
     /// stderr takes a signal for it.
-    _complaints: ChildStderr,
+    ///
+    /// **`None` on an adopted Drone**, whose stderr went with the Fleet that
+    /// held it. Nothing here can reopen it, and the Drone has been writing into
+    /// a closed pipe since that moment — which is one of the reasons an orphan
+    /// is unlikely to survive long, and is not a reason to pretend Fleet still
+    /// has the far end.
+    _complaints: Option<ChildStderr>,
     /// Where the Drone said this step's work would be. **`None` until it
     /// declares**, which is a different answer from an empty declaration.
     declared: Option<DeclaredPaths>,
@@ -303,10 +314,69 @@ impl Working {
             drone,
             step,
             worktree,
-            session: started.session,
+            session: Session::Spawned(started.session),
             transcript: Watching::reading(started.transcript, harness, each.clone()),
             taps: each,
-            _complaints: started.complaints,
+            _complaints: Some(started.complaints),
+            declared: None,
+            drifted: Vec::new(),
+            step_began: at.clone(),
+            calls_before: 0,
+            rested_before: 0,
+            chain: Chain::Working,
+            heard_at: at,
+            heard: 0,
+            answering: None,
+            asked: None,
+            told_after: AtomicUsize::new(0),
+            pokes: 0,
+            publishing: Publishing::default(),
+            entered_with: None,
+            checking_since: None,
+            checked_for: Duration::ZERO,
+            dry_runs: 0,
+        }
+    }
+
+    /// Take a slot back over a Drone this Fleet did not spawn.
+    ///
+    /// **The same invariant [`holding`](Working::holding) keeps, assembled from
+    /// what a restart still has.** Which Job, which step, which worktree and
+    /// which process all come off the record; what is missing is the two pipes,
+    /// and the two fields that held them say so rather than being faked —
+    /// [`Watching::unheard`] for the transcript, `None` for the complaints.
+    ///
+    /// **The taps are a fresh handle onto the same file.** A transcript is
+    /// named by the `drone_id`, which has not changed, so Fleet appends to what
+    /// the Drone had already written instead of opening a second file that
+    /// splits one run in two. `Fleet::adopted` writes the gap row through them
+    /// before anything else.
+    ///
+    /// **Every counter starts at zero and that is a decision, not an
+    /// oversight.** `calls_before`, `rested_before` and `pokes` are readings of
+    /// what Fleet observed, and Fleet observed none of the gap — carrying a
+    /// count forward would measure this step against a norm using a number
+    /// nobody took. What is *not* zeroed is the spend, which is on the record
+    /// rather than in the slot: money the Drone spent is a fact about the world
+    /// and survives the restart in `job_drone_spend`. It is an undercount by
+    /// whatever the gap cost, because the harness reports a run's cost on the
+    /// terminating line that went into the dead pipe.
+    pub(crate) fn adopting(
+        adopted: Adopted,
+        worktree: Worktree,
+        taps: Taps,
+        at: Timestamp,
+    ) -> Working {
+        let each = taps.each();
+        Working {
+            job: adopted.job().clone(),
+            drone: adopted.drone().clone(),
+            step: adopted.step().clone(),
+            worktree,
+            session: Session::Adopted(adopted),
+            transcript: Watching::unheard(),
+            taps: each,
+            _complaints: None,
             declared: None,
             drifted: Vec::new(),
             step_began: at.clone(),
@@ -782,7 +852,7 @@ impl Working {
         self.session.exited().await
     }
 
-    pub(crate) fn session(&self) -> &DroneSession {
+    pub(crate) fn session(&self) -> &Session {
         &self.session
     }
 

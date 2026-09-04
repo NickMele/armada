@@ -27,13 +27,13 @@
 use std::collections::VecDeque;
 use std::path::PathBuf;
 
-use core_model::JobId;
+use core_model::{DroneId, JobId, Timestamp};
 use ipc::{CallArguments, Saw, TranscriptRow};
 use serde::Deserialize;
 use tokio::fs;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
-use crate::transcript::log_of;
+use crate::transcript::{log_of, transcript_of};
 
 /// How many rows a viewer is handed before the live ones.
 ///
@@ -130,7 +130,41 @@ pub async fn arguments(repo_root: &str, job: &JobId, call: &str) -> Option<CallA
     None
 }
 
+/// The instant on the last row of one Drone's transcript.
+///
+/// **The far edge of what Fleet knows about a Drone it is taking back over.**
+/// A row is written as Fleet's line loop sees it, so the last one is by
+/// construction the last thing the previous Fleet read — and everything the
+/// Drone said after it went into a pipe with no reader. `crate::adopting::Gap`
+/// is what carries it, and `docs/concepts/observe.md` is why the file is the
+/// place to ask.
+///
+/// **`None` for a file that is not there, is empty, or holds no readable row.**
+/// A Drone spawned and adopted before it said anything reads that way, and so
+/// does a truncated file — both are a wider gap than any instant would claim,
+/// which is why nothing here falls back to the spawn instant.
+///
+/// It reads the whole file rather than seeking, for the reason `history` reads
+/// it: a JSONL file has no index, the last line is not at a known offset, and
+/// this is asked once per adopted Drone at a boot.
+pub async fn last_heard(repo_root: &str, drone: &DroneId) -> Option<Timestamp> {
+    let file = fs::File::open(transcript_of(repo_root, drone)).await.ok()?;
+    let mut lines = BufReader::new(file).lines();
+    let mut last = None;
+    while let Ok(Some(line)) = lines.next_line().await {
+        if let Ok(row) = ipc::decode::<TranscriptRow>("a transcript row", line.as_bytes()) {
+            last = Some(Timestamp::from_rfc3339(row.ts.as_str()));
+        }
+    }
+    last
+}
+
 /// Every transcript this Job's log names, in the order it names them.
+///
+/// **Each file once.** A Fleet that adopts a Drone opens the same transcript
+/// again and writes a second `drone transcript opened` line for it, which is
+/// the record of the restart — but a path read twice is a history showing every
+/// row of that Drone twice.
 async fn transcripts(repo_root: &str, job: &JobId) -> Vec<PathBuf> {
     let Ok(log) = fs::File::open(log_of(repo_root, job)).await else {
         return Vec::new();
@@ -143,7 +177,10 @@ async fn transcripts(repo_root: &str, job: &JobId) -> Vec<PathBuf> {
         };
         if entry.msg == OPENED {
             if let Some(at) = entry.fields.transcript {
-                named.push(PathBuf::from(at));
+                let at = PathBuf::from(at);
+                if !named.contains(&at) {
+                    named.push(at);
+                }
             }
         }
     }
