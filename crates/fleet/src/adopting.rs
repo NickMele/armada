@@ -19,7 +19,10 @@
 //! **So adoption is of the process and the record, never of the pipe.** An
 //! adopted Drone can finish its step and be gated, because evidence arrives
 //! over the loopback and nothing a Drone says gates its own step. It cannot be
-//! handed back to, poked, redirected or told a verdict.
+//! handed back to, poked, redirected or told a verdict. **So it is silent to
+//! Fleet by construction**, and `crate::silence` escalates it once the quiet
+//! budget is spent — under `unheard` rather than `stalled`, off
+//! [`Session::unheard`].
 
 use std::io;
 use std::num::NonZeroU32;
@@ -225,6 +228,28 @@ impl Session {
         match self {
             Session::Spawned(_) => None,
             Session::Adopted(adopted) => Some(adopted),
+        }
+    }
+
+    /// Whether Fleet holds no way of reading what this Drone says.
+    ///
+    /// **The condition, and deliberately not the cause.** What it answers is
+    /// whether there is a read end on the other side of this Drone's output —
+    /// not whether the Drone was adopted, which is merely the only road into
+    /// that state today. `crate::silence` escalates on this rather than on
+    /// [`adopted`](Session::adopted) for exactly that reason: a second way to
+    /// lose the pipe should reach the same trigger without minting a second
+    /// one, and a method called `is_adopted` at that call site would have
+    /// written the cause into the badge.
+    ///
+    /// **It is the same fact the six refusals below are**, read as a question
+    /// instead of taken as an error. A caller deciding *what to say about* a
+    /// Drone cannot get the answer by trying to speak to it, because trying
+    /// costs a turn and spends a poke.
+    pub(crate) fn unheard(&self) -> bool {
+        match self {
+            Session::Spawned(_) => false,
+            Session::Adopted(_) => true,
         }
     }
 

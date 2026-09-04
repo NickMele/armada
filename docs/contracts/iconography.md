@@ -673,3 +673,28 @@ should paper over.
   Board can tell this row from an `interrupted` row on the words alone;
   if they can, it stays wordless, the same way `[no-report-glyph]` above
   and `[doctor-warn-glyph]` were left.
+
+- **[unheard-glyph]** Which glyph, if any, carries the escalation reason
+  `unheard` — the Job whose Drone is working normally with nobody on the
+  other end of it? It ships drawing its verb alone, **nothing is reading
+  this Drone**, beside the escalation reasons that already draw one.
+  What was looked at and refused: `unplug` is `interrupted`'s and its own
+  row calls the visible gap between the two fragments *connection lost*,
+  which is the exact false claim here — the connection is gone and the
+  Drone is not, and a person who reads a severed plug goes looking for a
+  process that has died; `octagon-alert` is reserved to `stalled` by its
+  own note, and `stalled` is the badge this reason is being split away
+  from, so lending it would undo the split at the one place a reader
+  looks; `eye` is reserved to Review and its row says nothing else may
+  use it; `megaphone` is `job_status.escalated`'s and its row bans an
+  escalation reason outright; `bell` is Alerts'. What makes it hard is
+  that this is the only row in the badge set that means **a thing is
+  alive and cannot be read** — every candidate says either the thing
+  stopped or the connection to it broke, and both of those are half of
+  it said as the whole. The three questions above reach past it:
+  `[no-report-glyph]` is an absence of a reply from something that could
+  have replied, `[drone-killed-glyph]` is a person having already acted,
+  `[scope-refused-glyph]` is a machine declining a request. What decides
+  it is whether a person scanning the Board can tell this row from a
+  `stalled` row on the words alone; if they can, it stays wordless, the
+  same way the three above were left.

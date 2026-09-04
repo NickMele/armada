@@ -409,6 +409,40 @@ Step-level: it is measured against a step's turn count and a step's wall-clock, 
 Judge owns the routing.
 """
 
+[triggers.unheard]
+kind = "Trigger"
+level = "Job"
+meaning = "The Drone is alive and working and Fleet holds no way of reading what it says, so the silence the liveness ladder measured is Fleet's own deafness rather than anything the Drone did."
+in_code = ""
+notes = """
+**The condition is that Fleet cannot read it, never how it got there.** Adoption is the one road into this today — `crates/fleet/src/adopting.rs`, where both pipes died with the Fleet that held them and no process can reopen another's stdin or stdout — and a trigger meaning *adopted* would be a trigger that has to be re-minted the first time a second road appears. What the badge claims is the state, and `crate::adopting::Session::unheard` is the reading it comes from.
+
+**Not `stalled`, and this row exists because that word was wrong out loud.** `stalled` is Fleet having no signal from a Drone that had been active, which is a fact about the Drone — the process died mid-work, or the relay never fired. Here the process is fine, the relay is fine, and the reader is gone. The two want opposite responses: `stalled` recommends a redispatch, and redispatching this one would end a Drone that is at that moment finishing its step. Its `silent` sub-kind is further off still, being a Drone that ran to completion having called nothing.
+
+**Not `interrupted`.** That is a Job marked `running` with no matching OS process. There is a matching process here and it was proved — `reattaching` asks the machine and compares the start instant — which is what makes the Drone worth keeping rather than replacing.
+
+**Not `no_report`.** That is a Drone that could hear an instruction and did not answer it. This one was never sent anything, because there is nothing to send into; a poke against it fails at the pipe rather than going unanswered.
+
+**The escalation is not suppressed, and that is deliberate.** Nobody is watching this Drone, which is worth a person knowing whether or not the work is going well — so it reaches a person by the road every other trigger reaches one, after the quiet budget is spent. What the budget buys is the useful case: an adopted Drone can still submit evidence over the loopback and be gated, and a Job that clears its step leaves `running`, which suspends the ladder before it ever gets here. So this fires only on the Drone that neither finished nor was heard.
+
+**The Drone is not reaped.** The poke ladder holds its Drone, and this arrives by the same road: the process, the worktree and every earlier step's work are all there, and the recorded spend is an undercount because the harness reports a run's cost on a terminating line that goes into a dead pipe.
+
+Job-level, for `stalled`'s own reason and more plainly: a Drone Fleet cannot hear is unhearable on every step it has left, not on the one it happened to be standing on.
+
+Fires the default edge, `running -> escalated`.
+
+`in_code` is empty rather than "Not yet" for `gate_undecided`'s reason — the row was authored here and has no source value to carry.
+"""
+why = """
+`#61` built adoption and found that the ladder would call its own healthy Drone `stalled`, because an adopted Drone is silent to Fleet by construction and silence is the only thing the ladder measures. **The instinct was right and the word was wrong**: handing it to a person is correct, and telling them it stopped working is not. That agent refused to mint a registry word on its own judgement and filed `#410` instead.
+
+It is `#334`'s shape a third time, after `no_report` and `scope_refused` — two detections folded into one badge because the thing that tells them apart did not exist as a word.
+
+Suppressing the escalation was the alternative, on the reading that an adopted Drone is healthy and a person interrupted about a Job that is going fine has been interrupted for nothing. It is refused because the health is not the claim being made: what the Board would then say is that Fleet is watching a Job it is not watching, and the whole of the fix is that a person is told which.
+
+Widening `stalled` with a sub-kind was the other, and is refused for `no_report`'s reason read the same way round. A sub-kind renders as its parent, so `escalation_reason` would still say `stalled` on the wire and draw **stalled** on the badge — which is the one thing being corrected.
+"""
+
 [triggers.would_not_start]
 kind = "Trigger"
 level = "Job"
