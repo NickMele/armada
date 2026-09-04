@@ -19,7 +19,7 @@
 //! | That Fleet hands the right facts in | Six of [`ipc::JobDetail::of`]'s twelve arguments are facts a Job does not carry. A Fleet passing `None` for the footprint would still pass this file, and `fleet::wire::step_facts` is `pub(crate)` |
 //! | What the Job changed, file by file | `ipc::JobFootprint` is built by `fleet::footprint::kept`, `pub(crate)`. Building one here would assert that a struct has fields |
 //! | The evidence each step submitted, and what each step declared | `fleet::wire::submitted` and `declared_check`, `pub(crate)` for the same reason. What survives is the gate's *ruling* on that evidence, and what each Check **did** |
-//! | **Whether the work landed** | `#337`. `ipc::JobDelivery` has no field for a merge, so the assertion would not compile — and a milestone's test may not stop an earlier milestone's test running. Named here until the field exists, and red the day it does |
+//! | That anybody *is* asked what became of it | The sweep is `fleet::noticing`, `pub(crate)`, and asking needs a forge and a network. What holds here is that a merge the record already knows about survives the wire — `fleet`'s own tests assert that the sweep records one |
 
 // The bench is shared with the other milestones' tests and none of them uses
 // all of it. Every item in it is reached from one of the three.
@@ -31,7 +31,7 @@ use fleet::Ruling;
 use ipc::{JobList, JobSummary, UnreadableJob};
 use testkit::{FakeJudge, FakeWorkProduct};
 
-use bench::board::{detail, on_its_branch, received_detail, received_list, step_facts};
+use bench::board::{delivered, detail, on_its_branch, received_detail, received_list, step_facts};
 use bench::{a_fix_diff, a_root_cause_note, bug_workflow_with_the_fix_judged, states, Bench, Run};
 
 // ---------------------------------------------------------------------------
@@ -331,6 +331,67 @@ async fn a_detail_assembled_with_nothing_still_says_what_the_job_is() {
 // ---------------------------------------------------------------------------
 
 /// The Board row, built the way `fleet::serving` builds one.
+/// **The one question a person has about finished work.** #337: a Job could say
+/// it opened a pull request and could not say whether anybody merged it, so the
+/// board answered everything except the thing it was opened to find out.
+///
+/// Asserted after the wire, like every other case here, because `landed` is
+/// serialised as a word and a Board that read a different word would draw a
+/// pull request still waiting for somebody.
+#[tokio::test]
+async fn opening_a_finished_job_says_whether_its_pull_request_merged() {
+    let (run, reason) = a_job_that_finished().await;
+    let address = String::from("https://forge.invalid/armada/pull/1");
+    let detail = delivered(
+        &run.job,
+        reason.as_ref(),
+        &[],
+        ipc::JobDelivery {
+            commit: Some(String::from("fdc4cf46")),
+            pushed: Some(String::from("origin/armada/fix-the-readers-bound")),
+            pull_request: Some(address.clone()),
+            landed: Some(ipc::Settled::Merged),
+        },
+    );
+
+    let received = received_detail(&detail);
+    let delivery = received
+        .delivery
+        .expect("a finished Job's branch went somewhere");
+    assert_eq!(
+        delivery.landed,
+        Some(ipc::Settled::Merged),
+        "did this land — the question the record could not answer"
+    );
+    assert_eq!(
+        delivery.pull_request,
+        Some(address),
+        "and which pull request it was, so the answer is checkable"
+    );
+}
+
+/// **Absent, not `open`.** A pull request nobody has settled and one nobody has
+/// asked about are one silence, and a Board shown a value for either would be
+/// drawing the fact that nothing has happened.
+#[tokio::test]
+async fn a_pull_request_nobody_has_settled_says_nothing_rather_than_open() {
+    let (run, reason) = a_job_that_finished().await;
+    let detail = delivered(
+        &run.job,
+        reason.as_ref(),
+        &[],
+        ipc::JobDelivery {
+            commit: Some(String::from("fdc4cf46")),
+            pushed: Some(String::from("origin/armada/fix-the-readers-bound")),
+            pull_request: Some(String::from("https://forge.invalid/armada/pull/1")),
+            landed: None,
+        },
+    );
+
+    let received = received_detail(&detail);
+    assert_eq!(received.delivery.expect("a delivery").landed, None);
+}
+
 fn row(run: &Run, reason: &Option<core_model::TransitionReason>) -> JobSummary {
     JobSummary::of(&run.job, reason.as_ref(), None, false, None)
 }
