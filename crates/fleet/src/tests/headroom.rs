@@ -423,8 +423,12 @@ async fn a_running_job_is_left_alone_when_the_machine_fills() {
 
 /// A Drone that speaks once and leaves, so the slot empties and a restart is
 /// not refused for the reason `restarting` names — `DroneStillThere`.
+///
+/// **It leaves after it has been told**, and `crate::tests::planted` owns why:
+/// `echo BUSY` alone races `start`'s first write, and a busy machine turns this
+/// into a spawn that failed rather than a Drone that left.
 fn a_drone_that_leaves() -> testkit::FakeHarness {
-    testkit::FakeHarness::running("/bin/sh", &["-c", "echo BUSY"]).reading(
+    crate::tests::planted::a_drone_that_leaves("BUSY").reading(
         "BUSY",
         vec![adapter_traits::DroneEvent::Called {
             tool: String::from("Read"),

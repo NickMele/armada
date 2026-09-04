@@ -19,6 +19,8 @@
 //! in a shell reached every Drone. The assertion is on the child's own reading,
 //! not on what Fleet intended.
 
+use std::time::Duration;
+
 use adapter_traits::{
     DroneEvent, DroneSpawnConfig, Environment, McpConfig, Model, Prompt, Speaker, Toolbelt,
     Worktree,
@@ -203,10 +205,15 @@ async fn a_drone_that_exits_before_it_is_told_does_not_take_fleet_with_it() {
     assert_eq!(2 + 2, 4, "and this process is still running to say so");
 }
 
+/// How long a write has to be refused in. Spent only on a run that is already
+/// wrong — see the case below, where every ordinary pass answers on the first
+/// or second write.
+const A_PIPE_HAS_LONG_ENOUGH: Duration = Duration::from_secs(30);
+
 #[tokio::test]
 async fn telling_a_terminated_drone_is_an_error_and_fleet_survives_it() {
-    // The deterministic half of the case above: the child is gone and reaped
-    // before the write, so the pipe is certainly closed.
+    // The deterministic half of the case above: `terminate` signals the child
+    // and *waits*, so the child is gone and collected before the write.
     let at = TempDir::new();
     let started = start(&FakeHarness::that_listens(), &config(&at))
         .await
@@ -214,10 +221,33 @@ async fn telling_a_terminated_drone_is_an_error_and_fleet_survives_it() {
 
     started.session.terminate().await.expect("it can be ended");
 
-    let told = started
-        .session
-        .say(&crate::Turn::first("a turn nobody will read"))
-        .await;
+    // **Written until the pipe answers, and the reason is not this Drone.**
+    // `#443`: the child being gone does not on its own make the read end of its
+    // stdin closed, because every fork in this process inherits every
+    // inheritable descriptor and only drops them at `exec` — and this suite
+    // forks constantly, a `ps` per liveness probe and a shell per Drone. A
+    // write caught inside somebody else's fork window lands in the pipe buffer
+    // and answers `Ok`, and a single write would read that as a turn that
+    // vanished. Measured at load average 40: the first write succeeded and the
+    // second, three milliseconds later, answered `EPIPE`.
+    //
+    // **Bounded by `exec`, not by a quiet machine.** Every holder of that
+    // descriptor is a process on its way to `exec`, so the window closes
+    // whatever the load is; the timeout is here to fail loudly rather than hang
+    // if one somehow does not.
+    let told = tokio::time::timeout(A_PIPE_HAS_LONG_ENOUGH, async {
+        loop {
+            let told = started
+                .session
+                .say(&crate::Turn::first("a turn nobody will read"))
+                .await;
+            if told.is_err() {
+                return told;
+            }
+        }
+    })
+    .await
+    .expect("nothing ever refused a write to a Drone that had been reaped");
     assert!(
         told.is_err(),
         "a write to a dead Drone is an error, not a turn that vanished"

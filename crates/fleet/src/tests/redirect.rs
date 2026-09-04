@@ -112,8 +112,12 @@ fn a_drone_that_only_ticks() -> FakeHarness {
 }
 
 /// A Drone that speaks once and leaves, emptying the slot under an escalation.
+///
+/// **It leaves after it has been told, and `crate::tests::planted` owns why**:
+/// `echo BUSY` alone races `start`'s first write, and a busy machine turns this
+/// fixture into a spawn that failed rather than a Drone that left.
 fn a_drone_that_leaves() -> FakeHarness {
-    FakeHarness::running("/bin/sh", &["-c", "echo BUSY"]).reading("BUSY", called())
+    crate::tests::planted::a_drone_that_leaves("BUSY").reading("BUSY", called())
 }
 
 /// A Fleet on one step with that Drone on it. **The Judge fails every call**:

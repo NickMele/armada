@@ -14,6 +14,7 @@ use testkit::FakeWorkProduct;
 use tower::ServiceExt;
 
 use crate::tests::daemon::{a_fleet, a_proposal, worktree_directory};
+use crate::tests::planted::the_drone_it_holds_is_gone;
 use crate::tests::tmp::TempDir;
 
 pub(super) async fn get(app: &Router, uri: &str) -> (StatusCode, Vec<u8>) {
@@ -129,6 +130,11 @@ async fn the_branch_survives_a_fleet_restart() {
             .expect("a Job at the gate");
         worktree_directory(&home, job.id());
         fleet.approve(job.id()).await.expect("released to run");
+        // **Ended here rather than left to the drop.** A Drone outlives the
+        // Fleet that spawned it by design, and one still in the process table
+        // is one the second Fleet adopts — which would leave this Job
+        // `running`. See `crate::tests::planted`.
+        the_drone_it_holds_is_gone(&fleet).await;
         job.id().clone()
     };
     let restarted = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
