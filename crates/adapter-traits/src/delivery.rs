@@ -61,6 +61,36 @@ pub enum Standing {
     Behind { commits: usize },
 }
 
+/// Where the local base branch stands against the one the forge has.
+///
+/// **A different question from [`Standing`], and the one nothing was asking.**
+/// `Standing` compares the Job's branch with the base *on this machine*, which
+/// is what a rebase needs. A pull request is opened against the base *on the
+/// remote*, and nothing compared those two — so a base carrying commits the
+/// remote has not got produced a pull request that carried them as well, under
+/// a Job that never touched the files in them.
+///
+/// **Behind is carried alongside ahead** even though only ahead makes a pull
+/// request wrong. They are one `graph_ahead_behind` call, and a base behind its
+/// remote is a rebase that used a stale reading — worth saying in the same
+/// breath rather than discovered separately later.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BaseOnTheRemote {
+    /// Nothing to say: they hold the same commits, or the base tracks no
+    /// remote branch at all and there is no second reading to compare with.
+    Agreed,
+    /// They hold different commits. `remote` is the tracking branch's own name
+    /// — `origin/main` — because that is what a person types to look at it.
+    Apart {
+        remote: String,
+        /// Commits the local base has that the remote's has not got. **These
+        /// are the ones a pull request would carry.**
+        ahead: usize,
+        /// Commits the remote's base has that the local one has not got.
+        behind: usize,
+    },
+}
+
 /// What catching up to the base came to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BroughtUpToDate {
@@ -227,6 +257,18 @@ pub trait Delivery {
     /// Where the branch stands against the base. **Asked before anything is
     /// moved**, so that a branch which is not behind costs one comparison.
     fn standing(&self, worktree: &Worktree, base: &Base) -> Result<Standing, NotDelivered>;
+
+    /// Where the base branch stands against the one the forge would merge into.
+    ///
+    /// **Asked at the pull request and nowhere else.** It changes nothing about
+    /// what is rebased — the base on this machine is the branch a person merges
+    /// into, which is why `Nothing here fetches` is the adapter's own rule —
+    /// and it is read so that the pull request can say what it is carrying.
+    fn base_on_the_remote(
+        &self,
+        worktree: &Worktree,
+        base: &Base,
+    ) -> Result<BaseOnTheRemote, NotDelivered>;
 
     /// Put the branch on top of the base, carrying uncommitted work across.
     ///

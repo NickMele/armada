@@ -27,7 +27,7 @@ use std::path::Path;
 use std::process::{Command, Output};
 
 use adapter_traits::{
-    Base, BroughtUpToDate, Delivery, Landing, NotDelivered, Opened, Pushed, Review,
+    Base, BaseOnTheRemote, BroughtUpToDate, Delivery, Landing, NotDelivered, Opened, Pushed, Review,
 };
 use adapter_traits::{Standing, Worktree};
 use git2::{BranchType, Repository};
@@ -56,6 +56,34 @@ impl Delivery for GitVcs {
             Ok((_, behind)) => Ok(Standing::Behind { commits: behind }),
             Err(cause) => Err(NotDelivered::of(
                 "comparing the branch with its base",
+                cause.message(),
+            )),
+        }
+    }
+
+    fn base_on_the_remote(
+        &self,
+        worktree: &Worktree,
+        base: &Base,
+    ) -> Result<BaseOnTheRemote, NotDelivered> {
+        let repo = open(worktree)?;
+        // **A base with no upstream is `Agreed`, not a refusal.** A repository
+        // with no remote is ordinary here for the same reason `Pushed::NoRemote`
+        // is, and so is a base branch nobody has ever pushed: there is no second
+        // reading, so there is nothing to say about the two disagreeing.
+        let Some((remote, remote_tip)) = the_upstream_of(&repo, base.name()) else {
+            return Ok(BaseOnTheRemote::Agreed);
+        };
+        let local_tip = tip_of(&repo, base.name())?;
+        match repo.graph_ahead_behind(local_tip, remote_tip) {
+            Ok((0, 0)) => Ok(BaseOnTheRemote::Agreed),
+            Ok((ahead, behind)) => Ok(BaseOnTheRemote::Apart {
+                remote,
+                ahead,
+                behind,
+            }),
+            Err(cause) => Err(NotDelivered::of(
+                "comparing the base with the remote's",
                 cause.message(),
             )),
         }
@@ -268,6 +296,23 @@ fn head_of(repo: &Repository, worktree: &Worktree) -> Result<git2::Oid, NotDeliv
                 format!("`{}` points at no commit", worktree.branch()),
             )
         })
+}
+
+/// What the base branch tracks, and where that tracking branch points.
+///
+/// `None` at every step that could be absent — no such local branch, no
+/// upstream configured, an upstream that points at nothing, a name git will not
+/// spell. **None of them is an error**: each one means there is no second
+/// reading of the base, which is a fact about the repository rather than a
+/// failure of the call.
+fn the_upstream_of(repo: &Repository, name: &str) -> Option<(String, git2::Oid)> {
+    let upstream = repo
+        .find_branch(name, BranchType::Local)
+        .ok()?
+        .upstream()
+        .ok()?;
+    let tip = upstream.get().target()?;
+    Some((upstream.name().ok()??.to_string(), tip))
 }
 
 fn tip_of(repo: &Repository, name: &str) -> Result<git2::Oid, NotDelivered> {
