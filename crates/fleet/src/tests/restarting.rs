@@ -36,7 +36,7 @@ use crate::daemon::Fleet;
 use crate::gate::Ruling;
 use crate::resume::Redirection;
 use crate::reviewing::Said;
-use crate::tests::admitted::dispatched;
+use crate::tests::admitted::{dispatched, started};
 use crate::tests::daemon::{a_proposal, diff_evidence, fitted_with, one, worktree_directory};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
@@ -215,6 +215,12 @@ async fn a_restart_catches_the_branch_up_before_the_new_drone_starts() {
         .restart_step(&job, None)
         .await
         .expect("a stopped step with a worktree and no Drone restarts");
+    // **The catch-up is inside `put_a_drone_on`** — the module doc above says
+    // so — and since `#456` the spawn that reaches it is the turn's rather than
+    // the restart's.
+    started(&fleet, &job)
+        .await
+        .expect("the turn puts the fresh Drone on");
 
     assert_eq!(
         fleet.vcs().delivered().split_off(before),
@@ -253,6 +259,9 @@ async fn a_conflicted_rebase_on_a_restart_is_the_new_drones_opening_work() {
     until_reaped(&fleet).await;
 
     fleet.restart_step(&job, None).await.expect("a restart");
+    started(&fleet, &job)
+        .await
+        .expect("the turn puts the fresh Drone on");
 
     let said = until_spoken(&home, &on_it(&fleet, &job).await).await;
     assert!(
@@ -302,6 +311,9 @@ async fn a_restart_that_resolves_none_of_a_conflicted_rebase_fails_its_diff_chec
     let job = stopped(&fleet, &home).await;
     until_reaped(&fleet).await;
     fleet.restart_step(&job, None).await.expect("a restart");
+    started(&fleet, &job)
+        .await
+        .expect("the turn puts the fresh Drone on");
 
     // The restarted Drone resolves nothing and submits anyway.
     submitted_by_the_one(&fleet, diff_evidence())
@@ -336,6 +348,9 @@ async fn a_restart_onto_a_current_branch_rebases_nothing_and_says_nothing() {
     until_reaped(&fleet).await;
 
     fleet.restart_step(&job, None).await.expect("a restart");
+    started(&fleet, &job)
+        .await
+        .expect("the turn puts the fresh Drone on");
 
     assert!(
         fleet.vcs().delivered().is_empty(),
@@ -374,6 +389,9 @@ async fn a_restart_carrying_a_note_opens_the_new_drone_with_it() {
         )
         .await
         .expect("a restart with a note");
+    started(&fleet, &job)
+        .await
+        .expect("the turn puts the fresh Drone on");
 
     let said = until_spoken(&home, &on_it(&fleet, &job).await).await;
     assert!(
@@ -413,6 +431,9 @@ async fn a_restart_with_no_note_hands_the_new_drone_nothing_extra() {
     until_reaped(&fleet).await;
 
     fleet.restart_step(&job, None).await.expect("a restart");
+    started(&fleet, &job)
+        .await
+        .expect("the turn puts the fresh Drone on");
 
     let said = until_spoken(&home, &on_it(&fleet, &job).await).await;
     assert!(
@@ -484,6 +505,9 @@ async fn a_restart_with_no_note_delivers_the_one_already_waiting() {
         .restart_step(&job, None)
         .await
         .expect("a plain restart over a held note");
+    started(&fleet, &job)
+        .await
+        .expect("the turn puts the fresh Drone on");
 
     let said = until_spoken(&home, &on_it(&fleet, &job).await).await;
     assert!(

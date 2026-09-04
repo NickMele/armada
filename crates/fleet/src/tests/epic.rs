@@ -31,7 +31,7 @@ use verification::{Claimed, NotClaimed, ShownBy};
 use crate::daemon::Fleet;
 use crate::evidence::Call;
 use crate::resume::Redirection;
-use crate::tests::admitted::dispatched;
+use crate::tests::admitted::{dispatched, started};
 use crate::tests::daemon::{a_proposal_for, fittings, manifest, worktree_directory};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
@@ -170,13 +170,17 @@ async fn presented_the_plan(fleet: &Fixture) {
     fleet.turn().await.expect("the plan's gate runs");
 }
 
-/// **The approval is the dispatch.** A person answers `plan`, and what that
-/// advances into is the step holding the tool.
+/// **The approval queues and the turn dispatches.** A person answers `plan`,
+/// and what that advances into is the step holding the tool — put there by
+/// admission rather than by the approval, since `#456`.
 async fn approved_the_plan(fleet: &Fixture, job: &JobId, home: &TempDir) {
     fleet
         .approve_review(job)
         .await
         .expect("a person approves the plan");
+    started(fleet, job)
+        .await
+        .expect("the turn puts a Drone on the dispatching step");
     wrote(
         home,
         job,

@@ -19,12 +19,21 @@ impl FakeDaemon {
     /// The person takes the work. The gate this answers is the one after the
     /// Job ran, which is why the status it moves from is not the one
     /// `approve_dispatch` moves from.
+    ///
+    /// **It stops at `queued`, as `fake_approve_dispatch` does.** The Drone on
+    /// the next step is a turn's since `#456`, and a fake that answered
+    /// `running` would be the one place a caller could read the old shape.
     pub(super) async fn fake_approve_review(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
-        self.move_to(&job_id, "awaiting_review", "running", "human")
+        self.move_to(&job_id, "awaiting_review", "queued", "human")
     }
-    /// The work goes back with a note. The same destination as an approval on a
-    /// Job with steps left, and **a different act** — what separates them here
-    /// is the note, and in Fleet it is the step that does or does not advance.
+    /// The work goes back with a note. **A different act** from an approval —
+    /// what separates them here is the note, and in Fleet it is the step that
+    /// does or does not advance.
+    ///
+    /// **`running` and not `queued`, which is the one path Fleet keeps.** A
+    /// note injected into a live session resumes the Drone that is there; the
+    /// gate's own path re-queues, and that one is `crate::Commands`'s doc to
+    /// describe rather than this fake's to model twice.
     pub(super) async fn fake_request_changes(
         &self,
         job_id: JobId,

@@ -231,6 +231,10 @@ pub trait Commands: Send + Sync + 'static {
     /// been reclaimed — the second says the act being asked for is a
     /// redispatch rather than becoming one.
     ///
+    /// **What comes back is `queued`.** The act asks for a Drone; the turn
+    /// starts one, because a spawn inside this request died whenever a client
+    /// stopped waiting for it — `#428` and `#456`.
+    ///
     /// **The note is optional and is not a reason for the restart.** `None` is
     /// the plain restart this act has always been. `Some` is a person saying
     /// what to do differently in the same breath as asking for another
@@ -252,14 +256,21 @@ pub trait Commands: Send + Sync + 'static {
     ///
     /// It moves the machine and never writes a status: the step advances on the
     /// inner machine, which is legal beneath `awaiting_review`, and then the
-    /// Job goes back to `running` at the next step — or, where the step that
-    /// passed was the workflow's last, is committed, delivered and recorded
-    /// `completed_success`.
+    /// Job goes back in the **queue** at the next step — or, where the step
+    /// that passed was the workflow's last, is committed, delivered and
+    /// recorded `completed_success`.
     ///
-    /// **Refused with a 409 anywhere but `awaiting_review`.** All three review
-    /// acts share that refusal, and it is what stops this from quietly becoming
-    /// the dispatch gate: `awaiting_approval` has its own approval and its own
-    /// denial.
+    /// **What comes back is `queued`, not `running`**, for
+    /// [`Commands::approve_dispatch`]'s reason and `#456`. The Drone on the
+    /// next step is a turn's.
+    ///
+    /// **Refused with a 409 anywhere but `awaiting_review`**, and with a 409
+    /// where the Job's worktree has been reclaimed and a step is left to work
+    /// in it. The first is what stops this from quietly becoming the dispatch
+    /// gate: `awaiting_approval` has its own approval and its own denial. The
+    /// second arrives while the person's hand is still on the control, which is
+    /// the point of it — deferring the dispatch is `#456`, deferring the
+    /// refusal would have been collateral.
     fn approve_review(
         &self,
         job_id: JobId,
@@ -267,15 +278,22 @@ pub trait Commands: Send + Sync + 'static {
 
     /// `request_changes` — the work is not right yet, and here is what to fix.
     ///
-    /// **It keeps everything.** The Job goes back to `running` at the same
-    /// step, and the note is a turn injected into the session that was waiting
-    /// at the gate — so the Drone, the worktree and every step so far survive.
+    /// **It keeps everything**: the worktree, the branch and every step so far.
+    /// The step does not advance, which is the whole difference between this
+    /// and [`Commands::approve_review`].
     ///
-    /// **Refused where the Drone is gone**, for [`Commands::redirect_drone`]'s
-    /// reason: there is nobody to tell, and a Job put back to `running` with no
-    /// process on it escalates as `interrupted` a moment later having lost the
-    /// note. A blank note is refused as well — a Drone told nothing resumes
-    /// with exactly the information that was not enough.
+    /// **Which status comes back depends on whether a Drone is there.** A live
+    /// session is told — the note is a turn injected into it and the Job is
+    /// `running`. A gate that stood its Drone down has nobody to tell, so the
+    /// note is written onto the Job and `queued` comes back; the fresh Drone
+    /// re-admission puts on the same step opens with it.
+    ///
+    /// **Refused where the *worktree* is gone**, not where the Drone is. There
+    /// is then nowhere for the next pass to happen and no Drone the note could
+    /// ever reach, and what is being asked for is a redispatch — the reading
+    /// `job-statuses.toml`'s `awaiting_review` row gives. A blank note is
+    /// refused as well: a Drone told nothing resumes with exactly the
+    /// information that was not enough.
     fn request_changes(
         &self,
         job_id: JobId,
@@ -287,26 +305,26 @@ pub trait Commands: Send + Sync + 'static {
     /// that keeps the work.** [`Commands::approve_review`] cannot be it: a Job a
     /// gate refused is `escalated`, not `awaiting_review`.
     /// [`Commands::restart_step`] cannot either — it re-runs the step, discarding
-    /// work that was right and possibly drawing the same refusal. A verdict
-    /// with no appeal is worse than no verdict, because a verifier a person
-    /// cannot overrule is one they route around.
+    /// work that was right and possibly drawing the same refusal. A verdict with
+    /// no appeal is worse than no verdict, because a verifier a person cannot
+    /// overrule is one they route around.
     ///
     /// **It is not an approve-anything.** Only `gate_failure` is liftable — the
     /// Judge refusing a criterion, which is a matter of opinion. A step stopped
     /// on `gate_undecided` was never weighed and one stopped on
     /// `evidence_suspect` is a claim about the Drone's honesty; both are
-    /// [`Refusal::IllegalMove`]. A failed mechanical Check is out of reach
-    /// twice over: it ends the Job at `completed_failed`, which is terminal and
-    /// stops no step, and the recorded Check runs are read again before
-    /// anything moves.
+    /// [`Refusal::IllegalMove`]. A failed mechanical Check is out of reach twice
+    /// over: it ends the Job at `completed_failed`, which is terminal and stops
+    /// no step, and the recorded Check runs are read again before anything moves.
     ///
-    /// **It is recorded as an override.** The step move is `stopped ->
-    /// advanced` carrying the trigger it overruled, so the row still says
-    /// `failed` beside a state that says `advanced`, and
-    /// [`ipc::StepDetail::overridden`] is that pair read once here rather than
-    /// by every surface. A blank reason is [`Refusal::Unacceptable`]: an
-    /// override that says nothing is how this becomes the way somebody quiets a
-    /// gate.
+    /// **It answers `queued`**, or `completed_success` on the last step: the
+    /// verdict is not deferred and the Drone is — `#456`. **And it is recorded as
+    /// an override** — the step move is `stopped -> advanced` carrying the
+    /// trigger it overruled, so the row still says `failed` beside a state that
+    /// says `advanced`, and [`ipc::StepDetail::overridden`] is that pair read
+    /// once here rather than by every surface. A blank reason is
+    /// [`Refusal::Unacceptable`]: an override that says nothing is how this
+    /// becomes the way somebody quiets a gate.
     fn override_verdict(
         &self,
         job_id: JobId,

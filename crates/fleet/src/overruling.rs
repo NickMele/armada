@@ -130,13 +130,10 @@ where
             let told = OutcomeTurn::approved(&passed, None);
             let job = self.move_job(&job, Target::Running, Actor::Human).await?;
             let done = self.completed(&job, &told, job_id, &mut working).await?;
-            // **`completed` does not admit and says so**: it holds a slot, and
-            // taking the roster while holding one is the lock order reversed.
-            // This is the caller doing it, which is what that note asks for and
-            // what this path had been missing — a Job that finished by override
-            // left the bound spent until some later turn noticed.
-            drop(working);
-            self.admit_next().await?;
+            // **The freed place is the next turn's to fill** — `#428`. It is
+            // one turn later than it was, and the Job that takes it is not this
+            // one: admitting here meant a client that stopped waiting for an
+            // override killed a dispatch on a Job nobody was watching.
             return Ok(done);
         }
         // **The overridden part's Drone ends here, before the Job waits.** The
@@ -152,13 +149,10 @@ where
         // gets a process back. What the next Drone is told — that a person
         // settled the part before — is `crate::readmitting`'s to assemble, off
         // the `advanced` step this call leaves behind.
-        self.move_job(&job, Target::Queued, Actor::Human).await?;
-        // **After the slot is let go**, which is the lock order `crate::slots`
-        // states: admission takes the roster, and a caller holding a slot must
-        // not reach for it. Inline, exactly as an approval re-admits inline.
-        drop(working);
-        self.admit_next().await?;
-        self.load(job_id).await
+        // **It answers `queued` and no longer `running`**, which is `#428`:
+        // exactly as an approval no longer dispatches for itself. The next
+        // Drone is `crate::readmitting`'s, on the first turn with room.
+        self.move_job(&job, Target::Queued, Actor::Human).await
     }
 
     /// The step a person may overrule, and the verdict they are overruling.

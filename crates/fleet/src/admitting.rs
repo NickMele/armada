@@ -175,27 +175,27 @@ where
     ///
     /// **[`Fleet::room_for_another`] is the whole of what "room" means here**,
     /// and it is the same predicate `queued_reason` answers
-    /// `waiting_on_resources` from — one answer, because a Board saying a Job
-    /// is blocked while Fleet is starting it is worse than a Board saying
-    /// nothing.
+    /// `waiting_on_resources` from — one answer, because a Board saying a Job is
+    /// blocked while Fleet is starting it is worse than a Board saying nothing.
     ///
     /// **The roster lock is held across the loop, and nothing else is.** Two
-    /// admissions running at once would each read the same `queued` Job as
-    /// next and dispatch it twice; holding the roster is what makes admission
-    /// one act. It is released the moment the last Drone is spawned — a slot is
-    /// held for as long as a Job is worked, and this for as long as one is
-    /// *started*.
+    /// admissions running at once would each read the same `queued` Job as next
+    /// and dispatch it twice; holding the roster is what makes admission one act.
+    /// It is released the moment the last Drone is spawned — a slot is held for
+    /// as long as a Job is worked, and this for as long as one is *started*.
     ///
     /// Admission stops at the first Job that will not start. The failure is
     /// returned, its Job is left `escalated` by `dispatch`, and the next turn
-    /// asks again — Fleet does not walk on down the queue to find one that
-    /// works, because the reason the first failed is ordinarily the disk.
+    /// asks again — Fleet does not walk on down the queue to find one that works,
+    /// because the reason the first failed is ordinarily the disk.
     ///
-    /// **Never from a `Commands` method, which is `#428`.** This runs a whole
-    /// [`crate::dispatch`]: on a handler's future a client that stops waiting
-    /// takes the command and its timeout away together. [`Fleet::turn`] and
-    /// [`Fleet::reconcile`] are safe; `approve_review`, `request_changes`,
-    /// `override_verdict`, `reject`, `restart_step` and `kill_job` are not.
+    /// **Never from a `Commands` method, and none does** — `#428`, then `#456`
+    /// for the six that freed a place and filled it in one breath. This runs a
+    /// whole [`crate::dispatch`], so on a handler's future a client that stops
+    /// waiting takes the command and its timeout away together; where the command
+    /// freed a place, the Job that then never starts is the *next* one in the
+    /// queue and nobody is watching it. [`Fleet::turn`] and [`Fleet::reconcile`]
+    /// are the only callers.
     pub(crate) async fn admit_next(&self) -> Result<Vec<JobId>, Adrift> {
         let mut slots = self.slots().lock().await;
         let mut admitted = Vec::new();

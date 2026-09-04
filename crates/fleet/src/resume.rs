@@ -390,9 +390,9 @@ where
                 self.end_the_drone(working).await;
             }
         }
-        // Before the store reads below, and before `admit_next` reaches for the
-        // roster: `crate::slots` states that order and a caller holding a slot
-        // must not take it.
+        // Before the store reads below: nothing left here needs the slot, and a
+        // guard held across the refusals would keep a place the act may yet
+        // give back.
         drop(held);
         // **The step is stopped here where nothing stopped it**, which is the
         // other half of the case above. `crate::readmitting` reads the step's
@@ -446,13 +446,11 @@ where
         // The actor is **human**. A person took the Job out of `escalated`;
         // Fleet only chooses which turn it gets a process back, which is the
         // `queued -> running` row `crate::readmitting` writes as its own.
-        self.move_job(&job, Target::Queued, Actor::Human).await?;
-        // Inline, exactly as an approval re-admits inline — so a fleet with
-        // nothing else to do restarts the step now rather than on the next
-        // tick, and a busy one leaves the Job in the queue where a person can
-        // see it waiting.
-        self.admit_next().await?;
-        self.load(job_id).await
+        // **`queued`, and the fresh Drone is the turn's** — `#428`, exactly as
+        // an approval no longer dispatches for itself. The doc above already
+        // said this act asks for a Drone rather than starting one; until now
+        // the code did both.
+        self.move_job(&job, Target::Queued, Actor::Human).await
     }
 
     /// The Job is one a person may say something to. **All a redirect asks of
