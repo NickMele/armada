@@ -439,7 +439,8 @@ impl EscalationTrigger {
     /// than filling the default in, because the edge table is where the default
     /// lives and two copies of it would be one too many.
     ///
-    /// **A declared edge is a second one, never the only one.** The default
+    /// **A declared edge is usually a second one rather than the only one**, and
+    /// `loop_cap` is the exception that arrived with `#263` — see its arm. The default
     /// admits every trigger — `the default escalation edge accepts every
     /// trigger` in this module's tests is that claim — so what a declared edge
     /// adds is a `from` no other trigger may arrive at `escalated` from. Read
@@ -453,6 +454,13 @@ impl EscalationTrigger {
             EscalationTrigger::Interrupted => {
                 Some((JobStatus::AwaitingReview, JobStatus::Escalated))
             }
+            // **The one trigger for which a declared edge *is* the only one.**
+            // A spent `iteration_cap` is discovered when a person answers
+            // `request_changes`, and there is no other moment it can be
+            // discovered at: the verdict is what spends the pass. So the gate
+            // is where it fires, and it shares `interrupted`'s edge rather than
+            // needing one of its own.
+            EscalationTrigger::LoopCap => Some((JobStatus::AwaitingReview, JobStatus::Escalated)),
             _ => None,
         }
     }

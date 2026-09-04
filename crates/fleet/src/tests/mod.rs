@@ -56,6 +56,7 @@ mod judging;
 mod keeping;
 mod landing;
 mod linking;
+mod looping;
 mod modelling;
 mod noticing;
 mod overlap;

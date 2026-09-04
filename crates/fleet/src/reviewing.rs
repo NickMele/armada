@@ -33,6 +33,7 @@ use verification::OutcomeTurn;
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
+use crate::gate::{self, SentBack};
 use crate::resume::Redirection;
 use crate::session::{LiveSession, Occasion};
 use crate::transcript;
@@ -147,9 +148,44 @@ where
     /// it refuses before anything moves: [`Adrift::NoDroneToTell`].
     pub async fn request_changes(&self, job_id: &JobId, note: &Redirection) -> Result<Job, Adrift> {
         let slot = self.slot_for(job_id).await;
-        let working = slot.lock().await;
+        let mut working = slot.lock().await;
         let job = self.load(job_id).await?;
-        self.at_the_gate(&job)?;
+        let step = self.at_the_gate(&job)?;
+        // **Where the verdict goes is the step's declaration, not this
+        // method's.** `crate::gate` answers it with no store and no worktree,
+        // the way it answers every other verdict; what is left here is writing
+        // the answer down. A step that declares no `verdict_routing` answers
+        // `ToTheSameStep`, which is every step of every linear workflow and is
+        // the whole of what this act did before a loop could be declared.
+        let declared = self.declared_step(&job, &step)?.clone();
+        let pass = self
+            .store()
+            .lock()
+            .await
+            .step_iteration(job_id, &step)
+            .map_err(|cause| Adrift::Reading(store::LoadJobError::Unreadable(cause)))?;
+        let answered = match gate::sent_back(&declared, pass) {
+            SentBack::ToTheSameStep => false,
+            SentBack::ToAnEarlierStep(target) => {
+                self.route_back(&job, &step, &target, note, &mut working)
+                    .await?;
+                true
+            }
+            SentBack::NowhereLeft(spent) => {
+                self.loop_is_spent(&job, &step, spent, &mut working).await?;
+                true
+            }
+        };
+        if answered {
+            // **After the slot is let go**, which is the lock order
+            // `crate::slots` states and the reason neither call above admits
+            // for itself: admission takes the roster, and a caller holding a
+            // slot must not reach for it. A Job re-queued with the lock still
+            // held sat at `queued` until the next tick.
+            drop(working);
+            self.admit_next().await?;
+            return self.load(job_id).await;
+        }
         if working.as_ref().is_some_and(|at_work| at_work.is(job_id)) {
             let job = self.move_job(&job, Target::Running, Actor::Human).await?;
             self.said(job_id, note, &working).await?;
@@ -179,6 +215,96 @@ where
         drop(working);
         self.admit_next().await?;
         self.load(job_id).await
+    }
+
+    /// Send the work back to an earlier step, as the workflow's own
+    /// `verdict_routing` says.
+    ///
+    /// **The shape is [`approve_review`](Fleet::approve_review)'s and not
+    /// [`request_changes`](Fleet::request_changes)'s**, because what happens is
+    /// an advance in reverse: a step move made while the inner machine is still
+    /// live, then `awaiting_review -> queued`, then re-admission putting a fresh
+    /// Drone where `current_step_id` now points. The note rides along, because a
+    /// person asking for another draft said what to change and the Drone that
+    /// writes it is the one that needs to hear it.
+    ///
+    /// **The step that moves is the one being redone, and it names the gate.**
+    /// `StepTarget::Returned` carries the emitting step so the row says whose
+    /// `iteration_count` this pass belongs to; the gate itself does not move and
+    /// stays `running`, which is how a step at a human gate already reads.
+    ///
+    /// **A Drone in the slot is ended.** The gate ordinarily stood it down, so
+    /// there is usually none — but a process still standing on the step the Job
+    /// is leaving has nothing left to do, and re-admission is what puts one on
+    /// the step the work went back to.
+    ///
+    /// **Admission is the caller's**, and it is not an omission: this runs
+    /// beneath the slot lock, and taking the roster while holding one is the
+    /// lock order reversed — see [`completed`](Fleet::completed), which says the
+    /// same thing.
+    async fn route_back(
+        &self,
+        job: &Job,
+        gate: &StepId,
+        target: &StepId,
+        note: &Redirection,
+        working: &mut Option<crate::working::Working>,
+    ) -> Result<Job, Adrift> {
+        // Before anything moves, for `request_changes`'s reason: a refusal
+        // leaves the Job at the gate rather than half-answered. There is
+        // nowhere for the next pass to happen without a worktree.
+        if self.surviving_worktree(job).is_err() {
+            return Err(Adrift::NoDroneToTell {
+                job: job.id().clone(),
+            });
+        }
+        if working.as_ref().is_some_and(|at_work| at_work.is(job.id())) {
+            self.end_the_drone(working).await;
+        }
+        // While the Job is still `awaiting_review`, which is in
+        // `ADVANCING_STATUSES` only until the move below leaves it.
+        let job = self
+            .move_step_by(
+                job,
+                target,
+                StepTarget::Returned(gate.clone()),
+                Actor::Human,
+            )
+            .await?;
+        let waiting = self.hold_the_note(&job, note, Said::AtTheGate).await?;
+        self.move_job(&waiting, Target::Queued, Actor::Human).await
+    }
+
+    /// The loop did not converge, and the pass the verdict asked for is one the
+    /// step's `iteration_cap` does not have.
+    ///
+    /// **Nothing failed**, which is the whole content of the trigger: a plan on
+    /// its sixth draft under a cap of five is not a Drone that got it wrong five
+    /// times, and `retry_count` is untouched. The step stops and the Job
+    /// escalates for a person, which is what `escalation-triggers.toml` says a
+    /// spent cap does.
+    ///
+    /// The step stops first and the Job moves second, which is the order every
+    /// escalation here uses: the inner machine freezes the moment the Job leaves
+    /// an advancing status, so a step move made after would be refused.
+    async fn loop_is_spent(
+        &self,
+        job: &Job,
+        gate: &StepId,
+        spent: core_model::StepLevelTrigger,
+        working: &mut Option<crate::working::Working>,
+    ) -> Result<Job, Adrift> {
+        if working.as_ref().is_some_and(|at_work| at_work.is(job.id())) {
+            self.end_the_drone(working).await;
+        }
+        let job = self
+            .move_step_by(job, gate, StepTarget::Stopped(spent), Actor::Fleet)
+            .await?;
+        // **Fleet is the actor and the person is not.** They asked for another
+        // pass; what refused it is the workflow's own bound, read by Fleet. A
+        // row saying a person escalated the Job would say they gave up on it.
+        self.move_job(&job, Target::Escalated(spent.trigger()), Actor::Fleet)
+            .await
     }
 
     /// Put a person's note on the Job, for the opening brief of the next Drone

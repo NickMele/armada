@@ -6,7 +6,7 @@
 //! decides anything.
 
 use adapter_traits::Worktree;
-use core_model::{Attempt, EvidenceRef, FrozenWorkflow, ResolvedStep, StepEvidence, StepId};
+use core_model::{Attempt, EvidenceRef, FrozenWorkflow, ResolvedStep, Spent, StepEvidence, StepId};
 
 /// Where a Job is: which step of its frozen workflow, and the worktree the work
 /// is in.
@@ -27,12 +27,22 @@ use core_model::{Attempt, EvidenceRef, FrozenWorkflow, ResolvedStep, StepEvidenc
 /// as the only value a position with no history could have — `Attempt`'s own
 /// rule. [`on_attempt`](AtStep::on_attempt) is how the one caller that has read
 /// the log says so.
+///
+/// # And which run of the *pass* is a second coordinate, not the same one
+///
+/// [`Spent`] is what the retry budget is asked against, and it is a different
+/// number the moment anything loops: an [`Attempt`] climbs across a return
+/// because the per-run records must not overwrite each other, and the budget
+/// resets because `retry_limit`'s registry row says a re-entry as designed is a
+/// fresh one. Both are carried here so the gate cannot reach for whichever is
+/// nearer — the types are what make taking the wrong one a compile error.
 #[derive(Clone, Copy, Debug)]
 pub struct AtStep<'a> {
     workflow: &'a FrozenWorkflow,
     at: usize,
     worktree: &'a Worktree,
     attempt: Attempt,
+    spent: Spent,
 }
 
 impl<'a> AtStep<'a> {
@@ -43,6 +53,7 @@ impl<'a> AtStep<'a> {
             at: 0,
             worktree,
             attempt: Attempt::FIRST,
+            spent: Spent::FIRST,
         })
     }
 
@@ -58,21 +69,35 @@ impl<'a> AtStep<'a> {
             at,
             worktree,
             attempt: Attempt::FIRST,
+            spent: Spent::FIRST,
         })
     }
 
-    /// The same position, on the run the step's log says it is on.
+    /// The same position, on the run the step's log says it is on and on the
+    /// runs the current pass has spent.
     ///
-    /// One caller: `crate::settling`, which reads it off the store inside the
-    /// same turn it rules. Everything else is standing at a step for the first
-    /// time and says nothing.
-    pub fn on_attempt(self, attempt: Attempt) -> AtStep<'a> {
-        AtStep { attempt, ..self }
+    /// **Both together**, because reading one without the other is the bug this
+    /// pair exists to stop — and because the two callers that have read the log
+    /// have read it once for each.
+    pub fn on_attempt(self, attempt: Attempt, spent: Spent) -> AtStep<'a> {
+        AtStep {
+            attempt,
+            spent,
+            ..self
+        }
     }
 
-    /// Which run of this step is being ruled on. One-based.
+    /// Which run of this step is being ruled on. One-based. **The coordinate
+    /// every per-run record is filed under**, and never the retry budget.
     pub fn attempt(&self) -> Attempt {
         self.attempt
+    }
+
+    /// How many runs the pass this step is on has spent. One-based. **The
+    /// number `ResolvedStep::may_hand_back` is asked against**, and never the
+    /// attempt.
+    pub fn spent(&self) -> Spent {
+        self.spent
     }
 
     /// The step being gated.
@@ -92,10 +117,12 @@ impl<'a> AtStep<'a> {
             workflow: self.workflow,
             at: self.at + 1,
             worktree: self.worktree,
-            // A different step is on its own first run. Carrying this one's
-            // count forward would file the next step's records under a run it
-            // has not had.
+            // A different step is on its own first run, and on the first run of
+            // its own first pass. Carrying either count forward would file the
+            // next step's records under a run it has not had, or charge it a
+            // budget it has not spent.
             attempt: Attempt::FIRST,
+            spent: Spent::FIRST,
         })
     }
 

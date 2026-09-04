@@ -128,11 +128,20 @@ where
             .await
             .step_attempt(job_id, &step)
             .map_err(|cause| Adrift::Reading(store::LoadJobError::Unreadable(cause)))?;
+        // And the pass's own spend beside it, for `crate::settling`'s reason:
+        // the budget the second reading is weighed against is the one the
+        // Drone's run belongs to, and a return would have reset it.
+        let spent = self
+            .store()
+            .lock()
+            .await
+            .step_spent(job_id, &step)
+            .map_err(|cause| Adrift::Reading(store::LoadJobError::Unreadable(cause)))?;
         // The same call `crate::settling` makes, with the same arguments read
         // off the same places. Nothing here is assembled differently, because
         // an easier reading would not be the reading that failed.
         let ruling = rule_on(
-            at.on_attempt(attempt),
+            at.on_attempt(attempt, spent),
             Request::of(&job),
             &submission,
             declared.as_ref(),

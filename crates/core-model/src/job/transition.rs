@@ -38,12 +38,21 @@ use crate::job::step::JobStep;
 pub struct Edge {
     pub from: JobStatus,
     pub to: JobStatus,
-    /// The named trigger this edge belongs to, where the registry gives it one.
+    /// The triggers this edge belongs to, where the registry gives it any.
     ///
-    /// An edge that declares a trigger accepts that trigger and no other.
-    /// `running -> escalated` declares none and is the default edge: a trigger
-    /// with no edge of its own fires it.
-    pub escalation_trigger: Option<EscalationTrigger>,
+    /// An edge that names triggers accepts those and no others. `running ->
+    /// escalated` names none and is the default edge: a trigger with no edge of
+    /// its own fires it.
+    ///
+    /// **A slice and not one trigger, because an edge can be two triggers'
+    /// own.** `awaiting_review -> escalated` is `interrupted`'s — a Job at a
+    /// gate whose process is gone — and `loop_cap`'s, which is a step whose
+    /// verdict routed backwards once too often and is refused at the same gate.
+    /// The registry names the edge with no trigger on it at all, so which
+    /// triggers reach it is this table's narrowing rather than the file's, and
+    /// [`admits`] finds one edge per `(from, to)` — a second entry for the same
+    /// pair would be unreachable.
+    pub escalation_triggers: &'static [EscalationTrigger],
     /// The condition this edge is admitted under, where the registry gives it
     /// one. `None` is unconditional, which is what every edge was.
     ///
@@ -76,7 +85,11 @@ pub static EDGES: &[Edge] = &[
     edge(AwaitingRepair, Queued),
     edge(AwaitingReview, AwaitingAttestation),
     guarded(AwaitingReview, CompletedSuccess, Guard::EveryStepAdvanced),
-    triggered(AwaitingReview, Escalated, EscalationTrigger::Interrupted),
+    triggered(
+        AwaitingReview,
+        Escalated,
+        &[EscalationTrigger::Interrupted, EscalationTrigger::LoopCap],
+    ),
     edge(AwaitingReview, Killed),
     edge(AwaitingReview, Piloted),
     edge(AwaitingReview, Queued),
@@ -92,7 +105,7 @@ pub static EDGES: &[Edge] = &[
     edge(Piloted, Running),
     edge(Piloted, Superseded),
     edge(Queued, AwaitingApproval),
-    triggered(Queued, Escalated, EscalationTrigger::DependencyFailed),
+    triggered(Queued, Escalated, &[EscalationTrigger::DependencyFailed]),
     edge(Queued, Killed),
     edge(Queued, Running),
     edge(Running, AwaitingApproval),
@@ -110,16 +123,16 @@ const fn edge(from: JobStatus, to: JobStatus) -> Edge {
     Edge {
         from,
         to,
-        escalation_trigger: None,
+        escalation_triggers: &[],
         guard: None,
     }
 }
 
-const fn triggered(from: JobStatus, to: JobStatus, trigger: EscalationTrigger) -> Edge {
+const fn triggered(from: JobStatus, to: JobStatus, triggers: &'static [EscalationTrigger]) -> Edge {
     Edge {
         from,
         to,
-        escalation_trigger: Some(trigger),
+        escalation_triggers: triggers,
         guard: None,
     }
 }
@@ -128,7 +141,7 @@ const fn guarded(from: JobStatus, to: JobStatus, guard: Guard) -> Edge {
     Edge {
         from,
         to,
-        escalation_trigger: None,
+        escalation_triggers: &[],
         guard: Some(guard),
     }
 }
@@ -410,16 +423,17 @@ pub(crate) fn admits(
     let Some(edge) = EDGES.iter().find(|e| e.from == from && e.to == arriving) else {
         return Err(IllegalTransition::NoSuchEdge { from, to: arriving });
     };
-    match (edge.escalation_trigger, to) {
-        (Some(expected), Target::Escalated(given)) if expected != *given => {
-            return Err(IllegalTransition::WrongTrigger {
-                from,
-                to: arriving,
-                expected,
-                given: *given,
-            })
+    if let Target::Escalated(given) = to {
+        if let Some(expected) = edge.escalation_triggers.first() {
+            if !edge.escalation_triggers.contains(given) {
+                return Err(IllegalTransition::WrongTrigger {
+                    from,
+                    to: arriving,
+                    expected: *expected,
+                    given: *given,
+                });
+            }
         }
-        _ => {}
     }
     if let Some(guard) = edge.guard {
         if let Some(refused) = guard.refusing(steps) {
