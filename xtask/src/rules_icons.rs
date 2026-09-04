@@ -486,3 +486,5 @@ fn kebab(component: &str) -> String {
     }
     out
 }
+
+pub mod contract;

@@ -119,6 +119,7 @@ fn verify_foundations() -> ExitCode {
         rules_docs::every_path_a_document_names_exists(&root),
         capabilities::every_capability_is_bound_and_indexed(&root),
         rules_icons::every_glyph_in_use_is_registered(&root),
+        rules_icons::contract::the_contract_and_the_registry_agree_on_meaning(&root),
         rules_actions::every_action_carries_three_columns(&root),
         rules_stories::every_story_names_its_own_path(&root),
         rules_layers::every_package_imports_downward(&root),

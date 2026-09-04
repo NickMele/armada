@@ -259,13 +259,32 @@ must show the same mark as the badge above it when both state the same
 claim. What a step may not do is reuse a badge glyph in a sense the badge
 does not carry.
 
-The common rail values borrow their glyph from the Job badge one level down
-— `advanced` (check), `running` (circle-dot), `awaiting_human` (eye),
-`retrying` (rotate-cw, no hue), `killed` (power, no hue). The roster is
-`[conventions.step_activity_borrowing]` in `packages/icons/icons.toml`, and
-the per-value assignment is `verbs.step_state` in
-`crates/core-model/domain/enum-verbs.toml`. This paragraph is the reasoning,
-not the lookup.
+The common rail values borrow their glyph from the Job badge one level down.
+The roster of what may be lent is `[conventions.step_activity_borrowing]` in
+`packages/icons/icons.toml`; the per-value assignment is `verbs.step_state`
+in `crates/core-model/domain/enum-verbs.toml`; the values themselves are
+`crates/core-model/domain/step-states.toml`. This section is the reasoning.
+
+The block below is what this document claims those three files say, and it
+is **transcribed rather than authoritative**: `cargo xtask verify-foundations`
+compares it against all three, and where they disagree it names both
+spellings and stops rather than picking a winner. Neither side correcting the
+other silently is the whole point — each pointing at the other is what let
+#347 stand.
+
+```
+advanced        check          borrowed
+running         circle-dot     borrowed
+awaiting_human  eye            borrowed
+retrying        rotate-cw      borrowed
+not_started     circle-dashed  minted
+stopped         flag           minted
+failed          x              borrowed  not a step state
+killed          power          borrowed  not a step state
+```
+
+`retrying` and `killed` draw their borrowed glyph with no hue. `failed` and
+`stopped` differ in treatment and are argued below.
 
 **`awaiting_human` takes `eye`, and `clock` is refused.** This paragraph said
 `waiting` (clock) until 2026-09-04, which was a value the step machine does
