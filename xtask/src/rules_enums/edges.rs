@@ -154,6 +154,30 @@ pub(super) fn wired_status_edges(
         .collect()
 }
 
+/// Every `from -> to` the registry sanctions, with the line its row opens on.
+///
+/// [`super::declared`] compares each status row's `transitions_in` and
+/// `transitions_out` against these, so it needs the pairs and where to point a
+/// reader — not the trigger or the guard, which the rule above already holds
+/// against `EDGES`.
+///
+/// Malformed rows go to a dropped report for [`wired_status_edges`]'s reason:
+/// a `[[transitions]]` row missing `from` is this file's own defect, said once
+/// by the rule above. **Emptiness is not reported here**, because the caller
+/// treats "no edge to compare against" as its own failure and says so in its
+/// own words.
+pub(super) fn sanctioned_edges(root: &Path, report: &mut Report) -> Vec<(String, String, usize)> {
+    let Ok(text) = fs::read_to_string(root.join(REGISTRY)) else {
+        report.fail(format!("{REGISTRY} — the edge table itself"));
+        return Vec::new();
+    };
+    let mut reading = Report::new("reading the transition registry");
+    read_registry(&text, &mut reading)
+        .iter()
+        .map(|row| (row.from.clone(), row.to.clone(), row.line))
+        .collect()
+}
+
 /// The values inside a registry row, against the spellings an `Edge` can hold.
 ///
 /// Only the registry side needs this: an `EDGES` entry names a variant, and a
