@@ -1,4 +1,10 @@
 import type { LucideIcon } from "lucide-react";
+import type {
+  Finding,
+  JobExamined,
+  JobResources as Held,
+  Look,
+} from "@armada/protocol";
 import { ESCALATION_REASON, JOB_STATUS } from "../../generated/vocabulary";
 import { badgeOf } from "../badge";
 import { Button } from "../../primitives/Button/Button";
@@ -563,3 +569,168 @@ export const REPAIR_CHAPTERS: StepChapter[] = [
     act: chapterAct("Open the diff", "f"),
   },
 ];
+
+/**
+ * What the Job holds on this machine, at each moment the run below is drawn at.
+ *
+ * **The same Job, so the panel can be read against the run beside it.** The
+ * worktree path and the branch are `WHERE`'s, because that region sits four
+ * inches below this one and two spellings of one branch on one screen is the
+ * defect this fixture file exists to prevent.
+ */
+function holds(over: Partial<Held> = {}): Held {
+  return {
+    job_id: JOB,
+    read_at: "2026-09-04T09:16:52.402Z",
+    held: "running",
+    processes: [],
+    worktree: {
+      path: WORKTREE,
+      branch: "fix/settings-split-selectors",
+      bytes: 1_288_490_188,
+    },
+    ...over,
+  };
+}
+
+function examined(found: Finding, looks: Look[], reading: Held): JobExamined {
+  return { job_id: JOB, looked_at: "2026-09-04T09:16:52.402Z", found, looks, resources: reading };
+}
+
+/**
+ * A Drone working, and the two processes that says. **The one Fleet wrote down
+ * leads**, and the build it started is descended from it — which is the whole
+ * reason the reading is a list and not a pid.
+ */
+export const HOLDS_RUNNING: Held = holds({
+  processes: [
+    {
+      pid: 41233,
+      command: "claude",
+      cpu_percent: 8.2,
+      memory_bytes: 402_653_184,
+      running_for: "06:11",
+      recorded: true,
+    },
+    {
+      pid: 41287,
+      command: "node",
+      cpu_percent: 61.4,
+      memory_bytes: 268_435_456,
+      running_for: "00:12",
+      recorded: false,
+    },
+  ],
+  wrote_last_at: "2026-09-04T09:16:44.100Z",
+});
+
+/**
+ * The healthy answer, said once. **Three looks and not five**: `writing` and
+ * `silence` can never report a fault, so an examination that included them
+ * could not come back `working` — which is the component's own rule, and the
+ * reason its `WorkingAndSaidSo` story asks the same three.
+ */
+export const EXAMINED_WORKING: JobExamined = examined(
+  "working",
+  [
+    {
+      asked: "process",
+      found: "working",
+      said: "the process Fleet recorded is running",
+      fields: [{ name: "pid", value: "41233" }],
+    },
+    { asked: "worktree", found: "working", said: "the worktree is on disk" },
+    { asked: "span", found: "working", said: "waiting for the step to finish" },
+  ],
+  HOLDS_RUNNING,
+);
+
+/**
+ * A Job at its approval gate. **Holding nothing, and right to** — which is why
+ * the absence is drawn quiet here and loud on `HOLDS_WEDGED` below, from the
+ * same empty list. Nobody has pressed, because nothing looks wrong.
+ */
+export const HOLDS_AT_THE_GATE: Held = holds({
+  held: "none",
+  processes: [],
+  worktree: { path: WORKTREE, branch: "fix/settings-split-selectors", bytes: 1_310_720_000 },
+  wrote_last_at: "2026-09-04T09:14:48.000Z",
+});
+
+/**
+ * The claim `Drone alive, idle` in the step's header, substantiated.
+ *
+ * **This is the figure that header field cannot carry.** `alive, idle` is a
+ * summary of a process at 0.1% of a core that has been up for twenty-one
+ * minutes, and the summary is worth exactly as much as whatever produced it —
+ * so the reading it came from is on the screen beside it.
+ */
+export const HOLDS_IDLE: Held = holds({
+  processes: [
+    {
+      pid: 41233,
+      command: "claude",
+      cpu_percent: 0.1,
+      memory_bytes: 536_870_912,
+      running_for: "21:40",
+      recorded: true,
+    },
+  ],
+  worktree: { path: WORKTREE, branch: "fix/settings-split-selectors", bytes: 1_476_395_008 },
+  wrote_last_at: "2026-09-04T09:10:12.000Z",
+});
+
+/**
+ * A Job that is over, and the checkout it left behind.
+ *
+ * **The size is the reason this is drawn on a dead Job at all.** Nothing here
+ * needs watching and the disk does: seventy-four worktrees once took 220 GB and
+ * three agents died at zero bytes free, and every one of those Jobs was over.
+ */
+export const HOLDS_AFTER_THE_END: Held = holds({
+  held: "none",
+  processes: [],
+  worktree: { path: WORKTREE, branch: "fix/settings-split-selectors", bytes: 1_476_395_008 },
+  wrote_last_at: "2026-09-04T09:11:56.000Z",
+});
+
+/**
+ * The state the whole panel was built for. **A Job that reads `running` and
+ * holds no process**, with the run below it showing every step `not_started`
+ * and Fleet's log stopped on a failed preparation command two minutes ago.
+ *
+ * Nothing else on this screen says the Job is dead. The badge says running, the
+ * tree says not started — both true, and together they are what a wedged Job
+ * looked like for six minutes on 4 Sep 2026 while somebody read them.
+ */
+export const HOLDS_WEDGED: Held = holds({
+  held: "none",
+  processes: [],
+  worktree: { path: WORKTREE, branch: "fix/settings-split-selectors", bytes: 96_468_992 },
+  wrote_last_at: "2026-09-04T09:16:47.000Z",
+});
+
+/** What asking found on the wedged Job. The headline is the finding. */
+export const EXAMINED_WEDGED: JobExamined = examined(
+  "not_working",
+  [
+    {
+      asked: "process",
+      found: "not_working",
+      said: "this Job is running and Fleet recorded no process for it",
+      fields: [{ name: "processes", value: "0" }],
+    },
+    {
+      asked: "worktree",
+      found: "working",
+      said: "the worktree is on disk",
+    },
+    {
+      asked: "writing",
+      found: "cannot_tell",
+      said: "nothing has been written to this Job's log lately, which settles nothing on its own",
+      fields: [{ name: "seconds_ago", value: "165" }],
+    },
+  ],
+  HOLDS_WEDGED,
+);
