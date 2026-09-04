@@ -12,8 +12,17 @@
 //! Fleet, and every process Fleet has not detached — so the number that would
 //! turn one Drone's ending into a fleet-wide kill cannot be spelled. The pid
 //! being non-zero is not enough on its own: it also has to still be this
-//! Drone's, which is [`DroneSession::group`](crate::session::DroneSession)'s
-//! claim and not this file's.
+//! Drone's, and **the two callers prove that two different ways.**
+//!
+//! [`DroneSession::group`](crate::session::DroneSession) proves it by holding
+//! an uncollected child on the pid: while the child has not been waited on the
+//! operating system cannot hand the number to anybody else. `crate::adopting`
+//! cannot — an adopted Drone is not this process's child and there is nothing
+//! to hold — so it proves it by asking [`crate::holder_of`] when the process at
+//! that pid started and comparing the answer against what was recorded at the
+//! spawn. That is a weaker claim by exactly the width of `ps`'s second
+//! resolution, which is stated where it bites at
+//! [`Holder::Held`](crate::Holder).
 
 use std::num::NonZeroU32;
 

@@ -171,9 +171,13 @@ fn the_test_check_excludes_the_crate_that_must_not_compile() {
 /// `crates/core-model/domain/workflow-samples/bug.json` is the authority on
 /// what Bug becomes: seven steps, a Judge on every gate, and a `review` step
 /// that routes `request_changes` back to `fix`. It declares `structure: "loop"`
-/// and says so correctly. M1 carries one of the two structures, so the refusal
-/// is `OutsideM1` — a value the schema sanctions that this milestone has not
-/// built, whose fix is a later milestone rather than an edit.
+/// and says so correctly.
+///
+/// **The structure is no longer what refuses it.** Until #263 that was this
+/// test's subject — `loop` was `OutsideM1`, one of two values the milestone had
+/// not built — and both are carried now, so the claim is asked of the next
+/// deferral instead: `test_run` is a check type the schema sanctions and M1 has
+/// no per-step test invocation for.
 ///
 /// That distinction is why the two `bug.json` files in this repository are not
 /// duplicates and must not be reconciled, and it is asserted rather than left
@@ -184,22 +188,26 @@ fn the_designed_bug_workflow_is_refused_for_a_reason_a_later_milestone_removes()
     let designed = repository()
         .join("crates/core-model/domain/workflow-samples")
         .join("bug.json");
-    let refused =
-        WorkflowDef::load(&designed, &roster()).expect_err("a loop, and M1 carries linear");
+    let refused = WorkflowDef::load(&designed, &roster())
+        .expect_err("seven steps, and M1 reads a slice of what they declare");
     let LoadError::Refused { refusals, .. } = &refused else {
         panic!("a document that parsed and was refused, not {refused}");
     };
-    let structure = refusals
+    assert!(
+        !refusals.iter().any(|refusal| refusal.key == "structure"),
+        "`loop` is carried, and the file declares it correctly: {refusals:?}"
+    );
+    let deferred = refusals
         .iter()
-        .find(|refusal| refusal.key == "structure")
-        .unwrap_or_else(|| panic!("`structure` is refused: {refusals:?}"));
+        .find(|refusal| refusal.key == "steps[0].mechanical_checks[0].type")
+        .unwrap_or_else(|| panic!("`test_run` is refused: {refusals:?}"));
     assert!(
         matches!(
-            &structure.fault,
-            Fault::OutsideM1 { value, .. } if value == "loop"
+            &deferred.fault,
+            Fault::OutsideM1 { value, .. } if value == "test_run"
         ),
         "deferred, not wrong: {:?}",
-        structure.fault
+        deferred.fault
     );
 }
 

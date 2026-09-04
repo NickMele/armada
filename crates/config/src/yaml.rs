@@ -132,6 +132,13 @@ impl<'a> Table<'a> {
         self.taken.insert(name.to_string());
     }
 
+    /// Whether the mapping held nothing at all. For `verdict_routing`, where
+    /// `{}` is a key the author wrote and left blank rather than an absent one
+    /// — [`Fault::Empty`]'s distinction, applied to a map instead of a string.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
     /// Every name in this table, in the order the file wrote them, with its
     /// value. For the open-ended maps — `checks` and `commands` — where the
     /// names are the author's and there is no known set to close against.
@@ -333,4 +340,49 @@ pub(crate) fn word<T: Copy>(
     };
     out.push(Refusal::new(key, fault));
     None
+}
+
+/// Whether any mapping in a list writes `name` at all.
+///
+/// **Asked of the file rather than of what parsed.** A step is dropped when
+/// anything on it is refused — a missing `label`, a model this machine does not
+/// offer — so a cross-step check run against the survivors would tell a
+/// workflow it declares no loop edge while the edge is sitting plainly on one
+/// of its steps, and send the author to the wrong line for a fault they do not
+/// have.
+pub(crate) fn any_holds(items: &[(String, &Value)], name: &str) -> bool {
+    items.iter().any(|(_, item)| at_key(item, name).is_some())
+}
+
+/// The text at `name` in each mapping of a list, paired with the item's own
+/// position, skipping any item where the key is absent or is not text.
+///
+/// For the same cross-step checks, and read off the file for [`any_holds`]'s
+/// reason. **The position is the item's index, not the position in this list**,
+/// because a skipped item would otherwise shift every one after it — and what
+/// the caller compares is order in the document.
+pub(crate) fn placed_values<'a>(
+    items: &'a [(String, &'a Value)],
+    name: &str,
+) -> Vec<(usize, &'a str)> {
+    items
+        .iter()
+        .enumerate()
+        .filter_map(|(n, (_, item))| match at_key(item, name) {
+            Some(Value::String(found)) => Some((n, found.as_str())),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The value at `name` inside a mapping, or [`None`] where there is no mapping
+/// or no such key. Nothing is refused here: every one of these values is read
+/// properly somewhere else, and this is the second, cross-item look.
+fn at_key<'a>(value: &'a Value, name: &str) -> Option<&'a Value> {
+    let Value::Mapping(map) = value else {
+        return None;
+    };
+    map.iter()
+        .find(|(key, _)| matches!(key, Value::String(key) if key == name))
+        .map(|(_, held)| held)
 }

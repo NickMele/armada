@@ -164,16 +164,18 @@ fn a_step_needs_both_an_id_and_a_label() {
     assert_eq!(fault_at(&refused, "steps[1].id"), &Fault::Missing);
 }
 
+/// A third value is still a value the schema does not have, and the message
+/// says so rather than reading as a milestone that has not arrived.
 #[test]
-fn structure_loop_is_outside_m1_and_says_so() {
+fn a_structure_the_schema_does_not_have_is_refused_as_a_typo() {
     let refused = refusals(parse(
-        "version: 1\nworkflow_id: fixture\nname: design_plan\nstructure: loop\nsteps:\n  - id: draft\n    label: Draft\n    advance_gate: auto\n",
+        "version: 1\nworkflow_id: fixture\nname: fixture\nstructure: cycle\nsteps:\n  - id: draft\n    label: Draft\n    advance_gate: auto\n",
     ));
     assert_eq!(
         fault_at(&refused, "structure"),
-        &Fault::OutsideM1 {
-            value: "loop".to_string(),
-            carried: &["linear"],
+        &Fault::NotInTheSchema {
+            value: "cycle".to_string(),
+            legal: &["linear", "loop"],
         }
     );
 }

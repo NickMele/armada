@@ -23,6 +23,7 @@ mod gaming;
 mod iteration;
 mod migrate;
 mod plan;
+mod process;
 mod reconstruct;
 mod report;
 mod roundtrip;

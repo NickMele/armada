@@ -58,6 +58,7 @@ use crate::noticing::{Noticing, Sweep};
 use crate::peer::{attributed, Drones, NotACaller, PeerOf};
 use crate::proposal::Proposing;
 use crate::proposals::{Proposals, Watching};
+use crate::readopting::Recovered;
 use crate::silence::Liveness;
 use crate::slots::{Concurrency, Slot, Slots};
 
@@ -207,9 +208,16 @@ pub struct Fittings<H, V, W> {
 /// What the boot read found and what the reconciliation did about it.
 #[derive(Debug, Default)]
 pub struct Reconciled {
-    /// Jobs the store says were `running` and whose Drone this Fleet does not
-    /// have. Every one is now `escalated`, reason `interrupted`.
+    /// Jobs the store says were `running` and whose Drone is gone — **asked
+    /// about and answered**, not assumed. Every one is now `escalated`, reason
+    /// `interrupted`. A Job whose probe would not run is here too, and its log
+    /// line says the process may still be there.
     pub interrupted: Vec<JobId>,
+    /// Jobs whose Drone outlived this Fleet's predecessor and was taken back
+    /// over. **Each is still where it was** — ordinarily `running` — with the
+    /// process in a slot, its pid attributing its own calls again, and a row in
+    /// its transcript saying what nothing observed. See `crate::readopting`.
+    pub adopted: Vec<JobId>,
     /// Rows whose cached status disagreed with the log and were corrected.
     pub repaired: usize,
     /// Rows that would not rebuild at all. **Never dropped** — carried out so a
@@ -381,14 +389,23 @@ where
 
     /// **The boot read, and the reconciliation.** Nothing runs until this has.
     ///
-    /// A Job the store says was `running` has no Drone, because a Drone is held
-    /// in memory by the Fleet that spawned it and this Fleet has just started.
-    /// It is `escalated`, reason `interrupted` — the answer `crate::aftermath`
-    /// gives for a process that is gone having left nothing, reached through
-    /// that function rather than restated here.
+    /// A Job the store says was `running` **is asked about** rather than
+    /// assumed dead. `libc::setsid()` at every spawn is what lets a Drone
+    /// outlive the Fleet that started it, so a step whose pointer is still set
+    /// may name a process that is still working — and this used to state
+    /// `Ending::Vanished` about all of them, because a pid lived only in memory
+    /// and there was nothing to ask with. `crate::readopting` is the asking and
+    /// `#61` is the subject.
     ///
-    /// **Never resumed silently.** There is no path in this crate that puts a
-    /// Drone back onto a Job that was running when Fleet died.
+    /// Where the process is gone, the answer is what it always was: `escalated`,
+    /// reason `interrupted`, through `crate::aftermath` rather than restated
+    /// here.
+    ///
+    /// **Never resumed silently, which is a stronger claim than it looks.** A
+    /// Drone that is adopted is put back in a slot and the Job carries on, and
+    /// the record says so twice over: a line in the Job's log naming the pid,
+    /// and a row in the Drone's own transcript saying how long nothing was read
+    /// and that nothing will be read from here.
     pub async fn reconcile(&self) -> Result<Reconciled, Adrift> {
         let (loaded, unreadable) = self.every_job().await?;
         let mut reconciled = Reconciled {
@@ -415,6 +432,14 @@ where
             .filter(|(job, steps)| !steps.is_empty() || job.status() == JobStatus::Running)
             .collect();
         for (job, steps) in held {
+            // **Asked before anything is recorded**, because the departure is
+            // what clears the pointer and the stored pid, and a Drone that is
+            // still there has not departed. A Job that is adopted keeps its
+            // pointer, its process row and its status.
+            if self.recovered(&job).await? == Recovered::Adopted {
+                reconciled.adopted.push(job.id().clone());
+                continue;
+            }
             for step in steps {
                 self.drone_left(job.id(), &step).await?;
             }
