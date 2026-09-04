@@ -13,8 +13,8 @@ use core_model::Job;
 use ipc::mcp::NotRecorded;
 use ipc::{
     CheckRun, DeclaredCheck, DeclaredJudge, Flagged, HeldReason, Judged, KeptDeliverable,
-    ReclaimedBranch, ReclaimedWorktree, StepFacts, StepId, Submitted, WorkflowStep, WorktreeHeld,
-    WorktreeReclaimed,
+    ManifestId, ManifestSummary, ReclaimedBranch, ReclaimedWorktree, StepFacts, StepId, Submitted,
+    WorkflowId, WorkflowStep, WorkflowSummary, WorktreeHeld, WorktreeReclaimed,
 };
 
 use crate::holding::{Held, Holding};
@@ -182,6 +182,61 @@ pub(crate) fn canonical(path: &std::path::Path) -> String {
         .unwrap_or_else(|_| path.to_path_buf())
         .to_string_lossy()
         .to_string()
+}
+
+/// One workflow as a caller sees it before naming one, with [`declared`]
+/// carrying the steps.
+///
+/// The Manifest id travels on every row rather than beside the list: a
+/// workflow is only nameable against the Manifest it was resolved from, and a
+/// caller holding one row alone would otherwise have to remember which.
+pub(crate) fn workflow_summary(
+    workflow: &config::ResolvedWorkflow,
+    manifest_id: &core_model::ManifestId,
+) -> WorkflowSummary {
+    WorkflowSummary {
+        id: WorkflowId::from(workflow.id()),
+        name: workflow.name().to_string(),
+        version: workflow.version(),
+        steps: declared(workflow),
+        manifest_id: ManifestId::from(manifest_id),
+    }
+}
+
+/// The Manifest a Fleet was started against, as the wire carries it.
+///
+/// **`repository` is not a name the Manifest declares.** `armada.yml` has no
+/// key for one — `version`, `id`, `checks` and `commands` are the whole schema
+/// — so what is carried is the directory the file was read from, which is a
+/// fact rather than an invention. A person reading a Job wants to know which
+/// project it runs against, and a ULID does not say.
+pub(crate) fn manifest_summary(manifest: &config::Manifest) -> ManifestSummary {
+    let path = manifest.path();
+    ManifestSummary {
+        id: ManifestId::from(manifest.id()),
+        repository: path
+            .parent()
+            .and_then(|dir| dir.file_name())
+            .map(|name| name.to_string_lossy().to_string())
+            // A Manifest at the filesystem root has no directory to name. Its
+            // own path is the next most useful true thing.
+            .unwrap_or_else(|| path.to_string_lossy().to_string()),
+        // **Absolute, and it has to be.** Bridge derives every artifact path
+        // from this one — the worktree, the Job log, the transcripts — and then
+        // hands the result to the OS to open. A relative path answers a
+        // question about Fleet's working directory, which is not a fact about
+        // the repository and is not a directory Bridge is in: served as
+        // `./armada.yml`, every one of those opens resolved against the
+        // Electron process and found nothing.
+        //
+        // `$HOME` therefore appears on this wire, which the log envelope and
+        // the failure record both refuse. It is a different surface: those are
+        // written down and read later, and this is two processes on one machine
+        // agreeing where a file is.
+        path: canonical(path),
+        version: manifest.version(),
+        checks: manifest.check_names(),
+    }
 }
 
 /// One filed report, as the wire carries it. **The redaction, for a report.**

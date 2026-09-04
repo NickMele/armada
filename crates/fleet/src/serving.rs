@@ -30,9 +30,9 @@ use ipc::mcp::{
 };
 use ipc::{
     CallArguments, ChangesRequested, FleetCapacity, JobDelivery, JobDetail, JobDiff, JobEvidence,
-    JobForgotten, JobHistory, JobId, JobList, JobSpend, JobSummary, ManifestId, ManifestSummary,
-    ModelChoices, Overruled, ProposeJob, Redirection, Redispatched, Work, WorkflowId,
-    WorkflowSummary, WorktreeReclaimed, WorktreesHeld,
+    JobForgotten, JobHistory, JobId, JobList, JobSpend, JobSummary, ManifestSummary, ModelChoices,
+    Overruled, ProposeJob, Redirection, Redispatched, Work, WorkflowSummary, WorktreeReclaimed,
+    WorktreesHeld,
 };
 use store::LoadJobError;
 
@@ -46,7 +46,8 @@ use crate::overruling::Overruling;
 use crate::reporting::Filed;
 use crate::resume::Redirection as Instruction;
 use crate::wire::{
-    canonical, declared, recorded, reported, step_facts, step_moves, submitted, worktree_held,
+    manifest_summary, recorded, reported, step_facts, step_moves, submitted, workflow_summary,
+    worktree_held,
 };
 
 impl<H, V, W> Daemon for Fleet<H, V, W>
@@ -394,54 +395,17 @@ where
     /// Every workflow this Fleet holds, so a caller can name one that will not
     /// be refused.
     async fn list_workflows(&self) -> Result<Vec<WorkflowSummary>, Refusal> {
+        let manifest_id = self.manifest().id();
         Ok(self
             .workflows()
             .values()
-            .map(|workflow| WorkflowSummary {
-                id: WorkflowId::from(workflow.id()),
-                name: workflow.name().to_string(),
-                version: workflow.version(),
-                steps: declared(workflow),
-                manifest_id: ManifestId::from(self.manifest().id()),
-            })
+            .map(|workflow| workflow_summary(workflow, manifest_id))
             .collect())
     }
 
     /// The one Manifest this Fleet was started against.
-    ///
-    /// **`repository` is not a name the Manifest declares.** `armada.yml` has
-    /// no key for one — `version`, `id`, `checks` and `commands` are the whole
-    /// schema — so what is carried is the directory the file was read from,
-    /// which is a fact rather than an invention. A person reading a Job wants
-    /// to know which project it runs against, and a ULID does not say.
     async fn list_manifests(&self) -> Result<Vec<ManifestSummary>, Refusal> {
-        let manifest = self.manifest();
-        let path = manifest.path();
-        Ok(vec![ManifestSummary {
-            id: ManifestId::from(manifest.id()),
-            repository: path
-                .parent()
-                .and_then(|dir| dir.file_name())
-                .map(|name| name.to_string_lossy().to_string())
-                // A Manifest at the filesystem root has no directory to name.
-                // Its own path is the next most useful true thing.
-                .unwrap_or_else(|| path.to_string_lossy().to_string()),
-            // **Absolute, and it has to be.** Bridge derives every artifact path
-            // from this one — the worktree, the Job log, the transcripts — and
-            // then hands the result to the OS to open. A relative path answers
-            // a question about Fleet's working directory, which is not a fact
-            // about the repository and is not a directory Bridge is in: served
-            // as `./armada.yml`, every one of those opens resolved against the
-            // Electron process and found nothing.
-            //
-            // `$HOME` therefore appears on this wire, which the log envelope
-            // and the failure record both refuse. It is a different surface:
-            // those are written down and read later, and this is two processes
-            // on one machine agreeing where a file is.
-            path: canonical(path),
-            version: manifest.version(),
-            checks: manifest.check_names(),
-        }])
+        Ok(vec![manifest_summary(self.manifest())])
     }
 
     /// What a Job may be spawned as, resolved once by the composition root.
