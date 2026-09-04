@@ -30,7 +30,8 @@ use std::sync::Mutex;
 
 use adapter_traits::{
     Base, BaseOnTheRemote, BroughtUpToDate, Change, CommitTime, Committed, Delivery, Landing,
-    NotDelivered, Opened, Pushed, Review, Standing, Vcs, Worktree, WorktreeSpec,
+    NotDelivered, Opened, Pushed, Renewed, RepositoryStanding, Review, Standing, Vcs,
+    WhatBecameOfIt, Worktree, WorktreeSpec,
 };
 
 use crate::work_product::Holding;
@@ -120,6 +121,13 @@ pub enum Delivered {
     /// rarely it happens — a test that could not see the calls could not tell a
     /// sweep that asks once from one that asks every turn.
     AskedWhatBecameOfIt { pull_request: String },
+    /// The forge was asked to compare a pull request afresh. **Counted for
+    /// [`AskedWhatBecameOfIt`](Delivered::AskedWhatBecameOfIt)'s reason and
+    /// then some**: this one closes and reopens a person's pull request, so a
+    /// test that could not see it could not tell once from every sweep.
+    AskedToRenderAfresh { pull_request: String },
+    /// The repository every worktree is cut from was asked to catch up.
+    CaughtTheRepositoryUp { base: String },
 }
 
 /// What the fake's version control looks like from the delivery side.
@@ -141,6 +149,14 @@ pub struct Delivering {
     /// default, which is the answer on a machine with no forge and the one a
     /// test gets unless it says a merge happened.
     pub landed: Landing,
+    /// The branch the forge says the pull request merges into. `None` is a
+    /// forge that answered nothing, which is what [`Landing::Unknown`] means.
+    pub base_on_the_forge: Option<String>,
+    /// What closing and reopening comes to. Renewed by default, because the
+    /// case a test has to write out is the one where it was left closed.
+    pub renewed: Renewed,
+    /// What catching the repository up comes to.
+    pub repository: RepositoryStanding,
 }
 
 impl Default for Delivering {
@@ -161,6 +177,11 @@ impl Default for Delivering {
             // Nobody has merged it. A default that said `Merged` would have
             // every existing test's Job land the moment anything asked.
             landed: Landing::Unknown,
+            base_on_the_forge: Some(String::from("main")),
+            renewed: Renewed::Renewed,
+            repository: RepositoryStanding::AlreadyHadIt {
+                base: String::from("main"),
+            },
         }
     }
 }
@@ -248,6 +269,51 @@ impl FakeVcs {
     /// consuming builder could not express the case at all.
     pub fn now_landed(&self, landed: Landing) {
         self.delivery.lock().expect("not poisoned").landed = landed;
+    }
+
+    /// Say that closing and reopening the pull request will leave it closed.
+    ///
+    /// `&self` for [`now_landed`](FakeVcs::now_landed)'s reason, and the one
+    /// outcome worth scripting: the renewal that works changes nothing a
+    /// caller can see, and the one that fails is the case the guard exists for.
+    pub fn unable_to_reopen(&self) {
+        self.delivery.lock().expect("not poisoned").renewed = Renewed::LeftClosed {
+            why: String::from("the forge would not reopen it"),
+        };
+    }
+
+    /// Say what bringing the repository up to the merged branch comes to.
+    pub fn repository_standing(&self, standing: RepositoryStanding) {
+        self.delivery.lock().expect("not poisoned").repository = standing;
+    }
+
+    /// How many times the forge has been asked to compare a pull request
+    /// afresh. **The one call here a person sees happen**, so a test that
+    /// asserts once is asserting the whole of the rule.
+    pub fn times_asked_to_render_afresh(&self) -> usize {
+        self.counted(|it| matches!(it, Delivered::AskedToRenderAfresh { .. }))
+    }
+
+    /// Every branch the repository was asked to catch up to, in order.
+    pub fn repository_caught_up_to(&self) -> Vec<String> {
+        self.delivered
+            .lock()
+            .expect("not poisoned")
+            .iter()
+            .filter_map(|it| match it {
+                Delivered::CaughtTheRepositoryUp { base } => Some(base.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn counted(&self, which: impl Fn(&Delivered) -> bool) -> usize {
+        self.delivered
+            .lock()
+            .expect("not poisoned")
+            .iter()
+            .filter(|it| which(it))
+            .count()
     }
 
     /// How many times the forge has been asked what became of a pull request.
@@ -399,14 +465,42 @@ impl Delivery for FakeVcs {
         Ok(self.delivery.lock().expect("not poisoned").review.clone())
     }
 
-    fn landed(&self, _in_repo: &str, pull_request: &str) -> Landing {
+    fn landed(&self, _in_repo: &str, pull_request: &str) -> WhatBecameOfIt {
         self.delivered
             .lock()
             .expect("not poisoned")
             .push(Delivered::AskedWhatBecameOfIt {
                 pull_request: pull_request.to_string(),
             });
-        self.delivery.lock().expect("not poisoned").landed.clone()
+        let delivery = self.delivery.lock().expect("not poisoned");
+        WhatBecameOfIt {
+            landing: delivery.landed.clone(),
+            base: delivery.base_on_the_forge.clone(),
+        }
+    }
+
+    fn rendered_afresh(&self, _in_repo: &str, pull_request: &str) -> Renewed {
+        self.delivered
+            .lock()
+            .expect("not poisoned")
+            .push(Delivered::AskedToRenderAfresh {
+                pull_request: pull_request.to_string(),
+            });
+        self.delivery.lock().expect("not poisoned").renewed.clone()
+    }
+
+    fn caught_the_repository_up(&self, _in_repo: &str, base: &str) -> RepositoryStanding {
+        self.delivered
+            .lock()
+            .expect("not poisoned")
+            .push(Delivered::CaughtTheRepositoryUp {
+                base: base.to_string(),
+            });
+        self.delivery
+            .lock()
+            .expect("not poisoned")
+            .repository
+            .clone()
     }
 }
 

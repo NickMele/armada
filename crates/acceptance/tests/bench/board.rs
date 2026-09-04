@@ -20,7 +20,7 @@
 
 use core_model::{Branch, DroneStanding, Job, Standing, Stuck, TransitionReason};
 use fleet::Ruling;
-use ipc::{CheckRun, Flagged, JobDetail, JobList, Judged, StepFacts};
+use ipc::{CheckRun, Flagged, JobDelivery, JobDetail, JobList, Judged, StepFacts};
 
 use super::Run;
 
@@ -134,6 +134,35 @@ pub fn detail(job: &Job, reason: Option<&TransitionReason>, steps: &[StepFacts])
         stuck.as_ref(),
         None,
         None,
+        None,
+    )
+}
+
+/// The same, for a Job whose branch went somewhere.
+///
+/// **A separate function rather than a thirteenth argument to
+/// [`detail`].** Every other Job this bench builds has an empty delivery, and
+/// threading `None` through four call sites to reach one is how a fixture stops
+/// saying what it is for.
+pub fn delivered(
+    job: &Job,
+    reason: Option<&TransitionReason>,
+    steps: &[StepFacts],
+    delivery: JobDelivery,
+) -> JobDetail {
+    let stuck = Stuck::of(job, reason, standing(true));
+    JobDetail::of(
+        job,
+        reason,
+        None,
+        None,
+        steps,
+        None,
+        None,
+        None,
+        stuck.as_ref(),
+        None,
+        Some(delivery),
         None,
     )
 }

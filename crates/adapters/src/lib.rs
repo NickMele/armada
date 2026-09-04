@@ -43,6 +43,7 @@ mod error;
 mod harness;
 mod issue_lookup;
 mod judge;
+mod landing;
 mod mcp;
 mod reclaim;
 mod transcript;

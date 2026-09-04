@@ -204,9 +204,20 @@ The remedy needs no new state: `depends_on` already sequences Jobs and already p
 
 **The Drone and Job auto-retry on reconnect** and resume where they left off. Process-crash recovery flags `interrupted` instead of resuming — see the daemon lifecycle above.
 
-### Fleet's model of the world stops at the merge
+### What Fleet knows after the merge, and what it does not
 
-**Nothing watches main after a merge.** Under `auto_merge: never` a person merges and Armada is not party to it, so a post-merge signal would cover only the subset Fleet merged itself. A detector that fires on some breakages and not others is worse than none, because its silence reads as an all-clear.
+**Armada opens a pull request and a person merges it**, so everything after that moment is only ever knowable by asking. Fleet asks about **one** pull request per sweep and rotates, because the turn interval is 250ms and asking the forge is a process — an open pull request needs asking rarely and a merged one never again.
+
+| What one ask answers | What follows |
+|---|---|
+| Somebody merged it | The Job's record says so, the row says so, and the repository every worktree is cut from is brought up to what merged |
+| It was closed and never merged | The record says so, and nothing else moves — nothing arrived on the base |
+| It is still open, against a base that has since moved | The forge is asked to compare it afresh, **once**, because it pins the comparison at the commit the pull request was opened from and renders other people's commits as this Job's work until something moves it |
+| Nothing on this machine could say | Nothing is written down and it is asked again later |
+
+**The repository is fast-forwarded or left alone, and never anything in between.** A checkout on some other branch, a working tree carrying somebody's uncommitted change, a repository with no remote, and a history that will not fast-forward are all refusals — this is the one thing Fleet writes into the repository a person is standing in, and `--autostash` is not on offer because nobody asked for a rebase.
+
+**Nothing watches main for breakage after a merge.** Under `auto_merge: never` a person merges and Armada is not party to it, so a post-merge signal would cover only the subset Fleet merged itself. A detector that fires on some breakages and not others is worse than none, because its silence reads as an all-clear. Running the Checks once against the updated tree is the piece that would answer it, and it is not built — #474, where the reason it is its own issue is that the run belongs to the commit rather than to any one Job.
 
 A merge that breaks main is raised by a person, and the response is a new Job pointing back through `subject` rather than anything reopening: `completed_success` is terminal and stays true. See [Job](job.md). Whether Fleet should watch the merges it did perform is open (see Open questions).
 
