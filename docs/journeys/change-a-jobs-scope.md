@@ -32,7 +32,7 @@ Two entrances and two directions. A Drone asking is the common one; a person cha
 | 2. Fleet answers what it can without spending anything | A path the step's denylist excludes, a path already in scope, a Job whose scope was never stated, or a step that has already asked — each is refused there and then, and none of them costs a call |
 | 3. One Judge call goes out | The Job stays `running` and the Drone stays on its step. A person watching sees the wait, because the call is marked like every other |
 | 4a. It is consistent with the step | The paths join the Job's scope, the revision is recorded as taken, and the Drone carries on — declaring them again through `declare_scope`, which is what the drift check measures against |
-| 4b. It is not | The revision is recorded as not taken, the step stops carrying its verdict, and the Job escalates with the Judge's reason |
+| 4b. It is not | The revision is recorded as not taken, the step stops carrying `scope_refused`, and the Job escalates with the Judge's reason |
 | 5. On a refusal, you take it from there | The Drone is alive and idle, so redirect, restart the step or widen the scope yourself — the acts an escalated Job already has |
 
 **A widening is judged; a narrowing is not.** A narrowing asks for nothing — it hands back scope already held — so there is nothing for a Judge to be consistent about and no call is made. It is a person's act and it stays one: nothing in a Drone's toolset can reach it, and the tool has no field for a path to remove.
@@ -141,7 +141,7 @@ Everything below is drawn without a source, and each is a decision somebody has 
 | That narrowed-away edits stay in the diff and reach the Judge | Follows from write targets not binding writes |
 | That a respawn consumes no retry attempt | A reading. `retry_count` counts failures and a scope change is not one |
 | That one ask per step is the right bound | Argued rather than measured. A refusal escalates, so a second ask only arises after a clear, and a step whose plan was wrong twice is a step a person should see. Nothing measures how often that is wrong |
-| That a refused widening escalates as `blocked_by_policy` | The nearest row, read as *a Drone refused something it needed, where a rephrase cannot help*. Its own registry text says "a tool or a command", which this is not — whether that row widens or a sibling is minted is open |
+| That a refused widening escalates at all | The owner's, and the reason a person is met by the exception rather than by every request. It carries `scope_refused`, a row of its own rather than `blocked_by_policy` — that one is the allowlist denying a tool, where the fix is a Manifest; here the fix is to look at what the Drone was trying to write |
 
 ## Open questions
 

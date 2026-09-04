@@ -343,6 +343,32 @@ Leaving the step `running` was the alternative and it shipped that way for an ho
 Stopping the step with no trigger at all was the other, and is refused on `drone_killed`'s own reasoning: a person opening the Job a week later should find a reason rather than an absence, and `Job::stopped_on` answers the step and the trigger together.
 """
 
+[triggers.scope_refused]
+kind = "Trigger"
+level = "Step"
+meaning = "A Drone asked for a path outside what the Job says it writes, and the Judge decided it does not belong to the step the Drone was given."
+in_code = ""
+notes = """
+**Not `blocked_by_policy`, and this row exists because folding them costs a person the diagnosis.** That one is the allowlist denying a tool or a command: nothing read the request, the Drone tried something and was stopped, and what a person does about it is edit a Manifest. Here something *did* read the request and decided against it — so what a person does is look at what the Drone is trying to do, because a Drone asking for scope the step does not need is the first observable sign of drift. Two causes wanting opposite responses under one word is `#334` and `#410`, and this is the same shape a third time.
+
+Not `gate_failure`. That is work submitted, weighed and found short, with the retries spent. Nothing has been submitted here and no work has been weighed at all — what was weighed is a plan, before the work that would test it.
+
+Not `evidence_suspect`, for the same half of that argument from the other side: that one is evidence that passed mechanically and is not trusted. There is no evidence.
+
+Not `thrashing` or `no_report`, which are Fleet's own mid-step looks finding that work is going nowhere or that an instruction went unanswered. This one fires on a Drone doing exactly what it was asked to do — saying out loud that it needs something — and the answer being no.
+
+**The Drone is alive and idle when this lands.** It asked through a tool and the call answered; nothing was killed and nothing respawned, so the worktree, the session and every earlier step's work are all there. Redirect reaches it, and that is the ordinary recourse: a person who agrees with the Judge tells the Drone what to do instead, and a person who disagrees has no act that widens the scope from here — which is filed as `[declined-widening-has-no-edge]` on `docs/journeys/change-a-jobs-scope.md`.
+
+`in_code` is empty rather than "Not yet" for `gate_undecided`'s reason — the row was authored here and has no source value to carry.
+"""
+why = """
+A refused request is not a denied tool, and the badge is where the difference reaches a person. `blocked_by_policy` says *the allowlist is wrong, go and edit it*; this says *a Drone believes the work needs something the task does not cover*, which is either a scope that was drawn too tight or a Drone that has wandered — and neither is answered by editing a Manifest.
+
+Reusing `blocked_by_policy` was the alternative and it shipped that way for one commit, on the reading that a Drone refused something it needed is a Drone refused something it needed. It is refused because the row's own text says "a tool or a command", and a trigger whose meaning has to be read past is a trigger that will be read wrongly. The milestone has now hit that fold twice under `#334` and `#410`; a third would make it the pattern rather than the exception.
+
+Not stopping the Job at all was the other, and is refused because a Judge that will not grant a request is the one place a person is genuinely owed the decision. The whole shape of the feature is that a person is met by the exception rather than by every request, and an exception nobody is shown is not an exception.
+"""
+
 [triggers.silent]
 kind = "Sub-kind"
 meaning = "Sub-kind of stalled. The Drone process exited normally having called no tool at all. A Drone that did call tools and had every one of them refused is blocked_by_policy instead — the two look identical in the result envelope and take opposite remedies, so the boundary is the tool call and not the empty result."

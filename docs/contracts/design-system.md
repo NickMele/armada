@@ -1471,6 +1471,15 @@ reason as above — that is what the *Job* is held for, and one Job carries
 both: the step says what happened to it, the Job says what it happened
 for.
 
+`scope_refused` renders as **the scope request was refused**, and the
+Judge is deliberately not in it — attribution goes in the source field,
+which is `evidence_suspect`'s rule below. It is not **blocked by
+policy**, which is the badge it is being split away from: that one names
+a configuration to go and edit, and a reader who cannot tell them apart
+on the word edits a Manifest when what they should do is read what the
+Drone was trying to write. It is not **stopped at the gate** either —
+that says work was weighed, and here nothing was submitted.
+
 `evidence_suspect` renders as
 **evidence disputed**, with Judge in the source field, which keeps
 attribution out of the headline so P5 holds. Avoid "Judge rejected the

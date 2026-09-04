@@ -473,14 +473,12 @@ where
 
 /// What a refused widening escalates as.
 ///
-/// **`blocked_by_policy` read as it is written**: a Drone that was refused
-/// something it needed, where a rephrase cannot help and the fix is a change to
-/// what the task is allowed to do. The registry's row says "a tool or a
-/// command" and this is neither — it is the scope itself — and whether that row
-/// widens or a sibling is minted is a decision for the registry rather than for
-/// this file. What is not in doubt is the level: step, so the stopped step
-/// carries the verdict and a person can restart or redirect it.
-const REFUSED_A_WIDENING: EscalationTrigger = EscalationTrigger::BlockedByPolicy;
+/// **Not `blocked_by_policy`**, which shipped here for one commit and is the
+/// allowlist denying a tool: nothing read the request, and what a person does
+/// about it is edit a Manifest. What a person does about this is look at what
+/// the Drone is trying to do, because a Drone asking for scope its step does
+/// not need is the first observable sign of drift. The row carries the rest.
+const REFUSED_A_WIDENING: EscalationTrigger = EscalationTrigger::ScopeRefused;
 
 /// Whether this step has already had a request answered.
 ///

@@ -210,7 +210,7 @@ async fn a_refused_request_escalates_and_says_why() {
     assert_eq!(record.status(), JobStatus::Escalated);
     assert!(!record.status().is_terminal(), "a refusal is answerable");
     let (_, stopped) = record.stopped_on().expect("the step carries the verdict");
-    assert_eq!(stopped.trigger(), EscalationTrigger::BlockedByPolicy);
+    assert_eq!(stopped.trigger(), EscalationTrigger::ScopeRefused);
     let entry = record.scope_revisions().last().expect("an entry");
     assert_eq!(entry.outcome.as_str(), ScopeRevisionOutcome::NOT_TAKEN);
     assert_eq!(

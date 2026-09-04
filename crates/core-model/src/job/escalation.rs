@@ -188,6 +188,27 @@ pub enum EscalationTrigger {
     /// Nothing weighed the work, so there is no verdict to disagree with and
     /// [`StepLevelTrigger::overrulable`] is false.
     RunEnded,
+    /// A Drone asked for a path outside what the Job says it writes, and the
+    /// Judge decided it does not belong to the step it was given.
+    ///
+    /// **Not [`BlockedByPolicy`](Self::BlockedByPolicy), and folding them costs
+    /// a person the diagnosis.** That one is the allowlist denying a tool:
+    /// nothing read the request, and the fix is a configuration change. Here
+    /// something read it and decided against it, so what a person looks at is
+    /// what the Drone is trying to do — a Drone asking for scope its step does
+    /// not need is the first observable sign of drift.
+    ///
+    /// **Not [`GateFailure`](Self::GateFailure)**, which is work weighed and
+    /// found short. Nothing has been submitted and no work has been weighed;
+    /// what was weighed is a plan, before the work that would test it.
+    ///
+    /// The Drone is alive and idle when this lands — it asked through a tool
+    /// and the call answered — so a redirect reaches it and every earlier
+    /// step's work is on the branch.
+    ///
+    /// Nothing weighed the work, so there is no verdict to disagree with and
+    /// [`StepLevelTrigger::overrulable`] is false.
+    ScopeRefused,
     /// The Drone process exited normally having called no tool at all. Declared
     /// a sub-kind of [`Stalled`](Self::Stalled): it pauses the Job identically
     /// and differs only in the recommended action — rephrase and redispatch,
@@ -299,6 +320,13 @@ impl StepLevelTrigger {
             | EscalationTrigger::LoopCap
             | EscalationTrigger::NoReport
             | EscalationTrigger::RunEnded
+            // **Not overrulable, and it is not the trigger's severity that
+            // says so.** An override advances the step, recorded as one — and
+            // nothing here weighed the work, so advancing would skip it rather
+            // than disagree with a verdict. What a person who sides with the
+            // Drone actually wants is to widen the scope, which is a different
+            // act and does not exist yet: `[declined-widening-has-no-edge]`.
+            | EscalationTrigger::ScopeRefused
             | EscalationTrigger::Thrashing => false,
             EscalationTrigger::DependencyFailed
             | EscalationTrigger::FanOut
@@ -336,6 +364,7 @@ impl EscalationTrigger {
         EscalationTrigger::NotPrepared,
         EscalationTrigger::ResourceExhausted,
         EscalationTrigger::RunEnded,
+        EscalationTrigger::ScopeRefused,
         EscalationTrigger::Silent,
         EscalationTrigger::Stalled,
         EscalationTrigger::Thrashing,
@@ -363,6 +392,7 @@ impl EscalationTrigger {
             EscalationTrigger::NotPrepared => "not_prepared",
             EscalationTrigger::ResourceExhausted => "resource_exhausted",
             EscalationTrigger::RunEnded => "run_ended",
+            EscalationTrigger::ScopeRefused => "scope_refused",
             EscalationTrigger::Silent => "silent",
             EscalationTrigger::Stalled => "stalled",
             EscalationTrigger::Thrashing => "thrashing",
@@ -413,6 +443,7 @@ impl EscalationTrigger {
             | EscalationTrigger::LoopCap
             | EscalationTrigger::NoReport
             | EscalationTrigger::RunEnded
+            | EscalationTrigger::ScopeRefused
             | EscalationTrigger::Thrashing => TriggerLevel::Step,
             EscalationTrigger::DependencyFailed
             | EscalationTrigger::FanOut
