@@ -85,6 +85,21 @@ where
         let step = self.at_the_gate(&job)?;
         let passed = self.declared_step(&job, &step)?.clone();
         let next = job.workflow().after(&step).cloned();
+        // **Before anything moves, and this is the one refusal this act
+        // borrowed.** `override_verdict`, `restart_step` and `request_changes`
+        // each read the worktree for themselves before moving a Job that will
+        // need one; this act never did, and heard it from the dispatch that ran
+        // inside the request. Taking that dispatch away — `#456` — would have
+        // left a person told the approval worked and a Job dead a tick later
+        // over something knowable before the press. It is a `path.is_dir()`,
+        // not an admission.
+        //
+        // **Only where a step is left.** A gate on the last step lands the work
+        // through `completed` rather than asking for a Drone, and what that
+        // path does with a missing worktree is its own ordering question.
+        if next.is_some() {
+            self.surviving_worktree(&job)?;
+        }
         // Before the Job moves and never after: the inner machine is frozen
         // beneath every status but the two that advance, and `awaiting_review`
         // is one of them only until this call leaves it.

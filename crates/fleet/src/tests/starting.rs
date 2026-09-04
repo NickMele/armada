@@ -150,29 +150,31 @@ async fn attachments_that_will_not_copy_stop_the_job_as_no_worktree() {
 /// what makes an escalation reachable, and both halves are asserted: the error
 /// the admission gets, and the status a person sees.
 ///
-/// **The error is no longer the approving caller's**, which is `#456`. The
-/// approval answers `queued` and the disk is met on the turn that tries to put
-/// a Drone back on — so what a person pressed comes back clean and the Job
-/// escalates a tick later, carrying the same trigger and the same remedy.
+/// **The reclaim happens after the approval and it has to.** `approve_review`
+/// reads the worktree for itself now, so a Job whose disk was already gone
+/// never reaches admission — `an_approval_over_a_reclaimed_worktree_refuses_at_
+/// the_press` is that half. What is left here is the case this arm is named
+/// for: a Job that was approvable when it was approved and was reclaimed while
+/// it sat in the queue, which is the only way the escalation is reached at all.
 #[tokio::test]
 async fn a_readmitted_job_whose_worktree_is_gone_stops_as_no_worktree() {
     let home = TempDir::new();
     let fleet = a_fleet_reviewing_the_first_step(&home, FakeWorkProduct::changed(&["src/log.rs"]));
     let job_id = at_the_gate(&fleet, &home).await;
 
+    fleet
+        .approve_review(&job_id)
+        .await
+        .expect("the worktree is there while the person is reading");
     let job = fleet.load(&job_id).await.expect("the Job is there");
     std::fs::remove_dir_all(
         fleet
             .surviving_worktree(&job)
-            .expect("it is still there while the person reads")
+            .expect("it survived the approval")
             .path(),
     )
-    .expect("the worktree is reclaimed");
+    .expect("the worktree is reclaimed while the Job waits in the queue");
 
-    fleet
-        .approve_review(&job_id)
-        .await
-        .expect("the person's decision lands whatever the disk holds");
     let refused = admit(&fleet)
         .await
         .expect_err("there is nothing to put a Drone back onto");
@@ -186,6 +188,60 @@ async fn a_readmitted_job_whose_worktree_is_gone_stops_as_no_worktree() {
         stopped_by(&fleet, &job_id).await,
         EscalationTrigger::NoWorktree,
         "the earlier steps' work is not on disk — the badge says so and names who fixes it"
+    );
+}
+
+/// **The refusal a person gets while their hand is still on the control.**
+///
+/// `approve_review` used to hear this from the dispatch it ran inline, and
+/// `#456` took that dispatch away. A borrowed refusal is still a refusal
+/// somebody depends on: without it the approval answers `queued`, the person is
+/// told it worked, and the Job dies a quarter of a second later for something
+/// that was knowable before the press.
+///
+/// **It is a `path.is_dir()` and not an admission**, which is the distinction
+/// the fix turns on — `crate::stuck` states it, and `override_verdict`,
+/// `restart_step` and `request_changes` each made this read for themselves all
+/// along. This act was the only one of the six that did not.
+///
+/// **Nothing moves.** The Job is left at the gate exactly where the person
+/// found it, which is `request_changes`'s ordering and its reason: a refusal
+/// that half-answers is worse than one that arrives late.
+#[tokio::test]
+async fn an_approval_over_a_reclaimed_worktree_refuses_at_the_press() {
+    let home = TempDir::new();
+    let fleet = a_fleet_reviewing_the_first_step(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    let job_id = at_the_gate(&fleet, &home).await;
+
+    let job = fleet.load(&job_id).await.expect("the Job is there");
+    std::fs::remove_dir_all(
+        fleet
+            .surviving_worktree(&job)
+            .expect("it is still there while the person reads")
+            .path(),
+    )
+    .expect("the worktree is reclaimed");
+
+    let refused = fleet
+        .approve_review(&job_id)
+        .await
+        .expect_err("there is nothing to put the next step's Drone onto");
+    assert!(
+        matches!(refused, Adrift::WorktreeGone { .. }),
+        "the person hears the disk, on the press: {refused:?}"
+    );
+
+    let held = fleet.load(&job_id).await.expect("the Job is there");
+    assert_eq!(
+        held.status(),
+        JobStatus::AwaitingReview,
+        "and the Job is where they left it, not half-approved"
+    );
+    assert_eq!(
+        held.step(&core_model::StepId::new("implement".to_string()))
+            .map(|step| step.state()),
+        Some(core_model::StepState::Running),
+        "the step did not advance either — the refusal is before every move"
     );
 }
 
