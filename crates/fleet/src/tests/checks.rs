@@ -19,6 +19,7 @@ use verification::{Lifted, Request};
 
 use crate::at_step::AtStep;
 use crate::gate::{rule_on, CheckBudget};
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_fleet, a_proposal, worktree_directory};
 use crate::tests::detail::get;
 use crate::tests::gate::{budget, diff_evidence, judging, note_evidence, workflow, worktree};
@@ -364,7 +365,7 @@ async fn what_the_gate_found_reaches_the_detail_view() {
         .expect("a Job at the gate");
     let job_id = job.id().clone();
     worktree_directory(&home, &job_id);
-    fleet.approve(&job_id).await.expect("released to run");
+    dispatched(&fleet, &job_id).await.expect("released to run");
     submitted_by_the_one(&fleet, crate::tests::daemon::diff_evidence())
         .await
         .expect("the tool took it");
@@ -413,7 +414,7 @@ async fn the_record_survives_a_fleet_restart() {
             .await
             .expect("a Job at the gate");
         worktree_directory(&home, job.id());
-        fleet.approve(job.id()).await.expect("released to run");
+        dispatched(&fleet, job.id()).await.expect("released to run");
         submitted_by_the_one(&fleet, crate::tests::daemon::diff_evidence())
             .await
             .expect("the tool took it");

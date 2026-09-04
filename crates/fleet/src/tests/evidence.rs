@@ -139,6 +139,11 @@ async fn running(home: &TempDir) -> (Arc<FixtureFleet>, Router) {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "approval released it");
+    // **The turn is what dispatches, and the route no longer does.** `#428`:
+    // a dispatch that ran inside the request that asked for it died when the
+    // client stopped waiting, so `approve_dispatch` leaves the Job `queued`
+    // and `keep_turning`'s task picks it up. This is that task, once.
+    fleet.turn().await.expect("the turn puts a Drone on it");
     (fleet, app)
 }
 

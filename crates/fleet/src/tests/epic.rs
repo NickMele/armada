@@ -31,6 +31,7 @@ use verification::{Claimed, NotClaimed, ShownBy};
 use crate::daemon::Fleet;
 use crate::evidence::Call;
 use crate::resume::Redirection;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal_for, fittings, manifest, worktree_directory};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
@@ -157,7 +158,7 @@ async fn planning_a_wave(home: &TempDir) -> (Fixture, JobId) {
         ".armada/artifacts/plan.md",
         "# Wave 1\n\nOne piece.\n",
     );
-    fleet.approve(&id).await.expect("it dispatches");
+    dispatched(&fleet, &id).await.expect("it dispatches");
     (fleet, id)
 }
 

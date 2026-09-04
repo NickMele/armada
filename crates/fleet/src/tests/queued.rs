@@ -11,6 +11,7 @@
 use api::Queries;
 use testkit::{FakeJudge, FakeWorkProduct};
 
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
     a_fleet, a_fleet_proposing_through, a_proposal, diff_evidence, worktree_directory,
 };
@@ -34,7 +35,9 @@ async fn a_job_waiting_on_a_peer_reads_blocked_by_dependency() {
         .await
         .expect("a plan");
     worktree_directory(&home, made[1].id());
-    fleet.approve(made[1].id()).await.expect("approval lands");
+    dispatched(&fleet, made[1].id())
+        .await
+        .expect("approval lands");
 
     let summary = fleet
         .get_job(ipc::JobId::from(made[1].id()))
@@ -57,10 +60,10 @@ async fn a_job_waiting_for_the_slot_reads_waiting_on_resources() {
     let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
     let first = fleet.propose(a_proposal("the first")).await.unwrap();
     worktree_directory(&home, first.id());
-    fleet.approve(first.id()).await.unwrap();
+    dispatched(&fleet, first.id()).await.unwrap();
     let second = fleet.propose(a_proposal("the second")).await.unwrap();
     worktree_directory(&home, second.id());
-    fleet.approve(second.id()).await.unwrap();
+    dispatched(&fleet, second.id()).await.unwrap();
 
     let summary = fleet
         .get_job(ipc::JobId::from(second.id()))
@@ -117,7 +120,9 @@ async fn what_the_board_says_is_what_admission_did() {
         .expect("a plan");
     worktree_directory(&home, made[0].id());
     worktree_directory(&home, made[1].id());
-    fleet.approve(made[1].id()).await.expect("the dependent");
+    dispatched(&fleet, made[1].id())
+        .await
+        .expect("the dependent");
 
     // Says blocked, and is not running.
     let blocked = fleet
@@ -133,7 +138,9 @@ async fn what_the_board_says_is_what_admission_did() {
 
     // The upstream runs and lands. The same Job is admitted, and stops saying
     // it is held — the two moved together or one of these fails.
-    fleet.approve(made[0].id()).await.expect("the upstream");
+    dispatched(&fleet, made[0].id())
+        .await
+        .expect("the upstream");
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.expect("the loop turns");
 

@@ -18,6 +18,7 @@ use core_model::{JobId, JobStatus};
 use testkit::{FakeJudge, FakeWorkProduct};
 
 use crate::coupling::{coupling, Coupling};
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_fleet, a_fleet_proposing_through, a_proposal, worktree_directory};
 use crate::tests::planning::A_PLAN;
 use crate::tests::proposing::a_catalogue;
@@ -67,7 +68,9 @@ async fn a_killed_upstream_escalates_its_dependent_as_dependency_failed() {
         .await
         .expect("a plan");
     worktree_directory(&home, made[1].id());
-    fleet.approve(made[1].id()).await.expect("the dependent");
+    dispatched(&fleet, made[1].id())
+        .await
+        .expect("the dependent");
     fleet.kill_job(made[0].id()).await.expect("the upstream");
 
     let turned = fleet.turn().await.expect("the loop turns");
@@ -116,8 +119,8 @@ async fn the_chain_below_the_first_dependent_is_left_where_it_was() {
     assert_eq!(made.len(), 3);
     worktree_directory(&home, made[1].id());
     worktree_directory(&home, made[2].id());
-    fleet.approve(made[1].id()).await.expect("the second");
-    fleet.approve(made[2].id()).await.expect("the third");
+    dispatched(&fleet, made[1].id()).await.expect("the second");
+    dispatched(&fleet, made[2].id()).await.expect("the third");
     fleet.kill_job(made[0].id()).await.expect("the first");
 
     let turned = fleet.turn().await.expect("the loop turns");
@@ -155,7 +158,9 @@ async fn a_second_turn_strands_nothing_more() {
         .await
         .expect("a plan");
     worktree_directory(&home, made[1].id());
-    fleet.approve(made[1].id()).await.expect("the dependent");
+    dispatched(&fleet, made[1].id())
+        .await
+        .expect("the dependent");
     fleet.kill_job(made[0].id()).await.expect("the upstream");
     fleet.turn().await.expect("the first turn");
 

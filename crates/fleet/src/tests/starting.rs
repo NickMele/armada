@@ -28,6 +28,7 @@ use testkit::{FakeHarness, FakeWorkProduct};
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_fleet, a_proposal, fitted_with, fittings, worktree_directory};
 use crate::tests::reviewing::{a_fleet_reviewing_the_first_step, at_the_gate};
 use crate::tests::tmp::TempDir;
@@ -68,8 +69,7 @@ async fn a_worktree_git_would_not_make_stops_the_job_as_no_worktree() {
     worktree_directory(&home, job.id());
     fleet.vcs().refuse_next("a full disk");
 
-    let refused = fleet
-        .approve(job.id())
+    let refused = dispatched(&fleet, job.id())
         .await
         .expect_err("a Job with no worktree is not dispatched");
     assert!(
@@ -120,8 +120,7 @@ async fn attachments_that_will_not_copy_stop_the_job_as_no_worktree() {
         std::fs::remove_file(&attachment.storage_ref).expect("the promoted copy is reclaimed");
     }
 
-    let refused = fleet
-        .approve(job.id())
+    let refused = dispatched(&fleet, job.id())
         .await
         .expect_err("a worktree the brief's files are not in is not dispatched");
     let Adrift::AttachmentUnreadable { filename, .. } = &refused else {
@@ -202,8 +201,7 @@ async fn a_spawn_config_that_is_refused_stops_the_job_as_not_configurable() {
         .expect("proposed");
     worktree_directory(&home, job.id());
 
-    let refused = fleet
-        .approve(job.id())
+    let refused = dispatched(&fleet, job.id())
         .await
         .expect_err("a Drone that cannot be confined is not spawned");
     assert!(
@@ -244,8 +242,7 @@ async fn a_harness_that_refuses_to_spawn_stops_the_job_as_would_not_start() {
         .expect("proposed");
     worktree_directory(&home, job.id());
 
-    let refused = fleet
-        .approve(job.id())
+    let refused = dispatched(&fleet, job.id())
         .await
         .expect_err("a Drone that would not launch leaves the Job stopped");
     assert!(

@@ -25,6 +25,7 @@ use testkit::{Delivered, Delivering, FakeJudge, FakeVcs, FakeWorkProduct};
 use crate::daemon::Fleet;
 use crate::gate::Ruling;
 use crate::process::{holder_of, Holder};
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
     a_fleet_gated_on_a_person, a_fleet_judged_by, a_proposal, diff_evidence, fittings,
     note_evidence, one, two_steps_gated_on_a_person, worktree_directory,
@@ -60,7 +61,7 @@ pub(super) async fn at_the_gate(fleet: &Fixture, home: &TempDir) -> JobId {
         .await
         .expect("a Job at the approval gate");
     worktree_directory(home, job.id());
-    let job = fleet.approve(job.id()).await.expect("it dispatches");
+    let job = dispatched(&fleet, job.id()).await.expect("it dispatches");
     assert_eq!(job.status(), JobStatus::Running);
 
     submitted_by_the_one(&fleet, diff_evidence())
@@ -285,7 +286,7 @@ async fn a_step_after_a_human_boundary_does_not_advance_on_a_rebase_it_did_not_r
         .await
         .expect("a Job at the approval gate");
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.expect("it dispatches");
+    dispatched(&fleet, job.id()).await.expect("it dispatches");
 
     // The first step does real work and stops at the person's gate.
     fleet
@@ -336,7 +337,7 @@ async fn approving_the_last_step_commits_the_work_and_ends_the_job() {
         .await
         .expect("a Job at the approval gate");
     worktree_directory(&home, job.id());
-    let job = fleet.approve(job.id()).await.expect("it dispatches");
+    let job = dispatched(&fleet, job.id()).await.expect("it dispatches");
 
     submitted_by_the_one(&fleet, diff_evidence())
         .await
@@ -426,7 +427,7 @@ async fn work_that_fails_a_check_never_reaches_the_person() {
         .await
         .expect("a Job at the approval gate");
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.expect("it dispatches");
+    dispatched(&fleet, job.id()).await.expect("it dispatches");
 
     submitted_by_the_one(&fleet, diff_evidence())
         .await
@@ -476,7 +477,7 @@ async fn a_judge_under_a_human_gate_filters_what_reaches_the_person() {
             .await
             .expect("a Job at the approval gate");
         worktree_directory(&home, job.id());
-        fleet.approve(job.id()).await.expect("it dispatches");
+        dispatched(&fleet, job.id()).await.expect("it dispatches");
 
         submitted_by_the_one(&fleet, diff_evidence())
             .await
@@ -526,7 +527,7 @@ async fn a_job_a_person_is_reading_holds_no_process_and_no_slot() {
         .await
         .expect("a Job at the approval gate");
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.expect("it dispatches");
+    dispatched(&fleet, job.id()).await.expect("it dispatches");
 
     let pid = fleet
         .the_only_slot()
@@ -564,7 +565,7 @@ async fn a_job_a_person_is_reading_holds_no_process_and_no_slot() {
         .await
         .expect("a second Job");
     worktree_directory(&home, next.id());
-    let next = fleet.approve(next.id()).await.expect("it dispatches");
+    let next = dispatched(&fleet, next.id()).await.expect("it dispatches");
     assert_eq!(
         next.status(),
         JobStatus::Running,
@@ -597,7 +598,7 @@ async fn a_job_approved_while_another_holds_the_slot_waits_its_turn() {
         .await
         .expect("a second Job");
     worktree_directory(&home, next.id());
-    fleet.approve(next.id()).await.expect("it dispatches");
+    dispatched(&fleet, next.id()).await.expect("it dispatches");
 
     let approved = fleet
         .approve_review(&job_id)

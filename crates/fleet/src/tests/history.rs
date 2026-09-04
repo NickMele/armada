@@ -60,6 +60,18 @@ async fn a_finished_job_can_say_every_move_it_made() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
+    // The route queues; the loop above dispatches. `#428` — a dispatch that
+    // ran inside the request died when the client stopped waiting.
+    for _ in 0..400 {
+        let job = fleet
+            .load(&job_id.to_domain())
+            .await
+            .expect("the Job is there");
+        if job.current_step_id().is_some() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
     submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("the working Job's Drone submits");

@@ -295,12 +295,18 @@ const PROVISIONAL_ALLOWANCE: Allowance = Allowance::of(Micros::dollars(5), 300);
 
 /// How often Fleet is turned. **Provisional**, and nothing has measured it.
 ///
-/// It is the latency of a *ruling* rather than of a start — `approve` and each
-/// turn both dispatch inline — so what a quarter of a second buys is a Drone
-/// hearing the gate's answer promptly after it submits. What it costs is one
-/// store read per tick while nothing is being worked, which `fleet::turning`
-/// names as the reason a later milestone should wake this loop rather than poll
-/// it.
+/// It is the latency of a ruling *and* of a start. What a quarter of a second
+/// buys on the ruling is a Drone hearing the gate's answer promptly after it
+/// submits; what it buys on the start is that the start cannot be taken away.
+/// **`approve` used to dispatch inline** — inside the request that asked for
+/// it, so a client giving up after five seconds killed a cold install and the
+/// timeout watching it together. Every dispatch is this loop's now, and this
+/// loop is a task nobody's browser owns. `fleet::daemon::Fleet::approve`
+/// carries the chain, `#428` is the issue.
+///
+/// What it costs is one store read per tick while nothing is being worked,
+/// which `fleet::turning` names as the reason a later milestone should wake
+/// this loop rather than poll it.
 const PROVISIONAL_TURN_INTERVAL: Duration = Duration::from_millis(250);
 
 /// Serve `repository`, or the working directory, until a signal says stop.

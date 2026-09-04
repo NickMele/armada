@@ -36,6 +36,7 @@ use crate::daemon::Fleet;
 use crate::gate::Ruling;
 use crate::resume::Redirection;
 use crate::reviewing::Said;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, diff_evidence, fitted_with, one, worktree_directory};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
@@ -124,7 +125,7 @@ async fn stopped(fleet: &Fixture, home: &TempDir) -> JobId {
         .await
         .expect("a Job at the approval gate");
     worktree_directory(home, job.id());
-    fleet.approve(job.id()).await.expect("released to run");
+    dispatched(&fleet, job.id()).await.expect("released to run");
 
     let record = fleet.load(job.id()).await.expect("the Job reads");
     let record = fleet

@@ -14,6 +14,7 @@
 
 use testkit::{FakeWorkProduct, Gate, Sketch};
 
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_fleet_holding, a_proposal, diff_evidence, worktree_directory};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
@@ -65,7 +66,7 @@ async fn each_step_is_spawned_as_the_model_its_own_step_named() {
         .await
         .expect("a proposal");
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.expect("it is approved");
+    dispatched(&fleet, job.id()).await.expect("it is approved");
 
     let after_first = fleet.harness().configured();
     assert_eq!(after_first.len(), 1, "one step, one Drone");

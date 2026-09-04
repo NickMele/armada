@@ -15,6 +15,7 @@ use ipc::mcp::{DeclareScope, RequestScope};
 use testkit::{FakeJudge, FakeWorkProduct, Scoped, Sketch};
 
 use crate::daemon::Fleet;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_fleet_judged_by, a_proposal, worktree_directory};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::declared_by_the_one;
@@ -65,7 +66,7 @@ async fn running(
         scope.map(|paths| paths.iter().map(|path| (*path).to_string()).collect());
     let job = fleet.propose(proposal).await.expect("a job");
     worktree_directory(home, job.id());
-    fleet.approve(job.id()).await.expect("it dispatches");
+    dispatched(&fleet, job.id()).await.expect("it dispatches");
     let id = job.id().clone();
     (fleet, id)
 }
@@ -334,7 +335,7 @@ async fn the_call_carries_the_step_the_scope_the_paths_and_the_reason() {
     proposal.write_targets = Some(vec!["crates/fleet".to_string()]);
     let job = fleet.propose(proposal).await.expect("a job");
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.expect("it dispatches");
+    dispatched(&fleet, job.id()).await.expect("it dispatches");
 
     asked_by_the_one(&fleet, &asking(&["crates/store/src/schema.rs"]))
         .await
