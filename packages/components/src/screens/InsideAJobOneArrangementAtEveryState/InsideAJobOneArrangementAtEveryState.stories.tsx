@@ -447,14 +447,13 @@ export const Failed: Story = {
 };
 
 /**
- * **Nothing has started, and something is happening.** Fleet is cutting a
+ * **Nothing has started, and something is happening.** Armada is cutting a
  * worktree and running the repository's preparation commands; every step is
  * `not_started` and no Drone exists, so the step's own activity log is empty
- * and correct to be. What Armada has done sits above the run — #437.
- *
- * **Above the steps and not under the first one.** Attaching these to the step
- * about to start reads as though it were running when it has not begun, which
- * is the confusion that made a wedged Job look healthy.
+ * and correct to be. What Armada has done sits above the run — #437. **Above
+ * the steps and not under the first one**: attaching these to the step about
+ * to start reads as though it were running when it has not begun, which is the
+ * confusion that made a wedged Job look healthy.
  */
 export const NoDroneYet: Story = {
   render: () => (
