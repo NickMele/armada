@@ -457,7 +457,11 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
 
     let events = fleet.events();
     let run_id = ipc::RunId::carried(UlidMint::new().ulid().as_str());
-    let app = api::router(api::Served::sharing(fleet, run_id, events));
+    // The reader for a Job's own log, taken from the Fleet before it is handed
+    // over. **Nothing else on this side knows where the logs are**, which is
+    // why it comes from Fleet rather than from the root resolved above.
+    let job_logs = Arc::new(fleet.job_logs());
+    let app = api::router(api::Served::sharing(fleet, run_id, events).reading(job_logs));
     println!("serving {} on {bound}", api::SERVED.len());
 
     // **With connect info**, because a Drone's tool call is attributed by the

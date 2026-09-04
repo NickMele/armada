@@ -37,6 +37,7 @@ export * from "./frozen";
 export * from "./held";
 export * from "./keys";
 export * from "./lineage";
+export * from "./notes";
 export * from "./opening";
 export * from "./phases";
 export * from "./preview";

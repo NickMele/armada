@@ -75,8 +75,13 @@ export type LogRow = {
    * Armada's voice" — the two stopped being the same set once a turn the
    * harness replays onto the Drone's stream started arriving correctly
    * attributed, and selecting by voice counted each of Armada's turns twice.
+   *
+   * **`note` is not one of the transcript's kinds**, and it is in this union
+   * because both streams draw through one row type: it is a line of the Job's
+   * own log, off the second socket, and every selection above is by transcript
+   * kind so none of them claims one.
    */
-  kind: Turn["saw"]["event"];
+  kind: Turn["saw"]["event"] | "note";
   /** The one line the row shows closed. */
   message: string;
   /** Whether `message` is machine-derived. Sans names work, mono names machinery. */
