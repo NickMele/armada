@@ -33,6 +33,31 @@ close."*
 **Code that moves falsifies prose that did not.** Everything below is a place
 that prose lives. Work through them; do not reason about which are likely.
 
+## Every edit this skill makes goes in a worktree
+
+**This skill writes, and what it writes is not exempt.** Steps 3, 4 and 7 fix
+prose, and step 7 edits this file. All of it happens on a branch in a worktree —
+`git worktree add .claude/worktrees/<name> -b <branch> main` — and lands as a
+pull request like any other work. Never on the checkout at `main`.
+
+Two reasons, and the second is the one that bites:
+
+**A reflect edit is ordinary work and takes the ordinary bar.** A doc correction
+that goes straight onto `main` skips the gate, the diff and the review that every
+other line in this repository passes through. The fix that reconciles prose can
+be wrong.
+
+**Editing `main` while committing from a worktree strands the edit.** Confirmed
+4 Sep 2026, earlier in the very session that then ran this skill: a doc comment
+in `crates/fleet/src/proposal.rs` was fixed in the main checkout while the commit
+was taken from a worktree, so the pull request's message described a change its
+own diff did not carry. It went in green, and the owner found the loose file on
+`main` afterwards — *"There is an uncommitted change on main, is that yours?"* It
+cost a second pull request to land what the first one claimed.
+
+So: **check `git status --porcelain` on the main checkout before declaring
+anything merged**, and take every edit inside the worktree the commit comes from.
+
 ## 1. Through the gate, merged, and `main` synced
 
 For every branch this session committed to. The gate is all of it, every time:
