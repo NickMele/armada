@@ -67,6 +67,8 @@ Attached to every step that triggers a Judge or a human gate. Prevents the Judge
 
 **Definition vs. resolved object.** A `WorkflowDef` step carries the *policy* — `context_source`, `max_context_size`, `exclude_paths`, the flags. It cannot carry `context_paths`, because at definition time nobody knows them: that is precisely what `context_source: drone_declared` means.
 
+**`exclude_paths` is the tier a Judge may lift.** It is where an author says what this kind of work should stay out of, written before anybody had read the code — so when a Drone finds the fix genuinely needs one of those paths, `request_scope` puts that to a Judge and a cleared path becomes declarable. The boundaries nothing lifts — secrets, CI configuration, the workflow definitions themselves — are stated in no definition and named in no key. [Configuration](../contracts/configuration.md) holds the split and why the second tier is compiled in rather than configured.
+
 The Drone supplies them at evidence-report time, Fleet validates them, and the **resolved** object handed to the Judge is the one on which `context_paths` is required. Where a field row says a field is required, it means required on the resolved object.
 
 **The diff is delivered, not fetched.** The resolved object carries the **actual patch** for the files in scope, pre-loaded into the Judge's context — not a list of filenames the Judge then has to go and read. The veto-only contract already says the Judge receives the task text, the **work product** and the deterministic facts; on a coding step the diff *is* the work product.

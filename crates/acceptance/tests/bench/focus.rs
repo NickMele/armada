@@ -15,7 +15,7 @@
 use adapter_traits::Footprint;
 use core_model::{DroneId, FrozenWorkflow, StepEvidence, StepId, Timestamp, Ulid};
 use fleet::{rule_on, AtStep, Clock, Keeping, Ruling};
-use verification::{Request, Submission};
+use verification::{Lifted, Request, Submission};
 
 use super::{Bench, Run};
 
@@ -62,6 +62,7 @@ pub async fn gate_against(
         Request::of(&run.job),
         submitted,
         run.declared.as_ref(),
+        &Lifted::of(&run.job),
         Some(&entered_with),
         &recorded,
         &bench.work,

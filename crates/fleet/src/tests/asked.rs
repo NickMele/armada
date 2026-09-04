@@ -14,7 +14,7 @@ use adapter_traits::{Environment, Footprint, Model, Worktree};
 use config::ResolvedWorkflow;
 use core_model::{Attempt, CriterionId, JobId, StepId, Ulid};
 use testkit::{FakeJudge, FakeWorkProduct, Gate, Sketch};
-use verification::Request;
+use verification::{Lifted, Request};
 
 use crate::asked::Asked;
 use crate::at_step::AtStep;
@@ -74,6 +74,7 @@ async fn ruled(judge: Arc<FakeJudge>, asked: Asked, worktree: &Worktree) -> Ruli
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,

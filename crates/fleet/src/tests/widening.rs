@@ -11,12 +11,13 @@
 //! that the Judge was never asked is the point of them.
 
 use core_model::{EscalationTrigger, JobStatus, RepoPath, ScopeRevisionOutcome, WriteTargets};
-use ipc::mcp::RequestScope;
+use ipc::mcp::{DeclareScope, RequestScope};
 use testkit::{FakeJudge, FakeWorkProduct, Scoped, Sketch};
 
 use crate::daemon::Fleet;
 use crate::tests::daemon::{a_fleet_judged_by, a_proposal, worktree_directory};
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::declared_by_the_one;
 use crate::widening::NotWidened;
 
 type Fixture = Fleet<testkit::FakeHarness, testkit::FakeVcs, FakeWorkProduct>;
@@ -102,24 +103,62 @@ async fn a_task_with_no_stated_scope_has_nothing_to_widen_and_spends_nothing() {
     );
 }
 
-/// The denylist resolves last and wins over anything declared **and over any
-/// model**. A Judge that could excuse one is not a denylist, so no call is made
-/// at all.
+/// **The ordinary boundary, and it reaches the Judge.** The step excludes
+/// `secrets` and the request names a path under it, which until `#417` was
+/// refused here without a call — the refusal that left a blocked Drone with
+/// nowhere to go. Whether a fence drawn before anybody read the code is right
+/// for this particular fix is exactly the question this call asks.
 #[tokio::test]
-async fn a_path_the_step_excludes_is_refused_mechanically() {
+async fn a_path_the_step_excludes_is_put_to_the_judge() {
     let home = TempDir::new();
-    let (fleet, _) = running(
+    let (fleet, job) = running(
         &home,
-        FakeJudge::that_fails("a judge that must never be asked"),
+        FakeJudge::saying("answer: consistent"),
         &["secrets"],
         Some(&["crates/fleet"]),
     )
     .await;
 
-    let why = asked_by_the_one(&fleet, &asking(&["secrets/keys.toml"]))
+    asked_by_the_one(&fleet, &asking(&["secrets/keys.toml"]))
         .await
-        .expect_err("the denylist is not a model's to lift");
-    assert!(matches!(why, NotWidened::Excluded { .. }), "{why:?}");
+        .expect("a judge that saw the request and agreed");
+
+    // **The lift is on the record**, which is the half `#56` did not have: the
+    // Job's write_targets grew and the step's denylist went on refusing, so a
+    // cleared path was still a path the Drone could not declare.
+    let record = fleet.load(&job).await.expect("the job");
+    let took: Vec<&RepoPath> = record
+        .scope_revisions()
+        .iter()
+        .filter(|entry| entry.at_step.is_some() && entry.outcome.took_effect())
+        .flat_map(|entry| entry.paths_added.iter())
+        .collect();
+    assert_eq!(took, vec![&RepoPath::new("secrets/keys.toml")]);
+}
+
+/// **The one nothing lifts, and no call is made.** `.env` is not a fence
+/// somebody drew for this step; it is out of bounds for every step of every
+/// task, and a Judge asked about it would be a model deciding whether a secrets
+/// file is in scope. The Judge here fails if it is asked.
+#[tokio::test]
+async fn a_path_nothing_lifts_is_refused_without_a_call() {
+    let home = TempDir::new();
+    let (fleet, _) = running(
+        &home,
+        FakeJudge::that_fails("a judge that must never be asked"),
+        &[],
+        Some(&["crates/fleet"]),
+    )
+    .await;
+
+    let why = asked_by_the_one(&fleet, &asking(&[".env"]))
+        .await
+        .expect_err("no answer lifts it");
+    assert!(matches!(why, NotWidened::Forbidden { .. }), "{why:?}");
+    assert!(
+        why.to_string().contains("it holds secrets"),
+        "it says why, so the Drone does not ask again in other words: {why}"
+    );
 }
 
 /// A request for what the task already covers asks for nothing. Recorded as a
@@ -318,4 +357,112 @@ async fn the_call_carries_the_step_the_scope_the_paths_and_the_reason() {
         question.contains("fix the reader"),
         "the request: {question}"
     );
+}
+
+// ------------------------------------------- the whole of it, end to end
+
+/// **The case `#417` exists for, from the refusal to the declaration.**
+///
+/// A step scoped to the parser, told never to touch `crates/config`, whose fix
+/// genuinely needs one line there. Before the split there was no route: the
+/// declaration was refused mechanically, the widening could not reach the list
+/// that refused it, and a person found out at the gate.
+///
+/// Three beats, and the third is the one `#56` could not reach — a declaration
+/// naming the cleared path, taken, where the same call was refused a moment
+/// before against the same frozen workflow.
+#[tokio::test]
+async fn an_ordinary_boundary_is_asked_about_and_then_declarable() {
+    let home = TempDir::new();
+    let (fleet, job) = running(
+        &home,
+        FakeJudge::saying("answer: consistent"),
+        &["crates/config"],
+        Some(&["crates/parser"]),
+    )
+    .await;
+
+    let refused = declared_by_the_one(
+        &fleet,
+        &DeclareScope {
+            context_paths: vec!["crates/parser".to_string(), "crates/config".to_string()],
+        },
+    )
+    .await
+    .expect_err("the fence still stands before anybody asks");
+    assert!(
+        matches!(refused, crate::scope::NotDeclared::Excluded { .. }),
+        "{refused:?}"
+    );
+    assert!(
+        refused.to_string().contains("request_scope"),
+        "the refusal names the route: {refused}"
+    );
+
+    asked_by_the_one(
+        &fleet,
+        &RequestScope {
+            paths: vec!["crates/config".to_string()],
+            reason: "the parser reads the key and the key is declared there".to_string(),
+        },
+    )
+    .await
+    .expect("a judge that agreed the paths belong to the step");
+
+    declared_by_the_one(
+        &fleet,
+        &DeclareScope {
+            context_paths: vec!["crates/parser".to_string(), "crates/config".to_string()],
+        },
+    )
+    .await
+    .expect("the same declaration, after the boundary was lifted");
+
+    // The Job's own scope moved too, so the drift check at the gate measures
+    // against the corrected statement rather than the outgrown one.
+    let record = fleet.load(&job).await.expect("the job");
+    assert!(record
+        .write_targets()
+        .expect("a scope")
+        .paths()
+        .contains(&RepoPath::new("crates/config")));
+}
+
+/// **And the one nothing lifts, through the same two doors.** The Judge here
+/// fails if it is asked, so the request is answered out of what Fleet holds —
+/// and the declaration is refused without naming a route, because there is
+/// none and sending a Drone to spend its one ask on a no is worse than saying
+/// so.
+#[tokio::test]
+async fn an_absolute_boundary_is_refused_at_both_doors_and_no_answer_moves_it() {
+    let home = TempDir::new();
+    let (fleet, _) = running(
+        &home,
+        FakeJudge::that_fails("a judge that must never be asked"),
+        &[],
+        Some(&["crates/parser"]),
+    )
+    .await;
+
+    let refused = declared_by_the_one(
+        &fleet,
+        &DeclareScope {
+            context_paths: vec![".env".to_string()],
+        },
+    )
+    .await
+    .expect_err("nothing here can allow it");
+    assert!(
+        matches!(refused, crate::scope::NotDeclared::Forbidden { .. }),
+        "{refused:?}"
+    );
+    assert!(
+        !refused.to_string().contains("request_scope"),
+        "it does not send the Drone somewhere that will say no: {refused}"
+    );
+
+    let why = asked_by_the_one(&fleet, &asking(&[".env"]))
+        .await
+        .expect_err("no answer lifts it");
+    assert!(matches!(why, NotWidened::Forbidden { .. }), "{why:?}");
 }

@@ -42,7 +42,7 @@ They answer different questions, and neither is authoritative over the other.
 **A Job that stated no scope cannot be widened.** `request_scope` grows the write targets, so a null list leaves the paths nothing to be an addition to and the request is refused with *scope not yet determined*.
 Why: a request that determined the list would let a Drone write the whole answer to a question the Job never asked.
 
-**That is the common case rather than the edge.** Every Job the [Job proposer](../concepts/job-proposer.md) drafted reaches its first step with the list null. What such a Drone has instead is `declare_scope`, which costs no call, refuses nothing but the step's own denylist, and is what the drift check reads.
+**That is the common case rather than the edge.** Every Job the [Job proposer](../concepts/job-proposer.md) drafted reaches its first step with the list null. What such a Drone has instead is `declare_scope`, which costs no call, refuses nothing but the step's own boundaries, and is what the drift check reads.
 
 ## Flow
 
@@ -51,11 +51,13 @@ Two entrances and two directions. A Drone asking is the common one; a person cha
 | Step | What happens |
 | --- | --- |
 | 1. A Drone finds it needs a path the Job's scope does not cover | It asks, with the paths and a reason in its own words |
-| 2. Fleet answers what it can without spending anything | A path the step's denylist excludes, a path already in scope, a Job whose scope was never stated, or a step that has already asked — each is refused there and then, and none of them costs a call |
+| 2. Fleet answers what it can without spending anything | A path nothing lifts, a path already in scope, a Job whose scope was never stated, or a step that has already asked — each is refused there and then, and none of them costs a call |
 | 3. One Judge call goes out | The Job stays `running` and the Drone stays on its step. A person watching sees the wait, because the call is marked like every other |
 | 4a. It is consistent with the step | The paths join the Job's scope, the revision is recorded as taken, and the Drone carries on — declaring them again through `declare_scope`, which is what the drift check measures against |
 | 4b. It is not | The revision is recorded as not taken, the step stops carrying `scope_refused`, and the Job escalates with the Judge's reason |
 | 5. On a refusal, you take it from there | The Drone is alive and idle, so redirect, restart the step or widen the scope yourself — the acts an escalated Job already has |
+
+**A path the step excludes is what this is for, and a path nothing lifts is not.** The two used to be one list and both were refused without a call, which left a Drone blocked by an author's guess with no route at all. Now the first reaches the Judge — that is the question being asked, since the fence was drawn before anybody read the code — and the second is answered out of what Fleet holds, because there is no answer that would move it and no reason to spend a call finding out. [Configuration](../contracts/configuration.md) holds the two tiers.
 
 **A widening is judged; a narrowing is not.** A narrowing asks for nothing — it hands back scope already held — so there is nothing for a Judge to be consistent about and no call is made. It is a person's act and it stays one: nothing in a Drone's toolset can reach it, and the tool has no field for a path to remove.
 

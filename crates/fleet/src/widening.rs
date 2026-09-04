@@ -8,9 +8,15 @@
 //!
 //! **What keeps a model granting scope honest is not here.** `crate::scope`
 //! measures the declaration against the real diff, so a wider declaration is a
-//! wider thing to be measured against rather than a licence — and the step's
-//! own `exclude_paths` is refused below before any call, because a denylist a
-//! model could excuse is not one.
+//! wider thing to be measured against rather than a licence.
+//!
+//! **The step's own `exclude_paths` used to be refused below before any call,
+//! and `#417` is why it is not.** That refusal was the whole defect: a Drone
+//! blocked by a boundary somebody drew before reading the code had no route
+//! left, and the widening it was pointed at could not reach the list that had
+//! stopped it. What is refused here without a call is the *absolute* tier —
+//! `verification::forbidden`, which no answer lifts and which is compiled in
+//! rather than stated in a file a Drone has a worktree of.
 //!
 //! **One ask per step**, counted off the Job's scope history rather than held
 //! on the slot, so it survives a Fleet that restarts. A request refused before
@@ -74,10 +80,15 @@ pub enum NotWidened {
     /// a widening that changed nothing, which a later reader would count as a
     /// Drone that needed more room.
     AlreadyInScope,
-    /// Paths the step's own `exclude_paths` denies. **Mechanical, and no call
-    /// is made**: the denylist resolves last and wins over anything declared
-    /// and over any model.
-    Excluded { paths: Vec<RepoPath> },
+    /// Paths under a boundary nothing lifts. **Mechanical, and no call is
+    /// made**: `verification::forbidden` takes no argument, so there is no
+    /// answer a Judge could give that would change this and no reason to spend
+    /// a call finding that out.
+    ///
+    /// **It does not spend the step's one ask**, for the reason every refusal
+    /// before a call does not: nothing was weighed. A Drone that asked for one
+    /// absolute path and three ordinary ones can drop the first and ask again.
+    Forbidden { paths: Vec<verification::Forbidden> },
     /// This step has already asked. One ask per step, counted off the record.
     AlreadyAsked { step: StepId },
     /// The call could not be made. **Nothing is recorded and nothing
@@ -129,12 +140,13 @@ impl fmt::Display for NotWidened {
                 "every path you named is already inside what this task says it \
                  writes. Nothing is being asked for — get on with the work",
             ),
-            NotWidened::Excluded { paths } => write!(
+            NotWidened::Forbidden { paths } => write!(
                 out,
-                "{} is kept out of this part of the work deliberately, and that \
-                 is not something anybody here can lift. Ask again without it, \
-                 or do the part you were given without it",
-                Listed(paths)
+                "{} is out of bounds for every part of every task, and nothing \
+                 here can allow it — this was not looked at and asking again \
+                 will not change the answer. Ask again without it, or do the \
+                 part you were given without it",
+                Reasoned(paths)
             ),
             NotWidened::AlreadyAsked { step } => write!(
                 out,
@@ -173,16 +185,17 @@ impl fmt::Display for NotWidened {
 
 impl Error for NotWidened {}
 
-/// The paths, comma-separated, so no message ends in a dangling list.
-struct Listed<'a>(&'a [RepoPath]);
+/// The paths, each followed by why nothing lifts it, so no message ends in a
+/// dangling list and none of them reads as a rule with no reason behind it.
+struct Reasoned<'a>(&'a [verification::Forbidden]);
 
-impl fmt::Display for Listed<'_> {
+impl fmt::Display for Reasoned<'_> {
     fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (nth, path) in self.0.iter().enumerate() {
+        for (nth, found) in self.0.iter().enumerate() {
             if nth > 0 {
                 out.write_str(", ")?;
             }
-            write!(out, "`{}`", path.as_str())?;
+            write!(out, "{found}")?;
         }
         Ok(())
     }
@@ -254,12 +267,13 @@ where
             return Err(NotWidened::AlreadyAsked { step });
         }
         let paths: Vec<RepoPath> = request.paths.iter().map(RepoPath::new).collect();
-        let denied: Vec<RepoPath> = declared
-            .evidence_scope()
-            .map(|scope| outside(scope.exclude_paths(), &paths))
-            .unwrap_or_default();
-        if !denied.is_empty() {
-            return Err(NotWidened::Excluded { paths: denied });
+        // **The absolute tier, and only it.** An `exclude_paths` entry is
+        // exactly what this call is for — the request is "the fence somebody
+        // drew is in the wrong place for this fix", and answering that is the
+        // Judge's. What is refused here is the tier no answer reaches.
+        let absolute = verification::forbidden_among(paths.iter());
+        if !absolute.is_empty() {
+            return Err(NotWidened::Forbidden { paths: absolute });
         }
         let adding = beyond(&held, &paths);
         if adding.is_empty() {
@@ -491,20 +505,6 @@ fn asked_before(record: &Job, step: &StepId) -> bool {
         .scope_revisions()
         .iter()
         .any(|entry| entry.at_step.as_ref() == Some(step))
-}
-
-/// The paths that fall under one of `bounds`. Used for the denylist, where a
-/// hit is a refusal.
-fn outside(bounds: &[RepoPath], asked: &[RepoPath]) -> Vec<RepoPath> {
-    asked
-        .iter()
-        .filter(|path| {
-            bounds
-                .iter()
-                .any(|bound| under(bound.as_str(), path.as_str()))
-        })
-        .cloned()
-        .collect()
 }
 
 /// The paths not already covered by what the Job says it writes.

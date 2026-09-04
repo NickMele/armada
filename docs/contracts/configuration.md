@@ -129,6 +129,28 @@ be re-read when it changes is not decided and is not decided here** — nothing 
 the file is re-read today, so this key inherits the answer rather than raising
 the question.
 
+## Two tiers of path boundary, and only one of them is configuration
+
+Added 3 September 2026, with `#417`. A step's `exclude_paths` held two kinds of entry and refused both the same way, which is why a Drone that found the right fix in a fenced-off file had nowhere to go: the declaration was refused mechanically, and the widening it would have been pointed at grows the Job's `write_targets` rather than the list that refused it.
+
+| | Ordinary | Absolute |
+| --- | --- | --- |
+| Where it is written | `evidence_scope.exclude_paths`, per step, in a workflow definition | Nowhere. Compiled into `verification` |
+| What it is | A boundary somebody drew before anybody had read the code | Secrets, what decides which checks run, what decides how the work is judged |
+| At `declare_scope` | Refused, and the refusal names `request_scope` | Refused, and the refusal says asking will not change it |
+| At `request_scope` | The Judge is asked whether the paths belong to the step | Refused before any call. There is no answer that lifts it |
+| At the gate | Answered over the declaration, and a cleared path passes | Answered over the declaration **and the footprint** |
+
+**The absolute tier is not a key, and that is the whole of why it holds.** Every path in it lives inside the repository a Drone has a worktree of — `.git`, `.armada`, `armada.yml`, `.env` and its family. A list naming them from inside that same repository could be edited by the thing it denies, and a Judge that could lift the rules it is judged by is not a boundary. There is no file to edit and no key to widen.
+
+**A forge's continuous-integration directory is not in it, and cannot be as things stand.** Naming one inside `verification` is `no_vendor_literal_outside_adapters` exactly — a forge is the adapter layer's to know, and that rule has no exception mechanism by design. Reaching it would mean the VCS adapter declaring where its forge keeps that configuration and Fleet handing it down, which is a change to `adapter-traits` and `adapters`. Until then a step's own `exclude_paths` is where a repository names it, in the tier a Judge may lift.
+
+**A repository cannot add to it.** The obvious candidate in this repository is `xtask/src/rules.rs` — the gate's own rules — and it is not covered. Adding a per-workflow absolute key is a schema change and is not built.
+
+**Build configuration is deliberately ordinary.** `Cargo.toml`, `package.json` and a Makefile are what `check_config_edited` flags, and none of them is absolute: they are files ordinary work edits constantly, and a boundary that stopped a Job adding a dependency would refuse the work rather than protect anything. The gaming check is the right instrument there — it flags, and a Judge reads.
+
+**The ordinary tier is what a Judge may lift, and the shipped workflows now say only that.** `.env` was in every one of them and is gone from all nine, because an entry sitting in the liftable list teaches the next author that that is where secrets go. What is left is `node_modules/` and `target/`: generated output, which decides nothing about what is checked or judged, and which a Judge asked about would refuse on its own.
+
 ## What else the review changed
 
 - **Lifetime is on every setting.** The live-versus-frozen split was two example lists, so any setting on neither had undefined spawn behaviour. Four values: `Live`, `Frozen for the Job`, `Daemon start`, `Read at render`.
