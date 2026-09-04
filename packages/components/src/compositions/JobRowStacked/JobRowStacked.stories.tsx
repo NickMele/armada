@@ -241,9 +241,9 @@ export const Dimmed: Story = {
 };
 
 /**
- * `escalated` renders its reason, never its own name — nobody says a Job
- * escalated at step 3. The verb and the glyph both come from the escalation
- * reason, which is why the Job status row in the map carries neither.
+ * `escalated` renders its reason where one is set, never its own name — nobody
+ * says a Job escalated at step 3. The status row has carried `needs you` behind
+ * `megaphone` since #400, and it stands only where no reason reaches a surface.
  */
 export const EscalatedStalled: Story = {
   args: {
