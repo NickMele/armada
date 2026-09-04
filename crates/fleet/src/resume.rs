@@ -4,7 +4,7 @@
 //! `docs/concepts/job.md` retired *"decided by the Drone, not by the person"*
 //! when a Drone became a step's: absence is ordinary between steps. **Neither
 //! asks the other's question**, and each asked the other's until #145 —
-//! [`redirect`](Fleet::redirect) wants a session, [`restart_step`] a stopped step.
+//! [`redirect`](Fleet::redirect) wants a pipe, [`restart_step`] a stopped step.
 //!
 //! # A redirect moves a stopped step; a restart moves nothing
 //! Where a step stopped, a redirect moves both machines in the one order the
@@ -280,7 +280,8 @@ where
     }
 
     /// Ask for a fresh Drone on the worktree the last one left. **The second
-    /// act**, and what exists when the Drone is gone.
+    /// act**, and what exists when there is no Drone to speak to: one that has
+    /// gone, or one that is there and unreadable and is ended here. #442.
     ///
     /// **It asks; it does not start one.** The Job takes `-> queued` from
     /// either held status and `crate::readmitting` spawns when
@@ -297,8 +298,8 @@ where
     /// `stopped`, which a rail renders and re-admission reads.
     ///
     /// **Every guard below does run here**, because each is a question about
-    /// *now* — a Drone still standing, a worktree still there, an exit still
-    /// unrecorded. Deferred, they would answer about a different instant.
+    /// *now* — a Drone still speakable-to, a worktree still there, an exit
+    /// still unrecorded. Deferred, they would answer about a different instant.
     ///
     /// **The worktree, the branch and every earlier step's work survive**, and
     /// the branch is caught up inside [`put_a_drone_on`](Fleet::put_a_drone_on)
@@ -319,11 +320,29 @@ where
         // and hears it before "a Drone is still there", which is true of both
         // and names neither.
         self.stopped_step(&job)?;
-        let standing = match &slot {
-            Some(slot) => slot.lock().await.as_ref().is_some_and(|at| at.is(job_id)),
-            None => false,
+        // **Held rather than glanced at.** Whether a Drone is standing here and
+        // whether it is the kind this act ends are one decision at one instant,
+        // and a lock let go between them is a Drone that arrived or left in the
+        // gap.
+        let mut held = match &slot {
+            Some(slot) => Some(slot.lock().await),
+            None => None,
         };
-        if standing {
+        // `None` is an empty slot; `Some` carries whether Fleet can still speak
+        // to what is in it, which is the whole of what the two arms below turn
+        // on.
+        let standing = held
+            .as_deref()
+            .and_then(Option::as_ref)
+            .filter(|at_work| at_work.is(job_id))
+            .map(|at_work| at_work.session().unheard());
+        // **The refusal is a session, not a process, and it always was.**
+        // `DroneStillThere` gives its own reason — ending a live session to
+        // spawn a replacement onto the same worktree throws away the context
+        // that makes a redirect cost nothing — and that reason is about the
+        // pipe. Where there is a pipe, the redirect is the cheaper act and this
+        // one is refused so it cannot silently become the restart.
+        if standing == Some(false) {
             return Err(Adrift::DroneStillThere {
                 job: job_id.clone(),
             });
@@ -332,7 +351,32 @@ where
         // worktree that has been reclaimed is a redispatch, and saying so
         // before the Job moves leaves it exactly where the person found it.
         // `crate::readmitting` reaches the same directory again at the spawn.
+        //
+        // **Before the Drone is ended below**, which is this ordering's point:
+        // an unheard Drone taken away for a restart that then finds no worktree
+        // is a person left with less than they started with.
         self.surviving_worktree(&job)?;
+        // **The unheard Drone ends here, and that is what makes the restart the
+        // act on offer.** `crate::adopting` puts a Drone that outlived its
+        // Fleet back in this slot with both pipes dead; nothing can redirect it
+        // and nothing can hand it its step back, so a person meeting one is
+        // offered exactly this — and `crate::stuck` withholds the two acts that
+        // need the pipe on the same reading.
+        //
+        // It is `kill_job`'s call, in `kill_job`'s position: the group is
+        // signalled, the spend is folded onto the Job and the departure is
+        // written down, so `every_exit_recorded` below finds the pointer
+        // already clear. **The step's verdict is untouched** — a step that
+        // stopped keeps saying why, and it is the record this act reads.
+        if standing == Some(true) {
+            if let Some(working) = held.as_deref_mut() {
+                self.end_the_drone(working).await;
+            }
+        }
+        // Before the store reads below, and before `admit_next` reaches for the
+        // roster: `crate::slots` states that order and a caller holding a slot
+        // must not take it.
+        drop(held);
         // **Before the Job leaves `escalated`, and this used to be before the
         // spawn.** The record can still name a Drone on the step being
         // restarted: a Fleet that died holding one leaves exactly that, and

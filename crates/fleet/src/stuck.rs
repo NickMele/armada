@@ -59,17 +59,7 @@ where
     /// What Fleet knows about this Job that its record does not say.
     async fn standing_of(&self, job: &Job, ran: &[(StepId, Vec<StepCheck>)]) -> Standing {
         Standing {
-            // The slot and never `assigned_drone`: the record's pointer
-            // survives a Fleet restart and the pipe does not, and it is the
-            // pipe a redirect and a gate re-run both need.
-            drone_holding: match self.slot_of(job.id()).await {
-                Some(slot) => slot
-                    .lock()
-                    .await
-                    .as_ref()
-                    .is_some_and(|at_work| at_work.is(job.id())),
-                None => false,
-            },
+            drone_holding: self.a_drone_to_speak_to(job).await,
             // The same call `restart_step` and `override_verdict` make, so the
             // classification cannot say a worktree is there that they then
             // refuse to find.
@@ -77,6 +67,34 @@ where
             checks_passed: checks_passed(ran, job.stopped_on().map(|(step, _)| step)),
             workflow_held: self.workflow_named(job.workflow_id()).is_some(),
         }
+    }
+
+    /// Whether a Drone is on this Job **and Fleet can say something to it**.
+    ///
+    /// The slot and never `assigned_drone`: the record's pointer survives a
+    /// Fleet restart and the pipe does not, and it is the pipe a redirect and a
+    /// gate re-run both need.
+    ///
+    /// **And a full slot is not a pipe either**, which is the half that was
+    /// false. `crate::adopting` puts a Drone that outlived its Fleet back in
+    /// the working slot with both pipes dead, so a person offered a redirect on
+    /// one typed a note and had it refused. [`Session::unheard`] is the
+    /// reading, and it is the condition rather than the cause — the same call
+    /// `crate::silence` makes to tell `stalled` from `unheard`, so a second way
+    /// to lose the pipe withholds the same two acts unasked. #442.
+    ///
+    /// **What is left is the act that works**: `Stuck::of`'s other arm offers a
+    /// restart, which ends the unreadable Drone. An override and a redispatch
+    /// end the Drone rather than speak to it, so neither is withheld.
+    ///
+    /// [`Session::unheard`]: crate::adopting::Session::unheard
+    async fn a_drone_to_speak_to(&self, job: &Job) -> bool {
+        let Some(slot) = self.slot_of(job.id()).await else {
+            return false;
+        };
+        let held = slot.lock().await;
+        held.as_ref()
+            .is_some_and(|at_work| at_work.is(job.id()) && !at_work.session().unheard())
     }
 }
 

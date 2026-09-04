@@ -60,6 +60,10 @@ pub mod headroom;
 /// What Fleet is holding disk for, and the five tests that decide whether it
 /// may give one back without asking anybody.
 pub mod holding;
+/// A Job's own log, read back and served. **The other side of the file every
+/// `transcript::note` call writes**, and the third voice the activity log was
+/// designed around.
+pub mod journal;
 pub mod judging;
 pub mod keeping;
 mod landing;

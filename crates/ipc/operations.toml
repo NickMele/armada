@@ -331,6 +331,25 @@ Not `get_drone`, which is a snapshot of one Drone over HTTP. This is one Job acr
 """
 
 
+[operations.observe_job_log]
+kind = "query"
+transport = "WebSocket"
+helm_access = "No"
+description = "One Job's own log — what Fleet did to it — the lines already written and then the ones that follow"
+notes = """
+**The third voice, and it reached nowhere.** `ActivityLog` opens by saying it is one stream carrying the Drone's turns, Armada's injected turns and Fleet's own events. Two of the three travel `observe_job`. The third was written to `.armada/logs/<job-id>.jsonl` and read by nothing, so a Job with no Drone on it — cutting a worktree, running a repository's preparation commands, being reclaimed — drew a blank panel for however long that took. That is precisely the span somebody opens the log to read.
+
+Not `observe_job`. That socket exists only while a Drone is writing: it answers `nothing_writing` and closes on exactly the Job this is for, and its history is read out of transcript files a Job with no Drone has none of. Folding these notes into `Saw` would also be a new variant on a union Bridge matches on, which `docs/practices/protocol.md` makes a **major** bump — an old Bridge's switch has no arm for it and falls into the one it does have.
+
+Not `/events` either, for `observe_job`'s reason: one drop-oldest channel carrying every Job, where an eviction is a full resync rather than a lost row.
+
+**It is read off the file rather than published onto a channel**, and that is the decision worth recording. A Job's log has twenty-six write sites across nineteen modules of Fleet, every one a synchronous append; a channel would be a change to all of them, and a reader is a change to none — so the next thing that writes a line reaches this stream with no protocol change at all. What it buys is that **nothing here can be missed**: the cursor is a byte offset into the durable record, so a viewer that stalled reads what it missed on its next pass instead of being handed a count. What it costs is that a note is drawn within a quarter-second of being written rather than at the instant, which against a handful of events a minute is a trade against nothing.
+
+`step` is absent on exactly the notes this exists for. Preparation belongs to no step, and attaching those lines to the step about to start would read as a step that has begun when it has not — the confusion that made a wedged Job look healthy. A note with no step is the Job's own, and the surface draws it in a section above the steps.
+
+`helm_access` is `No` for `observe_job`'s reason: a stream pulled into a Helm session stays in that session for the rest of it, and `get_job_events` is the snapshot of what a Job did.
+"""
+
 [operations.approve_command]
 kind = "command"
 transport = "HTTP"

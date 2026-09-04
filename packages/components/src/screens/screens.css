@@ -544,6 +544,20 @@
   gap: var(--space-3);
 }
 
+/* What Armada has done to the Job itself, above the run.
+   **Bounded and scrolled, never as tall as it likes.** It is what there is to
+   read while every step is `not_started`, and by the time the run has something
+   in it the run is what a reader came for — a region that grew with the log
+   would push the steps off the screen exactly as the Job started moving. The
+   height is the same well the panel's own preview uses. */
+.armada-inside__fleet {
+  max-height: 15rem;
+  overflow-y: auto;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+}
+
 /* The whole run's elapsed. A figure, never a chart. */
 .armada-inside__elapsed {
   font-family: var(--font-mono);
