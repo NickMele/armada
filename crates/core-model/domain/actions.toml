@@ -17,8 +17,8 @@
 #
 # The table key is the id an implementation binds to. `shortcut` is the binding
 # spelled exactly as the contract spells it, so a rule compares the two with no
-# mapping in between: `⌘1–⌘4` is one row rather than four because the contract
-# makes the rule rail order rather than the digits, and four rows would fix an
+# mapping in between: `⌘1–⌘5` is one row rather than five because the contract
+# makes the rule rail order rather than the digits, and five rows would fix an
 # assignment it refuses to fix.
 #
 # Fields:
@@ -74,22 +74,22 @@ tier = "Global"
 verb = "Bridge surfaces"
 icon = ""
 icon_absent = "by design"
-shortcut = "⌘1–⌘4"
+shortcut = "⌘1–⌘5"
 scope = "anywhere"
 destructive = false
 confirms = false
-notes = "One binding over the rail rather than four over four destinations — the contract's rule is rail order, not the numbers, and the digits shift if the rail does. Each destination carries its own navigation glyph in the icon registry, so a glyph on this row would be a fifth one standing for all of them."
+notes = "One binding over the rail rather than five over five destinations — the contract's rule is rail order, not the numbers, and the digits shift if the rail does. They shifted on 2026-09-03: Held worktrees joined the rail as its fifth surface and took ⌘5, so this range grew by a digit and Helm moved off it. Each destination carries its own navigation glyph in the icon registry, so a glyph on this row would be a sixth one standing for all of them."
 
 [actions.helm]
 kind = "Action"
 tier = "Global"
 verb = "Helm"
 icon = "message-square"
-shortcut = "⌘5"
+shortcut = "⌘6"
 scope = "anywhere"
 destructive = false
 confirms = false
-notes = "The digit after the last Bridge surface, and a sibling surface rather than a fifth Bridge one. The glyph is the registry's own assignment for Helm."
+notes = "The digit after the last Bridge surface, and a sibling surface rather than a sixth Bridge one. It read ⌘5 until 2026-09-03, when Held worktrees became the fifth surface: the rail reads in order and the newest surface goes last, so the four surfaces used most keep the keys people know and this is the one key that moves. Moved now, while one person is using it, rather than left to be moved when more are — and the palette displays the binding beside every entry, which is how anyone would notice. The glyph is the registry's own assignment for Helm."
 
 [actions.toggle_sidebar]
 kind = "Action"
@@ -311,7 +311,7 @@ shortcut = "1–5"
 scope = "job board"
 destructive = false
 confirms = false
-notes = "One row for the five tabs, in tab order, for the reason ⌘1–⌘4 is one row. `1`–`5` and `⌘1`–`⌘5` are different acts on one row of keys, separated by the modifier and drawn that way deliberately."
+notes = "One row for the five tabs, in tab order, for the reason ⌘1–⌘5 is one row. `1`–`5` and `⌘1`–`⌘5` are different acts on one row of keys, separated by the modifier and drawn that way deliberately."
 
 [actions.observe]
 kind = "Action"

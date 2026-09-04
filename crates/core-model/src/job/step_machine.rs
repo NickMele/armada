@@ -8,14 +8,15 @@
 //!
 //! **`stopped -> running` is one edge for two acts**, and which of them a Job
 //! admits is decided by whether it holds a Drone — `fleet::resume`'s to ask,
-//! not this file's. **`stopped -> advanced` is one edge for one**, and the only
-//! edge two targets could reach: [`StepTarget::Overridden`] alone may walk it.
+//! not this file's. **`stopped -> advanced` and `advanced -> running` are one
+//! edge for one each**, walked by [`StepTarget::Overridden`] and
+//! [`StepTarget::Returned`] alone — an open edge at the second would admit the
+//! redispatch `fleet::resume` refuses above this layer.
 //!
 //! `awaiting_human` has its human advance gate now and is **still
 //! unreachable**: a step at that gate stays `running`, since `approve_review`
 //! advances it while the Job is still there. It stays declared on
-//! [`StepState`], because a stored row may render any of the six, and it has no
-//! [`StepTarget`].
+//! [`StepState`] — a stored row may render any of the six — with no target.
 //!
 //! **The outer machine gates the inner one**, and [`ADVANCING_STATUSES`] is
 //! that rule — which is why a step stops *before* the Job escalates, and why a
@@ -71,6 +72,14 @@ pub static STEP_EDGES: &[StepEdge] = &[
     step_edge(StepState::Retrying, StepState::Running),
     step_edge(StepState::Stopped, StepState::Running),
     step_edge(StepState::Stopped, StepState::Advanced),
+    // **The loop return, and it is not a retry.** `Retrying` is the same step
+    // going round again inside its budget after a failure; this is an earlier
+    // step redone on purpose because a later one routed a verdict back to it,
+    // and `workflowdef-fields.toml` refuses the conflation in two places.
+    //
+    // It is the only edge into `running` that says a step is on a new pass,
+    // which is what makes `Iteration` derivable off the log with no column.
+    step_edge(StepState::Advanced, StepState::Running),
 ];
 
 const fn step_edge(from: StepState, to: StepState) -> StepEdge {
@@ -185,24 +194,55 @@ pub enum StepTarget {
     ///
     /// [`StepVerdict`]: crate::StepVerdict
     Retrying(StepLevelTrigger),
+    /// A later step routed its verdict back here, and this step is being redone
+    /// as the workflow designed.
+    ///
+    /// **It arrives at `running` and it is not [`Running`](StepTarget::Running)**,
+    /// which is a dispatch or a resume — and re-running an advanced step is the
+    /// redispatch `fleet::resume` refuses, so an unnarrowed edge would admit it
+    /// underneath the refusal. This is the only target that walks it, as
+    /// [`Overridden`](StepTarget::Overridden) is for `stopped -> advanced`.
+    ///
+    /// **It carries no trigger, and that is the point.** A trigger is a reason
+    /// a gate refused something and no gate refused this; a payload would be a
+    /// third place a return could be conflated with a retry.
+    ///
+    /// Which verdict routed it back is not recorded here, and neither is
+    /// whether the cap allows it: this type cannot see a workflow, the same way
+    /// [`Retrying`](StepTarget::Retrying) cannot see a retry budget.
+    /// [`ResolvedStep::may_return`](crate::ResolvedStep::may_return) owns the
+    /// arithmetic and a spent cap is [`EscalationTrigger::LoopCap`].
+    Returned,
 }
 
 impl StepTarget {
     /// The state this target arrives at.
     pub fn state(&self) -> StepState {
         match self {
-            StepTarget::Running => StepState::Running,
+            StepTarget::Running | StepTarget::Returned => StepState::Running,
             StepTarget::Advanced | StepTarget::Overridden(_) => StepState::Advanced,
             StepTarget::Stopped(_) => StepState::Stopped,
             StepTarget::Retrying(_) => StepState::Retrying,
         }
     }
 
+    /// Whether arriving here starts a run of the step.
+    ///
+    /// **One question asked in one place**, because three things turn on it and
+    /// each was spelling the match itself: the cursor moves, `entered_at` moves,
+    /// and `store::attempt` counts the row this writes. A loop return is a run
+    /// of the step by every one of those readings — a fresh Drone does the work
+    /// again — so the three had to agree, and a fourth caller matching on the
+    /// variants would be a fourth place they could stop agreeing.
+    pub fn begins_a_run(&self) -> bool {
+        matches!(self, StepTarget::Running | StepTarget::Returned)
+    }
+
     /// What qualifies the move, where the destination stores one. `None` on the
     /// two that do not, for [`StepEdge`]'s reason.
     pub fn why(&self) -> Option<StepLevelTrigger> {
         match self {
-            StepTarget::Running | StepTarget::Advanced => None,
+            StepTarget::Running | StepTarget::Advanced | StepTarget::Returned => None,
             StepTarget::Stopped(why) | StepTarget::Overridden(why) | StepTarget::Retrying(why) => {
                 Some(*why)
             }
@@ -216,8 +256,24 @@ impl StepTarget {
     /// the narrowing the type system does at every call site is paid — once, on
     /// the way in. A reason on a destination that stores none is refused rather
     /// than dropped, the same way a missing one on `stopped` is.
-    pub fn arriving_at(state: StepState, why: Option<StepLevelTrigger>) -> Option<StepTarget> {
+    ///
+    /// **`from` is a parameter and used by one arm.** The two arrivals at
+    /// `advanced` are told apart by the reason they carry, but the two arrivals
+    /// at `running` carry none — a loop return has no trigger to store, for
+    /// [`Returned`](StepTarget::Returned)'s reason — so the state it left is
+    /// the only thing that distinguishes them, and the row already records it.
+    /// Without it a replayed `advanced -> running` row would come back as
+    /// [`Running`](StepTarget::Running), which [`admits_step`] then refuses,
+    /// and a Job that had looped would be unreadable off its own log.
+    pub fn arriving_at(
+        from: StepState,
+        state: StepState,
+        why: Option<StepLevelTrigger>,
+    ) -> Option<StepTarget> {
         match (state, why) {
+            // The loop return, and the only way to reach it: no other edge into
+            // `running` starts at `advanced`, so the pair is unambiguous.
+            (StepState::Running, None) if from == StepState::Advanced => Some(StepTarget::Returned),
             (StepState::Running, None) => Some(StepTarget::Running),
             (StepState::Advanced, None) => Some(StepTarget::Advanced),
             // The trigger is what tells the two arrivals at `advanced` apart,
@@ -269,6 +325,25 @@ pub enum IllegalStepTransition {
     /// and the record could lose the refusal a person disagreed with, which is
     /// the whole of what an override is for.
     StepDidNotPass { step_id: StepId },
+    /// An advanced step was dispatched into rather than returned to.
+    ///
+    /// The mirror of [`StepDidNotPass`](Self::StepDidNotPass), and the reason
+    /// `advanced -> running` is narrowed the way `stopped -> advanced` is. The
+    /// edge exists for a loop return and for nothing else; a plain
+    /// [`StepTarget::Running`] across it is a dispatch or a resume onto work
+    /// that already passed its gate, which `fleet::resume` refuses above this
+    /// layer and calls a redispatch. Without this the edge would quietly make
+    /// that act legal in the machine the refusal sits on top of.
+    StepAlreadyAdvanced { step_id: StepId },
+    /// A loop return was aimed at a step that has not advanced.
+    ///
+    /// The other half of the narrowing. [`StepTarget::Returned`] says a later
+    /// step routed its verdict back to a finished one; a return onto a step
+    /// that is `not_started`, `running`, `retrying` or `stopped` is a dispatch,
+    /// a no-op or a restart wearing a loop's name, and each of those has its
+    /// own target already. The `from` is carried because which of the four it
+    /// was is what tells the caller which act it meant.
+    NotAnAdvancedStep { step_id: StepId, from: StepState },
 }
 
 impl fmt::Display for IllegalStepTransition {
@@ -296,6 +371,18 @@ impl fmt::Display for IllegalStepTransition {
                 "step `{}` is stopped and did not pass its advance gate, so it advances only as \
                  an override, carrying the trigger it overrules",
                 step_id.as_str()
+            ),
+            IllegalStepTransition::StepAlreadyAdvanced { step_id } => write!(
+                f,
+                "step `{}` has advanced, so it is entered again only as a loop return; running \
+                 it again otherwise is a redispatch",
+                step_id.as_str()
+            ),
+            IllegalStepTransition::NotAnAdvancedStep { step_id, from } => write!(
+                f,
+                "step `{}` is {} and a loop returns only to a step that advanced",
+                step_id.as_str(),
+                from.as_wire()
             ),
         }
     }
@@ -380,6 +467,22 @@ pub(crate) fn admits_step(
     if from == StepState::Stopped && matches!(to, StepTarget::Advanced) {
         return Err(IllegalStepTransition::StepDidNotPass {
             step_id: step_id.clone(),
+        });
+    }
+    // The mirror, over the other edge two targets could reach. `advanced ->
+    // running` exists for a loop return and for nothing else, and a plain
+    // dispatch across it would put a Drone back on work that already passed
+    // its gate — the redispatch `fleet::resume` refuses, admitted underneath
+    // the refusal.
+    if from == StepState::Advanced && matches!(to, StepTarget::Running) {
+        return Err(IllegalStepTransition::StepAlreadyAdvanced {
+            step_id: step_id.clone(),
+        });
+    }
+    if from != StepState::Advanced && matches!(to, StepTarget::Returned) {
+        return Err(IllegalStepTransition::NotAnAdvancedStep {
+            step_id: step_id.clone(),
+            from,
         });
     }
     Ok(())

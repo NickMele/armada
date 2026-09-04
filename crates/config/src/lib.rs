@@ -26,6 +26,7 @@
 
 mod error;
 mod judge;
+mod loops;
 mod manifest;
 mod resolve;
 mod roster;
@@ -37,6 +38,7 @@ mod yaml;
 mod tests;
 
 pub use error::{Fault, LoadError, Refusal, ResolveError, UnknownCheck};
+pub use loops::GateVerdict;
 pub use manifest::{Check, Command, Manifest, Preparation};
 pub use resolve::ResolvedWorkflow;
 pub use roster::Roster;

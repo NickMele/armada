@@ -125,13 +125,50 @@ pub enum Fault {
     /// Two steps in one workflow carry one `id`. Reported on the second, and
     /// names where the first was, because the fix is to look at both.
     DuplicateStepId { first_at: usize },
-    /// **`verdict_routing` on a `linear` workflow.** The `structure` field is
-    /// redundant with `verdict_routing` by construction and that redundancy is
-    /// its whole value: declared intent, checked against what was wired.
-    /// Without this refusal a routing edge added to a workflow the author
-    /// believes is linear is legal config that surfaces as a Job which never
-    /// terminates.
+    /// **The declared structure and the wiring disagree**, in either direction:
+    /// `verdict_routing` on a `linear` workflow, or a `loop` no step declares an
+    /// edge for. The `structure` field is redundant with `verdict_routing` by
+    /// construction and that redundancy is its whole value: declared intent,
+    /// checked against what was wired. Without the first half, a routing edge
+    /// added to a workflow the author believes is linear is legal config that
+    /// surfaces as a Job which never terminates; without the second, `loop` is
+    /// a label a file can wear while running as a straight line.
+    ///
+    /// The two halves are one variant because they are one rule, and they are
+    /// reported at different keys: the linear half names the offending step,
+    /// and the loop half names `structure`, because the absence it found is the
+    /// whole file's.
     ContradictsStructure { structure: &'static str },
+    /// **`iteration_cap` on a step that declares no `verdict_routing`.** A cap
+    /// bounds a count, and the count is `iteration_count` on the step that
+    /// emits the verdict — so a cap on a step with no edge is a number nothing
+    /// ever spends. The registry is explicit that the two live on one step,
+    /// because split they never fire. The same half-a-statement shape as
+    /// [`Fault::PlanWithoutAScope`].
+    CapWithoutALoop,
+    /// **A `verdict_routing` target naming no step the file declares.** The
+    /// loop cannot close: the Job reaches its gate, is told to go back, and
+    /// there is nothing to go back to. Refused where it is written for
+    /// [`Fault::NotAnArtifactPath`]'s reason — the layer that would otherwise
+    /// find it is a Job that already has a worktree, a Drone and a person
+    /// standing at the gate.
+    RoutesToNoSuchStep {
+        value: String,
+        /// The ids the file writes, in order, so the message can name them.
+        /// Owned rather than borrowed, and read off the document rather than
+        /// off the parsed steps: a step dropped for its own unrelated fault is
+        /// still a step the author declared.
+        declared: Vec<String>,
+    },
+    /// **A `verdict_routing` target that names a real step and is not one this
+    /// step can return to.** A separate variant from
+    /// [`Fault::RoutesToNoSuchStep`] because the step exists and the fix is
+    /// different: one is a name to correct, this is a shape to redraw.
+    ///
+    /// One variant with a `why`, the same as [`Fault::NotAnArtifactPath`]: two
+    /// ways of writing an edge the workflow cannot take, and the message has to
+    /// say which, because the fix for each is the other one's mistake.
+    NotAReturn { value: String, why: BadReturn },
     /// **`context_paths` in a definition.** The schema puts it on the resolved
     /// object: the Drone supplies the paths at declaration time and Fleet
     /// validates them, so at definition time there is nothing to author.
@@ -196,6 +233,38 @@ pub enum BadTarget {
     /// It ends in `/`, so it names a directory and a directory is not the
     /// deliverable.
     ADirectory,
+}
+
+/// Why a step's `verdict_routing` target is not somewhere the workflow could
+/// return to, given that the step it names exists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BadReturn {
+    /// It is the step that emits the verdict. **A step sent back to itself is a
+    /// retry wearing a loop's name**, and the two counters exist precisely so
+    /// that a Drone that failed four times and a plan asked for a fourth draft
+    /// stay distinguishable. `retry_limit` is the key for going again.
+    Itself,
+    /// It comes later in `steps[]`. **Unreachable by construction, not
+    /// unbuilt**: a return re-enters a step that has advanced, and a step the
+    /// Job has not reached has advanced nothing there is to go back to.
+    Ahead,
+}
+
+impl fmt::Display for BadReturn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BadReturn::Itself => write!(
+                f,
+                "it is the step that emits the verdict, and a step sent back to \
+                 itself is a retry. `retry_limit` is the key for that"
+            ),
+            BadReturn::Ahead => write!(
+                f,
+                "it comes later in the workflow, and a step the Job has not \
+                 reached has nothing for a return to land on"
+            ),
+        }
+    }
 }
 
 impl fmt::Display for BadTarget {
@@ -269,9 +338,33 @@ impl fmt::Display for Fault {
             Fault::DuplicateStepId { first_at } => {
                 write!(f, "repeats the id already used by steps[{first_at}]")
             }
+            Fault::ContradictsStructure { structure: "loop" } => write!(
+                f,
+                "is `loop`, and no step declares a `verdict_routing` edge for \
+                 the loop to return by"
+            ),
             Fault::ContradictsStructure { structure } => write!(
                 f,
                 "declares a routing edge, and the workflow declares `structure: {structure}`"
+            ),
+            Fault::NotAReturn { value, why } => write!(
+                f,
+                "is `{value}`, which is not a step this one returns to: {why}"
+            ),
+            Fault::RoutesToNoSuchStep { value, declared } => {
+                let names: Vec<&str> = declared.iter().map(String::as_str).collect();
+                write!(
+                    f,
+                    "is `{value}`, which names no step in this workflow. It \
+                     declares {}",
+                    Listed(&names, "none")
+                )
+            }
+            Fault::CapWithoutALoop => write!(
+                f,
+                "bounds a count the step does not keep: it declares no \
+                 `verdict_routing`, so there is no loop return for a cap to \
+                 stop"
             ),
             Fault::BelongsToTheResolvedObject => write!(
                 f,

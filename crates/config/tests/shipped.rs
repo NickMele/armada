@@ -80,11 +80,12 @@ fn every_shipped_workflow_definition_parses() {
 /// **Nothing this repository ships grants the dispatch tool.**
 ///
 /// `may_dispatch_jobs` is carried by the parser and by the frozen record, and
-/// no shipped definition sets it — the workflow that will is a loop, and the
-/// loop keys are still refused as deferred. So this is not a gap: it is the
-/// grant existing before the shape that uses it, and it is asserted so that a
-/// step quietly acquiring the ability to create Jobs is a failing test rather
-/// than a Drone with an extra tool.
+/// no shipped definition sets it — the workflow that will is a loop, and while
+/// the loop keys parse since #263, nothing yet takes the return: no step-machine
+/// edge from `advanced` back to `running`, and no `iteration_count` to bound it.
+/// So this is not a gap: it is the grant existing before the shape that uses it,
+/// and it is asserted so that a step quietly acquiring the ability to create
+/// Jobs is a failing test rather than a Drone with an extra tool.
 #[test]
 fn no_shipped_workflow_grants_the_dispatch_tool_yet() {
     for (path, text) in shipped() {
