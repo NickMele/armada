@@ -33,7 +33,7 @@ copy, which is what a lint asserting every surface has copy would fail on.
 | Surface | Written by | Read by | Leaves | Enforcement | Shape | Samples |
 | --- | --- | --- | --- | --- | --- | --- |
 | Commit message | Drone | Whoever reads the history later, including people who did not ask | Yes | Hard gate | Prose | Worked |
-| PR description | Drone | A reviewer deciding where to spend attention | Yes | Hard gate | Prose | Worked |
+| PR description | Drone | A reviewer deciding where to spend attention | Yes | Hard gate | Four headings, then prose | Worked |
 | Work submission | Drone | A person, on escalation and at review — never the Judge | No | Prompt only | Named fields | Worked |
 | Escape hatch narrative | Drone | The engineer taking over | No | Prompt only | Named fields | Worked |
 | Judge record — refusal | Judge | A person triaging, and a Drone on retry, each a different projection | No | Lint warning | Named fields | Worked |
@@ -122,55 +122,97 @@ Same rule and same gate as a commit message — say what the diff cannot —
 with one job a commit message does not have: telling a reviewer what needs
 them.
 
+### Four headings, in this order, always
+
+`.github/PULL_REQUEST_TEMPLATE.md` is the shape and this is why it has one.
+
+| Heading | Answers | The failure it prevents |
+| --- | --- | --- |
+| `## Why was the change needed?` | What a person could not do, or what was wrong | A body that opens on the edit, so a reviewer never learns what it is for |
+| `## What is the outcome of the change` | What the end result is, as a person meets it | A narration of the diff, which the reviewer already has |
+| `## Risks` | What could still be wrong, and what was left alone | A leftover discovered in review instead of in the body |
+| `## Checks Evidence` | What proves it | `Tests pass`, which proves nothing a reader can check |
+
+**A short section keeps its heading.** Position is how a reviewer skimming a
+queue finds the part they need; a body that drops a heading has dropped the
+part the diff cannot supply. `Nothing` under Risks is an answer and it is a
+different answer from silence.
+
+**The order is not arrangeable.** Cause, result, cost, proof is the order a
+reviewer decides in, and the two most commonly dropped — Risks and Checks
+Evidence — are last precisely because they are the two a writer runs out of
+patience for. Their position is what makes their absence visible.
+
+### Show the outcome, do not describe it
+
+The outcome section takes an example. The sentence that now appears, the
+screen that now draws, the command that now answers — quoted, so a reviewer
+reads what a person will read rather than a paraphrase of it.
+
+**A code block is not an outcome.** A diff hunk pasted into the body is the
+diff again, one scroll higher. What belongs there is what the code
+*produces*.
+
 ### Bullets are legal, and they are the middle
 
-A PR body made only of bullets has dropped the cause and the caveat, which
+A section made only of bullets has dropped the cause and the caveat, which
 are the two parts a reviewer needs and the two the diff cannot supply.
 Rendered markdown scanned on a screen is a different medium from `git log`.
 
 ### A heading beats a colon reveal
 
 "Worth a look:" is a dramatic setup where a heading is the honest
-structure, and the lint bans colon reveals for exactly that reason. A
-heading also encodes something true — this part is a question, the rest is
-a report — and it is the only structure that survives a reviewer skimming a
-queue of PRs.
+structure, and the lint bans colon reveals for exactly that reason. The
+four above are the structure; a fifth heading inside one of them is legal
+and a colon reveal is not.
 
 ### Naming a leftover is not asking for a decision
 
-A caveat needs the cost, the reason it was not fixed, and the ways forward.
-A reviewer who cannot act on a caveat skims past it.
+A risk needs the cost, the reason it was not fixed, and the ways forward. A
+reviewer who cannot act on a caveat skims past it. This is the whole of why
+`## Risks` is a heading rather than a closing sentence.
 
 ### Sample
 
 ```
-Two Jobs against the same repo resolved to the same worktree
-path, and the second failed inside libgit2 naming neither Job.
+## Why was the change needed?
 
-- add() takes a job id and builds the path from it
-- Three call sites updated in dispatch.rs
-- test_concurrent_dispatch covers two Jobs on one repo
-- The existing single-Job tests are unchanged
+Two Jobs against the same repo resolved to the same worktree path, and
+the second failed inside libgit2 naming neither Job.
 
-## Left for you to decide
+## What is the outcome of the change
 
-Cleanup still keys off the repo name, so a killed Job now leaves
-a worktree directory nothing removes. One per kill.
+A second Job against a repo one is already working now gets its own
+worktree, and the failure it used to raise is gone. Where it used to
+stop, it now reports:
 
-Fixing that means changing the sweeper's match pattern, which is
-the retention path too, so it is wider than this change. Ship
-this and file the leak separately, or send it back and it goes
-in here.
+> armada/01K3Q… is holding crates/api. Dispatched to a worktree of
+> its own.
+
+## Risks
+
+Cleanup still keys off the repo name, so a killed Job now leaves a
+worktree directory nothing removes. One per kill.
+
+Fixing that means changing the sweeper's match pattern, which is the
+retention path too, so it is wider than this change. Ship this and
+file the leak separately, or send it back and it goes in here.
+
+## Checks Evidence
+
+- `test_concurrent_dispatch` drives two Jobs against one repo and
+  asserts two worktree paths.
+- The existing single-Job tests are unchanged and still green — a
+  reviewer who knows that does not go looking for a change that is
+  not there.
+- `cargo test --workspace` green.
 ```
 
-One bullet says what was left alone. A reviewer who knows the single-Job
-tests were not touched does not go looking for a change that is not there.
-
-Compare the bullets against the shape-to-avoid sample in the
-`commit-message` skill: "Updated add() to accept job_id parameter" narrates
-the edit; "add() takes a job id and builds the path from it" says what the
-code now does. Same form, opposite substance — the `claimed` distinction
-again.
+One line under Checks Evidence says what was left alone. Compare the
+outcome section against the shape-to-avoid sample in the `commit-message`
+skill: "Updated add() to accept job_id parameter" narrates the edit; the
+quoted sentence above is what a person now meets. Same form, opposite
+substance — the `claimed` distinction again.
 
 ---
 
