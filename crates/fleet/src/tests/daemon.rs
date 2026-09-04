@@ -46,6 +46,7 @@ use crate::judging::JudgeBudget;
 use crate::noticing::Noticing;
 use crate::silence::Liveness;
 use crate::slots::Concurrency;
+use crate::tests::admitted::dispatched;
 use crate::tests::planted::the_drone_it_holds_is_gone;
 pub use crate::tests::planted::{Counted, Ticking};
 use crate::tests::tmp::TempDir;
@@ -560,7 +561,7 @@ async fn a_job_is_driven_from_created_to_completed_and_survives_a_reopen() {
     assert_eq!(job.steps().len(), 2, "the frozen workflow's steps");
     worktree_directory(&home, job.id());
 
-    let approved = fleet.approve(job.id()).await.unwrap();
+    let approved = dispatched(&fleet, job.id()).await.unwrap();
     assert_eq!(approved.status(), JobStatus::Running);
     assert_eq!(fleet.working_on().await, vec![job.id().clone()]);
     assert_eq!(
@@ -643,7 +644,7 @@ async fn a_failed_check_holds_the_job_and_keeps_the_worktree() {
 
     let job = fleet.propose(a_proposal("change nothing")).await.unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
@@ -676,11 +677,11 @@ async fn a_second_approved_job_waits_while_one_is_worked() {
 
     let first = fleet.propose(a_proposal("the first")).await.unwrap();
     worktree_directory(&home, first.id());
-    fleet.approve(first.id()).await.unwrap();
+    dispatched(&fleet, first.id()).await.unwrap();
 
     let second = fleet.propose(a_proposal("the second")).await.unwrap();
     worktree_directory(&home, second.id());
-    let waiting = fleet.approve(second.id()).await.unwrap();
+    let waiting = dispatched(&fleet, second.id()).await.unwrap();
 
     assert_eq!(
         waiting.status(),
@@ -720,7 +721,7 @@ async fn a_running_job_with_no_drone_is_interrupted_at_startup() {
             .await
             .unwrap();
         worktree_directory(&home, job.id());
-        fleet.approve(job.id()).await.unwrap();
+        dispatched(&fleet, job.id()).await.unwrap();
         // **Ended here rather than left to the drop.** A Drone outlives the
         // Fleet that spawned it by design, and one still in the process table
         // is one the second Fleet adopts — which would leave this Job
@@ -761,7 +762,7 @@ async fn a_submission_of_the_wrong_kind_moves_nothing() {
     let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
     let job = fleet.propose(a_proposal("the wrong kind")).await.unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     // The first step asks for a diff.
     submitted_by_the_one(&fleet, note_evidence()).await.unwrap();
@@ -788,7 +789,7 @@ async fn killing_a_job_ends_it_and_frees_the_slot() {
     let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
     let job = fleet.propose(a_proposal("kill me")).await.unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     let killed = Fleet::kill_job(&fleet, job.id()).await.unwrap();
     assert_eq!(killed.status(), JobStatus::Killed);
@@ -811,7 +812,7 @@ async fn a_drone_that_leaves_without_submitting_does_not_leave_the_job_running()
         .await
         .unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     let mut after = None;
     for _ in 0..200 {
@@ -859,7 +860,7 @@ async fn a_second_step_that_writes_nothing_is_not_credited_with_the_first_step_s
         .await
         .unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     // The first step's Drone puts something on disk, then submits.
     fleet

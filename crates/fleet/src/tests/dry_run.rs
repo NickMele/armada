@@ -46,6 +46,7 @@ use crate::daemon::Fleet;
 use crate::dry_run::{DryRuns, NotRun};
 use crate::silence::Liveness;
 use crate::terms::Checking;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::checked_by_the_one;
@@ -155,7 +156,7 @@ async fn started(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
         .await
         .expect("a proposed Job");
     worktree_directory(home, job.id());
-    fleet.approve(job.id()).await.expect("an approved Job");
+    dispatched(&fleet, job.id()).await.expect("an approved Job");
     job.id().clone()
 }
 

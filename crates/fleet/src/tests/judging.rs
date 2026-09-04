@@ -33,6 +33,7 @@ use crate::asked::Asked;
 use crate::at_step::AtStep;
 use crate::gate::{apply, rule_on, Ruling};
 use crate::judging::{Aloft, JudgeBudget, Judging, Marking};
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_fleet_judged_by, a_proposal, worktree_directory};
 use crate::tests::detail::get;
 use crate::tests::gate::{
@@ -270,7 +271,7 @@ async fn a_refusal_escalates_the_job_and_its_citation_reaches_the_detail_view() 
         .expect("a Job at the gate");
     let job_id = job.id().clone();
     worktree_directory(&home, &job_id);
-    fleet.approve(&job_id).await.expect("released to run");
+    dispatched(&fleet, &job_id).await.expect("released to run");
     submitted_by_the_one(&fleet, crate::tests::daemon::diff_evidence())
         .await
         .expect("the tool took it");

@@ -10,6 +10,7 @@ use core_model::JobStatus;
 
 use crate::adrift::Adrift;
 use crate::briefing;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_fleet, a_proposal, worktree_directory};
 use crate::tests::tmp::TempDir;
 use testkit::FakeWorkProduct;
@@ -114,7 +115,7 @@ async fn dispatch_copies_the_attachment_and_the_brief_names_it() {
         .expect("promoted");
     worktree_directory(&home, job.id());
 
-    let approved = fleet.approve(job.id()).await.expect("dispatch runs");
+    let approved = dispatched(&fleet, job.id()).await.expect("dispatch runs");
     assert_eq!(approved.status(), JobStatus::Running);
 
     let spec = WorktreeSpec::for_job(&home.path().to_string_lossy(), job.id().as_str())

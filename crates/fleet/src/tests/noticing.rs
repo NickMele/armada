@@ -17,6 +17,7 @@ use testkit::{FakeVcs, FakeWorkProduct};
 
 use crate::daemon::Fleet;
 use crate::noticing::Noticing;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
     a_proposal, diff_evidence, fittings, note_evidence, worktree_directory,
 };
@@ -43,7 +44,7 @@ async fn a_finished_job(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
         .await
         .unwrap();
     worktree_directory(home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
     submitted_by_the_one(fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
     submitted_by_the_one(fleet, note_evidence()).await.unwrap();

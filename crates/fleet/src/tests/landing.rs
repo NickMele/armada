@@ -10,6 +10,7 @@ use testkit::{FakeVcs, FakeWorkProduct};
 
 use crate::adrift::Adrift;
 use crate::gate::Ruling;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
     a_fleet_committing_through, a_proposal, diff_evidence, note_evidence, worktree_directory,
 };
@@ -37,7 +38,7 @@ async fn the_work_is_committed_when_the_last_step_advances() {
         .await
         .unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
@@ -100,7 +101,7 @@ async fn a_job_that_changed_nothing_is_answered_rather_than_committed() {
         .await
         .unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
@@ -127,7 +128,7 @@ async fn a_job_that_fails_mid_workflow_gets_no_commit() {
 
     let job = fleet.propose(a_proposal("change nothing")).await.unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
@@ -159,7 +160,7 @@ async fn a_refused_commit_still_completes_the_job_and_says_so() {
         .await
         .unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();

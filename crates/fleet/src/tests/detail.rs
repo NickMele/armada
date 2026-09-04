@@ -13,6 +13,7 @@ use ipc::{JobDetail, RunId};
 use testkit::FakeWorkProduct;
 use tower::ServiceExt;
 
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_fleet, a_proposal, worktree_directory};
 use crate::tests::planted::the_drone_it_holds_is_gone;
 use crate::tests::tmp::TempDir;
@@ -51,7 +52,7 @@ async fn a_dispatched_job_carries_its_branch_and_its_steps() {
         .expect("a Job at the gate");
     let job_id = job.id().clone();
     worktree_directory(&home, &job_id);
-    fleet.approve(&job_id).await.expect("released to run");
+    dispatched(&fleet, &job_id).await.expect("released to run");
     let events = fleet.events();
     let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
 
@@ -129,7 +130,7 @@ async fn the_branch_survives_a_fleet_restart() {
             .await
             .expect("a Job at the gate");
         worktree_directory(&home, job.id());
-        fleet.approve(job.id()).await.expect("released to run");
+        dispatched(&fleet, job.id()).await.expect("released to run");
         // **Ended here rather than left to the drop.** A Drone outlives the
         // Fleet that spawned it by design, and one still in the process table
         // is one the second Fleet adopts — which would leave this Job

@@ -15,6 +15,7 @@ use core_model::{
 use testkit::{FakeWorkProduct, Gate, Sketch};
 
 use crate::gate::Ruling;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
     a_fleet, a_fleet_holding, a_fleet_holding_all, a_proposal, a_proposal_for, diff_evidence,
     workflow_named, worktree_directory,
@@ -77,7 +78,7 @@ async fn a_workflow_edited_under_a_job_changes_nothing_about_it() {
     // The file is edited and Fleet restarts. `implement` is now gated on a
     // command that exits 1, which this Job would fail on if the file won.
     let after = a_fleet_holding(&home, changed(), two_steps_edited(), 100);
-    after.approve(&job_id).await.unwrap();
+    dispatched(&after, &job_id).await.unwrap();
     submitted_by_the_one(&after, diff_evidence()).await.unwrap();
 
     let ruling_turn = after.turn().await.unwrap();
@@ -211,7 +212,7 @@ async fn a_job_folds_its_drone_out_of_the_log() {
             .await
             .unwrap();
         worktree_directory(&home, job.id());
-        let running = fleet.approve(job.id()).await.unwrap();
+        let running = dispatched(&fleet, job.id()).await.unwrap();
         assert_eq!(running.status(), JobStatus::Running);
         let drone = running
             .assigned_drone()
@@ -381,7 +382,7 @@ async fn a_failed_checks_output_is_readable_from_its_file_afterwards() {
         .await
         .unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
 
     let ruling_turn = fleet.turn().await.unwrap();
@@ -456,7 +457,7 @@ async fn a_check_that_passed_keeps_its_output_and_a_built_in_has_none() {
         .await
         .unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
 

@@ -40,6 +40,7 @@ use crate::converging::StepNorms;
 use crate::daemon::Fleet;
 use crate::questioning::{NotAnswered, NotAsked};
 use crate::silence::Liveness;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
 use crate::tests::tmp::TempDir;
 
@@ -179,7 +180,7 @@ async fn started(fleet: &Fixture, home: &TempDir) -> JobId {
         .await
         .unwrap();
     worktree_directory(home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
     settled(fleet).await;
     job.id().clone()
 }

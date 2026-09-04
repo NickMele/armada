@@ -20,6 +20,7 @@
 use core_model::{JobStatus, StepId};
 use testkit::{FakeVcs, FakeWorkProduct};
 
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
     a_fleet_gated_on_a_person, a_proposal, diff_evidence, note_evidence, worktree_directory,
 };
@@ -264,7 +265,7 @@ async fn a_step_sent_back_carries_no_verdict_about_the_part_before_it() {
         .expect("a Job at the approval gate");
     let job_id = job.id().clone();
     worktree_directory(&home, &job_id);
-    fleet.approve(&job_id).await.expect("it dispatches");
+    dispatched(&fleet, &job_id).await.expect("it dispatches");
     submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("the first step reports");
@@ -328,8 +329,7 @@ async fn a_note_waiting_behind_a_busy_fleet_is_on_the_wire_until_it_is_delivered
         .expect("a proposal");
     let other_id = other.id().clone();
     worktree_directory(&home, &other_id);
-    fleet
-        .approve(&other_id)
+    dispatched(&fleet, &other_id)
         .await
         .expect("the second Job takes the slot");
 

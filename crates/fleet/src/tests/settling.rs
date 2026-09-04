@@ -22,6 +22,7 @@ use testkit::{FakeVcs, FakeWorkProduct};
 
 use crate::evidence::Decline;
 use crate::gate::Ruling;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
     a_fleet, a_fleet_gated_on_a_person, a_proposal, diff_evidence, worktree_directory,
 };
@@ -64,7 +65,7 @@ async fn a_submission_that_lands_while_the_slot_is_empty_survives_to_be_ruled_on
 
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
 
     // The Drone goes, and its slot with it. Held rather than dropped so the
@@ -110,7 +111,7 @@ async fn a_decline_says_which_guard_refused_in_the_jobs_log() {
 
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
 
     let _held = fleet.the_only_slot().await.lock().await.take();
@@ -142,7 +143,7 @@ async fn a_submission_no_slot_will_ever_hold_escalates_the_job_it_was_for() {
 
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
 
     let _held = fleet.the_only_slot().await.lock().await.take();
@@ -189,7 +190,7 @@ async fn a_submission_overtaken_by_the_next_job_escalates_the_one_it_was_for() {
 
     let first = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, first.id());
-    fleet.approve(first.id()).await.unwrap();
+    dispatched(&fleet, first.id()).await.unwrap();
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
 
     // The slot emptied while the submission stays where it is — which is the
@@ -202,7 +203,7 @@ async fn a_submission_overtaken_by_the_next_job_escalates_the_one_it_was_for() {
     // The next approved Job goes straight into the slot it found free.
     let second = fleet.propose(a_proposal("fix the writer")).await.unwrap();
     worktree_directory(&home, second.id());
-    fleet.approve(second.id()).await.unwrap();
+    dispatched(&fleet, second.id()).await.unwrap();
     assert_eq!(fleet.working_on().await, vec![second.id().clone()]);
 
     // The strand is answered outside every slot, so the second Job being in one
@@ -250,7 +251,7 @@ async fn a_decline_that_stands_writes_one_line_rather_than_one_a_turn() {
 
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
 
     let _held = fleet.the_only_slot().await.lock().await.take();
@@ -293,7 +294,7 @@ async fn nothing_can_submit_to_a_job_a_person_is_holding_at_a_gate() {
 
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
     assert!(matches!(turned.ruled(), Some(Ruling::HeldForReview { .. })));
@@ -342,7 +343,7 @@ async fn a_gate_that_cannot_read_its_artifact_escalates_and_names_the_artifact()
 
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
 
     let turned = fleet.turn().await.unwrap();
@@ -407,7 +408,7 @@ async fn a_gate_that_could_not_decide_keeps_its_drone() {
 
     let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.unwrap();
+    dispatched(&fleet, job.id()).await.unwrap();
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();
 

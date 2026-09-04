@@ -19,6 +19,7 @@ use testkit::FakeWorkProduct;
 use crate::allowance::{spent, Allowance, Micros, Overspent};
 use crate::daemon::{Fittings, Fleet};
 use crate::headroom::{Bytes, InUse, Reading, Spare};
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fittings, worktree_directory};
 use crate::tests::tmp::TempDir;
 
@@ -41,7 +42,9 @@ fn capped(home: &TempDir, allowance: Allowance) -> Fixture {
 async fn approved(fleet: &Fixture, home: &TempDir, title: &str) -> core_model::JobId {
     let job = fleet.propose(a_proposal(title)).await.expect("a proposal");
     worktree_directory(home, job.id());
-    fleet.approve(job.id()).await.expect("a person approves it");
+    dispatched(&fleet, job.id())
+        .await
+        .expect("a person approves it");
     job.id().clone()
 }
 

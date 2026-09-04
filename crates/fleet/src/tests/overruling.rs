@@ -19,6 +19,7 @@ use testkit::{Delivered, Delivering, FakeJudge, FakeVcs, FakeWorkProduct, Gaming
 use crate::daemon::Fleet;
 use crate::gate::Ruling;
 use crate::overruling::Overruling;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
     a_fleet_judged_by, a_proposal, diff_evidence, fittings, one, worktree_directory,
 };
@@ -85,7 +86,7 @@ async fn refused(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
         .expect("a Job at the approval gate");
     let job_id = job.id().clone();
     worktree_directory(home, &job_id);
-    fleet.approve(&job_id).await.expect("released to run");
+    dispatched(&fleet, &job_id).await.expect("released to run");
     submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("the Drone reports its diff");
@@ -151,7 +152,7 @@ async fn flagged(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
         .expect("a Job at the approval gate");
     let job_id = job.id().clone();
     worktree_directory(home, &job_id);
-    fleet.approve(&job_id).await.expect("released to run");
+    dispatched(&fleet, &job_id).await.expect("released to run");
     submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("the tool took it");
@@ -455,7 +456,7 @@ async fn a_failed_mechanical_check_cannot_be_overruled() {
         .expect("a Job at the approval gate");
     let job_id = job.id().clone();
     worktree_directory(&home, &job_id);
-    fleet.approve(&job_id).await.expect("released to run");
+    dispatched(&fleet, &job_id).await.expect("released to run");
     submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("the Drone reports a diff it did not make");
@@ -516,7 +517,7 @@ async fn a_gate_that_could_not_decide_has_no_verdict_to_overrule() {
         .expect("a Job at the approval gate");
     let job_id = job.id().clone();
     worktree_directory(&home, &job_id);
-    fleet.approve(&job_id).await.expect("released to run");
+    dispatched(&fleet, &job_id).await.expect("released to run");
     submitted_by_the_one(&fleet, diff_evidence())
         .await
         .expect("the tool took it");

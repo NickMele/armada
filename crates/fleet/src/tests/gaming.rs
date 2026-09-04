@@ -22,6 +22,7 @@ use crate::asked::Asked;
 use crate::at_step::AtStep;
 use crate::gate::{apply, rule_on, Ruling};
 use crate::judging::{JudgeBudget, Judging, Marking};
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_fleet_judged_by, a_proposal, worktree_directory};
 use crate::tests::detail::get;
 use crate::tests::gate::{budget, diff_evidence, running_job, worktree};
@@ -329,7 +330,7 @@ async fn a_gaming_finding_names_its_patterns_on_the_detail_view() {
         .expect("a Job at the gate");
     let job_id = job.id().clone();
     worktree_directory(&home, &job_id);
-    fleet.approve(&job_id).await.expect("released to run");
+    dispatched(&fleet, &job_id).await.expect("released to run");
     submitted_by_the_one(&fleet, crate::tests::daemon::diff_evidence())
         .await
         .expect("the tool took it");
@@ -400,7 +401,7 @@ async fn a_step_nothing_was_flagged_on_carries_an_empty_list() {
         .expect("a Job at the gate");
     let job_id = job.id().clone();
     worktree_directory(&home, &job_id);
-    fleet.approve(&job_id).await.expect("released to run");
+    dispatched(&fleet, &job_id).await.expect("released to run");
     let events = fleet.events();
     let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
 

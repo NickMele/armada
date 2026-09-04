@@ -19,6 +19,7 @@ use testkit::{FakeVcs, FakeWorkProduct};
 
 use crate::daemon::Fleet;
 use crate::holding::{Held, Reclaiming};
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fittings};
 use crate::tests::http::call;
 use crate::tests::reclaim::{a_finished_job, a_repository, a_worktree_for, branches, commit, git};
@@ -207,7 +208,7 @@ async fn a_piloted_job_is_held_as_piloted_and_is_never_offered() {
         .await
         .expect("a Job at the gate");
     a_worktree_for(&home, job.id().as_str());
-    let running = fleet.approve(job.id()).await.expect("running");
+    let running = dispatched(&fleet, job.id()).await.expect("running");
     fleet
         .move_job(
             &running,
@@ -427,7 +428,7 @@ async fn a_piloted_jobs_checkout_is_not_served_at_all() {
         .await
         .expect("a Job at the gate");
     a_worktree_for(&home, job.id().as_str());
-    let running = fleet.approve(job.id()).await.expect("running");
+    let running = dispatched(&fleet, job.id()).await.expect("running");
     fleet
         .move_job(
             &running,

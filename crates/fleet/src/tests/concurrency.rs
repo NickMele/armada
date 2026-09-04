@@ -25,6 +25,7 @@ use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Gate, Scoped, Sk
 
 use crate::daemon::{Fittings, Fleet};
 use crate::slots::Concurrency;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fittings, one, worktree_directory};
 use crate::tests::peer::Placing;
 use crate::tests::planning::A_PLAN;
@@ -74,8 +75,7 @@ pub(crate) async fn approved(fleet: &Fixture, home: &TempDir, title: &str) -> Jo
         .await
         .expect("a proposal is drafted");
     worktree_directory(home, job.id());
-    fleet
-        .approve(job.id())
+    dispatched(&fleet, job.id())
         .await
         .expect("a person approves it, one by one");
     job.id().clone()
@@ -327,9 +327,13 @@ async fn a_dependent_whose_upstream_failed_does_not_take_the_free_place() {
         .expect("a plan");
     // The upstream runs, which is what leaves exactly one place free.
     worktree_directory(&home, made[0].id());
-    fleet.approve(made[0].id()).await.expect("the upstream");
+    dispatched(&fleet, made[0].id())
+        .await
+        .expect("the upstream");
     worktree_directory(&home, made[1].id());
-    fleet.approve(made[1].id()).await.expect("the dependent");
+    dispatched(&fleet, made[1].id())
+        .await
+        .expect("the dependent");
     assert_eq!(
         fleet.working_on().await,
         vec![made[0].id().clone()],

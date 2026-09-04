@@ -29,6 +29,7 @@ use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Sketch};
 
 use crate::daemon::Fleet;
 use crate::slots::Concurrency;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
 use crate::tests::tmp::TempDir;
 
@@ -85,7 +86,9 @@ fn a_full_fleet(home: &TempDir) -> Fixture {
 async fn approved(fleet: &Fixture, home: &TempDir, title: &str) -> JobId {
     let job = fleet.propose(a_proposal(title)).await.expect("a proposal");
     worktree_directory(home, job.id());
-    fleet.approve(job.id()).await.expect("a person approves it");
+    dispatched(&fleet, job.id())
+        .await
+        .expect("a person approves it");
     job.id().clone()
 }
 

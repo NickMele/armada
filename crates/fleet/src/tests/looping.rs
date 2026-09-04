@@ -22,6 +22,7 @@ use verification::{Claimed, NotClaimed, ShownBy};
 
 use crate::evidence::Call;
 use crate::resume::Redirection;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
     a_proposal_for, diff_evidence, fittings, manifest, note_evidence, one, worktree_directory,
 };
@@ -80,7 +81,7 @@ async fn at_the_loop_s_gate(fleet: &Fixture, home: &TempDir) -> core_model::JobI
         .await
         .expect("a Job at the approval gate");
     worktree_directory(home, job.id());
-    fleet.approve(job.id()).await.expect("it dispatches");
+    dispatched(&fleet, job.id()).await.expect("it dispatches");
     walked_to_the_gate(fleet).await;
     job.id().clone()
 }
@@ -415,7 +416,7 @@ async fn the_shipped_design_plan_goes_round_twice_and_then_stops() {
     worktree_directory(&home, job.id());
     wrote_the_plan(&home, job.id());
     let job_id = job.id().clone();
-    fleet.approve(&job_id).await.expect("it dispatches");
+    dispatched(&fleet, &job_id).await.expect("it dispatches");
 
     for pass in 1..=3 {
         submitted_by_the_one(&fleet, document())

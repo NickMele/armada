@@ -9,9 +9,10 @@
 //! front of it at M1 — so waking on a signal means inventing senders for events
 //! that have none. A tick needs none and is correct for all three.
 //!
-//! It is cheap where it matters: a turn over a Job being worked reads no store,
-//! and admission does not wait on the tick — `approve` dispatches inline — so
-//! this interval is the latency of a **ruling** rather than of a start.
+//! It is cheap where it matters: a turn over a Job being worked reads no store.
+//! **Admission waits on the tick, which is `#428`** — a dispatch inside the
+//! request that asked for it died when the client stopped waiting, so this is
+//! the latency of a start as well as of a ruling. `Fleet::admit_next`.
 //!
 //! # A Check that outlasts a tick
 //!

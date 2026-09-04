@@ -15,6 +15,7 @@ use ipc::mcp::DispatchJob;
 use testkit::{FakeHarness, FakeVcs, FakeWorkProduct};
 
 use crate::daemon::Fleet;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
     a_fleet_holding_all, a_proposal_for, note_evidence, worktree_directory,
 };
@@ -76,7 +77,7 @@ async fn dispatching(home: &TempDir) -> (Fixture, JobId) {
         .await
         .expect("the proposal lands");
     worktree_directory(home, job.id());
-    fleet.approve(job.id()).await.expect("approval lands");
+    dispatched(&fleet, job.id()).await.expect("approval lands");
     let id = job.id().clone();
     (fleet, id)
 }
@@ -187,7 +188,7 @@ async fn a_drone_on_a_workflow_that_dispatches_nothing_is_refused() {
         .await
         .expect("the proposal lands");
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.expect("approval lands");
+    dispatched(&fleet, job.id()).await.expect("approval lands");
 
     let refused = fleet
         .sub_dispatch(job.id(), &asking("work I invented", &[]))

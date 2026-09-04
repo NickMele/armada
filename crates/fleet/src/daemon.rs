@@ -503,11 +503,19 @@ where
         Ok(job)
     }
 
-    /// Release a Job to spawn, and dispatch it if the slot is free.
+    /// Release a Job to spawn. **It queues; it does not dispatch.**
     ///
     /// The transition is `awaiting_approval -> queued` and the actor is
     /// **human**: this is the primary autonomy control, and Fleet is not
     /// allowed to be recorded as the one that took it.
+    ///
+    /// **It answers `queued` and no longer `running`, which is `#428`.** This
+    /// ran `admit_next` inline, so the whole of [`crate::dispatch`] ran inside
+    /// the request that approved the Job — and a client that stopped waiting
+    /// took the cold install and the timeout watching it away together.
+    /// [`Fleet::admit_next`] holds the rule that came out of it. The wire's
+    /// shape is unchanged and the move to `running` follows on the turn that
+    /// dispatches, within one `PROVISIONAL_TURN_INTERVAL`.
     pub async fn approve(&self, job_id: &JobId) -> Result<Job, Adrift> {
         let job = self.load(job_id).await?;
         // **The gate is `awaiting_approval` and nothing else, said here rather
@@ -525,9 +533,7 @@ where
                 to: JobStatus::Queued,
             }));
         }
-        self.move_job(&job, Target::Queued, Actor::Human).await?;
-        self.admit_next().await?;
-        self.load(job_id).await
+        self.move_job(&job, Target::Queued, Actor::Human).await
     }
 
     /// Every Job, **and every row that would not load**.

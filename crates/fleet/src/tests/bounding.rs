@@ -31,6 +31,7 @@ use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Gate, Sketch};
 use crate::daemon::{Fittings, Fleet};
 use crate::overruling::Overruling;
 use crate::slots::Concurrency;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fittings, one, worktree_directory};
 use crate::tests::tmp::TempDir;
 
@@ -85,7 +86,7 @@ async fn working(fleet: &Fixture, home: &TempDir, title: &str) -> JobId {
         .await
         .expect("a Job at the approval gate");
     worktree_directory(home, job.id());
-    fleet.approve(job.id()).await.expect("released to run");
+    dispatched(&fleet, job.id()).await.expect("released to run");
     job.id().clone()
 }
 

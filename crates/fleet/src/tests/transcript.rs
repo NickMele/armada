@@ -21,6 +21,7 @@ use core_model::{DroneId, JobId, StepId, Ulid};
 use testkit::{FakeHarness, FakeWorkProduct};
 
 use crate::drone::start;
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::Ticking;
 use crate::tests::drone::config;
 use crate::tests::tmp::TempDir;
@@ -528,8 +529,7 @@ async fn a_running_drone_can_be_watched_and_a_finished_one_leaves_its_history() 
         .await
         .expect("a proposal Fleet holds everything for");
     crate::tests::daemon::worktree_directory(&home, proposed.id());
-    fleet
-        .approve(proposed.id())
+    dispatched(&fleet, proposed.id())
         .await
         .expect("approval releases it");
 
@@ -588,8 +588,7 @@ async fn a_row_written_after_a_step_advances_carries_the_step_it_was_written_und
         .await
         .expect("a proposal Fleet holds everything for");
     crate::tests::daemon::worktree_directory(&home, job.id());
-    fleet
-        .approve(job.id())
+    dispatched(&fleet, job.id())
         .await
         .expect("approval puts a Drone on `implement`");
     assert!(
@@ -637,8 +636,7 @@ async fn the_record_carries_what_armada_said_and_what_fleet_did_beside_the_drone
         .await
         .expect("a proposal Fleet holds everything for");
     crate::tests::daemon::worktree_directory(&home, job.id());
-    fleet
-        .approve(job.id())
+    dispatched(&fleet, job.id())
         .await
         .expect("approval puts a Drone on `implement`");
 

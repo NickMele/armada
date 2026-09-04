@@ -28,6 +28,7 @@ use crate::headroom::{
     disk_free, load_in_use, memory_in_use, Bytes, Headroom, InUse, Machine, Polling, Reading,
     Short, Spare, TheMachine,
 };
+use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fittings, worktree_directory};
 use crate::tests::tmp::TempDir;
 
@@ -108,7 +109,9 @@ fn watching(home: &TempDir, plant: &Arc<Plant>, polling: Polling) -> Fixture {
 async fn approved(fleet: &Fixture, home: &TempDir, title: &str) -> core_model::JobId {
     let job = fleet.propose(a_proposal(title)).await.expect("a proposal");
     worktree_directory(home, job.id());
-    fleet.approve(job.id()).await.expect("a person approves it");
+    dispatched(&fleet, job.id())
+        .await
+        .expect("a person approves it");
     job.id().clone()
 }
 
@@ -482,7 +485,7 @@ async fn a_restart_is_accepted_and_then_held_by_short_headroom() {
         .await
         .expect("a Job at the approval gate");
     worktree_directory(&home, job.id());
-    fleet.approve(job.id()).await.expect("released to run");
+    dispatched(&fleet, job.id()).await.expect("released to run");
     let record = fleet.load(job.id()).await.expect("the Job reads");
     let record = fleet
         .move_step(
