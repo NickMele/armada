@@ -125,13 +125,27 @@ pub enum Fault {
     /// Two steps in one workflow carry one `id`. Reported on the second, and
     /// names where the first was, because the fix is to look at both.
     DuplicateStepId { first_at: usize },
-    /// **`verdict_routing` on a `linear` workflow.** The `structure` field is
-    /// redundant with `verdict_routing` by construction and that redundancy is
-    /// its whole value: declared intent, checked against what was wired.
-    /// Without this refusal a routing edge added to a workflow the author
-    /// believes is linear is legal config that surfaces as a Job which never
-    /// terminates.
+    /// **The declared structure and the wiring disagree**, in either direction:
+    /// `verdict_routing` on a `linear` workflow, or a `loop` no step declares an
+    /// edge for. The `structure` field is redundant with `verdict_routing` by
+    /// construction and that redundancy is its whole value: declared intent,
+    /// checked against what was wired. Without the first half, a routing edge
+    /// added to a workflow the author believes is linear is legal config that
+    /// surfaces as a Job which never terminates; without the second, `loop` is
+    /// a label a file can wear while running as a straight line.
+    ///
+    /// The two halves are one variant because they are one rule, and they are
+    /// reported at different keys: the linear half names the offending step,
+    /// and the loop half names `structure`, because the absence it found is the
+    /// whole file's.
     ContradictsStructure { structure: &'static str },
+    /// **`iteration_cap` on a step that declares no `verdict_routing`.** A cap
+    /// bounds a count, and the count is `iteration_count` on the step that
+    /// emits the verdict — so a cap on a step with no edge is a number nothing
+    /// ever spends. The registry is explicit that the two live on one step,
+    /// because split they never fire. The same half-a-statement shape as
+    /// [`Fault::PlanWithoutAScope`].
+    CapWithoutALoop,
     /// **`context_paths` in a definition.** The schema puts it on the resolved
     /// object: the Drone supplies the paths at declaration time and Fleet
     /// validates them, so at definition time there is nothing to author.
@@ -269,9 +283,20 @@ impl fmt::Display for Fault {
             Fault::DuplicateStepId { first_at } => {
                 write!(f, "repeats the id already used by steps[{first_at}]")
             }
+            Fault::ContradictsStructure { structure: "loop" } => write!(
+                f,
+                "is `loop`, and no step declares a `verdict_routing` edge for \
+                 the loop to return by"
+            ),
             Fault::ContradictsStructure { structure } => write!(
                 f,
                 "declares a routing edge, and the workflow declares `structure: {structure}`"
+            ),
+            Fault::CapWithoutALoop => write!(
+                f,
+                "bounds a count the step does not keep: it declares no \
+                 `verdict_routing`, so there is no loop return for a cap to \
+                 stop"
             ),
             Fault::BelongsToTheResolvedObject => write!(
                 f,

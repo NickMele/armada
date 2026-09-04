@@ -34,6 +34,7 @@ use serde_yaml_ng::Value;
 
 use crate::error::{BadTarget, Fault, LoadError, Refusal};
 use crate::judge;
+use crate::loops::{self, GateVerdict, Looping};
 use crate::roster::{self, Roster};
 use crate::scope;
 use crate::yaml::{self, Table};
@@ -53,6 +54,8 @@ const STEP_KEYS: &[&str] = &[
     "retry_limit",
     "model",
     "may_dispatch_jobs",
+    "verdict_routing",
+    "iteration_cap",
 ];
 
 /// How the steps are wired. **Both of the schema's two values.**
@@ -167,6 +170,8 @@ pub struct Step {
     retry_limit: u32,
     model: Option<ModelName>,
     may_dispatch_jobs: bool,
+    verdict_routing: BTreeMap<GateVerdict, StepId>,
+    iteration_cap: Option<u32>,
 }
 
 impl Step {
@@ -241,6 +246,29 @@ impl Step {
     /// every workflow that creates none.
     pub fn may_dispatch_jobs(&self) -> bool {
         self.may_dispatch_jobs
+    }
+
+    /// Where this step goes on a verdict that neither advances nor ends.
+    /// **Empty on every step of a linear workflow**, and empty is what makes a
+    /// step's only exit forward. This is the edge that declares the loop —
+    /// `structure` only labels it, which is why the two are checked against
+    /// each other.
+    pub fn verdict_routing(&self) -> &BTreeMap<GateVerdict, StepId> {
+        &self.verdict_routing
+    }
+
+    /// How many times this step may be returned to before the Job escalates as
+    /// `loop_cap`. **`None` where the step declares none**, which is not
+    /// unbounded and not a number invented here: the schema defaults it from
+    /// `default_gate_policy.iteration_cap`, that block is still refused as
+    /// deferred, and inventing a ceiling at this layer would put the bound on a
+    /// Job in the one place nobody reading the workflow would look for it.
+    ///
+    /// **Not [`Step::retry_limit`], and never spent against it.** A retry is a
+    /// step that failed going again; an iteration is a step that was asked for
+    /// another draft.
+    pub fn iteration_cap(&self) -> Option<u32> {
+        self.iteration_cap
     }
 }
 
@@ -409,19 +437,9 @@ fn step(
 ) -> Option<Step> {
     let mut table = Table::open(at, value, out)?;
 
-    // `verdict_routing` is the one deferred key with a refusal of its own. As
-    // an unknown key it would read as "M1 does not do that yet", when on a
-    // linear workflow it is wrong at every milestone: the declared structure
-    // and the wiring disagree, and the file says so about itself.
-    if structure == Some(Structure::Linear) && table.present("verdict_routing") {
-        table.ignore("verdict_routing");
-        out.push(Refusal::new(
-            format!("{at}.verdict_routing"),
-            Fault::ContradictsStructure {
-                structure: "linear",
-            },
-        ));
-    }
+    // Read first, because the routing map's refusal depends on the structure
+    // the file declared and every other key on the step does not.
+    let looping = loops::looping(&mut table, structure == Some(Structure::Linear), out);
 
     let id = table
         .required("id", out)
@@ -562,6 +580,10 @@ fn step(
     if disagrees || (judged && evidence_type.is_none()) {
         return None;
     }
+    let Looping {
+        routing,
+        iteration_cap,
+    } = looping?;
 
     Some(Step {
         id: StepId::new(id?),
@@ -574,6 +596,8 @@ fn step(
         retry_limit: retry_limit?,
         model,
         may_dispatch_jobs: may_dispatch_jobs?,
+        verdict_routing: routing,
+        iteration_cap,
     })
 }
 

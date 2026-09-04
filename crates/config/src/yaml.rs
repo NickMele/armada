@@ -132,6 +132,13 @@ impl<'a> Table<'a> {
         self.taken.insert(name.to_string());
     }
 
+    /// Whether the mapping held nothing at all. For `verdict_routing`, where
+    /// `{}` is a key the author wrote and left blank rather than an absent one
+    /// — [`Fault::Empty`]'s distinction, applied to a map instead of a string.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
     /// Every name in this table, in the order the file wrote them, with its
     /// value. For the open-ended maps — `checks` and `commands` — where the
     /// names are the author's and there is no known set to close against.
