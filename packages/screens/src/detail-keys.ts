@@ -65,6 +65,16 @@ export const DIFF_CHAPTER = "produced";
 /** Which chapter the activity log is in. */
 export const LOG_CHAPTER = "log";
 
+/**
+ * The log of what Fleet did to the Job itself, which is not in a chapter.
+ *
+ * **A region name and not a chapter id.** The chapters are a step's story and
+ * this one belongs to no step, so it is named here beside them for the same
+ * reason they are named at all: a log's region is how the keyboard finds its
+ * rows, and a literal at the call site is what broke `h`/`l` the last time.
+ */
+export const FLEET_LOG = "fleet";
+
 /** The attribute that names the step a label belongs to. Written by `namesStep`. */
 const STEP = "data-armada-step";
 

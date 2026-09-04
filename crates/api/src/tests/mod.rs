@@ -8,6 +8,7 @@
 //! what makes the second one checkable.
 
 mod fake;
+mod journal;
 mod mcp;
 mod observing;
 mod served;

@@ -34,11 +34,12 @@ use crate::commands::{
     stop_proposal,
 };
 use crate::daemon::Daemon;
+use crate::journal::Journal;
 use crate::queries::{
     get_call, get_capacity, get_diff, get_evidence, get_job, get_job_events, list_jobs,
     list_manifests, list_models, list_reports, list_workflows, list_worktrees,
 };
-use crate::sockets::{events, observe_job};
+use crate::sockets::{events, job_log, observe_job};
 use crate::stream::Broadcaster;
 
 /// One operation, and where it is served.
@@ -279,6 +280,17 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/jobs/:job_id/observe",
     },
+    // The Job's own log, beside its Drone's transcript and not inside it. The
+    // path drops `observe_` and `_job` for the reason `redispatch` drops one:
+    // the segment before it already names the Job, and `observe` is taken by
+    // the socket next door. **A socket rather than a query** for that one's
+    // reason — what it answers is what has already been written followed by
+    // what is written next, which no request-response shape carries.
+    Route {
+        operation: "observe_job_log",
+        method: "GET",
+        path: "/jobs/:job_id/log",
+    },
     // Every event kind is served on the one socket, and every one is named:
     // `SERVED` is what a rule compares to the inventory, so a kind published
     // and not listed here is a kind no rule can see. The rule also compares
@@ -353,6 +365,16 @@ pub struct Served<D> {
     /// assumption. Every error the transport raises carries it.
     run_id: RunId,
     events: Broadcaster,
+    /// Where a Job's own log is read from, handed in by whoever built the
+    /// listener.
+    ///
+    /// **Not a constructor argument**, which is the one thing worth explaining.
+    /// Twenty-odd call sites build a `Served`, nearly all of them tests that
+    /// exercise routes having nothing to do with a log, and widening the two
+    /// constructors would have made every one of them state a reader they never
+    /// call. `None` is answered by [`crate::sockets::NO_JOURNAL`] — a fault
+    /// naming what is missing, never an empty stream.
+    journal: Option<Arc<dyn Journal>>,
 }
 
 impl<D> Served<D> {
@@ -382,7 +404,15 @@ impl<D> Served<D> {
             daemon,
             run_id,
             events,
+            journal: None,
         }
+    }
+
+    /// The reader for a Job's own log, from the side that knows where the logs
+    /// are. See [`Served::journal`] for why this is not a constructor argument.
+    pub fn reading(mut self, journal: Arc<dyn Journal>) -> Served<D> {
+        self.journal = Some(journal);
+        self
     }
 
     /// The stream this listener publishes from, for whoever holds the daemon.
@@ -393,6 +423,11 @@ impl<D> Served<D> {
     /// The daemon, for a handler in another module of this crate.
     pub(crate) fn daemon(&self) -> &D {
         &self.daemon
+    }
+
+    /// The Job log reader, where one was handed in.
+    pub(crate) fn journal(&self) -> Option<Arc<dyn Journal>> {
+        self.journal.clone()
     }
 
     /// **This process's** run id, which every error the transport raises
@@ -408,6 +443,7 @@ impl<D> Clone for Served<D> {
             daemon: Arc::clone(&self.daemon),
             run_id: self.run_id.clone(),
             events: self.events.clone(),
+            journal: self.journal.clone(),
         }
     }
 }
@@ -454,6 +490,7 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/reports", get(list_reports::<D>))
         .route("/worktrees", get(list_worktrees::<D>))
         .route("/jobs/:job_id/observe", get(observe_job::<D>))
+        .route("/jobs/:job_id/log", get(job_log::<D>))
         .route("/events", get(events::<D>))
         // The Evidence endpoint, on the same listener and deliberately not in
         // `SERVED`: it is the Fleet/Drone seam rather than the Fleet/Bridge

@@ -53,6 +53,7 @@ mod history;
 mod holding;
 mod host;
 mod http;
+mod journal;
 mod judging;
 mod keeping;
 mod landing;

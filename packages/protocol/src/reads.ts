@@ -13,6 +13,7 @@ import type {
   JobDetail,
   JobFilesChanged,
   JobSummary,
+  LogNote,
   ManifestSummary,
   ModelChoices,
   Recorded,
@@ -131,6 +132,42 @@ export type Observed =
    * moment before.
    */
   | { state: "failed"; jobId: string; turns: Turns; detail: string };
+
+/**
+ * One Job's own log, as `GET /jobs/:job_id/log` answered.
+ *
+ * **The same five states as `Observed`, and deliberately.** Two sockets on one
+ * screen that reported themselves differently would make one panel say two
+ * things about the same Job, and "nobody asked" and "the read failed" are
+ * different things to draw on both.
+ *
+ * The notes are kept through `ended` and `failed` for `Observed`'s reason: a
+ * failure is a fact about the connection and not about what has already
+ * arrived, and a panel that emptied on a transient error is the defect #324
+ * recorded one socket over.
+ */
+export type Journalled =
+  | { state: "none" }
+  | { state: "opening"; jobId: string }
+  | { state: "watching"; jobId: string; log: JobLog }
+  | { state: "ended"; jobId: string; log: JobLog; because: string }
+  | { state: "failed"; jobId: string; log: JobLog; detail: string };
+
+/** What one log connection has said so far. */
+export type JobLog = {
+  /** Older notes the bounded first read left out, from `opened`. */
+  skipped: number;
+  notes: Noted[];
+};
+
+/**
+ * One note, with an identity of its own.
+ *
+ * **`seq` is main's, because nothing on the wire carries one.** A note is a
+ * line in a file and the file has no ids in it; the log needs a stable key per
+ * row, and the order they arrived in is the one thing that is stable.
+ */
+export type Noted = LogNote & { seq: number };
 
 /** What one Observe connection has said so far. */
 export type Turns = {

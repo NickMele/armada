@@ -27,6 +27,9 @@
 mod answers;
 mod commands;
 mod daemon;
+/// One Job's own log, followed off the file Fleet already writes.
+/// **The third voice in the activity log.**
+mod journal;
 mod mcp;
 mod observing;
 mod queries;
@@ -38,6 +41,7 @@ mod stream;
 mod tests;
 
 pub use daemon::{Commands, Daemon, Queries, Refusal, Tools};
+pub use journal::{Journal, Reading, FOLLOW};
 pub use mcp::{Caller, MCP_PATH};
 pub use observing::{Feed, Observed, Seen, Turns, Watch, WATCHING};
 pub use routes::{router, Route, Served, SERVED};
