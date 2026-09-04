@@ -9,9 +9,8 @@
 // # Four, and it used to be ten
 //
 // The workflow, the branch, how long it has been alive and what it has spent.
-// A fifth joins them where somebody has merged or closed the pull request,
-// which is the one question a finished Job gets asked and is absent on every
-// Job that has not reached one.
+// A fifth joins them the moment Fleet opens a pull request, and says what
+// became of it once somebody has merged or closed it.
 // Step, Manifest, Model, Origin, Urgency, Drone, Scope and the write-scope
 // overlap were all in here as well, over two lines, and none of them is in the
 // drawing's header. The ones worth reaching are under *Where things are*, which
@@ -22,12 +21,24 @@
 // **The branch is bare.** `Branch armada/01K…` was a label in front of a
 // 26-character identifier; the branch is the one value here that reads as
 // itself, so it takes the line the drawing gives it and no label.
+//
+// # The pull request is one fact, and what became of it continues it
+//
+// `Pull request #4711` while it is open, `Pull request #4711, merged` once
+// somebody has taken it. Two facts with the run's gap between them would read
+// as two things to know; they are one thing — what the branch came to — said
+// to whatever depth the record can say it, so the second continues the first.
+//
+// **A Job with no pull request draws neither**, and that is most Jobs: one
+// still running, one in a repository with no remote, one that stopped before
+// it delivered. The rule `branchFact` and `landedFact` already keep.
 
 import type { JobDetailField } from "@armada/components";
 
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
 import { span } from "./duration";
+import { leading } from "./reading";
 import { LANDED } from "./Row";
 
 /**
@@ -45,10 +56,12 @@ export function factsOf(
   workflow: WorkflowSummary | undefined,
   now: number,
 ): JobDetailField[] {
+  const address = whole?.delivery?.pull_request;
   return [
     ...workflowFact(job, workflow),
     ...branchFact(job),
-    ...landedFact(whole),
+    ...pullRequestFact(address),
+    ...landedFact(whole, address !== undefined),
     ...elapsedFact(job, now),
     ...spendFact(whole),
   ];
@@ -78,23 +91,78 @@ function branchFact(job: JobSummary): JobDetailField[] {
 }
 
 /**
- * Whether the pull request landed, beside the branch it was opened from.
+ * The pull request Fleet opened, by its number, clickable.
+ *
+ * **News from the moment it exists.** Every Job that finishes is in this state
+ * — open, waiting on a reviewer — so a fact that waited for a merge would be
+ * absent exactly when a person is looking for it, which is what sent the owner
+ * to the forge to find a branch by hand. `#422`.
+ *
+ * **The number, never the address.** A forge address is sixty characters of
+ * which a person reads four, and the run is a line of short readings. The whole
+ * of it is on the link's `title`, which is where somebody who wants to copy it
+ * can still get at it.
+ *
+ * **The number is read off the address rather than served.** Nothing on the
+ * wire carries it: `JobDelivery` has the address and no id beside it, so the
+ * choice was to parse or to draw something longer. A forge that numbers its
+ * pull requests some other way falls back to the words alone, still linked —
+ * see `pullRequestNumber`.
+ */
+function pullRequestFact(address: string | undefined): JobDetailField[] {
+  if (address === undefined) return [];
+  const number = pullRequestNumber(address);
+  if (number === null) return [{ value: "Pull request", href: address }];
+  return [{ label: "Pull request", value: number, mono: true, href: address }];
+}
+
+/**
+ * The number out of a pull request address, or `null` where there is not one.
+ *
+ * **The last all-digit segment of the path, and that is the whole rule.**
+ * `…/pull/4711` and `…/-/merge_requests/12` both answer, without this file
+ * holding a list of forges — a roster of URL shapes would be a second statement
+ * of something Fleet already resolved, and it would be wrong for the first
+ * forge nobody thought of. Last rather than first, so an organisation or a
+ * repository named in digits does not win over the number at the end.
+ *
+ * **The query and the fragment are cut before anything is read, and that is
+ * not tidying.** A forge address that arrives with a line anchor on it ends
+ * `#3000`, which is all digits and sits after the number — so reading them as
+ * segments draws a line number where the pull request goes.
+ *
+ * `null` is a real answer and not a failure: a forge that addresses a pull
+ * request by a slug is a forge whose pull requests have no number, and the fact
+ * draws the words alone rather than inventing one.
+ */
+export function pullRequestNumber(address: string): string | null {
+  const last = (address.split(/[?#]/)[0] ?? "")
+    .split("/")
+    .filter((part) => /^\d+$/.test(part))
+    .at(-1);
+  return last === undefined ? null : `#${last}`;
+}
+
+/**
+ * What became of that pull request — continuing the fact that names it, where
+ * there is one to continue.
  *
  * **Absent on nearly every Job, which is why it is beside the branch and not a
  * fact of its own line.** It appears the moment there is something to say and
- * takes no room until then — a Job with no remote, one still running, and one
+ * takes no room until then: a Job with no remote, one still running, and one
  * whose pull request nobody has merged yet all draw nothing here, because
  * "nobody has merged it yet" is the state a pull request is in from the moment
- * it exists and is not news about this Job.
+ * it exists and is not news about this Job. The address above it is.
  *
- * The address itself is not drawn. `JobDelivery.pull_request` is what a person
- * clicks and there is nowhere in a field run for a link; this says which of the
- * two things happened, and the *did this land* question is answered by the word
- * alone. Reported: the header wants the pull request as a link.
+ * **`continues` where the address is drawn, standalone where it is not.** With
+ * one, this is the second half of a sentence and reads mid-line: `Pull request
+ * #4711, merged`. Without one — a Job old enough that Fleet recorded the
+ * verdict and not the address — it opens a fact of its own and takes a capital.
  */
-function landedFact(whole: JobWhole | null): JobDetailField[] {
+function landedFact(whole: JobWhole | null, linked: boolean): JobDetailField[] {
   const landed = LANDED[whole?.delivery?.landed ?? ""];
-  return landed === undefined ? [] : [{ label: landed }];
+  if (landed === undefined) return [];
+  return linked ? [{ label: landed, continues: true }] : [{ label: leading(landed) }];
 }
 
 /** How long the Job has been alive, from `created_at`. */

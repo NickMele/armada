@@ -4,7 +4,7 @@ import { CHANNELS } from "../shared/bridge";
 import type { BridgeApi, BridgeState, Summons } from "../shared/bridge";
 import type { CallRead, ClearOutcome, Draft, Outcome, Proposed } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
-import type { Artifact, Opened } from "@armada/protocol";
+import type { Artifact, Followed, Opened } from "@armada/protocol";
 import type { ProtocolVersion } from "@armada/protocol";
 import { PROTOCOL_VERSION } from "@armada/protocol";
 
@@ -213,6 +213,15 @@ const api: BridgeApi = {
   // only in which file and none of them changes anything about the Job.
   openArtifact: (jobId: string, what: Artifact): Promise<Opened> =>
     ipcRenderer.invoke(CHANNELS.openArtifact, jobId, what),
+
+  // The second entry that reaches outside the app, and the only one that
+  // leaves the machine. **A Job id and nothing else** — narrower than the one
+  // above it, which at least takes a word. Main reads the address off the
+  // reading it published and refuses anything that is not `https:`, so no
+  // string the renderer composed can reach `shell.openExternal`; the renderer
+  // draws the address, and does not send it.
+  openPullRequest: (jobId: string): Promise<Followed> =>
+    ipcRenderer.invoke(CHANNELS.openPullRequest, jobId),
 
   // Where a pressed notification says to go. **The only entry here that the
   // renderer does not initiate** — every other one is the window asking, and

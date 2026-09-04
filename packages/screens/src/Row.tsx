@@ -80,7 +80,7 @@ import type { WorkflowSummary } from "@armada/protocol";
 import { absoluteOf, span } from "./duration";
 import { activityFor } from "./frozen";
 import { ROW_VERBS, verbOf } from "./keys";
-import { readingOf } from "./reading";
+import { leading, readingOf } from "./reading";
 
 /** Whether the Job is over, from the registry that says so. */
 export function isTerminal(job: JobSummary): boolean {
@@ -96,10 +96,18 @@ export function isTerminal(job: JobSummary): boolean {
  *
  * The same two words are used on the detail, imported from here rather than
  * written twice.
+ *
+ * **Spelled mid-sentence, and capitalised by whoever opens a line with it.**
+ * The detail continues the pull request's own fact with this — `Pull request
+ * #4711, merged` — and this row opens a field with it. `leading` is what turns
+ * one reading into the other, exactly as it does for the registry's verbs,
+ * which are spelled lowercase for the same reason. The alternative was a second
+ * roster of the same two words in mid-sentence case, which is two spellings of
+ * a set that has one owner.
  */
 export const LANDED: Record<string, string | undefined> = {
-  merged: "Merged",
-  closed_unmerged: "Closed, not merged",
+  merged: "merged",
+  closed_unmerged: "closed without merging",
 };
 
 export function Row({
@@ -208,7 +216,7 @@ export function Row({
   // address is on the detail, where a click can reach it.
   const landed = LANDED[job.landed ?? ""];
   if (landed !== undefined) {
-    fields.push({ icon: GitPullRequest, value: landed });
+    fields.push({ icon: GitPullRequest, value: leading(landed) });
   }
 
   // Track four, appended rather than always drawn: a Job with neither an

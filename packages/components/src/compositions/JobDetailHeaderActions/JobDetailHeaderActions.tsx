@@ -26,6 +26,12 @@ import { Badge } from "../../primitives/Badge/Badge";
  * estimated and is marked approximate. Rendering the two alike would destroy
  * trust in both.
  *
+ * **A fact may point somewhere, and the run is where that belongs.** A pull
+ * request is read in the same breath as the branch it was opened from, and a
+ * control at the trailing edge would put going to read something among the
+ * acts that end a Job. So `href` makes a fact a link in place, beside the
+ * facts it is about, and nothing moves to the other end of the header.
+ *
  * **What the header offers changes with the state; how it is arranged does
  * not.** The set is the caller's, and which state carries what is written where
  * that decision is made — `Acts` in Bridge's `JobDetail.tsx`. The arrangement
@@ -47,6 +53,26 @@ export type JobDetailField = {
    * value copy on click and go to `--accent` on hover, with no `copy` glyph.
    */
   copyValue?: string;
+  /**
+   * Where this fact goes, for a fact that names something outside Armada.
+   * Setting it draws the value in `--accent` — the token the design contract
+   * gives links — and hands the address to `onFollowed` when it is clicked.
+   *
+   * **The address is never the value.** A forge address is long, a person
+   * reads one number out of it, and a fact run is a line of short readings;
+   * what this carries is where the fact points, and the caller decides what it
+   * spells. The full address is on the element's `title`, which is the only
+   * place a person can still get at the whole of it.
+   *
+   * **This component does not navigate, and no fact here ever will.** The
+   * anchor's default is cancelled and the address goes back to the caller,
+   * because a surface that let a click load a page would be a surface that
+   * could be steered off the app by a value that arrived on a wire. Where a
+   * caller sets `href` and no `onFollowed`, the fact draws as a link and the
+   * click does nothing — which is a caller wiring only half of it, and is the
+   * one shape to look for when a link goes dead.
+   */
+  href?: string;
   /**
    * The words after the value, where the fact reads as a sentence around it —
    * `All 4 of 4 steps advanced`. Sans, and never part of the mono run.
@@ -79,6 +105,13 @@ export type JobDetailHeaderActionsProps = {
   actions?: ReactNode;
   /** A clipboard write is silent, so the surface confirms it with a toast. */
   onCopied?: (value: string) => void;
+  /**
+   * A fact with an `href` was clicked. **The host opens it, not this** — a
+   * component that reached for a browser could not be rendered in Storybook,
+   * and the process with the shell is the one that should decide what leaving
+   * the app means.
+   */
+  onFollowed?: (href: string) => void;
 };
 
 export function JobDetailHeaderActions({
@@ -90,7 +123,20 @@ export function JobDetailHeaderActions({
   fields,
   actions,
   onCopied,
+  onFollowed,
 }: JobDetailHeaderActionsProps) {
+  // The anchor is a real one so it reads as a link and carries the address on
+  // hover, and its default is cancelled so nothing here can navigate. See
+  // `href`.
+  const follow = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>, href: string) => {
+      event.preventDefault();
+      event.stopPropagation();
+      onFollowed?.(href);
+    },
+    [onFollowed],
+  );
+
   const copy = useCallback(
     (event: MouseEvent<HTMLSpanElement>, value: string) => {
       event.stopPropagation();
@@ -137,7 +183,18 @@ export function JobDetailHeaderActions({
                       {field.value !== undefined ? " " : null}
                     </>
                   ) : null}
-                  {field.value !== undefined ? (
+                  {field.value === undefined ? null : field.href !== undefined ? (
+                    <a
+                      className="armada-job-head__value"
+                      data-mono={field.mono || undefined}
+                      data-opens=""
+                      href={field.href}
+                      title={field.href}
+                      onClick={(e) => follow(e, field.href as string)}
+                    >
+                      {field.value}
+                    </a>
+                  ) : (
                     <span
                       className="armada-job-head__value"
                       data-mono={field.mono || undefined}
@@ -150,7 +207,7 @@ export function JobDetailHeaderActions({
                     >
                       {field.value}
                     </span>
-                  ) : null}
+                  )}
                   {field.suffix ? <> {field.suffix}</> : null}
                 </Fragment>
               ))}
