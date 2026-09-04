@@ -1,14 +1,23 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect } from "storybook/test";
 import { Button } from "../../primitives/Button/Button";
 import { ActivityLog } from "../../compositions/ActivityLog/ActivityLog";
+import { JobResources } from "../../compositions/JobResources/JobResources";
 import { InsideAJob } from "./InsideAJobOneArrangementAtEveryState";
 import {
   BRIEF,
   CHAPTERS,
   ESCALATED_HEADING,
+  EXAMINED_WEDGED,
+  EXAMINED_WORKING,
   FAILED_HEADING,
   FLEET_PREPARING,
   HEADING,
+  HOLDS_AFTER_THE_END,
+  HOLDS_AT_THE_GATE,
+  HOLDS_IDLE,
+  HOLDS_RUNNING,
+  HOLDS_WEDGED,
   REPAIR_CHAPTERS,
   RUN_FAILED,
   RUN_NOT_STARTED,
@@ -38,6 +47,20 @@ export default meta;
 
 type Story = StoryObj<typeof InsideAJob>;
 
+/**
+ * What the Job holds on this machine, above the Fleet log and above the run.
+ *
+ * **Six of the seven states carry one, and the seventh is the point.** The
+ * region draws nothing when it is absent, so a story without one proves that —
+ * and `A check failed` is the state where nothing about the machine is in
+ * question, because a Drone is working and the log below says which line it is
+ * on. Everywhere else the reading answers something the rest of the screen
+ * cannot: whether the process behind `Drone alive, idle` exists, whether an
+ * empty process list is a Job at its gate or a Job that has died, and how much
+ * disk a finished Job is still holding.
+ */
+const nothingPressedYet = () => {};
+
 /** The acts that end or replace the Job. Pilot lands left of Kill — #250. */
 const JOB_ACTS = (
   <>
@@ -57,6 +80,14 @@ export const Running: Story = {
         heading={{ ...HEADING, actions: JOB_ACTS }}
         run={RUN_RUNNING}
         runElapsed="11m 03s"
+        machine={
+          <JobResources
+            reading={HOLDS_RUNNING}
+            age="3s"
+            examined={EXAMINED_WORKING}
+            onExamine={nothingPressedYet}
+          />
+        }
         where={WHERE}
         whereNote="A path opens where it lives; an identifier copies. This milestone is about never needing these — they are here for when you want them anyway."
         brief={BRIEF}
@@ -124,6 +155,14 @@ export const WaitingOnYou: Story = {
         heading={{ ...WAITING_HEADING, actions: JOB_ACTS }}
         run={RUN_WAITING}
         runElapsed="13m 47s"
+        machine={
+          <JobResources
+            reading={HOLDS_AT_THE_GATE}
+            age="8s"
+            examined={null}
+            onExamine={nothingPressedYet}
+          />
+        }
         where={WHERE}
         brief={BRIEF}
         step={{
@@ -282,6 +321,14 @@ export const OutOfAttempts: Story = {
         heading={{ ...ESCALATED_HEADING, actions: JOB_ACTS }}
         run={RUN_STOPPED}
         runElapsed="21m 55s"
+        machine={
+          <JobResources
+            reading={HOLDS_IDLE}
+            age="4s"
+            examined={null}
+            onExamine={nothingPressedYet}
+          />
+        }
         where={WHERE}
         brief={BRIEF}
         step={{
@@ -403,6 +450,14 @@ export const Failed: Story = {
         run={RUN_FAILED}
         runElapsed="13m 54s"
         pulsing={false}
+        machine={
+          <JobResources
+            reading={HOLDS_AFTER_THE_END}
+            age="1m"
+            examined={null}
+            onExamine={nothingPressedYet}
+          />
+        }
         where={WHERE}
         whereNote="The worktree and the branch are left in place. Nothing was rolled back."
         brief={BRIEF}
@@ -454,6 +509,13 @@ export const Failed: Story = {
  * the steps and not under the first one**: attaching these to the step about
  * to start reads as though it were running when it has not begun, which is the
  * confusion that made a wedged Job look healthy.
+ *
+ * **And it is the state where nothing else on the screen says the Job is
+ * dead.** The badge reads `running`, the tree reads `not started`, and both are
+ * true — which is exactly what a person read for six minutes on 4 Sep 2026
+ * while the Job held nothing. What it holds sits above the log, because the log
+ * is the record of a span and this is what is true now: Fleet's last line is a
+ * preparation command that failed, and no Drone was ever dispatched after it.
  */
 export const NoDroneYet: Story = {
   render: () => (
@@ -462,6 +524,14 @@ export const NoDroneYet: Story = {
         heading={{ ...HEADING, actions: JOB_ACTS }}
         run={RUN_NOT_STARTED}
         runElapsed="2m 45s"
+        machine={
+          <JobResources
+            reading={HOLDS_WEDGED}
+            age="5s"
+            examined={EXAMINED_WEDGED}
+            onExamine={nothingPressedYet}
+          />
+        }
         fleet={<ActivityLog entries={FLEET_PREPARING} openId="f3" />}
         where={WHERE}
         brief={BRIEF}
@@ -474,6 +544,24 @@ export const NoDroneYet: Story = {
       />
     </div>
   ),
+  // Two claims a rendering makes and cannot hold on its own. The first is that
+  // the reading survives the company it keeps: alone the panel is the only
+  // thing on screen, and here it competes with a log, a tree, seven paths and a
+  // whole panel, so the sentence a person came for is asserted to still be one
+  // of them. The second is the arrangement — what the Job holds reads before
+  // what Armada has done, and before the run — which is #437's decision and the
+  // one thing about this screen that a later region added above it would break
+  // silently.
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/is not doing what it should be/)).toBeVisible();
+    await expect(canvas.getByText(/Fleet holds no process for this job/)).toBeVisible();
+
+    const holds = canvas.getByText("What this Job holds");
+    const armada = canvas.getByText("What Armada has done");
+    const run = canvas.getByText("The run");
+    await expect(holds.compareDocumentPosition(armada)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    await expect(armada.compareDocumentPosition(run)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  },
 };
 
 /**
@@ -488,6 +576,14 @@ export const NothingServesTheStep: Story = {
         heading={{ ...HEADING, actions: JOB_ACTS }}
         run={[]}
         runAbsent="Fleet did not answer for this Job, so its steps are unknown."
+        machine={
+          <JobResources
+            reading={null}
+            note="Fleet did not answer for this Job, so nothing here can say what it holds."
+            examined={null}
+            onExamine={nothingPressedYet}
+          />
+        }
         where={undefined}
         whereAbsent="Nothing serves this Job's paths, and no branch exists yet."
         brief={undefined}

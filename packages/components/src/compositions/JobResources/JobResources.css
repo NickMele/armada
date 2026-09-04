@@ -188,18 +188,29 @@
   color: var(--fg-subtle);
 }
 
+/* **It wraps rather than shrinking every value at once.** In a 380px run
+   column the size, the path and the branch on one unwrapped line left all three
+   ellipsised past reading — `.armada/worktree…` names no worktree. Wrapping
+   spends a line the column has and keeps the figure whole. */
 .armada-holds__disk {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-2);
+  gap: var(--space-1) var(--space-2);
   min-width: 0;
   margin: 0;
   color: var(--fg-muted);
 }
 
 /* The figure a person acts on directly. Body text against the path beside it,
-   because seventy-four worktrees once took 220 GB and nothing said so. */
+   because seventy-four worktrees once took 220 GB and nothing said so.
+
+   **The unit never leaves the number.** On the Job screen the row is 380px wide
+   and `1.2 GiB` broke at its space, leaving `1.2` on one line and `GiB` on the
+   next — a byte count drawn without its unit resolved, which is the one thing
+   this component says it does not do. */
 .armada-holds__size {
+  white-space: nowrap;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   line-height: var(--leading-xs);
