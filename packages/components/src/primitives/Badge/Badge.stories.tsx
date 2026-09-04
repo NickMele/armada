@@ -21,6 +21,7 @@ import {
   Terminal,
   Unplug,
   UserCheck,
+  Wrench,
   X,
 } from "lucide-react";
 import { Badge } from "./Badge";
@@ -100,6 +101,16 @@ export const AwaitingReview: Story = {
 
 export const AwaitingAttestation: Story = {
   args: { status: "awaiting-attestation", icon: Stamp, children: "Awaiting attestation" },
+};
+
+/**
+ * Drawn immediately above `escalated`, which is where the pair can be read
+ * against each other: `status.css` aliases this hue from that one, so the only
+ * channel telling the two apart is the glyph, and a spanner beside a horn is
+ * the whole of Iconography rule 4 working or not working.
+ */
+export const AwaitingRepair: Story = {
+  args: { status: "awaiting-repair", icon: Wrench, children: "Needs repair" },
 };
 
 /**

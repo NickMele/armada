@@ -20,7 +20,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Alert, Button, Dialog, Textarea } from "@armada/components";
-import { ClipboardList } from "lucide-react";
 
 import { NOTHING_YET } from "../../shared/bridge";
 import type { BridgeState } from "../../shared/bridge";
@@ -42,7 +41,7 @@ import { JobDetail, type ConfirmableAct } from "@armada/screens";
 import { ACT_LABEL, CONFIRM, reclaimed, RESTART_NOTE, said } from "@armada/screens";
 import { Jobs } from "@armada/screens";
 import { BOARD_TABS, type BoardReach, type BoardTab } from "@armada/screens";
-import { carryOut, dormantIn } from "./palette";
+import { carryOut, dormantIn, NAVIGATION, SURFACES } from "./palette";
 import { proposeRequest } from "./dispatch";
 import { Palette, useCommandPalette } from "@armada/shell";
 import { copyDebugInfoFor } from "@armada/shell";
@@ -75,7 +74,6 @@ const readCall = (jobId: string, callId: string) => window.armada.readCall(jobId
 const openArtifact = (jobId: string, what: Artifact) => window.armada.openArtifact(jobId, what);
 const stageAttachment = (bytes: ArrayBuffer, filename: string, mimeType: string) =>
   window.armada.stageAttachment(bytes, filename, mimeType);
-
 
 export function App() {
   const [state, setState] = useState<BridgeState>(WAITING);
@@ -567,11 +565,14 @@ export function App() {
         title={head.title}
         summary={head.summary}
         actions={head.actions}
-        // The rail returns to the list from wherever you are. Both views it
-        // closes are single pieces of state, so there is no history to unwind.
+        // The rail returns to the list from wherever you are. Every view it
+        // closes is a single piece of state, so there is no history to unwind.
+        // **`auditing` was missing here**, so the rail drew the Board's head
+        // over the filed reports and left them on screen.
         onSurface={() => {
           setOpenJob(null);
           setComposing(false);
+          setAuditing(false);
           setClearing(false);
         }}
       >
@@ -848,9 +849,7 @@ export function App() {
         onClose={palette.onClose}
         context={reading === null ? "board" : "detail"}
         on={onWhat === undefined ? null : `${onWhat.id} — ${onWhat.title}`}
-        surfaces={[
-          { id: "board", label: "Job Board", shortcut: "⌘1", icon: ClipboardList },
-        ]}
+        surfaces={SURFACES}
         filters={reading === null ? BOARD_TABS : []}
         jobs={state.jobs.map((job) => ({ id: job.id, label: `${job.id} — ${job.title}` }))}
         // Bridge serves no settings surface, so the section is empty and draws
@@ -866,11 +865,14 @@ export function App() {
             openJob: setOpenJob,
             closeJob: close,
             compose: () => setComposing(true),
-            surface: () => {
+            // The rail's own clear, and then one destination opens something.
+            // A clear-then-set rather than a branch per row: a branch is where
+            // a view gets left standing under the next one.
+            surface: (surfaceId) => {
               setOpenJob(null);
               setComposing(false);
               setAuditing(false);
-              setClearing(false);
+              setClearing(surfaceId === NAVIGATION.worktrees);
             },
             filter: (tabId) => reach.current?.tab(tabId as BoardTab),
             search: () => reach.current?.search(),

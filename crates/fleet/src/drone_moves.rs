@@ -25,10 +25,15 @@
 //! silently failed would become a boundary that could not put a Drone on it.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
-use core_model::{Actor, DroneAssigned, DroneId, IllegalDroneMove, Job, JobId, StepId};
+use core_model::{
+    Actor, Component, DroneAssigned, DroneId, Envelope, FieldValue, IllegalDroneMove, Job, JobId,
+    Level, StepId,
+};
+use store::DroneProcess;
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
+use crate::process::{holder_of, Holder};
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -59,6 +64,81 @@ where
         Ok(())
     }
 
+    /// Record the operating-system process the Drone is running as.
+    ///
+    /// **The third place a spawn is written down, and the only one a restart
+    /// can read.** The step's `assigned_drone` says a Drone exists and
+    /// `crate::peer`'s index says which pid it is; both are needed while Fleet
+    /// is up, and only this survives Fleet going away. `crate::adopting` is the
+    /// reader.
+    ///
+    /// **A pid and when it started, because a pid alone is not an identity.**
+    /// The reading is taken here, once, immediately after the process exists —
+    /// not at the adoption, where the answer would be whatever holds the number
+    /// by then.
+    ///
+    /// **A probe that will not run does not fail the spawn.** What is lost is
+    /// the ability to adopt this Drone if Fleet restarts, which is a recovery
+    /// Fleet did not have at all until now; failing a live dispatch over it
+    /// would trade a working Job for a hypothetical one. The Job's log says so,
+    /// because a Drone that silently cannot be adopted is exactly the kind of
+    /// absence nobody finds later.
+    pub(crate) async fn drone_process_recorded(
+        &self,
+        job: &Job,
+        step: &StepId,
+        drone: &DroneId,
+        pid: u32,
+    ) -> Result<(), Adrift> {
+        let started_at = match holder_of(pid) {
+            Ok(Holder::Held(at)) => at,
+            // Held by nothing, a heartbeat after the spawn returned. The
+            // process is already gone and the reap will say so; there is
+            // nothing to adopt and nothing to write.
+            Ok(Holder::Vacant) => {
+                self.noted_unadoptable(job, step, pid, "the process was already gone");
+                return Ok(());
+            }
+            Err(probe) => {
+                self.noted_unadoptable(job, step, pid, &probe.to_string());
+                return Ok(());
+            }
+        };
+        self.store()
+            .lock()
+            .await
+            .record_drone_process(&DroneProcess {
+                job_id: job.id().clone(),
+                step_id: step.clone(),
+                drone_id: drone.clone(),
+                pid,
+                started_at: started_at.as_str().to_string(),
+                spawned_at: self.now(),
+            })
+            .map_err(Adrift::Writing)?;
+        Ok(())
+    }
+
+    /// This Drone cannot be adopted if Fleet restarts, and here is why.
+    ///
+    /// **Fields rather than an interpolated sentence**, so a query finds every
+    /// Drone that started without one rather than a person grepping prose.
+    fn noted_unadoptable(&self, job: &Job, step: &StepId, pid: u32, because: &str) {
+        let envelope = Envelope::new(
+            self.now(),
+            Level::Warn,
+            Component::Fleet,
+            self.run().clone(),
+            "the Drone started and its process could not be recorded, so a Fleet restart \
+             will not be able to adopt it",
+        )
+        .in_job(job.id().as_ulid().clone())
+        .at_step(step.as_str())
+        .with_field("pid", FieldValue::Int(i64::from(pid)))
+        .with_field("because", FieldValue::Str(because.to_string()));
+        let _ = crate::transcript::note(&self.host().repo_root, job.id(), &envelope);
+    }
+
     /// Record that the Drone on a step is gone.
     ///
     /// **A step holding no Drone is `Ok` and not a fault.** `kill_drone` on a
@@ -73,7 +153,16 @@ where
         // connection that would still attribute to this Job, and every road out
         // of here — including the two that answer `Ok` without writing anything
         // — is a road where the Drone has gone.
+        //
+        // The stored process goes with it, for the same reason one step further
+        // out: a row that outlived its Drone is a pid a later Fleet would probe
+        // and adopt, and the number by then names whatever took it.
         self.drone_gone(job_id);
+        self.store()
+            .lock()
+            .await
+            .forget_drone_process(job_id)
+            .map_err(Adrift::Writing)?;
         let job = self.load(job_id).await?;
         let moved = match job.drone_exited(step, Actor::Fleet, self.now()) {
             Ok(moved) => moved,

@@ -637,20 +637,6 @@ so they are not lost.
 ---
 
 ## Open questions
-- **[orphaned-drone-on-restart]** On Fleet start, what happens to a Job whose Drone is still alive and orphaned?
-  Reconciliation already flags a Job `interrupted` when its Drone process is
-  gone. The other half is now reachable: `setsid` at Drone spawn is what
-  makes the Drone survive a Fleet restart, and that is also what creates a
-  Drone that outlives the Fleet that spawned it. Two candidates: re-adopt
-  (the Drone already writes to its per-Job log file rather than a pipe, so
-  Fleet could just resume tailing it — a spawn-time design choice, not a
-  recovery-time one) or kill-and-flag `interrupted` (simple and consistent
-  with the other half, but conflicts with "killing is exclusively a human
-  action"). Interacts with the rule that an `interrupted` Job's worktree is
-  never swept — an orphaned-but-alive Drone keeps writing into that
-  worktree while Fleet decides. Resolve alongside the Drone spawn
-  implementation, since "re-adopt" is decided by how the Drone's output is
-  plumbed at spawn time.
 - **[manifest-scanner-agent-or-model-call]** Is the Manifest Setup wizard's scan step a model call or a third Agent?
   The taxonomy test (section 9) is whether an invocation carries a
   toolset — Drone and Helm do, Judge, the Job proposer and Voice generation

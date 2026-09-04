@@ -61,6 +61,11 @@ pub struct Forgotten {
     pub step_plan_paths: usize,
     /// What each Drone of the Job spent, one row per Drone.
     pub drone_spend: usize,
+    /// The process the Job's Drone is running as. One row while a Drone is on
+    /// it, none otherwise — so a Job forgotten from a terminal status counts
+    /// zero here, and one that counts a row is a departure that never
+    /// recorded itself.
+    pub drone_process: usize,
     /// Rows removed from a table this build has no field for.
     ///
     /// Always zero today, and a test says so. It exists because the delete is
@@ -94,6 +99,7 @@ impl Forgotten {
             "job_footprint_files" => &mut self.footprint_files,
             "job_step_plans" => &mut self.step_plans,
             "job_step_plan_paths" => &mut self.step_plan_paths,
+            "job_drone_process" => &mut self.drone_process,
             "job_drone_spend" => &mut self.drone_spend,
             _ => return None,
         })

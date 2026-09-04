@@ -381,13 +381,16 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     // unserved or — as it was — dispatched and never settled.
     let fleet = Arc::new(assemble(&machine, setup, bound.port(), machine_facts)?);
 
-    // **Nothing runs until this has.** A Job the store says was running has no
-    // Drone, because a Drone is held in memory by the Fleet that spawned it and
-    // this Fleet has just started.
+    // **Nothing runs until this has.** A Job the store says was running is
+    // asked about: a Drone is spawned into a session of its own, so it outlives
+    // the Fleet that started it and may still be working. What is gone is
+    // `interrupted`; what is still there is adopted, and the Job carries on
+    // with a Drone nothing can speak to.
     let reconciled = fleet.reconcile().await?;
     println!(
-        "reconciled: {} interrupted, {} repaired, {} unreadable{}",
+        "reconciled: {} interrupted, {} adopted, {} repaired, {} unreadable{}",
         reconciled.interrupted.len(),
+        reconciled.adopted.len(),
         reconciled.repaired,
         reconciled.unreadable.len(),
         match reconciled.admitted.as_slice() {
@@ -395,6 +398,15 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
             admitted => format!(", admitted {}", admitted.len()),
         }
     );
+    for job in &reconciled.adopted {
+        // Named rather than counted, because an adopted Drone is a Job whose
+        // record has a hole in it: what it did while Fleet was away is not in
+        // the transcript and never will be. The Job's own log says how wide.
+        eprintln!(
+            "  a Drone outlived the last Fleet and was adopted: {}",
+            job.as_str()
+        );
+    }
     for unreadable in &reconciled.unreadable {
         // Carried out rather than dropped: a short list with nothing saying so
         // is the one answer the store refuses to give.
