@@ -224,6 +224,28 @@ pub enum EscalationTrigger {
     /// [`NoReport`](Self::NoReport)'s, and the step is stopped under that name
     /// rather than this one.
     Thrashing,
+    /// The Drone is alive and working and Fleet holds no way of reading what it
+    /// says, so the silence the liveness ladder measured is Fleet's own
+    /// deafness rather than anything the Drone did.
+    ///
+    /// **The condition, never how it got there.** A Fleet that restarted and
+    /// adopted an orphan is the one road into this today — both pipes died
+    /// with the Fleet that held them — and a variant meaning *adopted* would
+    /// have to be re-minted the first time a second road appears.
+    ///
+    /// **Not [`Stalled`](Self::Stalled), which is the word this is split away
+    /// from.** That one is a fact about the Drone: it stopped producing, or
+    /// the relay never fired. Here the process is fine and the reader is gone,
+    /// and the two take opposite responses — `stalled` recommends a
+    /// redispatch, which here would end a Drone that is finishing its step.
+    /// Not [`Interrupted`](Self::Interrupted) either: there is a matching
+    /// process and it was proved. Not [`NoReport`](Self::NoReport), which is a
+    /// Drone that could hear an instruction and did not answer; nothing was
+    /// ever sent into this one.
+    ///
+    /// The Drone is not ended and the worktree is untouched, exactly as the
+    /// poke ladder leaves one.
+    Unheard,
     /// Everything the spawn needed resolved and the machine still would not
     /// start it: the transcript would not open on disk, or the harness refused
     /// to launch the process.
@@ -338,6 +360,7 @@ impl StepLevelTrigger {
             | EscalationTrigger::ResourceExhausted
             | EscalationTrigger::Silent
             | EscalationTrigger::Stalled
+            | EscalationTrigger::Unheard
             | EscalationTrigger::WouldNotStart => false,
         }
     }
@@ -368,6 +391,7 @@ impl EscalationTrigger {
         EscalationTrigger::Silent,
         EscalationTrigger::Stalled,
         EscalationTrigger::Thrashing,
+        EscalationTrigger::Unheard,
         EscalationTrigger::WouldNotStart,
     ];
 
@@ -396,6 +420,7 @@ impl EscalationTrigger {
             EscalationTrigger::Silent => "silent",
             EscalationTrigger::Stalled => "stalled",
             EscalationTrigger::Thrashing => "thrashing",
+            EscalationTrigger::Unheard => "unheard",
             EscalationTrigger::WouldNotStart => "would_not_start",
         }
     }
@@ -454,6 +479,7 @@ impl EscalationTrigger {
             | EscalationTrigger::NotPrepared
             | EscalationTrigger::ResourceExhausted
             | EscalationTrigger::Stalled
+            | EscalationTrigger::Unheard
             | EscalationTrigger::WouldNotStart => TriggerLevel::Job,
             // A sub-kind has no level of its own. It pauses the Job exactly as
             // its parent does, so it reads its parent's rather than declaring

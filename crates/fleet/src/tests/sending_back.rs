@@ -14,10 +14,10 @@
 //! # What each case pins
 //!
 //! The delivery, that it happens once, that a live Drone takes the other path
-//! instead, and the refusal that is left once "no process right now" stops
-//! being one.
+//! instead, the refusal that is left once "no process right now" stops being
+//! one, and that each pass over the step is filed apart from the last.
 
-use core_model::JobStatus;
+use core_model::{JobStatus, StepId};
 use testkit::{FakeVcs, FakeWorkProduct};
 
 use crate::tests::daemon::{
@@ -379,6 +379,115 @@ async fn a_note_waiting_behind_a_busy_fleet_is_on_the_wire_until_it_is_delivered
             .as_str()
             .contains("name the cause, not the symptom"),
         "the note went where it was waiting to go"
+    );
+}
+
+/// **A step sent back twice keeps three records and not one, which is `#418`.**
+///
+/// The gate ends its Drone, so the pass after a note is a different process
+/// with a session that cannot see the first one's reasoning — and the first
+/// one's Checks are the only account of what it did. Keyed under one ordinal
+/// they were overwritten, and the note, the work that ignored it and the work
+/// that fixed it read as a step that passed first time.
+///
+/// **The budget is not what moves.** A person asking for a change opens a pass
+/// rather than spending one, so `step_spent` reads 1 at the third run and a Job
+/// cannot die of being reviewed. `iteration_count` does not move either:
+/// nothing routed anywhere, and this workflow declares no loop to charge.
+#[tokio::test]
+async fn a_step_sent_back_twice_files_each_pass_apart_from_the_last() {
+    let home = TempDir::new();
+    let fleet = a_fleet_reviewing_the_first_step(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    let job_id = at_the_gate(&fleet, &home).await;
+    let step = StepId::new("implement".to_string());
+
+    for note in [
+        "name the cause, not the symptom",
+        "the cause, still not named",
+    ] {
+        fleet
+            .request_changes(
+                &job_id,
+                &crate::resume::Redirection::saying(note).expect("a note with something in it"),
+            )
+            .await
+            .expect("the note waits and a fresh Drone opens with it");
+        submitted_by_the_one(&fleet, diff_evidence())
+            .await
+            .expect("the next Drone reports its diff");
+        fleet.turn().await.expect("the gate holds it for a person");
+    }
+
+    let store = fleet.store();
+    let store = store.lock().await;
+    assert_eq!(
+        store
+            .step_attempt(&job_id, &step)
+            .expect("counted")
+            .number(),
+        3,
+        "one dispatch and two send-backs are three runs of the step"
+    );
+    assert_eq!(
+        store.step_spent(&job_id, &step).expect("counted").number(),
+        1,
+        "and none of them spent the retry budget: a person's note opens a pass"
+    );
+    assert_eq!(
+        store
+            .step_iteration(&job_id, &step)
+            .expect("counted")
+            .number(),
+        1,
+        "nothing was routed anywhere, so no loop was charged for it"
+    );
+
+    let ran = store
+        .step_checks_every_attempt(&job_id)
+        .expect("the checks read back");
+    let implement: Vec<u32> = ran
+        .iter()
+        .filter(|group| group.step_id == step)
+        .map(|group| group.attempt.number())
+        .collect();
+    assert_eq!(
+        implement,
+        vec![1, 2, 3],
+        "each pass kept its own Checks rather than writing over the pass before it"
+    );
+    drop(store);
+
+    // **And a person is shown them.** A record that tells the passes apart
+    // behind a wire that folds them back into one is half the fix: `get_job` is
+    // what job detail draws the run tree from.
+    let seen = detail(&fleet, &job_id).await;
+    let drawn = seen
+        .steps
+        .iter()
+        .find(|shown| shown.step_id.as_str() == "implement")
+        .expect("the step is on the wire");
+    assert_eq!(
+        drawn
+            .attempts
+            .iter()
+            .map(|run| run.attempt)
+            .collect::<Vec<_>>(),
+        vec![1, 2, 3],
+        "three passes are drawn, not the last one wearing the count of one"
+    );
+    assert_eq!(
+        drawn
+            .attempts
+            .iter()
+            .map(|run| run.outcome.as_wire())
+            .collect::<Vec<_>>(),
+        vec!["awaiting_human", "awaiting_human", "running"],
+        "the two a person ended say so, and the one still being reviewed is open"
+    );
+    assert!(
+        drawn.verdicts.is_empty(),
+        "and none of them claims a gate ruling: the tiers held every time, and \
+         what ended the first two was somebody asking again"
     );
 }
 

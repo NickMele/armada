@@ -1497,6 +1497,21 @@ on the word edits a Manifest when what they should do is read what the
 Drone was trying to write. It is not **stopped at the gate** either —
 that says work was weighed, and here nothing was submitted.
 
+`unheard` renders as **nothing is reading this Drone**, and it is the
+one reason in this vocabulary written in the present tense. Every other
+one names something that is over; this names a condition still true
+while a person reads it — the Drone is working at that moment, and
+nobody is on the other end of it. It is not **stalled**, which is the
+badge it is split away from: that word is a Drone that stopped
+producing, and a person who reads it here redispatches and ends a Drone
+that was finishing its step. It is not **went quiet** either, for the
+same reason from the other side — `no_report` is a Drone that could
+hear an instruction and did not answer, and nothing was ever sent into
+this one. The verb is about the reading rather than about the Drone,
+which is what puts the fault where it is; "Fleet cannot hear it" was
+refused because a failure headline names what happened and not who,
+which is `no_worktree`'s rule above.
+
 `evidence_suspect` renders as
 **evidence disputed**, with Judge in the source field, which keeps
 attribution out of the headline so P5 holds. Avoid "Judge rejected the

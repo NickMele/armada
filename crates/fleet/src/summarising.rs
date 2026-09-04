@@ -18,7 +18,7 @@ use api::Refusal;
 use core_model::{
     Job, JobId as CoreJobId, JobStatus as CoreJobStatus, QueuedReason as CoreQueuedReason,
 };
-use ipc::mcp::NotRecorded;
+
 use ipc::JobSummary;
 
 use crate::admitting::clear_to_run;
@@ -35,18 +35,6 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
-    /// Which Job made this call, as the tool's own refusal.
-    ///
-    /// **Every one of the three opens with this**, and none of them takes a Job
-    /// id: `Fleet::caller_of` reads the connection, and a caller it cannot place
-    /// is told so as a tool error the Drone can read rather than as a 4xx it can
-    /// only retry.
-    pub(crate) fn placed(&self, caller: &api::Caller) -> Result<core_model::JobId, NotRecorded> {
-        self.caller_of(caller).map_err(|why| NotRecorded {
-            because: why.to_string(),
-        })
-    }
-
     /// A Job as a Board row, with the reason its last transition stored and
     /// whether its Drone is waiting on somebody. **The slot read is free on
     /// every row but the working ones** — `question_awaited` answers `None`

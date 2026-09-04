@@ -3,8 +3,8 @@
 //! # Silence is the signal. Elapsed time is not, and calls cannot be
 //!
 //! Spike 9 measured 31 completed steps: the longest silence inside an honest
-//! one was **79s**, against a step wall clock whose p90 was 437s. **Every
-//! stuck step was quiet, not long.** So neither tripwire in
+//! one was **79s**, against a step wall clock whose p90 was 437s. **Every stuck
+//! step was quiet, not long.** So neither tripwire in
 //! [`converging`](mod@crate::converging) reaches this, and the call count
 //! **cannot fire at all** on a Drone that has stopped making calls.
 //!
@@ -13,7 +13,7 @@
 //! | Reading | What | Then |
 //! |---|---|---|
 //! | At rest | the run Armada's last turn began has ended | the escalation, now |
-//! | Quiet | nothing for `quiet_after`, and the run has not ended | a poke, then `stalled` once `poke_limit` is spent |
+//! | Quiet | nothing for `quiet_after`, and the run has not ended | a poke, then `stalled` once `poke_limit` is spent — or `unheard`, where the silence is Fleet's own and [`heard_at_all`] says which |
 //!
 //! **An ended run is not a gap, and poking one was `#314`.** A quiet Drone may
 //! be inside a long command, which is what the poke is for; one that has ended
@@ -26,6 +26,7 @@
 use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
+use config::Manifest;
 use core_model::{
     Actor, Component, Envelope, EscalationTrigger, FieldValue, Job, JobId, JobStatus, Level,
     StepId, Target,
@@ -49,7 +50,8 @@ use crate::working::{StoodDown, Working};
 /// `drone-silence-threshold-quiet-after` and `poke-limit-poke-limit` in
 /// `crates/config/settings.toml`, each overridable per repository and per step.
 /// A step wanting more patience per poke does not thereby want more pokes, so
-/// one key would make setting either half mean restating both.
+/// one key would make setting either half mean restating both — and both
+/// overriding tiers resolve the halves separately for that reason.
 ///
 /// **The value in force is the watched step's, and nothing aggregates.** A
 /// Drone belongs to one step, so a Job spanning four steps is four independent
@@ -86,44 +88,60 @@ impl Liveness {
 
     /// What one step of one Job gets, given what Fleet is running with.
     ///
+    /// # Three tiers, and this is the only place their order is written
+    ///
+    /// The composition root's constant — `self` — then the repository's
+    /// `armada.yml`, then the step. **Each half falls back on its own**, so a
+    /// repository may state a threshold and inherit a poke budget. **There is
+    /// no Kit**, though both rows are filed *Kit → Manifest*: nothing in this
+    /// workspace parses one.
+    ///
     /// # A live setting under a frozen step, and which wins
     ///
     /// Both rows are `lifetime = "Live"` and a step's override rides a
     /// WorkflowDef frozen at Job creation. **The override wins where it
-    /// exists, and `Live` governs the tier it falls back to** — not a
+    /// exists, and `Live` governs the tiers it falls back to** — not a
     /// compromise, but what each word is about. A setting is live so a person
     /// may change what Fleet runs with; a step is frozen so an edit to
     /// `.armada/workflows/` cannot move a running Job's terms under an
-    /// approval nobody re-gave. Neither claim reaches the other's tier.
+    /// approval nobody re-gave.
     ///
-    /// **And `Live` stays true**, because this is asked at each step boundary
-    /// rather than once per Job: a Job whose steps declare nothing follows a
-    /// changed setting into its next step, with no restart. What it cannot do
-    /// is have its *declared* patience change underneath it.
-    ///
-    /// # The chain is shorter than the rows say
-    ///
-    /// They resolve *Kit → Manifest*, and this workspace has no Kit: what
-    /// exists is the composition root's constant — `self` — and the step.
-    /// `armada.yml` carries no key and `#60` added none, a key ahead of its
-    /// reader being this issue's own defect wearing the other hat.
-    ///
-    /// Each half falls back on its own, and a step naming neither takes both.
-    pub fn at(self, job: &Job, step: &StepId) -> Liveness {
-        // A step this workflow does not name takes both, which no dispatch can
-        // produce — the id came out of this same workflow — and a restart can,
-        // where the step comes off a record a Fleet that is gone wrote.
+    /// **`Live` reaches this boundary and no further, because the Manifest is
+    /// read once.** A Job declaring nothing follows what `Fleet::manifest`
+    /// holds into its next step; an edit to the file reaches it only across a
+    /// restart. Resolving here rather than folding the repository's value into
+    /// the constant keeps that a fact about when the file is read.
+    pub fn at(self, manifest: &Manifest, job: &Job, step: &StepId) -> Liveness {
+        // Tier two. A repository stating one half inherits the other from the
+        // constant, which is why this is built rather than matched on.
+        let repository = Liveness {
+            quiet_after: manifest
+                .quiet_after_seconds()
+                .map(seconds)
+                .unwrap_or(self.quiet_after),
+            pokes: manifest.poke_limit().unwrap_or(self.pokes),
+        };
+        // Tier three, and a step this workflow does not name takes the two
+        // above — which no dispatch can produce, the id having come out of this
+        // same workflow, and a restart can, where the step comes off a record a
+        // Fleet that is gone wrote.
         let Some(declared) = job.workflow().step(step) else {
-            return self;
+            return repository;
         };
         Liveness {
             quiet_after: declared
                 .quiet_after_seconds()
-                .map(|seconds| Duration::from_secs(u64::from(seconds)))
-                .unwrap_or(self.quiet_after),
-            pokes: declared.poke_limit().unwrap_or(self.pokes),
+                .map(seconds)
+                .unwrap_or(repository.quiet_after),
+            pokes: declared.poke_limit().unwrap_or(repository.pokes),
         }
     }
+}
+
+/// Both files write the threshold as a whole number of seconds, and both are
+/// read through here rather than each converting for itself.
+fn seconds(count: u32) -> Duration {
+    Duration::from_secs(u64::from(count))
 }
 
 /// What the Drone is told when it has gone quiet.
@@ -193,8 +211,16 @@ pub enum Vigil {
     /// this road is reaching the right answer.
     NotPoked { spent: u32, cause: std::io::Error },
     /// The pokes are spent and the silence outlived them. The Job is
-    /// `escalated`, reason `stalled`.
-    Escalated { pokes: u32 },
+    /// `escalated`.
+    ///
+    /// **It carries the trigger because the silence has two readings**, and
+    /// the ladder cannot tell them apart from the clock alone. `stalled` is a
+    /// Drone that stopped producing; `unheard` is a Drone producing into a
+    /// pipe nothing holds the far end of. See [`heard_at_all`].
+    Escalated {
+        pokes: u32,
+        found: EscalationTrigger,
+    },
     /// The Drone's run ended with nothing submitted and nothing outstanding for
     /// it, so it was reaped, its step stopped and the Job escalated — without a
     /// poke being spent.
@@ -284,6 +310,12 @@ where
         }
         let (job, step, _) = at_work.standing();
         let spent = at_work.pokes();
+        // **Which of the two silences this is, off the slot.** The clock says
+        // how long and nothing about it says whose silence it was; the session
+        // is the only thing that knows whether anybody was ever listening.
+        // Free, and taken here with the rest of the slot's readings so the
+        // borrow ends before the roads below take the slot again.
+        let found = heard_at_all(at_work);
         // From here it costs a store read, and only from here. It is one read
         // per threshold rather than one per turn, because every road out of
         // this point restarts the clock.
@@ -302,20 +334,20 @@ where
         let said = if spent < liveness.pokes() {
             self.poke(working, after).await
         } else {
-            self.move_job(
-                &record,
-                Target::Escalated(EscalationTrigger::Stalled),
-                Actor::Fleet,
-            )
-            .await?;
+            self.move_job(&record, Target::Escalated(found), Actor::Fleet)
+                .await?;
             // **The Drone is not ended and the worktree is not touched.** It is
             // held exactly as every other escalation holds one, and a person
             // decides. `stalled`'s recommended action is a redispatch, which
-            // needs the worktree the Drone is sitting in.
+            // needs the worktree the Drone is sitting in — and `unheard`'s is
+            // not a redispatch at all, since that Drone is still working.
             if let Some(at_work) = working.as_mut() {
                 at_work.waiting(self.now());
             }
-            Vigil::Escalated { pokes: spent }
+            Vigil::Escalated {
+                pokes: spent,
+                found,
+            }
         };
         // Nothing was reaped on this road: the poke ladder holds its Drone.
         self.noted_quiet(&job, &step, after, &said, None);
@@ -461,6 +493,17 @@ where
                 Level::Warn,
                 "the Drone has gone quiet and the poke could not be sent",
             ),
+            // **Two sentences, because the escalation has two meanings.** A
+            // line saying the Drone stayed quiet through its pokes is false of
+            // an unheard one: no poke reached it, and it may have been talking
+            // the whole time.
+            Vigil::Escalated {
+                found: EscalationTrigger::Unheard,
+                ..
+            } => (
+                Level::Warn,
+                "the quiet budget ran out on a Drone Fleet cannot hear",
+            ),
             Vigil::Escalated { .. } => (
                 Level::Warn,
                 "the Drone stayed quiet through every poke it had",
@@ -484,7 +527,7 @@ where
             "pokes_spent",
             FieldValue::Int(i64::from(match said {
                 Vigil::Poked { spent } | Vigil::NotPoked { spent, .. } => *spent,
-                Vigil::Escalated { pokes } => *pokes,
+                Vigil::Escalated { pokes, .. } => *pokes,
                 // **Zero, and it is the interesting number.** What this line
                 // says is that the escalation was reached without spending the
                 // ladder at all.
@@ -522,8 +565,33 @@ where
 /// Which trigger the vigil escalated under, where it escalated at all.
 fn escalated_as(said: &Vigil) -> Option<EscalationTrigger> {
     match said {
-        Vigil::Escalated { .. } => Some(EscalationTrigger::Stalled),
-        Vigil::AtRest { found } => Some(found.clone()),
+        Vigil::Escalated { found, .. } | Vigil::AtRest { found } => Some(found.clone()),
         Vigil::Poked { .. } | Vigil::NotPoked { .. } => None,
+    }
+}
+
+/// Whether anybody was ever going to hear this Drone, and therefore which of
+/// the two silences the ladder just measured.
+///
+/// **`stalled` is a Drone that stopped and `unheard` is a Fleet that cannot
+/// listen**, and the ladder reads the same empty clock either way — so the
+/// clock cannot be what tells them apart. [`Session::unheard`] can: it answers
+/// whether there is a read end on the far side of this Drone's output at all.
+///
+/// **It asks the condition and never the cause.** A Fleet that restarted and
+/// adopted an orphan is the only way into it today; a second way would reach
+/// the same trigger through the same reading, without a second registry word.
+/// `crate::adopting` holds why the pipes cannot come back.
+///
+/// **A poke against an unheard Drone still spends its budget**, which is what
+/// puts this on the escalation rather than on the first reading. The
+/// escalation is not suppressed — nobody is watching that Drone and a person
+/// is owed that — and the budget is what gives an adopted Drone time to finish
+/// its step and be gated, which takes the Job out of `running` and stops the
+/// ladder before it ever gets here.
+fn heard_at_all(at_work: &Working) -> EscalationTrigger {
+    match at_work.session().unheard() {
+        true => EscalationTrigger::Unheard,
+        false => EscalationTrigger::Stalled,
     }
 }

@@ -24,19 +24,18 @@
 //! through, and sleeping for it would be a test that is slow *and* timing-
 //! dependent — this way the number under test is the real one.
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
 use adapter_traits::{CallDetail, DroneEvent};
 use config::ResolvedWorkflow;
-use core_model::{EscalationTrigger, JobStatus, StepState, Timestamp, TransitionReason};
+use core_model::{EscalationTrigger, JobStatus, StepState, TransitionReason};
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Patience, Sketch};
 
-use crate::clock::Clock;
 use crate::daemon::Fleet;
 use crate::silence::{Liveness, Poke, Quiet, Vigil};
 use crate::tests::daemon::{a_proposal, diff_evidence, fitted_with, one, worktree_directory};
+use crate::tests::planted::Held;
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
 use crate::Ruling;
@@ -56,39 +55,6 @@ const QUIET_AFTER: Duration = Duration::from_secs(120);
 /// how a machine already running the rest of the workspace turned a child that
 /// had not been scheduled yet into a Drone that had stopped talking — #327.
 const A_CHILD_HAS_LONG_ENOUGH: Duration = Duration::from_secs(30);
-
-/// A clock that ticks a second per reading, and jumps when a test says so.
-struct Held {
-    ticks: AtomicU64,
-    pushed: AtomicU64,
-}
-
-impl Held {
-    fn started() -> Held {
-        Held {
-            ticks: AtomicU64::new(0),
-            pushed: AtomicU64::new(0),
-        }
-    }
-
-    /// Move the clock on. **Never backwards**, which `converging::elapsed`
-    /// reads as zero and which no machine should produce.
-    fn on(&self, seconds: u64) {
-        self.pushed.fetch_add(seconds, Ordering::SeqCst);
-    }
-}
-
-impl Clock for Held {
-    fn now(&self) -> Timestamp {
-        let at = self.ticks.fetch_add(1, Ordering::SeqCst) + self.pushed.load(Ordering::SeqCst);
-        Timestamp::from_rfc3339(format!(
-            "2026-08-26T{:02}:{:02}:{:02}.000Z",
-            (at / 3_600) % 24,
-            (at / 60) % 60,
-            at % 60
-        ))
-    }
-}
 
 /// One step, gated on nothing, so nothing but the vigil can move it.
 fn one_step() -> ResolvedWorkflow {
@@ -211,6 +177,33 @@ fn watching(
     clock: Arc<Held>,
     liveness: Liveness,
 ) -> Fixture {
+    assembled(home, workflow, harness, clock, liveness, None)
+}
+
+/// The same again, over a repository that states a patience of its own.
+///
+/// `says` is the body of an `armada.yml`'s `drone:` section, written the way a
+/// repository writes it and put through the real parser — so a case here fails
+/// if the key stops being read, rather than passing on a value planted past it.
+fn watching_a_repository_that_says(
+    home: &TempDir,
+    workflow: ResolvedWorkflow,
+    harness: FakeHarness,
+    clock: Arc<Held>,
+    liveness: Liveness,
+    says: &str,
+) -> Fixture {
+    assembled(home, workflow, harness, clock, liveness, Some(says))
+}
+
+fn assembled(
+    home: &TempDir,
+    workflow: ResolvedWorkflow,
+    harness: FakeHarness,
+    clock: Arc<Held>,
+    liveness: Liveness,
+    says: Option<&str>,
+) -> Fixture {
     let mut fittings = fitted_with(
         home,
         FakeWorkProduct::changed(&["src/parse.rs"]).showing("+    panic!();\n"),
@@ -219,6 +212,13 @@ fn watching(
     fittings.workflows = one(workflow);
     fittings.clock = clock;
     fittings.liveness = liveness;
+    if let Some(says) = says {
+        fittings.manifest = config::Manifest::parse(
+            std::path::Path::new("armada.yml"),
+            &format!("version: 1\nid: 01FIXTUREMANIFEST\ndrone:\n{says}"),
+        )
+        .expect("a repository that states its own patience");
+    }
     fittings.judge = Arc::new(FakeJudge::that_fails("no model is asked about silence"));
     Fleet::assembled(fittings)
 }
@@ -351,7 +351,13 @@ async fn a_drone_silent_past_the_threshold_is_poked_and_then_escalates() {
 
     let last = after_the_threshold(&fleet, &clock, "escalated the Job").await;
     assert!(
-        matches!(last.said, Vigil::Escalated { pokes: 2 }),
+        matches!(
+            last.said,
+            Vigil::Escalated {
+                pokes: 2,
+                found: EscalationTrigger::Stalled
+            }
+        ),
         "{:?}",
         last.said
     );
@@ -548,7 +554,13 @@ async fn a_step_that_asks_for_no_pokes_escalates_without_spending_one() {
 
     let said = after_the_threshold(&fleet, &clock, "escalated the Job").await;
     assert!(
-        matches!(said.said, Vigil::Escalated { pokes: 0 }),
+        matches!(
+            said.said,
+            Vigil::Escalated {
+                pokes: 0,
+                found: EscalationTrigger::Stalled
+            }
+        ),
         "the step's own budget was spent before it was offered: {:?}",
         said.said
     );
@@ -582,6 +594,186 @@ async fn working_on(fleet: &Fixture, step: &str) -> bool {
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
     false
+}
+
+/// **All three tiers in one run**, which is what `#414` claims and the only
+/// case that can falsify it.
+///
+/// The constant is the shipped 120s. The repository asks for five times it, and
+/// the *first* step for a quarter of it — so each of the three numbers is in
+/// force somewhere in this test and no two of them could be confused for one
+/// another.
+///
+/// | in force on | value | what it beat |
+/// |---|---|---|
+/// | `implement` | 30s, the step's | the repository's 600 and Fleet's 120 |
+/// | `verify` | 600s, the repository's | Fleet's 120 |
+///
+/// **`verify` is where the middle tier is proved**, and it takes both bounds:
+/// silence twice Fleet's threshold passes unremarked, which no Fleet-wide value
+/// could have allowed, and silence past the repository's own is poked — so what
+/// is being read is a number rather than an absence of one.
+#[tokio::test]
+async fn a_repository_sets_the_patience_and_a_step_still_overrides_it() {
+    let home = TempDir::new();
+    let clock = Arc::new(Held::started());
+    let fleet = watching_a_repository_that_says(
+        &home,
+        // `implement` names its own; `verify` names nothing and so takes the
+        // repository's. Neither names a poke budget, which stays Fleet's
+        // through both tiers — the halves fall back on their own.
+        a_quick_step_and_a_step_that_defers(),
+        a_drone_that_goes_quiet(),
+        Arc::clone(&clock),
+        Liveness::of(QUIET_AFTER, 2),
+        &format!("  quiet_after_seconds: {}\n", PATIENT.as_secs()),
+    );
+    let job = started(&fleet, &home).await;
+
+    // Tier three. Past what the step asked for and nowhere near either of the
+    // two it overrode.
+    clock.on(IMPATIENT.as_secs() * 2);
+    let poked = turning_until_quiet(&fleet, "poked the Drone on the quick step").await;
+    assert!(
+        matches!(poked.said, Vigil::Poked { spent: 1 }),
+        "{:?}",
+        poked.said
+    );
+    assert!(
+        poked.after >= IMPATIENT && poked.after < QUIET_AFTER,
+        "the step's own threshold fired, and neither the repository's nor \
+         Fleet's could have: {:?}",
+        poked.after
+    );
+
+    // On to the step that declares nothing, which is where the repository's
+    // value is the answer.
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
+    let turned = fleet.turn().await.expect("a turn");
+    assert!(
+        matches!(turned.ruled(), Some(Ruling::Advanced { .. })),
+        "the first step did not advance: {:?}",
+        turned.ruled()
+    );
+    assert!(
+        working_on(&fleet, "verify").await,
+        "no Drone reached the deferring step"
+    );
+
+    // Tier two, and the whole of `#414`: twice Fleet's threshold, with a step
+    // that said nothing, and nothing is poked. **Pushed only once the new Drone
+    // is in the slot** — a silence measured from before the spawn is one the
+    // spawn resets, and the case would pass over a step poked on its first turn.
+    clock.on(QUIET_AFTER.as_secs() * 2);
+    for _ in 0..10 {
+        let turned = fleet.turn().await.expect("a turn");
+        let quiet = turned.quiet();
+        assert!(
+            quiet.is_none(),
+            "a step that declared nothing was poked at Fleet's threshold, so \
+             the repository's value never reached the vigil: {quiet:?}"
+        );
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+
+    // And it is the repository's number rather than no number: past what
+    // `armada.yml` asked for, the same Drone is poked, on the budget the step
+    // boundary handed back.
+    clock.on(PATIENT.as_secs());
+    let waited = turning_until_quiet(&fleet, "poked the Drone on the deferring step").await;
+    assert!(
+        matches!(waited.said, Vigil::Poked { spent: 1 }),
+        "the poke budget resets at the step boundary: {:?}",
+        waited.said
+    );
+    assert!(waited.after >= PATIENT, "{:?}", waited.after);
+    assert_eq!(waited.step.as_str(), "verify");
+    assert_eq!(
+        fleet.load(&job).await.unwrap().status(),
+        JobStatus::Running,
+        "one poke escalates nothing, whichever tier chose the threshold"
+    );
+}
+
+/// **The repository's other half, resolved on its own.** This `armada.yml` says
+/// only that a Drone here gets no nudge; it has no opinion about how long
+/// silence may run, and no step has one either. So the threshold is Fleet's and
+/// the escalation spends no poke.
+///
+/// `#60` proved this of a step. It is asserted again a tier up because the two
+/// tiers fall back through different code, and a Manifest that carried its
+/// halves as a pair would pass every other case in this file.
+#[tokio::test]
+async fn a_repository_that_asks_for_no_pokes_keeps_fleets_threshold() {
+    let home = TempDir::new();
+    let clock = Arc::new(Held::started());
+    let fleet = watching_a_repository_that_says(
+        &home,
+        one_step(),
+        a_drone_that_goes_quiet(),
+        Arc::clone(&clock),
+        Liveness::of(QUIET_AFTER, 2),
+        "  poke_limit: 0\n",
+    );
+    let job = started(&fleet, &home).await;
+
+    let said = after_the_threshold(&fleet, &clock, "escalated the Job").await;
+    assert!(
+        matches!(
+            said.said,
+            Vigil::Escalated {
+                pokes: 0,
+                found: EscalationTrigger::Stalled
+            }
+        ),
+        "the repository's budget was spent before it was offered: {:?}",
+        said.said
+    );
+    assert!(
+        said.after >= QUIET_AFTER,
+        "the threshold is Fleet's, because neither the repository nor the step \
+         named one: {:?}",
+        said.after
+    );
+    assert_eq!(
+        fleet.load(&job).await.unwrap().status(),
+        JobStatus::Escalated
+    );
+}
+
+/// A quick step that names its own patience, and one that defers.
+///
+/// **The second declares nothing at all**, which is the point: it is what every
+/// step in every shipped workflow looks like, and it is the step the middle
+/// tier has to reach.
+fn a_quick_step_and_a_step_that_defers() -> ResolvedWorkflow {
+    testkit::patient(
+        &[
+            Sketch {
+                id: "implement",
+                label: "Implement",
+                evidence_type: Some("diff"),
+                gates: &[],
+                judged_on: &[],
+                scope: None,
+                gaming: None,
+            },
+            Sketch {
+                id: "verify",
+                label: "Verify",
+                evidence_type: Some("diff"),
+                gates: &[],
+                judged_on: &[],
+                scope: None,
+                gaming: None,
+            },
+        ],
+        &[Patience {
+            step: "implement",
+            quiet_after_seconds: Some(IMPATIENT.as_secs() as u32),
+            poke_limit: None,
+        }],
+    )
 }
 
 /// One step, gated on nothing, saying what it is prepared to wait through.

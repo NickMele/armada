@@ -17,7 +17,7 @@ use adapter_traits::{Footprint, Worktree};
 use config::ResolvedWorkflow;
 use core_model::{Attempt, JobId, StepId, Ulid};
 use testkit::{FakeJudge, FakeWorkProduct, Gate, Sketch};
-use verification::Request;
+use verification::{Lifted, Request};
 
 use crate::at_step::AtStep;
 use crate::gate::{rule_on, Ruling};
@@ -160,6 +160,7 @@ impl Repo {
             Request::of(testkit::asked_for()),
             &note_evidence(),
             None,
+            &Lifted::default(),
             Some(&Footprint::nothing()),
             &[],
             &FakeWorkProduct::changed(&[]),

@@ -23,7 +23,7 @@ use std::time::Duration;
 use adapter_traits::{Footprint, Worktree};
 use core_model::CheckOutcome;
 use testkit::{FakeWorkProduct, Gate, Sketch};
-use verification::Request;
+use verification::{Lifted, Request};
 
 use crate::at_step::AtStep;
 use crate::gate::{rule_on, CheckBudget, Ruling};
@@ -75,6 +75,7 @@ async fn ruled(
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,

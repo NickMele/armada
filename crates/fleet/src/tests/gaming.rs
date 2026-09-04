@@ -16,7 +16,7 @@ use core_model::{
 
 use ipc::{JobDetail, RunId};
 use testkit::{FakeJudge, FakeWorkProduct, Gaming, Sketch};
-use verification::Request;
+use verification::{Lifted, Request};
 
 use crate::asked::Asked;
 use crate::at_step::AtStep;
@@ -109,6 +109,7 @@ async fn ruled(patch: &str, flag_if: &[&str], recorded: &[(StepId, StepEvidence)
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         recorded,
         &work,
@@ -214,6 +215,7 @@ async fn a_step_that_asks_nothing_about_gaming_is_never_looked_at() {
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,
@@ -289,6 +291,7 @@ async fn a_flagged_step_keeps_what_the_judge_said_about_its_criteria() {
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,

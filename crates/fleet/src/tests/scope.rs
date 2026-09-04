@@ -18,7 +18,7 @@ use core_model::{
 use ipc::mcp::DeclareScope;
 use testkit::{FakeJudge, FakeWorkProduct, Gate, Scoped, Sketch};
 use verification::{
-    CheckFailed, Claimed, NotClaimed, OutsideScope, Request, ShownBy, DECLARED_PLAN_DRIFT,
+    CheckFailed, Claimed, Lifted, NotClaimed, OutsideScope, Request, ShownBy, DECLARED_PLAN_DRIFT,
 };
 
 use crate::at_step::AtStep;
@@ -92,6 +92,7 @@ async fn ruled_by(
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         declared,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,
@@ -508,6 +509,10 @@ async fn a_step_with_no_scope_is_not_watched_and_takes_no_declaration() {
 
 /// The denylist resolves last and wins over anything the Drone declared — and
 /// the Drone is told at declaration time, while it can still fix the plan.
+///
+/// **And it is told there is a route.** An ordinary boundary refused with no
+/// route named is `#417`: a Drone that reads "not allowed" fails its step or
+/// works around it, and a person finds out at the gate.
 #[tokio::test]
 async fn a_declaration_naming_an_excluded_path_is_refused_where_it_is_made() {
     let home = TempDir::new();
@@ -529,7 +534,14 @@ async fn a_declaration_naming_an_excluded_path_is_refused_where_it_is_made() {
     )
     .await
     .expect_err("the denylist wins");
-    assert!(matches!(refused, NotDeclared::Outside(_)));
+    assert!(
+        matches!(refused, NotDeclared::Excluded { .. }),
+        "{refused:?}"
+    );
+    assert!(
+        refused.to_string().contains("request_scope"),
+        "it names the route out: {refused}"
+    );
 }
 
 /// A declaration is about one step. Carrying it forward would let the next
@@ -630,6 +642,7 @@ async fn a_step_with_no_scope_is_neither_checked_nor_read() {
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,
@@ -670,6 +683,7 @@ async fn an_ungated_step_with_no_scope_advances_on_evidence_alone() {
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,

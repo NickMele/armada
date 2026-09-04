@@ -185,3 +185,30 @@ fn a_dispatch_grant_that_is_not_a_boolean_is_refused() {
                 advance_gate: auto\n";
     assert!(config::WorkflowDef::parse(Path::new("grants.yml"), text, &roster()).is_err());
 }
+
+/// **This repository's own `armada.yml` loads**, which nothing asked until now.
+///
+/// The header above has claimed since `#200` that these definitions resolve
+/// against the shipped Manifest, and no test here read that file — so a typo in
+/// it was found by starting a daemon, and by nothing before that. `#414` gave it
+/// a `drone:` section and made the gap worth closing rather than only worth
+/// naming.
+///
+/// **The value is asserted and not only the parse.** A `quiet_after_seconds`
+/// silently dropped by a parser that stopped reading the key would leave this
+/// file loading exactly as well as before, and every Drone here back on a
+/// threshold shorter than one of its own commands.
+#[test]
+fn this_repositorys_own_manifest_loads_and_states_its_patience() {
+    let path = root().join("armada.yml");
+    let manifest = config::Manifest::load(&path)
+        .unwrap_or_else(|why| panic!("{} is refused:\n{why}", path.display()));
+    assert_eq!(
+        manifest.quiet_after_seconds(),
+        Some(300),
+        "the repository's own patience is what its `drone:` section writes"
+    );
+    // Nothing here has a reason to want more or fewer nudges than Fleet's, and
+    // the two halves fall back separately — so an absent one is the assertion.
+    assert_eq!(manifest.poke_limit(), None);
+}

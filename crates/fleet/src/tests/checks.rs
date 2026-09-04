@@ -15,7 +15,7 @@ use adapter_traits::{Footprint, WorkProduct};
 use core_model::CheckOutcome;
 use ipc::{JobDetail, RunId};
 use testkit::FakeWorkProduct;
-use verification::Request;
+use verification::{Lifted, Request};
 
 use crate::at_step::AtStep;
 use crate::gate::{rule_on, CheckBudget};
@@ -48,6 +48,7 @@ async fn a_check_that_passes_is_written_down_as_a_pass() {
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,
@@ -84,6 +85,7 @@ async fn a_check_that_fails_records_the_code_it_returned() {
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,
@@ -118,6 +120,7 @@ async fn a_hanging_check_is_recorded_as_timed_out_and_not_as_failed() {
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,
@@ -150,6 +153,7 @@ async fn a_check_whose_command_does_not_exist_is_recorded_as_never_ran() {
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,
@@ -196,6 +200,7 @@ async fn a_step_that_added_nothing_to_what_it_inherited_fails_its_diff_check() {
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&entered_with),
         &[],
         &work,
@@ -242,6 +247,7 @@ async fn a_step_that_moved_work_it_inherited_advances() {
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         Some(&entered_with),
         &[],
         &work,
@@ -268,6 +274,7 @@ async fn a_step_whose_start_was_never_read_does_not_advance_on_the_doubt() {
         Request::of(testkit::asked_for()),
         &diff_evidence(),
         None,
+        &Lifted::default(),
         None,
         &[],
         &work,
@@ -296,6 +303,7 @@ async fn an_ungated_step_records_nothing_because_there_was_nothing_to_run() {
         Request::of(testkit::asked_for()),
         &note_evidence(),
         None,
+        &Lifted::default(),
         Some(&Footprint::nothing()),
         &[],
         &work,

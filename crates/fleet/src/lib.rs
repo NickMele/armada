@@ -99,6 +99,7 @@ mod stuck;
 pub mod sub_dispatch;
 mod summarising;
 pub mod terms;
+mod tooling;
 pub mod transcript;
 pub mod turning;
 /// The one vigil whose subject is a Job with no Drone to watch.
