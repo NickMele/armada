@@ -42,6 +42,9 @@ mod history;
 mod holding;
 mod ids;
 mod job;
+/// What Fleet did to a Job, out of the Job's own log. **The third voice the
+/// activity log was designed around and nothing produced.**
+mod journal;
 mod judged;
 /// The Evidence tool's transport. **A different seam** — Fleet to Drone, not
 /// Fleet to Bridge — so it is a module rather than a flat re-export and none of
@@ -97,6 +100,9 @@ pub use job::{
     AttachmentRef, DependencyEdge, JobForgotten, JobList, JobRequest, JobSummary, ProposeJob,
     ProposedCriterion, ProposedPlan, Redirection, Redispatched, RestartRequested, Subject,
     UnreadableJob,
+};
+pub use journal::{
+    JournalClosed, JournalMessage, JournalOpened, LogNote, NoteLevel, NotedField, Quiet,
 };
 pub use judged::{CitedAt, Flagged, Judged, KeptDeliverable};
 pub use overlap::{ScopeOverlap, SharedPath};

@@ -61,26 +61,37 @@ import {
   type StepNotice,
 } from "@armada/components";
 
-import type { Diff, Evidence, Footprint, Observed, Outcome, Turn, Watched } from "@armada/protocol";
+import type {
+  Diff,
+  Evidence,
+  Footprint,
+  Journalled,
+  Observed,
+  Outcome,
+  Turn,
+  Watched,
+} from "@armada/protocol";
 import type { FileReport, JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
 import type { JobFootprint } from "@armada/protocol";
 import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
 import { Acts, type ConfirmableAct } from "./Acts";
 import { useCallArguments, type Calls, type ReadCall } from "./calls";
 import type { OpenArtifact } from "./opening";
-import { DIFF_CHAPTER, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-keys";
+import { DIFF_CHAPTER, FLEET_LOG, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-keys";
 import { useAtFloor } from "@armada/shell";
 import { DetailSheet, holdOf, type HeldAt, type OpenSheet } from "./Sheets";
 import { chaptersOf } from "./chapters";
 import { clock, span } from "./duration";
 import { Decide } from "./Decide";
 import { factsOf, ordered } from "./facts";
+import { Log } from "./Log";
 import { Opening, phasesOf, type Opens } from "./phases";
 import { recourseOf } from "./recovery";
 import { escalation, renderFor } from "./render";
 import { runOf } from "./run";
 import { StepActs } from "./StepActs";
 import { steeringOf } from "./steering";
+import { NOTHING_FROM_FLEET_YET, notesOf, whyNoNotes } from "./notes";
 import { entriesOf, whyNotWatching } from "./story";
 import { readingOf } from "./reading";
 import { briefOf, whyNoWork, workOf } from "./work";
@@ -155,6 +166,13 @@ export type JobDetailProps = {
    * that filled only after somebody asked is the tab this screen removed.
    */
   observed: Observed;
+  /**
+   * What the Job's own log has said. **The third voice, and the one thing there
+   * is to read before a Drone exists** — `observed` is a Drone's transcript and
+   * is empty for the whole of preparation, which is precisely when somebody
+   * opens this screen to find out what is going on.
+   */
+  journalled: Journalled;
   /** The reads the panel's chapters draw from. */
   recorded: FoldedReads;
   onCopied: (value: string) => void;
@@ -181,6 +199,7 @@ export function JobDetail({
   approving,
   deciding,
   observed,
+  journalled,
   recorded,
   onAct,
   onRedirect,
@@ -260,6 +279,10 @@ export function JobDetail({
   // chapter drawn from the rows alone reads every one of them as a step that
   // has not started. `story.ts` holds the sentences. #324.
   const transcript = whyNotWatching(observed);
+  // What Fleet has done to the Job itself, on the same terms: checked against
+  // the id it was opened for, because this socket lags a selection too.
+  const noted = "log" in journalled && journalled.jobId === job.id ? journalled.log : null;
+  const fleetSaid = useMemo(() => notesOf(noted?.notes ?? []), [noted]);
 
   // What the keyboard can name, built before it is drawn. **The three regions
   // the contextual tier reaches are values here rather than queries later** —
@@ -394,6 +417,17 @@ export function JobDetail({
       run={run.map(named)}
       runElapsed={span(job.created_at, now) ?? undefined}
       runAbsent={whyNoSteps(watched, job.id)}
+      // What Fleet did to the Job itself, above the run. **Drawn at every
+      // state**, not only while a Job is preparing: the lines that belong to no
+      // step are also the ones a reader wants after it stopped — what was
+      // reclaimed, what was adopted, what went outside its scope.
+      fleet={
+        <Log
+          rows={fleetSaid}
+          emptyNote={whyNoNotes(journalled) ?? NOTHING_FROM_FLEET_YET}
+          {...keys.inLog(FLEET_LOG)}
+        />
+      }
       // One animated mark per screen, on the thing being read — and nothing
       // pulses on a Job that is over, where "still working" is a claim no step
       // is making. **The pulse moves with the reading**: with a sheet open the

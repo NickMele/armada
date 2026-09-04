@@ -123,6 +123,22 @@ export type InsideAJobProps = {
   /** Why there is no run to draw, where there is none. */
   runAbsent?: string;
   /**
+   * What Fleet has done to the Job itself — the lines its own log carries that
+   * belong to no step.
+   *
+   * **Above the run, and the Job's rather than a step's.** Cutting a worktree,
+   * running a repository's preparation commands and reclaiming one all happen
+   * with every step `not_started`, so there is no step whose story they are.
+   * Attaching them to the step about to start was rejected: it reads as though
+   * step one is running when it has not begun, which is exactly the confusion
+   * that made a wedged Job look healthy.
+   *
+   * Absent draws nothing. A Job Fleet has recorded nothing about is not a hole
+   * in the screen — the same rule `record` below keeps.
+   */
+  fleet?: ReactNode;
+  fleetLabel?: ReactNode;
+  /**
    * The running mark on the current step animates. One per screen: this is the
    * Job being read, so the tree pulses and the header badge stays static.
    */
@@ -192,6 +208,8 @@ export function InsideAJob({
   runLabel = "The run",
   runElapsed,
   runAbsent = "Nothing serves this Job's workflow, so its steps are unknown.",
+  fleet,
+  fleetLabel = "What Armada has done",
   pulsing = true,
   onSelectStep,
   openSteps,
@@ -216,8 +234,20 @@ export function InsideAJob({
       <div className="armada-inside">
         {/* The run, and the pointers beneath it. Left, at every state. */}
         <div className="armada-inside__run">
+          {/* Above the run, because it is the Job's and not a step's, and
+              because it is what there is to read at the one moment the run has
+              nothing in it. */}
+          {fleet === undefined ? null : (
+            <>
+              <span className="armada-screen__eyebrow">{fleetLabel}</span>
+              <div className="armada-inside__fleet">{fleet}</div>
+            </>
+          )}
+
           <div className="armada-inside__region-head">
-            <span className="armada-screen__eyebrow">{runLabel}</span>
+            <span className="armada-screen__eyebrow" data-spaced={fleet !== undefined || undefined}>
+              {runLabel}
+            </span>
             {runElapsed === undefined ? null : (
               <span className="armada-inside__elapsed">{runElapsed}</span>
             )}

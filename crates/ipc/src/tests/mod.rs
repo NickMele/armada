@@ -13,6 +13,7 @@
 
 mod fixtures;
 mod gates;
+mod journal;
 mod mcp;
 mod reports;
 mod turns;

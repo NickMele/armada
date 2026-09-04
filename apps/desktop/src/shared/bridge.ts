@@ -17,6 +17,7 @@ import type {
   HeldWorktrees,
   History,
   Holdings,
+  Journalled,
   Observed,
   Outcome,
   Proposed,
@@ -140,6 +141,17 @@ export type BridgeState = {
    * evict the state changes that draw it. Separate here for the same reason.
    */
   observed: Observed;
+  /**
+   * What Fleet has done to the Job being watched — its own log, live.
+   *
+   * **Its own piece of state beside `observed`, and its own socket.** The two
+   * answer different questions and neither substitutes for the other: a Drone's
+   * transcript exists only while a Drone does, and this is the only thing there
+   * is to draw while a worktree is being cut. A Job with all its steps
+   * `not_started` has an empty `observed` and a full `journalled`, which is
+   * exactly the moment somebody opens the panel.
+   */
+  journalled: Journalled;
   /**
    * What the open Job's Drone has changed in its worktree.
    *
@@ -525,6 +537,7 @@ export const NOTHING_YET: BridgeState = {
   holds: { workflows: [], manifests: [], models: null },
   watched: { state: "none" },
   observed: { state: "none" },
+  journalled: { state: "none" },
   footprint: { state: "none" },
   history: { state: "none" },
   evidence: { state: "none" },

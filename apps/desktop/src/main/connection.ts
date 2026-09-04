@@ -34,6 +34,7 @@ import type { CallRead, Connection } from "@armada/protocol";
 import type { JobHistory, Recorded } from "@armada/protocol";
 import type { JobDetail, JobSummary, StreamMessage } from "@armada/protocol";
 import { JobCommands } from "./command";
+import { JournalSocket } from "./journal";
 import { ObserveSocket } from "./observe";
 import { JobReader } from "./reader";
 import { HeldReader } from "./holding";
@@ -78,6 +79,12 @@ export class FleetConnection {
   /** The Job whose turns are open. A second socket to Fleet — see `observe.ts`. */
   private observing: string | null = null;
   /**
+   * The Job whose own log is open. **The same Job as `observing`, always** —
+   * both sockets are opened by the same act of opening a Job, and they are two
+   * fields rather than one because each may be down while the other is up.
+   */
+  private reading: string | null = null;
+  /**
    * The token this window sent with the proposal it is waiting on, or `null`.
    *
    * **What tells this window's proposal from anybody else's.** Fleet publishes
@@ -91,6 +98,8 @@ export class FleetConnection {
    */
   private proposalRef: string | null = null;
   private readonly turns: ObserveSocket;
+  /** What Fleet did to the open Job — a third socket. See `journal.ts`. */
+  private readonly notes: JournalSocket;
   /** The claims and the patch, each read when a surface asks — see `review.ts`. */
   private readonly material: ReviewMaterial;
   /**
@@ -118,6 +127,7 @@ export class FleetConnection {
     // where its log is is half a failure.
     this.current = { ...NOTHING_YET, bridge: startingIdentity(wiring.home) };
     this.turns = new ObserveSocket((observed) => this.publish({ observed }));
+    this.notes = new JournalSocket((journalled) => this.publish({ journalled }));
     this.material = new ReviewMaterial((change) => this.publish(change));
     this.watched = new JobReader<{ detail: JobDetail }>({
       route: (jobId) => `/jobs/${encodeURIComponent(jobId)}`,
@@ -201,8 +211,10 @@ export class FleetConnection {
     // Watching ends with the window; the Job does not, because nothing observed
     // is written onto it.
     this.observing = null;
+    this.reading = null;
     this.history.close();
     this.turns.close();
+    this.notes.close();
     this.material.close();
     this.reports.close();
     this.held.close();
@@ -334,6 +346,12 @@ export class FleetConnection {
       // reopening a working socket would restart the transcript from the top.
       if (this.observing !== null && !this.turns.attached()) {
         this.turns.open(fleet.port, this.observing);
+      }
+      // And the Job's own log, on the same terms and for the same reason: a
+      // reopen resets the notes and republishes `opening`, so only a socket
+      // that is actually down is reopened.
+      if (this.reading !== null && !this.notes.attached()) {
+        this.notes.open(fleet.port, this.reading);
       }
       return;
     }
@@ -541,6 +559,12 @@ export class FleetConnection {
     if (this.observing === jobId && !this.turns.attached()) {
       this.turns.open(port, jobId);
     }
+    // The log socket does not end when a step advances — nothing about a Job's
+    // own log is per-Drone — so this only catches one that closed because Fleet
+    // could not read the file, on the next event that says the Job moved.
+    if (this.reading === jobId && !this.notes.attached()) {
+      this.notes.open(port, jobId);
+    }
     // A history that is unfolded grows as the Job moves, so the move that was
     // just delivered is read back rather than left off the end of the list.
     if (this.history.jobId === jobId) void this.history.again(port);
@@ -555,8 +579,16 @@ export class FleetConnection {
    * difference from Pilot.
    */
   async observeJob(jobId: string | null): Promise<void> {
+    const port = this.connected()?.port ?? null;
     this.observing = jobId;
-    this.turns.open(this.connected()?.port ?? null, jobId);
+    this.turns.open(port, jobId);
+    // **The Job's own log opens with the transcript, on one act and not two.**
+    // A person opening a Job wants what happened to it; which of the two
+    // sockets carries a given line is Fleet's business rather than theirs, and
+    // a second channel would let a surface open one and forget the other —
+    // which is the empty panel this exists to fix, arriving by another route.
+    this.reading = jobId;
+    this.notes.open(port, jobId);
   }
 
   // ------------------------------------------------- one Job's work, reviewed

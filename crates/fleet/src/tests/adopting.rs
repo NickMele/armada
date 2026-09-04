@@ -27,10 +27,15 @@ use std::time::Duration;
 
 use adapter_traits::{CallDetail, DroneEvent};
 use config::ResolvedWorkflow;
-use core_model::{EscalationTrigger, JobId, JobStatus, StepId, Timestamp, TransitionReason};
+use core_model::{
+    Actor, EscalationTrigger, JobId, JobStatus, StepId, StepLevelTrigger, StepTarget, Target,
+    Timestamp, TransitionReason,
+};
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Sketch};
 
+use crate::adrift::Adrift;
 use crate::daemon::Fleet;
+use crate::resume::Redirection;
 use crate::session::LiveSession;
 use crate::silence::{Liveness, Poke, Quiet, Vigil};
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
@@ -291,10 +296,18 @@ async fn a_drone_whose_process_is_gone_still_interrupts_its_job() {
     let home = TempDir::new();
     let first = a_fleet(
         &home,
-        // Long enough to be spawned and read, short enough to be gone before
-        // the second Fleet asks. The wait below is on the pid rather than on
-        // the clock, so nothing here races.
-        FakeHarness::running("/bin/sh", &["-c", "echo CALLED"]).reading("CALLED", vec![called()]),
+        // **Alive until Fleet has told it, and gone the moment Fleet goes.**
+        // Both edges are events rather than timings, which is what this
+        // comment used to claim and did not have: `echo CALLED` on its own
+        // raced the opening brief, and on a loaded machine the shell was
+        // already gone when Fleet wrote — `NoDrone { DiedBeforeItWasTold }`,
+        // before the case under test began. Reading stdin to the end holds the
+        // process open for exactly as long as Fleet holds the write end, so
+        // dropping the Fleet is what ends it. This is `#443`'s rule — a
+        // guaranteed lifetime rather than a sleep tuned on an idle machine —
+        // in a fourth place it applies.
+        FakeHarness::running("/bin/sh", &["-c", "echo CALLED; cat >/dev/null"])
+            .reading("CALLED", vec![called()]),
     );
     let job = started(&first, &home).await;
     assert!(spoke(&first, 1).await, "the Drone never said anything");
@@ -521,4 +534,180 @@ async fn past_the_threshold(fleet: &Fixture, clock: &Held, waiting_for: &str) ->
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
     panic!("the vigil never {waiting_for}");
+}
+
+/// A Fleet holding an adopted Drone, the Job it is on, and its pid.
+///
+/// **The whole of the first case's story, folded into a call**, because what
+/// the three cases below are about is the state it leaves rather than the way
+/// it is reached — and each of them still needs a real orphan, for this
+/// module's own reason.
+async fn adopted(home: &TempDir) -> (Fixture, JobId, u32) {
+    let first = a_fleet(home, a_drone_that_keeps_working());
+    let job = started(&first, home).await;
+    assert!(spoke(&first, 1).await, "the Drone never said anything");
+    let pid = pid_of(&first).await;
+    drop(first);
+    assert!(alive(pid), "the Drone was meant to outlive its Fleet");
+
+    let second = a_fleet(home, a_drone_that_keeps_working());
+    assert_eq!(
+        second.reconcile().await.expect("the boot read").adopted,
+        vec![job.clone()],
+        "every case here is about an adopted Drone, so it has to have been adopted"
+    );
+    (second, job, pid)
+}
+
+/// Stop the adopted Drone's step under a trigger, the way a gate stops one:
+/// the step first and then the Job, which is the only order the machines admit.
+///
+/// **Moved rather than driven**, for `crate::tests::stuck`'s reason: what is
+/// under test is which acts the stopped step admits, not the gate that stopped
+/// it.
+async fn stopped_under(fleet: &Fixture, job: &JobId, why: EscalationTrigger) {
+    let record = fleet.load(job).await.unwrap();
+    let record = fleet
+        .move_step(
+            &record,
+            &StepId::new("implement"),
+            StepTarget::Stopped(StepLevelTrigger::of(why).expect("a step-level trigger")),
+        )
+        .await
+        .unwrap();
+    fleet
+        .move_job(&record, Target::Escalated(why), Actor::Fleet)
+        .await
+        .unwrap();
+}
+
+/// One Job as the wire serves it, and the acts it offers, spelled as the
+/// operations that perform them.
+async fn offered(fleet: &Fixture, job: &JobId) -> Vec<String> {
+    api::Queries::get_job(fleet, ipc::JobId::from(job))
+        .await
+        .expect("a Job that exists")
+        .stuck
+        .expect("a Job that stopped")
+        .recourse
+        .iter()
+        .map(|act| act.as_wire().to_string())
+        .collect()
+}
+
+/// **The defect, and it is the offer rather than the act.** The badge above the
+/// button says nothing is reading this Drone; the button beside it used to be a
+/// redirect, and `Session::redirect` refuses one. A slot that is full was read
+/// as a pipe that is open, and adoption is the case where those come apart.
+///
+/// **What is left is a redispatch and only a redispatch**, because `unheard` is
+/// Job-level and a restart needs a step that stopped. That is `stalled`'s own
+/// shape one act shorter, and the missing act is named in this file's report
+/// rather than papered over here.
+#[tokio::test]
+async fn an_unheard_job_is_not_offered_a_redirect_nothing_can_deliver() {
+    let home = TempDir::new();
+    let (fleet, job, pid) = adopted(&home).await;
+    let record = fleet.load(&job).await.unwrap();
+    fleet
+        .move_job(
+            &record,
+            Target::Escalated(EscalationTrigger::Unheard),
+            Actor::Fleet,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        offered(&fleet, &job).await,
+        ["redispatch_job"],
+        "the Drone is in the slot and there is no pipe into it"
+    );
+
+    // **And the act that was withheld is the one Fleet refuses**, which is the
+    // agreement every case in `crate::tests::stuck` asserts: a classification
+    // that offers what an act declines is a person pressing a button for a 409.
+    let said = Redirection::saying("read tests/parse.rs first").expect("something to act on");
+    let refused = fleet
+        .redirect(&job, &said)
+        .await
+        .expect_err("there is no pipe to redirect down");
+    assert!(
+        matches!(refused, Adrift::NotTold { .. }),
+        "the refusal is the session's: {refused:?}"
+    );
+
+    end(pid);
+}
+
+/// **The act that works, offered where it can be taken.** A step that stopped
+/// beneath an adopted Drone leaves a person the restart — and the restart is an
+/// act rather than an offer because it ends the unreadable Drone on the way
+/// through, which is the one thing Fleet can still do to an orphan.
+#[tokio::test]
+async fn a_stopped_step_under_an_adopted_drone_offers_the_restart_and_it_lands() {
+    let home = TempDir::new();
+    let (fleet, job, pid) = adopted(&home).await;
+    stopped_under(&fleet, &job, EscalationTrigger::GateFailure).await;
+
+    assert_eq!(
+        offered(&fleet, &job).await,
+        ["override_verdict", "restart_step", "redispatch_job"],
+        "the redirect goes with the pipe and the restart arrives with the stopped step"
+    );
+
+    fleet
+        .restart_step(&job, None)
+        .await
+        .expect("the act the classification named");
+
+    // **The unreadable Drone is ended, not left standing beside a fresh one.**
+    // A restart that refused over it — which is what `DroneStillThere` did —
+    // left every act on this Job refused.
+    assert!(
+        gone(pid).await,
+        "the group signal reached the process Fleet could not speak to"
+    );
+    let record = fleet.load(&job).await.unwrap();
+    assert_ne!(
+        record.status(),
+        JobStatus::Escalated,
+        "the Job left the status a person found it in: {:?}",
+        record.status()
+    );
+
+    // Nothing adopted is in the slot any more, whether or not admission has
+    // already put a fresh Drone there.
+    let slot = fleet.the_only_slot().await;
+    let held = slot.lock().await;
+    let still_adopted = held
+        .as_ref()
+        .and_then(|at_work| at_work.session().adopted())
+        .map(|adopted| adopted.pid());
+    assert_eq!(still_adopted, None, "the orphan is off the slot");
+    let fresh = held.as_ref().map(|at_work| at_work.session().pid());
+    drop(held);
+    if let Some(fresh) = fresh {
+        end(fresh);
+    }
+}
+
+/// **The other act that sentence named**, checked rather than assumed. A gate
+/// re-run reads the baseline the step entered with, and an adopted Drone's slot
+/// carries none — the previous Fleet held it — so the second reading would
+/// answer a different question from the first and then try to tell a Drone
+/// nothing can be told. It is withheld on the same reading the redirect is.
+#[tokio::test]
+async fn an_undecided_gate_under_an_adopted_drone_offers_no_re_run() {
+    let home = TempDir::new();
+    let (fleet, job, pid) = adopted(&home).await;
+    stopped_under(&fleet, &job, EscalationTrigger::GateUndecided).await;
+
+    assert_eq!(
+        offered(&fleet, &job).await,
+        ["restart_step", "redispatch_job"],
+        "no re-run and no override: nothing ruled, and nothing can be asked again"
+    );
+
+    end(pid);
 }
