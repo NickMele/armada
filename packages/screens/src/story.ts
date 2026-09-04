@@ -331,12 +331,20 @@ function rowOf(row: Turn): LogRow {
     case "unrecognised":
       // A kind this Bridge has no case for. Drawn as itself rather than
       // dropped: a row nobody can read is a finding, and a missing row is not.
+      //
+      // **The kind is in the sentence, not only behind it.** Five of these
+      // arrived across four seconds carrying five different kinds and read as
+      // one error repeated, because the only thing telling them apart was a
+      // payload chip nobody opens five times. The wire's own word is the whole
+      // finding — what Fleet sent that this build cannot draw — so it goes
+      // where a person reads first. It stays on the payload too, so the row
+      // still opens to something. #379.
       return {
         id,
         at,
         actor,
         kind,
-        message: "A row this Bridge has no reading for",
+        message: `A row this Bridge has no reading for: ${saw.kind}`,
         payload: [{ text: saw.kind, named: "meta" }],
       };
     default:
