@@ -268,6 +268,14 @@
   size = "12px"
   status = "Specified"
 
+[icons.hard-drive]
+  means = "A drum lying on its side, cut through by a line running the full width of the grid, with two short marks below it — disk, drawn as the object and never as anything done to one"
+  group = "Navigation"
+  size = "16px"
+  status = "Specified"
+  reserved = "The Worktrees surface only. Never the act of reclaiming, and never a delete or a sweep control — a glyph that drew deletion would promise the bulk act that surface exists to replace. Never storage-in-general, a database or a file."
+  notes = "Added 2026-09-03 for Worktrees, the surface listing every worktree fleet is holding that it will not give back on its own — a branch with unmerged commits, files an agent never committed, a Job still running — with the reason beside each, so a person takes back the ones they look at and approve. It names that destination and nothing that happens on it. It is the only horizontal vessel in the Navigation set: clipboard-list is an upright board, message-square a bubble with a tail, and bell, stethoscope and file-cog are each an outline with something drawn on or inside it — none of them is a wide low drum cut edge to edge. Its two interior dots are fine here where they would not be on a badge, because rule 3's interior-detail floor is the 12px badge and the rail draws at 16px: at 16 the two marks sit clear of the band above them, and at 12 they begin to merge into it, which is why this row's size is not \"12 and 16px\". Refused before it was proposed: archive is superseded's and its own row claims the lidded box as a unique outline in the badge set, so a second surface wearing it would spend that; database would name SQLite, which Armada actually has, so it would name the wrong object. Row only — the surfaces array and the digit binding that reach it are Bridge's and land with #401."
+
 [icons.hourglass]
   means = "nothing — banned outright"
   group = "Banned"

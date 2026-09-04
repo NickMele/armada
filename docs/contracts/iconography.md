@@ -335,9 +335,15 @@ it deliberately takes none, is an open question.
 
 16px, `--fg-muted` at rest, `--fg-default` when active. Never
 status-coloured. The full mapping (Job Board, Alerts, Doctor, Manifest,
-Helm) is `packages/icons/icons.toml`, group
+Helm, Worktrees) is `packages/icons/icons.toml`, group
 `Navigation` — `eye` and `file-cog` are shared assignments, carried under
 their own primary groups with a `Navigation` usage entry.
+
+**`hard-drive` is Worktrees' and names the destination, never the act.** A
+glyph drawing deletion would promise the bulk reclaim that surface exists to
+replace. Its two interior dots survive because a rail draws at 16px and rule
+3's interior-detail floor is the 12px badge; they are the reason its row is
+not `12 and 16px`.
 
 **No nautical iconography.** A ship's wheel or compass for Helm is the exact
 failure P1 legislates against — metaphor confined to proper nouns. Helm is a
@@ -474,6 +480,8 @@ megaphone      job_status.escalated only. Never an alert or a notification —
 wrench         job_status.awaiting_repair only. Never settings, never a
                Manifest, and never an action — repairing is what a person does
                off the badge, not a button Armada draws
+hard-drive     the Worktrees surface only. Never the act of reclaiming, and
+               never a delete or a sweep control
 chevron-down   disclosure only. The caret segment of a split button, and the
                one exception to "primary and secondary buttons are label-only"
                — it is the whole content of its own divided segment, structural
