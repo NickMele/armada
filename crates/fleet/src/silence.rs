@@ -106,11 +106,11 @@ impl Liveness {
     /// `.armada/workflows/` cannot move a running Job's terms under an
     /// approval nobody re-gave.
     ///
-    /// **`Live` reaches this boundary and no further, because the Manifest is
-    /// read once.** A Job declaring nothing follows what `Fleet::manifest`
-    /// holds into its next step; an edit to the file reaches it only across a
-    /// restart. Resolving here rather than folding the repository's value into
-    /// the constant keeps that a fact about when the file is read.
+    /// **`Live` reaches the file since `#430`, and this boundary is as far as
+    /// it goes.** The Manifest `Fleet` holds re-reads its two live keys when
+    /// `armada.yml` is saved — resolving here rather than folding them into the
+    /// constant is what makes that possible — and the pair is read once per
+    /// step and held on the slot, so no save moves a running step's terms.
     pub fn at(self, manifest: &Manifest, job: &Job, step: &StepId) -> Liveness {
         // Tier two. A repository stating one half inherits the other from the
         // constant, which is why this is built rather than matched on.

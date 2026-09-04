@@ -112,22 +112,31 @@ number from one file to the other and it stops working.
 | Where | Read by | When |
 | --- | --- | --- |
 | `crates/armada/src/serve.rs` | the composition root | daemon start |
-| `armada.yml`'s `drone:` | `config::Manifest` | daemon start, resolved at every step boundary |
+| `armada.yml`'s `drone:` | `config::Manifest` | daemon start and on every save, resolved at every step boundary |
 | a WorkflowDef step | `config::Step` | frozen at Job creation, resolved at every step boundary |
 
 `fleet::Liveness::at` is the only place that order is written. **Each half falls
 back on its own** — a repository stating a threshold and no poke budget inherits
 the budget, and a step may override either without restating the other.
 
-**`Live` reaches the step boundary and no further, because the file is read
-once.** A Job whose step declares nothing follows whatever Fleet is holding into
-its next step; editing `armada.yml` under a running Fleet changes nothing until
-it restarts. That is a property of when the Manifest is loaded rather than of
-the resolution, and it is stated here because `lifetime = "Live"` on its own
-reads as a stronger promise than the system makes. **Whether a Manifest should
-be re-read when it changes is not decided and is not decided here** — nothing in
-the file is re-read today, so this key inherits the answer rather than raising
-the question.
+**`Live` reaches the file, and stops at the step boundary.** This paragraph said
+the opposite until `#430`: `armada.yml` was read once at daemon start, so the
+resolution was live against a file that was not, and editing it changed nothing
+until a restart. `crates/armada/src/watching.rs` now watches the file and
+`crates/config/src/live.rs` adopts what a re-read may move, so a Job whose step
+declares nothing follows an edit into its next step.
+
+**Only the keys this table marks `Live` move, and only at a boundary.** A
+`checks:` or `commands:` edit is *Frozen for the Job* — every workflow was
+resolved against the registry the file declared at start, and adopting a new one
+would leave a resolved step pointing at a Check the Manifest no longer agrees
+with. Such a change is named on the daemon's console as needing a restart rather
+than swallowed. And the live pair is resolved once per step and held for as long
+as the Drone is, so a save cannot move the terms a running step began under.
+
+**A save that will not parse changes nothing.** The last good configuration stays
+in force and the refusal is printed. A fleet that stopped because somebody
+mistyped a number would be worse than one that ignored the edit.
 
 ## Two tiers of path boundary, and only one of them is configuration
 
