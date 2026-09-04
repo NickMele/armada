@@ -20,7 +20,7 @@
 //! **No block here is written from a `ResolvedCheck`'s `run` string.** The step
 //! block comes from [`ResolvedStep::label`] and the Job's own fields, and the
 //! blocks that outlive the turn are not here at all — the sentence this module
-//! was split on. [`crate::terms`] holds the four a step puts to whoever works
+//! was split on. [`crate::terms`] holds the five a step puts to whoever works
 //! it; [`Stopped`] stayed, because it is why a resuming brief differs from a
 //! first one and the one turn it was built for consumes it.
 
@@ -32,7 +32,7 @@ use core_model::{
 use verification::TheBaseMoved;
 
 use crate::crossing::{Crossed, Produced, Reconciling, Redirected};
-use crate::terms::{Checking, Declaring, Delivering};
+use crate::terms::{Checking, Declaring, Delivering, Splitting};
 
 /// Layer 1, verbatim from the Agent Prompt Contract's M1 rendering: **mechanics,
 /// never task content**, identical on every step of every Job, which is what
@@ -534,6 +534,12 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed
     }
     if let Some(step) = workflow.steps().iter().find(|step| step.id() == at) {
         blocks.headed(&step_block(step));
+        // **Before the file the part delivers**, on the one workflow where
+        // both appear: what the part is for decides what goes in the file, and
+        // a Drone reading the path first has already started writing.
+        if let Some(splitting) = Splitting::at(workflow, at) {
+            blocks.headed(splitting.text());
+        }
         if let Some(delivers) = Delivering::at(step) {
             blocks.headed(delivers.text());
         }
