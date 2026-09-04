@@ -270,28 +270,16 @@ pub struct ResolvedStep {
     /// seconds. **`None` is the step declaring none**, and none means the
     /// value Fleet is running with rather than a number restated here.
     ///
-    /// # A frozen override beneath a live setting, and which one wins
-    ///
-    /// `crates/config/settings.toml` marks both halves of the pair `lifetime =
-    /// "Live"`, and this field is part of a WorkflowDef frozen at Job
-    /// creation. The two say different things about different tiers, and the
-    /// order between them is: **the step's override wins where it exists, and
-    /// `Live` governs the tier an absent override falls back to.**
-    ///
-    /// It could not be otherwise without giving up the freeze. Reading this
+    /// **Frozen, while the setting it overrides is marked live.** Reading it
     /// live would mean re-reading `.armada/workflows/`, which is the one thing
-    /// this module exists to refuse — an edit to the file would move a running
-    /// Job's patience under an approval nobody re-gave.
-    ///
-    /// **And `Live` stays honest**, because the fallback is resolved at each
-    /// step boundary rather than once per Job: a Job whose steps declare
-    /// nothing picks up a changed setting at its next step, with no restart and
-    /// no redispatch.
+    /// this module exists to refuse: an edit would move a running Job's
+    /// patience under an approval nobody re-gave. The order between the two
+    /// tiers is `fleet::Liveness::at`'s, and it is the only place that resolves
+    /// them.
     ///
     /// Seconds, and the unit is in the name, following the schema's
     /// `heartbeat_interval_minutes`. A `u32` rather than a `Duration` because
-    /// what the file wrote is what the row holds; `fleet::Liveness` is where it
-    /// becomes a duration, once.
+    /// what the file wrote is what the row holds.
     quiet_after_seconds: Option<u32>,
     /// How many nudges this step's quiet Drone gets before the Job escalates as
     /// stalled. **`None` is the step declaring none**, with

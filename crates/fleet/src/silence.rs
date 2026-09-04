@@ -27,8 +27,8 @@ use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
-    Actor, Component, Envelope, EscalationTrigger, FieldValue, JobId, JobStatus, Level,
-    ResolvedStep, StepId, Target,
+    Actor, Component, Envelope, EscalationTrigger, FieldValue, Job, JobId, JobStatus, Level,
+    StepId, Target,
 };
 
 use crate::adrift::Adrift;
@@ -53,16 +53,9 @@ use crate::working::{StoodDown, Working};
 ///
 /// **The value in force is the watched step's, and nothing aggregates.** A
 /// Drone belongs to one step, so a Job spanning four steps is four independent
-/// patiences — never a sum and never the strictest of them. The poke budget
-/// already resets at the boundary, because `crate::working::Working` is
-/// per step.
-///
-/// **Resolved once, at the step boundary, and held on the slot.** [`at`](
-/// Liveness::at) is the resolution and `crate::working::Working` is where the
-/// answer sits, because `watch_silence` compares against the threshold before
-/// it touches the store: a per-step value read off the Job would cost that read
-/// every turn on every healthy Drone, which is the one reading this vigil is
-/// built to avoid.
+/// patiences — never a sum and never the strictest of them. [`at`](Liveness::at)
+/// resolves one at each boundary and `crate::working::Working` holds it from
+/// there, which is also where the poke budget resets.
 ///
 /// [`StepNorms`]: crate::StepNorms
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -91,54 +84,44 @@ impl Liveness {
         self.pokes
     }
 
-    /// What this step gets, given what Fleet is running with.
+    /// What one step of one Job gets, given what Fleet is running with.
     ///
-    /// # The chain is two layers, and one of them is not built
+    /// # A live setting under a frozen step, and which wins
     ///
-    /// `crates/config/settings.toml` says the pair resolves *Kit → Manifest*,
-    /// and there is no Kit anywhere in this workspace. What exists is the
-    /// composition root's constant — `armada::serve::PROVISIONAL_LIVENESS`,
-    /// which is `self` here — and the step, which is this argument. The
-    /// Manifest tier is a key `armada.yml` does not carry, and `#60` did not
-    /// add one: a key ahead of the code that reads it is the same defect this
-    /// issue is about, wearing the other hat.
-    ///
-    /// # Which wins when a live setting meets a frozen step
-    ///
-    /// Both rows are `lifetime = "Live"` and a step override rides a
-    /// WorkflowDef frozen at Job creation. **The step's override wins where it
-    /// exists, and `Live` governs the tier it falls back to** — which is not a
-    /// compromise between the two words but what each of them is about. A
-    /// setting is live because a person may change what Fleet is running with
-    /// and have it take effect; a frozen step is frozen because an edit to
-    /// `.armada/workflows/` must not move a running Job's terms under an
+    /// Both rows are `lifetime = "Live"` and a step's override rides a
+    /// WorkflowDef frozen at Job creation. **The override wins where it
+    /// exists, and `Live` governs the tier it falls back to** — not a
+    /// compromise, but what each word is about. A setting is live so a person
+    /// may change what Fleet runs with; a step is frozen so an edit to
+    /// `.armada/workflows/` cannot move a running Job's terms under an
     /// approval nobody re-gave. Neither claim reaches the other's tier.
     ///
-    /// **And nothing here is stale for it**, because this is called at each
-    /// step boundary rather than once per Job: a Job whose steps declare
-    /// nothing follows a changed setting into its next step, with no restart
-    /// and no redispatch. What a Job cannot do is have its *declared* patience
-    /// change underneath it, which is the freeze working.
+    /// **And `Live` stays true**, because this is asked at each step boundary
+    /// rather than once per Job: a Job whose steps declare nothing follows a
+    /// changed setting into its next step, with no restart. What it cannot do
+    /// is have its *declared* patience change underneath it.
     ///
-    /// # Two settings, resolved separately
+    /// # The chain is shorter than the rows say
     ///
-    /// Each half falls back on its own. A step naming only
-    /// `quiet_after_seconds` gets its own patience and Fleet's poke budget,
-    /// because wanting longer between pokes is not wanting more pokes — and a
-    /// resolution that took the pair together would make overriding either half
-    /// mean restating both.
+    /// They resolve *Kit → Manifest*, and this workspace has no Kit: what
+    /// exists is the composition root's constant — `self` — and the step.
+    /// `armada.yml` carries no key and `#60` added none, a key ahead of its
+    /// reader being this issue's own defect wearing the other hat.
     ///
-    /// **Nothing aggregates.** The value in force is the watched step's, so a
-    /// Job spanning four steps is four independent patiences — never a sum and
-    /// never the strictest of them. The poke budget resets with it, because the
-    /// slot that counts spent pokes is per step already.
-    pub fn at(self, step: &ResolvedStep) -> Liveness {
+    /// Each half falls back on its own, and a step naming neither takes both.
+    pub fn at(self, job: &Job, step: &StepId) -> Liveness {
+        // A step this workflow does not name takes both, which no dispatch can
+        // produce — the id came out of this same workflow — and a restart can,
+        // where the step comes off a record a Fleet that is gone wrote.
+        let Some(declared) = job.workflow().step(step) else {
+            return self;
+        };
         Liveness {
-            quiet_after: step
+            quiet_after: declared
                 .quiet_after_seconds()
                 .map(|seconds| Duration::from_secs(u64::from(seconds)))
                 .unwrap_or(self.quiet_after),
-            pokes: step.poke_limit().unwrap_or(self.pokes),
+            pokes: declared.poke_limit().unwrap_or(self.pokes),
         }
     }
 }

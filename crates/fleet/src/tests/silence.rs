@@ -31,13 +31,15 @@ use std::time::Duration;
 use adapter_traits::{CallDetail, DroneEvent};
 use config::ResolvedWorkflow;
 use core_model::{EscalationTrigger, JobStatus, StepState, Timestamp, TransitionReason};
-use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Sketch};
+use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Patience, Sketch};
 
 use crate::clock::Clock;
 use crate::daemon::Fleet;
 use crate::silence::{Liveness, Poke, Quiet, Vigil};
-use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
+use crate::tests::daemon::{a_proposal, diff_evidence, fitted_with, one, worktree_directory};
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
+use crate::Ruling;
 
 type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 
@@ -139,6 +141,56 @@ fn a_drone_that_answers() -> FakeHarness {
     .reading("ANSWERED", called())
 }
 
+/// Two steps, neither of them content with what Fleet is running with.
+///
+/// `implement` asks for a quarter of the threshold and `verify` for five times
+/// it, which is the shape `#60` is about: a quick step and a slow one, told
+/// apart by the file rather than by a constant. Neither declares a poke budget,
+/// so both inherit Fleet's — the halves fall back separately.
+fn two_steps_of_different_patience() -> ResolvedWorkflow {
+    testkit::patient(
+        &[
+            Sketch {
+                id: "implement",
+                label: "Implement",
+                evidence_type: Some("diff"),
+                gates: &[],
+                judged_on: &[],
+                scope: None,
+                gaming: None,
+            },
+            Sketch {
+                id: "verify",
+                label: "Verify",
+                evidence_type: Some("diff"),
+                gates: &[],
+                judged_on: &[],
+                scope: None,
+                gaming: None,
+            },
+        ],
+        &[
+            Patience {
+                step: "implement",
+                quiet_after_seconds: Some(IMPATIENT.as_secs() as u32),
+                poke_limit: None,
+            },
+            Patience {
+                step: "verify",
+                quiet_after_seconds: Some(PATIENT.as_secs() as u32),
+                poke_limit: None,
+            },
+        ],
+    )
+}
+
+/// What `implement` asks for: a quarter of the shipped threshold, so a poke at
+/// this silence is one no Fleet-wide value could have produced.
+const IMPATIENT: Duration = Duration::from_secs(30);
+/// What `verify` asks for: five times it, so a silence that would have spent a
+/// poke and a half against the shipped value passes unremarked.
+const PATIENT: Duration = Duration::from_secs(600);
+
 /// A Fleet watching one step with that Drone on it, and a Judge that fails
 /// every call — **nothing here may ask a model anything**, and a Judge that
 /// answered would let a regression into the cheap half pass unseen.
@@ -148,12 +200,23 @@ fn a_watched_fleet(
     clock: Arc<Held>,
     liveness: Liveness,
 ) -> Fixture {
+    watching(home, one_step(), harness, clock, liveness)
+}
+
+/// The same, over whichever workflow the case is about.
+fn watching(
+    home: &TempDir,
+    workflow: ResolvedWorkflow,
+    harness: FakeHarness,
+    clock: Arc<Held>,
+    liveness: Liveness,
+) -> Fixture {
     let mut fittings = fitted_with(
         home,
         FakeWorkProduct::changed(&["src/parse.rs"]).showing("+    panic!();\n"),
         harness,
     );
-    fittings.workflows = one(one_step());
+    fittings.workflows = one(workflow);
     fittings.clock = clock;
     fittings.liveness = liveness;
     fittings.judge = Arc::new(FakeJudge::that_fails("no model is asked about silence"));
@@ -174,6 +237,16 @@ async fn started(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
 /// Push the clock past the threshold and turn until the vigil says something.
 async fn after_the_threshold(fleet: &Fixture, clock: &Held, waiting_for: &str) -> Quiet {
     clock.on(QUIET_AFTER.as_secs() + 60);
+    turning_until_quiet(fleet, waiting_for).await
+}
+
+/// Turn until the vigil says something, with the clock left where it is.
+///
+/// **Separate from [`after_the_threshold`] because which threshold matters.**
+/// A case about a step's own patience decides for itself how far to push, and
+/// a helper that pushed past the Fleet-wide value would make every case look
+/// alike whatever the step declared.
+async fn turning_until_quiet(fleet: &Fixture, waiting_for: &str) -> Quiet {
     for _ in 0..400 {
         let turned = fleet.turn().await.expect("a turn");
         if let Some(quiet) = turned.each.into_iter().find_map(|worked| worked.quiet) {
@@ -362,6 +435,169 @@ async fn a_drone_that_answers_the_poke_is_heard_and_not_escalated() {
         JobStatus::Running,
         "the Drone answered and was escalated anyway"
     );
+}
+
+/// **What `#60` is worth, in one case**: two steps, two patiences, and a vigil
+/// that waits differently for each.
+///
+/// The Fleet-wide pair is the shipped one and neither step gets it. `implement`
+/// is poked at a silence a quarter of it — one no Fleet-wide value could have
+/// produced — and `verify` sits through twice it untouched, which against the
+/// constant would have been two pokes and half a third.
+///
+/// **Both bounds are asserted, not just the firing one.** A test that only
+/// showed the quick step being poked early would pass over a Fleet that had
+/// simply become impatient with everything.
+#[tokio::test]
+async fn each_step_is_watched_against_its_own_patience() {
+    let home = TempDir::new();
+    let clock = Arc::new(Held::started());
+    let fleet = watching(
+        &home,
+        two_steps_of_different_patience(),
+        a_drone_that_goes_quiet(),
+        Arc::clone(&clock),
+        Liveness::of(QUIET_AFTER, 2),
+    );
+    let job = started(&fleet, &home).await;
+
+    // Past what `implement` asked for and nowhere near what Fleet is running
+    // with.
+    clock.on(IMPATIENT.as_secs() * 2);
+    let poked = turning_until_quiet(&fleet, "poked the Drone on the quick step").await;
+    assert!(
+        matches!(poked.said, Vigil::Poked { spent: 1 }),
+        "{:?}",
+        poked.said
+    );
+    assert!(
+        poked.after >= IMPATIENT && poked.after < QUIET_AFTER,
+        "the step's own threshold fired and Fleet's could not have: {:?}",
+        poked.after
+    );
+
+    // On to the second step, which is where the resolution happens again.
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
+    let turned = fleet.turn().await.expect("a turn");
+    assert!(
+        matches!(turned.ruled(), Some(Ruling::Advanced { .. })),
+        "the first step did not advance: {:?}",
+        turned.ruled()
+    );
+    assert!(
+        working_on(&fleet, "verify").await,
+        "no Drone reached the patient step"
+    );
+
+    // **Pushed only once the new Drone is in the slot.** A silence measured
+    // from before the spawn is a silence the spawn resets, and the case would
+    // pass over a step that had been poked on the first turn.
+    clock.on(QUIET_AFTER.as_secs() * 2);
+    for _ in 0..10 {
+        let turned = fleet.turn().await.expect("a turn");
+        let quiet = turned.quiet();
+        assert!(
+            quiet.is_none(),
+            "the slow step was poked at a silence it declared itself content \
+             with, which is what Fleet's own value would have done: {quiet:?}"
+        );
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+
+    // And it is patience rather than indifference: past its own threshold the
+    // same Drone is poked, with the budget the boundary handed back.
+    clock.on(PATIENT.as_secs());
+    let waited = turning_until_quiet(&fleet, "poked the Drone on the slow step").await;
+    assert!(
+        matches!(waited.said, Vigil::Poked { spent: 1 }),
+        "the poke budget resets at the step boundary: {:?}",
+        waited.said
+    );
+    assert!(waited.after >= PATIENT, "{:?}", waited.after);
+    assert_eq!(waited.step.as_str(), "verify");
+    assert_eq!(
+        fleet.load(&job).await.unwrap().status(),
+        JobStatus::Running,
+        "one poke escalates nothing, whichever step spent it"
+    );
+}
+
+/// **The other half, resolved on its own.** This step says only that its Drone
+/// gets no nudge and says nothing about how long silence may run — so it waits
+/// out Fleet's threshold and then escalates without spending a poke.
+///
+/// One key holding a pair could not say this. It is the whole of why there are
+/// two rows: a step wanting fewer pokes would have had to restate a duration it
+/// has no opinion about.
+#[tokio::test]
+async fn a_step_that_asks_for_no_pokes_escalates_without_spending_one() {
+    let home = TempDir::new();
+    let clock = Arc::new(Held::started());
+    let fleet = watching(
+        &home,
+        one_step_asking(Patience {
+            step: "implement",
+            quiet_after_seconds: None,
+            poke_limit: Some(0),
+        }),
+        a_drone_that_goes_quiet(),
+        Arc::clone(&clock),
+        Liveness::of(QUIET_AFTER, 2),
+    );
+    let job = started(&fleet, &home).await;
+
+    let said = after_the_threshold(&fleet, &clock, "escalated the Job").await;
+    assert!(
+        matches!(said.said, Vigil::Escalated { pokes: 0 }),
+        "the step's own budget was spent before it was offered: {:?}",
+        said.said
+    );
+    assert!(
+        said.after >= QUIET_AFTER,
+        "the threshold is Fleet's, because this step declared none: {:?}",
+        said.after
+    );
+    assert_eq!(
+        fleet.load(&job).await.unwrap().status(),
+        JobStatus::Escalated
+    );
+}
+
+/// Whether the Drone in the slot is on that step, waited for rather than
+/// assumed: the boundary ends one Drone and the next turn starts the next, so
+/// which turn the new slot appears on is not something a case should hard-code.
+async fn working_on(fleet: &Fixture, step: &str) -> bool {
+    for _ in 0..400 {
+        let on = fleet
+            .the_only_slot()
+            .await
+            .lock()
+            .await
+            .as_ref()
+            .map(|at_work| at_work.standing().1);
+        if on.map(|id| id.as_str() == step).unwrap_or(false) {
+            return true;
+        }
+        fleet.turn().await.expect("a turn");
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    false
+}
+
+/// One step, gated on nothing, saying what it is prepared to wait through.
+fn one_step_asking(patience: Patience<'_>) -> ResolvedWorkflow {
+    testkit::patient(
+        &[Sketch {
+            id: "implement",
+            label: "Implement",
+            evidence_type: Some("diff"),
+            gates: &[],
+            judged_on: &[],
+            scope: None,
+            gaming: None,
+        }],
+        &[patience],
+    )
 }
 
 /// How much the Drone in the slot has said so far. **A count and never the

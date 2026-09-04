@@ -151,7 +151,7 @@ where
         // the orphan was recorded on: an adopted Drone is on a step somebody
         // declared, and a restart is no reason to watch it against a different
         // number than the Fleet that spawned it did.
-        let liveness = self.liveness_at(job, adopted.step());
+        let liveness = self.liveness().at(job, adopted.step());
         let taken = Working::adopting(adopted, worktree, taps, liveness, self.now());
         // The first thing written through the new handle, so the row lands in
         // the transcript between the last line the previous Fleet read and

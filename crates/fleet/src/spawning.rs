@@ -196,7 +196,7 @@ where
             // This step's patience, resolved here and held for as long as the
             // slot lives. Off `job`, which is the record the Job froze — the
             // one place the step's own declaration exists.
-            self.liveness_at(job, step),
+            self.liveness().at(job, step),
             self.now(),
         ));
         // The first row of this step's record, written by Armada, before the

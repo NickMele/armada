@@ -156,7 +156,16 @@ pub fn workflow() -> FrozenWorkflow {
                 // — and a column that lost the difference would silently spawn
                 // every step on the Job's model again.
                 Some(ModelName::new("the-steps-own-model").expect("a model name")),
-            ),
+            )
+            // Carried on the shared fixture for `when`'s reason again, and
+            // with the halves set to different numbers: one step declares both
+            // and one declares neither, so every round trip in this crate
+            // walks the value and its absence. Absent is the step deferring to
+            // what Fleet is running with, which is not the same sentence as a
+            // number, and a column that lost the difference would put every
+            // step back on one constant.
+            .quiet_after(Some(900))
+            .poking(Some(4)),
         ],
     )
 }

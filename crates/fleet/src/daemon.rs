@@ -675,30 +675,8 @@ where
     pub(crate) fn norms(&self) -> StepNorms {
         self.norms
     }
-    /// The pair in force for one step of one Job.
-    ///
-    /// **The only reader of `self.liveness`, which is why there is no
-    /// accessor for it.** What Fleet is running with is the tier a step that
-    /// declares nothing falls back to, and nothing compares a silence against
-    /// it directly: an accessor handing it out would be the constant reachable
-    /// again from anywhere, which is the shape `#60` was opened about.
-    ///
-    /// **Called once per slot, at the step boundary**, and the answer is held
-    /// on the slot from there — `crate::working::Working::liveness`. It is
-    /// resolved off the *frozen* workflow, so what applies is what the Job
-    /// froze at creation rather than what `.armada/workflows/` says now;
-    /// `Liveness::at` holds the whole of why a frozen override sits beneath a
-    /// live setting.
-    ///
-    /// **A step the frozen workflow does not name falls back to Fleet's own
-    /// pair.** That cannot arise on the dispatch road, where the step id came
-    /// out of this same workflow, and it is the honest answer on the adoption
-    /// road, where the step comes off a record a Fleet that is gone wrote.
-    pub(crate) fn liveness_at(&self, job: &Job, step: &StepId) -> Liveness {
-        job.workflow()
-            .step(step)
-            .map(|step| self.liveness.at(step))
-            .unwrap_or(self.liveness)
+    pub(crate) fn liveness(&self) -> Liveness {
+        self.liveness
     }
     pub(crate) fn dry_runs(&self) -> DryRuns {
         self.dry_runs
