@@ -15,17 +15,11 @@
 //! rather than a term this step puts to whoever works it. `Delivering` was
 //! missing from the list and is the plainest member of it.
 //!
-//! **Every one of them is written from the definition and from nothing else**,
-//! which is `briefing`'s narrowing carried across: a `ResolvedCheck`'s `run`
-//! string is not readable from here, [`Checking`] says a tool exists rather
-//! than what it will run, and [`Delivering`] names a path in the Drone's own
-//! worktree.
-//!
-//! **[`Splitting`] is the one read off two steps**, and it is the same
-//! narrowing rather than an exception to it. What a step's product *becomes* is
-//! a fact about the step after it — `may_dispatch_jobs` there and nowhere else
-//! — so nothing arbitrary reaches a Drone through it, and no workflow is named
-//! in this module.
+//! **Every one is written from the definition and from nothing else**, which is
+//! `briefing`'s narrowing carried across: a `ResolvedCheck`'s `run` string is
+//! not readable from here, and [`Delivering`] names a path in the Drone's own
+//! worktree. [`Splitting`] reads one step further, because what a step's
+//! product *becomes* is a fact about the step after it — and names no workflow.
 //!
 //! Four of the five carry **drafted wording**. Sanctioned copy is
 //! `docs/contracts/agent-prompt.md`'s to write and it has none for them yet.
@@ -290,32 +284,23 @@ impl Redeclaring {
 /// What a step that creates Jobs tells its Drone, and what the step *before*
 /// one tells its own.
 ///
-/// **It is the only term read off two steps rather than one**, and the pair is
-/// the point. A step whose product is a plan and a step that turns that plan
-/// into Jobs are one decision written on two steps: what the first one writes
-/// is carried out unchanged, and a Drone that does not know that writes a
-/// sketch. So the switch is `may_dispatch_jobs` on this step, or on the one
-/// after it, which is a fact about the definition in exactly the way
-/// [`Delivering`]'s target is.
+/// **It is the only term read off two steps**, and the pair is the point. A
+/// step whose product is a plan and a step that turns that plan into Jobs are
+/// one decision written twice: what the first writes is carried out unchanged,
+/// and a Drone that does not know that writes a sketch. So the switch is
+/// `may_dispatch_jobs` here or on the step after — a fact about the definition
+/// in exactly the way [`Delivering`]'s target is.
 ///
 /// **The consequence is what it states, because nothing else can.** A Drone
-/// reading `dispatch_job`'s own description learns what one call does; it
-/// cannot learn from there that the file it wrote on the part before is the
-/// authority for every call, or that nobody edits it in between. Spike 6's
-/// finding is the general form — a description alone does not make a Drone use
-/// a tool the way the system needs it used.
+/// reading `dispatch_job`'s description learns what one call does; it cannot
+/// learn there that the file it wrote on the part before is the authority for
+/// every call. Spike 6's finding is the general form.
 ///
-/// **It names no notation.** Whether a plan is drawn in Mermaid or in
-/// something else is the repository's business and not Fleet's; what this asks
-/// for is a drawing rather than a format, for the reason the owner gave on
-/// reading one by hand: a wave is a set of Jobs and an ordering between the
-/// sets, and prose asks a reader to redraw it before they can answer.
-///
-/// **The two reasons a piece waits are told apart here** because only one of
-/// them survives leaving the plan. A piece needing what another produced
-/// becomes a dependency edge that admission holds; two pieces that would write
-/// the same files are held apart by the plan and by nothing else — `#47`
-/// settled that an overlap is surfaced and never serialised.
+/// **It names no notation.** Whether a plan is drawn in Mermaid is the
+/// repository's business; what this asks for is a drawing rather than a
+/// format, for the reason the owner gave on reading one by hand: a wave is a
+/// set of Jobs and an ordering between the sets, and prose asks a reader to
+/// redraw it before they can answer.
 ///
 /// **Drafted wording**, like [`Checking`] and [`Redeclaring`].
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -342,6 +327,12 @@ impl Splitting {
 }
 
 /// The step before the one that dispatches: what it writes becomes Jobs.
+///
+/// **The two reasons a piece waits are told apart** because only one survives
+/// leaving the plan: needing what another produced becomes a dependency edge,
+/// and two pieces that would write the same files are held apart by the plan
+/// and by nothing else — `#47` settled that an overlap is surfaced, never
+/// serialised.
 const DECIDES_IT: &str = "\
 WHAT THIS PART DECIDES
 
