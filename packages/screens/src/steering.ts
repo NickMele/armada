@@ -77,11 +77,13 @@ import { clock } from "./duration";
  * it.
  *
  * **One act, and the shape holds more than one on purpose.**
- * `docs/concepts/drone.md` puts Kill and Pause in the same sentence as
- * Redirect: Kill is already drawn, from this same pointer and in the job header
- * where it ends something rather than steers it, and Pause is built nowhere —
- * no route, no operation implementation, no binding in `actions.toml`. Naming a
- * control for it here would be this surface inventing an act.
+ * `docs/concepts/drone.md` puts Kill in the same sentence as Redirect, and Kill
+ * is already drawn — from this same pointer, and in the job header where it
+ * ends something rather than steers it. It named Pause there too until that was
+ * retired on 2026-09-03, for the reason this comment was already giving: no
+ * route, no operation implementation, no binding in `actions.toml`. The shape
+ * stays open for the act after next, and a control invented here would be this
+ * surface minting one.
  */
 export type Steering = {
   /**

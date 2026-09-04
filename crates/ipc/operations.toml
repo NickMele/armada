@@ -586,15 +586,24 @@ stop it could reach would let it cancel a person's dispatch.
 kind = "command"
 transport = "HTTP"
 helm_access = "No"
-description = "Holds a healthy Drone with its worktree intact"
+description = "Retired 2026-09-03. Never built, and no longer promised"
 notes = """
-Not on the Intervention Ladder, and not yet built. Pause only means something
-on a healthy Drone: anything escalated is already held, because Fleet never
-auto-kills.
+**Retired, not pending.** The row said *not yet built* for months, which read as
+work somebody had scheduled — and nothing was: no route, no operation
+implementation, no binding in `actions.toml`. `#395` deleted the name from the
+six documents that counted it as an act, `docs/concepts/drone.md` first, and
+that page carries the dated note. Redirect and Kill are what a person does to a
+working Drone: say something to it, or stop it.
 
-Bridge offers it beside Redirect and Kill on a healthy Drone. Helm does not
-reach it directly, because Helm access on a command is the ladder rung and
-pause has none.
+The name is kept here rather than deleted for `packages/icons/icons.toml`'s
+reason — a reader who finds no row cannot tell a call that was refused from one
+nobody thought of, and `docs/contracts/system-architecture.md` sends them here.
+
+What it would have been, so that whoever proposes it again starts from the
+argument rather than from the gap: a hold on a healthy Drone with its worktree
+intact. It only ever meant something there — anything escalated is already
+held, because Fleet never auto-kills — and it carried no Intervention Ladder
+rung, so Helm never reached it directly.
 """
 
 [operations.redirect_drone]
