@@ -50,7 +50,7 @@ use fleet::{
     Mint, Ruling,
 };
 use testkit::{resolved, FakeJudge, FakeVcs, FakeWorkProduct, Gaming, Gate, Sketch};
-use verification::{Claimed, NotClaimed, Request, ShownBy, Submission};
+use verification::{Claimed, Lifted, NotClaimed, Request, ShownBy, Submission};
 
 /// Absolute, because `WorktreeSpec` refuses a relative root — a derived path
 /// that moves with the caller is the stored-path failure in another shape.
@@ -423,6 +423,7 @@ impl Bench {
             Request::of(&run.job),
             submitted,
             run.declared.as_ref(),
+            &Lifted::of(&run.job),
             Some(&entered_with),
             &recorded,
             &self.work,

@@ -183,15 +183,22 @@ pub struct Lifted(Vec<RepoPath>);
 impl Lifted {
     /// What this Job's recorded widenings cleared.
     ///
-    /// **Every taken revision's `paths_added`**, not only the ones that were
-    /// excluded: a path the Judge cleared that no denylist named was never
-    /// blocked, so including it changes nothing and excluding it would need this
-    /// to hold the step's denylist too.
+    /// **Entry zero is not one**, and skipping it is the whole correctness of
+    /// this: the first revision carries the scope the Job was created with, and
+    /// counting it would make the Job's own `write_targets` lift the step's
+    /// denylist — which is the ordering `exclude_paths` exists to invert. It is
+    /// told apart by carrying no step, the way `fleet::widening` already tells
+    /// it apart when it counts a step's one ask.
+    ///
+    /// **Every remaining taken revision's `paths_added`**, not only the ones
+    /// that were excluded: a path a Judge cleared that no denylist named was
+    /// never blocked, so including it changes nothing and excluding it would
+    /// need this to hold the step's denylist too.
     pub fn of(job: &Job) -> Lifted {
         Lifted(
             job.scope_revisions()
                 .iter()
-                .filter(|revision| revision.outcome.took_effect())
+                .filter(|revision| revision.at_step.is_some() && revision.outcome.took_effect())
                 .flat_map(|revision| revision.paths_added.iter().cloned())
                 .collect(),
         )
@@ -332,7 +339,7 @@ mod tests {
     /// resolution is.
     fn cleared(paths: &[&str]) -> Lifted {
         let job = testkit::asked_for().scope_revised(core_model::ScopeRevision {
-            at_step: None,
+            at_step: Some(core_model::StepId::new("the-step")),
             paths_added: paths.iter().copied().map(RepoPath::new).collect(),
             paths_removed: Vec::new(),
             atomic_before: false,

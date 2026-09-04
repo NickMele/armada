@@ -26,8 +26,8 @@ use std::fmt;
 
 use adapter_traits::{AgentHarness, Changed, Delivery, Vcs, WorkProduct};
 use core_model::{Component, DeclaredPaths, Envelope, FieldValue, JobId, Level, RepoPath, StepId};
-use ipc::mcp::DeclareScope;
-use verification::{drifted, InScope, OutsideScope};
+use ipc::mcp::{DeclareScope, WIDEN_TOOL};
+use verification::{drifted, InScope, Lifted, OutsideScope};
 
 use crate::daemon::Fleet;
 use crate::session::{LiveSession, Occasion};
@@ -123,10 +123,22 @@ where
         // so it is applied here rather than only at the gate — a Drone told at
         // declaration time can still fix its plan, and one told at the gate has
         // already done the work.
-        if let Err(outside @ OutsideScope::Excluded { .. }) =
-            InScope::resolved(scope, Some(&paths), &[])
-        {
-            return Err(NotDeclared::Outside(outside));
+        //
+        // **This is where the two tiers diverge**, and it is the moment they
+        // have to: an ordinary boundary refused here leaves the Drone a route,
+        // and the refusal below is what points at it. `Lifted::of` carries what
+        // a Judge has already cleared, so a Drone that took that route and won
+        // can declare the path it asked for.
+        match InScope::resolved(scope, Some(&paths), &Lifted::of(&record), &[]) {
+            Err(OutsideScope::Excluded { declared }) => {
+                return Err(NotDeclared::Excluded { declared })
+            }
+            Err(OutsideScope::Forbidden { paths }) => return Err(NotDeclared::Forbidden { paths }),
+            // Neither of the other two is reachable with an empty footprint and
+            // a declaration in hand. Matched rather than ignored, so a variant
+            // added to `OutsideScope` is a compile error here rather than a
+            // declaration this quietly takes.
+            Err(OutsideScope::Undeclared { .. }) | Err(OutsideScope::NothingDeclared) | Ok(_) => {}
         }
         at_work.declares(paths.clone());
         drop(working);
@@ -291,6 +303,11 @@ where
 /// **No variant is a gate failure.** Nothing has been verified: the call was
 /// aimed at nothing, at a step that asks for no scope, or at paths the step's
 /// own denylist refuses.
+///
+/// **Two of them refuse a path and only one of them ends the road.** That is
+/// `#417`, and it is the whole reason they are separate variants: a Drone told
+/// only "not allowed" fails its step or works around it, and a person finds out
+/// at the gate.
 #[derive(Debug)]
 pub enum NotDeclared {
     /// No Job is being worked. The tool is bound to a Job at construction, so
@@ -303,8 +320,20 @@ pub enum NotDeclared {
     /// would be measured against. Refused rather than stored: a plan nothing
     /// reads is a plan the Drone believes is being checked.
     StepHasNoScope { step: StepId },
-    /// The declaration names paths the step's `exclude_paths` denies.
-    Outside(verification::OutsideScope),
+    /// The declaration names paths the step's `exclude_paths` denies and no
+    /// Judge has cleared.
+    ///
+    /// **A route is left, and the message is where it is said.** The step was
+    /// fenced off these before anybody read the code, and whether the fence is
+    /// right for this particular fix is a question `request_scope` puts to a
+    /// Judge. A Drone that is not told that asks for nothing.
+    Excluded { declared: Vec<RepoPath> },
+    /// The declaration names paths under a boundary nothing lifts.
+    ///
+    /// **No route, and the message says so plainly** rather than leaving a
+    /// Drone to spend its one ask finding out. `verification::forbidden` carries
+    /// why each one is absolute, and the reason travels into the sentence.
+    Forbidden { paths: Vec<verification::Forbidden> },
 }
 
 impl fmt::Display for NotDeclared {
@@ -328,19 +357,58 @@ impl fmt::Display for NotDeclared {
                  it is done",
                 step.as_str()
             ),
-            NotDeclared::Outside(why) => write!(out, "{why}. Declare again without them"),
+            NotDeclared::Excluded { declared } => write!(
+                out,
+                "{} is kept out of this part of the work, and that was decided \
+                 before anybody had read the code. Declare again without it — \
+                 or, if the fix you found genuinely needs it, say so with \
+                 `{WIDEN_TOOL}` and say why in your own words. Somebody will \
+                 look at whether it belongs to this part, and you keep working \
+                 while they do",
+                Listed(declared)
+            ),
+            NotDeclared::Forbidden { paths } => write!(
+                out,
+                "{} is out of bounds for every part of every task, and nothing \
+                 here can allow it — asking will not change the answer. Declare \
+                 again without it, and if the work truly cannot be done without \
+                 it, say that in `not_claimed` when you submit",
+                Reasoned(paths)
+            ),
         }
     }
 }
 
-impl Error for NotDeclared {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            NotDeclared::NothingIsWorking
-            | NotDeclared::NoSuchStep { .. }
-            | NotDeclared::StepHasNoScope { .. } => None,
-            NotDeclared::Outside(why) => Some(why),
+impl Error for NotDeclared {}
+
+/// The paths, comma-separated, so no message ends in a dangling list.
+struct Listed<'a>(&'a [RepoPath]);
+
+impl fmt::Display for Listed<'_> {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (nth, path) in self.0.iter().enumerate() {
+            if nth > 0 {
+                out.write_str(", ")?;
+            }
+            write!(out, "`{}`", path.as_str())?;
         }
+        Ok(())
+    }
+}
+
+/// The same, each path followed by why nothing lifts it. **The reason is what
+/// stops the Drone asking again in other words.**
+struct Reasoned<'a>(&'a [verification::Forbidden]);
+
+impl fmt::Display for Reasoned<'_> {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (nth, found) in self.0.iter().enumerate() {
+            if nth > 0 {
+                out.write_str(", ")?;
+            }
+            write!(out, "{found}")?;
+        }
+        Ok(())
     }
 }
 

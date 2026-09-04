@@ -38,7 +38,7 @@ use core_model::{
     Timestamp, Transitioned,
 };
 use verification::{
-    decide, Accepted, Answered, Baseline, CheckFailed, Delivered, InScope, OutcomeTurn,
+    decide, Accepted, Answered, Baseline, CheckFailed, Delivered, InScope, Lifted, OutcomeTurn,
     OutsideScope, Printed, Ran, Request, Submission, Verdict, Verified, A_DELIVERABLE,
 };
 
@@ -95,12 +95,14 @@ pub use crate::ruling::Ruling;
 /// | `request` | A position knows the frozen workflow; the requester's text is on the Job row. Not an `Option` — a gate that could rule without it is the gate this had until #169, which judged a scope note against itself and never against what was asked. **It reaches the Judge and nothing else here**: no Check and no mechanical tier reads it, so a request cannot pass or fail a step by itself |
 /// | `recorded` | What every step of this Job has submitted so far. Its two readers — the gaming check's baseline and a step's `reference_docs` — both reach it through [`AtStep::baseline`], which will not answer with anything but a strictly earlier step's |
 /// | `keeping` | Where a copy of the step's deliverable goes. The repository and the Job are the caller's to know, and a worktree path is not something to reverse-engineer either of them out of. **Not an `Option`** — every caller is gating a real Job in a real repository, and a gate that could rule without keeping what it read is the gate `#223` was filed against |
+/// | `lifted` | The excluded paths a Judge has already cleared for this Job, off its own scope revisions. **Handed in rather than derived** because this function is given a step and not a Job, and because [`Lifted`] has one constructor: a caller with a record in hand can produce one and nothing else can. A gate that re-refused a path `declare_scope` had accepted would fail the step for being the plan Fleet took, which is `#417`'s own complaint |
 /// | `entered_with` | What the worktree held when this step began, **after the boundary rebase that started it**, which is `crate::dispatch::Fleet::marked`'s to place and not this function's. `diff_nonempty` is decided by comparing it against a second reading taken here — which is what catches the step that advanced having written nothing, where the check used to read the whole branch and count an earlier step's file as this step's work |
 pub async fn rule_on<W>(
     at: AtStep<'_>,
     request: Request<'_>,
     evidence: &Submission,
     declared: Option<&DeclaredPaths>,
+    lifted: &Lifted,
     entered_with: Option<&Footprint>,
     recorded: &[(StepId, StepEvidence)],
     work: &W,
@@ -272,7 +274,7 @@ where
                 output,
             }
         }
-        (Some(scope), Some(_)) => match InScope::resolved(scope, declared, &touched) {
+        (Some(scope), Some(_)) => match InScope::resolved(scope, declared, lifted, &touched) {
             Ok(_) => (None, Vec::new()),
             Err(OutsideScope::Undeclared { changed }) => (None, changed),
             // A variant added to `OutsideScope` lands here and fails the

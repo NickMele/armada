@@ -29,7 +29,7 @@ use core_model::{
     Actor, Component, Envelope, EscalationTrigger, FieldValue, Job, JobId, JobStatus, Level,
     StepId, StepTarget, Target,
 };
-use verification::{Claimed, NotClaimed, Request, ShownBy, Submission};
+use verification::{Claimed, Lifted, NotClaimed, Request, ShownBy, Submission};
 
 use crate::adrift::Adrift;
 use crate::at_step::AtStep;
@@ -145,6 +145,7 @@ where
             Request::of(&job),
             &submission,
             declared.as_ref(),
+            &Lifted::of(&job),
             entered_with.as_ref(),
             &recorded,
             self.work(),

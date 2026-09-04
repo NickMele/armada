@@ -102,24 +102,62 @@ async fn a_task_with_no_stated_scope_has_nothing_to_widen_and_spends_nothing() {
     );
 }
 
-/// The denylist resolves last and wins over anything declared **and over any
-/// model**. A Judge that could excuse one is not a denylist, so no call is made
-/// at all.
+/// **The ordinary boundary, and it reaches the Judge.** The step excludes
+/// `secrets` and the request names a path under it, which until `#417` was
+/// refused here without a call — the refusal that left a blocked Drone with
+/// nowhere to go. Whether a fence drawn before anybody read the code is right
+/// for this particular fix is exactly the question this call asks.
 #[tokio::test]
-async fn a_path_the_step_excludes_is_refused_mechanically() {
+async fn a_path_the_step_excludes_is_put_to_the_judge() {
     let home = TempDir::new();
-    let (fleet, _) = running(
+    let (fleet, job) = running(
         &home,
-        FakeJudge::that_fails("a judge that must never be asked"),
+        FakeJudge::saying("answer: consistent"),
         &["secrets"],
         Some(&["crates/fleet"]),
     )
     .await;
 
-    let why = asked_by_the_one(&fleet, &asking(&["secrets/keys.toml"]))
+    asked_by_the_one(&fleet, &asking(&["secrets/keys.toml"]))
         .await
-        .expect_err("the denylist is not a model's to lift");
-    assert!(matches!(why, NotWidened::Excluded { .. }), "{why:?}");
+        .expect("a judge that saw the request and agreed");
+
+    // **The lift is on the record**, which is the half `#56` did not have: the
+    // Job's write_targets grew and the step's denylist went on refusing, so a
+    // cleared path was still a path the Drone could not declare.
+    let record = fleet.load(&job).await.expect("the job");
+    let took: Vec<&RepoPath> = record
+        .scope_revisions()
+        .iter()
+        .filter(|entry| entry.at_step.is_some() && entry.outcome.took_effect())
+        .flat_map(|entry| entry.paths_added.iter())
+        .collect();
+    assert_eq!(took, vec![&RepoPath::new("secrets/keys.toml")]);
+}
+
+/// **The one nothing lifts, and no call is made.** `.env` is not a fence
+/// somebody drew for this step; it is out of bounds for every step of every
+/// task, and a Judge asked about it would be a model deciding whether a secrets
+/// file is in scope. The Judge here fails if it is asked.
+#[tokio::test]
+async fn a_path_nothing_lifts_is_refused_without_a_call() {
+    let home = TempDir::new();
+    let (fleet, _) = running(
+        &home,
+        FakeJudge::that_fails("a judge that must never be asked"),
+        &[],
+        Some(&["crates/fleet"]),
+    )
+    .await;
+
+    let why = asked_by_the_one(&fleet, &asking(&[".env"]))
+        .await
+        .expect_err("no answer lifts it");
+    assert!(matches!(why, NotWidened::Forbidden { .. }), "{why:?}");
+    assert!(
+        why.to_string().contains("it holds secrets"),
+        "it says why, so the Drone does not ask again in other words: {why}"
+    );
 }
 
 /// A request for what the task already covers asks for nothing. Recorded as a
