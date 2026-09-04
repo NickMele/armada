@@ -10,8 +10,9 @@
 //! command below is a pair of statuses handed to it.
 
 use ipc::{
-    Actor, ChangesRequested, Event, Instant, JobCreated, JobForgotten, JobId, JobSummary,
-    ManifestId, Origin, ProposeJob, Redispatched, Urgency, WorkflowId, WorktreeReclaimed,
+    Actor, ChangesRequested, Event, Instant, JobCreated, JobExamined, JobForgotten, JobId,
+    JobSummary, ManifestId, Origin, ProposeJob, Redispatched, Urgency, WorkflowId,
+    WorktreeReclaimed,
 };
 use std::sync::atomic::Ordering;
 
@@ -21,6 +22,17 @@ use crate::tests::shapes::{run_id, status};
 use crate::{Commands, Refusal};
 
 impl Commands for FakeDaemon {
+    /// Look at the Job. **The one command that moves nothing**, so the fake
+    /// answers the shape and leaves its Job list alone — and a 404 on an id
+    /// naming nothing, which is the only refusal this act has.
+    async fn examine_job(&self, job_id: JobId) -> Result<JobExamined, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        if !jobs.iter().any(|job| job.id == job_id) {
+            return Err(self.no_such_job(&job_id));
+        }
+        Ok(shapes::examined(job_id))
+    }
+
     /// Stop a proposal. **The fake never has one out** — it answers a proposal
     /// without making a call — so this always reports that there was nothing to
     /// stop, which is the arm a route test needs: it is the one that must be a

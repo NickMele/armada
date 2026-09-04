@@ -95,6 +95,31 @@ pub(crate) async fn get_diff<D: Queries>(
     }
 }
 
+/// What this Job holds on this machine — its processes, what each is burning,
+/// the disk its worktree has taken, and when its own log was last written.
+///
+/// **Its own route rather than a field on `get_job`.** That read is made on
+/// every open of a Job and again on every event naming it; this one walks a
+/// process table and a directory, and paying for that continuously to answer a
+/// question asked rarely is the cost the issue this serves rules out.
+///
+/// It answers rather than refuses on a reading it could not take. The figures
+/// carry the instant they were read at, because a process can exit between the
+/// sample and the render.
+pub(crate) async fn get_job_resources<D: Queries>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+) -> Response {
+    match served
+        .daemon()
+        .get_job_resources(JobId::carried(job_id))
+        .await
+    {
+        Ok(resources) => answer(StatusCode::OK, &resources, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// One tool call's arguments, whole. **The rest of a row that was cut**, on a
 /// route rather than in the row itself.
 ///

@@ -53,6 +53,9 @@ mod drone_moves;
 pub mod dry_run;
 pub mod ending;
 pub mod evidence;
+/// Going and looking at a Job now, because somebody suspects it is wedged.
+/// **The rung below intervene**, and it costs no model call.
+mod examining;
 pub mod footprint;
 mod gate;
 mod group;
@@ -90,6 +93,9 @@ pub mod redispatch;
 mod refusing;
 mod regating;
 pub mod reporting;
+/// What one Job holds on this machine — its processes, what they are burning,
+/// and the disk its worktree has taken. **Read on demand, never on the turn.**
+pub mod resources;
 pub mod resume;
 mod review;
 pub mod reviewing;

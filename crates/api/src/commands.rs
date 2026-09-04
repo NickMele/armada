@@ -215,6 +215,25 @@ pub(crate) async fn kill_job<D: Commands>(
     }
 }
 
+/// Go and look at this Job now, and answer with what was found.
+///
+/// **200 on every answer, including `not_working`.** The examination ran and
+/// this is what it found; a status code saying the request failed would make a
+/// finding indistinguishable from Fleet being unable to look.
+///
+/// **A POST, and an act rather than a read.** It writes what it found into the
+/// Job's own log, so the answer is on the record beside everything else Fleet
+/// did — and it does real work, which is not what a GET promises.
+pub(crate) async fn examine_job<D: Commands>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+) -> Response {
+    match served.daemon().examine_job(JobId::carried(job_id)).await {
+        Ok(examined) => answer(StatusCode::OK, &examined, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// Delete the Job's whole record. **Real deletion, not a status** — the row
 /// and everything beneath it are gone, and there is no undo.
 ///

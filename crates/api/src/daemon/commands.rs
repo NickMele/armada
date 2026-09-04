@@ -19,8 +19,8 @@ use std::future::Future;
 
 use crate::daemon::Refusal;
 use ipc::{
-    ChangesRequested, ChosenAnswer, FileReport, JobForgotten, JobId, JobSummary, ProposeJob,
-    Redirection, Redispatched, Report, RestartRequested, WorktreeReclaimed,
+    ChangesRequested, ChosenAnswer, FileReport, JobExamined, JobForgotten, JobId, JobSummary,
+    ProposeJob, Redirection, Redispatched, Report, RestartRequested, WorktreeReclaimed,
 };
 
 /// Everything a client asks Fleet to do.
@@ -108,6 +108,35 @@ pub trait Commands: Send + Sync + 'static {
     /// Legal from every non-terminal status, including those with no Drone
     /// under them, which is why it cannot be spelled as [`Commands::kill_drone`].
     fn kill_job(&self, job_id: JobId) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `examine_job` — go and look at this Job now, and say what was found.
+    ///
+    /// **The rung below intervene.** Every other act here changes the Job, so a
+    /// person who suspected one was wedged had one move — end it — and no way
+    /// to find out first whether ending it was warranted.
+    ///
+    /// **A command rather than a query, and the split is worth stating.** It
+    /// decodes no body and answers no 201, which are two of the three marks of
+    /// a read. What makes it an act is the third thing it does: it writes what
+    /// it found into the Job's own log, so the answer is on the record beside
+    /// everything else Fleet did rather than in one person's terminal.
+    ///
+    /// **It costs no model call and is bounded.** The one thing a person
+    /// presses when they already suspect a hang must not be the next thing that
+    /// stops answering.
+    ///
+    /// **`cannot_tell` is a real answer and is never rounded up.** A look that
+    /// cannot separate working from not says so, and one such look keeps the
+    /// whole examination off `working` — "everything looks fine" on a plainly
+    /// hung Job spends a person's suspicion and returns nothing.
+    ///
+    /// [`Refusal::NoSuchJob`] where the id names nothing. There is no
+    /// [`Refusal::IllegalMove`]: every status is examinable, including the
+    /// terminal ones, because *check this Job* is not *check preparation*.
+    fn examine_job(
+        &self,
+        job_id: JobId,
+    ) -> impl Future<Output = Result<JobExamined, Refusal>> + Send;
 
     /// `forget_job` — deletes the Job's whole record. **Real deletion, not a
     /// further status**: the row and everything beneath it are gone, through

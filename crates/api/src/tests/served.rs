@@ -277,6 +277,46 @@ async fn a_workflow_previews_the_judge_and_the_gate_it_will_stop_at() {
     );
 }
 
+/// The machine reading and the act above it, and the two things a client
+/// cannot work out for itself: an id naming nothing is a 404 rather than a
+/// panel of empty lists, and an examination that found a fault is still a 200.
+#[tokio::test]
+async fn what_a_job_holds_is_read_and_examined_under_the_job() {
+    let events = Broadcaster::new();
+    let daemon = FakeDaemon::new(events.clone());
+    at(&daemon, "01HOLDS", "running");
+    let app = wired(daemon, events);
+
+    let (status, body) = call(&app, "GET", "/jobs/01HOLDS/resources", "").await;
+    assert_eq!(status, StatusCode::OK);
+    let held: ipc::JobResources = ipc::decode("a reading", &body).expect("a reading");
+    assert_eq!(held.held, ipc::Held::Running);
+    assert!(
+        !held.read_at.as_str().is_empty(),
+        "every figure is as of an instant"
+    );
+
+    // The examination answers 200 whatever it found. A status saying the
+    // request failed would make a finding indistinguishable from Fleet being
+    // unable to look.
+    let (status, body) = call(&app, "POST", "/jobs/01HOLDS/examine", "").await;
+    assert_eq!(status, StatusCode::OK);
+    let examined: ipc::JobExamined = ipc::decode("an examination", &body).expect("an answer");
+    assert_eq!(
+        examined.found,
+        ipc::Finding::CannotTell,
+        "one look that could not tell keeps the whole answer off working"
+    );
+
+    for (method, uri) in [
+        ("GET", "/jobs/01NOSUCH/resources"),
+        ("POST", "/jobs/01NOSUCH/examine"),
+    ] {
+        let (status, _) = call(&app, method, uri, "").await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{method} {uri}");
+    }
+}
+
 /// **The case that proves the two operations are not one.** A Job at the
 /// approval gate has no Drone — nothing has spawned — and the registry still
 /// carries `awaiting_approval -> killed`, an operator act carrying no verdict.

@@ -17,7 +17,7 @@ use crate::daemon::Refusal;
 use crate::observing::Observed;
 use ipc::{
     CallArguments, FleetCapacity, JobDetail, JobDiff, JobEvidence, JobHistory, JobId, JobList,
-    ManifestSummary, ModelChoices, ReportList, WorkflowSummary, WorktreesHeld,
+    JobResources, ManifestSummary, ModelChoices, ReportList, WorkflowSummary, WorktreesHeld,
 };
 
 /// Everything a client reads.
@@ -114,6 +114,27 @@ pub trait Queries: Send + Sync + 'static {
     /// as one that did nothing. A worktree that will not open is
     /// [`Refusal::Fault`], never an empty patch.
     fn get_diff(&self, job_id: JobId) -> impl Future<Output = Result<JobDiff, Refusal>> + Send;
+
+    /// `get_job_resources` — what this Job holds on this machine: the
+    /// processes it owns, what each is burning, the disk its worktree has
+    /// taken, and when anything was last written to its own log.
+    ///
+    /// **The other axis from `spend`.** That answers what a Job cost in model
+    /// terms, and on a wedged Job every one of its four figures read zero — a
+    /// Job between phases and a Job hung are the same four zeros.
+    ///
+    /// **Its own operation and not a field on [`Queries::get_job`].** That read
+    /// is made on every open of a Job and on every event naming it; this one
+    /// walks a process table and a directory, which is a cost paid when
+    /// somebody asks rather than continuously.
+    ///
+    /// It answers rather than refuses on a reading it could not take. A `ps`
+    /// that will not run and a worktree walk that ran long are said, because a
+    /// panel that 500s is one a person stops opening.
+    fn get_job_resources(
+        &self,
+        job_id: JobId,
+    ) -> impl Future<Output = Result<JobResources, Refusal>> + Send;
 
     /// `get_call` — one tool call's arguments, as the record holds them.
     ///
