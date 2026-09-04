@@ -4,6 +4,19 @@ import type { Finding, JobExamined, JobProcess, JobResources as Held, Look } fro
 import { Button } from "../../primitives/Button/Button";
 
 /**
+ * Why the panel offers nothing to press.
+ *
+ * `no_answer` — Fleet is not on the other end. Bridge holds no connection, or
+ * the request itself could not be sent.
+ *
+ * `unreadable` — Fleet answered and Bridge could not read what came back. Fleet
+ * is demonstrably up, which is exactly why the act still goes: the two do not
+ * agree about the route, and the same request down the same route meets the
+ * same disagreement.
+ */
+export type NothingToAsk = "no_answer" | "unreadable";
+
+/**
  * What this job holds on the machine, and the act that goes and looks.
  *
  * **Not a debug panel.** The moment it is for is a person worried about a job,
@@ -29,6 +42,13 @@ import { Button } from "../../primitives/Button/Button";
  * a second reason to exist — seventy-four worktrees once took 220 GB and three
  * agents died at zero bytes free — and it is the one number here a person acts
  * on directly.
+ *
+ * **The act is not offered where pressing it could not work.** Every reading
+ * here is Fleet's and the button asks Fleet for one, so the panel has to know
+ * when there is nothing on the other end to ask — `nothingToAsk`. Drawn as an
+ * unpressed panel it read "Nobody has asked whether this job is working" over
+ * a live control, which is the opposite of what was true, and a disabled
+ * control with no sentence beside it is the same dead end drawn quieter.
  */
 export type JobResourcesProps = {
   /**
@@ -48,6 +68,27 @@ export type JobResourcesProps = {
   looking?: boolean;
   /** Why the last look failed, where it did. Drawn instead of a finding. */
   lookFailed?: string;
+  /**
+   * There is nothing to ask, and which of the two reasons it is. **The act is
+   * not drawn at all**, and the panel says why rather than leaving a dead
+   * control on screen.
+   *
+   * **Not `lookFailed`, and the difference is what to do next.** A failed look
+   * is one attempt that did not come back, which invites another; both of
+   * these say attempts are not the shape of the problem. The caller decides it
+   * from what the failure was, never from the fact that something failed — a
+   * read Fleet refused or answered late is a read worth sending again.
+   *
+   * **Two readings and not one**, because the fixes are opposite. `no_answer`
+   * is a Fleet that may only need starting; `unreadable` is a Fleet that is
+   * running and would come back the same, so restarting it is the wrong move
+   * and the pair has to be rebuilt. One sentence covering both would send
+   * somebody to do the wrong one half the time.
+   *
+   * **A reading rather than a sentence**, because the copy is fixed and
+   * belongs to one producer.
+   */
+  nothingToAsk?: NothingToAsk;
   onExamine: () => void;
 };
 
@@ -58,22 +99,38 @@ export function JobResources({
   examined,
   looking = false,
   lookFailed,
+  nothingToAsk,
   onExamine,
 }: JobResourcesProps) {
   return (
     <section className="armada-holds">
       <div className="armada-holds__head">
-        <Headline examined={examined} looking={looking} lookFailed={lookFailed} />
-        <Button size="sm" onClick={onExamine} disabled={looking}>
-          <Search size={12} strokeWidth={2} aria-hidden="true" />
-          {looking ? "Looking" : "Look now"}
-        </Button>
+        <Headline
+          examined={examined}
+          looking={looking}
+          lookFailed={lookFailed}
+          nothingToAsk={nothingToAsk}
+        />
+        {/* No act where there is nothing to ask. **Absent rather than
+            disabled**: a greyed control still says an act exists here and puts
+            the reason on a person to work out, and both of these have a reason
+            worth reading. */}
+        {nothingToAsk !== undefined ? null : (
+          <Button size="sm" onClick={onExamine} disabled={looking}>
+            <Search size={12} strokeWidth={2} aria-hidden="true" />
+            {looking ? "Looking" : "Look now"}
+          </Button>
+        )}
       </div>
 
       {examined === null ? null : <Looks looks={examined.looks} />}
 
       {reading === null ? (
-        <p className="armada-holds__note">{note ?? "Nothing has been read yet."}</p>
+        <p className="armada-holds__note">
+          {nothingToAsk === undefined
+            ? (note ?? "Nothing has been read yet.")
+            : INSTEAD[nothingToAsk]}
+        </p>
       ) : (
         <>
           <Processes reading={reading} examined={examined} />
@@ -101,11 +158,24 @@ function Headline({
   examined,
   looking,
   lookFailed,
+  nothingToAsk,
 }: {
   examined: JobExamined | null;
   looking: boolean;
   lookFailed?: string;
+  nothingToAsk?: NothingToAsk;
 }) {
+  // Ahead of every other arm, including a look still in flight and a finding
+  // from before. Both of those are claims about the job; this is the reason
+  // there can be no claim, and it outranks a stale one.
+  if (nothingToAsk !== undefined) {
+    return (
+      <p className="armada-holds__verdict" data-degraded>
+        <span className="armada-holds__dot" aria-hidden="true" />
+        {SILENT[nothingToAsk]}
+      </p>
+    );
+  }
   if (lookFailed !== undefined) {
     return <p className="armada-holds__verdict" data-found="not_working">{lookFailed}</p>;
   }
@@ -125,6 +195,50 @@ function Headline({
     </p>
   );
 }
+
+/**
+ * The headline, when there is nothing to ask.
+ *
+ * **Both name Fleet as the subject, because the alternative reading is the one
+ * this panel exists to make loud.** A job that holds nothing is a real answer
+ * and reads as one; these are the panel having nothing to report, and a
+ * sentence that did not say which would report a silent seam as a silent job.
+ *
+ * **They must not read as the same message twice**, because they are not the
+ * same condition and the fixes point in opposite directions. One is a Fleet
+ * that is not there; the other is a Fleet that is up and answering, which is
+ * why "not answering" would be false on it.
+ */
+const SILENT: Record<NothingToAsk, string> = {
+  no_answer: "Fleet is not answering, so there is nothing to ask.",
+  unreadable: "Fleet answered, and Bridge could not read the answer.",
+};
+
+/**
+ * What stands in for the reading, and neither of them is a reading.
+ *
+ * **Unknown rather than absent**, said out loud in both, because everything
+ * else on this panel is a figure and an empty panel reads as a job holding
+ * nothing.
+ *
+ * **`no_answer` points at the status bar and `unreadable` must not.** The bar
+ * names which Fleet state a silent one is and what to do about it, and on the
+ * second of these it says "Fleet running" — which is true, and would read as
+ * this panel and the bar disagreeing about the same moment. So the sentence
+ * carries its own next step.
+ *
+ * **The wrong move is named, because it is the one somebody reaches for.** A
+ * Fleet that is up and unreadable comes back the same after a restart: the two
+ * were built apart, and building them together is the fix. No version and no
+ * word for the disagreement — a number here is machinery, and the person
+ * reading this needs the act.
+ */
+const INSTEAD: Record<NothingToAsk, string> = {
+  no_answer:
+    "Nothing here is a reading of this job. The status bar names which Fleet state this is and what to do.",
+  unreadable:
+    "Nothing here is a reading of this job. This build of Bridge and this Fleet do not agree about the route, so restarting Fleet changes nothing. They ship as a pair, and rebuilding both is what settles it.",
+};
 
 /**
  * The three findings, said once.

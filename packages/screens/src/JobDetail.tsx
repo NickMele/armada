@@ -96,6 +96,7 @@ import { steeringOf } from "./steering";
 import { NOTHING_FROM_FLEET_YET, notesOf, whyNoNotes } from "./notes";
 import { entriesOf, whyNotWatching } from "./story";
 import { leading, readingOf } from "./reading";
+import { LOOK_FAILED, nothingToAsk, whyNoReading } from "./resources";
 import { briefOf, whyNoWork, workOf } from "./work";
 import { stoppedAt } from "./stopped";
 
@@ -459,6 +460,7 @@ export function JobDetail({
           examined={looked?.state === "found" ? looked.examined : null}
           looking={looked?.state === "looking"}
           lookFailed={looked?.state === "failed" ? LOOK_FAILED : undefined}
+          nothingToAsk={nothingToAsk(resources)}
           onExamine={() => onExamine(job.id)}
         />
       }
@@ -807,34 +809,6 @@ export type FoldedReads = {
   evidence: Evidence;
   diff: Diff;
 };
-
-/**
- * What a failed look says, and it says nothing about the Job.
- *
- * **Fleet did not answer, which is not a finding.** Drawing a failure as
- * `not_working` would report a Job as broken on the strength of a connection.
- */
-const LOOK_FAILED = "Fleet did not answer the look. Nothing here is a finding about the Job.";
-
-/**
- * Why there is no machine reading, which is never the same sentence twice.
- *
- * **A read that has not answered and a Job that holds nothing are different
- * things**, and this is the half that says which — the panel's own arm says the
- * other. `undefined` where the reading is in hand.
- */
-function whyNoReading(resources: Holds): string | undefined {
-  switch (resources.state) {
-    case "none":
-      return "Nothing is being read.";
-    case "reading":
-      return "Reading the machine.";
-    case "failed":
-      return "Fleet did not answer, so what this Job holds is unknown.";
-    case "read":
-      return undefined;
-  }
-}
 
 /** Why the run has no rows, which is never the same sentence twice. */
 function whyNoSteps(watched: Watched, jobId: string): string | undefined {
