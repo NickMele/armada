@@ -32,7 +32,7 @@ use core_model::{
 };
 use serde_yaml_ng::Value;
 
-use crate::error::{BadTarget, Fault, LoadError, Refusal};
+use crate::error::{BadReturn, BadTarget, Fault, LoadError, Refusal};
 use crate::judge;
 use crate::loops::{self, GateVerdict, Looping};
 use crate::roster::{self, Roster};
@@ -431,27 +431,50 @@ fn read(path: &Path, root: &Value, roster: &Roster, out: &mut Vec<Refusal>) -> O
             }
         }
     }
-    // **An edge that names no step is a loop that cannot close.** Every other
+    // **A routing edge has to name a step, and an earlier one.** Every other
     // name in this crate is resolved where it is written rather than at the
     // gate, for the reason `artifact_exists` gives: a step no Drone could pass
     // costs a worktree, a Drone and a retry budget to discover. A routing
     // target is the same name one layer up, and the layer that would otherwise
     // find it is a Job standing at a human gate with nowhere to go.
     //
+    // The order is checked here rather than deferred to the step machine
+    // because there is nothing there to defer to: the edge a return takes is
+    // `advanced -> running`, and a step the Job has not reached has advanced
+    // nothing. A step routing at itself is refused for the opposite reason —
+    // that move exists and is spelled `retry_limit`, and the two counters are
+    // two counters so a Drone that failed four times and a plan asked for a
+    // fourth draft do not read alike.
+    //
     // Read off the file for `yaml::any_holds`'s reason: a target step dropped
-    // for its own unrelated fault is still a step the author wrote.
-    let declared = yaml::text_values(&items, "id");
+    // for its own unrelated fault is still a step the author wrote. The
+    // position is the index in the document, which is what `steps[n]` in the
+    // refusal already names.
+    let declared = yaml::placed_values(&items, "id");
     for (n, step) in &placed {
         for (verdict, target) in step.verdict_routing() {
-            if !declared.contains(&target.as_str()) {
-                out.push(Refusal::new(
-                    format!("steps[{n}].verdict_routing.{}", verdict.as_wire()),
-                    Fault::RoutesToNoSuchStep {
-                        value: target.as_str().to_string(),
-                        declared: declared.iter().map(|id| (*id).to_string()).collect(),
-                    },
-                ));
-            }
+            let at = format!("steps[{n}].verdict_routing.{}", verdict.as_wire());
+            let value = target.as_str().to_string();
+            let found = declared
+                .iter()
+                .find(|(_, id)| *id == target.as_str())
+                .map(|(at, _)| *at);
+            let fault = match found {
+                None => Fault::RoutesToNoSuchStep {
+                    value,
+                    declared: declared.iter().map(|(_, id)| (*id).to_string()).collect(),
+                },
+                Some(target_at) if target_at == *n => Fault::NotAReturn {
+                    value,
+                    why: BadReturn::Itself,
+                },
+                Some(target_at) if target_at > *n => Fault::NotAReturn {
+                    value,
+                    why: BadReturn::Ahead,
+                },
+                Some(_) => continue,
+            };
+            out.push(Refusal::new(at, fault));
         }
     }
 

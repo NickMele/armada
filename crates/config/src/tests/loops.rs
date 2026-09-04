@@ -10,7 +10,7 @@
 
 use core_model::StepId;
 
-use crate::error::{Fault, LoadError};
+use crate::error::{BadReturn, Fault, LoadError};
 use crate::loops::GateVerdict;
 use crate::tests::{fault_at, named, refusals, roster};
 use crate::workflow::{Structure, WorkflowDef};
@@ -328,5 +328,82 @@ fn an_edge_that_names_no_step_is_refused() {
             value: "redraft".to_string(),
             declared: vec!["draft".to_string(), "present".to_string()],
         }
+    );
+}
+
+/// **A step routing at itself is a retry wearing a loop's name.** The move
+/// exists and is spelled `retry_limit`; the whole reason `iteration_count` and
+/// `retry_count` are two counters is that a Drone which failed four times and a
+/// plan asked for a fourth draft must not read alike, and folding them here
+/// would be the parser making that conflation on the author's behalf.
+#[test]
+fn a_step_that_routes_at_itself_is_refused_as_a_retry() {
+    let refused = refusals(parsed(
+        "loop",
+        "
+  - id: draft
+    label: Draft
+    evidence_type: document
+    advance_gate: auto
+  - id: present
+    label: Present
+    evidence_type: document
+    advance_gate: human_always
+    verdict_routing:
+      request_changes: present
+",
+    ));
+    assert_eq!(
+        fault_at(&refused, "steps[1].verdict_routing.request_changes"),
+        &Fault::NotAReturn {
+            value: "present".to_string(),
+            why: BadReturn::Itself,
+        }
+    );
+}
+
+/// **A forward target is unreachable by construction, not unbuilt.** The edge a
+/// return takes is `advanced -> running`, so it lands on a step that has already
+/// run — and a step the Job has not reached has advanced nothing. There is no
+/// later milestone in which this becomes legal, which is why it is refused here
+/// rather than left to the step machine.
+#[test]
+fn a_step_that_routes_forward_is_refused_and_not_deferred() {
+    let refused = refusals(parsed(
+        "loop",
+        "
+  - id: draft
+    label: Draft
+    evidence_type: document
+    advance_gate: human_always
+    verdict_routing:
+      request_changes: present
+  - id: present
+    label: Present
+    evidence_type: document
+    advance_gate: auto
+",
+    ));
+    assert_eq!(
+        fault_at(&refused, "steps[0].verdict_routing.request_changes"),
+        &Fault::NotAReturn {
+            value: "present".to_string(),
+            why: BadReturn::Ahead,
+        }
+    );
+}
+
+/// The refusals are three and not one: a name that resolves to nothing is an
+/// edit to the name, and a name that resolves to the wrong place is an edit to
+/// the shape. Collapsing them would tell an author to look at the same line for
+/// two different mistakes.
+#[test]
+fn a_target_that_is_strictly_earlier_is_the_only_one_that_loads() {
+    let def = parsed("loop", DESIGN_PLAN).expect("the design loop");
+    assert_eq!(
+        def.steps()[1]
+            .verdict_routing()
+            .get(&GateVerdict::RequestChanges),
+        Some(&StepId::new("draft".to_string()))
     );
 }

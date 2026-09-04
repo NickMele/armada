@@ -160,6 +160,15 @@ pub enum Fault {
         /// still a step the author declared.
         declared: Vec<String>,
     },
+    /// **A `verdict_routing` target that names a real step and is not one this
+    /// step can return to.** A separate variant from
+    /// [`Fault::RoutesToNoSuchStep`] because the step exists and the fix is
+    /// different: one is a name to correct, this is a shape to redraw.
+    ///
+    /// One variant with a `why`, the same as [`Fault::NotAnArtifactPath`]: two
+    /// ways of writing an edge the workflow cannot take, and the message has to
+    /// say which, because the fix for each is the other one's mistake.
+    NotAReturn { value: String, why: BadReturn },
     /// **`context_paths` in a definition.** The schema puts it on the resolved
     /// object: the Drone supplies the paths at declaration time and Fleet
     /// validates them, so at definition time there is nothing to author.
@@ -224,6 +233,38 @@ pub enum BadTarget {
     /// It ends in `/`, so it names a directory and a directory is not the
     /// deliverable.
     ADirectory,
+}
+
+/// Why a step's `verdict_routing` target is not somewhere the workflow could
+/// return to, given that the step it names exists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BadReturn {
+    /// It is the step that emits the verdict. **A step sent back to itself is a
+    /// retry wearing a loop's name**, and the two counters exist precisely so
+    /// that a Drone that failed four times and a plan asked for a fourth draft
+    /// stay distinguishable. `retry_limit` is the key for going again.
+    Itself,
+    /// It comes later in `steps[]`. **Unreachable by construction, not
+    /// unbuilt**: a return re-enters a step that has advanced, and a step the
+    /// Job has not reached has advanced nothing there is to go back to.
+    Ahead,
+}
+
+impl fmt::Display for BadReturn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BadReturn::Itself => write!(
+                f,
+                "it is the step that emits the verdict, and a step sent back to \
+                 itself is a retry. `retry_limit` is the key for that"
+            ),
+            BadReturn::Ahead => write!(
+                f,
+                "it comes later in the workflow, and a step the Job has not \
+                 reached has nothing for a return to land on"
+            ),
+        }
+    }
 }
 
 impl fmt::Display for BadTarget {
@@ -305,6 +346,10 @@ impl fmt::Display for Fault {
             Fault::ContradictsStructure { structure } => write!(
                 f,
                 "declares a routing edge, and the workflow declares `structure: {structure}`"
+            ),
+            Fault::NotAReturn { value, why } => write!(
+                f,
+                "is `{value}`, which is not a step this one returns to: {why}"
             ),
             Fault::RoutesToNoSuchStep { value, declared } => {
                 let names: Vec<&str> = declared.iter().map(String::as_str).collect();

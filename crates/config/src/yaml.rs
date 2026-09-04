@@ -354,14 +354,22 @@ pub(crate) fn any_holds(items: &[(String, &Value)], name: &str) -> bool {
     items.iter().any(|(_, item)| at_key(item, name).is_some())
 }
 
-/// The text at `name` in each mapping of a list, skipping any that is absent or
-/// is not text. For the same cross-step checks, and read off the file for
-/// [`any_holds`]'s reason.
-pub(crate) fn text_values<'a>(items: &'a [(String, &'a Value)], name: &str) -> Vec<&'a str> {
+/// The text at `name` in each mapping of a list, paired with the item's own
+/// position, skipping any item where the key is absent or is not text.
+///
+/// For the same cross-step checks, and read off the file for [`any_holds`]'s
+/// reason. **The position is the item's index, not the position in this list**,
+/// because a skipped item would otherwise shift every one after it — and what
+/// the caller compares is order in the document.
+pub(crate) fn placed_values<'a>(
+    items: &'a [(String, &'a Value)],
+    name: &str,
+) -> Vec<(usize, &'a str)> {
     items
         .iter()
-        .filter_map(|(_, item)| match at_key(item, name) {
-            Some(Value::String(found)) => Some(found.as_str()),
+        .enumerate()
+        .filter_map(|(n, (_, item))| match at_key(item, name) {
+            Some(Value::String(found)) => Some((n, found.as_str())),
             _ => None,
         })
         .collect()
