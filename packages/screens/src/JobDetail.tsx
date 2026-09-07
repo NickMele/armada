@@ -47,19 +47,24 @@
 // happening right now was the one thing a person had to go and find. That
 // region is gone: the turns are chapter two, the files are chapter three, and
 // the raw event table is not something this screen needs at all.
+//
+// # What this file keeps, and where the next thing goes
+//
+// It holds the open state of one reading — which step, which sheet, where the
+// log was held, whether the report dialog is up — and it arranges the regions.
+// **What each region says, it no longer decides.** The Job header is
+// `heading.tsx`, the step's facts, band and question box are `step.tsx`, the
+// story is `chapters.tsx`, the two sheets are `Sheets.tsx`, and which reading
+// is this Job's is `mine.ts`.
+//
+// That is the seam, and it is the one this file was missing: it was cut twice
+// and grew back both times, because it was the only place an addition to a
+// region could be written. The pull request link and Pilot's slot are the two
+// most recent, and both are the header's — they go in `heading.tsx` now.
 
-import { GAMING_PATTERN, JOB_LIFECYCLE, JobResources } from "@armada/components";
+import { JobResources } from "@armada/components";
 import { useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
-import {
-  DroneQuestion,
-  GamingFlags,
-  InsideAJob,
-  type JobDetailField,
-  type JobDetailHeading,
-  type RunTreeStep,
-  type StepNotice,
-} from "@armada/components";
+import { InsideAJob, type RunTreeStep } from "@armada/components";
 
 import type {
   Diff,
@@ -70,35 +75,32 @@ import type {
   Journalled,
   Observed,
   Outcome,
-  Turn,
   Watched,
 } from "@armada/protocol";
-import type { FileReport, JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
-import type { JobFootprint } from "@armada/protocol";
+import type { FileReport, JobSummary } from "@armada/protocol";
 import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
-import { Acts, type ConfirmableAct } from "./Acts";
-import { useCallArguments, type Calls, type ReadCall } from "./calls";
-import { openPullRequest, type OpenArtifact, type OpenPullRequest } from "./opening";
+import type { ConfirmableAct } from "./Acts";
+import { useCallArguments, type ReadCall } from "./calls";
+import type { OpenArtifact, OpenPullRequest } from "./opening";
 import { DIFF_CHAPTER, FLEET_LOG, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-keys";
 import { useAtFloor } from "@armada/shell";
 import { DetailSheet, holdOf, type HeldAt, type OpenSheet } from "./Sheets";
 import { chaptersOf } from "./chapters";
-import { clock, span } from "./duration";
+import { span } from "./duration";
 import { Decide } from "./Decide";
-import { factsOf, ordered } from "./facts";
+import { ordered } from "./facts";
+import { headingOf, Unrenderable } from "./heading";
 import { Log } from "./Log";
-import { Opening, phasesOf, type Opens } from "./phases";
-import { recourseOf } from "./recovery";
-import { escalation, renderFor } from "./render";
+import { detailOf, holdingOf, logOf, lookOf, turnsOf } from "./mine";
+import { phasesOf } from "./phases";
+import { renderFor } from "./render";
 import { runOf } from "./run";
+import { askingOf, fieldsOf, noticeOf, questionOf } from "./step";
 import { StepActs } from "./StepActs";
-import { steeringOf } from "./steering";
 import { NOTHING_FROM_FLEET_YET, notesOf, whyNoNotes } from "./notes";
 import { entriesOf, whyNotWatching } from "./story";
-import { leading, readingOf } from "./reading";
 import { LOOK_FAILED, nothingToAsk, whyNoReading } from "./resources";
 import { briefOf, whyNoWork, workOf } from "./work";
-import { stoppedAt } from "./stopped";
 
 export type { ConfirmableAct, JobAct } from "./Acts";
 export { renderFor } from "./render";
@@ -289,39 +291,29 @@ export function JobDetail({
   // why, and the measurement behind it.
   const floor = useAtFloor();
 
-  const reading = readingOf(job);
   const render = renderFor(job);
   const workflow = workflows.find((held) => held.id === job.workflow_id);
   const manifest = manifests.find((held) => held.id === job.owner_manifest_id);
-  // The detail is only this Job's while it names this Job. A stale one from the
-  // Job that was open a moment ago would draw another Job's steps under this
-  // Job's title.
-  const whole = watched.state === "read" && watched.jobId === job.id ? watched.detail : null;
+  // Every reading, narrowed to the Job on screen. **All five carry the id they
+  // were taken for and all five are checked against it** — each lags a
+  // selection by a round trip, so another Job's answer landing here would be
+  // that Job's steps under this Job's title, its turns under this Job's step,
+  // its disk under this Job's panel. `mine.ts` is the one place the check is
+  // written, and the counterpart to `main/reader.ts` on this side of the seam.
+  const whole = detailOf(watched, job.id);
+  const watching = turnsOf(observed, job.id);
+  const noted = logOf(journalled, job.id);
+  const holding = holdingOf(resources, job.id);
+  const looked = lookOf(examination, job.id);
 
   const steps = whole === null ? [] : ordered(whole);
   const open = steps.find((step) => step.step_id === (selected ?? job.current_step_id)) ?? steps[0];
-  // The rows this Job's socket has carried, or none. Checked against the id
-  // it was opened for: the socket lags a selection by a round trip, and another
-  // Job's turns under this Job's step would be a transcript under the wrong
-  // title.
-  const watching = "turns" in observed && observed.jobId === job.id ? observed.turns : null;
-  // And what the socket says about itself, where it is not reading. **A third
-  // answer the story needs**: four of the five states carry no rows, and a
-  // chapter drawn from the rows alone reads every one of them as a step that
+  // What the observe socket says about itself, where it is not reading. **A
+  // third answer the story needs**: four of the five states carry no rows, and
+  // a chapter drawn from the rows alone reads every one of them as a step that
   // has not started. `story.ts` holds the sentences. #324.
   const transcript = whyNotWatching(observed);
-  // What Fleet has done to the Job itself, on the same terms: checked against
-  // the id it was opened for, because this socket lags a selection too.
-  const noted = "log" in journalled && journalled.jobId === job.id ? journalled.log : null;
   const fleetSaid = useMemo(() => notesOf(noted?.notes ?? []), [noted]);
-  // The machine reading and the look above it, both checked against the id they
-  // were made for — a reading painted under the Job that replaced it is the
-  // failure `reader.ts` exists to prevent, and the same rule applies once the
-  // state reaches a screen.
-  const holding =
-    resources.state === "read" && resources.jobId === job.id ? resources.resources : null;
-  const looked =
-    examination.state !== "none" && examination.jobId === job.id ? examination : null;
 
   // What the keyboard can name, built before it is drawn. **The three regions
   // the contextual tier reaches are values here rather than queries later** —
@@ -414,49 +406,35 @@ export function JobDetail({
           onOpenSheet: openSheet,
         });
 
+  // The Job header, and everything that goes in it. `heading.tsx` holds what
+  // it is made of — the badge, the facts, the acts that end or replace the Job,
+  // and the way out to the pull request — which is where the next thing added
+  // to this header goes rather than here.
+  const heading = headingOf({
+    job,
+    whole,
+    workflow,
+    now,
+    render,
+    stale,
+    acting,
+    approving,
+    reporting,
+    onReporting: setReporting,
+    onAct,
+    onApprove,
+    onReport,
+    onOpenPullRequest,
+    onCopied,
+    onSaid,
+  });
+
   // The badge is the header, so a Job the registry has no glyph or verb for
-  // cannot be drawn at all. Named rather than half-drawn.
-  if (reading.as !== "badge" || render === "unrenderable") {
+  // cannot be drawn at all — which is the `null` above. Named rather than
+  // half-drawn.
+  if (heading === null || render === "unrenderable") {
     return <Unrenderable job={job} />;
   }
-
-  const heading: JobDetailHeading = {
-    status: reading.status,
-    statusIcon: reading.icon,
-    // The registry's own verb, opening a line. `enum-verbs.toml` spells it
-    // lowercase because most of its readings are mid-sentence; here it is the
-    // first word in the badge, and the badge is the header.
-    statusLabel: leading(reading.verb),
-    headline: job.title,
-    jobId: job.id,
-    fields: factsOf(job, whole, workflow, now),
-    // The acts that end or replace the Job. **Pilot's slot is this one**, left
-    // of the kill group — #250, and it lands without this line changing.
-    actions: (
-      <Acts
-        job={job}
-        whole={whole}
-        render={render}
-        acting={acting}
-        approving={approving}
-        stale={stale}
-        onAct={onAct}
-        onApprove={onApprove}
-        onReport={onReport}
-        reporting={reporting}
-        onReporting={setReporting}
-        onCopied={onCopied}
-      />
-    ),
-    // The pull request fact, followed. The address the link carries is what the
-    // fact drew from; what is sent is the Job id, so the string never decides
-    // what opens. `opening.ts` says why.
-    onFollowed: () => {
-      void openPullRequest(onOpenPullRequest, job.id).then((because) => {
-        if (because !== null) onSaid(because);
-      });
-    },
-  };
 
   return (
     <InsideAJob
@@ -623,205 +601,6 @@ const NAMED_NOT_NEEDED =
   "A path opens where it lives; an identifier copies. Nothing above needs these — they are here " +
   "for when you want them anyway.";
 
-/**
- * The step's own short facts. **Figures, never a chart** — a filled bar reads
- * as progress and a step has no percentage.
- *
- * **The attempt is which run this is**, from `attempts`, and it is absent on a
- * step nothing has entered rather than drawn as a zero. A step run once still
- * says `Attempt 1`, because the drawing does and because it is the fact a
- * person checks before deciding a Drone is going in circles.
- */
-function fieldsOf(step: StepDetail, now: number): JobDetailField[] {
-  const running = step.state === "running" || step.state === "retrying";
-  const elapsed = running
-    ? span(step.entered_at, now)
-    : step.entered_at === step.updated_at
-      ? undefined
-      : span(step.entered_at, step.updated_at);
-  return [
-    ...(elapsed === undefined
-      ? []
-      : [{ label: running ? "Running for" : "Took", value: elapsed, mono: true }]),
-    ...(step.attempts.length === 0
-      ? []
-      : [{ label: "Attempt", value: String(step.attempts.length), mono: true }]),
-  ];
-}
-
-/**
- * The band above the story: what happened, and why you are looking at this
- * step.
- *
- * **Waiting, stopped and failed are three kinds of stopped and never share a
- * tone.** Waiting on you is amber and carries no surface, because everything
- * mechanical cleared and the workflow is working; a Job that is over is red.
- */
-/**
- * The band, where this Job's drone is waiting on an answer.
- *
- * **`waiting`, the same tone `reviewing` takes**, and for the reason the screen
- * already gives it: everything mechanical has cleared and nothing advances until
- * a person answers. Amber, never red — a drone that asked rather than guessed
- * did the right thing.
- *
- * It says only that a question is open. What was asked, and what each answer
- * commits to, is the box beneath: this band is scanned and that is read.
- */
-function askingOf(whole: JobWhole | null): StepNotice | undefined {
-  if (whole?.asking === undefined) return undefined;
-  return {
-    tone: "waiting",
-    title: "The drone asked a question and is waiting for you.",
-    children: "Nothing advances until you answer, and nothing is wrong.",
-  };
-}
-
-/**
- * The question itself. `undefined` where nothing is outstanding, which is every
- * drone that knows what it is doing.
- *
- * **The elapsed is computed here and nowhere else.** `asked_at` crosses once and
- * nothing on the wire ticks, so the surface subtracts for itself — the same
- * arrangement `JudgeInFlight.since` has, on the `now` this screen re-renders
- * from.
- *
- * **Stale and in-flight both disable, and each says which.** A window showing a
- * reading it knows is not live must not send an answer against it.
- */
-function questionOf(
-  whole: JobWhole | null,
-  jobId: string,
-  now: number,
-  stale: boolean,
-  acting: boolean,
-  onAnswer: (jobId: string, questionId: string, chose: string) => void,
-): ReactNode {
-  const asking = whole?.asking;
-  if (asking === undefined) return undefined;
-  return (
-    <DroneQuestion
-      question={asking.question}
-      options={asking.options}
-      waiting={span(asking.asked_at, now) ?? undefined}
-      disabled={stale || acting}
-      disabledNote={
-        stale
-          ? "This Job is not live, so nothing can be sent. The drone is still waiting."
-          : acting
-            ? "That answer is already on its way to the drone."
-            : undefined
-      }
-      onAnswer={(label) => onAnswer(jobId, asking.question_id, label)}
-    />
-  );
-}
-
-/**
- * The band above the story: what stopped this step, and what the machine that
- * stopped it actually found.
- *
- * **`flagged` renders here, and it is the whole point of the band on a step
- * where the evidence was disputed.** Everything mechanical can pass, every
- * criterion can be met, and the step still stop — and a person reading
- * `7 of 7 passed`, `2 of 2 met` and a stopped step, with nothing reconciling
- * them, can only conclude the app is broken. The gaming check's finding is
- * what reconciles them, and it was reachable only by pressing *Overrule the
- * flag* and reading it in the dialog that confirms the act it exists to
- * inform.
- *
- * **What each act does is not here.** That was ninety words describing four
- * acts, in the imperative, detached from every control it named. Each sentence
- * is on its act's tooltip now, with its binding, and the band says where the
- * step stands.
- */
-function noticeOf(
-  job: JobSummary,
-  whole: JobWhole | null,
-  render: string,
-  step: StepDetail,
-  opens: Opens,
-): StepNotice | undefined {
-  if (render === "reviewing") {
-    return {
-      tone: "waiting",
-      title: "Nothing is wrong. The workflow asks for a person here.",
-      children: "Everything mechanical has cleared. Nothing advances until you answer.",
-    };
-  }
-  // **The one thing a redirect into a healthy drone leaves behind.** That job
-  // is `running` before the send and `running` after the answer, so nothing
-  // else on the screen says a person spoke to it — and a press that changed
-  // nothing reads as a press that failed. `note` and never a hue: nothing is
-  // wrong, and the band is not announcing a stop.
-  if (render === "working") {
-    const sent = steeringOf(job, whole).sent;
-    return sent === undefined ? undefined : { tone: "note", children: sent };
-  }
-  if (render !== "stopped") return undefined;
-  const reason = escalation(job);
-  const at = whole === null ? undefined : stoppedAt(whole);
-  const said = [
-    reason?.verb,
-    at === undefined ? undefined : `stopped at ${at.label}`,
-    at?.check,
-  ].filter((part) => part != null);
-  // **The line that named the file a person could not open.** This band is the
-  // first thing read on a Job that stopped and it has always ended with the log
-  // path — as text, which is where `#246` was reported from. The strip opens it
-  // too, on the Check's own row; this one is where somebody is already looking.
-  const log = at?.outputPath;
-  const recourse = recourseOf(job, whole);
-  const flagged = step.flagged;
-  return {
-    // A Job that is over is red; one holding with a live Drone is not, because
-    // a person deciding what happens next is not a failure.
-    //
-    // **Terminality is read, never listed**, which is `frozen.ts`'s rule and is
-    // what this sentence has always described. Naming `escalated` alone was the
-    // same claim with one status hard-coded into it, and `awaiting_repair` is
-    // the status that made the difference visible: a spent retry budget holds
-    // the Job for a person, nothing has failed, and it would have drawn red.
-    // #208.
-    tone: JOB_LIFECYCLE[job.status]?.terminal === false ? "stopped" : "failed",
-    title: (
-      <>
-        {said.length === 0 ? "This Job stopped." : said.join(" · ")}
-        {log === undefined ? null : (
-          <>
-            {" · "}
-            <Opening path={log} what="check" opens={opens} />
-          </>
-        )}
-      </>
-    ),
-    children: (
-      <>
-        {flagged.length === 0 ? null : (
-          <GamingFlags
-            flags={flagged.map((flag) => ({
-              ...flag,
-              // The registry carries a verb per pattern since #279; the wire
-              // spelling is the key, never the copy. A pattern with no row
-              // falls back to it rather than rendering nothing.
-              verb: GAMING_PATTERN[flag.pattern]?.verb ?? undefined,
-            }))}
-            said={WHAT_THE_CHECK_FOUND}
-            citation="whole"
-          />
-        )}
-        <span>{recourse.stands}</span>
-        {recourse.withheld === undefined ? null : (
-          <span className="text-fg-subtle">{recourse.withheld}</span>
-        )}
-      </>
-    ),
-  };
-}
-
-/** What the flag rows are, said once over them rather than once on each. */
-const WHAT_THE_CHECK_FOUND = "What the gaming check found, and where:";
-
 /** The reads the panel's own chapters draw from. */
 export type FoldedReads = {
   footprint: Footprint;
@@ -852,21 +631,4 @@ function whyNoBrief(watched: Watched, jobId: string): string {
     return "Fleet did not answer for this job.";
   }
   return "Reading this job.";
-}
-
-/**
- * A Job the registry has no sanctioned glyph, verb or hue for. The badge is
- * the header, so there is no partial render to fall back to — and no glyph is
- * invented for it here any more than in the list.
- */
-function Unrenderable({ job }: { job: JobSummary }) {
-  const reading = readingOf(job);
-  const missing = reading.as === "badge" ? ["variant"] : reading.missing;
-  return (
-    <p className="text-fg-muted">
-      {`${job.title} — `}
-      <span className="mono">{job.status}</span>
-      {`. The registry carries no ${missing.join(" and no ")} for it, so this Job has no detail to draw.`}
-    </p>
-  );
 }
