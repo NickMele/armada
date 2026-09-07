@@ -137,6 +137,7 @@ fn verify_foundations() -> ExitCode {
         rules_enums::declared::every_status_row_names_the_edges_it_carries(&root),
         rules_toolbelt::the_roster_and_the_allowlist_hold_the_same_set(&root),
         rules_vocabulary::the_generated_vocabulary_says_what_the_registries_say(&root),
+        rules_vocabulary::readers::every_generated_vocabulary_has_a_reader(&root),
     ];
 
     render("verify-foundations", &reports)

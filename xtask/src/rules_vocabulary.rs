@@ -152,5 +152,7 @@ fn parse(stdout: &str) -> Result<Vec<(String, String)>, String> {
         .collect())
 }
 
+pub mod readers;
+
 #[cfg(test)]
 mod tests;
