@@ -279,7 +279,7 @@ is a fault, because what failed was an act.
 thing that observed the failure knows Fleet's state, and a component that
 mints the class has to guess — which is how every Bridge failure came to
 draw as a fault, including the two where restarting Fleet is the wrong move.
-It sits beside the code, in `packages/shell/src/failures.ts`, and carries
+It sits beside the code, under `packages/shell/src/failures/`, and carries
 its argument there. See #344.
 
 **It is never derived from the code.** The one code Bridge does not mint is
@@ -312,7 +312,7 @@ failures Bridge draws crosses the wire that guarantees one, and the code is
 what separates an error from a failed Job. See #228.
 
 **A Bridge code is declared beside the builder that raises it**, in
-`packages/shell/src/failures.ts`, and is namespaced `bridge.`. The prefix keeps
+`packages/shell/src/failures/`, and is namespaced `bridge.`. The prefix keeps
 the Rust set and the Bridge set disjoint without a collector spanning both —
 which is why the collection above may check each half against itself and
 decide nothing about the other. A Rust code that took the prefix fails, since
