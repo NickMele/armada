@@ -33,12 +33,20 @@ import type { ReactNode } from "react";
 import { Button } from "@armada/components";
 import type { PhaseStage, PhaseStageRow, PhaseStripProps } from "@armada/components";
 
-import { ADVANCE_GATE, CHECK_ADVANCES, CHECK_OUTCOME, CRITERION_VERDICT_JUDGE } from "@armada/components";
+import { ADVANCE_GATE, CHECK_ADVANCES, CHECK_OUTCOME, CRITERION_VERDICT_CHECK, CRITERION_VERDICT_JUDGE } from "@armada/components";
 import type { CheckRun, Criterion, Judged, StepDetail } from "@armada/protocol";
 import type { Kept } from "@armada/protocol";
 import { commandOf, nameOf } from "./declared";
 import { onlyCurrentAttempt } from "./facts";
 import { openArtifact, type OpenArtifact } from "./opening";
+
+/**
+ * What a tier the run has not got to stands at. **The registry's word, and
+ * `criterion_verdict_check` owns it**: `check_outcome`'s five are what a Check
+ * that *ran* did, and `icons.toml` already calls "not reached" a Check state.
+ * Once here for the four tiers that say it, rather than typed at each.
+ */
+const NOT_REACHED = CRITERION_VERDICT_CHECK.not_reached?.verb ?? "not_reached";
 
 /**
  * How a record is opened, and where a refusal is said.
@@ -127,7 +135,7 @@ export function phasesOf(
       id: "instructed",
       label: "Instructed",
       state: step.state === "not_started" ? "ahead" : "cleared",
-      stands: step.state === "not_started" ? "not reached" : undefined,
+      stands: step.state === "not_started" ? NOT_REACHED : undefined,
       detail: "Armada wrote the step's brief and the Drone opened with it.",
     },
     {
@@ -206,7 +214,7 @@ function checksStage(step: StepDetail, opens: Opens): PhaseStage | undefined {
     return {
       label: commandOf(check),
       mono: true,
-      result: run === undefined ? "not run" : resultOf(run),
+      result: run === undefined ? NOT_REACHED : resultOf(run),
       named: run === undefined ? undefined : didNotPass(run) ? "failed" : "passed",
       // **The output opens from the row of the Check that wrote it.** An exit
       // code is the whole of what a failed Check said here, and the sentence
@@ -232,7 +240,7 @@ function checksStage(step: StepDetail, opens: Opens): PhaseStage | undefined {
     state: failed.length > 0 ? "failed" : runs.length === declared.length ? "cleared" : runs.length > 0 ? "current" : "ahead",
     stands:
       runs.length === 0
-        ? "not run"
+        ? NOT_REACHED
         : failed.length > 0
           ? `${failed.length} of ${declared.length} did not pass`
           : `${runs.length} of ${declared.length} passed`,
@@ -282,7 +290,7 @@ function judgeStage(
       label: asked === 0 ? "Judge" : `Judge · ${asked} ${asked === 1 ? "criterion" : "criteria"}`,
       kind: "judge",
       state: "ahead",
-      stands: step.judging === undefined ? "not reached" : `asking · ${step.judging.look}`,
+      stands: step.judging === undefined ? NOT_REACHED : `asking · ${step.judging.look}`,
       rows,
     };
   }
@@ -463,7 +471,7 @@ function youStage(step: StepDetail): PhaseStage {
     state: waiting ? "waiting" : step.state === "advanced" ? "cleared" : "ahead",
     // **Three states, so three standings.** Two branches against three states
     // stood a just-approved step "not reached" — #320's claim, from the caller.
-    stands: waiting ? "waiting on you" : step.state === "advanced" ? "answered" : "not reached",
+    stands: waiting ? "waiting on you" : step.state === "advanced" ? "answered" : NOT_REACHED,
     // Where `advance_gate` is a manifest rule, the tier resolved at dispatch
     // from the Manifest's own policy — so two Jobs on one workflow can show
     // different gates. Naming the value is what says why.

@@ -353,6 +353,31 @@ draw anything, into a Board Fleet could state in one message.
 A surface drawing a timeline reads `get_job_events`, and its timeline begins at
 the connection.
 
+**What a resync cannot rebuild, Bridge reads back — every region together.** A
+resync is a Board, so nothing under the open Job comes with it, and the
+receiving side is what makes the open Job's screen whole again. That reading is
+one list in `apps/desktop/src/main/screen.ts`, and it is one list on
+purpose: the reads it names were once classified at the call site, one region at
+a time, and the region left out was the panel reporting the outage. A read added
+to that screen is added to the list.
+
+**A resync arrives on two occasions, and they are not the same recovery.** The
+first message on a connection is Fleet coming back, and every read attempted
+while the socket was down failed — so a surface can be holding a failure nothing
+else will clear. A resync following a `Missed` is a gap under a connection that
+held, where HTTP answered throughout, so only what events keep current can be
+stale. Bridge tells them apart by which resync it is on the socket.
+
+| Taken again on a gap | Taken again only on a reconnection |
+|---|---|
+| Everything an event re-reads: the Job whole, what it holds, its history | The reads only a press makes, and only where one is showing a failure |
+| Either per-Job socket that is down | |
+
+**A reconnection is not a refresh.** Re-reading every open surface on every
+resync spends the bytes the `get_job`/`get_diff` split exists to save, and a
+flapping Fleet turns that into a fetch every retry. What comes back is what a
+screen is showing and cannot repair itself.
+
 **The stream is global, and a client subscribes to nothing.** Bridge holds
 exactly one connection and the Board renders every Job on it. A per-Job
 subscription would put state on a connection whose whole value is being cheap

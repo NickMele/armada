@@ -91,6 +91,24 @@ export class ReviewMaterial {
   async reread(port: number): Promise<void> {
     await Promise.all([this.claims.again(port), this.patch.again(port)]);
   }
+
+  /**
+   * Whichever of the two is showing a failure, read again. A reconnection.
+   *
+   * **Not `reread`, and the difference is the megabyte.** These two are the
+   * reads no event refreshes, for the reason at the top of this file — so a
+   * good reading of either cannot have gone stale while the socket was down,
+   * and taking it again would spend the bytes the split exists to save on every
+   * reconnection. A *failed* reading is different: it is a surface a person
+   * opened while Fleet was not answering, and nothing else in Bridge will ever
+   * take it again. #472.
+   */
+  async repair(port: number): Promise<void> {
+    await Promise.all([
+      this.claims.failing ? this.claims.again(port) : undefined,
+      this.patch.failing ? this.patch.again(port) : undefined,
+    ]);
+  }
 }
 
 /**

@@ -18,6 +18,8 @@
 
 import { describe, expect, it } from "vitest";
 
+import { CRITERION_VERDICT_CHECK } from "@armada/components";
+
 import { phasesOf, type Opens } from "./phases";
 
 import type { StepDetail } from "@armada/protocol";
@@ -116,7 +118,11 @@ describe("the human tier", () => {
     expect(you({ advance_gate: "human_always", state: "awaiting_human" })?.stands).toBe(
       "waiting on you",
     );
-    expect(you({ advance_gate: "human_always", state: "not_started" })?.stands).toBe("not reached");
+    // The registry's own word, never one typed here — a copy in the assertion
+    // is what would let this pass over a tier that had stopped reading it.
+    expect(you({ advance_gate: "human_always", state: "not_started" })?.stands).toBe(
+      CRITERION_VERDICT_CHECK.not_reached?.verb,
+    );
   });
 
   // An absent `advance_gate` means Fleet does not hold the workflow this Job

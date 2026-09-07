@@ -27,10 +27,12 @@ export type Reads<Read> = {
   /**
    * Whether a failed read keeps the last good answer for the same Job.
    *
-   * **The open Job's detail alone.** It is re-read on every event naming its
-   * Job, so one timed-out read would blank a rail mid-run; the other three are
-   * read once for a Job that has stopped, where a failure is all there is to
-   * say. A first read that fails has nothing to keep and says so either way.
+   * **The two reads an event re-takes: the open Job's detail and what it holds
+   * on this machine.** Both are re-read on every event naming their Job, so one
+   * timed-out read would blank a rail or a panel mid-run. The rest are read
+   * when a surface asks and not again, for a Job that has stopped, where a
+   * failure is all there is to say. A first read that fails has nothing to keep
+   * and says so either way. Resources joined the detail in #438.
    */
   keepsLastGood?: boolean;
 };
@@ -56,6 +58,19 @@ export class JobReader<Read> {
   /** The Job this read is for, or `null`. */
   get jobId(): string | null {
     return this.open;
+  }
+
+  /**
+   * Whether what a surface is showing for this read is a failure.
+   *
+   * **What the screen says, not what the last attempt did.** A read carrying
+   * `keepsLastGood` answers `false` where an attempt failed and the previous
+   * answer is still up, because that panel has a reading and does not need
+   * repairing. This is asked on a reconnection, of the reads nothing else takes
+   * again, so that only the ones actually stuck are re-read. #472.
+   */
+  get failing(): boolean {
+    return this.last.state === "failed";
   }
 
   /** Read one Job, or `null` to stop. Nothing connected is a failure to draw. */

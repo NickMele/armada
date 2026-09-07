@@ -12,6 +12,13 @@
 // happened on this step yet.`
 //
 // And the second case: a Drone's question reaching the Board row it belongs on.
+//
+// And the third and fourth, which are one rule from both sides: **a reconnection
+// brings back every region of the open Job's screen, and a gap in the stream
+// does not fetch the patch.** #472 was the detail being re-read on a resync and
+// what the Job holds not being, so the panel left saying Fleet was not answering
+// was the one reporting the outage. The pair here is what keeps the fix from
+// being replaced by its own opposite — a resync that refetches everything.
 
 import { once } from "node:events";
 import { createServer, type IncomingMessage, type Server } from "node:http";
@@ -51,34 +58,101 @@ afterEach(async () => {
   while (opened.length > 0) await opened.pop()?.();
 });
 
-/** A Fleet on one port: `/events`, `/jobs/:id/observe`, and the reads between. */
+/**
+ * Every read one Job's screen is drawn from, by the route it is made on.
+ *
+ * **The list `screen.ts` classifies**, written out here so a
+ * read that is added to one and not the other is a case that fails rather than
+ * a region that never comes back.
+ */
+const SCREEN = {
+  detail: `/jobs/${A_JOB}`,
+  resources: `/jobs/${A_JOB}/resources`,
+  history: `/jobs/${A_JOB}/events`,
+  evidence: `/jobs/${A_JOB}/evidence`,
+  diff: `/jobs/${A_JOB}/diff`,
+} as const;
+
+/** What each of those answers. Every body is the smallest one that reads. */
+function answering(route: string): unknown {
+  switch (route) {
+    case SCREEN.detail:
+      return { ...A_ROW, steps: [], acceptance_criteria: [], workflow_steps: [] };
+    case SCREEN.resources:
+      return { job_id: A_JOB, read_at: "2026-09-02T19:00:00Z", held: "running", processes: [] };
+    case SCREEN.history:
+      return { job_id: A_JOB, moves: [] };
+    case SCREEN.evidence:
+      return { job_id: A_JOB, steps: [] };
+    case SCREEN.diff:
+      return { job_id: A_JOB };
+    default:
+      return undefined;
+  }
+}
+
+/** Each connection to one route, in arrival order, and a wait for the next. */
+function arriving(server: WebSocketServer): {
+  all: WebSocket[];
+  past: (already: number) => Promise<WebSocket>;
+} {
+  const all: WebSocket[] = [];
+  let waiting: (() => void) | null = null;
+  server.on("connection", (socket: WebSocket) => {
+    all.push(socket);
+    waiting?.();
+  });
+  return {
+    all,
+    past: (already: number) =>
+      new Promise<WebSocket>((keep) => {
+        const look = (): boolean => {
+          const found = all[already];
+          if (found === undefined) return false;
+          keep(found);
+          return true;
+        };
+        if (!look()) waiting = () => void look();
+      }),
+  };
+}
+
+/** A Fleet on one port: `/events`, both per-Job sockets, and the reads between. */
 async function serving(): Promise<{
   port: number;
-  events: Promise<WebSocket>;
+  /** Each connection to `/events`. A reconnection is the second one. */
+  stream: (past: number) => Promise<WebSocket>;
   /** Each connection to this Job's transcript, in arrival order. */
   observing: WebSocket[];
   /** The next transcript connection past the ones already in hand. */
   watched: (past: number) => Promise<WebSocket>;
+  /** Each connection to this Job's own log. */
+  logging: WebSocket[];
+  /** How many times one route has been read. */
+  read: (route: string) => number;
+  /** Fleet goes away: every socket it holds closes. The port stays listening. */
+  goesAway: () => void;
 }> {
   const stream = new WebSocketServer({ noServer: true });
   const turns = new WebSocketServer({ noServer: true });
-  const observing: WebSocket[] = [];
-  let arrived: (() => void) | null = null;
-  turns.on("connection", (socket) => {
-    observing.push(socket);
-    arrived?.();
-  });
+  const notes = new WebSocketServer({ noServer: true });
+  const events = arriving(stream);
+  const transcripts = arriving(turns);
+  const logs = arriving(notes);
 
+  const reads = new Map<string, number>();
   const server = createServer((request, answer) => {
-    // Only the reads this case's path takes. Everything else answers a refusal,
-    // which every reader here already renders rather than throwing on.
-    answer.writeHead(request.url === `/jobs/${A_JOB}` ? 200 : 404, {
-      "content-type": "application/json",
-    });
-    answer.end(request.url === `/jobs/${A_JOB}` ? JSON.stringify(whole()) : "{}");
+    const route = request.url ?? "";
+    reads.set(route, (reads.get(route) ?? 0) + 1);
+    // Anything off the list answers a refusal, which every reader here already
+    // renders rather than throwing on.
+    const body = answering(route);
+    answer.writeHead(body === undefined ? 404 : 200, { "content-type": "application/json" });
+    answer.end(JSON.stringify(body ?? {}));
   });
   server.on("upgrade", (request: IncomingMessage, socket: Socket, head: Buffer) => {
-    const to = (request.url ?? "").endsWith("/observe") ? turns : stream;
+    const path = request.url ?? "";
+    const to = path.endsWith("/observe") ? turns : path.endsWith("/log") ? notes : stream;
     to.handleUpgrade(request, socket, head, (client) => to.emit("connection", client, request));
   });
   server.listen(0, "127.0.0.1");
@@ -87,29 +161,25 @@ async function serving(): Promise<{
 
   return {
     port: (server.address() as AddressInfo).port,
-    events: once(stream, "connection").then(([socket]) => socket as WebSocket),
-    observing,
-    watched: (past: number) =>
-      new Promise<WebSocket>((keep) => {
-        const look = (): boolean => {
-          const found = observing[past];
-          if (found === undefined) return false;
-          keep(found);
-          return true;
-        };
-        if (!look()) arrived = () => void look();
-      }),
+    stream: events.past,
+    observing: transcripts.all,
+    watched: transcripts.past,
+    logging: logs.all,
+    read: (route: string) => reads.get(route) ?? 0,
+    goesAway: () => {
+      for (const socket of [...events.all, ...transcripts.all, ...logs.all]) socket.close();
+    },
   };
 }
 
-/** One Job read whole, as `GET /jobs/:id` answers it. */
-function whole() {
-  return {
-    ...A_ROW,
-    steps: [],
-    acceptance_criteria: [],
-    workflow_steps: [],
-  };
+/** The first message on every connection, and one more after every drop. */
+function resyncing(cursor: number): string {
+  return JSON.stringify({
+    message: "resync",
+    protocol_version: PROTOCOL_VERSION,
+    cursor,
+    jobs: { jobs: [A_ROW], unreadable: [] },
+  });
 }
 
 /** Every state main published, and a wait for the one a case is about. */
@@ -166,15 +236,8 @@ it("reopens a Job's transcript on the event that says its next step is running",
   opened.push(() => connection.stop());
 
   connection.start();
-  const stream = await fleet.events;
-  stream.send(
-    JSON.stringify({
-      message: "resync",
-      protocol_version: PROTOCOL_VERSION,
-      cursor: 1,
-      jobs: { jobs: [A_ROW], unreadable: [] },
-    }),
-  );
+  const stream = await fleet.stream(0);
+  stream.send(resyncing(1));
   await published.until((state) => state.connection.state === "connected");
 
   await connection.observeJob(A_JOB);
@@ -249,15 +312,8 @@ it("puts a Drone's question on the Board row, and takes it off again", async () 
   opened.push(() => connection.stop());
 
   connection.start();
-  const stream = await fleet.events;
-  stream.send(
-    JSON.stringify({
-      message: "resync",
-      protocol_version: PROTOCOL_VERSION,
-      cursor: 1,
-      jobs: { jobs: [A_ROW], unreadable: [] },
-    }),
-  );
+  const stream = await fleet.stream(0);
+  stream.send(resyncing(1));
   await published.until((state) => state.connection.state === "connected");
 
   // The Job stays `running` for the whole of this. **The row's own flag is the
@@ -294,4 +350,111 @@ it("puts a Drone's question on the Board row, and takes it off again", async () 
     }),
   );
   await published.until((state) => state.jobs[0]?.asking === false);
+});
+
+it("brings back every region of the open Job when Fleet comes back", async () => {
+  const fleet = await serving();
+  const home = await runtimeFile(fleet.port);
+  const published = publishing();
+  const connection = new FleetConnection({
+    home,
+    publish: (state) => published.publish(state),
+    now: () => 1_756_840_000_000,
+  });
+  opened.push(() => connection.stop());
+
+  connection.start();
+  const first = await fleet.stream(0);
+  first.send(resyncing(1));
+  await published.until((state) => state.connection.state === "connected");
+
+  // **Fleet goes away with nothing open**, so what follows is a person opening
+  // a Job while it is down — which is the only way the reads that no event
+  // feeds come to be showing a failure at all.
+  fleet.goesAway();
+  await published.until((state) => state.connection.state === "unreachable");
+
+  // Every region of one Job's screen, opened the way opening the Job opens
+  // them: the rail, the machine panel, the history, both halves of the review,
+  // and the two sockets.
+  await connection.watchJob(A_JOB);
+  await connection.readResources(A_JOB);
+  await connection.readHistory(A_JOB);
+  await connection.readEvidence(A_JOB);
+  await connection.readDiff(A_JOB);
+  await connection.observeJob(A_JOB);
+
+  // #472 as it was reported: the panel saying Fleet is not answering is the one
+  // that stayed that way. Every region is a failure here, and nothing has been
+  // read over HTTP, because there was no port to send to.
+  await published.until(
+    (state) => state.resources.state === "failed" && state.watched.state === "failed",
+  );
+  for (const route of Object.values(SCREEN)) expect(fleet.read(route)).toBe(0);
+  expect(fleet.observing).toHaveLength(0);
+  expect(fleet.logging).toHaveLength(0);
+
+  // Fleet comes back on the same port, and the runtime file still names it.
+  // Nothing below is a press: the retry reattaches on its own.
+  const second = await fleet.stream(1);
+  second.send(resyncing(2));
+
+  await published.until(
+    (state) =>
+      state.watched.state === "read" &&
+      state.resources.state === "read" &&
+      state.history.state === "read" &&
+      state.evidence.state === "read" &&
+      state.diff.state === "read",
+  );
+  // Each read once, together, rather than a screen that half-recovered.
+  for (const route of Object.values(SCREEN)) expect(fleet.read(route)).toBe(1);
+  // And both per-Job sockets, which are reopened rather than re-read.
+  await fleet.watched(0);
+  await published.until((state) => state.journalled.state !== "failed");
+  expect(fleet.observing).toHaveLength(1);
+  expect(fleet.logging).toHaveLength(1);
+}, 15_000);
+
+it("does not fetch the patch again when the stream drops events under a live socket", async () => {
+  const fleet = await serving();
+  const home = await runtimeFile(fleet.port);
+  const published = publishing();
+  const connection = new FleetConnection({
+    home,
+    publish: (state) => published.publish(state),
+    now: () => 1_756_840_000_000,
+  });
+  opened.push(() => connection.stop());
+
+  connection.start();
+  const stream = await fleet.stream(0);
+  stream.send(resyncing(1));
+  await published.until((state) => state.connection.state === "connected");
+
+  await connection.watchJob(A_JOB);
+  await connection.readResources(A_JOB);
+  await connection.readEvidence(A_JOB);
+  await connection.readDiff(A_JOB);
+  await published.until((state) => state.diff.state === "read");
+  for (const route of [SCREEN.detail, SCREEN.resources, SCREEN.evidence, SCREEN.diff]) {
+    expect(fleet.read(route)).toBe(1);
+  }
+
+  // A client that could not keep up. Fleet says how many it lost and follows
+  // with current state, on the socket that never dropped —
+  // `crates/api/src/sockets.rs`.
+  stream.send(JSON.stringify({ message: "missed", dropped: 3 }));
+  stream.send(resyncing(9));
+
+  // **What events keep current comes back; what a press keeps does not.** HTTP
+  // answered throughout, so the claims and the patch are still good — and the
+  // patch is the megabyte the split in `crates/ipc/src/work.rs` exists to save.
+  await published.until(
+    (state) => state.connection.state === "connected" && state.connection.cursor === 9,
+  );
+  await published.until(() => fleet.read(SCREEN.resources) === 2);
+  expect(fleet.read(SCREEN.detail)).toBe(2);
+  expect(fleet.read(SCREEN.evidence)).toBe(1);
+  expect(fleet.read(SCREEN.diff)).toBe(1);
 });
