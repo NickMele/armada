@@ -67,6 +67,20 @@ impl TempRepo {
         self.root.to_string_lossy().into_owned()
     }
 
+    /// What `HEAD` resolves to, as the forty characters a proof is keyed by.
+    ///
+    /// **Read from the repository rather than remembered by the test**, so an
+    /// assertion about which commit was proved cannot pass by comparing a
+    /// literal to itself.
+    pub fn head_str(&self) -> String {
+        self.open()
+            .head()
+            .expect("a HEAD")
+            .target()
+            .expect("a commit")
+            .to_string()
+    }
+
     pub fn open(&self) -> Repository {
         Repository::open(&self.root).expect("the repository")
     }

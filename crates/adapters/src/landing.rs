@@ -110,9 +110,20 @@ pub(crate) fn caught_up(in_repo: &str, base: &str) -> RepositoryStanding {
     if !run.status.success() {
         return left_alone(said(&run));
     }
-    let after = repo.head().ok().and_then(|head| head.target());
-    let moved = match (before, after) {
-        (Some(before), Some(after)) if before != after => repo
+    // **Read after the pull and reported, not inferred.** What `#474` runs its
+    // Checks against is the tree that is here now, so the commit is the one
+    // this repository's HEAD resolves to — never the merge commit the forge
+    // named, which may be three commits back by the time anybody looks.
+    let Some(after) = repo.head().ok().and_then(|head| head.target()) else {
+        // A pull that succeeded over a HEAD nothing can read. Unreachable in
+        // practice and reported as a refusal rather than as a standing with no
+        // commit, because the alternative is a variant carrying an optional
+        // one — and every caller would then have to ask a question that has no
+        // answer it could act on.
+        return left_alone(format!("git would not say what commit `{base}` is on"));
+    };
+    let moved = match before {
+        Some(before) if before != after => repo
             .graph_ahead_behind(after, before)
             .map(|(ahead, _)| ahead)
             .unwrap_or(0),
@@ -121,10 +132,12 @@ pub(crate) fn caught_up(in_repo: &str, base: &str) -> RepositoryStanding {
     match moved {
         0 => RepositoryStanding::AlreadyHadIt {
             base: base.to_string(),
+            head: after.to_string(),
         },
         commits => RepositoryStanding::MovedOn {
             base: base.to_string(),
             commits,
+            head: after.to_string(),
         },
     }
 }

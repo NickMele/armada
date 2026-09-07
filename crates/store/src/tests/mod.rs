@@ -24,6 +24,7 @@ mod iteration;
 mod migrate;
 mod plan;
 mod process;
+mod proving;
 mod reconstruct;
 mod report;
 mod revision;

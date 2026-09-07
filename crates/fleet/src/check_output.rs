@@ -208,6 +208,44 @@ pub fn kept_dry(
     keeping(repo_root, job, step, attempt, checks, output, DRY)
 }
 
+/// Write each Check's output for a run against a commit, and put its path on
+/// the row.
+///
+/// **Under `commits/`, beside the Job directories rather than inside one.** The
+/// run belongs to the commit and not to whichever Job noticed the merge — `#474`
+/// — so filing it under that Job's id would put one commit's answer somewhere a
+/// second Job merging into the same commit would never look. A Job id is a
+/// ULID, so the literal collides with nothing.
+///
+/// The ordinal alone is the file name, because the row's key is the commit and
+/// the ordinal and nothing else: there is no step here, and no attempt — a
+/// commit is proved once.
+pub fn kept_for_a_commit(
+    repo_root: &str,
+    at_commit: &str,
+    checks: &[StepCheck],
+    output: &[(String, Output)],
+) -> Vec<StepCheck> {
+    let relative = format!(".armada/checks/commits/{at_commit}");
+    let dir = Path::new(repo_root).join(&relative);
+    if !one_component(at_commit) || std::fs::create_dir_all(&dir).is_err() {
+        return checks.to_vec();
+    }
+    checks
+        .iter()
+        .enumerate()
+        .map(|(ordinal, check)| {
+            let Some((_, printed)) = output.iter().find(|(name, _)| name == &check.name) else {
+                return check.clone();
+            };
+            let name = format!("{ordinal}.log");
+            let mut kept = check.clone();
+            kept.output_path = write(&dir, &name, printed).then(|| format!("{relative}/{name}"));
+            kept
+        })
+        .collect()
+}
+
 /// What a gate run's file name carries between the step and the ordinal:
 /// nothing.
 const RECORDED: &str = "";

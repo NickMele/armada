@@ -213,6 +213,9 @@ async fn the_forge_is_not_asked_on_every_turn() {
 
 /// The address the fixture's finish opens a pull request at.
 const PULL_REQUEST: &str = "https://forge.invalid/armada/pull/1";
+/// The commit the base branch is on once the fast-forward has run. `#474` keys
+/// a proof by it, so it is a value the tests can name.
+const MERGED_INTO: &str = "5b4ec82700000000000000000000000000000000";
 
 /// An open pull request whose base has been superseded, as the forge would
 /// report it.
@@ -361,6 +364,7 @@ async fn a_merge_brings_the_repository_up_to_the_branch_that_merged() {
         .repository_standing(RepositoryStanding::MovedOn {
             base: String::from("main"),
             commits: 3,
+            head: String::from(MERGED_INTO),
         });
     fleet.vcs().now_landed(Landing::Merged {
         url: String::from(PULL_REQUEST),
@@ -373,6 +377,7 @@ async fn a_merge_brings_the_repository_up_to_the_branch_that_merged() {
         Some(RepositoryStanding::MovedOn {
             base: String::from("main"),
             commits: 3,
+            head: String::from(MERGED_INTO),
         })
     );
     assert_eq!(

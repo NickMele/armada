@@ -84,6 +84,9 @@ pub mod process;
 pub mod proposal;
 pub mod proposals;
 mod proposing;
+/// Running the repository's Checks against the tree a merge left behind, and
+/// the record that is keyed by the commit rather than by a Job.
+mod proving;
 pub mod questioning;
 pub mod readmitting;
 pub mod readopting;

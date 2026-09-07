@@ -149,6 +149,26 @@ Rules that follow:
 
 `armada check`, the dry run a Drone can ask for, skips exactly what the gate would. A rehearsal that ran a Check the gate will not run would tell a Drone its work failed something nobody is going to ask.
 
+### Proving what merged
+
+**A Manifest may name Checks to run against the tree a merge left behind, and absent means none run.**
+
+```yaml
+after_merge:
+  checks: [build, test]
+```
+
+Decided 7 Sep 2026, #474. A Job's gate proves the work in a worktree cut from a base that has since moved; Fleet then brings the repository up to what merged and, until this key, stopped there — so the last run that said anything about the code holding was a run against a tree that no longer existed.
+
+Rules that follow:
+
+- **Absent is off, and there is no value meaning *all of them*.** What this costs is a build and a test run on the machine somebody is working on, for an event nobody is waiting for. `../practices/rust.md` section 8 names a hook that rebuilt on merge as the cause of v1's four-minute cold build and says outright not to reintroduce one. So the repository names what is worth that, one Check at a time, or nothing runs.
+- **The run belongs to the commit, not to the Job that noticed.** Two Jobs merging within a minute are two merges into one commit, and the result is keyed by the commit the repository ended up on. The second Job reads the first one's answer rather than running the suite again.
+- **A Check that declares `requires` is refused here.** A prerequisite writes in the tree it runs in, and that tree is the repository a person is standing in. Fleet fast-forwards it only over a clean checkout; a run that then reformatted it would put back what those refusals exist to keep out.
+- **A Check's own `when` is not consulted.** `when` answers *did this step touch anything I cover*, and after a merge there is no step to ask it of. The list is the filter.
+- **Nothing depends on the answer.** The work is merged. A red cannot fail the Job, cannot reopen it — `completed_success` is terminal — and rolls nothing back; the response is a person filing a new Job pointing back through `subject`. See [Fleet](fleet.md).
+- **A merge Fleet declined to fast-forward proves nothing.** A dirty worktree or a checkout on another branch leaves no updated tree, and a run against whatever was there would be reporting on somebody's uncommitted work.
+
 ### Check timeout
 
 A configured bound applies to every Check, and an optional per-Check field narrows it.

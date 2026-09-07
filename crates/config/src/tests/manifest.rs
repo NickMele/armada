@@ -103,7 +103,16 @@ fn a_section_m1_does_not_read_hard_fails_and_names_what_it_does_read() {
     };
     assert_eq!(
         *known,
-        ["version", "id", "base", "checks", "commands", "setup", "drone"]
+        [
+            "version",
+            "id",
+            "base",
+            "checks",
+            "commands",
+            "setup",
+            "drone",
+            "after_merge"
+        ]
     );
 }
 

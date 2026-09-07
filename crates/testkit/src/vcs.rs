@@ -181,6 +181,10 @@ impl Default for Delivering {
             renewed: Renewed::Renewed,
             repository: RepositoryStanding::AlreadyHadIt {
                 base: String::from("main"),
+                // A commit-shaped string, because `#474` keys a proof by it and
+                // a fixture that handed back an empty one would key every
+                // fake's proof the same way.
+                head: String::from("0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"),
             },
         }
     }

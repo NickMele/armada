@@ -72,6 +72,7 @@ mod preparing;
 mod prerequisites;
 mod process;
 mod proposing;
+mod proving;
 mod questioning;
 mod queued;
 mod reclaim;

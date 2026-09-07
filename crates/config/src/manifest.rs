@@ -27,7 +27,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use core_model::{Covers, ManifestId, PathPattern, Prerequisite, Ulid};
+use core_model::{Covers, ManifestId, PathPattern, Prerequisite, ResolvedCheck, Ulid};
 use serde_yaml_ng::Value;
 
 use crate::error::{Fault, LoadError, Refusal};
@@ -36,7 +36,14 @@ use crate::yaml::{self, Table};
 
 /// The keys M1 reads at the top level of an `armada.yml`.
 const TOP_LEVEL: &[&str] = &[
-    "version", "id", "base", "checks", "commands", "setup", "drone",
+    "version",
+    "id",
+    "base",
+    "checks",
+    "commands",
+    "setup",
+    "drone",
+    "after_merge",
 ];
 /// The keys M1 reads inside `checks.<name>`.
 const CHECK_KEYS: &[&str] = &["run", "when", "requires"];
@@ -44,6 +51,10 @@ const CHECK_KEYS: &[&str] = &["run", "when", "requires"];
 const COMMAND_KEYS: &[&str] = &["run", "destructive"];
 /// The keys M1 reads inside `setup`.
 const SETUP_KEYS: &[&str] = &["requires"];
+/// The keys M1 reads inside `after_merge`. **`checks` and nothing else**, so
+/// the section says one thing: which of this repository's Checks are worth
+/// running against a tree a merge left behind.
+const AFTER_MERGE_KEYS: &[&str] = &["checks"];
 /// The keys M1 reads inside `drone`. **Spelled as a workflow step spells
 /// them** — `crates/config/src/workflow.rs`'s `STEP_KEYS` carries the same two
 /// words, because they are the same two values one tier up.
@@ -162,6 +173,7 @@ pub struct Manifest {
     checks: BTreeMap<String, Check>,
     commands: BTreeMap<String, Command>,
     prepared_by: Vec<Preparation>,
+    proved_after_a_merge: Vec<ResolvedCheck>,
     /// The two `lifetime = "Live"` keys, behind a cell every clone shares.
     /// See [`crate::live`] for why these and not the whole file.
     live: Cell,
@@ -276,6 +288,18 @@ impl Manifest {
         &self.prepared_by
     }
 
+    /// The Checks this repository asks to be run against the tree a merge left
+    /// behind, **already resolved, in the order `after_merge.checks` names
+    /// them**. Empty is the default and is opt-in on purpose — see
+    /// `docs/concepts/manifest.md`, *Proving what merged*, and `#474`.
+    ///
+    /// **`when` is dropped, `requires` is refused, `expect_exit_code` is zero.**
+    /// All three are a step's question and there is no step here; the refusal is
+    /// [`Fault::PreparesTheRepository`], and [`after_merge`] carries why.
+    pub fn proved_after_a_merge(&self) -> &[ResolvedCheck] {
+        &self.proved_after_a_merge
+    }
+
     /// How long a Drone working in this repository may say nothing before
     /// Fleet pokes it, in seconds. **`None` where the file declares no
     /// `drone.quiet_after_seconds`**, which is the repository deferring to what
@@ -361,6 +385,13 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         Some(value) => patience(value, out),
         None => (None, None),
     };
+    // After `checks` for `setup.requires`' reason, one registry along: every
+    // entry resolves against it, and a file's order is never something an
+    // author has to think about.
+    let proved_after_a_merge = match top.optional("after_merge") {
+        Some(value) => after_merge(value, &checks, &commands, out),
+        None => Vec::new(),
+    };
     top.close(TOP_LEVEL, out);
 
     // Sibling maps sharing no keys. Reported against `commands`, because the
@@ -382,6 +413,7 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         checks,
         commands,
         prepared_by,
+        proved_after_a_merge,
         live: Cell::holding(Patience {
             quiet_after_seconds,
             poke_limit,
@@ -462,6 +494,75 @@ fn preparation(
         .into_iter()
         .map(|(name, run)| Preparation { name, run })
         .collect()
+}
+
+/// `after_merge:`, the Checks this repository asks to be run against the tree a
+/// merge left behind.
+///
+/// **The one section here that spends a person's machine rather than a Job's.**
+/// A Job's Checks run in a worktree Armada cut; these run in the repository
+/// somebody is working in, minutes after a merge nobody is waiting on. That is
+/// why it is opt-in, why it names Checks one at a time rather than meaning *all
+/// of them*, and why a Check with prerequisites is refused. `#474`, and
+/// `docs/concepts/manifest.md` — *Proving what merged*.
+///
+/// **`checks` is required, for `setup.requires`' reason.** Every entry is
+/// refused on its own and the walk continues, so two bad names are one edit.
+fn after_merge(
+    value: &Value,
+    checks: &BTreeMap<String, Check>,
+    commands: &BTreeMap<String, Command>,
+    out: &mut Vec<Refusal>,
+) -> Vec<ResolvedCheck> {
+    let Some(mut table) = Table::open("after_merge", value, out) else {
+        return Vec::new();
+    };
+    let items = table
+        .required("checks", out)
+        .and_then(|value| yaml::list(&table.at("checks"), value, out));
+    table.close(AFTER_MERGE_KEYS, out);
+    let Some(items) = items else {
+        return Vec::new();
+    };
+    let mut built: Vec<ResolvedCheck> = Vec::new();
+    for (key, name) in texts(items, out) {
+        if let Some(first_at) = built.iter().position(|had| had.label() == name) {
+            out.push(Refusal::new(key, Fault::RequiredTwice { first_at }));
+            continue;
+        }
+        match checks.get(&name) {
+            Some(check) if !check.requires().is_empty() => out.push(Refusal::new(
+                key,
+                Fault::PreparesTheRepository {
+                    requires: check
+                        .requires()
+                        .iter()
+                        .map(|needed| needed.name().to_string())
+                        .collect::<Vec<String>>()
+                        .join(", "),
+                    value: name,
+                },
+            )),
+            // `when` dropped and `expect_exit_code` zero: both are a step's
+            // question, and after a merge there is no step to ask it of.
+            Some(check) => built.push(ResolvedCheck::ManifestCheck {
+                name,
+                run: check.run().to_string(),
+                expect_exit_code: 0,
+                when: None,
+                requires: Vec::new(),
+            }),
+            None => out.push(Refusal::new(
+                key,
+                Fault::NotADeclaredCheck {
+                    is_a_command: commands.contains_key(&name),
+                    value: name,
+                    declared: checks.keys().cloned().collect(),
+                },
+            )),
+        }
+    }
+    built
 }
 
 /// `checks.<name>.requires`, resolved for every Check in the file.
