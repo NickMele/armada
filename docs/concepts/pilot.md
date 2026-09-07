@@ -145,4 +145,20 @@ Resuming it as-is produces a Drone that fights the engineer's changes or redoes 
 **Assist renders disabled in the modal with a coming-soon state**, rather than hidden, so the outcome set does not change shape when it ships.
 
 ## Open questions
-Nothing. `[pilot-ninth-status-name]` asked what the ninth status is called and what its reasons are, on the premise that one status carried both a piloted Job and one owing an attestation. **The code answered it by splitting them.** `crates/core-model/domain/job-statuses.toml` carries `piloted` and `awaiting_attestation` as separate rows, each with its own reasons — which is why the question could not be answered as asked.
+
+- **[pilot-session-launch]** What opens a piloted session on this machine? *The
+  piloted session* above says what the session is — the Drone's worktree, the
+  bundle loaded, an unrestricted toolset — and never what runs it. The two
+  shapes are a terminal Armada launches itself and an instruction a person
+  follows, and they differ in what Armada has to know about the engineer's
+  shell, which of the two owns the failure when the session does not open, and
+  whether a piloted Job can be entered from a machine Bridge is not running on.
+  The act cannot be built until this is decided.
+- **[pilot-exits-ship-with-entry]** May the act that starts a pilot land before
+  the panel that ends one? Both are claimed by the Pilot milestone, so they ship
+  in the same release and that half is settled. What is not is the order inside
+  it: *The piloted session* states the three exits as a panel on the Job, and a
+  pilot a person can start and cannot end holds a worktree out of the scheduler
+  with no recorded way back.
+
+`[pilot-ninth-status-name]` asked what the ninth status is called and what its reasons are, on the premise that one status carried both a piloted Job and one owing an attestation. **The code answered it by splitting them.** `crates/core-model/domain/job-statuses.toml` carries `piloted` and `awaiting_attestation` as separate rows, each with its own reasons — which is why the question could not be answered as asked.
