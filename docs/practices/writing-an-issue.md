@@ -40,9 +40,10 @@ Everything else on this page follows from that one rule.
 
 **Provenance is not the lede.** "Found by the #286 agent, which was told to
 spell a responsive variant", "Drawn in `Journey 6`, frame `6a`", "Filing this
-small because" — 31 of the last 60 issues open on a sentence like one of these.
-Every one of them is worth keeping and none of them is the answer. They go last,
-under `## How this was found`.
+small because" — 31 of the last 60 issues opened on a sentence like one of these
+when this page was written, which is why it exists. Thirty-four have since been
+rewritten to demote it. Every one of those sentences is worth keeping and none
+of them is the answer. They go last, under `## How this was found`.
 
 **A mechanism is not a consequence.** `JobDetail::of` taking twelve positional
 arguments is a fact about a signature. The consequence is that two agents adding
@@ -104,7 +105,11 @@ should care:
 > Doctor: the condition strip
 
 A colon-prefixed grouping (`Pilot:`, `Doctor:`) is a milestone's job, and the
-milestone field already does it.
+milestone field already does it. The third example above is repaired, along with
+eleven others in the same pass — and **the replacement came out of the body every
+time**, because those bodies had just had their opening paragraphs rewritten to
+name what a person cannot do. A title that will not come is usually a body that
+has not said it yet.
 
 ## What not to write
 
