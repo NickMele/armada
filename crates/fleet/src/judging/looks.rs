@@ -1,0 +1,342 @@
+//! The five looks, and what each one asks about.
+//!
+//! **The only half that knows what is being asked.** A brief is built here, a
+//! model is chosen here, and the answer is read back into a verdict here — the
+//! mark and the child process below it know none of that, which is why they
+//! are elsewhere.
+//!
+//! **A caller chooses none of what the Judge is shown.** The work product comes
+//! from `verification::Product`, reading the step's declared `evidence_type`;
+//! the yardstick from `evidence_scope.reference_docs` through
+//! [`AtStep::baseline`], which answers only with a strictly earlier step that
+//! recorded something. The **request** is the exception — it belongs to the Job
+//! rather than the step and rides every brief, including the drift look.
+//! Unconditional on purpose: per-criterion needs a key in the definition, and a
+//! criterion asking about the request whose author forgot the key is #169 one
+//! dial smaller. The cost is unmeasured: a few hundred characters beside a brief
+//! already carrying a whole diff, times `panel_size` — the dial to reach for.
+
+use adapter_traits::{Ask, Model, Patch};
+use core_model::{
+    DeclaredPaths, GamingFlag, JudgeCheck, Judgment, RepoPath, ResolvedStep, StepEvidence, StepId,
+};
+use verification::{
+    Accepted, Answered, Baseline, Brief, Convergence, ConvergenceBrief, Delivered, Flagged,
+    GamingBrief, Product, Reference, Refusals, Request, Widened, WideningBrief,
+};
+
+use crate::at_step::AtStep;
+
+use super::marking::Calling;
+use super::{said, CallFailed, Judging, Look};
+
+/// Judge one step, and answer with the refusals or with none.
+///
+/// **Called only after the mechanical tier passed**, and only where the step
+/// declares a criterion or its work drifted off the declared plan. Both of
+/// those are the caller's to establish, which is what makes the tier cold: this
+/// function costs money every time it is entered.
+///
+/// `off_plan` is the mandatory drift look. It is one call, on the step's own
+/// model dial, and it asks its question after the step's own criteria so that a
+/// refusal a step declared is not preceded by one Fleet added.
+///
+/// **A step with nothing to show draws no call at all.** Building the work
+/// product is the first thing done here, before a model is named or a budget
+/// spent, and a step that produced nothing the Judge could read comes back as
+/// [`CallFailed::NothingToJudge`] — which the gate turns into a ruling that
+/// decided neither way. It used to come back as a refusal, every time, on every
+/// Job whose first step wrote a note.
+pub(crate) async fn judged(
+    at: AtStep<'_>,
+    request: Request<'_>,
+    accepted: Accepted<'_>,
+    patch: &Patch,
+    delivered: Option<Delivered<'_>>,
+    answered: Answered<'_>,
+    off_plan: &[RepoPath],
+    recorded: &[(StepId, StepEvidence)],
+    judging: &Judging,
+) -> Result<(Vec<Judgment>, Option<Refusals>), CallFailed> {
+    let step = at.step();
+    let product =
+        Product::of(step, patch, accepted, delivered).map_err(CallFailed::NothingToJudge)?;
+    let against = measured_against(at, recorded);
+    let references: Vec<Reference<'_>> = against
+        .iter()
+        .map(|(id, evidence)| Reference::to(id.as_str(), evidence))
+        .collect();
+    let mut judgments = Vec::new();
+    // What the step's own declaration implies this pass will cost, counted
+    // before the first call so that the first call can say "1 of 4" rather than
+    // "1 of as many as it turns out to be". The drift look is added because no
+    // declaration mentions it and a person waiting still pays for it.
+    let of = passes(step) + u32::from(!off_plan.is_empty());
+    let mut nth = 0;
+    for check in step.judge_checks() {
+        let model = model_for(check, &judging.default_model)?;
+        for criterion in check.criteria() {
+            let brief = Brief::about(step, criterion, request, &product, &references, answered);
+            // Once, outside the panel loop, because the panel answers one
+            // brief. See `crate::asked`: the file is not a summary of the
+            // members' briefs, it is the brief all of them were given.
+            let kept = judging.asked.kept(
+                step.id(),
+                at.attempt(),
+                &criterion.criterion_id,
+                brief.question(),
+            );
+            // Every member of a panel answers the same brief and none of them
+            // sees another's verdict — there is nothing in this loop that
+            // carries one answer into the next call.
+            for _ in 0..check.panel_size() {
+                let ask = Ask::put(model.clone(), brief.question(), judging.environment.clone())
+                    .map_err(|_| CallFailed::NothingToAsk)?;
+                nth += 1;
+                // Named, not `let _`: the mark stands for the binding's
+                // life, and `?` below is one of the ways out that has to lower
+                // it.
+                let _out = judging.marking.out(
+                    step.id(),
+                    Calling {
+                        look: Look::Criterion,
+                        criterion: Some(&criterion.criterion_id),
+                        pattern: None,
+                        model: &model,
+                        nth,
+                        of,
+                    },
+                );
+                let said = said(judging.client.as_ref(), &ask, judging.budget).await?;
+                let mut judgment = brief.read(&said).map_err(CallFailed::Unreadable)?;
+                judgment.brief_path.clone_from(&kept);
+                judgments.push(judgment);
+            }
+        }
+    }
+    // **No panel.** `panel_size` is what a step declared for the questions it
+    // declared, and multiplying a look the step never asked for would let a
+    // step's own rigour dial bill it for drift.
+    if let Some(criterion) = verification::drift_criterion(off_plan) {
+        let model = fleets_model(step, &judging.default_model)?;
+        let brief = Brief::about(step, &criterion, request, &product, &references, answered);
+        // Kept like any other, and this is the one whose brief nobody could
+        // reconstruct: `drift_criterion` assembles a question out of the paths
+        // the work touched, so what it asked is not in any workflow file.
+        let kept = judging.asked.kept(
+            step.id(),
+            at.attempt(),
+            &criterion.criterion_id,
+            brief.question(),
+        );
+        let ask = Ask::put(model.clone(), brief.question(), judging.environment.clone())
+            .map_err(|_| CallFailed::NothingToAsk)?;
+        let _out = judging.marking.out(
+            step.id(),
+            Calling {
+                look: Look::Drift,
+                // `declared_plan_drift`, which is a criterion id like any
+                // other and lands on `judged` under the same name — so the
+                // wait and the answer join without a second rule.
+                criterion: Some(&criterion.criterion_id),
+                pattern: None,
+                model: &model,
+                nth: of,
+                of,
+            },
+        );
+        let said = said(judging.client.as_ref(), &ask, judging.budget).await?;
+        let mut judgment = brief.read(&said).map_err(CallFailed::Unreadable)?;
+        judgment.brief_path = kept;
+        judgments.push(judgment);
+    }
+    let refusals = Refusals::among(&judgments);
+    Ok((judgments, refusals))
+}
+
+/// Every `reference_docs` entry this step can actually reach.
+///
+/// **A named step that is not strictly earlier, or that recorded nothing, is
+/// silently absent rather than an error.** That is [`AtStep::baseline`]'s rule
+/// and not a second one: a yardstick that does not exist yet is not a yardstick,
+/// and a step is judged on what is there. What a definition may name is
+/// `config`'s to refuse; what a Job can reach is this.
+fn measured_against<'a, 'e>(
+    at: AtStep<'a>,
+    recorded: &'e [(StepId, StepEvidence)],
+) -> Vec<(&'a StepId, &'e StepEvidence)> {
+    at.step()
+        .evidence_scope()
+        .map(|scope| {
+            scope
+                .reference_docs()
+                .iter()
+                .filter_map(|reference| at.baseline(reference, recorded))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Look a second time, and answer with what was flagged or with nothing.
+///
+/// **Called only where the step would otherwise advance.** Gaming is what a
+/// Mechanical Check passes by design, so this is the one place it can matter,
+/// and a step already stopped by a Check or a refusal spends nothing here.
+///
+/// The mechanical half runs first and costs nothing. The judged half is one
+/// call per declared pattern the diff cannot answer — **and no panel**, because
+/// this check has no veto for a panel to make stricter.
+pub(crate) async fn gaming(
+    step: &ResolvedStep,
+    patch: &Patch,
+    baseline: Option<Baseline<'_>>,
+    judging: &Judging,
+) -> Result<Option<Flagged>, CallFailed> {
+    let mut flags: Vec<GamingFlag> = Vec::new();
+    // Every judged pattern the step declares. A pattern whose brief cannot be
+    // built is skipped below, so `nth` can finish short of this — `of` is what
+    // was declared and `nth` is what actually went out, which is the honest
+    // pair when the two differ.
+    let of: u32 = step
+        .judge_checks()
+        .iter()
+        .filter_map(JudgeCheck::gaming)
+        .map(core_model::GamingCheck::calls)
+        .sum();
+    let mut nth = 0;
+    for check in step.judge_checks() {
+        let Some(gaming) = check.gaming().filter(|gaming| gaming.fires()) else {
+            continue;
+        };
+        flags.extend(verification::in_the_diff(patch, gaming.flag_if()));
+        let model = model_for(check, &judging.default_model)?;
+        for pattern in verification::judged_patterns(gaming.flag_if()) {
+            let Some(brief) = GamingBrief::about(step, pattern, patch, baseline) else {
+                continue;
+            };
+            let ask = Ask::put(model.clone(), brief.question(), judging.environment.clone())
+                .map_err(|_| CallFailed::NothingToAsk)?;
+            nth += 1;
+            let _out = judging.marking.out(
+                step.id(),
+                Calling {
+                    look: Look::Gaming,
+                    // A gaming look is about a pattern rather than a criterion,
+                    // and the pattern joins to `flagged` exactly as a criterion
+                    // joins to `judged`.
+                    criterion: None,
+                    pattern: Some(pattern.as_wire()),
+                    model: &model,
+                    nth,
+                    of,
+                },
+            );
+            let said = said(judging.client.as_ref(), &ask, judging.budget).await?;
+            flags.extend(brief.read(&said, patch).map_err(CallFailed::Unreadable)?);
+        }
+    }
+    Ok(Flagged::among(flags))
+}
+
+/// Look part-way through a step, and answer with where the work stands.
+///
+/// **Called only once a mechanical tripwire fired**, which is the caller's to
+/// establish — this function costs money every time it is entered, and a look
+/// on a schedule is the design `docs/concepts/judge.md` rules out.
+///
+/// One call and **no panel**: the answer has no veto for a panel to make
+/// stricter, and unanimity over three opinions about "is this going anywhere"
+/// would fail loudly on a step that is merely slow.
+pub(crate) async fn converging(
+    step: &ResolvedStep,
+    patch: &Patch,
+    declared: Option<&DeclaredPaths>,
+    off_plan: &[RepoPath],
+    judging: &Judging,
+) -> Result<Convergence, CallFailed> {
+    let model = fleets_model(step, &judging.default_model)?;
+    let brief = ConvergenceBrief::about(step, patch, declared, off_plan);
+    let ask = Ask::put(model.clone(), brief.question(), judging.environment.clone())
+        .map_err(|_| CallFailed::NothingToAsk)?;
+    // **One call, and it names neither a criterion nor a pattern**, because it
+    // asks about neither. What it is, a surface reads off `look`.
+    let _out = judging.marking.out(
+        step.id(),
+        Calling {
+            look: Look::Convergence,
+            criterion: None,
+            pattern: None,
+            model: &model,
+            nth: 1,
+            of: 1,
+        },
+    );
+    let said = said(judging.client.as_ref(), &ask, judging.budget).await?;
+    brief.read(&said).map_err(CallFailed::Unreadable)
+}
+
+/// Ask whether the paths a Drone wants belong to the step it was given.
+///
+/// **One call and no panel**, for [`converging`]'s reason: the answer has no
+/// veto for a panel to make stricter. It is outside `judge_call_cap`, which
+/// bounds `criteria x panel_size` over what a step *declared* — no declaration
+/// mentions this look, exactly as none mentions drift or convergence. What
+/// bounds it is one ask per step, which `crate::widening` holds because it is
+/// a fact about the Job's record rather than about a call.
+pub(crate) async fn widening(
+    step: &ResolvedStep,
+    brief: &WideningBrief,
+    judging: &Judging,
+) -> Result<Widened, CallFailed> {
+    let model = fleets_model(step, &judging.default_model)?;
+    let ask = Ask::put(model.clone(), brief.question(), judging.environment.clone())
+        .map_err(|_| CallFailed::NothingToAsk)?;
+    let _out = judging.marking.out(
+        step.id(),
+        Calling {
+            look: Look::Widening,
+            criterion: None,
+            pattern: None,
+            model: &model,
+            nth: 1,
+            of: 1,
+        },
+    );
+    let said = said(judging.client.as_ref(), &ask, judging.budget).await?;
+    brief.read(&said).map_err(CallFailed::Unreadable)
+}
+
+/// How many calls this step's own declaration asks for: criteria times panel
+/// size, over every entry it declares.
+///
+/// **Not `JudgeCheck::calls`**, which folds in the gaming look. That look is a
+/// second pass made after this one and only where the step would otherwise
+/// advance, so counting it here would tell a person waiting at the gate that
+/// four calls were coming when three were.
+fn passes(step: &ResolvedStep) -> u32 {
+    step.judge_checks()
+        .iter()
+        .map(|check| check.panel_size() * check.criteria().len() as u32)
+        .sum()
+}
+
+/// Which model a look Fleet asks for — drift, or convergence — runs on.
+///
+/// The step's own dial where it declares one, so a step that pays for a
+/// stronger judge at its gate is looked at by the same one. A step declaring no
+/// Judge check at all still gets the look, on the default: neither question is
+/// something a step opts into.
+fn fleets_model(step: &ResolvedStep, default: &Model) -> Result<Model, CallFailed> {
+    match step.judge_checks().first() {
+        Some(check) => model_for(check, default),
+        None => Ok(default.clone()),
+    }
+}
+
+/// The step's own model dial, or the fleet default where it names none.
+fn model_for(check: &JudgeCheck, default: &Model) -> Result<Model, CallFailed> {
+    match check.model() {
+        Some(named) => Model::named(named.as_str()).map_err(|_| CallFailed::NothingToAsk),
+        None => Ok(default.clone()),
+    }
+}
