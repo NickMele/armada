@@ -6,7 +6,7 @@
 // preload entry, the two facts a fault's payload is quoted with, and the instant
 // it was taken.
 //
-// # It is not one of the bound calls at the top of `App.tsx`
+// # It is not one of the bound calls at the top of `commands.ts`
 //
 // Those are stable at module scope because effects depend on them and a lambda
 // rebuilt every render would feed itself. This one cannot be: it reads the

@@ -21,11 +21,11 @@ import { createRequire } from 'node:module'
 // 512×512. The file was never the problem and rebuilding it never would have
 // helped. So the runtime tile is a PNG, and `src/main/index.ts` reads that one.
 //
-// **The `.icns` is still emitted, because it is what a packager wants.** There
-// is no packager in this workspace yet; when there is, its `icon` key takes the
-// `.icns` and macOS reads it through `Info.plist`, which is a different code
-// path from `nativeImage` and does handle the format. Dropping it now would
-// mean putting it back then, having lost the reason.
+// **The `.icns` is still emitted, because it is what the packager wants.**
+// `electron-builder.yml` points its `mac.icon` at the same file in
+// `packages/brand`, and macOS reads it through `Info.plist` — a different code
+// path from `nativeImage`, and one that does handle the format. So the two
+// formats are not a belt and braces: each has exactly one reader.
 //
 // Both are emitted rather than imported because the main process is a Node
 // bundle and needs a path on disk, not a module — so the build writes them next

@@ -1,0 +1,277 @@
+//! What a Job's detail says that its Board row cannot.
+//!
+//! The step rows, what each gate did, what the Judge cited and the note
+//! waiting for the next Drone reach a client only through
+//! [`JobDetail`](crate::JobDetail), so this is where they are held true.
+//!
+//! Most cases here turn on one distinction: **empty is an answer and absent is
+//! a different answer.** An ungated step declares no Checks; a step this Fleet
+//! holds no workflow for cannot say. A client that read a gap either way could
+//! not tell those apart, which is the whole reason the optional fields are
+//! skipped rather than written `null`.
+
+use crate::tests::{detail_of, job};
+use crate::{decode, encode, CheckRun, DeclaredCheck, JobDetail, Judged, StepFacts};
+
+/// **The distinction the whole field exists for.** An ungated step says so with
+/// an empty list; a step Fleet cannot answer for carries no key at all. A
+/// client that saw a gap either way could not tell them apart.
+#[test]
+fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
+    let job = job();
+    let ungated = detail_of(
+        &job,
+        &[StepFacts {
+            step_id: crate::StepId::carried("repro"),
+            label: Some("Reproduce it".to_string()),
+            declares: Some(Vec::new()),
+            ran: Vec::new(),
+            judged: Vec::new(),
+            flagged: Vec::new(),
+            deliverables: Vec::new(),
+            attempts: Vec::new(),
+            verdicts: Vec::new(),
+            judging: None,
+        }],
+    );
+    let json = encode(&ungated).expect("a detail is plain data");
+    assert!(json.contains("\"checks\":[]"), "declares none: {json}");
+
+    let unanswerable = detail_of(
+        &job,
+        &[StepFacts {
+            step_id: crate::StepId::carried("repro"),
+            label: None,
+            declares: None,
+            ran: Vec::new(),
+            judged: Vec::new(),
+            flagged: Vec::new(),
+            deliverables: Vec::new(),
+            attempts: Vec::new(),
+            verdicts: Vec::new(),
+            judging: None,
+        }],
+    );
+    let json = encode(&unanswerable).expect("a detail is plain data");
+    assert!(
+        !json.contains("\"checks\""),
+        "absent, never present-and-null: {json}"
+    );
+    assert!(
+        json.contains("\"check_runs\":[]"),
+        "what ran is always a list — nothing ran: {json}"
+    );
+}
+
+/// **The fallback is deliberate, and a blank is not a state.** A step Fleet
+/// cannot name reads as its id, so nothing downstream has to decide what an
+/// empty label draws as.
+#[test]
+fn a_step_with_no_label_reads_as_its_id() {
+    let detail = detail_of(
+        &job(),
+        &[StepFacts {
+            step_id: crate::StepId::carried("repro"),
+            label: Some("   ".to_string()),
+            declares: None,
+            ran: Vec::new(),
+            judged: Vec::new(),
+            flagged: Vec::new(),
+            deliverables: Vec::new(),
+            attempts: Vec::new(),
+            verdicts: Vec::new(),
+            judging: None,
+        }],
+    );
+    assert_eq!(detail.steps[0].label, "repro");
+
+    let unanswerable = detail_of(&job(), &[]);
+    assert_eq!(unanswerable.steps[0].label, "repro");
+}
+
+/// A recorded run round-trips, and a pass carries neither sentence.
+#[test]
+fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
+    let detail = detail_of(
+        &job(),
+        &[StepFacts {
+            step_id: crate::StepId::carried("repro"),
+            label: Some("Reproduce it".to_string()),
+            declares: Some(vec![DeclaredCheck {
+                kind: "manifest_check".to_string(),
+                name: Some("suite".to_string()),
+                run: Some("cargo nextest run --workspace".to_string()),
+                expect_exit_code: Some(0),
+                when: Some(vec!["crates/**".to_string()]),
+            }]),
+            ran: vec![CheckRun {
+                attempt: 1,
+                name: "suite".to_string(),
+                outcome: core_model::CheckOutcome::NeverRan.into(),
+                expected: Some("`suite` can be run".to_string()),
+                produced: Some("`suite` is not installed".to_string()),
+                output_path: Some(".armada/checks/01JOB/repro.0.log".to_string()),
+            }],
+            judged: Vec::new(),
+            flagged: Vec::new(),
+            deliverables: Vec::new(),
+            attempts: Vec::new(),
+            verdicts: Vec::new(),
+            judging: None,
+        }],
+    );
+    let json = encode(&detail).expect("a detail is plain data");
+
+    assert!(json.contains("\"outcome\":\"never_ran\""), "{json}");
+    assert!(
+        json.contains("\"run\":\"cargo nextest run --workspace\""),
+        "the command the workflow froze crosses whole: {json}"
+    );
+    assert!(
+        json.contains("\"when\":[\"crates/**\"]"),
+        "and so do the paths it covers, which are only useful before it runs: {json}"
+    );
+    assert_eq!(
+        decode::<JobDetail>("a Job in full", json.as_bytes()).expect("it round-trips"),
+        detail
+    );
+}
+
+/// **A refusal's citation crosses, and a no-objection carries none.**
+///
+/// This is what makes escalating a refusal worth more than ending the Job: the
+/// escalation trigger says the gate stopped, and only these three lines say
+/// what was wrong with the work. A person reading the Job is the audience.
+#[test]
+fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
+    let detail = detail_of(
+        &job(),
+        &[StepFacts {
+            step_id: crate::StepId::carried("repro"),
+            label: Some("Reproduce it".to_string()),
+            declares: Some(Vec::new()),
+            ran: Vec::new(),
+            judged: vec![
+                Judged {
+                    attempt: 1,
+                    criterion_id: crate::CriterionId::carried("c1"),
+                    verdict: core_model::JudgeVerdict::NotMet.into(),
+                    expected: Some("the caller's bound narrowed".to_string()),
+                    produced: Some("the reader's bound widened".to_string()),
+                    consequence: Some("every other caller reads one row too many".to_string()),
+                    brief_path: Some(".armada/briefs/01JOB/repro.1.c1.txt".to_string()),
+                },
+                Judged {
+                    attempt: 1,
+                    criterion_id: crate::CriterionId::carried("c2"),
+                    verdict: core_model::JudgeVerdict::Met.into(),
+                    expected: None,
+                    produced: None,
+                    consequence: None,
+                    brief_path: None,
+                },
+            ],
+            flagged: Vec::new(),
+            deliverables: Vec::new(),
+            attempts: Vec::new(),
+            verdicts: Vec::new(),
+            judging: None,
+        }],
+    );
+    let json = encode(&detail).expect("a detail is plain data");
+
+    assert!(json.contains("\"verdict\":\"not_met\""), "{json}");
+    assert!(
+        json.contains("every other caller reads one row too many"),
+        "the line a person triages on crosses: {json}"
+    );
+    assert!(
+        !json.contains("\"expected\":null"),
+        "a no-objection cites nothing, and absent is not null: {json}"
+    );
+    assert_eq!(
+        decode::<JobDetail>("a Job in full", json.as_bytes()).expect("it round-trips"),
+        detail
+    );
+}
+
+/// A step nothing asked the Judge about says so with an empty list, the way an
+/// ungated step says so about its Checks.
+#[test]
+fn a_step_the_judge_was_never_asked_about_carries_an_empty_list() {
+    let detail = detail_of(&job(), &[]);
+    let json = encode(&detail).expect("a detail is plain data");
+    assert!(json.contains("\"judged\":[]"), "{json}");
+}
+
+/// **A note with nowhere to go crosses, and stops crossing when it goes.**
+///
+/// The whole of `#212`: between a person asking for changes at a gate and the
+/// next Drone opening with their words, the Job is `queued` and the wire said
+/// nothing that a Job nobody typed anything into does not also say. The field is
+/// read off the record rather than handed in, so the two readings below are the
+/// record's own two states and cannot drift from them.
+#[test]
+fn a_note_waiting_for_the_next_drone_crosses_until_it_is_delivered() {
+    let waiting = job()
+        .redirect_waits(
+            core_model::RedirectWaiting::saying("name the cause, not the symptom")
+                .expect("a note with something in it"),
+        )
+        .expect("nothing was waiting");
+
+    let held = detail_of(&waiting, &[]);
+    let json = encode(&held).expect("a detail is plain data");
+    assert_eq!(
+        held.redirect_waiting
+            .as_ref()
+            .map(|note| note.note.as_str()),
+        Some("name the cause, not the symptom"),
+        "the person's own words, quoted rather than counted"
+    );
+    assert!(
+        json.contains("name the cause, not the symptom"),
+        "and they reach the wire: {json}"
+    );
+    assert_eq!(
+        decode::<JobDetail>("a Job in full", json.as_bytes()).expect("it round-trips"),
+        held
+    );
+
+    // Delivery is what clears it, so the field cannot be a badge that goes
+    // stale: there is no third state for a surface to keep drawing.
+    let delivered = detail_of(&waiting.redirect_delivered(), &[]);
+    assert!(
+        delivered.redirect_waiting.is_none(),
+        "a delivered note stops saying it is waiting"
+    );
+    assert!(
+        !encode(&delivered)
+            .expect("a detail is plain data")
+            .contains("redirect_waiting"),
+        "and absent is absent, never present-and-null"
+    );
+}
+
+/// **A Check that declares no `when` sends no key at all.**
+///
+/// Absent and empty would be one value with opposite meanings — always, and
+/// never — which is the collision `core_model::Covers` refuses at the other end
+/// of the wire. A client that received `[]` would have to know which one this
+/// build meant.
+#[test]
+fn a_check_covering_everything_carries_no_when() {
+    let declared = DeclaredCheck {
+        kind: "manifest_check".to_string(),
+        name: Some("build".to_string()),
+        run: Some("cargo build --workspace --locked".to_string()),
+        expect_exit_code: Some(0),
+        when: None,
+    };
+    let json = encode(&declared).expect("a declaration is plain data");
+    assert!(!json.contains("when"), "{json}");
+    assert_eq!(
+        decode::<DeclaredCheck>("a declared check", json.as_bytes()).expect("it round-trips"),
+        declared
+    );
+}

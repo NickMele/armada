@@ -11,6 +11,13 @@ dist/
 out/
 .vite/
 
+# What `pnpm --filter @armada/desktop package` builds: `apps/desktop/release/`
+# holds an Electron runtime and a copy of the app, a couple of hundred MB of it,
+# rebuilt from `out/` in a minute. Not `dist/` above, deliberately — a name that
+# already means "a JavaScript bundle" here would make one ignore line stand for
+# two very different things.
+release/
+
 # The gallery's own intermediate bundle. `out/` above does not match a leading
 # dot, so this was tracked: a 400kB generated file re-committed by anyone who
 # touched a story, three times in the last week alone. It is rebuilt by

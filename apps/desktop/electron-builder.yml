@@ -1,0 +1,46 @@
+# What a built Armada.app is, and why each line is here.
+#
+# **This exists so the app says its own name.** macOS reads the dock and the
+# app switcher from `CFBundleName` in the bundle it launched, and an unpackaged
+# `electron-vite preview` launches Electron's own bundle — so the switcher said
+# `Electron` no matter what `app.setName` was given. Measured: `setName` moves
+# `app.getName()` and nothing a person can see. Only a bundle of our own fixes
+# it, which is what this file makes.
+appId: dev.armada.bridge
+productName: Armada
+
+directories:
+  # Not `dist/` — that is already ignored repository-wide for JavaScript
+  # bundles, and a 200MB app tree sharing a name with a 1MB bundle is a
+  # `.gitignore` line nobody can read.
+  output: release
+
+# `out/` is the whole app: `electron.vite.config.ts` bundles every workspace
+# package into the three process bundles, so nothing under `packages/` is
+# copied and no symlink is followed. `ws` is the one runtime dependency left
+# external, and electron-builder collects it from `dependencies` itself.
+files:
+  - out/**
+  - package.json
+
+mac:
+  # The `.icns` here rather than the PNG the dock tile reads at runtime:
+  # `Info.plist` is the reader for a packaged bundle, and it handles the format
+  # `nativeImage` does not. Both come out of `packages/brand`.
+  icon: ../../packages/brand/macos/AppIcon.icns
+  category: public.app-category.developer-tools
+  # A bundle, not an installer. There is no distribution yet, and a `.dmg`
+  # target would be a channel nobody ships through — `dmg` is one word away
+  # when there is one.
+  target:
+    - dir
+  # **Unsigned, deliberately.** There is no Developer ID in this workspace, and
+  # electron-builder's default is to look for one and fail the build when it
+  # finds none. `null` takes the ad-hoc signature macOS gives a local build,
+  # which is what runs on the machine that built it and nowhere else.
+  identity: null
+
+# Nothing here is native. `ws` carries two optional native accelerators it
+# already runs without, and a rebuild step that compiles nothing is a minute
+# per build and a toolchain to keep.
+npmRebuild: false
