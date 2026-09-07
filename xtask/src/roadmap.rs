@@ -1,7 +1,9 @@
 //! The half of the capability check that needs a network, kept out of the gate.
 //!
-//! A capability is a GitHub issue and `docs/capabilities/<slug>.md` bound
-//! together, and neither half may exist alone. **The gate cannot check that**:
+//! A capability is a GitHub issue, and `docs/capabilities/<slug>.md` when it has
+//! prose worth keeping. A file may not name an issue that is not there; an issue
+//! with no file is normal, and the comment on that decision below says why.
+//! **The gate cannot check the first of those**:
 //! `xtask` has no dependencies and must run on a checkout with nothing built —
 //! a gate that fails on a plane is a gate people learn to ignore. So the
 //! binding is checked from both ends:
@@ -31,7 +33,7 @@ struct Tracked {
     title: String,
     milestone: Option<String>,
     open: bool,
-    /// Every `#N` the body references. On a capability, these are its steps.
+    /// On a capability, the steps it declares under `**Steps**`. Empty on a step.
     refs: Vec<u64>,
 }
 
@@ -50,7 +52,7 @@ fn issues(label: &str) -> Result<Vec<Tracked>, String> {
             "--limit", "500",
             "--json", "number,title,state,milestone,body",
             "--jq",
-            r#".[] | [(.number|tostring), .state, (.milestone.title // ""), .title, ((.body // "") | gsub("[\r\n]"; " "))] | @tsv"#,
+            r#".[] | [(.number|tostring), .state, (.milestone.title // ""), .title, ((.body // "") | gsub("[\r\n]"; "\u0001"))] | @tsv"#,
         ])
         .current_dir(repo_root())
         .output()
@@ -80,10 +82,56 @@ fn issues(label: &str) -> Result<Vec<Tracked>, String> {
             title: title.to_string(),
             milestone: Some(milestone.to_string()).filter(|m| !m.is_empty()),
             open: state.eq_ignore_ascii_case("OPEN"),
-            refs: issue_refs(f.next().unwrap_or_default()),
+            refs: step_refs(f.next().unwrap_or_default()),
         });
     }
     Ok(out)
+}
+
+/// A body's newlines, carried through `@tsv` as a character it cannot contain.
+///
+/// `@tsv` escapes a real newline, which would make the body unreadable as one
+/// field. A control character survives the round trip and lets the section
+/// structure below be read rather than guessed at from a flattened line.
+const BODY_NEWLINE: char = '\u{1}';
+
+/// The steps a capability declares, in order.
+///
+/// **Not every `#N` in a body is a step.** A capability cites other issues for
+/// reasons that are not ownership: #384 names a Pilot step to say which worktree
+/// it must never reclaim, #215 quotes *"#140 depends on #137"* as an example of
+/// prose. Counting those made two closed Recovery capabilities read as owing
+/// work Recovery does not own, and no rule about milestones separates the two —
+/// #100 is a Trust capability and three of its four steps are Board's.
+///
+/// So ownership is declared rather than inferred: the references under a
+/// `**Steps**` heading are the steps, and a capability with no such heading
+/// declares none and reports no arithmetic. That is the honest answer — a count
+/// assembled from whatever the prose happened to link was never a claim anybody
+/// made.
+fn step_refs(body: &str) -> Vec<u64> {
+    let mut out: Vec<u64> = Vec::new();
+    let mut inside = false;
+    for line in body.split(BODY_NEWLINE) {
+        let line = line.trim();
+        if line == "**Steps**" || line == "## Steps" {
+            inside = true;
+            continue;
+        }
+        if !inside {
+            continue;
+        }
+        // The section runs to the next heading, or to the end of the body.
+        if line.starts_with("## ") {
+            break;
+        }
+        for n in issue_refs(line) {
+            if !out.contains(&n) {
+                out.push(n);
+            }
+        }
+    }
+    out
 }
 
 /// The `#N` references in a body, deduplicated and in order.
@@ -152,9 +200,9 @@ pub fn verify() -> Result<Outcome, String> {
     //
     // A step satisfies as many capabilities as it genuinely serves — M1 step 9
     // serves five — so a sub-issue link, which has one parent, would have to
-    // pick one and demote four. The capability issue references its steps by
-    // number instead, and the arithmetic lives here where it can fail rather
-    // than in a checkbox that only renders.
+    // pick one and demote four. The capability issue lists its steps under
+    // `**Steps**` instead (see `step_refs`), and the arithmetic lives here where
+    // it can fail rather than in a checkbox that only renders.
     let step_open: BTreeMap<u64, bool> = steps.iter().map(|s| (s.number, s.open)).collect();
     for cap in &caps {
         let mine: Vec<u64> = cap
@@ -205,4 +253,46 @@ pub fn verify() -> Result<Outcome, String> {
     progress.sort_by_key(|(n, _, _, _)| *n);
 
     Ok(Outcome { problems, progress })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The body as `issues()` hands it over: newlines carried as `BODY_NEWLINE`.
+    fn body(lines: &[&str]) -> String {
+        lines.join("\u{1}")
+    }
+
+    #[test]
+    fn a_capability_declares_its_steps_under_the_steps_heading() {
+        let b = body(&[
+            "Pilot is the only way to see inside a running Drone today.",
+            "",
+            "**Steps**",
+            "",
+            "Ordered. The tee and the log come first.",
+            "",
+            "- #101",
+            "- #102",
+        ]);
+        assert_eq!(step_refs(&b), vec![101, 102]);
+    }
+
+    /// The bug that made two closed Recovery capabilities owe Pilot's work.
+    #[test]
+    fn a_cross_reference_outside_the_section_is_not_a_step() {
+        let b = body(&[
+            "| The Job is not piloted | A person is at an unrestricted toolset — #367 |",
+            "",
+            "`reclaim.rs` does the work and #297 gave it a route.",
+        ]);
+        assert!(step_refs(&b).is_empty());
+    }
+
+    #[test]
+    fn the_section_ends_at_the_next_heading() {
+        let b = body(&["**Steps**", "- #101", "", "## Watch for", "- #999"]);
+        assert_eq!(step_refs(&b), vec![101]);
+    }
 }
