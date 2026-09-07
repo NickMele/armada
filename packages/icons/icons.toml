@@ -43,10 +43,10 @@
 [icons.armada-mark]
   means = "Armada itself. The product, never a state and never an action."
   group = "Brand"
-  size = "12 and 16px"
+  size = "16px"
   status = "Proposed"
   reserved = "Absolute. Nothing else may use this outline, and the mark may not be made to mean anything other than Armada — not home, not app, not a nav destination. It never appears in a Job Board row, a badge, or a button."
-  notes = "The Countersign mark. An open outline (the claim) and a solid block struck across its opening (the countersign), held clear by exactly 2 units. Drawn on the lucide 24 grid at strokeWidth 2, but butt caps and miter joins, not round — round caps overhang 1u at each end and close the clearance the mark is built on. Custom SVG, which hard rule 2 forbids; see the Brand mark amendment on Iconography, added the same day. Group is Brand, an option added 2026-08-24 for this row — it is a category of one and should stay that way. 16px in chrome, 12px only beside badge text, never below 12 — under that the clearance falls under one device pixel and the two marks fuse. Two-tone variant (claim --fg-muted, block --fg-default) at 24px and above only. Accent fill permitted on the macOS app tile alone."
+  notes = "Three equal hulls on a shallow arc — one filled path repeated three times, in one colour. **Redrawn 2026-09-07; the Countersign mark it replaced was two offset squares, which is the duplicate glyph in lucide, Feather and macOS, and read as a copy icon.** The construction changed with it: this mark carries no stroke at all, so the Rendering section\'s one-stroke rule has nothing to fix here — see the Brand mark amendment on Iconography. The floor is 16px, where the notches hold at about one pixel; it is comfortable from 24. **It has left 12px** — the old row permitted 12 beside badge text while its own reservation banned it from badges, and the new floor removes the contradiction rather than resolving it. Below 16 the three hulls fuse into one silhouette and the wordmark is set alone instead. Two-tone variant (ArmadaMarkDuo, the two trailing hulls held back) at 32px and above only. Accent fill permitted on the macOS app tile alone. The full specification — construction, clear space, colour and what may never change — is packages/brand/README.md."
 
 [icons.arrow-up-down]
   means = "sort"
