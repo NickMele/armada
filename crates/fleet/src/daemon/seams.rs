@@ -50,10 +50,6 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
-    // The seams, read-only, for `dispatch`. Private accessors rather than
-    // `pub(crate)` fields: a field would be assignable from the other module,
-    // and Fleet's own configuration is fixed at assembly.
-
     pub(crate) fn store(&self) -> &Mutex<Store> {
         &self.store
     }
