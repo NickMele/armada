@@ -11,11 +11,12 @@
 // none of those sits beside it and is handed a port: `request.ts` sends,
 // `command.ts` acts on a Job, `reader.ts` holds one Job's read and the rule
 // that drops a stale one, `review.ts` reads the work, `observe.ts` holds the
-// second socket.
+// second socket, `screen.ts` says which of the per-Job reads each way of coming
+// back takes again.
 //
 // # Over 500 lines, and left whole
 //
-// Six files have already been taken out of it, and what is left is one thing:
+// Seven files have already been taken out of it, and what is left is one thing:
 // a state machine, plus the arrival handler that folds each message into it.
 // Every remaining split runs along a message kind rather than a subject — the
 // resync here, the state changes there — and each half would still have to
@@ -42,6 +43,7 @@ import { ReportsReader } from "./reports";
 import { ask, callArgumentsOf, capacityOf, holdingsOf, manifestReadingOf } from "./request";
 import { ReviewMaterial } from "./review";
 import { HOST, machinePath, read, startingIdentity } from "./runtime-file";
+import { takeAgain, type Again } from "./screen";
 
 /** How long to wait before reading the runtime file again. */
 const RETRY_MS = 2000;
@@ -61,6 +63,20 @@ export class FleetConnection {
   private socket: WebSocket | null = null;
   private retry: ReturnType<typeof setTimeout> | null = null;
   private unreachableSince: number | null = null;
+  /**
+   * Whether the resync now arriving is a later one on a socket already up.
+   *
+   * **What tells a reconnection from a gap**, and they are not the same
+   * recovery. A gap is events lost under a connection that held: HTTP answered
+   * throughout, so only the reads events feed can be stale. A reconnection is a
+   * socket that was down, and every read attempted while it was down failed —
+   * which is a failure standing on a panel that nothing else will clear.
+   *
+   * Both arrive as the same message, so the difference has to be held here.
+   * `crates/api/src/sockets.rs` sends one on every connection and one more
+   * after every `Missed`.
+   */
+  private greeted = false;
   /**
    * The open Job, read whole and kept current. Here rather than in the renderer
    * because every event naming this Job re-reads it, which is what makes a rail
@@ -204,10 +220,9 @@ export class FleetConnection {
     if (fleet !== null) {
       await this.reread(fleet.port);
       await this.readHoldings(fleet.port);
-      await this.watched.again(fleet.port);
-      await this.resources.again(fleet.port);
-      await this.history.again(fleet.port);
-      await this.material.reread(fleet.port);
+      // Every region of the open Job — the same list a reconnection takes, so
+      // the two cannot drift apart. #472.
+      await this.takeAgain(fleet.port, { because: "a_person_asked" });
       // A no-op where nothing has them open. Nothing but Bridge files a
       // report, so the list moves when somebody presses a button in a window —
       // and a second window is a second somebody, which is what Refresh is for.
@@ -303,6 +318,9 @@ export class FleetConnection {
   private open(port: number, fleet: BridgeStateFleet): void {
     const socket = new WebSocket(`ws://${HOST}:${port}/events`);
     this.socket = socket;
+    // The next resync to arrive is this socket's first, so it is Fleet coming
+    // back rather than a gap in a stream that never stopped.
+    this.greeted = false;
 
     socket.on("message", (data: WebSocket.RawData) => this.arrived(String(data), fleet));
     socket.on("error", (cause: Error) => this.dropped(fleet, cause.message));
@@ -351,6 +369,10 @@ export class FleetConnection {
         return;
       }
       this.unreachableSince = null;
+      // Read before it is set, because both readings arrive as this message and
+      // only the order tells them apart. See the field.
+      const cameBack = !this.greeted;
+      this.greeted = true;
       this.publish({
         connection: connectedTo(fleet, message.cursor),
         jobs: message.jobs.jobs,
@@ -369,20 +391,12 @@ export class FleetConnection {
       // the window that opened after the save — which is most windows, since a
       // refusal stands until the file is corrected.
       void this.readManifest(fleet.port);
-      // A resync says nothing about the open Job's steps, so it is re-read.
-      void this.watched.again(fleet.port);
-      // A pane left open across a Fleet restart reopens its own socket. Only
-      // where it has none: a resync arrives after every dropped event too, and
-      // reopening a working socket would restart the transcript from the top.
-      if (this.observing !== null && !this.turns.attached()) {
-        this.turns.open(fleet.port, this.observing);
-      }
-      // And the Job's own log, on the same terms and for the same reason: a
-      // reopen resets the notes and republishes `opening`, so only a socket
-      // that is actually down is reopened.
-      if (this.reading !== null && !this.notes.attached()) {
-        this.notes.open(fleet.port, this.reading);
-      }
+      // **And the open Job's screen, whole.** A resync says where every Job is
+      // and nothing about what any one of them holds, so every region of the
+      // Job somebody has open is taken again together — `screen.ts` is the
+      // list, and it is one list so that a read added later is classified
+      // rather than left out. #472.
+      void this.takeAgain(fleet.port, { because: cameBack ? "fleet_came_back" : "stream_gap" });
       return;
     }
 
@@ -648,29 +662,25 @@ export class FleetConnection {
 
   /** Re-read the open Job, where the event was about it. */
   private refresh(port: number, jobId: string): void {
-    // **A step advancing is a new Drone, and Fleet's socket ended with the last
-    // one.** So the event that says this Job moved is what reopens the
-    // transcript — there is no timer here on purpose: reopening resets the rows
-    // and republishes `opening`, so a loop would blank the log on every tick.
-    // Only where the socket is down; reopening a working one restarts the
-    // transcript from the top. #324.
-    if (this.observing === jobId && !this.turns.attached()) {
-      this.turns.open(port, jobId);
-    }
-    // The log socket does not end when a step advances — nothing about a Job's
-    // own log is per-Drone — so this only catches one that closed because Fleet
-    // could not read the file, on the next event that says the Job moved.
-    if (this.reading === jobId && !this.notes.attached()) {
-      this.notes.open(port, jobId);
-    }
-    // A history that is unfolded grows as the Job moves, so the move that was
-    // just delivered is read back rather than left off the end of the list.
-    if (this.history.jobId === jobId) void this.history.again(port);
-    // The machine reading moves with the Job rather than on a clock of its
-    // own. See the field: a poll would pay a process table per tick.
-    if (this.resources.jobId === jobId) void this.resources.again(port);
-    if (this.watched.jobId !== jobId) return;
-    void this.watched.again(port);
+    void this.takeAgain(port, { because: "job_moved", jobId });
+  }
+
+  /**
+   * The open Job's screen, brought back whole. **`screen.ts` owns which reads
+   * each occasion takes and why**, and it holds none of them — every region is
+   * handed in from here, so the list cannot drift from what is actually open.
+   */
+  private takeAgain(port: number, again: Again): Promise<void> {
+    return takeAgain(port, again, {
+      detail: this.watched,
+      resources: this.resources,
+      history: this.history,
+      turns: this.turns,
+      notes: this.notes,
+      observing: this.observing,
+      reading: this.reading,
+      review: this.material,
+    });
   }
 
   // -------------------------------------------------------- one Job's turns
