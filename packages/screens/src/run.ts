@@ -24,13 +24,7 @@
 import type { RunTreeFact, RunTreePath, RunTreeStep, StepActivity } from "@armada/components";
 
 import type { Turn } from "@armada/protocol";
-import {
-  CHECK_ADVANCES,
-  CHECK_OUTCOME,
-  CRITERION_VERDICT_CHECK,
-  ESCALATION_REASON,
-  STEP_STATE,
-} from "@armada/components";
+import { CHECK_ADVANCES, CHECK_OUTCOME, CRITERION_VERDICT_CHECK, ESCALATION_REASON, STEP_STATE } from "@armada/components";
 import type {
   ChangedFile,
   CheckRun,
@@ -269,11 +263,9 @@ function checksFact(step: StepDetail, runs: CheckRun[]): RunTreeFact | undefined
   if (step.checks === undefined) return { label: "Checks", value: "Fleet cannot say" };
   if (step.checks.length === 0) return { label: "Checks", value: "none declared" };
   // **`not reached`, never `not run`.** `not run` is `check_outcome.skipped`'s
-  // own verb, and a Check the gate never got to is not one it deliberately
-  // skipped. The row that owns this word is `criterion_verdict_check`.
+  // own verb, and a Check the gate never got to is not one it skipped.
   if (runs.length === 0) {
-    const word = CRITERION_VERDICT_CHECK.not_reached?.verb ?? "not_reached";
-    return { label: "Checks", value: word };
+    return { label: "Checks", value: CRITERION_VERDICT_CHECK.not_reached?.verb ?? "not_reached" };
   }
   const failed = runs.filter(didNotPass);
   return failed.length === 0

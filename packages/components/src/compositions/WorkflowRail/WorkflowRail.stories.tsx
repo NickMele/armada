@@ -2,12 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { FileCheck, Lock, ShieldCheck, ShieldMinus, ShieldOff, ShieldX } from "lucide-react";
 import { expect } from "storybook/test";
 
-import {
-  ADVANCE_GATE,
-  CRITERION_VERDICT_CHECK,
-  JOB_STATUS,
-  STEP_STATE,
-} from "../../generated/vocabulary";
+import { ADVANCE_GATE, CRITERION_VERDICT_CHECK, JOB_STATUS, STEP_STATE } from "../../generated/vocabulary";
 import { WorkflowRail, type WorkflowRailStep } from "./WorkflowRail";
 
 /**
@@ -36,12 +31,10 @@ type Story = StoryObj<typeof WorkflowRail>;
 const EVIDENCE = FileCheck;
 
 /**
- * The four words below are read off the registry and never typed here, so a
- * story cannot keep passing over copy the rows have moved off. #468.
- *
- * `state` is one of the six `job_steps.state` values; `frozen` is a terminal
- * Job's own status, showing through on a row the step never left. The two are
- * different registries and `frozen.ts` holds the same split.
+ * Read off the registry, never typed here, so a story cannot keep passing over
+ * copy the rows moved off. `state` takes one of the six `job_steps.state`
+ * values and `frozen` a terminal Job's status showing through on a row the
+ * step never left — two registries, the split `frozen.ts` holds. #468.
  */
 const state = (value: string) => STEP_STATE[value]?.verb ?? value;
 const frozen = (status: string) => JOB_STATUS[status]?.verb ?? status;

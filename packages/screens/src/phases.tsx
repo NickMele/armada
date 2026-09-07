@@ -33,13 +33,7 @@ import type { ReactNode } from "react";
 import { Button } from "@armada/components";
 import type { PhaseStage, PhaseStageRow, PhaseStripProps } from "@armada/components";
 
-import {
-  ADVANCE_GATE,
-  CHECK_ADVANCES,
-  CHECK_OUTCOME,
-  CRITERION_VERDICT_CHECK,
-  CRITERION_VERDICT_JUDGE,
-} from "@armada/components";
+import { ADVANCE_GATE, CHECK_ADVANCES, CHECK_OUTCOME, CRITERION_VERDICT_CHECK, CRITERION_VERDICT_JUDGE } from "@armada/components";
 import type { CheckRun, Criterion, Judged, StepDetail } from "@armada/protocol";
 import type { Kept } from "@armada/protocol";
 import { commandOf, nameOf } from "./declared";
@@ -47,13 +41,10 @@ import { onlyCurrentAttempt } from "./facts";
 import { openArtifact, type OpenArtifact } from "./opening";
 
 /**
- * What a tier that the run has not got to stands at.
- *
- * **The registry's word, and `criterion_verdict_check` is the row that owns
- * it.** `check_outcome`'s five are what a Check that *ran* did, and it declares
- * none for one the gate never reached; `icons.toml` already calls "not reached"
- * a Check state and reserves `shield-minus` to it. So the word is written in
- * one place for the four tiers that say it, rather than typed at each.
+ * What a tier the run has not got to stands at. **The registry's word, and
+ * `criterion_verdict_check` owns it**: `check_outcome`'s five are what a Check
+ * that *ran* did, and `icons.toml` already calls "not reached" a Check state.
+ * Once here for the four tiers that say it, rather than typed at each.
  */
 const NOT_REACHED = CRITERION_VERDICT_CHECK.not_reached?.verb ?? "not_reached";
 
