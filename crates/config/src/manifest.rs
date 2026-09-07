@@ -56,7 +56,7 @@ const SETUP_KEYS: &[&str] = &["requires"];
 /// running against a tree a merge left behind.
 const AFTER_MERGE_KEYS: &[&str] = &["checks"];
 /// The keys M1 reads inside `drone`. **Spelled as a workflow step spells
-/// them** — `crates/config/src/workflow.rs`'s `STEP_KEYS` carries the same two
+/// them** — `crates/config/src/workflow/step.rs`'s `STEP_KEYS` carries the same two
 /// words, because they are the same two values one tier up.
 const DRONE_KEYS: &[&str] = &["quiet_after_seconds", "poke_limit"];
 
@@ -430,7 +430,7 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
 /// at all.
 ///
 /// **The two zeros disagree, and each key is right about its own.** This is
-/// `crates/config/src/workflow.rs`'s split arriving one file up: a
+/// `crates/config/src/workflow/step.rs`'s split arriving one file up: a
 /// `quiet_after_seconds: 0` pokes a Drone on its first turn and escalates it on
 /// its third, which nobody means, and a `poke_limit: 0` says the first silence
 /// past the threshold escalates, which somebody might. Both readings are the
