@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/armada-banner.png" alt="Armada — delegate without watching. Run five coding agents at once. Armada monitors them, verifies what they produce, and brings you only what needs a person." width="100%">
+  <img src="packages/brand/covers/armada-social-preview.png" alt="Armada — delegate without watching. You handle the decisions without babysitting." width="100%">
 </p>
 
 <p align="center">

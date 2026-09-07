@@ -80,6 +80,13 @@ importers:
       react:
         specifier: ^19.2.0
         version: 19.2.8
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.2.18
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
 
   packages/components:
     dependencies:
@@ -196,6 +203,9 @@ importers:
 
   packages/shell:
     dependencies:
+      '@armada/brand':
+        specifier: workspace:*
+        version: link:../brand
       '@armada/components':
         specifier: workspace:*
         version: link:../components

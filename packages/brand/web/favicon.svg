@@ -1,1 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><style>:root{color:#0F1419}@media(prefers-color-scheme:dark){:root{color:#E4E9EF}}</style><path d="M14 9 V4 H4 V14 H9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"/><path d="M11 11 H21 V21 H11 Z" fill="currentColor"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="Armada">
+  <style>path{fill:#0F1419}@media (prefers-color-scheme:dark){path{fill:#E4E9EF}}</style>
+  <g><path transform="translate(-0.3664,10.3511) scale(0.183206)" d="M32 4 C 40 17, 50 35, 53 44 L36 46 C 34 34, 33 24, 31 18 C 28 25, 24 38, 19 52 L2 54 C 11 36, 24 15, 32 4 Z"/><path transform="translate(6.9618,3.0229) scale(0.183206)" d="M32 4 C 40 17, 50 35, 53 44 L36 46 C 34 34, 33 24, 31 18 C 28 25, 24 38, 19 52 L2 54 C 11 36, 24 15, 32 4 Z"/><path transform="translate(14.2901,8.5191) scale(0.183206)" d="M32 4 C 40 17, 50 35, 53 44 L36 46 C 34 34, 33 24, 31 18 C 28 25, 24 38, 19 52 L2 54 C 11 36, 24 15, 32 4 Z"/></g>
+</svg>

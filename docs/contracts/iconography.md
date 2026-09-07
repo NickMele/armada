@@ -81,6 +81,12 @@ looking mixed-weight. 2 everywhere is lint-enforceable and holds the set
 together. Never use `absoluteStrokeWidth` — a 2px stroke inside a 12px box is
 a blob.
 
+**One thing Armada draws is not governed by this section**, and it is named
+here so *no exceptions* is not read as covering it: `armada-mark` is filled
+and carries no stroke, so there is nothing in it to hold at 2, and its floor
+is 16px rather than 12. See Brand mark below. Every lucide glyph is governed,
+without exception.
+
 **Contrast floor.** Icons never render in `--fg-subtle`, with two exceptions:
 `circle-minus` and `circle-dashed`, below. `--fg-subtle` was `#5D6B7C` on
 `--bg-raised`, ~3.2:1, which a 1px stroke does not survive, so `--fg-muted`
@@ -561,18 +567,38 @@ no table has not been decided, whatever it looks like in a mockup.
 now carries exactly one exception, and it is named here so that the next
 person to read the rule does not delete the component on sight.
 
-`armada-mark` is the Countersign identity mark. **It is not an icon and does
-not compete with lucide.** An icon names a state or an action inside the
-app; this names the app. That distinction is the whole basis of the
-exception and also its limit — the moment the mark is used to mean *home*,
-*app*, or a nav destination, it has become an icon and rule 2 applies again.
+`armada-mark` is Armada's identity mark: three equal hulls on a shallow arc.
+**It is not an icon and does not compete with lucide.** An icon names a state
+or an action inside the app; this names the app. That distinction is the whole
+basis of the exception and also its limit — the moment the mark is used to
+mean *home*, *app*, or a nav destination, it has become an icon and rule 2
+applies again.
 
-Its construction — the 24-unit grid, the butt caps and miter joins instead
-of lucide's round, the filled element, the size floor, the reserved status —
-is recorded in full in `packages/icons/icons.toml` under `armada-mark`, so it
-is not restated here. Full specification of the mark itself — construction,
-clear space, the size floor, colour, and six misuses drawn rather than
-described — is a separate Armada Identity document, not migrated here.
+**The mark was redrawn on 2026-09-07 and the previous one is gone.** Until
+then this section described the Countersign mark — an open outline with a
+solid block struck across it, at strokeWidth 2 with butt caps and miter
+joins. It was two offset squares, which is the duplicate glyph in lucide,
+Feather, Tabler and macOS, and it read as a copy icon. Nothing of its
+construction survives, so a document or a drawing that still describes butt
+caps or a 12px size is stale rather than a second opinion.
+
+**The one-stroke rule does not reach this mark**, and that is the amendment
+the redraw owes. *Rendering — two sizes, one stroke, no exceptions* governs
+lucide glyphs, which are stroked outlines. This mark is filled and carries no
+stroke, so there is no `strokeWidth` to hold at 2 and the React components
+expose none. The rule stands unchanged for every glyph it was written for.
+
+**Its floor is 16px and it no longer renders at 12.** At 16 the notches
+between a hull's legs hold at about one pixel; below it the three hulls fuse
+into a single silhouette, and the wordmark is set alone instead. The old row
+permitted 12px beside badge text while its own reservation banned the mark
+from badges — the new floor removes that contradiction rather than resolving
+it.
+
+Its registry row is `packages/icons/icons.toml` under `armada-mark`. The full
+specification — construction, clear space, colour, the minimum size for each
+lockup, and what may never change — is `packages/brand/README.md`, which is
+also where every rendering of the mark is rebuilt.
 
 Its entry in `packages/icons/icons.toml` is Proposed, under the Brand group
 added 2026-08-24. Brand is a category of one and should stay that way — a
