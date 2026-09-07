@@ -19,10 +19,10 @@
 //! # What a merge moves, and what it does not
 //!
 //! `#337` named four outcomes. The record and the row shipped in `#360`; the
-//! repository every worktree is cut from is brought up to what merged here.
-//! Running the Checks against that tree is `#474` — that run belongs to the
-//! commit, not to whichever Job noticed first. Every question is asked from the
-//! repository root and never a Job's worktree: [`Delivery::landed`] says why.
+//! repository is brought up to what merged here; and `crate::proving` runs the
+//! Checks against the tree that leaves — **keyed by the commit, not by this
+//! Job**, since two Jobs merging in a minute are two merges into one commit.
+//! Every question is asked from the repository root, never a Job's worktree.
 
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -177,7 +177,13 @@ where
             // What merged is now what everything else builds on — `#337` — and
             // a pull request that was closed put nothing on the base at all.
             (Landing::Merged { .. }, Some(base)) => {
-                Some(self.caught_the_repository_up(&asking.job_id, base).await)
+                let standing = self.caught_the_repository_up(&asking.job_id, base).await;
+                // **After the fast-forward and never instead of it**, because
+                // what is proved is the tree the fast-forward left: a standing
+                // that declined has no commit to hand over and cannot start a
+                // run. `#474`, and `crate::proving` for why nothing waits on it.
+                self.began_proving(&asking.job_id, &standing).await;
+                Some(standing)
             }
             _ => None,
         };

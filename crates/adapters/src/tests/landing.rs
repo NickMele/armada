@@ -153,6 +153,7 @@ fn a_clean_repository_on_the_base_is_fast_forwarded() {
         RepositoryStanding::MovedOn {
             base: String::from("main"),
             commits: 1,
+            head: repo.head_str(),
         }
     );
 }
@@ -166,7 +167,8 @@ fn a_repository_that_already_has_it_says_so_rather_than_moving() {
     assert_eq!(
         caught_up(&repo.root_str(), "main"),
         RepositoryStanding::AlreadyHadIt {
-            base: String::from("main")
+            base: String::from("main"),
+            head: repo.head_str(),
         }
     );
 }

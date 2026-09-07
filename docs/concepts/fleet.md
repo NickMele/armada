@@ -217,9 +217,17 @@ The remedy needs no new state: `depends_on` already sequences Jobs and already p
 
 **The repository is fast-forwarded or left alone, and never anything in between.** A checkout on some other branch, a working tree carrying somebody's uncommitted change, a repository with no remote, and a history that will not fast-forward are all refusals — this is the one thing Fleet writes into the repository a person is standing in, and `--autostash` is not on offer because nobody asked for a rebase.
 
-**Nothing watches main for breakage after a merge.** Under `auto_merge: never` a person merges and Armada is not party to it, so a post-merge signal would cover only the subset Fleet merged itself. A detector that fires on some breakages and not others is worse than none, because its silence reads as an all-clear. Running the Checks once against the updated tree is the piece that would answer it, and it is not built — #474, where the reason it is its own issue is that the run belongs to the commit rather than to any one Job.
+**What merged can be proved, and only where the repository asks.** A Manifest that names Checks under `after_merge` has them run once against the tree the fast-forward left — see [Manifest](manifest.md), *Proving what merged*. A Manifest that names none runs nothing, which is every Manifest by default: what this costs is a build and test run on the machine somebody is working on, for an event nobody is waiting for, and `../practices/rust.md` section 8 names a hook that rebuilt on merge as the cause of v1's four-minute cold build.
 
-A merge that breaks main is raised by a person, and the response is a new Job pointing back through `subject` rather than anything reopening: `completed_success` is terminal and stays true. See [Job](job.md). Whether Fleet should watch the merges it did perform is open (see Open questions).
+**The run belongs to the commit and its record is keyed by the commit**, in a table with no `job_id` column and no foreign key to `jobs`. Two Jobs merging within a minute are two merges into one commit; the second finds it already proved and starts nothing. What is keyed by a Job is only the line saying it happened, which goes into the log of whichever Job's turn started the run — beside the fast-forward's own line, and for the same reason.
+
+| The state after the fast-forward | What is proved |
+| --- | --- |
+| The repository moved on, or already had it | Its Checks run against the commit `HEAD` is now on, unless that commit has already been proved |
+| It was left alone | Nothing. There is no updated tree, and a run against the checkout would be reporting on somebody's uncommitted work |
+| A run is already out | Nothing. One suite at a time on one machine — two would contend for the same cores and neither would be measuring anything |
+
+**Nothing depends on the answer, and that is a constraint rather than a caveat.** The work is already merged. A red cannot fail the Job, cannot reopen it — `completed_success` is terminal — and rolls nothing back. A merge that breaks main is raised by a person, and the response is a new Job pointing back through `subject`. See [Job](job.md). Whether Fleet should watch the merges it did perform is open (see Open questions).
 
 ### Restarting Fleet
 

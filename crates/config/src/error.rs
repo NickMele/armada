@@ -122,6 +122,26 @@ pub enum Fault {
     /// prerequisite runs inside Fleet's own gate, where the Drone has already
     /// submitted and is waiting on the answer.
     RequiresSomethingDestructive { value: String },
+    /// **An `after_merge.checks` entry naming no declared Check.** The same
+    /// question [`Fault::NotADeclaredCommand`] asks of `requires`, asked of the
+    /// other registry: a name that resolves to nothing is a merge nothing
+    /// proves, found at load rather than an hour later when somebody merges.
+    NotADeclaredCheck {
+        value: String,
+        /// **The name is declared, under `commands`.** A different mistake with
+        /// a different fix, and a field rather than a variant for
+        /// [`Fault::NotADeclaredCommand`]'s reason.
+        is_a_command: bool,
+        /// What the file does declare under `checks`, in order.
+        declared: Vec<String>,
+    },
+    /// **An `after_merge.checks` entry whose Check declares `requires`.**
+    ///
+    /// A prerequisite writes in the tree it runs in, and that tree is the
+    /// repository a person is standing in — which Fleet fast-forwards only over
+    /// a clean checkout. Refused rather than run without its prerequisites,
+    /// which would fail for a reason nobody can connect to it.
+    PreparesTheRepository { value: String, requires: String },
     /// Two steps in one workflow carry one `id`. Reported on the second, and
     /// names where the first was, because the fix is to look at both.
     DuplicateStepId { first_at: usize },
@@ -334,6 +354,33 @@ impl fmt::Display for Fault {
                  means somebody approves before it runs, and nothing that reads \
                  `requires` — preparing a worktree, or running a Check's \
                  prerequisite at the gate — has anybody to ask"
+            ),
+            Fault::NotADeclaredCheck {
+                value,
+                is_a_command: true,
+                ..
+            } => write!(
+                f,
+                "is `{value}`, which is declared as a Command, not a Check. \
+                 `after_merge.checks` names a Check"
+            ),
+            Fault::NotADeclaredCheck {
+                value, declared, ..
+            } => {
+                let names: Vec<&str> = declared.iter().map(String::as_str).collect();
+                write!(
+                    f,
+                    "is `{value}`, which this file declares no Check by. It \
+                     declares {}",
+                    Listed(&names, "none")
+                )
+            }
+            Fault::PreparesTheRepository { value, requires } => write!(
+                f,
+                "is `{value}`, which declares `requires: [{requires}]`. A \
+                 prerequisite writes in the tree it runs in, and this run \
+                 happens in the repository somebody is working in — name a \
+                 Check that prepares nothing"
             ),
             Fault::DuplicateStepId { first_at } => {
                 write!(f, "repeats the id already used by steps[{first_at}]")

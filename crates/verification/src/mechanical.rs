@@ -501,7 +501,21 @@ impl Ran {
     /// Pair the step's checks with what was observed of each, in the step's
     /// order.
     pub fn of(step: &ResolvedStep, observed: &[Observed]) -> Result<Ran, ChecksOutstanding> {
-        let checks = step.checks();
+        Ran::against(step.checks(), observed)
+    }
+
+    /// The same pairing, against a list of Checks that no step declared.
+    ///
+    /// **`#474` has Checks and no step.** A repository's `after_merge` list is
+    /// run against the tree a merge left behind, where there is no step, no
+    /// Drone and no evidence — but there is the same refusal to accept fewer
+    /// observations than Checks, and the same mapping onto the rows that get
+    /// written down. [`Ran::of`] is this call with a step's own list, so the
+    /// two cannot come to disagree about what a skip or a timeout records.
+    pub fn against(
+        checks: &[ResolvedCheck],
+        observed: &[Observed],
+    ) -> Result<Ran, ChecksOutstanding> {
         if checks.len() != observed.len() {
             return Err(ChecksOutstanding::NotEveryCheckRan {
                 declared: checks.len(),

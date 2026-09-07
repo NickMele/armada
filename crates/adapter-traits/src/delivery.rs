@@ -269,17 +269,43 @@ pub enum Renewed {
 /// in, so every reading that is not "clean, on the branch that merged, and one
 /// fast-forward behind it" is [`LeftAlone`](RepositoryStanding::LeftAlone) with
 /// the reason said out loud.
+///
+/// **Two of the three name a commit and the third cannot**, which is what stops
+/// `#474` proving a tree nobody committed. See
+/// [`caught_up_to`](RepositoryStanding::caught_up_to).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RepositoryStanding {
-    /// It moved, and by how much.
-    MovedOn { base: String, commits: usize },
-    /// It already had what merged. Ordinary, and the answer whenever a person
-    /// pulled before Armada got to it.
-    AlreadyHadIt { base: String },
+    /// It moved, by how much, and onto what. `head` is the commit the base is
+    /// on **now** and not the merge commit the forge named, so a merge that
+    /// arrived behind two others is proved once, at the tip.
+    MovedOn {
+        base: String,
+        commits: usize,
+        head: String,
+    },
+    /// It already had what merged, and what it is on. Ordinary, and the answer
+    /// whenever a person pulled before Armada got to it — which is not a person
+    /// having run anything, so it still names a commit.
+    AlreadyHadIt { base: String, head: String },
     /// Nothing was touched, and why — a person's uncommitted work, a checkout
     /// that is not on the base, no remote, or a history that would not
-    /// fast-forward.
+    /// fast-forward. **No commit, and that is the point.**
     LeftAlone { why: String },
+}
+
+impl RepositoryStanding {
+    /// The commit a run may be made against, where this standing left one.
+    ///
+    /// **`None` is the whole of the refusal**, and it is a shape rather than a
+    /// rule: there is no other way to reach a run, so declining on a dirty
+    /// worktree is not a check somebody remembered to write.
+    pub fn caught_up_to(&self) -> Option<&str> {
+        match self {
+            RepositoryStanding::MovedOn { head, .. }
+            | RepositoryStanding::AlreadyHadIt { head, .. } => Some(head),
+            RepositoryStanding::LeftAlone { .. } => None,
+        }
+    }
 }
 
 /// A pull request's contents, assembled before anything is opened.

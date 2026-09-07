@@ -279,6 +279,9 @@ pub struct Fleet<H, V, W> {
     /// process would name a position in a list that has since changed, and the
     /// answers it produces are on the record already.
     sweeping: Mutex<Sweep>,
+    /// Which commit is being proved and what came back. Never written down, for
+    /// `sweeping`'s reason; an `Arc` because the run is spawned — `crate::proving`.
+    proving: Arc<Mutex<crate::proving::Proving>>,
     /// What one Job may spend. **Held rather than read** — like every other
     /// dial here, the composition root resolves it and nothing below Fleet
     /// reads configuration.
@@ -366,6 +369,7 @@ where
             reading: std::sync::Mutex::new(None),
             swept: Mutex::new(None),
             sweeping: Mutex::new(Sweep::default()),
+            proving: Arc::new(Mutex::new(crate::proving::Proving::default())),
             allowance: fittings.allowance,
             polled: Mutex::new(None),
             drones: std::sync::Mutex::new(Drones::default()),
@@ -814,6 +818,9 @@ where
     }
     pub(crate) fn polling(&self) -> Polling {
         self.polling
+    }
+    pub(crate) fn proving(&self) -> &Arc<Mutex<crate::proving::Proving>> {
+        &self.proving
     }
     pub(crate) fn noticing(&self) -> Noticing {
         self.noticing

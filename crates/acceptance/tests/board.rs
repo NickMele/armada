@@ -20,6 +20,7 @@
 //! | What the Job changed, file by file | `ipc::JobFootprint` is built by `fleet::footprint::kept`, `pub(crate)`. Building one here would assert that a struct has fields |
 //! | The evidence each step submitted, and what each step declared | `fleet::wire::submitted` and `declared_check`, `pub(crate)` for the same reason. What survives is the gate's *ruling* on that evidence, and what each Check **did** |
 //! | That anybody *is* asked what became of it | The sweep is `fleet::noticing`, `pub(crate)`, and asking needs a forge and a network. What holds here is that a merge the record already knows about survives the wire — `fleet`'s own tests assert that the sweep records one |
+//! | What the Checks said about the commit that merged | **Not Board's claim, and nothing here could carry it.** #474 keys that run by the commit and not by a Job, and Board's claim is about Jobs; the answer reaches no operation and no event, so there is no received value to assert against. What would prove it is an operation serving a commit's proof — filed, not built. `store` and `fleet` assert the record and the run |
 
 // The bench is shared with the other milestones' tests and none of them uses
 // all of it. Every item in it is reached from one of the three.

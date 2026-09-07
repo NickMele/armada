@@ -197,6 +197,15 @@ drone:
   # No `poke_limit`. Nothing here wants more or fewer nudges than Fleet's two,
   # and a number written without a reason is one the next person deletes.
 
+# No `after_merge:`. The key exists and this repository does not set it — see
+# docs/concepts/manifest.md, *Proving what merged*. What it would buy is a run of
+# `build` and `test` against the commit each merge leaves on `main`; what it
+# costs is those two on the machine somebody is working on, cold, for an event
+# nobody is waiting for. docs/practices/rust.md section 8 names a hook that
+# rebuilt on merge as the cause of v1's four-minute cold build and says outright
+# not to reintroduce one. Turning it on is two lines and is a decision somebody
+# takes deliberately, which is the whole reason absent means off.
+
 # What has to have run before any step starts in a fresh worktree. Names a
 # Command above; a name nothing declares is refused at load. Fleet runs it once
 # where the worktree is cut, not once per Drone, and has no opinion about what

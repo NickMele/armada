@@ -111,6 +111,12 @@ pub struct Turned {
     /// The Jobs admitted because the bound had room. Ordinarily empty, and
     /// longer than one only where several came free at once.
     pub admitted: Vec<JobId>,
+    /// What the repository's own Checks said about a commit that merged,
+    /// written down this turn. **Ordinarily empty, and never longer than one**
+    /// — a repository that names no `after_merge` Checks proves nothing, and at
+    /// most one run is ever out. **Keyed by the commit and not by a Job**: see
+    /// `crate::proving` for why, and `#474`.
+    pub proved: Vec<store::Proved>,
     /// Jobs escalated because an upstream they wait on ended badly. **A list
     /// and not an `Option`**: one upstream ending releases every dependent that
     /// named it, so the turn a Job fails is the turn all of them move.
@@ -254,6 +260,11 @@ where
         // its reason: this touches no slot and starts nothing, so what it
         // wants is only to run once for the turn rather than once per Drone.
         turned.noticed = self.notice_a_merge().await?;
+        // **After the notice, so a run started this turn is not drained on it.**
+        // What this writes down came back from a task spawned turns or minutes
+        // ago; the store is Fleet's to write and a detached task has no handle
+        // on it. See `crate::proving`.
+        turned.proved = self.settle_proofs().await?;
         // Beside the merge notice and for the same two reasons: it touches no
         // slot, and what it reads is the whole board rather than one Drone.
         // **After the notice**, because a merge read this turn is what makes a

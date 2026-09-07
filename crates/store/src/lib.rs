@@ -44,6 +44,9 @@ mod open;
 mod plan;
 /// Which operating-system process is working a Job, so a restart can ask.
 mod process;
+/// What a repository's Checks said about a commit — **the one per-Check record
+/// here that is not keyed by a Job.**
+mod proving;
 mod read;
 /// What a person says went wrong, kept after the Job it is about is gone.
 mod report;
@@ -68,6 +71,7 @@ pub use forget::Forgotten;
 pub use open::Store;
 pub use plan::DeclaredPlan;
 pub use process::DroneProcess;
+pub use proving::Proved;
 pub use read::{Loaded, RowIdentity, StatusRepair, UnreadableRow};
 pub use report::Report;
 pub use schema::KNOWN_SCHEMA_VERSION;
