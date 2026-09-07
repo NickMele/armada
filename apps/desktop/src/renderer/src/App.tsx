@@ -8,42 +8,50 @@
 // Fleet has not confirmed — a Job whose real state is not what the screen says
 // is the failure that matters.
 //
-// # Nothing here fails silently
+// # What this file is, now that three subjects have left it
 //
-// Three failures, and they stay three. Fleet unreachable says which of the four
-// answers the runtime file gave, a region that threw names itself and leaves
-// the rest of the window usable, and a Job the store refused is one row rather
-// than a board. Each points at its log, and the one that carries a run id — a
-// refusal Fleet minted — says that the id names Fleet's run rather than that
-// failure. **Nothing here mints one.** An id from a process that writes no log
-// line joins to nothing, and a labelled blank is worse than an absent row.
+// What is left is the window: which surface is open, what keeps that consistent
+// as events arrive, and what is drawn. Three things that are not the window are
+// beside it, each because it is a subject rather than a line of wiring —
+// `commands.ts` for what the host is asked to do, `failing.ts` for which
+// failure is on screen, and `palette.ts` for what the palette can reach.
 
 import { useEffect, useRef, useState } from "react";
-import { Button, Dialog, Textarea } from "@armada/components";
+import { Dialog, Textarea } from "@armada/components";
 
 import { NOTHING_YET } from "../../shared/bridge";
 import type { BridgeState } from "../../shared/bridge";
-import type { Artifact, Draft, Outcome } from "@armada/protocol";
-import type { FileReport, WorktreeReclaimed } from "@armada/protocol";
 import { Boundary } from "@armada/shell";
 import { Standing } from "./Standing";
 import { CopiedToast, SaidToast, useCopied, useSaid } from "@armada/shell";
 import { FailureBlock } from "@armada/shell";
-import { fleetFailure, jobFailure, refusalFailure, transportFailure, uncaughtFailure } from "@armada/shell";
+import { jobFailure } from "@armada/shell";
 import { headOf } from "@armada/shell";
-import { statementOf } from "@armada/shell";
 import { Composer } from "@armada/screens";
 import { DispatchJob } from "@armada/screens";
-import type { Answered } from "@armada/screens";
 import { watchOf } from "@armada/screens";
 import { Reports } from "@armada/screens";
 import { Worktrees } from "@armada/screens";
 import { JobDetail, type ConfirmableAct } from "@armada/screens";
-import { ACT_LABEL, CONFIRM, reclaimed, RESTART_NOTE, said } from "@armada/screens";
+import { ACT_LABEL, CONFIRM, RESTART_NOTE } from "@armada/screens";
 import { Jobs } from "@armada/screens";
 import { BOARD_TABS, type BoardReach, type BoardTab } from "@armada/screens";
 import { carryOut, dormantIn } from "./palette";
-import { proposeRequest } from "./dispatch";
+import { failingIn } from "./failing";
+import {
+  examine,
+  openArtifact,
+  openPullRequest,
+  readCall,
+  readDiff,
+  readEvidence,
+  readHeld,
+  readReports,
+  reclaimOne,
+  stageAttachment,
+  useCommands,
+  useWatching,
+} from "./commands";
 import { Palette, useCommandPalette } from "@armada/shell";
 import { copyDebugInfoFor } from "@armada/shell";
 import { Shell } from "@armada/shell";
@@ -57,30 +65,8 @@ const TICK_MS = 1000;
 /** Re-exported so nothing importing it has to learn a new path. */
 export const WAITING: BridgeState = NOTHING_YET;
 
-/* The host calls the screens make, bound once at module scope.
- *
- * **Stable on purpose.** Three of these are depended on by effects, and a
- * lambda rebuilt every render would open and close a read on a loop that feeds
- * itself — the reads publish state. Module scope is the cheapest guarantee
- * there is, and `window.armada` is itself fixed for the life of the window.
- *
- * They exist at all because a screen may not reach for the preload. A screen
- * that did could not be rendered outside the app, which is the whole of why the
- * screens are a layer. */
-const readDiff = (jobId: string | null): void => void window.armada.readDiff(jobId);
-const readReports = (want: boolean): void => void window.armada.readReports(want);
-const readHeld = (want: boolean): void => void window.armada.readHeld(want);
-const reclaimOne = (jobId: string) => window.armada.reclaimWorktree(jobId);
-const readEvidence = (jobId: string | null): void => void window.armada.readEvidence(jobId);
-const readCall = (jobId: string, callId: string) => window.armada.readCall(jobId, callId);
-const openArtifact = (jobId: string, what: Artifact) => window.armada.openArtifact(jobId, what);
-const openPullRequest = (jobId: string) => window.armada.openPullRequest(jobId);
-const stageAttachment = (bytes: ArrayBuffer, filename: string, mimeType: string) =>
-  window.armada.stageAttachment(bytes, filename, mimeType);
-
 export function App() {
   const [state, setState] = useState<BridgeState>(WAITING);
-  const [outcome, setOutcome] = useState<Outcome | null>(null);
   // What has been read and acknowledged. The count itself belongs to the
   // connection and is never reset from here — a drop that happened, happened.
   const [acknowledged, setAcknowledged] = useState(0);
@@ -102,11 +88,6 @@ export function App() {
   // may have arrived over the composer or over a Job, so the surface it wants
   // is not mounted yet and `reach` is whatever the last one left.
   const [landing, setLanding] = useState<BoardTab | null>(null);
-  // Whether the open Job's turns socket is held open. **Not navigation, and not
-  // a control either.** It was navigation while watching swapped the surface
-  // for a transcript, and then a tab; the turns are the open step's activity
-  // log now, so this tracks which Job is open and nothing presses it.
-  const [observing, setObserving] = useState(false);
   // Whether the composer is open. It used to sit permanently above the list;
   // `New job` is what opens it now, so the surface is the list until somebody
   // asks for the form.
@@ -128,10 +109,9 @@ export function App() {
   // The row the cursor goes back to when the detail closes. A keyboard that
   // opened a row and came back to the top of the document has lost its place.
   const [returning, setReturning] = useState<string | null>(null);
-  // Which Job an act is in flight on, and which act is waiting to be
-  // confirmed. **Nothing destructive happens on one press** — every one of the
-  // three ends something, so each states what happens and what survives first.
-  const [acting, setActing] = useState<string | null>(null);
+  // Which act is waiting to be confirmed. **Nothing destructive happens on one
+  // press** — every one of them ends something, so each states what happens and
+  // what survives first.
   const [confirming, setConfirming] = useState<{ act: ConfirmableAct; jobId: string } | null>(
     null,
   );
@@ -140,18 +120,8 @@ export function App() {
   // inside it**: the act being confirmed is what the palette and the step
   // header both set, and neither of them knows about a field.
   const [restartNote, setRestartNote] = useState("");
-  // What the last reclaim answered. **Its own state and not `outcome`** — that
-  // one draws refusals, and this is a success worth reading: the act asks for
-  // two things, the halves can disagree, and a kept branch is something a
-  // person has to go and deal with by hand.
-  const [givenBack, setGivenBack] = useState<WorktreeReclaimed | null>(null);
   /** The Manifest reading a person put away. A later read draws again. */
   const [readingSeen, setReadingSeen] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  // Which Job has a decision on its work in flight. Separate from `acting`,
-  // the header's act set: sharing one flag would grey out the header's kills
-  // while a review note was being sent.
-  const [deciding, setDeciding] = useState<string | null>(null);
   // Whether the command palette is up, and where the Board's cursor is.
   // **The cursor is mirrored, not owned** — the Board holds it and reports it,
   // so the palette can title its context block with the job its acts would act
@@ -162,6 +132,12 @@ export function App() {
   // field. Both belong to that surface and stay there — see `BoardReach`.
   const reach = useRef<BoardReach | null>(null);
 
+  // Every command the window can send, and what it holds while one is out.
+  // Two of them end somewhere this file owns, so both are answered to rather
+  // than reached for: a redispatch opens its replacement, and a re-read
+  // publishes what came back.
+  const commands = useCommands({ onOpen: setOpenJob, onRead: setState });
+
   // The open Job, read out of the list rather than copied beside it. A Job that
   // leaves the list — superseded, or gone from a resync — closes its own detail
   // rather than leaving a row on screen that Fleet no longer has.
@@ -171,35 +147,9 @@ export function App() {
     return window.armada.subscribe(setState);
   }, []);
 
-  // Which Job main should read whole and keep current. The renderer says which
-  // one is open and does no reading of its own — a component that fetched
-  // would be Bridge's second connection.
-  useEffect(() => {
-    void window.armada.watchJob(openJob);
-  }, [openJob]);
-
-  // What the open Job holds on this machine. **Opened with the Job**, like the
-  // two sockets: the panel it draws answers *is this working*, which is the
-  // question somebody opening a Job they suspect has wedged came with. Main
-  // re-reads it on every event naming the Job and this says nothing about when.
-  useEffect(() => {
-    void window.armada.readResources(openJob);
-  }, [openJob]);
-
-  // Opening another Job drops the socket, and does it before the one below is
-  // reopened — the rows in hand belong to the Job that was open, and carrying
-  // them into a different one would be a transcript under the wrong title.
-  //
-  // **A Job that is open is a Job being observed.** The turns are the step's
-  // activity log rather than a screen of their own, and a log that filled only
-  // after a press is the tab job detail removed. Closing the Job closes the
-  // socket, so nothing is held for a Job nobody is reading.
-  useEffect(() => setObserving(openJob !== null), [openJob]);
-
-  // Which Job's turns main should hold a socket open for.
-  useEffect(() => {
-    void window.armada.observeJob(observing ? openJob : null);
-  }, [observing, openJob]);
+  // What main is asked to hold open for the Job being read: the Job itself, what
+  // it holds on this machine, and its turns.
+  useWatching(openJob);
 
   useEffect(() => watchUncaught(setUncaught), []);
 
@@ -274,245 +224,37 @@ export function App() {
   // unambiguously what is in front of you.
   const onWhat = reading ?? state.jobs.find((job) => job.id === cursor);
   const live = state.connection.state === "connected";
-  const statement = statementOf(state.connection, now, state.readAt);
-  const fleet = fleetFailure(state.connection, statement, state.bridge, now);
-  // What the last command answered, where the answer was a failure rather than
-  // guidance. **Two arms and not one**: a refusal is Fleet declining with an
-  // envelope, and a transport failure is a command it did not answer at all —
-  // which used to be a single line of copy with no code and nothing to copy.
-  // Everything else `Outcome` carries is the form saying what it will not send,
-  // which is guidance and takes the `Alert` below.
-  const commandFailure =
-    outcome === null || outcome.ok
-      ? null
-      : outcome.why === "refused"
-        ? refusalFailure(outcome.error, state.bridge)
-        : outcome.why === "transport"
-          ? transportFailure(outcome, state.bridge)
-          : null;
+  // Which failure is on screen, and which one `Copy debug info` would copy.
+  // The order between them, and the reason there is one, are `failing.ts`.
+  const { statement, fleet, commandFailure, failing } = failingIn({
+    connection: state.connection,
+    bridge: state.bridge,
+    readAt: state.readAt,
+    outcome: commands.outcome,
+    uncaught,
+    now,
+  });
   const guarded = { bridge: state.bridge, onCopied: setCopied };
-  // The failure Copy debug info would copy, where one is on screen. Fleet
-  // being unreachable outranks a throw in a handler: it is the one that
-  // explains every other symptom, so it is the one worth sending. A command
-  // that failed sits between them — more specific than a stray throw, and
-  // still explained by an unreachable Fleet where there is one.
-  const failing =
-    fleet ??
-    commandFailure ??
-    (uncaught === null ? null : uncaughtFailure(uncaught, state.bridge));
-
-  async function propose(draft: Draft): Promise<void> {
-    setOutcome(await window.armada.proposeJob(draft));
-  }
-
-  /**
-   * The app's half of a proposer answer: a refusal the dispatch surface has no
-   * drawing for goes to the same pipeline every other command failure uses.
-   * `dispatch.ts` makes the call and decides which half an answer is.
-   */
-  /**
-   * Stop the proposal that is out. **Kills the call rather than stopping the
-   * wait** — see `JobCommands.stopProposal`.
-   *
-   * A refusal goes to the same pipeline every other command failure uses. A
-   * success says nothing: what a person sees is the wait ending, which the
-   * event stream draws a beat later, and a toast on top of it would announce an
-   * outcome they are already looking at.
-   */
-  async function stopProposal(): Promise<void> {
-    const answer = await window.armada.stopProposal();
-    if (!answer.ok) setOutcome(answer);
-  }
-
-  async function proposeFrom(request: string): Promise<Answered> {
-    const read = await proposeRequest(request, {
-      workflows: state.holds.workflows,
-      bridge: state.bridge,
-    });
-    if (read.outcome !== null) setOutcome(read.outcome);
-    return read;
-  }
-
-  async function approve(jobId: string): Promise<void> {
-    setOutcome(await window.armada.approveDispatch(jobId));
-  }
-
-  /**
-   * Clear every terminal Job at once. **One outcome shown, not a tally** — a
-   * failed forget is surfaced through the same refusal pipeline every other
-   * command failure uses, naming the first one that refused; the rest that
-   * succeeded are already gone from the board by the time this returns.
-   */
-  async function clearTerminal(jobIds: readonly string[]): Promise<void> {
-    const result = await window.armada.clearTerminalJobs(jobIds);
-    if (result.failed.length > 0) setOutcome(result.failed[0]!.outcome);
-  }
-
-  /**
-   * Do the confirmed act. **Five preload calls, not one with a discriminator**
-   * — killing a Drone leaves the Job, killing the Job ends it, a redispatch
-   * mints a replacement, a restart puts a fresh Drone on the same worktree at
-   * the step that stopped, and a reclaim takes the worktree away and leaves
-   * the Job exactly where it is.
-   *
-   * A redispatch answers with the replacement's id, and the detail follows it:
-   * the Job that was open is over, and the one worth reading is the new one.
-   *
-   * **A reclaim answers with a receipt, which is shown rather than folded.**
-   * Nothing on the board changes — the record survives, `clearTerminalJobs` is
-   * what takes it — and the answer's two halves can disagree, so what happened
-   * is stated instead of being left to a silent success.
-   */
-  async function act(act: ConfirmableAct, jobId: string): Promise<void> {
-    // Read before the state is cleared, and only the restart has one. A blank
-    // field is not sent: `restartStep` drops it, so a person who opened the
-    // dialog and typed nothing gets the restart they pressed for rather than
-    // the 422 a blank note earns.
-    const note = act === "restart_step" ? restartNote : undefined;
-    setConfirming(null);
-    setRestartNote("");
-    setActing(jobId);
-    try {
-      const answer =
-        act === "redispatch"
-          ? await window.armada.redispatchJob(jobId)
-          : act === "kill_drone"
-            ? await window.armada.killDrone(jobId)
-            : act === "restart_step"
-              ? await window.armada.restartStep(jobId, note)
-              : act === "reclaim_worktree"
-                ? await window.armada.reclaimWorktree(jobId)
-                : await window.armada.killJob(jobId);
-      setOutcome(answer);
-      if (answer.ok && answer.reclaimed !== undefined) setGivenBack(answer.reclaimed);
-      if (answer.ok && answer.jobId !== undefined) setOpenJob(answer.jobId);
-    } finally {
-      setActing(null);
-    }
-  }
-
-  /**
-   * Send a redirect. **Not through `act`** — the dialog that collected the
-   * instruction already was the confirmation, so there is nothing left to
-   * confirm here, only to send.
-   */
-  async function redirect(jobId: string, instruction: string): Promise<void> {
-    setActing(jobId);
-    try {
-      setOutcome(await window.armada.redirectDrone(jobId, instruction));
-    } finally {
-      setActing(null);
-    }
-  }
-
-  /**
-   * Answer the question a drone asked, with the label a person picked.
-   *
-   * **Not through `act`** for `redirect`'s reason and one of its own: there was
-   * never a dialog, because there was never anything to confirm — the answer is
-   * one of a closed set the drone itself offered, and it stops the drone
-   * waiting rather than ending anything.
-   */
-  async function answer(jobId: string, questionId: string, chose: string): Promise<void> {
-    setActing(jobId);
-    try {
-      setOutcome(await window.armada.answerQuestion(jobId, questionId, chose));
-    } finally {
-      setActing(null);
-    }
-  }
-
-  /**
-   * Overrule a Judge that refused the work. **Not through `act`**, for
-   * `redirect`'s reason: the dialog that collected the reason was the
-   * confirmation. **And not through `decide`**, which answers a gate nothing
-   * objected to — this one answers a gate that refused.
-   */
-  async function overrule(jobId: string, reason: string): Promise<void> {
-    setActing(jobId);
-    try {
-      setOutcome(await window.armada.overrideVerdict(jobId, reason));
-    } finally {
-      setActing(null);
-    }
-  }
-
-  /**
-   * Ask the gate again on a step it could not decide. **Not through `act`**,
-   * which confirms first: nothing is destroyed, nothing is overruled and
-   * nothing is advanced by pressing this, so there is nothing for a dialog to
-   * state. **And not through `overrule`**, which answers a machine that ruled —
-   * this answers one that could not.
-   */
-  async function rerun(jobId: string): Promise<void> {
-    setActing(jobId);
-    try {
-      setOutcome(await window.armada.rerunGate(jobId));
-    } finally {
-      setActing(null);
-    }
-  }
-
-  /**
-   * File a report on a job that failed in error.
-   *
-   * **Not through `act`, and not like the others at all**: nothing about the
-   * job changes, so there is nothing to fold and nothing to re-read. It returns
-   * the outcome rather than only publishing one, because the record that comes
-   * back is what the dialog shows next — held there rather than in app state,
-   * where it would outlive the dialog that produced it.
-   */
-  async function report(jobId: string, filing: FileReport): Promise<Outcome> {
-    const answer = await window.armada.fileReport(jobId, filing);
-    // Published as well as returned: a refusal belongs in the one place this
-    // app says what a command answered, and a success is worth the same line.
-    setOutcome(answer);
-    return answer;
-  }
-
-  /**
-   * Answer the review gate. **Three preload calls, not one with a
-   * discriminator** — approving takes the work, requesting changes sends the
-   * drone back to the same step with the note, and rejecting is terminal and
-   * ends the drone. **Nothing confirms here**: approving is the ordinary path,
-   * and rejecting is confirmed by the review render's own dialog, where the
-   * diff being decided on is still on screen.
-   */
-  async function decide(jobId: string, what: "approve" | "changes" | "reject", note = ""): Promise<void> {
-    setDeciding(jobId);
-    try {
-      setOutcome(
-        what === "approve"
-          ? await window.armada.approveReview(jobId)
-          : what === "changes"
-            ? await window.armada.requestChanges(jobId, note)
-            : await window.armada.rejectWork(jobId),
-      );
-    } finally {
-      setDeciding(null);
-    }
-  }
-
-  /**
-   * Ask Fleet for current state over the connection Bridge already holds.
-   *
-   * **It re-reads; it does not reconnect.** The stream keeps the board current
-   * on its own, so this is for the case where somebody wants to be sure rather
-   * than for a connection that is broken — and dropping a working socket would
-   * not fix one that is.
-   */
-  async function refresh(): Promise<void> {
-    setRefreshing(true);
-    try {
-      setState(await window.armada.state());
-    } finally {
-      setRefreshing(false);
-    }
-  }
 
   function close(): void {
     setReturning(openJob);
     setOpenJob(null);
+  }
+
+  /**
+   * Do the act the dialog collected, and put the dialog away first.
+   *
+   * **The note is read here rather than in the command.** Only the restart has
+   * one, and the field that holds it belongs to the dialog below. A blank field
+   * is not sent: `restartStep` drops it, so a person who opened the dialog and
+   * typed nothing gets the restart they pressed for rather than the 422 a blank
+   * note earns.
+   */
+  function confirmed(what: ConfirmableAct, jobId: string): void {
+    const note = what === "restart_step" ? restartNote : undefined;
+    setConfirming(null);
+    setRestartNote("");
+    void commands.act(what, jobId, note);
   }
 
   /**
@@ -537,7 +279,7 @@ export function App() {
     auditing,
     clearing,
     live,
-    refreshing,
+    refreshing: commands.refreshing,
     onCloseJob: close,
     onCloseComposer: () => setComposing(false),
     onCompose: () => setComposing(true),
@@ -545,7 +287,7 @@ export function App() {
     onReadReports: () => setAuditing(true),
     onCloseWorktrees: () => setClearing(false),
     onReadWorktrees: () => setClearing(true),
-    onRefresh: () => void refresh(),
+    onRefresh: () => void commands.refresh(),
   });
 
   return (
@@ -580,11 +322,11 @@ export function App() {
             missed={state.missed}
             acknowledged={acknowledged}
             onAcknowledged={setAcknowledged}
-            givenBack={givenBack}
-            onGivenBack={setGivenBack}
+            givenBack={commands.givenBack}
+            onGivenBack={commands.setGivenBack}
             commandFailure={commandFailure}
-            outcome={outcome}
-            onOutcome={setOutcome}
+            outcome={commands.outcome}
+            onOutcome={commands.setOutcome}
           />
 
           {/* One Job, read whole, in place of the board. Reviewing and deciding
@@ -604,9 +346,9 @@ export function App() {
                 manifests={state.holds.manifests}
                 stale={!live}
                 now={now}
-                acting={acting === reading.id}
+                acting={commands.acting === reading.id}
                 approving={state.approving.includes(reading.id)}
-                deciding={deciding === reading.id}
+                deciding={commands.deciding === reading.id}
                 observed={state.observed}
                 journalled={state.journalled}
                 resources={state.resources}
@@ -615,22 +357,24 @@ export function App() {
                 // call, and its answer arrives on the published state rather
                 // than coming back — so a window reloaded mid-look still draws
                 // what Fleet found.
-                onExamine={(jobId) => void window.armada.examineJob(jobId)}
+                onExamine={examine}
                 recorded={{
                   footprint: state.footprint,
                   evidence: state.evidence,
                   diff: state.diff,
                 }}
                 onAct={(what, jobId) => setConfirming({ act: what, jobId })}
-                onRedirect={(jobId, instruction) => void redirect(jobId, instruction)}
-                onAnswer={(jobId, questionId, chose) => void answer(jobId, questionId, chose)}
-                onOverrule={(jobId, reason) => void overrule(jobId, reason)}
-                onRerun={(jobId) => void rerun(jobId)}
-                onReport={report}
-                onApprove={(jobId) => void approve(jobId)}
-                onApproveReview={(jobId) => void decide(jobId, "approve")}
-                onRequestChanges={(jobId, note) => void decide(jobId, "changes", note)}
-                onReject={(jobId) => void decide(jobId, "reject")}
+                onRedirect={(jobId, instruction) => void commands.redirect(jobId, instruction)}
+                onAnswer={(jobId, questionId, chose) =>
+                  void commands.answer(jobId, questionId, chose)
+                }
+                onOverrule={(jobId, reason) => void commands.overrule(jobId, reason)}
+                onRerun={(jobId) => void commands.rerun(jobId)}
+                onReport={commands.report}
+                onApprove={(jobId) => void commands.approve(jobId)}
+                onApproveReview={(jobId) => void commands.decide(jobId, "approve")}
+                onRequestChanges={(jobId, note) => void commands.decide(jobId, "changes", note)}
+                onReject={(jobId) => void commands.decide(jobId, "reject")}
                 onCopied={setCopied}
                 onSaid={setTelling}
               />
@@ -671,11 +415,18 @@ export function App() {
                offered before `list_workflows` and `list_manifests` existed. */
             <Boundary region="the job composer" {...guarded}>
               <DispatchJob
-                onPropose={proposeFrom}
+                // What the reading is read against is published state, so it is
+                // handed over at the press rather than held by the command.
+                onPropose={(request) =>
+                  commands.proposeFrom(request, {
+                    workflows: state.holds.workflows,
+                    bridge: state.bridge,
+                  })
+                }
                 // What Fleet says the call is doing, against the same `now`
                 // every other elapsed figure on screen is drawn from.
                 watching={watchOf(state.proposing, now)}
-                onStop={() => void stopProposal()}
+                onStop={() => void commands.stopProposal()}
                 // A proposed Job is opened, never approved from here: approval
                 // is a second act from detail, and this is the same signpost the
                 // Board's own `awaiting_approval` row carries.
@@ -693,7 +444,7 @@ export function App() {
                     models={state.holds.models}
                     disabled={!live}
                     onPropose={(draft) => {
-                      void propose(draft);
+                      void commands.propose(draft);
                       setComposing(false);
                     }}
                   />
@@ -721,7 +472,7 @@ export function App() {
                   // holds initial focus" a rule with one implementation.
                   onKill={(jobId) => setConfirming({ act: "kill_job", jobId })}
                   onCompose={() => setComposing(true)}
-                  onClearTerminal={(jobIds) => void clearTerminal(jobIds)}
+                  onClearTerminal={(jobIds) => void commands.clearTerminal(jobIds)}
                   onCopied={setCopied}
                 />
               </Boundary>
@@ -756,7 +507,7 @@ export function App() {
             setConfirming(null);
             setRestartNote("");
           }}
-          onConfirm={() => void act(confirming.act, confirming.jobId)}
+          onConfirm={() => confirmed(confirming.act, confirming.jobId)}
         >
           {CONFIRM[confirming.act].body}
           {/* The one confirmation that collects anything, and what it collects

@@ -1,6 +1,6 @@
 // How a failure is drawn, and what its actions do.
 //
-// The six failures are built in `failures.ts` and every one of them arrives
+// The six failures are built under `failures/` and every one of them arrives
 // here, because the shape is shared and the sentences are not — the same
 // discipline as six Job states through one row shape. A generic error screen is
 // six failures given one *sentence*, which is what this repairs.
