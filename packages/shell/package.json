@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@armada/brand": "workspace:*",
     "@armada/components": "workspace:*",
     "@armada/protocol": "workspace:*",
     "@armada/tokens": "workspace:*",

@@ -142,3 +142,13 @@
   justify-content: center;
   padding: 0;
 }
+
+/* Centred on the 48px rail, the same as every item beneath it. The chrome
+   carries a name rather than a glyph at full width, so it is left-aligned
+   there; collapsed, whatever the app passes is the only thing on the row and
+   an off-centre one reads as misplaced beside a centred column. */
+.armada-sidebar[data-collapsed] .armada-sidebar__chrome {
+  display: flex;
+  justify-content: center;
+  padding-inline: 0;
+}

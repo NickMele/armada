@@ -1,48 +1,77 @@
-# @armada/brand
+# Armada brand
 
-The Countersign mark, and every rendering of it the app or the repository needs.
-
-**The rules are not here.** `docs/contracts/iconography.md`, section *Brand mark
-— the one custom glyph*, governs stroke, caps, clear space, minimum size and
-colour, and `packages/icons/icons.toml` carries the mark's registry row. This
-file says what is in the directory and how to rebuild it.
-
-Two things worth knowing before touching anything, because both are easy to undo
-by accident and neither is visible in a diff:
-
-- **The stroke is 2 at every size**, and **the caps are butt, not round.** Round
-  caps overhang each endpoint by a full unit, which closes the two-unit
-  clearance the mark is built on — the mark stops being the mark.
-- **The React components do not take `strokeWidth` or `linecap` as props.** That
-  is deliberate: a prop is an invitation.
+The mark is three hulls on a shallow arc. It is one filled shape in one
+colour, and it is the only custom glyph Armada owns.
 
 ## What is here
 
-| Path | |
+| Folder | Holds |
 |---|---|
-| `svg/armada-mark.svg` | 24×24, `currentColor`. **The master** — every other rendering derives from it |
-| `svg/armada-lockup-*.svg`, `armada-wordmark.svg` | Text outlined, so no font is needed to render them |
-| `png/` | Transparent, light and dark, 16 through 1024; lockups at @2x |
-| `web/` | `favicon.svg` responds to `prefers-color-scheme`; `.ico` carries 16/32/48 |
-| `macos/` | `AppIcon.icns` ready for the bundle, plus the `.iconset` it is built from and the two SVG sources |
-| `covers/` | Page covers at 2400×480 and the repository's social preview at 1280×640 |
-| `src/` | `ArmadaMark`, `ArmadaLockup` |
+| `svg/` | The masters. Everything else is derived from these. |
+| `png/` | Raster mark at nine sizes, plus lockups and wordmark at @2x, in both tones. |
+| `web/` | Favicons. `favicon.svg` flips with `prefers-color-scheme`. |
+| `macos/` | App icon on Apple's grid, as `.icns` and as a rebuildable `.iconset`. |
+| `src/` | `ArmadaMark`, `ArmadaMarkDuo`, `ArmadaLockupHorizontal`, `ArmadaLockupStacked`. |
+| `covers/` | Notion covers at 2400×480 and the GitHub card at 1280×640. |
 
-## Rebuilding
+## Colour
 
-The macOS icon, after any change to the mark:
+| Token | Value | Use |
+|---|---|---|
+| Ink | `#E4E9EF` | The mark on dark grounds |
+| Ink, dark | `#0F1419` | The mark on light grounds |
+| Accent | `#4A9EDB` | Rules, meta text, the accent app icon body |
+| App body, dark | `#161C23` | The macOS icon body |
 
-```sh
+The mark is monotone. It is never given a gradient, a shadow, an outline, or a
+second colour, with one exception: `ArmadaMarkDuo` holds the two trailing hulls
+back, and only at 32px and above.
+
+## Clear space
+
+Clear space on all four sides equals the height of one hull — roughly half the
+mark's own height. Nothing enters it, including the wordmark in a hand-built
+lockup. Use the supplied lockups rather than setting your own.
+
+## Minimum sizes
+
+| Context | Floor |
+|---|---|
+| Mark alone | 16px |
+| Horizontal lockup | 20px cap height |
+| Stacked lockup | 48px overall height |
+| `ArmadaMarkDuo` | 32px |
+
+At 16px the notches are about one pixel and the mark is at its limit; it is
+comfortable from 24px. Below 16px the three hulls fuse into a single silhouette
+and the mark should not be used — set the wordmark alone instead.
+
+## What may never change
+
+- **The hull count is three.** It is not a fleet size, a feature count, or a
+  number to tune. Two hulls or four is a different mark.
+- **The arc is shallow and the hulls are equal.** A size taper was tried; the
+  third hull disappears below 24px.
+- **The legs carry their weight.** The hulls were widened specifically so the
+  mark survives 16px. Thinning them for elegance at display size breaks the
+  favicon.
+- **No enclosing shape.** No circle, no rounded square, no badge. The macOS icon
+  body is Apple's grid requirement, not a container the mark may borrow.
+- **The mark is filled, never stroked.** There is no stroke width to set, which
+  is why the React components expose no stroke prop.
+
+## Rebuilding the macOS icon
+
+```
 iconutil -c icns packages/brand/macos/AppIcon.iconset
 ```
 
-## Why the covers are the sizes they are
+The `.icns` here was assembled directly, so it can be regenerated on any
+machine; `iconutil` is only needed if the iconset changes.
 
-**2400×480 is ≈5:1** because that is the aspect a page cover is actually
-displayed at, so nothing important lands outside the crop and the image needs no
-repositioning. Both hold the lower-left quiet, because a page icon sits there and
-overlaps the cover's bottom edge.
+## The wordmark
 
-**1280×640 is GitHub's stated size** for a social preview, and everything sits
-inside the 40pt safe border it recommends — so nothing is lost when the card is
-re-cropped by a link unfurl. It is set under Settings → General → Social preview.
+IBM Plex Sans SemiBold, converted to outlines. Every lockup and wordmark file
+carries paths, not a font reference, so nothing falls back to Times on a machine
+that lacks Plex. If the wordmark needs resetting, install `@ibm/plex-sans` and
+convert with fontTools' `SVGPathPen`. Do not trace it by eye.

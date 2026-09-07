@@ -11,7 +11,14 @@
     "./AppIcon.icns": "./macos/AppIcon.icns",
     "./mark.svg": "./svg/armada-mark.svg"
   },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
   "dependencies": {
     "react": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "typescript": "^5.9.0"
   }
 }
