@@ -1,24 +1,21 @@
-//! The daemon core: the [`Fleet`] a process is, and the state one holds. It is
-//! assembled from [`mod@fittings`], answers through [`mod@answering`], and hands
-//! what it holds to the rest of the crate through [`mod@seams`].
-//! [`working`](mod@crate::working) is a slot's contents, an invariant kept away
-//! from the logic that moves it, and [`dispatch`](mod@crate::dispatch) is what
-//! happens to a Job while it is in one.
+//! The daemon core: the [`Fleet`] a process is. It is assembled from
+//! [`mod@fittings`], answers through [`mod@answering`], and hands what it holds
+//! to the crate around it through [`mod@seams`]. A slot's contents are
+//! [`working`](mod@crate::working), an invariant kept away from the logic that
+//! moves it, and [`dispatch`](mod@crate::dispatch) is what moves it.
 //!
-//! **The queue is not a list.** [`Fleet`] holds a [`Slots`] roster, one
-//! [`Working`](crate::working::Working) slot per Job being worked and bounded by
-//! [`Concurrency`](crate::slots::Concurrency), and a Job approved while the
-//! bound is spent stays at `queued` — a status the registry already has and the
-//! store already persists. So there is no queue object here, and no ordering in
-//! memory a restart could lose or could disagree with the log — what `#50` added
-//! was the second slot rather than a scheduler over it. **The bound is on
-//! Drones, never on approvals.**
+//! **The queue is not a list.** [`Fleet`] holds a [`Slots`] roster, one slot per
+//! Job being worked and bounded by [`Concurrency`](crate::slots::Concurrency),
+//! and a Job approved while the bound is spent stays at `queued` — a status the
+//! registry already has and the store already persists. So there is no queue
+//! object here, and no ordering in memory a restart could lose or disagree with
+//! the log: `#50` added the second slot rather than a scheduler over it. **The
+//! bound is on Drones, never on approvals.**
 //!
 //! **A refused transition is not survivable.** Every move goes through
-//! `Job::transition` or `Job::transition_step`, every refusal comes back as
-//! `Adrift::IllegalMove` or `Adrift::IllegalStepMove`, and no arm here logs one
-//! and continues: a refusal means Fleet asked for something the edge table says
-//! cannot happen, which is a bug in Fleet.
+//! `Job::transition` or `Job::transition_step`, and no arm below logs an
+//! `Adrift::IllegalMove` or `Adrift::IllegalStepMove` and continues: a refusal
+//! means Fleet asked for what the edge table says cannot happen, a bug in Fleet.
 //!
 //! **Three locks — the roster, one Job's slot, the store — taken in that order
 //! and in no other**, with [`crate::slots`] holding the argument. The gate holds
