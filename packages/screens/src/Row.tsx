@@ -58,12 +58,13 @@
 // wire, not in the store, not computed — and a labelled gap on every row reads
 // as a value that failed to load rather than one nothing serves.
 //
-// **Origin stays out too, and for a nearer miss.** `origin` is on `JobSummary`
-// and its five values are real; what is missing is the word. `enum-verbs.toml`
-// has no `origin` entry, so there is nothing mapping `auto_detected` to `Found
-// by Fleet` — and writing the five sentences here would be a second place they
-// live and the one nothing checks. The screen stories draw them as literals, so
-// **the track is drawn there and empty here**. Issue #234.
+// **Origin stays out too, and no longer for want of the word.**
+// `enum-verbs.toml` carries all five `origin` rows — `auto_detected` reads
+// `Found by Fleet`. What is missing is the carriage: the generator's wanted
+// list does not name `origin`, so no `ORIGIN` map reaches Bridge, and
+// `sub_dispatched` is a form with the parent's id in it rather than a word, so
+// emitting one is a decision rather than a line. The screen stories draw the
+// five as literals, so **the track is drawn there and empty here**. Issue #234.
 //
 // **The step reads its name**, since `StepDetail` carries a label Fleet fills
 // from the frozen workflow. A list row holds `JobSummary` and not the steps, so

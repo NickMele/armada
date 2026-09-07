@@ -122,10 +122,15 @@ export type WorkflowRailStep = {
   labelIsAnIdentifier?: boolean;
   activity: StepActivity;
   /**
-   * The activity, in words, at the row's trailing edge. Not from the enum→verb
-   * map: that map covers Job states, and no vocabulary in the repository
-   * carries a verb per step-activity value. Written by the caller until one
-   * does. Reported.
+   * The activity, in words, at the row's trailing edge.
+   *
+   * **The caller's, because two registries answer it.** Six of the eight
+   * activity values are `job_steps.state` and `enum-verbs.toml` carries a
+   * `step_state` row for each; `killed` and `failed` are not step states at
+   * all but a terminal Job's status showing through, and their word is the
+   * Job's own verb. `run.ts` and `frozen.ts` hold that split, and a lookup
+   * here would have to pick one of the two registries and be wrong about the
+   * other.
    */
   status?: string;
   /**

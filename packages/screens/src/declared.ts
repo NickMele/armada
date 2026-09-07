@@ -91,10 +91,10 @@ const AUTO = "auto";
  * would bury the two values that matter and displace the sentence the design
  * contract requires on a step that genuinely checks nothing.
  *
- * **The word is the wire's own.** `enum-verbs.toml` carries no `advance_gate`
- * rows, so `ADVANCE_GATE` is empty and `human_always` renders as itself — the
- * same fallback `step_state` takes. A phrase chosen here would be the second
- * vocabulary the generated module exists to prevent. Reported.
+ * **The word is the registry's.** `enum-verbs.toml` carries a row for each of
+ * the three, so `human_always` reads `a person answers`; a gate this build has
+ * no row for falls back to its own wire spelling. A phrase chosen here would
+ * be the second vocabulary the generated module exists to prevent.
  */
 export function advanceOf(gate: string | undefined): WorkflowRailDeclaration | undefined {
   if (gate === undefined || gate === AUTO) return undefined;

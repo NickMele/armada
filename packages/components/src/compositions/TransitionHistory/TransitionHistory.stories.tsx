@@ -1,4 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect } from "storybook/test";
+
+import { DRONE_PRESENCE, MOVEMENT_KIND } from "../../generated/vocabulary";
 import { TransitionHistory } from "./TransitionHistory";
 
 /**
@@ -8,6 +11,11 @@ import { TransitionHistory } from "./TransitionHistory";
  * The log is already ordered, already append-only and already validated — the
  * fold refuses a history the machine would not admit. So this draws what
  * arrived and recomputes none of it.
+ *
+ * **Every `kind` and `presence` below is a wire value, never a word.** The
+ * component reads both off the generated vocabulary, so a fixture spelling the
+ * rendered phrase would be a story that keeps passing while the list goes
+ * stale. #468.
  */
 const meta: Meta<typeof TransitionHistory> = {
   title: "Compositions/Transition history",
@@ -35,7 +43,8 @@ export const AJobThatRanClean: Story = {
         at: "09:14:03",
         kind: "drone",
         subject: "drn_01M13",
-        moved: "drone_spawned on plan",
+        presence: "drone_spawned",
+        moved: "on plan",
         actor: "fleet",
       },
       { seq: 4, at: "09:14:03", kind: "step", subject: "plan", moved: "not_started → running", actor: "fleet" },
@@ -47,11 +56,28 @@ export const AJobThatRanClean: Story = {
         at: "10:02:19",
         kind: "drone",
         subject: "drn_01M13",
-        moved: "drone_exited on plan",
+        presence: "drone_exited",
+        moved: "on plan",
         actor: "fleet",
       },
       { seq: 9, at: "10:02:19", kind: "status", moved: "running → completed_success", actor: "fleet" },
     ],
+  },
+  play: async ({ canvas }) => {
+    // Asserted against the registry itself and never a word typed here. All
+    // three `movement_kind` verbs happen to equal their wire spelling — the
+    // rows exist to sanction that, not to change it — so a literal here would
+    // pass over a column that had stopped reading the map at all.
+    for (const wire of ["status", "step", "drone"]) {
+      const verb = MOVEMENT_KIND[wire]?.verb;
+      await expect(verb).toBeTruthy();
+      await expect(canvas.getAllByText(verb!)[0]).toBeVisible();
+    }
+    for (const wire of ["drone_spawned", "drone_exited"]) {
+      const verb = DRONE_PRESENCE[wire]?.verb;
+      await expect(verb).toBeTruthy();
+      await expect(canvas.getAllByText(new RegExp(`^${verb!} on `))[0]).toBeVisible();
+    }
   },
 };
 
@@ -76,7 +102,8 @@ export const AJobThatEndedSomewhereSurprising: Story = {
         at: "13:40:12",
         kind: "drone",
         subject: "drn_01M2A",
-        moved: "drone_spawned on implement",
+        presence: "drone_spawned",
+        moved: "on implement",
         actor: "fleet",
       },
       { seq: 4, at: "13:40:12", kind: "step", subject: "implement", moved: "not_started → running", actor: "fleet" },
@@ -102,7 +129,8 @@ export const AJobThatEndedSomewhereSurprising: Story = {
         at: "14:06:33",
         kind: "drone",
         subject: "drn_01M2A",
-        moved: "drone_exited on implement",
+        presence: "drone_exited",
+        moved: "on implement",
         actor: "human",
       },
       { seq: 8, at: "14:11:50", kind: "step", subject: "implement", moved: "stopped → retrying", actor: "human" },
@@ -111,7 +139,8 @@ export const AJobThatEndedSomewhereSurprising: Story = {
         at: "14:11:51",
         kind: "drone",
         subject: "drn_01M2F",
-        moved: "drone_spawned on implement",
+        presence: "drone_spawned",
+        moved: "on implement",
         actor: "fleet",
       },
       { seq: 10, at: "14:11:51", kind: "status", moved: "escalated → running", actor: "human" },
@@ -128,7 +157,8 @@ export const AJobThatEndedSomewhereSurprising: Story = {
         at: "14:52:00",
         kind: "drone",
         subject: "drn_01M2F",
-        moved: "drone_exited on implement",
+        presence: "drone_exited",
+        moved: "on implement",
         actor: "fleet",
       },
       { seq: 13, at: "14:52:00", kind: "status", moved: "escalated → killed", actor: "human" },

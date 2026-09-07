@@ -1,5 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { FileCheck, Lock, ShieldCheck, ShieldMinus, ShieldOff, ShieldX } from "lucide-react";
+import { expect } from "storybook/test";
+
+import {
+  ADVANCE_GATE,
+  CRITERION_VERDICT_CHECK,
+  JOB_STATUS,
+  STEP_STATE,
+} from "../../generated/vocabulary";
 import { WorkflowRail, type WorkflowRailStep } from "./WorkflowRail";
 
 /**
@@ -26,6 +34,19 @@ type Story = StoryObj<typeof WorkflowRail>;
  * no row for it; it does.
  */
 const EVIDENCE = FileCheck;
+
+/**
+ * The four words below are read off the registry and never typed here, so a
+ * story cannot keep passing over copy the rows have moved off. #468.
+ *
+ * `state` is one of the six `job_steps.state` values; `frozen` is a terminal
+ * Job's own status, showing through on a row the step never left. The two are
+ * different registries and `frozen.ts` holds the same split.
+ */
+const state = (value: string) => STEP_STATE[value]?.verb ?? value;
+const frozen = (status: string) => JOB_STATUS[status]?.verb ?? status;
+const gate = (value: string) => ADVANCE_GATE[value]?.verb ?? value;
+const NOT_REACHED = CRITERION_VERDICT_CHECK.not_reached?.verb ?? "not_reached";
 
 const running: WorkflowRailStep[] = [
   { id: "plan", label: "Plan the change", activity: "advanced", status: "advanced",
@@ -288,11 +309,10 @@ export const OneStep: Story = {
  * — `state` is `job_steps.state` as Fleet recorded it, and the duration on each
  * row is `entered_at` to `updated_at` on that step.
  *
- * **The status word is `job_steps.state`'s own wire spelling.**
- * `enum-verbs.toml` carries no `step_state` rows, so the generated module emits
- * an empty map and the underscored value renders — the same fallback a Check
- * outcome took until its rows landed. A word chosen at the call site would be
- * the second vocabulary that rule exists to prevent. Reported.
+ * **The status word is the registry's.** `enum-verbs.toml` carries a
+ * `step_state` row for each of the six, and the word is read off the generated
+ * map rather than typed here — a word chosen at the call site would be the
+ * second vocabulary that rule exists to prevent.
  *
  * **The unstarted step shows no duration.** `entered_at` is stamped at Job
  * creation for every step of the frozen workflow, so a span on a step that has
@@ -303,10 +323,10 @@ export const OneStep: Story = {
 export const ServedSteps: Story = {
   args: {
     steps: [
-      { id: "plan", label: "plan", labelIsAnIdentifier: true, activity: "advanced", status: "advanced", elapsed: "2m 14s", verdict: "passed", verdictNamed: "passed" },
-      { id: "implement", label: "implement", labelIsAnIdentifier: true, activity: "running", status: "running", current: true, elapsed: "11m 03s" },
-      { id: "verify", label: "verify", labelIsAnIdentifier: true, activity: "not_started", status: "not_started" },
-      { id: "handoff", label: "handoff", labelIsAnIdentifier: true, activity: "not_started", status: "not_started" },
+      { id: "plan", label: "plan", labelIsAnIdentifier: true, activity: "advanced", status: state("advanced"), elapsed: "2m 14s", verdict: "passed", verdictNamed: "passed" },
+      { id: "implement", label: "implement", labelIsAnIdentifier: true, activity: "running", status: state("running"), current: true, elapsed: "11m 03s" },
+      { id: "verify", label: "verify", labelIsAnIdentifier: true, activity: "not_started", status: state("not_started") },
+      { id: "handoff", label: "handoff", labelIsAnIdentifier: true, activity: "not_started", status: state("not_started") },
     ],
     pulsing: true,
   },
@@ -316,12 +336,12 @@ export const ServedSteps: Story = {
  * The six `job_steps.state` values `crates/core-model/domain/step-states.toml`
  * declares, one row each, exactly as Bridge draws them from `GET /jobs/:job_id`.
  *
- * **Every word on every row is the wire's own.** The label is the `step_id`
- * because this workflow declares none and Fleet substitutes the id; the status
- * is the state's underscored spelling, because `enum-verbs.toml` has no
- * `step_state` rows; and the Check row says its name and not its command,
- * because `GET /manifests` serves names and not `run` strings. Two wire gaps
- * and one honest fallback, drawn rather than papered over.
+ * **The label is the wire's own and the status word is not.** The label is the
+ * `step_id`, because this workflow declares none and Fleet substitutes the id,
+ * and the Check row says its name and not its command, because `GET /manifests`
+ * serves names and not `run` strings. The status is the registry's word for
+ * the state — `awaiting_human` reads `awaiting review` — so the row shows the
+ * wire value and its reading side by side.
  *
  * `not reached` and its `shield-minus` come from the criterion Check
  * vocabulary: `check_outcome`'s six are what the gate *decided* about a Check,
@@ -331,18 +351,29 @@ export const ServedSteps: Story = {
 export const EveryStepState: Story = {
   args: {
     steps: [
-      { id: "not_started", label: "not_started", labelIsAnIdentifier: true, activity: "not_started", status: "not_started",
-        gates: [{ command: "build", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }] },
-      { id: "running", label: "running", labelIsAnIdentifier: true, activity: "running", status: "running", current: true, elapsed: "6m 12s",
-        gates: [{ command: "test", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }] },
-      { id: "awaiting_human", label: "awaiting_human", labelIsAnIdentifier: true, activity: "awaiting_human", status: "awaiting_human", elapsed: "1m 04s" },
-      { id: "retrying", label: "retrying", labelIsAnIdentifier: true, activity: "retrying", status: "retrying", elapsed: "3m 41s", verdict: "failed · failed a check", verdictNamed: "failed" },
-      { id: "advanced", label: "advanced", labelIsAnIdentifier: true, activity: "advanced", status: "advanced", elapsed: "2m 14s", verdict: "passed", verdictNamed: "passed",
+      { id: "not_started", label: "not_started", labelIsAnIdentifier: true, activity: "not_started", status: state("not_started"),
+        gates: [{ command: "build", result: NOT_REACHED, icon: ShieldMinus, iconLabel: NOT_REACHED }] },
+      { id: "running", label: "running", labelIsAnIdentifier: true, activity: "running", status: state("running"), current: true, elapsed: "6m 12s",
+        gates: [{ command: "test", result: NOT_REACHED, icon: ShieldMinus, iconLabel: NOT_REACHED }] },
+      { id: "awaiting_human", label: "awaiting_human", labelIsAnIdentifier: true, activity: "awaiting_human", status: state("awaiting_human"), elapsed: "1m 04s" },
+      { id: "retrying", label: "retrying", labelIsAnIdentifier: true, activity: "retrying", status: state("retrying"), elapsed: "3m 41s", verdict: "failed · failed a check", verdictNamed: "failed" },
+      { id: "advanced", label: "advanced", labelIsAnIdentifier: true, activity: "advanced", status: state("advanced"), elapsed: "2m 14s", verdict: "passed", verdictNamed: "passed",
         gates: [{ command: "fmt", result: "passed", icon: ShieldCheck, iconLabel: "passed" }] },
-      { id: "stopped", label: "stopped", labelIsAnIdentifier: true, activity: "stopped", status: "stopped", elapsed: "12m 30s",
+      { id: "stopped", label: "stopped", labelIsAnIdentifier: true, activity: "stopped", status: state("stopped"), elapsed: "12m 30s",
         gates: [{ command: "build", result: "failed · exit 0 → exit 101", icon: ShieldX, iconLabel: "failed" }] },
     ],
     pulsing: true,
+  },
+  play: async ({ canvas }) => {
+    // Asserted against `STEP_STATE` itself and never a word typed here. A copy
+    // in the assertion is the second source the generated map exists to be rid
+    // of, and it is the copy that would let this story pass over a rail that
+    // had gone back to drawing the underscored value.
+    for (const wire of ["not_started", "running", "awaiting_human", "retrying", "advanced", "stopped"]) {
+      const verb = STEP_STATE[wire]?.verb;
+      await expect(verb).toBeTruthy();
+      await expect(canvas.getAllByText(verb!)[0]).toBeVisible();
+    }
   },
 };
 
@@ -523,7 +554,7 @@ export const AChecksPathsAreDrawnBeforeItRuns: Story = {
   args: {
     steps: [
       {
-        id: "implement", label: "Implement", labelIsAnIdentifier: true, activity: "not_started", status: "not_started",
+        id: "implement", label: "Implement", labelIsAnIdentifier: true, activity: "not_started", status: state("not_started"),
         gates: [
           { command: "build · cargo build --workspace --locked" },
           { command: "storybook · pnpm -C packages/components build-storybook", covers: "when packages/**, apps/desktop/**" },
@@ -574,24 +605,25 @@ export const AFailedCheckNamesItsOutput: Story = {
  * resumes exactly its step, so it keeps `flag` and `--step-stopped-bg` while
  * the dead end takes hued `x` and `--step-failed-bg`; drawing the two alike
  * would invite a control that cannot work. No row carries a duration that
- * moves, and a frozen row's word is the Job's own verb — `enum-verbs.toml` has
- * no `step_state` rows, and the Job's status holds the fact that it is over.
+ * moves, and a frozen row's word is the Job's own verb: the step's own
+ * `step_state` row still reads `running`, and the fact that it is over is the
+ * Job's status rather than the step's.
  */
 export const FourJobsOverAndOneResumable: StoryObj = {
   render: () => {
-    const done: WorkflowRailStep = { id: "implement", label: "Implement", activity: "advanced", status: "advanced", elapsed: "6m 48s" };
+    const done: WorkflowRailStep = { id: "implement", label: "Implement", activity: "advanced", status: state("advanced"), elapsed: "6m 48s" };
     const failing = { command: "test · cargo test --workspace", result: "failed · exit 0 → exit 101", icon: ShieldX, iconLabel: "failed", outputPath: ".armada/jobs/job_91ab/checks/test.log" };
     // The Job's status, what it means for the step, and the step as `railOf` builds it there.
     const rails: [string, string, WorkflowRailStep][] = [
       ["escalated", "over, and resumable — a redirect resumes exactly this step",
-        { id: "verify", label: "Run tests", activity: "stopped", status: "stopped", current: true, elapsed: "12m 30s", gates: [failing] }],
+        { id: "verify", label: "Run tests", activity: "stopped", status: frozen("escalated"), current: true, elapsed: "12m 30s", gates: [failing] }],
       ["completed_failed", "over, and a dead end. Nothing resumes it",
-        { id: "verify", label: "Run tests", activity: "failed", status: "failed", current: true, elapsed: "12m 30s", gates: [failing] }],
+        { id: "verify", label: "Run tests", activity: "failed", status: frozen("completed_failed"), current: true, elapsed: "12m 30s", gates: [failing] }],
       ["killed", "frozen where it stood, and unhued — an operator act carries no verdict",
-        { id: "verify", label: "Run tests", activity: "killed", status: "killed", current: true, elapsed: "4m 09s",
-          gates: [{ command: "test · cargo test --workspace", result: "not reached", icon: ShieldMinus, iconLabel: "not reached" }] }],
+        { id: "verify", label: "Run tests", activity: "killed", status: frozen("killed"), current: true, elapsed: "4m 09s",
+          gates: [{ command: "test · cargo test --workspace", result: NOT_REACHED, icon: ShieldMinus, iconLabel: NOT_REACHED }] }],
       ["completed_success", "frozen, every step advanced. The Job's status says so",
-        { id: "verify", label: "Run tests", activity: "advanced", status: "done", current: true, elapsed: "9m 51s",
+        { id: "verify", label: "Run tests", activity: "advanced", status: frozen("completed_success"), current: true, elapsed: "9m 51s",
           gates: [{ command: "test · cargo test --workspace", result: "passed", icon: ShieldCheck, iconLabel: "passed" }] }],
     ];
     return (
@@ -623,21 +655,22 @@ export const FourJobsOverAndOneResumable: StoryObj = {
  * carries no prompt at all: a question drawn here is a prompt in a screenshot.
  * `panel_size` is absent at one, so a value always means a panel.
  *
- * **`advance_gate` reads as the wire spells it.** `enum-verbs.toml` has no rows
- * for it, so `human_always` renders underscored — the fallback `step_state`
- * takes. Reported. `auto` draws no row: the Checks above are the whole gate, and
- * a row on every step would displace the sentence an ungated step owes.
+ * **`advance_gate` reads as the registry spells it.** `enum-verbs.toml` carries
+ * a row for each of the three, so `human_always` reads `a person answers` — the
+ * word `declared.ts` composes the row from. `auto` draws no row: the Checks
+ * above are the whole gate, and a row on every step would displace the sentence
+ * an ungated step owes.
  */
 export const WhatAStepDeclares: Story = {
   args: {
     steps: [
-      { id: "scope", label: "scope", labelIsAnIdentifier: true, activity: "advanced", status: "advanced", elapsed: "1m 12s", evidence: { label: "" } },
-      { id: "implement", label: "implement", labelIsAnIdentifier: true, activity: "not_started", status: "not_started",
-        declarations: [{ label: "judge · 2 criteria · panel of 3", result: "not reached" }, { label: "advance_gate · auto_if_judge_passes" }] },
-      { id: "tests", label: "tests", labelIsAnIdentifier: true, activity: "not_started", status: "not_started",
-        declarations: [{ label: "judge · gaming check", result: "not reached" }] },
-      { id: "handoff", label: "handoff", labelIsAnIdentifier: true, activity: "not_started", status: "not_started",
-        declarations: [{ label: "advance_gate · human_always" }] },
+      { id: "scope", label: "scope", labelIsAnIdentifier: true, activity: "advanced", status: state("advanced"), elapsed: "1m 12s", evidence: { label: "" } },
+      { id: "implement", label: "implement", labelIsAnIdentifier: true, activity: "not_started", status: state("not_started"),
+        declarations: [{ label: "judge · 2 criteria · panel of 3", result: NOT_REACHED }, { label: `advance_gate · ${gate("auto_if_judge_passes")}` }] },
+      { id: "tests", label: "tests", labelIsAnIdentifier: true, activity: "not_started", status: state("not_started"),
+        declarations: [{ label: "judge · gaming check", result: NOT_REACHED }] },
+      { id: "handoff", label: "handoff", labelIsAnIdentifier: true, activity: "not_started", status: state("not_started"),
+        declarations: [{ label: `advance_gate · ${gate("human_always")}` }] },
     ],
   },
 };

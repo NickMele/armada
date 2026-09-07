@@ -24,7 +24,13 @@
 import type { RunTreeFact, RunTreePath, RunTreeStep, StepActivity } from "@armada/components";
 
 import type { Turn } from "@armada/protocol";
-import { CHECK_ADVANCES, CHECK_OUTCOME, ESCALATION_REASON, STEP_STATE } from "@armada/components";
+import {
+  CHECK_ADVANCES,
+  CHECK_OUTCOME,
+  CRITERION_VERDICT_CHECK,
+  ESCALATION_REASON,
+  STEP_STATE,
+} from "@armada/components";
 import type {
   ChangedFile,
   CheckRun,
@@ -158,11 +164,10 @@ function verdictFact(verdict: { named: string; trigger?: string }): RunTreeFact 
  * One run of the step: which it was, what it came to, and — nested beneath
  * it — its own Checks, Judge and Verdict.
  *
- * **The outcome is the wire's own step state.** `enum-verbs.toml` carries no
- * `step_state` rows, so the spelling renders — and the escalation trigger the
- * run carried out of `running` rides beside it, because `refused` and
- * `refused · gate_failure` are different amounts of help and the second costs
- * nothing.
+ * **The outcome is the registry's word for the step state**, off `STEP_STATE`
+ * — and the escalation trigger the run carried out of `running` rides beside
+ * it, because `refused` and `refused · gate_failure` are different amounts of
+ * help and the second costs nothing.
  *
  * **The children are this attempt's rows and nobody else's.** `check_runs`,
  * `judged` and `verdicts` are filtered to `attempt.attempt` before either
@@ -263,7 +268,13 @@ function producedBy(rows: readonly Turn[]): Map<string, ChangedFile[]> {
 function checksFact(step: StepDetail, runs: CheckRun[]): RunTreeFact | undefined {
   if (step.checks === undefined) return { label: "Checks", value: "Fleet cannot say" };
   if (step.checks.length === 0) return { label: "Checks", value: "none declared" };
-  if (runs.length === 0) return { label: "Checks", value: "not run" };
+  // **`not reached`, never `not run`.** `not run` is `check_outcome.skipped`'s
+  // own verb, and a Check the gate never got to is not one it deliberately
+  // skipped. The row that owns this word is `criterion_verdict_check`.
+  if (runs.length === 0) {
+    const word = CRITERION_VERDICT_CHECK.not_reached?.verb ?? "not_reached";
+    return { label: "Checks", value: word };
+  }
   const failed = runs.filter(didNotPass);
   return failed.length === 0
     ? { label: "Checks", value: `${runs.length} of ${step.checks.length} passed`, named: "passed" }
@@ -327,7 +338,8 @@ function didNotPass(run: CheckRun): boolean {
 
 /**
  * The step's state in words — the mark's accessible name, and nothing visible.
- * `enum-verbs.toml` carries no `step_state` rows, so the wire spelling renders.
+ * The word is `enum-verbs.toml`'s, through `STEP_STATE`; a state this build's
+ * registry has no row for falls back to its own wire spelling.
  */
 function stateOf(step: StepDetail): string {
   return STEP_STATE[step.state]?.verb ?? step.state;
