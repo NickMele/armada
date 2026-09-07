@@ -21,29 +21,43 @@ import { Attention } from "./telling";
 // rather than starting one. Nothing here spawns Fleet.
 
 /**
- * The Countersign mark, as the macOS app tile.
+ * The mark, as the macOS app tile.
  *
  * Emitted beside this bundle by `electron.vite.config.ts` — see the note there
  * for why it is a file on disk rather than an import. **The accent-filled
  * variant is sanctioned for the app tile and nowhere else**, which is what this
- * `.icns` carries and why nothing in the renderer may reach for it.
+ * carries and why nothing in the renderer may reach for it.
+ *
+ * **A PNG, and the `.icns` beside it is not what this reads.**
+ * `nativeImage.createFromPath` returns an empty image for `.icns` — measured
+ * against Electron 40.10.6, for the checked-in file and for one rebuilt with
+ * `iconutil`, while the same iconset's PNG loads at 512×512. This line said
+ * `AppIcon.icns` for a fortnight and the tile stayed Electron's the whole time.
  */
-const APP_ICON = join(__dirname, "AppIcon.icns");
+const APP_ICON = join(__dirname, "AppIcon.png");
 
 /**
  * Wear the mark. **Runtime, not packaging** — `BrowserWindow`'s `icon` option
  * is ignored on macOS, and there is no packager in this workspace yet, so an
  * `electron-builder` `icon` key would be configuration nothing reads. This is
  * what makes the dock tile right for the app as it is actually run today; a
- * packaged bundle will take the same file through its own `Info.plist`.
+ * packaged bundle will take the `.icns` through its own `Info.plist`, which is
+ * a different reader and does handle that format.
  *
  * A failed read leaves Electron's own icon rather than stopping the app: a
- * window that will not open because of a picture is the wrong trade.
+ * window that will not open because of a picture is the wrong trade. **It says
+ * so now.** Silence is what let a tile nobody had looked at go two builds
+ * wearing Electron's mark, with every gate green — this is the only line main
+ * writes, and it earns it by being the failure that has already happened.
  */
 function wearTheMark(): void {
   if (process.platform !== "darwin" || app.dock === undefined) return;
   const icon = nativeImage.createFromPath(APP_ICON);
-  if (!icon.isEmpty()) app.dock.setIcon(icon);
+  if (icon.isEmpty()) {
+    console.warn(`the app tile did not load, so the dock keeps Electron's: ${APP_ICON}`);
+    return;
+  }
+  app.dock.setIcon(icon);
 }
 
 /** The hard window floor, from the token that exists to be read here. */

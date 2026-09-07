@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./favicon.svg": "./web/favicon.svg",
     "./AppIcon.icns": "./macos/AppIcon.icns",
+    "./AppIcon.png": "./macos/AppIcon.iconset/icon_512x512@2x.png",
     "./mark.svg": "./svg/armada-mark.svg"
   },
   "scripts": {

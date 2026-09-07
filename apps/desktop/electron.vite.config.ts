@@ -5,33 +5,51 @@ import tailwindcss from '@tailwindcss/vite'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 
-// The app tile, emitted beside the main bundle.
+// The app tile, emitted beside the main bundle — twice, in two formats, for
+// two different readers.
 //
 // `packages/brand/macos/AppIcon.icns` is the built icon and its README says it
-// is ready to drop into the bundle. Nothing was dropping it, so the running app
-// and its dock tile carried Electron's own mark.
+// is ready to drop into a bundle. Nothing was dropping it, so the running app
+// and its dock tile carried Electron's own mark. That was fixed by emitting it
+// — and the tile stayed Electron's anyway, for a second reason nothing here
+// could see.
 //
-// It is emitted rather than imported because the main process is a Node bundle
-// and needs a path on disk, not a module — so the build writes the file next to
-// `index.js` and `src/main/index.ts` resolves it from `__dirname`. That works
-// the same in `dev`, `build` and `preview`, which a path reaching back into
-// `packages/` through a workspace symlink would not.
+// **`nativeImage.createFromPath` does not read `.icns`.** Measured against
+// Electron 40.10.6 on 2026-09-07: the call returns an empty image and reports
+// 0×0, for the checked-in `.icns` and for one rebuilt with `iconutil` from the
+// same iconset, while the iconset's own PNG at the same path style loads at
+// 512×512. The file was never the problem and rebuilding it never would have
+// helped. So the runtime tile is a PNG, and `src/main/index.ts` reads that one.
 //
-// **The accent-filled variant is what this file carries, and the app tile is
-// the only place it is allowed.** `packages/icons/icons.toml` states it on the
+// **The `.icns` is still emitted, because it is what a packager wants.** There
+// is no packager in this workspace yet; when there is, its `icon` key takes the
+// `.icns` and macOS reads it through `Info.plist`, which is a different code
+// path from `nativeImage` and does handle the format. Dropping it now would
+// mean putting it back then, having lost the reason.
+//
+// Both are emitted rather than imported because the main process is a Node
+// bundle and needs a path on disk, not a module — so the build writes them next
+// to `index.js` and `src/main/index.ts` resolves them from `__dirname`. That
+// works the same in `dev`, `build` and `preview`, which a path reaching back
+// into `packages/` through a workspace symlink would not.
+//
+// **The accent-filled variant is what these carry, and the app tile is the only
+// place it is allowed.** `packages/icons/icons.toml` states it on the
 // `armada-mark` row: "Accent fill permitted on the macOS app tile alone."
-const APP_ICON = 'AppIcon.icns'
+const APP_ICONS = ['AppIcon.icns', 'AppIcon.png'] as const
 
 function appIcon(): Plugin {
   const require = createRequire(import.meta.url)
   return {
     name: 'armada-app-icon',
     generateBundle() {
-      // Resolved through the package's own `exports`, so `packages/brand` says
-      // the tile is part of its surface rather than this build reaching into
-      // its directory layout.
-      const icns = require.resolve('@armada/brand/AppIcon.icns')
-      this.emitFile({ type: 'asset', fileName: APP_ICON, source: readFileSync(icns) })
+      for (const fileName of APP_ICONS) {
+        // Resolved through the package's own `exports`, so `packages/brand`
+        // says the tile is part of its surface rather than this build reaching
+        // into its directory layout.
+        const source = readFileSync(require.resolve(`@armada/brand/${fileName}`))
+        this.emitFile({ type: 'asset', fileName, source })
+      }
     },
   }
 }
