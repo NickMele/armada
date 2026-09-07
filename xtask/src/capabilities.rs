@@ -1,10 +1,11 @@
 //! Reading `docs/capabilities/`, and the half of its check that works offline.
 //!
-//! One file per capability, paired to one GitHub issue. The issue tracks — its
-//! steps are sub-issues, so progress is computed rather than reported. The file
-//! holds the prose, the rationale, and the links to the concepts it depends on,
-//! because an issue body buries all of that the moment the issue closes, and
-//! because a file is reviewable in the same diff as the code that delivered it.
+//! One file per capability, paired to one GitHub issue. The issue tracks — it
+//! lists its steps under a `**Steps**` heading, so progress is computed rather
+//! than reported. The file holds the prose, the rationale, and the links to the
+//! concepts it depends on, because an issue body buries all of that the moment
+//! the issue closes, and because a file is reviewable in the same diff as the
+//! code that delivered it.
 //!
 //! The frontmatter is the binding:
 //!
