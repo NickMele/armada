@@ -69,6 +69,17 @@ like.
 reinstalls the binary. An agent starts Bridge alone against a Fleet already up,
 and works from `target/debug/armada` rather than an installed copy.
 
+**The app is called Electron until it is packaged.** `pnpm dev` and
+`pnpm --filter @armada/desktop start` launch Electron's own bundle, and macOS
+reads the dock and the app switcher from whichever bundle it launched — so both
+say `Electron` there whatever `app.setName` is given, and the dock tile is only
+right because Bridge sets it at runtime after the window is ready.
+`pnpm --filter @armada/desktop package` builds an `Armada.app` that carries its
+own name and its own icon, and connects to a running Fleet exactly as the
+unpackaged app does. It is unsigned, so it runs on the machine that built it and
+nowhere else. `apps/desktop/electron-builder.yml` says where it lands and what
+goes in it.
+
 ## Starting Fleet
 
 **A healthy start prints, then goes quiet.** The repository and its workflow,

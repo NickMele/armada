@@ -16,8 +16,15 @@ app draws rather than an error.
 |---|---|
 | `pnpm --filter @armada/desktop codegen` | Rewrites `src/shared/generated/` from the registries. Run it after changing `crates/core-model/domain/` or `protocol-version.toml` |
 | `pnpm --filter @armada/desktop typecheck` | `tsc -b --force` across all three processes. Silence is success |
-| `pnpm --filter @armada/desktop build` | Bundles the three processes into `out/`. Does not package an installer; there is no packager in this workspace yet |
+| `pnpm --filter @armada/desktop build` | Bundles the three processes into `out/`. Does not build an app bundle |
+| `pnpm --filter @armada/desktop package` | Builds, then puts `release/mac-arm64/Armada.app` beside it. Unsigned, so it runs on the machine that built it and nowhere else |
 | `pnpm --filter @armada/desktop dev` | Opens the window with reload. The only one that opens a window |
+
+**Run the packaged app when the name matters.** macOS reads the dock and the
+app switcher from `CFBundleName` in whichever bundle it launched, and `dev` and
+`start` launch Electron's — so they say `Electron` there, whatever
+`app.setName` is given. `package` is the only way to see the app under its own
+name, and `electron-builder.yml` says the rest.
 
 ## What `codegen` emits, and what its output means
 

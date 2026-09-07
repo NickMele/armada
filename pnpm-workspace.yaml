@@ -13,6 +13,12 @@ packages:
 allowBuilds:
   electron: true
   esbuild: true
+  # Arrived with electron-builder and builds the Windows installer. Armada is
+  # macOS, `electron-builder.yml` declares a `mac` target and nothing else, so
+  # its install script has nothing to prepare. `false` rather than absent
+  # because pnpm refuses the install until the package is decided either way —
+  # a blank line here fails `pnpm install` with the reason two screens up.
+  electron-winstaller: false
 
 # Refuse to install on a Node the repo does not support, rather than warn and
 # carry on. `engines.node` in package.json is the floor; `.nvmrc` names the

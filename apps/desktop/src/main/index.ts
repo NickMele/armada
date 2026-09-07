@@ -38,11 +38,11 @@ const APP_ICON = join(__dirname, "AppIcon.png");
 
 /**
  * Wear the mark. **Runtime, not packaging** — `BrowserWindow`'s `icon` option
- * is ignored on macOS, and there is no packager in this workspace yet, so an
- * `electron-builder` `icon` key would be configuration nothing reads. This is
- * what makes the dock tile right for the app as it is actually run today; a
- * packaged bundle will take the `.icns` through its own `Info.plist`, which is
- * a different reader and does handle that format.
+ * is ignored on macOS, and a packaged `Armada.app` already carries the `.icns`
+ * through its own `Info.plist`. This is what makes the dock tile right when
+ * Bridge is run unpackaged, which is how it is run all day: `electron-vite
+ * preview` launches Electron's own bundle, and that bundle's icon is
+ * Electron's.
  *
  * A failed read leaves Electron's own icon rather than stopping the app: a
  * window that will not open because of a picture is the wrong trade. **It says
