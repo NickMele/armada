@@ -9,14 +9,8 @@
 // The header rules there hold here: these are hand-written, they drift the day
 // a field moves, and every closed set is left as `string`.
 
-import type {
-  JobForgotten,
-  JobList,
-  JobSummary,
-  JudgeInFlight,
-  Reason,
-  Settled,
-} from "./protocol";
+import type { JudgeInFlight, Settled } from "./detail";
+import type { JobForgotten, JobList, JobSummary, Reason } from "./protocol";
 import type { ManifestReading } from "./reading";
 import type { ProposalInFlight } from "./proposing";
 import type { QuestionInFlight } from "./waiting";

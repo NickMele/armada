@@ -1,0 +1,472 @@
+// One Job read whole, and the step it is on. `crates/ipc/src/detail.rs`.
+//
+// **Split out of `protocol.ts` at the 900-line line, and the cut is one the
+// Rust side already draws.** That file was a second statement of two modules at
+// once: `job.rs`, which is a Job as a row and a list carry it, and `detail.rs`,
+// which is the answer to `GET /jobs/:job_id`. Everything here is `detail.rs`'s
+// half, down to which module `Dependency` and `Settled` belong to — so the two
+// languages now name the same seam, and a field that moves in one has one file
+// to move in on the other.
+//
+// **`protocol.ts` does not re-export these**, for the reason `proposal.ts` and
+// `proposing.ts` give: nothing outside this package imports a module by path,
+// every caller reaches the wire through the package index, and a re-export
+// block would spend the lines that cut was made to free.
+//
+// `JobSummary` is imported from `protocol.ts` and `Settled` is imported back
+// from here. That is a cycle of `import type` alone, which the compiler erases
+// and no bundler ever sees — the alternative is a copy of one of the two, and a
+// copy is the thing this file exists to stop.
+//
+// The header rules there hold here: these are hand-written, they drift the day
+// a field moves, and every closed set is left as `string`.
+
+import type { JobFootprint } from "./footprint";
+import type { Flagged, Judged, KeptDeliverable } from "./judged";
+import type { StepAttempt } from "./attempt";
+import type {
+  CheckRun,
+  DeclaredCheck,
+  DeclaredJudge,
+  JobSummary,
+  ScopeOverlap,
+  Subject,
+} from "./protocol";
+import type { QuestionInFlight, RedirectInFlight, RedirectWaiting } from "./waiting";
+
+/**
+ * One Job, whole. The answer to `GET /jobs/:job_id`. `crates/ipc/src/detail.rs`.
+ *
+ * **Every optional field is omitted, never null.** Absent and empty are
+ * different sentences on screen, and `write_targets` is the one that shows why:
+ * absent is scope undetermined, present and empty is determined to write
+ * nothing.
+ *
+ * Evidence, per-step Check results, the log file and spend are not here and are
+ * not invented. Nothing serves them.
+ */
+export type JobDetail = {
+  /** The board row, unchanged. A field added to the row reaches here for free. */
+  job: JobSummary;
+  /** What a whole-Job elapsed is measured from. Creation is not a transition. */
+  created_at: string;
+  /** Absent until a worktree exists. A Job at the gate has no branch. */
+  branch?: string;
+  /** One entry per step of the frozen WorkflowDef, in order. */
+  steps: StepDetail[];
+  acceptance_criteria: Criterion[];
+  /** Context the Job was given. Absent where none was, rather than `""`. */
+  facts?: string;
+  /** Absent is scope undetermined; present and empty is writing nothing. */
+  write_targets?: string[];
+  subject?: Subject;
+  /** The DAG edges this Job sits on. Empty until something writes one. */
+  dependencies: Dependency[];
+  /**
+   * Other unfinished Jobs claiming to write where this one says it will. Since
+   * protocol 5.3.
+   *
+   * **A fact, never a verdict.** Nothing here refuses a dispatch and no surface
+   * may read it as one — `docs/concepts/fleet.md`, "Surfaced, never serialised".
+   *
+   * **Absent is not empty.** Absent is a Job that has claimed nothing yet, so
+   * no comparison was made; that is every Job at its approval gate, because
+   * the proposer does not fill `write_targets` in. An empty array is a
+   * comparison that ran and found nobody. Drawing them the same way would say
+   * "no overlap" about a Job nothing had looked at.
+   */
+  write_scope_overlaps?: ScopeOverlap[];
+  /**
+   * What the worktree held when the job stopped. Since protocol 4.12.
+   *
+   * **Absent on every job that is still going**, which is not a gap — a job
+   * with a drone on it has a live reading, published as `job.files_changed`.
+   * Absent is also a job that finished before Fleet kept these, and one whose
+   * worktree would not open when it did. Present with no files is a worktree
+   * that was read and held no change, which is a different sentence.
+   */
+  footprint?: JobFootprint;
+  /**
+   * What the job's branch came to: the commit, the push, the pull request.
+   * Since protocol 5.3.
+   *
+   * **Absent is two different facts.** A job still running has nothing here.
+   * So does a job that finished before Fleet wrote this down — which is most of
+   * the jobs on any machine that has been running Armada a while, because the
+   * result was assembled and dropped for a long time before it was stored.
+   */
+  delivery?: JobDelivery;
+  /**
+   * What the job has spent, against what it is allowed to. Since protocol 5.5.
+   *
+   * **Present on every job, including one that has spent nothing.** That is
+   * what makes a job which cost nothing legible as such rather than as a job
+   * Fleet has not measured, and it is why `drones` is on the payload: a cost of
+   * zero across one drone and a cost of zero across none are different facts.
+   */
+  spend?: JobSpend;
+  /**
+   * The redirect this job's drone has been sent and has not answered yet.
+   * Since protocol 4.14.
+   *
+   * **Absent is the second reading, not a gap.** Where a step had stopped, the
+   * job went back to `running` on the send and there was never anything to wait
+   * for; where none had, the job stays `escalated` until the drone takes a
+   * turn, and this is the only thing on the wire that says so. A window that
+   * remembered having sent one would lose it on a reload and never have it in a
+   * second window, which is why the fact is here and not in Bridge.
+   */
+  redirecting?: RedirectInFlight;
+  /**
+   * The note a person wrote at a human gate that no drone has opened with yet.
+   * Since protocol 5.2. **The other half of `redirecting`** — that one is an
+   * instruction with a session to go into, this one is one with none, and until
+   * a slot frees the job sits at `queued` looking exactly like a job nobody
+   * typed anything into.
+   *
+   * **Absent is the ordinary case, and absent is also delivered.** Fleet clears
+   * it the instant a drone's brief is built from it, so nothing here can be a
+   * badge that goes stale: the delivery is the move to `running`, which is an
+   * event this window already re-reads the open job on.
+   */
+  redirect_waiting?: RedirectWaiting;
+  /**
+   * The question this job's drone asked and nobody has answered yet. Since
+   * protocol 5.7.
+   *
+   * **Absent is the ordinary case**, and it covers three things the job's own
+   * status tells apart: a drone that never asked, a drone whose question has
+   * been answered, and a job with no drone on it. A job that is not `running`
+   * has nothing waiting on an answer.
+   *
+   * **It is not a status and there is no seventh step state.** The job is
+   * `running` and its step is `running` while it waits, exactly as they are
+   * while a judge call is out, and the question stops being outstanding without
+   * either moving.
+   */
+  asking?: QuestionInFlight;
+  /**
+   * What kind of stuck this job is, and what moves it. Since protocol 4.16.
+   *
+   * **Absent is "this job did not stop"**, and it is the whole of the second
+   * reading: a queued, running, reviewing, piloted, superseded or landed job
+   * carries nothing here, because a classification on one of those would offer
+   * acts against a job nothing is wrong with. It is never an older fleet — one
+   * behind this bridge is refused at the socket.
+   */
+  stuck?: Stuck;
+};
+
+/**
+ * Why a job stopped, and what moves it. `crates/ipc/src/detail.rs`.
+ *
+ * **Fleet decides the acts and Bridge draws them.** Bridge used to derive them
+ * from `status`, `current_step_id` and `assigned_drone` and reached four of the
+ * five refusals `adrift.rs` carries; the fifth is whether the worktree is on
+ * disk, which is a `path.is_dir()` no renderer can make. So a restart was
+ * offered on a job that had none and the refusal arrived on the press.
+ *
+ * **It does not claim the trigger is true.** A drone whose worktree was deleted
+ * escalates as `stalled`, the nearest trigger and the wrong condition; what
+ * crosses is the escalation as recorded, beside the worktree fact.
+ */
+export type Stuck = {
+  /**
+   * The escalation trigger, in the registry's spelling. **Absent is a job that
+   * recorded none** — one killed by hand stops no step and its transition
+   * carries no reason.
+   */
+  stopped_by?: string;
+  /**
+   * The step that stopped, where a step-level trigger named one. **Absent on
+   * every job-level escalation**, which is what makes a restart incoherent
+   * there rather than merely refused.
+   */
+  step_id?: string;
+  /**
+   * The acts fleet will take on this job **now**, each spelled as the operation
+   * that performs it, ordered by how much each takes away.
+   *
+   * **Empty is a dead end and says so**: nothing resumes this job and nothing
+   * replaces it either, which is not the same as the field being absent. Left
+   * as `string[]` like every other closed set, and here the rule earns itself
+   * twice — the set is declared by the acts fleet implements rather than by a
+   * registry, and `rerun_gate` was added to it after the concept doc had
+   * written a table of five.
+   */
+  recourse: string[];
+  /**
+   * Whether the job's worktree is still on disk.
+   *
+   * **The fact that decides between a restart and a redispatch**, and the one
+   * no surface can compute for itself. It rides beside the acts so a screen can
+   * say *why* a restart is not offered rather than only that it is missing.
+   */
+  worktree_on_disk: boolean;
+  /**
+   * Whether a drone is standing on this job that fleet cannot hear.
+   *
+   * **The other fact no surface can compute**, and what a restart is about to
+   * do turns on it: a drone that outlived the fleet holding its pipes is alive
+   * and unreachable at once, so the button said it had gone beside a step in
+   * flight. The trigger does not answer this — here it reads `gate_failure`.
+   * False is every ordinary stopped job, including one whose drone really is
+   * gone. Both are real, and this is what tells them apart.
+   */
+  drone_unheard: boolean;
+};
+
+/**
+ * What a finished job's branch came to.
+ *
+ * **Three independent absences, and a surface must not fold them.** A commit
+ * with no push is a repository that names no remote; a push with no pull
+ * request is a machine with nothing that can open one. Neither is a failure,
+ * and a row that treated them as one would say "unknown" about a branch that is
+ * sitting on a remote right now.
+ */
+/**
+ * What one job has spent and what it is allowed to spend.
+ *
+ * **Four numbers and no verdict**, deliberately. Whether the job is over is the
+ * pair being compared, and a boolean could not say by how much or which of the
+ * two ceilings it was — which is exactly what `queued_reason: "over_budget"`
+ * leaves out.
+ *
+ * `cost_micros` and `cost_cap_micros` are millionths of a dollar, and they are
+ * **notional**. The figure is what the run would have cost at list price, which
+ * is not what a subscription account is billed; a surface that presents it as
+ * money owed is presenting a currency nothing here spends. What it is for is
+ * telling a runaway from a job that started with a cold cache.
+ *
+ * `ran_ms` has no cap beside it on purpose. Wall clock is bounded by a
+ * different setting at a different scope, which nothing enforces yet, so the
+ * figure is here to be read and there is no ceiling to draw it against.
+ */
+export type JobSpend = {
+  /** What every drone of this job has cost, added up, in millionths of a dollar. */
+  cost_micros: number;
+  /** What it may cost before Fleet stops starting drones on it. */
+  cost_cap_micros: number;
+  /** How many turns every drone of this job has taken, added up. */
+  turns: number;
+  /** How many it may take before Fleet stops starting drones on it. */
+  turn_cap: number;
+  /** How long those drones ran, in milliseconds. No cap beside it — see above. */
+  ran_ms: number;
+  /** How many drones this is the sum of. Zero is a job nothing has run for. */
+  drones: number;
+};
+
+export type JobDelivery = {
+  /** The commit Fleet wrote over the job's work, by its id. */
+  commit?: string;
+  /** Where it was pushed, as `remote/branch`, or that there was no remote. */
+  pushed?: string;
+  /** The address a person clicks. */
+  pull_request?: string;
+  /**
+   * What became of that pull request. Since protocol 6.6. **Absent is unasked
+   * or still open** — one absence, because Armada opens a pull request and a
+   * person merges it, so "still open" is the fact that nothing has happened.
+   */
+  landed?: Settled;
+};
+
+/**
+ * The two ends a pull request comes to, and the whole of the set. Since 6.6.
+ *
+ * **Neither open nor unknown is here**, which is what makes it closed: a pull
+ * request that has not settled is the absence of the value, so no variant
+ * means "no news" and nothing tells one kind of nothing from another.
+ */
+export type Settled = "merged" | "closed_unmerged";
+
+/** One step: which, where in the order, and where it got to. */
+export type StepDetail = {
+  step_id: string;
+  /**
+   * What a person reads — `Plan the change`, not `plan`.
+   *
+   * **Never absent and never blank.** Where the workflow declares no label, or
+   * Fleet cannot say which workflow this is, Fleet substitutes the id, so no
+   * client picks its own fallback and no two surfaces pick different ones.
+   */
+  label: string;
+  /** Position in the frozen WorkflowDef, so a rail draws past and future. */
+  ordinal: number;
+  /** `job_steps.state`, served rather than inferred from the Job's status. */
+  state: string;
+  /**
+   * The Checks this step declares, in the workflow's order.
+   *
+   * **Empty is "this step is ungated"; absent is "Fleet cannot say."** Those
+   * are two different sentences on screen and the rail says each of them in
+   * words — the key being missing means the Job named a workflow this Fleet
+   * does not hold, which is not the same as a step that gates on nothing.
+   */
+  checks?: DeclaredCheck[];
+  /**
+   * What every declared Check did, every run of the step, oldest first.
+   * Empty until the gate has run them. Since 7.0 this was the latest run
+   * alone; join to `attempts` by `attempt`.
+   */
+  check_runs: CheckRun[];
+  /**
+   * The semantic tier this step declares, in the workflow's order. **Empty is
+   * "the Judge will not look here"; absent is "Fleet cannot say"** — the two
+   * sentences `checks` has. Neither is "nothing happens here", which is what
+   * `advance_gate` answers.
+   */
+  judge_checks?: DeclaredJudge[];
+  /**
+   * What it takes to advance past this step — `auto`, `auto_if_judge_passes` or
+   * `human_always`, left as `string` like every other closed set. **This is
+   * what lets a step say it will stop before it stops**: `human_always` holds
+   * the Job at `awaiting_review`, which six of the seven shipped workflows now
+   * do. Absent on the same grounds as `checks`.
+   */
+  advance_gate?: string;
+  /** Absent until a gate has ruled on the step. */
+  last_verdict?: Verdict;
+  /**
+   * **The step advanced because a person overruled the gate, not because it
+   * passed.**
+   *
+   * Served as a field rather than left as a rule a client applies, and that is
+   * the point: the fact is already on the wire as `state: advanced` beside
+   * `last_verdict: failed`, and every surface drawing a rail would otherwise
+   * have to spell the same pair — the first one that forgot would draw a Judge
+   * that had been overruled as a Judge that had cleared the work.
+   *
+   * Never absent, because it is a `bool` on the wire: `false` on every ordinary
+   * advance. What was overruled is on `last_verdict`, which still names the
+   * trigger, and the person's reason is in the Job's own log rather than here.
+   */
+  overridden: boolean;
+  /**
+   * Every criterion the Judge answered, every run of the step, oldest first.
+   *
+   * **Always present, empty on a step that asks nothing** — which is most of
+   * them, and also every step the Judge never reached. This is where a
+   * refusal's citation arrives. Since 7.0 this was the latest run alone; join
+   * to `attempts` by `attempt`.
+   */
+  judged: Judged[];
+  /**
+   * Every gaming pattern this step's evidence tripped, with what each cites.
+   *
+   * **This is what `evidence_suspect` does not say** — the trigger says the
+   * evidence is not to be trusted, and only these say which shape of gaming
+   * was found and where. The same relation `judged` has to a `gate_failure`,
+   * and the reason a person deciding whether to overrule a flag can be shown
+   * what the flag was about. Empty on every step nothing was flagged on.
+   */
+  flagged: Flagged[];
+  /**
+   * The copies of this step's deliverable Fleet kept, oldest run first.
+   *
+   * **The third of the three records a verdict is argued with**, beside
+   * `check_runs[].output_path` and `judged[].brief_path`: what the Judge read,
+   * what the Checks printed, and what the Judge was asked. One without the
+   * others cannot separate a bad Judge from a bad brief, which is why all three
+   * are on the wire rather than the two that were.
+   *
+   * **Absent is the ordinary case** — a step that declares no deliverable keeps
+   * none, and so does one whose Judge was never asked.
+   */
+  deliverables?: KeptDeliverable[];
+  /**
+   * Every run of this step, oldest first. **`Attempt 1 refused`, `Attempt 2
+   * advanced`** — the rows the run tree draws under a step that was worked
+   * more than once.
+   *
+   * It is the only place an earlier run's outcome survives: `state` and
+   * `last_verdict` are both the latest, so a step that passed on its third try
+   * and one that passed on its first were the same message. Empty on a step
+   * nothing has entered, which is every step a Job has not reached.
+   */
+  attempts: StepAttempt[];
+  /**
+   * What each closed run of this step came to, oldest first. Since 7.0.
+   *
+   * **What `attempts[].outcome` cannot say** — `passed` or `failed` in so
+   * many words, not just where a run ended. Join to `attempts` by `attempt`.
+   */
+  verdicts: Verdict[];
+  /**
+   * The Judge call out on this step **right now**, where one is.
+   *
+   * **Absent is the ordinary case, and it is the point of the field.** A step
+   * waiting on a model call, a step whose Drone is thinking and a step that has
+   * quietly become unreachable were the same pixels on this side of the seam,
+   * and nothing on the wire told them apart. `since` is what keeps a surface
+   * from being a spinner: ninety seconds and two seconds are different facts,
+   * the budget is two minutes, and the elapsed time is subtracted here rather
+   * than pushed as an event a second.
+   *
+   * It is not a step state. `state` still says `running` while a gate asks, and
+   * the six values it may take are unchanged.
+   */
+  judging?: JudgeInFlight;
+  /** Entered, then moved on entering `running`. To `updated_at` is how long. */
+  entered_at: string;
+  updated_at: string;
+};
+
+/**
+ * One Judge call, while it is still out. `crates/ipc/src/detail.rs`.
+ *
+ * Arrives two ways and means the same thing both times: on the open Job's
+ * `StepDetail`, which is what a Bridge opened mid-call reads, and as the
+ * `job.judging` event, which is what moves it without a reload.
+ */
+export type JudgeInFlight = {
+  /**
+   * `criterion`, `drift`, `gaming` or `convergence` — the four looks Fleet
+   * makes. Left as `string` like every other closed set on this side: no
+   * registry declares this one, so a union here would be a roster with no
+   * authority behind it.
+   */
+  look: string;
+  /**
+   * Which criterion is being asked. **Joins to `judged`**, where the same id
+   * reappears with a verdict once the answer lands. Absent on `gaming`, which
+   * is about a pattern, and on `convergence`, which is about neither.
+   */
+  criterion_id?: string;
+  /** Which gaming pattern is being asked about. Joins to `flagged`. */
+  pattern?: string;
+  /** Which model is out. What the wait costs, and roughly how long it is. */
+  model: string;
+  /** Which call of how many this pass is making. Counted from one. */
+  call: number;
+  /** Criteria times panel size, plus the drift look where the work drifted. */
+  of: number;
+  /** When the call went out. **A surface subtracts; nothing ticks on the wire.** */
+  since: string;
+  /** How long it may take before Fleet calls it a failed call. */
+  budget_ms: number;
+};
+
+/** The last ruling against a step. `failed` carries its trigger; the rest do not. */
+export type Verdict = {
+  /** Which run of the step this was ruled on, counted from one. Since 7.0.
+   * Joins to `StepDetail.attempts`. */
+  attempt: number;
+  named: string;
+  trigger?: string;
+};
+
+/** One acceptance criterion, with the id a Judge citation references. */
+export type Criterion = {
+  criterion_id: string;
+  text: string;
+  source: string;
+};
+
+/** One DAG edge, sequencing peer Jobs. */
+export type Dependency = {
+  direction: string;
+  peer: string;
+};
