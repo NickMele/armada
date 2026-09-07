@@ -76,9 +76,9 @@ export type Submitted = {
    * What the step's workflow asked the work product to be. Recorded by Fleet
    * from the frozen step, never named by the Drone.
    *
-   * Left as `string` like every other closed set: `enum-verbs.toml` carries no
-   * `evidence_type` rows, so there is no verb, glyph or hue for one and the
-   * wire's spelling renders. Reported.
+   * Left as `string` like every other closed set. The word a person reads is
+   * not this value: `enum-verbs.toml` carries an `evidence_type` row for each
+   * of the six, and `review.ts` reads the verb off the generated map.
    */
   evidence_type: string;
   /** What the work now does, as an observable. */

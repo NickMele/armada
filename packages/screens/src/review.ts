@@ -23,6 +23,7 @@
 // read as something the repository said.
 
 import { FileCheck } from "lucide-react";
+import { EVIDENCE_TYPE } from "@armada/components";
 import type { DiffFile, DiffLine, EvidenceTrailEntry } from "@armada/components";
 
 import type { Diff, Evidence } from "@armada/protocol";
@@ -218,14 +219,17 @@ function stripped(value: string): string | null {
  * frozen workflow no longer names — the id renders as itself rather than being
  * replaced by a word chosen here.
  *
- * `evidence_type` renders as the wire spells it. `enum-verbs.toml` carries no
- * rows for it, so there is no verb, glyph or hue and none is invented.
- * Reported.
+ * **The word for an evidence type is the registry's.** `enum-verbs.toml`
+ * carries six `evidence_type` rows and each was authored for this line — the
+ * `diff` row says so outright, that it renders in mono on the provenance line
+ * beside the time, which is a label and not a badge. A type this build's
+ * registry does not carry falls back to the wire spelling, which is
+ * recoverable; nothing here invents a word.
  */
 export function claimsOf(steps: Submitted[], whole: JobWhole | null): EvidenceTrailEntry[] {
   return steps.map((step) => ({
     step: labelOf(step.step_id, whole),
-    provenance: step.evidence_type,
+    provenance: EVIDENCE_TYPE[step.evidence_type]?.verb ?? step.evidence_type,
     // `file-check` is reserved to a submission that landed, which is what every
     // row here is.
     icon: FileCheck,

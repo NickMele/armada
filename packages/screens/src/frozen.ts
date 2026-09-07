@@ -71,9 +71,10 @@ export type Frozen = {
  * the clock, which is the whole of what a terminal Job owes.
  *
  * **The word is the Job's own verb**, borrowed from the generated vocabulary.
- * `enum-verbs.toml` has no `step_state` rows at all, and it is the Job's status
- * that carries the fact that the step is over, so the word comes from where
- * that fact is written rather than being chosen here.
+ * `enum-verbs.toml` does carry `step_state` rows, and they are the wrong ones
+ * here: the step still reads `running` and the fact that it is over is the
+ * Job's status, not the step's. So the word comes from where that fact is
+ * written rather than from the state it contradicts.
  */
 export function frozenBeneath(status: string, state: string): Frozen | undefined {
   if (JOB_LIFECYCLE[status]?.terminal !== true) return undefined;

@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { DRONE_PRESENCE, MOVEMENT_KIND } from "../../generated/vocabulary";
+
 /**
  * Transition history — every move one Job made, in order.
  *
@@ -20,8 +22,9 @@ import type { ReactNode } from "react";
  *
  * **Neutral, all the way down.** Hue below Job level exists only where
  * `tokens/status.css` declares it, and it declares no history row — twelve
- * statuses hued down a list would also read as twelve verdicts. The wire's own
- * word for what moved carries the scan instead, in the kind column.
+ * statuses hued down a list would also read as twelve verdicts. The kind
+ * column carries the scan instead, and `movement_kind` refuses a token for
+ * that reason rather than being owed one.
  */
 export type TransitionMove = {
   /** The key the log assigned. Monotonic, never reused, and what orders this. */
@@ -29,17 +32,29 @@ export type TransitionMove = {
   /** When it was recorded. Read, never sorted on. */
   at: string;
   /**
-   * What moved: `status`, `step` or `drone`, in the wire's own word.
-   *
-   * **The spelling renders.** No vocabulary in the repository carries a verb,
-   * a glyph or a hue per movement kind, so a word chosen here would be a second
-   * vocabulary. Reported.
+   * What moved: the wire's `movement_kind`, and the registry's word for it
+   * renders. All three rows keep the wire's own spelling, which is what the
+   * rows are for — they sanction the word rather than change it, so a word
+   * chosen here would be a second vocabulary saying the same thing until one
+   * of them moved. A kind this build's registry has no row for renders as
+   * itself.
    */
   kind: string;
   /** Which one moved, where the row names one: a step id, a Drone id. */
   subject?: string;
-  /** The move itself — `running → escalated`. Composed from two served values. */
+  /**
+   * The move itself — `running → escalated`, composed from two served values.
+   * On a drone row it is where: `on plan`, after the word `presence` carries.
+   */
   moved: ReactNode;
+  /**
+   * The wire's `drone_presence` on a drone row, and nothing on the other two.
+   *
+   * **Its own field rather than a phrase in `moved`**, because the word is the
+   * registry's: `drone_presence` spells `a drone started` and `a drone left`,
+   * and a caller composing that sentence would be spelling it a second time.
+   */
+  presence?: string;
   /** The reason the transition stored, or the trigger that stopped a step. */
   why?: ReactNode;
   /** Who caused it: `human`, `fleet` or `drone`. Three ways, and no fourth. */
@@ -59,6 +74,11 @@ export type TransitionHistoryProps = {
   note?: ReactNode;
 };
 
+/** The registry's word for a Drone arriving or leaving, or the wire's own. */
+function wordFor(presence: string): string {
+  return DRONE_PRESENCE[presence]?.verb ?? presence;
+}
+
 export function TransitionHistory({ moves, emptyNote, note }: TransitionHistoryProps) {
   if (moves.length === 0) {
     return (
@@ -75,13 +95,16 @@ export function TransitionHistory({ moves, emptyNote, note }: TransitionHistoryP
           <li className="armada-history__move" key={move.seq}>
             <span className="armada-history__seq">{move.seq}</span>
             <span className="armada-history__at">{move.at}</span>
-            <span className="armada-history__kind">{move.kind}</span>
+            <span className="armada-history__kind">{MOVEMENT_KIND[move.kind]?.verb ?? move.kind}</span>
             <span className="armada-history__body">
               <span className="armada-history__head">
                 {move.subject === undefined ? null : (
                   <span className="armada-history__subject">{move.subject}</span>
                 )}
-                <span className="armada-history__moved">{move.moved}</span>
+                <span className="armada-history__moved">
+                  {move.presence === undefined ? null : `${wordFor(move.presence)} `}
+                  {move.moved}
+                </span>
               </span>
               {move.why === undefined ? null : (
                 <span className="armada-history__why">{move.why}</span>

@@ -36,12 +36,12 @@ import { APPROVAL_TRACKS, TheListSixStatesOneRowShape } from "./TheListSixStates
  * properties rather than repeating widths.
  *
  * **The five origin sentences here are literals, and Bridge draws nothing in
- * that track on a real row.** `origin` is on `JobSummary`, but
- * `enum-verbs.toml` has no entry for it, so there is no source mapping the
- * stored value to the rendered word — these fixtures are the drawing, not proof
- * the track is filled. Issue #234, which also has to decide `sub_dispatched`,
- * since that one renders as a form with the parent Job's id in it rather than
- * as a word.
+ * that track on a real row.** `origin` is on `JobSummary` and `enum-verbs.toml`
+ * carries a row for each of its five values; what no generator emits is a map
+ * carrying them into Bridge, so these fixtures are the drawing rather than
+ * proof the track is filled. Issue #234, which also has to decide
+ * `sub_dispatched` — that row is a form with the parent Job's id in it rather
+ * than a word, and no other vocabulary interpolates.
  */
 const meta: Meta<typeof TheListSixStatesOneRowShape> = {
   title: "Screens/The list — six states, one row shape",
@@ -349,7 +349,7 @@ export const Killed: Story = { render: () => one(killed) };
  * | Field | Why it is not here |
  * |---|---|
  * | Spend | Measured nowhere — not on the wire, not in the store, not computed |
- * | `Dispatched by you` | `origin` is on `JobSummary`, and its five wire values have no rows in `enum-verbs.toml`. The five sentences above are drawn on `docs/concepts/job-board.md` and nowhere a generator reads, so Bridge would have to retype them |
+ * | `Dispatched by you` | `origin` is on `JobSummary` and `enum-verbs.toml` carries all five rows, but no generator emits them — the wanted list in `apps/desktop/codegen/vocabulary.mjs` does not name `origin`, so nothing carries the words across and Bridge would have to retype them. #234 |
  * | Elapsed on a Job that is over | `JobSummary` carries no instant the Job stopped at, and a terminal elapsed running to now would read as still working |
  *
  * The step is its `step_id`, in mono: `StepDetail` carries a label, but a list
