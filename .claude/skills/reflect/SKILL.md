@@ -83,6 +83,15 @@ agents to treat them as inherited failure. Both had been fixed on the remote
 before either agent started. `git fetch` and compare — a local `main` in a
 repository other sessions are pushing to is a claim about the past.
 
+**Take the baseline in a worktree, never by stashing the main checkout.**
+Confirmed 2026-09-07: a session ran `git stash` on `main` to measure a baseline
+while another agent was writing to the same tree. The pop was clean by luck —
+between the two commands the other agent had added six modified files and seven
+component directories, and the measurement it produced was wrong anyway, naming
+six failures that belonged to work in flight rather than to `main`. A clean
+`git worktree add <path> origin/main` answers the same question, cannot lose
+somebody else's uncommitted work, and is the tree the fixes then land in.
+
 **A measurement is a timestamp, not a state.** The same session reported two
 worktrees that had been removed minutes earlier, and offered the owner a branch
 as "green, 152 lines of headroom" after `main` had made it unmergeable. Nothing
