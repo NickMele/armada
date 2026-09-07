@@ -1,79 +1,95 @@
-import { forwardRef, type SVGProps } from 'react'
-
 /**
- * The Armada Countersign mark.
+ * Armada brand mark — three hulls on a shallow arc.
  *
- * Drawn on the same 24-unit grid and 2-unit stroke as lucide-react, so it sits
- * beside the icon set without restyling. Two rules are deliberately not props:
- *
- *   strokeWidth  — fixed at 2. The Design System forbids per-size tuning.
- *   linecap      — butt, not round. Round caps overhang each endpoint by a full
- *                  unit, which closes the 2-unit clearance the mark is built on.
- *
- * Colour comes from `currentColor`, as everywhere else in the app.
+ * The API is `size` plus colour by inheritance. There is deliberately no
+ * strokeWidth or strokeLinecap prop: the mark is a filled construction with no
+ * stroke at all, and per-size tuning is not permitted by the design contract.
  */
+import * as React from "react";
 
-export interface ArmadaMarkProps extends Omit<SVGProps<SVGSVGElement>, 'width' | 'height'> {
-  /** Rendered edge length in px. Use 16 in chrome, 12 only alongside badge text. */
-  size?: number
+const HULLS = [
+  { s: 0.46, x: 1.2, y: 30.0 },
+  { s: 0.46, x: 19.6, y: 11.6 },
+  { s: 0.46, x: 38.0, y: 25.4 },
+] as const;
+
+const HULL =
+  "M32 4 C 40 17, 50 35, 53 44 L36 46 C 34 34, 33 24, 31 18 C 28 25, 24 38, 19 52 L2 54 C 11 36, 24 15, 32 4 Z";
+
+// bbox of the composed mark, in authoring units
+const BX = 2.1200, BY = 13.4400, BW = 60.2600, BH = 41.4000;
+const K = 24 / BW;
+const OY = (24 - BH * K) / 2;
+
+const transformFor = (h: { s: number; x: number; y: number }) =>
+  `translate(${((h.x - BX) * K).toFixed(4)},${(OY + (h.y - BY) * K).toFixed(4)}) scale(${(h.s * K).toFixed(6)})`;
+
+export interface ArmadaMarkProps
+  extends Omit<React.SVGProps<SVGSVGElement>, "children"> {
+  /** Rendered width and height in pixels. Defaults to 24. Floor is 16. */
+  size?: number | string;
+  /** Accessible label. Omit for a decorative mark. */
+  title?: string;
 }
 
-export const ArmadaMark = forwardRef<SVGSVGElement, ArmadaMarkProps>(
-  ({ size = 16, ...props }, ref) => (
-    <svg
-      ref={ref}
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      role="img"
-      aria-label="Armada"
-      {...props}
-    >
-      {/* the claim — three sides, unclosed */}
-      <path
-        d="M14 9 V4 H4 V14 H9"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={2}
-        strokeLinecap="butt"
-        strokeLinejoin="miter"
-      />
-      {/* the countersign — a second act, held clear by exactly 2 */}
-      <path d="M11 11 H21 V21 H11 Z" fill="currentColor" />
-    </svg>
-  ),
-)
-
-ArmadaMark.displayName = 'ArmadaMark'
+export const ArmadaMark = React.forwardRef<SVGSVGElement, ArmadaMarkProps>(
+  function ArmadaMark({ size = 24, title, ...rest }, ref) {
+    return (
+      <svg
+        ref={ref}
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        width={size}
+        height={size}
+        fill="currentColor"
+        role={title ? "img" : undefined}
+        aria-hidden={title ? undefined : true}
+        {...rest}
+      >
+        {title ? <title>{title}</title> : null}
+        {HULLS.map((h, i) => (
+          <path key={i} transform={transformFor(h)} d={HULL} />
+        ))}
+      </svg>
+    );
+  }
+);
 
 /**
- * Two-tone variant. The claim recedes to --fg-muted, the countersign holds
- * --fg-default: asserted against evidenced, stated without a second hue.
- * Only for sizes >= 24 — below that the muted stroke drops under the contrast
- * floor and the mark reads as a single object.
+ * Two-tone variant. The lead hull carries `currentColor`; the two following
+ * hulls are held back. Never below 32px — the distinction stops reading.
  */
-export const ArmadaMarkTwoTone = forwardRef<SVGSVGElement, ArmadaMarkProps>(
-  ({ size = 32, ...props }, ref) => (
-    <svg
-      ref={ref}
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      role="img"
-      aria-label="Armada"
-      {...props}
-    >
-      <path
-        d="M14 9 V4 H4 V14 H9"
-        fill="none"
-        stroke="var(--fg-muted)"
-        strokeWidth={2}
-        strokeLinecap="butt"
-        strokeLinejoin="miter"
-      />
-      <path d="M11 11 H21 V21 H11 Z" fill="var(--fg-default)" />
-    </svg>
-  ),
-)
+export interface ArmadaMarkDuoProps extends ArmadaMarkProps {
+  /** Opacity of the two trailing hulls. Defaults to 0.45. */
+  trailOpacity?: number;
+}
 
-ArmadaMarkTwoTone.displayName = 'ArmadaMarkTwoTone'
+export const ArmadaMarkDuo = React.forwardRef<SVGSVGElement, ArmadaMarkDuoProps>(
+  function ArmadaMarkDuo({ size = 32, title, trailOpacity = 0.45, ...rest }, ref) {
+    return (
+      <svg
+        ref={ref}
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        width={size}
+        height={size}
+        fill="currentColor"
+        role={title ? "img" : undefined}
+        aria-hidden={title ? undefined : true}
+        {...rest}
+      >
+        {title ? <title>{title}</title> : null}
+        {HULLS.map((h, i) => (
+          <path
+            key={i}
+            opacity={i === 1 ? 1 : trailOpacity}
+            transform={transformFor(h)}
+            d={HULL}
+          />
+        ))}
+      </svg>
+    );
+  }
+);
+
+export default ArmadaMark;

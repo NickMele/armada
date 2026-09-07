@@ -10,6 +10,11 @@
 //! A child module rather than a file of its own, because both halves reach the
 //! same private fields — `taps`, `transcript`, `told_after` — and the
 //! invariant those fields are part of is what makes them safe to reach.
+//!
+//! **No method here returns one event.** [`Working::heard`] answers with the
+//! whole run, because what anybody asks a transcript is what it folds to; a
+//! per-event accessor would invite reading a Drone's claim, which the gate
+//! exists to refuse.
 
 use std::sync::atomic::Ordering;
 
