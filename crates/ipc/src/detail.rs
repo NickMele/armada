@@ -273,6 +273,13 @@ pub struct Stuck {
 /// empty `decision_reason` — so a row drawn from
 /// [`because`](Refusal::because) alone draws nothing, which is the whole of
 /// what was wrong.
+///
+/// **The whole argument stays in the file**, exactly as [`Shown`](crate::Shown)
+/// leaves it: a heredoc is a whole file and this crosses on every open of a
+/// stopped Job. What crosses instead is that the line was cut and how long the
+/// argument was — enough for a surface to say so, which is what a person about
+/// to paste a command into an allowlist needs. `get_call` is the operation that
+/// serves the rest.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Refusal {
     /// The tool that was reached for, in the harness's own spelling.
@@ -292,6 +299,27 @@ pub struct Refusal {
     /// carries one line of it. **Empty is a tool whose arguments that
     /// vocabulary has no name for**, and never an invented one.
     pub detail: String,
+    /// Whether [`detail`](Refusal::detail) is less than what the Drone sent.
+    ///
+    /// **Said rather than implied**, `Saw::Called::truncated`'s reason: a
+    /// command can legitimately end in an ellipsis. Without it a surface draws
+    /// a cut command as the whole one, and the command is what somebody copies
+    /// into an allowlist.
+    #[serde(default)]
+    pub truncated: bool,
+    /// How many characters the argument had, before anything was cut.
+    ///
+    /// **A size rather than only a flag**, which is
+    /// [`CallArguments::length`](crate::CallArguments)'s reason: a surface says
+    /// *showing 200 of 14,320 characters* instead of reporting that something
+    /// was taken away.
+    ///
+    /// **`None` is a transcript row written before the file recorded the
+    /// size.** A surface holding `truncated: true` and no length has what there
+    /// is and no way to say how much is missing, and says that rather than
+    /// inventing a size.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub length: Option<usize>,
     /// The harness's own wording, where it gave one.
     ///
     /// **Usually empty, and empty is the honest answer.** Nothing fills it in
@@ -305,6 +333,8 @@ impl From<&core_model::Refusal> for Refusal {
             tool: refusal.tool.clone(),
             call: refusal.call.clone(),
             detail: refusal.detail.clone(),
+            truncated: refusal.truncated,
+            length: refusal.length,
             because: refusal.because.clone(),
         }
     }

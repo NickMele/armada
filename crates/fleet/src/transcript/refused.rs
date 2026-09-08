@@ -8,7 +8,7 @@
 //!
 //! [`backfill::refusals`]: super::refusals
 
-use adapter_traits::DroneEvent;
+use adapter_traits::{CallDetail, DroneEvent};
 use core_model::{Refusal, Refusals};
 
 /// How many refused calls the Job log line names.
@@ -50,10 +50,13 @@ pub fn refused_in(heard: &[DroneEvent]) -> Refusals {
         if kept.len() == NAMED {
             continue;
         }
+        let against = against(heard, call);
         kept.push(Refusal {
             tool: tool.clone(),
             call: call.clone(),
-            detail: String::from(against(heard, call)),
+            detail: String::from(against.map(CallDetail::shown).unwrap_or_default()),
+            truncated: against.is_some_and(CallDetail::truncated),
+            length: against.map(CallDetail::length),
             because: because.clone(),
         });
     }
@@ -62,17 +65,18 @@ pub fn refused_in(heard: &[DroneEvent]) -> Refusals {
 
 /// What one refused call was on, off the `called` event that shares its id.
 ///
+/// **The whole value and not its shown form**, because the row is owed how much
+/// there was as well as the line. `None` is a refusal whose call is not in this
+/// run's stream, which is a different answer from a call with nothing to show.
+///
 /// A scan per named refusal, and deliberately not a map over every call the run
 /// made: at most [`NAMED`] of these are ever run, and a map would be a second
 /// copy of the stream built to answer five questions.
-fn against<'a>(heard: &'a [DroneEvent], call: &str) -> &'a str {
-    heard
-        .iter()
-        .find_map(|earlier| match earlier {
-            DroneEvent::Called {
-                call: id, detail, ..
-            } if id == call => Some(detail.shown()),
-            _ => None,
-        })
-        .unwrap_or_default()
+fn against<'a>(heard: &'a [DroneEvent], call: &str) -> Option<&'a CallDetail> {
+    heard.iter().find_map(|earlier| match earlier {
+        DroneEvent::Called {
+            call: id, detail, ..
+        } if id == call => Some(detail),
+        _ => None,
+    })
 }

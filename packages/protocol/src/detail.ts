@@ -249,6 +249,11 @@ export type Stuck = {
  * — the observed `permission_denied` line carried an empty `decision_reason` —
  * so a row drawn from `because` alone draws nothing, which is the whole of what
  * was wrong.
+ *
+ * **The whole argument stays in fleet's file.** A heredoc is a whole file and
+ * this crosses on every open of a stopped job, so `detail` is one line of it
+ * and `truncated` and `length` are how a row says so. `get_call` is the
+ * operation that serves the rest.
  */
 export type Refusal = {
   /** The tool that was reached for, in the harness's own spelling. */
@@ -267,6 +272,28 @@ export type Refusal = {
    * whose arguments the decoder has no name for**, and never an invented one.
    */
   detail: string;
+  /**
+   * Whether `detail` is less than what the drone sent. Since protocol 7.6.
+   *
+   * **Said rather than implied**, because a command can legitimately end in an
+   * ellipsis. A row that drew a cut command as the whole one would have
+   * somebody paste a truncated command into an allowlist, which is the failure
+   * this field exists to prevent — one step on from the failure `refused`
+   * itself exists to prevent.
+   */
+  truncated: boolean;
+  /**
+   * How many characters the argument had, before anything was cut. Since
+   * protocol 7.6.
+   *
+   * **A size rather than only a flag**, so a row reads *showing 200 of 14,320
+   * characters* instead of reporting that something was taken away.
+   *
+   * **Absent is a transcript row written before the file recorded the size.** A
+   * row holding `truncated: true` and no length has what there is and no way to
+   * say how much is missing, and must say that rather than invent a size.
+   */
+  length?: number;
   /**
    * The harness's own wording, where it gave one.
    *

@@ -291,6 +291,8 @@ fn blocked() -> Stuck {
             tool: String::from("Bash"),
             call: String::from("toolu_01B13LL"),
             detail: String::from("cargo nextest run --package ipc"),
+            truncated: false,
+            length: Some(30),
             because: String::new(),
         }],
         refusals: 1,
@@ -346,5 +348,48 @@ fn the_count_crosses_beside_the_list_and_a_job_with_none_says_so() {
         json.contains("\"refused\":[]") && json.contains("\"refusals\":0"),
         "empty is a Drone that was refused nothing, and it is stated rather \
          than left to a missing key: {json}"
+    );
+}
+
+/// **A cut command has to say it was cut.** The whole of a heredoc stays in the
+/// file, so what crosses is a line — and a client that drew that line as the
+/// entire command would have somebody paste a truncated one into an allowlist,
+/// which is the failure this whole field exists to prevent, one step further
+/// on.
+#[test]
+fn a_cut_argument_says_so_and_how_much_there_was() {
+    let mut cut = blocked();
+    cut.refused[0].detail = String::from("cat <<EOF > out.txt word word word");
+    cut.refused[0].truncated = true;
+    cut.refused[0].length = Some(14_320);
+
+    let json = encode(&cut).expect("a classification is plain data");
+    assert!(json.contains("\"truncated\":true"), "{json}");
+    assert!(
+        json.contains("\"length\":14320"),
+        "the size of what there was, so a surface says a proportion rather \
+         than reporting that something was taken away: {json}"
+    );
+    assert_eq!(
+        decode::<Stuck>("a classification", json.as_bytes()).expect("it reads back"),
+        cut
+    );
+}
+
+/// A row written before the file recorded the size carries no length, and that
+/// is a different answer from an argument of no length.
+#[test]
+fn an_unmeasured_argument_carries_no_length_rather_than_nought() {
+    let mut old = blocked();
+    old.refused[0].length = None;
+
+    let json = encode(&old).expect("a classification is plain data");
+    assert!(
+        !json.contains("\"length\""),
+        "absent, never present-and-null: {json}"
+    );
+    assert_eq!(
+        decode::<Stuck>("a classification", json.as_bytes()).expect("it reads back"),
+        old
     );
 }

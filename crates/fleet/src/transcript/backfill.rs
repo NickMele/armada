@@ -204,8 +204,12 @@ async fn refused_calls(files: &[PathBuf]) -> (Vec<Refusal>, u64) {
                     // Filled by [`against`], and left empty where the `called`
                     // row is not in the file: a transcript that begins mid-run
                     // is a real record, and an empty command is what
-                    // `CallDetail::none` already means.
+                    // `CallDetail::none` already means. Nothing there was cut
+                    // either, which is the honest reading of a row that is not
+                    // in the file at all.
                     detail: String::new(),
+                    truncated: false,
+                    length: None,
                     because,
                 });
             }
@@ -231,7 +235,14 @@ async fn against(files: &[PathBuf], kept: &mut [Refusal]) {
             let Ok(row) = ipc::decode::<TranscriptRow>("a transcript row", line.as_bytes()) else {
                 continue;
             };
-            let Saw::Called { call, detail, .. } = row.saw else {
+            let Saw::Called {
+                call,
+                detail,
+                truncated,
+                detail_length,
+                ..
+            } = row.saw
+            else {
                 continue;
             };
             // The bounded line and never the whole: this is read on every open
@@ -246,6 +257,12 @@ async fn against(files: &[PathBuf], kept: &mut [Refusal]) {
                 .find(|refusal| refusal.call == call && refusal.detail.is_empty())
             {
                 refusal.detail = detail;
+                // **The row's own two, not a reading of the string.** Whether
+                // it was cut is on the row; comparing lengths here would call a
+                // pre-cut row whole on any file written before the size was
+                // recorded.
+                refusal.truncated = truncated;
+                refusal.length = detail_length;
                 owed -= 1;
             }
         }

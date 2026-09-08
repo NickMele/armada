@@ -493,12 +493,16 @@ fn every_act_is_spelled_as_the_operation_that_performs_it() {
     assert_eq!(Recourse::from_wire("pilot"), None);
 }
 
-/// One refusal, shaped as the real one was: a command, and **no reason**.
+/// One refusal, shaped as the real one was: a command that fits, and **no
+/// reason**.
 fn a_refusal() -> Refusal {
+    let detail = String::from("cargo nextest run --package ipc");
     Refusal {
         tool: String::from("Bash"),
         call: String::from("toolu_01B13LL"),
-        detail: String::from("cargo nextest run --package ipc"),
+        length: Some(detail.chars().count()),
+        detail,
+        truncated: false,
         because: String::new(),
     }
 }

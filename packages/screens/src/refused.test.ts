@@ -20,6 +20,8 @@ function refusal(over: Partial<Refusal> = {}): Refusal {
     tool: "Bash",
     call: "toolu_01ANq8Yk3sWnQ2gVv7hHc4Pd",
     detail: "cargo nextest run --package ipc 2>&1 | tail -80",
+    truncated: false,
+    length: 47,
     because: "",
     ...over,
   };

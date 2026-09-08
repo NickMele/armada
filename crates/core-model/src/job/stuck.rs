@@ -158,6 +158,11 @@ pub struct Standing {
 /// carried an empty `decision_reason` — so a row showing only
 /// [`because`](Refusal::because) shows nothing, which is the defect this type
 /// exists to close.
+///
+/// **The whole argument is not here**, for the reason `ipc::Shown` leaves it in
+/// the file: a heredoc is a whole file and this crosses on every open of a
+/// stopped Job. [`truncated`](Refusal::truncated) and
+/// [`length`](Refusal::length) are what a reader is given instead.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Refusal {
     /// The tool that was reached for, in the harness's own spelling.
@@ -174,6 +179,19 @@ pub struct Refusal {
     /// a tool whose arguments that vocabulary has no name for**, and never an
     /// invented one.
     pub detail: String,
+    /// Whether [`detail`](Refusal::detail) is less than what the Drone sent.
+    ///
+    /// **Said rather than implied**, `CallDetail::truncated`'s reason: a
+    /// command can legitimately end in an ellipsis. A silently cut command
+    /// pasted into an allowlist is this type's own defect one step further on.
+    pub truncated: bool,
+    /// How many characters the argument had, before anything was cut.
+    ///
+    /// **A size rather than only a flag**, so a reader is told *showing 200 of
+    /// 14,320* rather than that something was taken away. **`None` is a
+    /// transcript row written before the file recorded the size**, whose true
+    /// length nobody can recover — never an argument measured at nought.
+    pub length: Option<usize>,
     /// The harness's own wording, where it gave one. Often empty, and an empty
     /// one is the honest answer rather than a reason to guess.
     pub because: String,

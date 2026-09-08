@@ -100,6 +100,41 @@ async fn a_refusal_names_the_command_it_was_refused_over() {
     );
 }
 
+/// **A cut command is read back as cut.** The transcript keeps the whole and
+/// the classification carries a line, so a row that did not say it was short
+/// would have a person paste a truncated command into an allowlist — the
+/// failure this whole reading exists to prevent, one step further on.
+#[tokio::test]
+async fn a_refused_heredoc_says_it_was_cut_and_how_long_it_was() {
+    let at = TempDir::new();
+    let recording = recording(&at, DRONE);
+    let heredoc = format!("cat <<EOF > out.txt {}", "word ".repeat(400));
+    recording.saw(&[called("toolu_01Haa", &heredoc), refused("toolu_01Haa")]);
+    recording.settled().await;
+
+    let read = refusals(
+        &at.path().to_string_lossy(),
+        &JobId::carried(Ulid::carried(JOB)),
+    )
+    .await;
+
+    let [one] = read.kept() else {
+        panic!("one refusal, carried: {:?}", read.kept());
+    };
+    assert!(one.truncated, "the argument was longer than a row carries");
+    assert_eq!(
+        one.length,
+        Some(heredoc.chars().count()),
+        "how much there was, not how much is shown"
+    );
+    assert!(one.detail.chars().count() < heredoc.chars().count());
+    assert!(
+        !one.detail.is_empty(),
+        "and the front of it, which is where the reason a call was worth \
+         seeing usually is"
+    );
+}
+
 /// A Drone that was refused nothing carries nothing, which is most of them —
 /// and it is the same empty answer a Job whose transcripts are gone gives.
 #[tokio::test]
@@ -177,6 +212,10 @@ async fn a_refusal_with_no_call_row_names_the_tool_and_guesses_nothing() {
         one.detail, "",
         "empty, and never a reason built from the trigger"
     );
+    assert!(
+        !one.truncated && one.length.is_none(),
+        "and a row that is not in the file is not a row that was cut"
+    );
 }
 
 /// A retry is a second `drone_id` under one `job_id`, and a refusal in either
@@ -222,6 +261,8 @@ fn the_live_fold_joins_the_call_to_its_refusal_and_counts_the_rest() {
     };
     assert_eq!(one.tool, "Bash");
     assert_eq!(one.detail, REFUSED);
+    assert!(!one.truncated, "the command fits, and the row says so");
+    assert_eq!(one.length, Some(REFUSED.chars().count()));
     assert_eq!(read.in_all(), 1);
 
     // Far more than the line names, so what is asserted is that the count does
