@@ -211,6 +211,48 @@ export const JudgeRefusedAndWhy: Story = {
 };
 
 /**
+ * **A panel of three, on the two criteria it answered.** A panel runs
+ * independent judges against one brief, none seeing another's answer, and
+ * **any single refusal refuses the criterion** — unanimity, never a vote, so
+ * that a panel is a stricter veto rather than a way to grant by consensus.
+ *
+ * **One row per criterion, and the row says how the panel went.** The wire
+ * sends one row per *call*: two criteria at `panel_size: 3` is six. Drawn
+ * straight that is each criterion three times, and counted straight it reports
+ * `1 of 6 refused` for a step where one criterion of two was refused.
+ *
+ * **`1 of 3` and `3 of 3` are different readings, which is why the number is
+ * carried at all.** A criterion two judges cleared and one refused is a close
+ * call worth opening; one all three refused is not.
+ *
+ * A step that asks a single judge says nothing about a panel and reads exactly
+ * as `Judge` above does.
+ */
+export const JudgeAsAPanel: Story = {
+  args: {
+    kind: "judge",
+    name: "Judge",
+    state: "failed",
+    stands: "1 of 2 refused",
+    rows: [
+      {
+        label: "Selectors import without the store",
+        named: "met",
+        result: "no objection · 3 judges",
+      },
+      {
+        label: "No behaviour change in the reducer",
+        named: "not_met",
+        result: "refused by 1 of 3",
+        cited:
+          "packages/settings/src/reducer.ts:88 — the SETTINGS_RESET branch now clears " +
+          "manifests as well as columns, which it did not before this step.",
+      },
+    ],
+  },
+};
+
+/**
  * **You.** The human gate, where the workflow asks for one.
  *
  * Everything mechanical has already cleared by the time this tier is lit, so a

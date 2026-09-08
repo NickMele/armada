@@ -29,7 +29,7 @@ use rusqlite::{Connection, Row};
 
 use crate::error::{fault, DatabaseFault, LoadJobError, RowError};
 use crate::open::Store;
-use crate::row::{enum_value, maybe, string};
+use crate::row::{enum_value, maybe, maybe_number, string};
 
 /// One step's record from one of the times it ran.
 ///
@@ -133,7 +133,7 @@ impl Store {
         let rows = self
             .collect(
                 "SELECT step_id, attempt, judged_at, criterion, verdict, expected, produced,
-                        consequence, brief_path
+                        consequence, brief_path, member
                  FROM job_step_judgments WHERE job_id = ?1 ORDER BY step_id, attempt, ordinal",
                 job_id,
                 "reading judgments",
@@ -403,6 +403,7 @@ fn judgment(row: &Row<'_>) -> Result<Judgment, RowError> {
     let verdict = string(row, "verdict")?;
     Ok(Judgment {
         criterion_id: CriterionId::new(string(row, "criterion")?),
+        member: maybe_number(row, "member")?,
         verdict: enum_value(
             JudgeVerdict::from_wire,
             "job_step_judgments",

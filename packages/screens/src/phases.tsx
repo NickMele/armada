@@ -29,6 +29,7 @@
 // reason this file grew an extension: the alternative was a path on a row and a
 // second surface to open it from.
 
+import { Fragment } from "react";
 import type { ReactNode } from "react";
 import { Button } from "@armada/components";
 import type { PhaseLoop, PhaseStage, PhaseStageRow, PhaseStripProps } from "@armada/components";
@@ -318,19 +319,32 @@ function judgeStage(
 
   const judged = onlyCurrentAttempt(step, step.judged);
   const asked = declared.reduce((sum, judge) => sum + judge.criteria, 0);
-  const rows: PhaseStageRow[] = judged.map((one) => {
-    const criterion = criteria.find((held) => held.criterion_id === one.criterion_id);
+  const panels = byCriterion(judged);
+  const rows: PhaseStageRow[] = panels.map(([criterion_id, members]) => {
+    const criterion = criteria.find((held) => held.criterion_id === criterion_id);
+    // Unanimity, from `docs/concepts/judge.md`: any single refusal refuses the
+    // criterion, so a row is `not_met` where one member of three objected.
+    const refused = members.filter((one) => one.verdict !== "met");
+    const verdict = refused.length === 0 ? "met" : "not_met";
     return {
       // The criterion's own text where the Job carries it, and its id where it
       // does not. A criterion is a sentence somebody wrote, so it is not mono;
       // an id that could not be joined is machine-derived, so it is.
-      label: criterion?.text ?? one.criterion_id,
+      label: criterion?.text ?? criterion_id,
       mono: criterion === undefined || undefined,
       // The registry's verb: `no objection`, `refused`. `not_met` is the wire's
       // key and reads as a field name rather than as a ruling.
-      result: CRITERION_VERDICT_JUDGE[one.verdict]?.verb ?? one.verdict,
-      named: one.verdict,
-      cited: citedOf(one, opens),
+      result: howThePanelWent(verdict, refused.length, members.length),
+      named: verdict,
+      // What a refusal rests on comes from the members that refused. Where none
+      // did there is nothing disputed, and the first member's row carries the
+      // brief every member of the panel answered.
+      cited: (refused.length === 0 ? members.slice(0, 1) : refused).map((one, at) => (
+        <Fragment key={one.member ?? at}>
+          {at === 0 ? null : " · "}
+          {citedOf(one, opens)}
+        </Fragment>
+      )),
     };
   });
 
@@ -345,19 +359,62 @@ function judgeStage(
     };
   }
 
-  const met = judged.filter((one) => one.verdict === "met").length;
-  const refused = judged.length - met;
+  // **Criteria, never calls.** A panel of three answering two criteria sends
+  // six rows, and counting those would report `1 of 6 refused` for a step where
+  // one criterion of two was refused. The gate is criterion-shaped and so is
+  // the count a person reads against it.
+  const refused = rows.filter((row) => row.named === "not_met").length;
+  const met = rows.length - refused;
   return {
     id: "judge",
     label:
       refused === 0
-        ? `Judge · ${met} of ${judged.length} met`
-        : `Judge · ${refused} of ${judged.length} refused`,
+        ? `Judge · ${met} of ${rows.length} met`
+        : `Judge · ${refused} of ${rows.length} refused`,
     kind: "judge",
     state: refused === 0 ? "cleared" : "failed",
-    stands: refused === 0 ? `${met} of ${judged.length} met` : `${refused} refused`,
+    stands: refused === 0 ? `${met} of ${rows.length} met` : `${refused} refused`,
     rows,
   };
+}
+
+/**
+ * A step's verdicts grouped into one entry per criterion, in the order asked.
+ *
+ * **A panel sends one row per member and a person reads one row per criterion.**
+ * At `panel_size: 3` three rows arrive carrying the same `criterion_id` and
+ * differing only in `member`; drawn straight they are the same sentence three
+ * times, and before `member` existed they were not even distinguishable enough
+ * to be deduplicated safely.
+ *
+ * **First-appearance order, never sorted.** The order is the order the criteria
+ * were asked, which is the order they were written, and a criterion may be
+ * appended but never reordered — so position is stable and is what a citation
+ * to `02` means.
+ */
+function byCriterion(judged: Judged[]): [string, Judged[]][] {
+  const held = new Map<string, Judged[]>();
+  for (const one of judged) {
+    const already = held.get(one.criterion_id);
+    if (already === undefined) held.set(one.criterion_id, [one]);
+    else already.push(one);
+  }
+  return [...held];
+}
+
+/**
+ * What a criterion's row says the panel came to.
+ *
+ * **Silent about the panel at one**, the convention `Judged.member` keeps: a
+ * lone judge reads exactly as it did before panels were recorded, so no step
+ * grows a count it did not have.
+ */
+function howThePanelWent(verdict: string, refused: number, members: number): string {
+  const verb = CRITERION_VERDICT_JUDGE[verdict]?.verb ?? verdict;
+  if (members < 2) return verb;
+  // A refusal from one of three is a close call and a refusal from all three is
+  // not, and that difference is the reason the member number is on the wire.
+  return refused === 0 ? `${verb} · ${members} judges` : `${verb} by ${refused} of ${members}`;
 }
 
 /**

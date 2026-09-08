@@ -157,6 +157,7 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
                 Judged {
                     attempt: 1,
                     criterion_id: crate::CriterionId::carried("c1"),
+                    member: None,
                     verdict: core_model::JudgeVerdict::NotMet.into(),
                     expected: Some("the caller's bound narrowed".to_string()),
                     produced: Some("the reader's bound widened".to_string()),
@@ -166,6 +167,7 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
                 Judged {
                     attempt: 1,
                     criterion_id: crate::CriterionId::carried("c2"),
+                    member: None,
                     verdict: core_model::JudgeVerdict::Met.into(),
                     expected: None,
                     produced: None,

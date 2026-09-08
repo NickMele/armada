@@ -225,12 +225,14 @@ fn quoted(value: &str) -> String {
 ///
 /// **Written out once here rather than once per test file**, for
 /// [`asked_for`](crate::asked_for)'s reason one level along: a `Judgment` is
-/// seven fields with no `Default`, four of which are `Option`s that mean
+/// eight fields with no `Default`, five of which are `Option`s that mean
 /// different things, and a test that wants "the Judge refused c1" should not
-/// have to say so in eight lines.
+/// have to say so in nine lines.
 ///
 /// `brief_path` is `None`: where a brief was kept is a fact about a filesystem
-/// and a fixture has none. The test that cares asserts on it directly.
+/// and a fixture has none. `member` is `None` for the same shape of reason —
+/// one judge is the default, and a panel is a fact about a step's declaration
+/// rather than about one refusal. The test that cares sets either directly.
 pub fn refusal(
     criterion: &str,
     expected: &str,
@@ -239,6 +241,7 @@ pub fn refusal(
 ) -> core_model::Judgment {
     core_model::Judgment {
         criterion_id: core_model::CriterionId::new(criterion),
+        member: None,
         verdict: core_model::JudgeVerdict::NotMet,
         expected: Some(expected.to_string()),
         produced: Some(produced.to_string()),

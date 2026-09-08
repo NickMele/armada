@@ -161,6 +161,19 @@ impl JudgeCheck {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Judgment {
     pub criterion_id: CriterionId,
+    /// Which member of the panel answered, counted from one.
+    ///
+    /// **Absent at `panel_size: 1`**, which is `JudgeCheck::panel_size`'s own
+    /// convention on the wire: a value here always means a panel, so one judge
+    /// reads exactly as it did before panels were recorded at all.
+    ///
+    /// **A position, not a person.** Every member is an independent call to one
+    /// model against one brief, none seeing another's answer, so the number
+    /// orders the calls and carries nothing across them. It exists because a
+    /// refusal from one member of three is a close call worth reading and a
+    /// refusal from all three is not, and without it the rows are
+    /// interchangeable.
+    pub member: Option<u32>,
     pub verdict: JudgeVerdict,
     /// What should be seen if the work is right. **Absent on `Met`**, where
     /// there is nothing being refused on.

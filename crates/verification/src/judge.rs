@@ -151,6 +151,11 @@ impl Brief {
     /// fill it.** Where the question was kept is a fact about a filesystem and
     /// this crate has none; `fleet::asked` writes the file and stamps the path
     /// on, which is why it is the caller and not this.
+    ///
+    /// **`member` comes back `None` for the same reason.** A brief is what one
+    /// member was asked and is identical for all of them, so nothing here knows
+    /// which call this answer came back from. The panel loop counts, and stamps
+    /// it on.
     pub fn read(&self, answer: &str) -> Result<Judgment, Unreadable> {
         let verdict = field(answer, "verdict")
             .and_then(|found| JudgeVerdict::from_wire(&found))
@@ -158,6 +163,7 @@ impl Brief {
         if !verdict.refuses() {
             return Ok(Judgment {
                 criterion_id: self.criterion.clone(),
+                member: None,
                 verdict,
                 expected: None,
                 produced: None,
@@ -184,6 +190,7 @@ impl Brief {
         }
         Ok(Judgment {
             criterion_id: self.criterion.clone(),
+            member: None,
             verdict,
             expected: Some(expected),
             produced: Some(produced),
