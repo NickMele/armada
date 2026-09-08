@@ -253,6 +253,47 @@ fn a_kind_this_vocabulary_has_no_name_for_is_reported_by_kind() {
     );
 }
 
+/// **The set, counted — and the line is the harness's own.** Both bodies here
+/// are copied from `docs/spikes/004-*.ndjson`, which is where this subtype was
+/// first seen: one task outstanding, then the same key carrying an empty list
+/// once it finished. A decoder that read the non-empty one and ignored the
+/// empty one would hold every Drone that ever delegated open for a turn it does
+/// not need.
+#[test]
+fn the_outstanding_background_set_is_read_as_a_count_in_both_directions() {
+    let started = read(
+        r#"{"type":"system","subtype":"background_tasks_changed","tasks":[
+             {"task_id":"b2qi6vicy","task_type":"local_bash","description":"Sleep for 40 seconds"}
+           ],"session_id":"a"}"#,
+    );
+    assert_eq!(started, vec![DroneEvent::BackgroundWork { outstanding: 1 }]);
+
+    let emptied = read(
+        r#"{"type":"system","subtype":"background_tasks_changed","tasks":[],"session_id":"a"}"#,
+    );
+    assert_eq!(emptied, vec![DroneEvent::BackgroundWork { outstanding: 0 }]);
+}
+
+/// **The other three spellings stay unrecognised, deliberately.** The harness
+/// says the same thing four ways and only one of them carries the whole set;
+/// reading `task_started` as a start would make the count a fold that has to
+/// know every terminal status the harness can send, and be wrong the first time
+/// it grows another.
+#[test]
+fn the_other_background_task_lines_are_not_read_as_the_count() {
+    for subtype in ["task_started", "task_updated", "task_notification"] {
+        let read = read(&format!(
+            r#"{{"type":"system","subtype":"{subtype}","task_id":"b2qi6vicy","session_id":"a"}}"#
+        ));
+        assert_eq!(
+            read,
+            vec![DroneEvent::Unrecognised {
+                kind: format!("system/{subtype}")
+            }]
+        );
+    }
+}
+
 #[test]
 fn a_turn_carrying_two_tool_calls_is_two_events() {
     let read = read(

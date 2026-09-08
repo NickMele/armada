@@ -184,6 +184,20 @@ export type Saw =
    * boundary attached and a footprint is the whole Job's.
    */
   | { event: "produced"; files: ChangedFile[] }
+  /**
+   * How much work the Drone has running behind its own turn, as the harness
+   * last counted it.
+   *
+   * **A level, so the last one on a step is the answer** — the harness
+   * re-states the whole outstanding set each time it changes, and
+   * `outstanding: 0` is that set having emptied.
+   *
+   * **A run that ends on a non-zero one has not finished, it is waiting.** A
+   * background report reaches a session as a notification and a headless Drone
+   * between turns cannot be notified, so Fleet gives the turn back rather than
+   * reaping. `crates/fleet/src/silence.rs` holds that road.
+   */
+  | { event: "background_work"; outstanding: number }
   | { event: "unrecognised"; kind: string }
   | { event: "unreadable"; line: string; why: string };
 

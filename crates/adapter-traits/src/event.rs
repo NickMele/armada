@@ -242,6 +242,23 @@ pub enum DroneEvent {
         /// this number.
         refusals: usize,
     },
+    /// How much work the Drone has running behind its own turn, as the harness
+    /// last counted it.
+    ///
+    /// **A level and never an edge**, which is why one variant carries the
+    /// whole answer: the harness re-states the outstanding set every time it
+    /// changes, so `outstanding: 0` is the set having emptied and nothing has
+    /// to pair a start with a finish to know that. A decoder that folded starts
+    /// against finishes would need every terminal spelling the harness has, and
+    /// would be wrong the first time it grew another.
+    ///
+    /// **What it is for is a Drone that ends its turn waiting.** A subagent's
+    /// report reaches a session through the same notification a person's
+    /// terminal is woken by, and a headless Drone that ends its turn is not
+    /// there to be woken — so it dies waiting for something that was never
+    /// coming. `fleet::awaiting_background` is the reading and
+    /// `fleet::silence` is what it does about it.
+    BackgroundWork { outstanding: usize },
     /// Something arrived that this vocabulary has no variant for. Carried by
     /// kind so a stream that grew an event is visible as a count rather than as
     /// a gap.

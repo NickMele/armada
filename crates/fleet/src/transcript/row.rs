@@ -82,6 +82,9 @@ pub(crate) fn seen(at: &Timestamp, step: &StepId, event: &DroneEvent) -> Transcr
                 cost_micros: *cost_micros,
                 refusals: *refusals,
             },
+            DroneEvent::BackgroundWork { outstanding } => Saw::BackgroundWork {
+                outstanding: *outstanding,
+            },
             DroneEvent::Unrecognised { kind } => Saw::Unrecognised { kind: kind.clone() },
             DroneEvent::Unreadable { line, why } => Saw::Unreadable {
                 line: line.clone(),

@@ -328,6 +328,19 @@ function rowOf(row: Turn): LogRow {
         message: "The Drone run ended",
         payload: [{ text: endedOf(saw.turns, saw.cost_micros, saw.refusals), named: "meta" }],
       };
+    case "background_work":
+      // **The count, and the sentence says which direction it moved.** A row
+      // reading "1 running" beside a Drone that has just stopped talking is the
+      // whole of why its step went nowhere, and a reader who has to know that
+      // 0 means "finished" is a reader who reads it wrong once.
+      return {
+        id,
+        at,
+        actor,
+        kind,
+        message: backgroundWork(saw.outstanding),
+        payload: [{ text: `${saw.outstanding}`, named: "meta" }],
+      };
     case "unrecognised":
       // A kind this Bridge has no case for. Drawn as itself rather than
       // dropped: a row nobody can read is a finding, and a missing row is not.
@@ -436,6 +449,20 @@ function lines(text: string, headed: readonly number[] = []): LogLine[] {
  * retried has one `ended` per Drone, so a figure on the Job would be a total
  * the wire deliberately declines to compute.
  */
+/**
+ * What the Drone has running behind its turn, in a sentence.
+ *
+ * **Nought is drawn and not withheld**, because the row that says the wait is
+ * over is what makes the row before it readable. A step whose last such row
+ * says nought had its subagents land; one whose last says one did not, and that
+ * is the row beside an ending nobody could otherwise account for.
+ */
+function backgroundWork(outstanding: number): string {
+  if (outstanding === 0) return "Nothing is left running in the background";
+  const counted = outstanding === 1 ? "1 task" : `${outstanding} tasks`;
+  return `The Drone has ${counted} running in the background`;
+}
+
 function endedOf(turns: number, costMicros: number, refusals: number): string {
   const said = [`${turns} turns`];
   if (refusals > 0) said.push(`${refusals} refusals`);

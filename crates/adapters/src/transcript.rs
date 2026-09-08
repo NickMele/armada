@@ -101,10 +101,18 @@ pub fn read(line: &str) -> Vec<DroneEvent> {
 
 /// A `system` line, told apart by its own subtype.
 ///
-/// Two of them matter and the rest are noise from the harness's own machinery.
-/// `init` is where the confinement is observable from inside the session:
-/// `mcp_servers` is what the Drone actually came up holding, which is the only
-/// reading that can contradict the flag Armada passed.
+/// Three of them matter and the rest are noise from the harness's own
+/// machinery. `init` is where the confinement is observable from inside the
+/// session: `mcp_servers` is what the Drone actually came up holding, which is
+/// the only reading that can contradict the flag Armada passed.
+///
+/// **`background_tasks_changed` is the third and it is read as a level.** The
+/// harness spells the same fact four ways — `task_started`, `task_updated`,
+/// `task_notification` and this one — and only this one carries the whole
+/// outstanding set rather than one task's move. Reading the set is what lets
+/// `DroneEvent::BackgroundWork` be a count instead of a fold that has to know
+/// every terminal status the harness can send. The other three stay
+/// unrecognised deliberately: they say nothing this one does not.
 fn system_event(system: SystemLine) -> DroneEvent {
     match system.subtype.as_str() {
         "init" => DroneEvent::Started {
@@ -116,6 +124,9 @@ fn system_event(system: SystemLine) -> DroneEvent {
             tool: system.tool_name.unwrap_or_default(),
             call: system.tool_use_id.unwrap_or_default(),
             because: system.decision_reason.unwrap_or_default(),
+        },
+        "background_tasks_changed" => DroneEvent::BackgroundWork {
+            outstanding: system.tasks.len(),
         },
         other => DroneEvent::Unrecognised {
             kind: format!("system/{other}"),
@@ -362,6 +373,12 @@ struct SystemLine {
     tool_name: Option<String>,
     tool_use_id: Option<String>,
     decision_reason: Option<String>,
+    /// Present on `background_tasks_changed` and nowhere else: the whole
+    /// outstanding set, re-stated each time it changes. Counted and never read,
+    /// for [`Counted`]'s reason — what a Drone put in the background is its
+    /// own, and how much of it is still there is the whole of what Fleet needs.
+    #[serde(default)]
+    tasks: Vec<Counted>,
 }
 
 /// An entry that is counted and never read, whatever shape it arrives in.
