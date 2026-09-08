@@ -221,6 +221,14 @@ fn detail(input: &ToolInput) -> CallDetail {
     if let Some(declared) = &input.context_paths {
         return CallDetail::of(&declared_as(declared));
     }
+    // `run_checks`'s one argument, as a word: the only key here that is not
+    // text, so it is spelled out rather than fallen through to.
+    if let Some(narrowed) = input.only_what_changed {
+        return CallDetail::of(match narrowed {
+            true => "only what changed",
+            false => "the whole repository",
+        });
+    }
     match [&input.query, &input.url, &input.description, &input.claimed]
         .into_iter()
         .flatten()
@@ -439,10 +447,10 @@ enum Block {
 /// was the one place a call said nothing about itself. A fall-through rather
 /// than a missing mechanism — `fleet::transcript::row` already carries
 /// `detail` and `truncated`, and would have written whatever arrived. The two
-/// names are asserted against [`ipc::mcp::SCOPE_FIELDS`] and
-/// [`ipc::mcp::EVIDENCE_FIELDS`] in this crate's tests, so a rename there fails
-/// here rather than emptying a row again. `run_checks` is absent and stays
-/// absent: it takes no arguments, so its empty detail is already the truth.
+/// names are asserted against [`ipc::mcp::SCOPE_FIELDS`],
+/// [`ipc::mcp::EVIDENCE_FIELDS`] and [`ipc::mcp::CHECKS_FIELDS`] in this
+/// crate's tests, so a rename there fails here rather than emptying a row
+/// again.
 #[derive(Deserialize, Default)]
 struct ToolInput {
     /// Read, Write, Edit.
@@ -474,6 +482,10 @@ struct ToolInput {
     /// what the row is for is saying which submission this call was; three
     /// prose fields joined would be one truncated field and two elisions.
     claimed: Option<String>,
+    /// `run_checks`, and the only argument it takes. **Carried because the two
+    /// runs cost very different amounts of a machine**, and a row that named
+    /// neither could not tell them apart.
+    only_what_changed: Option<bool>,
 }
 
 #[derive(Deserialize)]

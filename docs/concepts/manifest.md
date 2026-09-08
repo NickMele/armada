@@ -149,6 +149,33 @@ Rules that follow:
 
 `armada check`, the dry run a Drone can ask for, skips exactly what the gate would. A rehearsal that ran a Check the gate will not run would tell a Drone its work failed something nobody is going to ask.
 
+### How much of the tree a Check reads
+
+**A Check may declare `narrow`, and a Drone asking about its own change gets it run that way instead.** The Configuration contract holds the syntax and every key in it.
+
+```yaml
+checks:
+  test:
+    run: cargo nextest run --workspace --exclude acceptance
+    narrow:
+      run: cargo nextest run
+      each: "-p {}"
+      under: crates
+      except:
+        - acceptance
+```
+
+Decided 8 Sep 2026, after a Drone spent a whole step polling the whole gate and submitted nothing. It is the second question about paths a Check answers and `when` is the first: `when` decides whether the Check runs, `narrow` decides what it reads once it does.
+
+Rules that follow:
+
+- **Absent means whole.** A Check with nothing narrower to run declares nothing, and runs exactly as it did before the key existed. That is most Checks and always will be.
+- **The derivation from a path to an argument is the Manifest's.** `under: crates` is this repository saying where its packages live. Nothing in Fleet or the runner knows it, which is what keeps the same key right for a repository that keeps its packages somewhere else.
+- **A narrowed run gates nothing.** The Drone asks for it mid-step, the gate reads the whole of every Check regardless, and the report says in its own words that a narrowed pass is the smaller claim. `after_merge` drops `narrow` for the reason it drops `when`.
+- **A Check that narrows to nothing the change touched is skipped, not passed.** The third answer, the same one a `when` skip records.
+- **`except` restates an exclusion the whole run already makes.** Dropping `--workspace` so `-p` means something drops `--exclude` with it, and a narrowed `test` that pulled `acceptance` back in would show a Drone a bar the gate deliberately does not apply — the one case where a narrowed run is misleading rather than merely smaller.
+- **It is frozen with the workflow**, beside the Check's command.
+
 ### Proving what merged
 
 **A Manifest may name Checks to run against the tree a merge left behind, and absent means none run.**

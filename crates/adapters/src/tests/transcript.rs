@@ -596,7 +596,7 @@ fn the_armada_keys_read_here_are_the_keys_the_tools_take() {
     );
     assert!(ipc::mcp::EVIDENCE_FIELDS.contains(&"claimed"));
     assert!(
-        ipc::mcp::CHECKS_FIELDS.is_empty(),
-        "run_checks growing an argument is a field this decoder would drop"
+        ipc::mcp::CHECKS_FIELDS.contains(&"only_what_changed"),
+        "run_checks's one argument is what says which of the two runs a step paid for"
     );
 }

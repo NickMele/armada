@@ -39,7 +39,7 @@ use core_model::{
     CriterionSource, DeclarePlanAt, DependencyDirection, DependencyEdge, DispatchOrigin,
     EvidenceRef, EvidenceScope, EvidenceType, Facts, FrozenWorkflow, GamingCheck, GamingPattern,
     GateManifest, GateOutcome, GateVerdict, Job, JobId, JudgeCheck, JudgeCriterion, ManifestId,
-    ModelName, NewJob, NotRunReason, PathPattern, Prerequisite, RepoPath, ResolvedCheck,
+    ModelName, Narrowing, NewJob, NotRunReason, PathPattern, Prerequisite, RepoPath, ResolvedCheck,
     ResolvedStep, ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, Subject, Timestamp, Title,
     TopLevelOrigin, Ulid, Urgency, WorkflowId, WriteTargets,
 };
@@ -116,6 +116,19 @@ pub fn workflow() -> FrozenWorkflow {
                             "fmt".to_string(),
                             "cargo fmt --all".to_string(),
                         )],
+                        // Carried here for `when`'s reason, and carrying every
+                        // one of its own keys: a narrowing that came back
+                        // without its `under` would run over every changed path
+                        // rather than every changed crate, and one that came
+                        // back without its `except` would run a Check the whole
+                        // run excludes — neither visible anywhere on the row.
+                        narrow: Some(Narrowing::declared(
+                            "cargo build".to_string(),
+                            "-p {}".to_string(),
+                            Covers::of(vec![PathPattern::parse("crates/**").expect("a pattern")]),
+                            Some("crates".to_string()),
+                            vec!["acceptance".to_string()],
+                        )),
                     },
                     ResolvedCheck::DiffNonempty,
                     // Carried on the shared fixture for `when`'s reason: every

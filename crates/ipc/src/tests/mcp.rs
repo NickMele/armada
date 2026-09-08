@@ -241,13 +241,14 @@ fn a_path_list_that_is_not_a_list_is_refused_by_name() {
     ));
 }
 
-/// **A tool that takes nothing is called with nothing**, and a client is
-/// entitled to omit the `arguments` member entirely rather than send an empty
-/// object. Both readings are the same call, and the arm that answers them runs
-/// before the arguments are looked for at all.
+/// **Which of the two runs is asked for is required and has no default.** A
+/// Drone that omitted it would get whichever run Fleet picked for it, and the
+/// whole of `#504` is a Drone that did not know there was a choice — so an
+/// omitted `arguments` member and an empty object are both refused by name,
+/// and the refusal says what to send.
 #[test]
-fn a_checks_call_reads_the_same_with_no_arguments_and_with_none() {
-    use crate::mcp::{read, Incoming};
+fn a_checks_call_that_does_not_say_which_run_is_refused_by_name() {
+    use crate::mcp::{read, Incoming, NotAnArgument};
 
     let omitted =
         read(br#"{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"run_checks"}}"#);
@@ -255,8 +256,83 @@ fn a_checks_call_reads_the_same_with_no_arguments_and_with_none() {
         br#"{"jsonrpc":"2.0","id":14,"method":"tools/call","params":{"name":"run_checks",
             "arguments":{}}}"#,
     );
-    assert!(matches!(omitted, Incoming::RunChecks { .. }), "{omitted:?}");
-    assert!(matches!(empty, Incoming::RunChecks { .. }), "{empty:?}");
+    assert!(
+        matches!(
+            omitted,
+            Incoming::NotASubmission {
+                why: NotAnArgument::NoArguments {
+                    tool: "run_checks",
+                    ..
+                },
+                ..
+            }
+        ),
+        "{omitted:?}"
+    );
+    assert!(
+        matches!(
+            empty,
+            Incoming::NotASubmission {
+                why: NotAnArgument::Missing {
+                    field: "only_what_changed"
+                },
+                ..
+            }
+        ),
+        "{empty:?}"
+    );
+}
+
+/// **Both answers are legal and neither is the other's absence.** The narrowed
+/// run is what a Drone mid-work wants and the whole run is what the gate will
+/// make, so a Drone has to be able to ask for either.
+#[test]
+fn a_checks_call_carries_which_of_the_two_runs_was_asked_for() {
+    use crate::mcp::{read, Incoming};
+
+    for (asked, expected) in [("true", true), ("false", false)] {
+        let called = read(
+            format!(
+                r#"{{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{{"name":"run_checks",
+                    "arguments":{{"only_what_changed":{asked}}}}}}}"#
+            )
+            .as_bytes(),
+        );
+        assert!(
+            matches!(
+                called,
+                Incoming::RunChecks {
+                    only_what_changed, ..
+                } if only_what_changed == expected
+            ),
+            "{called:?}"
+        );
+    }
+}
+
+/// **A value that is not one of the two is refused rather than read as false.**
+/// A Drone that sent `"true"` as a string meant `true`, and running it whole
+/// would spend minutes answering a question it did not ask.
+#[test]
+fn a_checks_call_whose_answer_is_not_a_boolean_is_refused() {
+    use crate::mcp::{read, Incoming, NotAnArgument};
+
+    let called = read(
+        br#"{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"run_checks",
+            "arguments":{"only_what_changed":"true"}}}"#,
+    );
+    assert!(
+        matches!(
+            called,
+            Incoming::NotASubmission {
+                why: NotAnArgument::NotAFlag {
+                    field: "only_what_changed"
+                },
+                ..
+            }
+        ),
+        "{called:?}"
+    );
 }
 
 /// **A Drone cannot choose which bar it is measured against**, so an invented

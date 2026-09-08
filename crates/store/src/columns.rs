@@ -29,7 +29,7 @@ use core_model::{
     AcceptanceCriterion, Actor, AdvanceGate, ContextSource, Covers, CriteriaOwed, CriterionId,
     CriterionSource, DeclarePlanAt, DependencyDirection, DependencyEdge, EscalationTrigger,
     EvidenceRef, EvidenceScope, EvidenceType, FrozenWorkflow, GamingCheck, GamingPattern,
-    GateVerdict, JobId, JudgeCheck, JudgeCriterion, ModelName, PathPattern, PilotReason,
+    GateVerdict, JobId, JudgeCheck, JudgeCriterion, ModelName, Narrowing, PathPattern, PilotReason,
     Prerequisite, RepoPath, ResolvedCheck, ResolvedStep, ScopeRevision, ScopeRevisionOutcome,
     StepId, Timestamp, TransitionReason, Ulid, WorkflowId, ARTIFACT_EXISTS, DIFF_NONEMPTY,
     MANIFEST_CHECK,
@@ -357,7 +357,7 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
                 })),
             })).collect::<Vec<Value>>(),
             "checks": step.checks().iter().map(|check| match check {
-                ResolvedCheck::ManifestCheck { name, run, expect_exit_code, when, requires } => json!({
+                ResolvedCheck::ManifestCheck { name, run, expect_exit_code, when, requires, narrow } => json!({
                     "type": MANIFEST_CHECK,
                     "check": name,
                     "run": run,
@@ -379,6 +379,24 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
                     // no key at all, which reads back as the first.
                     "when": when.as_ref().map(|covers| covers.patterns().iter()
                         .map(|pattern| pattern.as_str()).collect::<Vec<&str>>()),
+                    // Absent where the Check declares no `narrow`, which is a
+                    // Check that runs whole — the reading a row written before
+                    // the key existed gets for free.
+                    "narrow": narrow.as_ref().map(|narrowing| json!({
+                        "run": narrowing.run(),
+                        "each": narrowing.each(),
+                        "from": narrowing.from().map(|covers| covers.patterns().iter()
+                            .map(|pattern| pattern.as_str()).collect::<Vec<&str>>()),
+                        "under": narrowing.under(),
+                        // Absent rather than an empty list where the Check
+                        // excludes nothing, for `requires`' reason: a row
+                        // written before the key existed carries no key at
+                        // all, and that reads back as the same sentence.
+                        "except": match narrowing.except().is_empty() {
+                            true => None,
+                            false => Some(narrowing.except()),
+                        },
+                    })),
                 }),
                 ResolvedCheck::DiffNonempty => json!({ "type": DIFF_NONEMPTY }),
                 ResolvedCheck::ArtifactExists { target } => json!({
@@ -706,6 +724,7 @@ fn read_check(entry: &Map<String, Value>) -> Result<ResolvedCheck, Malformed> {
                 .ok_or_else(|| "`expect_exit_code` is not an integer".to_string())?,
             when: read_when(entry)?,
             requires: read_requires(entry)?,
+            narrow: read_narrow(entry)?,
         }),
         DIFF_NONEMPTY => Ok(ResolvedCheck::DiffNonempty),
         ARTIFACT_EXISTS => Ok(ResolvedCheck::ArtifactExists {
@@ -756,7 +775,14 @@ fn read_requires(entry: &Map<String, Value>) -> Result<Vec<Prerequisite>, Malfor
 /// whose scope was silently widened to everything, or narrowed to nothing, is
 /// worse than a Job that refuses to load.
 fn read_when(entry: &Map<String, Value>) -> Result<Option<Covers>, Malformed> {
-    let Some(value) = entry.get("when") else {
+    read_patterns(entry, "when")
+}
+
+/// A stored list of path patterns under one key. **One function for `when` and
+/// for `narrow.from`**, which are the same list read the same way: absent means
+/// always, and an empty list is refused rather than read as the opposite.
+fn read_patterns(entry: &Map<String, Value>, key: &str) -> Result<Option<Covers>, Malformed> {
+    let Some(value) = entry.get(key) else {
         return Ok(None);
     };
     if value.is_null() {
@@ -766,10 +792,10 @@ fn read_when(entry: &Map<String, Value>) -> Result<Option<Covers>, Malformed> {
     for item in array(value)? {
         let written = item
             .as_str()
-            .ok_or_else(|| "`when` holds something that is not a pattern".to_string())?;
+            .ok_or_else(|| format!("`{key}` holds something that is not a pattern"))?;
         patterns.push(
             PathPattern::parse(written)
-                .map_err(|why| format!("`when` holds `{written}`, which {why}"))?,
+                .map_err(|why| format!("`{key}` holds `{written}`, which {why}"))?,
         );
     }
     // `Covers::of` answers `None` on an empty list, which would read back as
@@ -778,7 +804,38 @@ fn read_when(entry: &Map<String, Value>) -> Result<Option<Covers>, Malformed> {
     // reinterpreted.
     Covers::of(patterns)
         .map(Some)
-        .ok_or_else(|| "`when` is an empty list".to_string())
+        .ok_or_else(|| format!("`{key}` is an empty list"))
+}
+
+/// What a stored Check narrows to, where it narrows at all.
+///
+/// **Absent and null both read as none**, which is a Check that runs whole —
+/// the reading every row written before the key existed gets, and the same
+/// additive shape `read_requires` has.
+///
+/// `run` and `each` missing is malformed rather than repaired: a narrowing with
+/// no command to run would read as a Check that narrows and then runs nothing.
+fn read_narrow(entry: &Map<String, Value>) -> Result<Option<Narrowing>, Malformed> {
+    let Some(value) = entry.get("narrow") else {
+        return Ok(None);
+    };
+    if value.is_null() {
+        return Ok(None);
+    }
+    let narrowing = object(value)?;
+    Ok(Some(Narrowing::declared(
+        text(narrowing, "run")?,
+        text(narrowing, "each")?,
+        read_patterns(narrowing, "from")?,
+        match narrowing.get("under") {
+            None | Some(Value::Null) => None,
+            Some(_) => Some(text(narrowing, "under")?),
+        },
+        match narrowing.get("except") {
+            None | Some(Value::Null) => Vec::new(),
+            Some(_) => texts(narrowing, "except")?,
+        },
+    )))
 }
 
 /// A definition's own version number. `u32` on the record, so a stored value

@@ -13,9 +13,9 @@
 //! call carrying one is refused **by name** — a field nothing reads is a promise
 //! the call makes and the system does not keep.
 //!
-//! [`CHECKS_TOOL`] takes nothing at all, not even a Check name: the step's
-//! Checks were frozen at approval, so a name here could only be a Drone
-//! choosing which bar it is measured against.
+//! [`CHECKS_TOOL`] takes no Check name and no path list: the step's Checks were
+//! frozen at approval, so either would be a Drone choosing the bar it is
+//! measured against. [`checks_tool`] carries what its one boolean does choose.
 //!
 //! # Why declaring is a different call from submitting
 //!
@@ -51,11 +51,11 @@ pub const CHECKS_TOOL: &str = "run_checks";
 pub const EVIDENCE_FIELDS: &[&str] = &["claimed", "shown_by", "not_claimed"];
 /// The one field the scope tool takes. Public for [`EVIDENCE_FIELDS`]' reason.
 pub const SCOPE_FIELDS: &[&str] = &["context_paths"];
-/// The Checks tool takes none. See this module's comment.
-///
-/// Public for the same reason and carrying the opposite fact: a `run_checks`
-/// row with an empty detail is **accurate**, because there was no argument.
-pub const CHECKS_FIELDS: &[&str] = &[];
+/// The one field the Checks tool takes. Public for [`EVIDENCE_FIELDS`]' reason,
+/// and the transcript decoder now has an argument to put on the row: which of
+/// the two runs a Drone asked for is the whole of what a person reading it back
+/// wants to know.
+pub const CHECKS_FIELDS: &[&str] = &["only_what_changed"];
 /// What a Drone hands over. **The Agent Copy Contract's Work submission
 /// fields, spelled as the Drone is asked for them**, and nothing else.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -119,6 +119,10 @@ pub enum NotAnArgument {
     NotText {
         field: &'static str,
     },
+    /// A field whose value should be `true` or `false` and is not.
+    NotAFlag {
+        field: &'static str,
+    },
     /// A field whose value should be a list of strings and is not.
     NotAList {
         field: &'static str,
@@ -164,15 +168,6 @@ impl core::fmt::Display for NotAnArgument {
                  `{SCOPE_TOOL}`, `{WIDEN_TOOL}`, `{CHECKS_TOOL}`, \
                  `{DISPATCH_TOOL}` and `{ASK_TOOL}`"
             ),
-            // The empty list is a real case now: `run_checks` takes nothing, so
-            // a call of it with no arguments is a correct call and never
-            // reaches here. A message reading "takes " with nothing after it
-            // would be this refusal arriving at a tool it does not apply to.
-            NotAnArgument::NoArguments { tool, takes: [] } => write!(
-                out,
-                "`{tool}` takes no arguments and none were expected. This \
-                 refusal is a fault in Fleet rather than in the call"
-            ),
             NotAnArgument::NoArguments { tool, takes } => write!(
                 out,
                 "the call carried no arguments. `{tool}` takes {}",
@@ -187,6 +182,11 @@ impl core::fmt::Display for NotAnArgument {
             NotAnArgument::NotText { field } => {
                 write!(out, "`{field}` is not text. Submit again with a string")
             }
+            NotAnArgument::NotAFlag { field } => write!(
+                out,
+                "`{field}` is not true or false. Call again with one of them — \
+                 it is a question with two answers and no third"
+            ),
             NotAnArgument::NotAList { field } => write!(
                 out,
                 "`{field}` is not a list of strings. Call again with one, \
@@ -213,18 +213,19 @@ impl core::fmt::Display for NotAnArgument {
                  or artifact you name in `shown_by`, and what it shows in \
                  `claimed` — then submit again"
             ),
-            // A Drone that invented a Check name is told who decides that,
-            // because "no such field" reads as an oversight to work around and
-            // the answer here is that there is nothing to work around.
-            NotAnArgument::NotAField {
-                named,
-                tool,
-                takes: [],
-            } => write!(
+            // A Drone inventing a field on the Checks tool is inventing one of
+            // two things — a Check name, or a list of files — and each is a
+            // choice that is not the Drone's. "No such field" reads as an
+            // oversight to work around, and the answer here is that there is
+            // nothing to work around and something else to use.
+            NotAnArgument::NotAField { named, tool, .. } if *tool == CHECKS_TOOL => write!(
                 out,
-                "`{named}` is not a field of `{tool}`, which takes no arguments \
-                 at all. Which checks gate the part you are on was settled when \
-                 this task was approved; remove it and call again"
+                "`{named}` is not a field of `{tool}`, which takes \
+                 `only_what_changed` and nothing else. Which checks gate the \
+                 part you are on was settled when this task was approved, and \
+                 which files each one reads is Fleet's reading of your \
+                 worktree — pass `only_what_changed: true` to have them \
+                 narrowed to what you have changed"
             ),
             NotAnArgument::NotAField { named, tool, takes } => write!(
                 out,
@@ -295,12 +296,27 @@ pub(crate) fn submission(arguments: &Map<String, Value>) -> Result<SubmitEvidenc
     })
 }
 
-/// The Checks tool's arguments, which is to say: that there are none.
+/// The Checks tool's one argument: which of the two runs the Drone is asking
+/// for.
 ///
-/// **A call carrying a field is refused by name** rather than having it
-/// dropped, which is [`closed`]'s rule applied to an empty list.
-pub(crate) fn nothing(arguments: &Map<String, Value>) -> Result<(), NotAnArgument> {
-    closed(arguments, CHECKS_TOOL, CHECKS_FIELDS)
+/// **Required, like every other tool's fields.** A default would be a run a
+/// Drone never chose, and the whole of what went wrong on `#496` is a Drone
+/// that did not know there was a choice. Absent is refused by name, which puts
+/// the choice in front of every call.
+pub(crate) fn checking(arguments: &Map<String, Value>) -> Result<bool, NotAnArgument> {
+    closed(arguments, CHECKS_TOOL, CHECKS_FIELDS)?;
+    flag(arguments, "only_what_changed")
+}
+
+/// One field that is `true` or `false`. Absent is [`NotAnArgument::Missing`]
+/// and never `false`: a boolean's absence would be a second spelling of one of
+/// its two values, and the two would be indistinguishable in a transcript.
+fn flag(arguments: &Map<String, Value>, field: &'static str) -> Result<bool, NotAnArgument> {
+    arguments
+        .get(field)
+        .ok_or(NotAnArgument::Missing { field })?
+        .as_bool()
+        .ok_or(NotAnArgument::NotAFlag { field })
 }
 
 pub(crate) fn declaration(arguments: &Map<String, Value>) -> Result<DeclareScope, NotAnArgument> {
@@ -482,22 +498,44 @@ pub(crate) fn listed() -> Vec<Value> {
 /// no block at all, so a Drone sent looking for a list that is not there would
 /// be left to work out whether it had missed something or the tool was broken.
 fn checks_tool() -> Value {
+    // **Its one argument is a boolean and not a path list, and that is the
+    // whole of why it is safe.** A path list would be the Drone naming the
+    // scope it is measured over; a boolean asks Fleet to read the worktree it
+    // already reads. The same Checks run under both answers, and the
+    // description below says a narrowed pass is the smaller one — as does the
+    // report, for spike 6's reason.
     json!({
         "name": CHECKS_TOOL,
         "description":
             "Run the checks that gate the part you are on — the ones your brief \
              names under FINDING OUT WHERE YOU STAND — in your worktree, and get \
              back what each one did and where its output was written. It runs \
-             all of them and takes no arguments; there is nothing to choose. \
-             Call it when you want to know whether the work holds up, before you \
-             submit. It is not a verdict and it advances nothing — the checks \
-             are run again when you submit, and only that run decides anything. \
-             There is a limit on how many times one part may ask, a second call \
-             while one is still running is refused, and a part whose brief names \
-             no checks has none to run.",
+             all of them; which checks they are was settled when this task was \
+             approved and there is nothing to choose. Call it when you want to \
+             know whether the work holds up, before you submit. It is not a \
+             verdict and it advances nothing — the checks are run again when you \
+             submit, and only that run decides anything. There is a limit on how \
+             many times one part may ask, a second call while one is still \
+             running is refused, and a part whose brief names no checks has none \
+             to run.",
         "inputSchema": {
             "type": "object",
-            "properties": {},
+            "properties": {
+                "only_what_changed": {
+                    "type": "boolean",
+                    "description":
+                        "True to run each check against what you have changed \
+                         rather than the whole repository, which is faster and \
+                         says less. Fleet reads your worktree to find out what \
+                         that is; you do not name files. A check the project has \
+                         given no narrower way to run still runs whole, and a \
+                         check that narrows to nothing you touched is not run at \
+                         all. A pass under true says the parts you changed hold, \
+                         not that the repository does. Use false when you want \
+                         the same run the gate will make.",
+                },
+            },
+            "required": ["only_what_changed"],
             "additionalProperties": false,
         },
     })

@@ -18,7 +18,7 @@
 
 use core_model::{
     AdvanceGate, ContextSource, Covers, DeclarePlanAt, EvidenceRef, GamingPattern, ModelName,
-    PathPattern, Prerequisite, RepoPath, ResolvedCheck, StepId,
+    Narrowing, PathPattern, Prerequisite, RepoPath, ResolvedCheck, StepId,
 };
 
 use crate::tests::{created_at, job_id, open, top_level, TempDir};
@@ -60,6 +60,13 @@ fn the_frozen_workflow_comes_back_with_every_check_its_steps_declared() {
                     "fmt".to_string(),
                     "cargo fmt --all".to_string(),
                 )],
+                narrow: Some(Narrowing::declared(
+                    "cargo build".to_string(),
+                    "-p {}".to_string(),
+                    Covers::of(vec![PathPattern::parse("crates/**").expect("a pattern")]),
+                    Some("crates".to_string()),
+                    vec!["acceptance".to_string()],
+                )),
             },
             ResolvedCheck::DiffNonempty,
             ResolvedCheck::ArtifactExists {

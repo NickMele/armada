@@ -135,12 +135,12 @@ fn resolve_step(step: &Step, manifest: &Manifest, unknown: &mut Vec<UnknownCheck
                 check,
                 expect_exit_code,
             } => match manifest.check(check) {
-                // `when` and `requires` are lifted here beside `run`, and for
-                // the same reason: all three are the Manifest's and all three
-                // are frozen onto the Job, so an edit to `armada.yml` changes
-                // the next Job rather than this one. A step cannot narrow or
-                // widen any of them — the owner's decision is that the
-                // repository declares once what a Check covers and every
+                // `when`, `requires` and `narrow` are lifted here beside `run`,
+                // and for the same reason: all four are the Manifest's and all
+                // four are frozen onto the Job, so an edit to `armada.yml`
+                // changes the next Job rather than this one. A step cannot
+                // narrow or widen any of them — the owner's decision is that
+                // the repository declares once what a Check covers and every
                 // workflow inherits it, so there is no step-level key to read
                 // here and none to add.
                 //
@@ -154,6 +154,7 @@ fn resolve_step(step: &Step, manifest: &Manifest, unknown: &mut Vec<UnknownCheck
                     expect_exit_code: *expect_exit_code,
                     when: declared.when().cloned(),
                     requires: declared.requires().to_vec(),
+                    narrow: declared.narrow().cloned(),
                 }),
                 None => unknown.push(UnknownCheck {
                     step: step.id().clone(),

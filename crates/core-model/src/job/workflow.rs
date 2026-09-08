@@ -33,6 +33,7 @@ use crate::job::covers::Covers;
 use crate::job::gaming::GamingCheck;
 use crate::job::ids::{ModelName, StepId, WorkflowId};
 use crate::job::judge::JudgeCheck;
+use crate::job::narrowing::Narrowing;
 use crate::job::prerequisite::Prerequisite;
 use crate::job::scope::EvidenceScope;
 use crate::job::verdict::GateVerdict;
@@ -120,6 +121,16 @@ pub enum ResolvedCheck {
         /// reason — what runs before a Check is part of what produced its exit
         /// code.
         requires: Vec<Prerequisite>,
+        /// How the Manifest says this Check is run against a subset of the
+        /// tree. **`None` where it declares no `narrow`, and that means the
+        /// Check runs whole** — which is what every Check did before the key
+        /// existed and what most will go on doing.
+        ///
+        /// Frozen for `when`'s reason, one step further along: this decides
+        /// what a Drone is told about its own work mid-step, and a Manifest
+        /// edited under a running Job would change that answer without
+        /// changing the question.
+        narrow: Option<Narrowing>,
     },
     /// The step produced a non-empty diff.
     DiffNonempty,
@@ -212,6 +223,16 @@ impl ResolvedCheck {
     /// the reading off the gate of a step that would not use it.
     pub fn needs_changed_paths(&self) -> bool {
         self.when().is_some()
+    }
+
+    /// How this Check is run against a subset of the tree, where the Manifest
+    /// says. **`None` on a built-in and on a Check that declares no `narrow`**,
+    /// which is the same answer: it runs whole.
+    pub fn narrowing(&self) -> Option<&Narrowing> {
+        match self {
+            ResolvedCheck::ManifestCheck { narrow, .. } => narrow.as_ref(),
+            ResolvedCheck::DiffNonempty | ResolvedCheck::ArtifactExists { .. } => None,
+        }
     }
 
     /// What has to run before this Check, in order. **Empty on a built-in and

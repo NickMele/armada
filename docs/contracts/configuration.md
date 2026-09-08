@@ -147,6 +147,99 @@ a minute after the save still learns that the file was refused — and every fau
 crosses, not the first, because a person correcting a file from a message naming
 one fault meets the next one on the following save.
 
+## How much of the tree a Check reads
+
+Added 8 September 2026, with `checks.<name>.narrow` and `#504`. A Drone that
+changed one crate had two speeds and nothing between them: the whole gate, or
+nothing. On 8 Sep 2026 one spent its whole `implement` step polling the whole
+gate behind a four-minute sleep and submitted nothing.
+
+**This is the second question about paths a Check answers, and `when` is the
+first.** `when` decides whether the Check runs at all, given what changed;
+`narrow` decides what it reads once it does. They are two keys because they are
+two answers: `format` covers every path in the repository and still narrows to
+the Rust ones, so one key could not carry both.
+
+**A Check that declares no `narrow` runs whole, and that is the default that
+must not move.** Most Checks have nothing narrower — a TypeScript project is
+the unit its compiler reads — and the honest declaration for those is silence.
+Every Manifest written before this key existed goes on behaving exactly as it
+did.
+
+The block, and every key in it:
+
+| Key | Required | What it says |
+| --- | --- | --- |
+| `run` | yes | The command a narrowed run starts from, whole and not an edit of `run` |
+| `each` | yes | How one value is spelled as an argument. `{}` is the value, and a template without one is refused |
+| `from` | no | Which changed paths feed it, in the one glob dialect. Absent means all of them |
+| `under` | no | The directory whose child names the value. Absent means the value is the changed path itself |
+| `except` | no | Values the narrowing never produces, whatever the change derived to |
+
+```yaml
+checks:
+  test:
+    run: cargo nextest run --workspace --exclude acceptance
+    narrow:
+      run: cargo nextest run
+      each: "-p {}"
+      under: crates
+      except:
+        - acceptance
+```
+
+**`run` is a whole second command line, not a suffix.** The first Check narrowed
+in this repository is `cargo nextest run --workspace`, and what has to go for
+`-p` to mean anything is `--workspace` — cargo reads the two together as the
+whole workspace and drops the `-p` without saying so. No rule about appending
+arguments could have produced the narrowed command, so the file writes both.
+
+**`except` restates an exclusion the whole run already makes, and it is the one
+key here that is about correctness rather than speed.** This repository's whole
+`test` run excludes `acceptance` because a milestone's claim is read on its own —
+`docs/practices/acceptance-tests.md` — and dropping `--workspace` to make `-p`
+mean anything drops `--exclude` with it, because cargo refuses one without the
+other. Without `except` the narrowed run would show a Drone a bar the gate
+deliberately does not apply to it, and a Drone shown a red test chases it green.
+That is the one case where a narrowed run is not merely smaller but actively
+misleading. It filters values rather than paths, so `from` cannot do it, and
+neither can a pattern: the dialect above refuses a leading `!` by name, so there
+is no way to write *every crate but this one*.
+
+**`under` is where a repository declares its own layout, and it is the whole of
+the derivation.** `crates` turns `crates/ipc/src/lib.rs` into `ipc`. Nothing in
+`checks-runner`, `fleet` or `config` knows that packages live under `crates` —
+a runner holding that fact would be wrong about the first `pnpm` repository it
+met, and the derivation belongs where the repository describes itself. It is
+deliberately a directory name and not a capture group: a pattern that reported
+what `*` matched would be a second reading of the dialect stated above, and
+there is one.
+
+Rules that follow:
+
+- **The Drone asks for a narrowed run and never names the paths.** The tool
+  takes one boolean, `only_what_changed`. A path list would be the Drone
+  choosing the scope it is measured over, which is the same refusal
+  `crates/ipc/src/mcp/tools.rs` already makes about a Check name. Which paths a
+  narrowed run reads is Fleet's reading of the worktree's own diff.
+- **A narrowed run is never a verdict and never gates.** The gate reads the
+  whole of every Check whatever a Drone asked for mid-step, and the report a
+  Drone reads back carries its own closing sentence saying a pass under it means
+  the parts that changed hold and not that the repository does. `after_merge`
+  drops `narrow` for the same reason it drops `when`: what merged is the whole
+  tree.
+- **A Check that narrows to nothing is not run, and is not passed.** A change
+  touching nothing under `crates` gives `-p` nothing to name, and a Check with
+  nothing to say records a skip rather than a pass — the same third answer a
+  `when` skip records, for the same reason.
+- **A changed path that cannot be spelled as one argument abandons the
+  narrowing**, and the Check runs whole. Whole is never less than narrow, so
+  that is the safe direction; the alternative is a Check run over a subset
+  nobody was told was a subset.
+- **It is frozen with the workflow**, beside `run`, `when` and `requires`. An
+  edit to `armada.yml` changes the next Job rather than what a running Drone is
+  told about its own work.
+
 ## Two tiers of path boundary, and only one of them is configuration
 
 Added 3 September 2026, with `#417`. A step's `exclude_paths` held two kinds of entry and refused both the same way, which is why a Drone that found the right fix in a fenced-off file had nowhere to go: the declaration was refused mechanically, and the widening it would have been pointed at grows the Job's `write_targets` rather than the list that refused it.
@@ -311,7 +404,8 @@ That day also closes the one gap it cannot close now. A setting nothing reads is
 
 - **[armada-yml-schema]** What is the exact `armada.yml` schema?
   M1 decided a subset — `version`, `id`, `base`, `checks.<name>.run`,
-  `checks.<name>.when`, `checks.<name>.requires`, `commands.<name>.run`,
+  `checks.<name>.when`, `checks.<name>.requires`, `checks.<name>.narrow`,
+  `commands.<name>.run`,
   `commands.<name>.destructive` and `setup.requires` — with every
   other key (`permissions`, `knowledge`, `policy`,
   `commands.*.description`) hard-failing as unknown until Reach. Beyond that, what is still open: the

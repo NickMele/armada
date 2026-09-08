@@ -313,16 +313,140 @@ fn every_bad_pattern_in_one_file_is_reported_in_one_pass() {
 }
 
 #[test]
-fn when_is_the_only_key_a_check_gained() {
-    // The header's rule is unchanged: every key but `run` and `when` is refused
-    // by name, so a deferred section still arrives with the code that honours
-    // it.
+fn a_key_no_check_reads_is_still_refused_by_name() {
+    // The header's rule is unchanged: every key a Check does not read is
+    // refused by name, so a deferred section still arrives with the code that
+    // honours it.
     let refused = refusals(parse(
         "version: 1\nid: a\nchecks:\n  build:\n    run: x\n    timeout: 60\n",
     ));
     assert!(matches!(
         fault_at(&refused, "checks.build.timeout"),
         Fault::Unknown { known } if known.contains(&"when")
+    ));
+}
+
+// ------------------------------------------------------- checks.<name>.narrow
+
+const NARROWED: &str = r#"
+version: 1
+id: armada
+checks:
+  build:
+    run: cargo build --workspace
+  test:
+    run: cargo nextest run --workspace --exclude acceptance
+    narrow:
+      run: cargo nextest run
+      each: "-p {}"
+      under: crates
+      except: [acceptance]
+  format:
+    run: cargo fmt --all --check
+    narrow:
+      run: rustfmt --check
+      each: "{}"
+      from: ["**/*.rs"]
+"#;
+
+#[test]
+fn a_check_may_say_how_it_is_run_against_a_subset() {
+    let manifest = parse(NARROWED).expect("two narrowings this parser reads");
+    let narrow = manifest
+        .check("test")
+        .expect("test")
+        .narrow()
+        .expect("a narrowing");
+    // **A whole second command line and not a suffix.** `--workspace` is gone,
+    // which no rule about appending arguments could have done.
+    assert_eq!(narrow.run(), "cargo nextest run");
+    assert_eq!(narrow.each(), "-p {}");
+    assert_eq!(narrow.under(), Some("crates"));
+    assert_eq!(narrow.from(), None);
+    // The exclusion the whole run makes, restated: `--exclude` goes with
+    // `--workspace`, and the narrowed command has neither.
+    assert_eq!(narrow.except(), ["acceptance"]);
+}
+
+#[test]
+fn the_verbatim_shape_reads_its_own_two_keys() {
+    // The other shape the syntax has to carry: no derivation, and a filter on
+    // which changed paths feed it.
+    let manifest = parse(NARROWED).expect("two narrowings this parser reads");
+    let narrow = manifest
+        .check("format")
+        .expect("format")
+        .narrow()
+        .expect("a narrowing");
+    assert_eq!(narrow.under(), None);
+    assert_eq!(narrow.from().expect("one pattern").written(), "**/*.rs");
+    assert!(narrow.except().is_empty(), "a Check that excludes nothing");
+}
+
+#[test]
+fn a_check_with_no_narrow_says_none_and_that_means_whole() {
+    // **The default, and the one that must not move.** Every `armada.yml`
+    // written before this key existed lands on this branch.
+    let manifest = parse(NARROWED).expect("two narrowings this parser reads");
+    assert!(manifest.check("build").expect("build").narrow().is_none());
+}
+
+#[test]
+fn a_narrowing_with_nowhere_to_put_the_value_is_refused() {
+    // `each` without `{}` produces the same argument however many paths
+    // changed, which is a narrowed run narrowed to nothing that says so
+    // nowhere.
+    let refused = refusals(parse(
+        "version: 1\nid: a\nchecks:\n  build:\n    run: x\n    narrow:\n      run: y\n      each: -p\n",
+    ));
+    assert!(matches!(
+        fault_at(&refused, "checks.build.narrow.each"),
+        Fault::NothingToSubstitute
+    ));
+}
+
+#[test]
+fn a_narrowing_with_no_command_of_its_own_is_refused() {
+    let refused = refusals(parse(
+        "version: 1\nid: a\nchecks:\n  build:\n    run: x\n    narrow:\n      each: \"{}\"\n",
+    ));
+    assert!(matches!(
+        fault_at(&refused, "checks.build.narrow.run"),
+        Fault::Missing
+    ));
+}
+
+#[test]
+fn a_key_the_narrowing_does_not_read_is_refused_by_name() {
+    let refused = refusals(parse(
+        "version: 1\nid: a\nchecks:\n  build:\n    run: x\n    narrow:\n      run: y\n      each: \"{}\"\n      only: [ipc]\n",
+    ));
+    assert!(matches!(
+        fault_at(&refused, "checks.build.narrow.only"),
+        Fault::Unknown { known } if known.contains(&"under")
+    ));
+}
+
+#[test]
+fn an_empty_except_is_refused_rather_than_read_as_excluding_nothing() {
+    // `except: []` is a key to delete, which is `when`'s rule one level down.
+    let refused = refusals(parse(
+        "version: 1\nid: a\nchecks:\n  build:\n    run: x\n    narrow:\n      run: y\n      each: \"{}\"\n      except: []\n",
+    ));
+    assert!(matches!(
+        fault_at(&refused, "checks.build.narrow.except"),
+        Fault::Empty
+    ));
+}
+
+#[test]
+fn a_narrowings_from_is_read_in_the_one_dialect_and_refused_in_any_other() {
+    let refused = refusals(parse(
+        "version: 1\nid: a\nchecks:\n  build:\n    run: x\n    narrow:\n      run: y\n      each: \"{}\"\n      from: [\"src/[ab].rs\"]\n",
+    ));
+    assert!(matches!(
+        fault_at(&refused, "checks.build.narrow.from[0]"),
+        Fault::NotAPathPattern { value, .. } if value == "src/[ab].rs"
     ));
 }
 

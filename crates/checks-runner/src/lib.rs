@@ -11,9 +11,11 @@
 //! # What is built so far
 //!
 //! [`run`], which executes one Check's command in one worktree under a budget
-//! and reports how it ended. Commands — the ungating half of a Manifest's two
-//! registries — are not here: nothing may invoke one yet, and a runner for
-//! something with no caller is a surface that gets used by accident.
+//! and reports how it ended, and [`narrowed`], which assembles the command a
+//! Check runs against one Drone's own change. The two are one crate because
+//! they have to agree about quoting — [`narrow`] says why. Commands are not
+//! here: nothing may invoke one yet, and a runner for something with no caller
+//! is a surface that gets used by accident.
 //!
 //! # It decides nothing
 //!
@@ -22,9 +24,11 @@
 //! and the two are separate crates because the deciding half must be testable
 //! without a process and the running half cannot be.
 
+mod narrow;
 mod run;
 
 #[cfg(test)]
 mod tests;
 
+pub use narrow::{narrowed, Narrowed};
 pub use run::{run, Attempt, Output};

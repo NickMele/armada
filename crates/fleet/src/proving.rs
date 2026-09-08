@@ -224,10 +224,13 @@ fn spawn_the_run(
         // `touched` is empty and `moved` is false, and neither is consulted:
         // `config` drops `when` from an `after_merge` entry, so no Check here
         // can be skipped for coverage, and `diff_nonempty` is a step's built-in
-        // that an `after_merge` list has no way to name.
+        // that an `after_merge` list has no way to name. Narrowing is off for
+        // the same reason one step along: `config` drops `narrow` too, and what
+        // merged is the whole tree rather than one Drone's change.
         let completed = checking::ran(
             &checks,
             &[],
+            false,
             false,
             std::path::Path::new(&repo_root),
             budget,
