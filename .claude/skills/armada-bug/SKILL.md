@@ -100,6 +100,15 @@ Give him the URL.
 Give the agent the reproduction and the reasoning, not just the symptom — an
 agent handed a symptom rediscovers the cause you already found, at full cost.
 
+**Then read the diff before you repeat what the agent said.**
+`orchestrate-milestone` owns this rule — *the report is not the work* — and this
+line is here because that skill is the one nobody loads on a bug. Confirmed
+2026-09-08: an agent's summary said a Check "declares no `narrow`, and says
+why"; it declared one and had no `except`. That sentence went to the owner
+inside a pull request body and had to be corrected to him afterwards. The
+summary is written by the thing with an interest in it being right, and a
+paragraph of yours built on it inherits that interest without the evidence.
+
 ## What not to do
 
 **Do not file a bug the owner did not report**, unless you found it while
