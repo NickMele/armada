@@ -261,6 +261,20 @@
      the sheet inside the screen's own radius at the corners. */
   position: relative;
   overflow: hidden;
+  /* And the screen fills the height it was given rather than growing past it.
+
+     The shell scrolls one region — `.armada-shell__mount` — and this screen
+     used to grow inside it, so a long Job scrolled the whole page. A sheet is
+     positioned against this box, so it scrolled away with everything else: the
+     layer covering the panel slid up out of the window while the reader was
+     still in it. Bounding here moves the scrolling one level in, to the two
+     columns, which is what makes a full-height layer possible at all.
+
+     `min-height: 0` with it, because this is a flex child of the mount and
+     without it the box keeps its content's height and nothing below can
+     shrink — the same rule the mount itself carries, one level down. */
+  height: 100%;
+  min-height: 0;
 }
 
 /* The job detail header is `Job detail header actions` on all three states, so
@@ -510,21 +524,34 @@
    The middle track is the rule between them. Half a gap either side, so the
    drawn 24px gutter still measures 24 with a hairline down the middle of it
    rather than 24 plus a rule plus another 24. */
+/* `align-items: stretch` and not `start`, so both columns are the grid's full
+   height and can scroll inside it rather than pushing the screen taller. */
 .armada-inside {
   display: grid;
   grid-template-columns: var(--w-run-column) minmax(0, 1fr);
   column-gap: var(--space-6);
   row-gap: var(--space-4);
-  align-items: start;
+  align-items: stretch;
   min-width: 0;
+  min-height: 0;
+  flex: 1;
 }
 
+/* Each column scrolls itself.
+
+   **Two scrollers, not one.** The run and the panel are read against each
+   other — which step, and what that step did — so a reader deep in a 47-entry
+   log must not have taken the tree off the screen to get there. It is also
+   what lets the sheet be the height of the screen: a layer over a column that
+   scrolls the page has nothing fixed to be flush to. */
 .armada-inside__run,
 .armada-inside__panel {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* The panel is a card, which is what separates the two columns — the drawing
@@ -542,20 +569,6 @@
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-3);
-}
-
-/* What Armada has done to the Job itself, above the run.
-   **Bounded and scrolled, never as tall as it likes.** It is what there is to
-   read while every step is `not_started`, and by the time the run has something
-   in it the run is what a reader came for — a region that grew with the log
-   would push the steps off the screen exactly as the Job started moving. The
-   height is the same well the panel's own preview uses. */
-.armada-inside__fleet {
-  max-height: 15rem;
-  overflow-y: auto;
-  padding: var(--space-2);
-  border-radius: var(--radius-sm);
-  background: var(--bg-sunken);
 }
 
 /* The whole run's elapsed. A figure, never a chart. */

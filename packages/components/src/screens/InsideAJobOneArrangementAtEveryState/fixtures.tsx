@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import type {
   Finding,
@@ -10,13 +11,19 @@ import { badgeOf } from "../badge";
 import { Button } from "../../primitives/Button/Button";
 import { Kbd } from "../../primitives/Kbd/Kbd";
 import { ActivityLog, type ActivityEntry } from "../../compositions/ActivityLog/ActivityLog";
+import { Clamped } from "../../compositions/Clamped/Clamped";
 import {
   ChangedFiles,
   changedFilesSummary,
   type ChangedFile,
 } from "../../compositions/ChangedFiles/ChangedFiles";
 import type { JobBriefProps } from "../../compositions/JobBrief/JobBrief";
+import type {
+  HoldsFigures,
+  HoldsLine,
+} from "../../compositions/JobHoldsSummary/JobHoldsSummary";
 import type { JobLogReferenceRow } from "../../compositions/JobLogReference/JobLogReference";
+import { PhaseCard } from "../../compositions/PhaseCard/PhaseCard";
 import type { RunTreeStep } from "../../compositions/RunTree/RunTree";
 import type { StepChapter } from "../../compositions/StepStory/StepStory";
 
@@ -154,6 +161,7 @@ const BEHIND: RunTreeStep[] = [
     activity: "advanced",
     status: "advanced",
     elapsed: "1m 12s",
+    startedAt: "14:17:15",
     facts: [
       {
         label: "Produced",
@@ -168,6 +176,7 @@ const BEHIND: RunTreeStep[] = [
     activity: "advanced",
     status: "advanced",
     elapsed: "3m 40s",
+    startedAt: "14:18:27",
     facts: [
       { label: "Attempt 1", value: "refused", named: "refused" },
       { label: "Attempt 2", value: "advanced", named: "advanced" },
@@ -229,38 +238,31 @@ export const RUN_NOT_STARTED: RunTreeStep[] = [
   },
 ];
 
+
 /**
- * What Fleet has done to the Job itself, before any step is running.
+ * The commands behind `not run`, as the phase strip's own card draws them.
  *
- * **Every one of these names Fleet**, and every one opens to what it carried.
- * A grey line of prose in a column of openable entries is a second-class
- * citizen in a stream whose whole claim is that it has one grammar — which is
- * what the log-file-as-text rendering would have made these.
+ * **The rich hover, and it is `PhaseCard` rather than anything new.** `Checks ·
+ * not run` raises exactly one question — *which commands* — and the strip
+ * already answers it four inches away on the same screen. Two drawings of that
+ * card is the defect; this is the one that exists, opened from the tree.
+ *
+ * `said` is left to default, so the sentence about what a Check is comes from
+ * `phaseSaid` and no fixture retypes it.
  */
-export const FLEET_PREPARING: ActivityEntry[] = [
-  {
-    id: "f1",
-    at: "09:14:02",
-    actor: "fleet",
-    summary: "Worktree cut",
-    output: "branch  armada/job_2d90bb\nat      .armada/worktrees/job_2d90bb",
-  },
-  {
-    id: "f2",
-    at: "09:14:02",
-    actor: "fleet",
-    summary: "Preparation began",
-    output: "commands  3",
-  },
-  {
-    id: "f3",
-    at: "09:16:47",
-    actor: "fleet",
-    summary: "A preparation command failed",
-    named: "failed",
-    output: "command   pnpm install --frozen-lockfile\nexit      1",
-  },
-];
+const CHECKS_NOT_RUN = (
+  <PhaseCard
+    kind="checks"
+    name="Checks"
+    state="ahead"
+    stands="not run"
+    floating
+    rows={[
+      { label: "cargo build --workspace --locked", mono: true, result: "not run" },
+      { label: "cargo nextest run --workspace", mono: true, result: "not run" },
+    ]}
+  />
+);
 
 /** The run while the Drone is working on Fix. */
 export const RUN_RUNNING: RunTreeStep[] = [
@@ -271,11 +273,12 @@ export const RUN_RUNNING: RunTreeStep[] = [
     activity: "running",
     status: "running",
     elapsed: "6m 11s",
+    startedAt: "14:22:07",
     current: true,
     factsOpen: true,
     facts: [
       { label: "Produced", value: "3 files · +94 −31" },
-      { label: "Checks", value: "not run" },
+      { label: "Checks", value: "not run", card: CHECKS_NOT_RUN },
       { label: "Judge", value: "2 criteria" },
     ],
   },
@@ -292,13 +295,14 @@ export const RUN_RUNNING: RunTreeStep[] = [
 /** The run once Regression check has cleared everything mechanical. */
 export const RUN_WAITING: RunTreeStep[] = [
   ...BEHIND,
-  { id: "fix", label: "Fix", activity: "advanced", status: "advanced", elapsed: "6m 11s", facts: [] },
+  { id: "fix", label: "Fix", activity: "advanced", status: "advanced", elapsed: "6m 11s", startedAt: "14:22:07", facts: [] },
   {
     id: "regression_verify",
     label: "Regression check",
     activity: "awaiting_human",
     status: "waiting on you",
     elapsed: "2m 04s",
+    startedAt: "14:44:20",
     current: true,
     factsOpen: true,
     facts: [
@@ -313,13 +317,14 @@ export const RUN_WAITING: RunTreeStep[] = [
 /** The run while a failed Check is being repaired by the Drone that caused it. */
 export const RUN_REPAIRING: RunTreeStep[] = [
   ...BEHIND,
-  { id: "fix", label: "Fix", activity: "advanced", status: "advanced", elapsed: "6m 11s", facts: [] },
+  { id: "fix", label: "Fix", activity: "advanced", status: "advanced", elapsed: "6m 11s", startedAt: "14:22:07", facts: [] },
   {
     id: "regression_verify",
     label: "Regression check",
     activity: "retrying",
     status: "retrying",
     elapsed: "1m 09s",
+    startedAt: "14:44:20",
     current: true,
     factsOpen: true,
     facts: [
@@ -334,20 +339,28 @@ export const RUN_REPAIRING: RunTreeStep[] = [
 /** The run once three attempts at the same failure are spent. */
 export const RUN_STOPPED: RunTreeStep[] = [
   ...BEHIND,
-  { id: "fix", label: "Fix", activity: "advanced", status: "advanced", elapsed: "6m 11s", facts: [] },
+  { id: "fix", label: "Fix", activity: "advanced", status: "advanced", elapsed: "6m 11s", startedAt: "14:22:07", facts: [] },
   {
     id: "regression_verify",
     label: "Regression check",
     activity: "stopped",
     status: "retries spent",
     elapsed: "6m 40s",
+    startedAt: "14:44:20",
     current: true,
     factsOpen: true,
     facts: [
-      { label: "Attempt 1", value: "same failure", named: "failed" },
-      { label: "Attempt 2", value: "same failure", named: "failed" },
-      { label: "Attempt 3", value: "same failure", named: "failed" },
-      { label: "Held", value: "retries spent · waiting on you" },
+      // The failure is named once and the repeats say they are repeats. Three
+      // rows all reading `same failure` never said what the failure was, and
+      // `Held` was the surface's word for a state the row's own status already
+      // spells — two pieces of jargon where one plain sentence was owed.
+      // Each attempt keeps its own run log, so each fact opens a different
+      // artifact — which is the whole reason the tree can be pressed here
+      // rather than sending a reader to one Checks list further down.
+      { label: "Attempt 1", value: "test failed · exit 101", named: "failed", opens: "chk-suite@1" },
+      { label: "Attempt 2", value: "the same failure again", named: "failed", opens: "chk-suite@2" },
+      { label: "Attempt 3", value: "the same failure again", named: "failed", opens: "chk-suite@3" },
+      { label: "Stopped", value: "3 of 3 attempts spent · waiting on you" },
     ],
   },
   ...AHEAD,
@@ -356,13 +369,14 @@ export const RUN_STOPPED: RunTreeStep[] = [
 /** The run where the Check ended the Job. Nothing below it ever ran. */
 export const RUN_FAILED: RunTreeStep[] = [
   ...BEHIND,
-  { id: "fix", label: "Fix", activity: "advanced", status: "advanced", elapsed: "6m 11s", facts: [] },
+  { id: "fix", label: "Fix", activity: "advanced", status: "advanced", elapsed: "6m 11s", startedAt: "14:22:07", facts: [] },
   {
     id: "regression_verify",
     label: "Regression check",
     activity: "failed",
     status: "failed",
     elapsed: "2m 51s",
+    startedAt: "14:44:20",
     current: true,
     factsOpen: true,
     facts: [
@@ -472,9 +486,9 @@ const PRODUCED = (
  * inline, which is Journey 4's stated departure from the contract: a missing
  * one is then visible, which is how the `open_log` gap was found.
  */
-export function chapterAct(label: string, binding: string) {
+export function chapterAct(label: string, binding: string, onClick?: () => void) {
   return (
-    <Button variant="ghost" size="sm">
+    <Button variant="ghost" size="sm" onClick={onClick}>
       {label}
       <Kbd>{binding}</Kbd>
     </Button>
@@ -487,9 +501,18 @@ export const CHAPTERS: StepChapter[] = [
     ordinal: 1,
     title: "Drone instructions",
     summary: "14:22:07 · 2 criteria and what it was given",
-    preview:
-      "Move the selector block into its own module so the tests can import it without constructing " +
-      "the store. Do not change reducer behaviour.",
+    // Held to a few lines, like the brief above it. What a Drone was told runs
+    // to whatever length the work needed, and this chapter is first in the
+    // story — an unbounded one pushes the log and the diff off the screen.
+    preview: (
+      <Clamped>
+        {"Move the selector block into its own module so the tests can import it without " +
+          "constructing the store. Do not change reducer behaviour. The columns selector is " +
+          "the one that matters: it is memoised against the whole settings slice today, so any " +
+          "write to any setting invalidates it, and the board re-sorts on a change to something " +
+          "it does not read."}
+      </Clamped>
+    ),
   },
   {
     id: "log",
@@ -498,17 +521,24 @@ export const CHAPTERS: StepChapter[] = [
     // `live` is the running dot, not the word. A count says how many entries
     // there are and only the dot says they are still arriving.
     live: true,
-    summary: "47 entries · every line opens",
+    // Counted from the list, not typed beside it — the same rule
+    // `changedFilesSummary` keeps below. It read `47 entries` over a stream of
+    // 7, which the log sheet then contradicted in its own subtitle.
+    summary: `${WHOLE.length} entries`,
     preview: <ActivityLog entries={PREVIEW} />,
-    act: chapterAct("Open the log", "Enter"),
+    act: chapterAct("Open the log", "L"),
   },
   {
     id: "produced",
     ordinal: 3,
     title: "Produced",
+    // The act, not the concept: what a reader wants from this header is the
+    // files, and the sentence naming it is written at the control because
+    // that is where an act's copy belongs.
+    says: "Click to view the files",
     // Built from the list rather than typed beside it, so the header and the
     // rows cannot disagree about what the reading found.
-    summary: changedFilesSummary(PRODUCED_FILES, true),
+    summary: changedFilesSummary(PRODUCED_FILES),
     preview: PRODUCED,
     act: chapterAct("Open the diff", "f"),
   },
@@ -528,7 +558,7 @@ export const REPAIR_CHAPTERS: StepChapter[] = [
     ordinal: 2,
     title: "Activity log",
     summary: "88 entries · ended 14:47:11",
-    act: chapterAct("Open the log", "Enter"),
+    act: chapterAct("Open the log", "L"),
     preview: (
       <ActivityLog
         entries={[
@@ -562,6 +592,7 @@ export const REPAIR_CHAPTERS: StepChapter[] = [
     id: "produced",
     ordinal: 3,
     title: "Produced",
+    says: "Click to view the files",
     summary: "4 files · being repaired",
     preview:
       "The work is on fix/settings-split-selectors and the Drone is editing it now. Nothing was " +
@@ -739,3 +770,97 @@ export const EXAMINED_WEDGED: JobExamined = examined(
   ],
   HOLDS_WEDGED,
 );
+
+/**
+ * The same readings as the summary draws them, under the run.
+ *
+ * **Values rather than a second reading.** The figures below are what the
+ * `HOLDS_*` readings above come to once a caller has formatted them — the sizes
+ * are `sized()` of the same byte counts, and the process counts are the length
+ * of the same lists. The summary derives nothing, so a fixture that disagreed
+ * with the reading it stands for would be a disagreement the app cannot have.
+ */
+export const TAIL_LIVE: HoldsLine[] = [
+  { at: "14:31:58", actor: "Drone", said: "thinking" },
+  { at: "14:30:28", actor: "Fleet", said: "Heartbeat — quiet 48s" },
+];
+
+/**
+ * Armada's last two lines before any step is running, newest first — the tail
+ * that used to have a region of its own above the run.
+ *
+ * **A worktree cut, a preparation command that failed, and no Drone after
+ * it.** The whole reason the region existed is that these belong to no step,
+ * and folding it in here kept that: they are still on the Job's column, and a
+ * reader still sees the failure that explains the empty run below.
+ */
+export const TAIL_PREPARING: HoldsLine[] = [
+  { at: "09:16:47", actor: "Fleet", said: "A preparation command failed", wrong: true },
+  { at: "09:14:02", actor: "Fleet", said: "Preparation began" },
+];
+
+/** A Drone working: two processes and a checkout on disk. */
+export const SUMMARY_RUNNING: HoldsFigures = {
+  processes: 2,
+  worktree: "healthy",
+  size: "1.2 GiB",
+};
+
+/** At the approval gate: no process, and right to hold none. */
+export const SUMMARY_AT_THE_GATE: HoldsFigures = {
+  processes: 0,
+  worktree: "on disk",
+  size: "1.2 GiB",
+};
+
+/** The Drone that is alive and idle, in one figure. */
+export const SUMMARY_IDLE: HoldsFigures = {
+  processes: 1,
+  worktree: "on disk",
+  size: "1.4 GiB",
+};
+
+/** A Job that is over, and the checkout it is still holding. */
+export const SUMMARY_AFTER_THE_END: HoldsFigures = {
+  processes: 0,
+  worktree: "on disk",
+  size: "1.4 GiB",
+};
+
+/**
+ * The wedged Job. **The worktree is fine and the process count is the fault** —
+ * the examination is what says which, exactly as it does in the full reading.
+ */
+export const SUMMARY_WEDGED: HoldsFigures = {
+  processes: 0,
+  nothingRunningIsWrong: true,
+  worktree: "healthy",
+  size: "92.0 MiB",
+};
+
+/**
+ * The ground a job detail composes on, in a story.
+ *
+ * **The screen fills the height it is given rather than growing past it**, so
+ * a story has to give it one: `height: 100%` against an unbounded parent
+ * resolves against nothing, the two columns stop scrolling, and a trailing
+ * sheet measures the panel's content instead of the screen — which is the
+ * scrolling-away this bounding was for. Every story in the file is this screen,
+ * so every one of them takes it.
+ *
+ * The height is the one `ActivityLogSheet`'s stories already stage on. A second
+ * number here would be a second answer to the same question.
+ */
+export function OnAScreen({ children }: { children: ReactNode }) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        height: "var(--palette-max-height)",
+        background: "var(--bg-base)",
+      }}
+    >
+      {children}
+    </div>
+  );
+}

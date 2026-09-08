@@ -1,8 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { useState } from "react";
+import { expect, within } from "storybook/test";
 import { Button } from "../../primitives/Button/Button";
 import { ActivityLog } from "../../compositions/ActivityLog/ActivityLog";
-import { JobResources } from "../../compositions/JobResources/JobResources";
+import { JobHoldsSheet } from "../../compositions/JobHoldsSheet/JobHoldsSheet";
+import { JobHoldsSummary } from "../../compositions/JobHoldsSummary/JobHoldsSummary";
 import { Refusals } from "../../compositions/Refusals/Refusals";
 import { InsideAJob } from "./InsideAJobOneArrangementAtEveryState";
 import {
@@ -13,13 +15,10 @@ import {
   EXAMINED_WEDGED,
   EXAMINED_WORKING,
   FAILED_HEADING,
-  FLEET_PREPARING,
   HEADING,
-  HOLDS_AFTER_THE_END,
-  HOLDS_AT_THE_GATE,
-  HOLDS_IDLE,
   HOLDS_RUNNING,
   HOLDS_WEDGED,
+  OnAScreen,
   REPAIR_CHAPTERS,
   RUN_FAILED,
   RUN_NOT_STARTED,
@@ -27,9 +26,27 @@ import {
   RUN_RUNNING,
   RUN_STOPPED,
   RUN_WAITING,
+  SUMMARY_AFTER_THE_END,
+  SUMMARY_AT_THE_GATE,
+  SUMMARY_IDLE,
+  SUMMARY_RUNNING,
+  SUMMARY_WEDGED,
+  TAIL_LIVE,
+  TAIL_PREPARING,
   WAITING_HEADING,
   WHERE,
 } from "./fixtures";
+import {
+  CONSOLE_SHEET,
+  EVIDENCE_CHAPTERS,
+  INPUTS_SHEET,
+  QUEUED_EVIDENCE_CHAPTERS,
+  aRefusedJob,
+  REFUSED_DECISION,
+  RUNNING_PHASES,
+  TWO_REFUSAL_CHAPTERS,
+} from "./evidence";
+import { PlayableJob } from "./playable";
 
 /**
  * **One Job, six moments.** Every story below is the same Bug workflow at a
@@ -44,22 +61,26 @@ import {
 const meta: Meta<typeof InsideAJob> = {
   title: "Screens/Inside a job — one arrangement at every state",
   component: InsideAJob,
+  decorators: [(Story) => <OnAScreen><Story /></OnAScreen>],
 };
 export default meta;
 
 type Story = StoryObj<typeof InsideAJob>;
 
 /**
- * What the Job holds on this machine, above the Fleet log and above the run.
+ * What the Job holds on this machine, below the run and above the pointers.
+ *
+ * **Five lines, and the reading a press away.** It used to be a card at the top
+ * of this column, above the run a person opens a Job to read — the largest
+ * thing on the column, answering a question nobody had asked yet. What survives
+ * up here is what changes the answer: the tail of Armada's own log, the process
+ * count, the worktree and the disk.
  *
  * **Six of the seven states carry one, and the seventh is the point.** The
  * region draws nothing when it is absent, so a story without one proves that —
  * and `A check failed` is the state where nothing about the machine is in
- * question, because a Drone is working and the log below says which line it is
- * on. Everywhere else the reading answers something the rest of the screen
- * cannot: whether the process behind `Drone alive, idle` exists, whether an
- * empty process list is a Job at its gate or a Job that has died, and how much
- * disk a finished Job is still holding.
+ * question, because a Drone is working and the story below says which line it
+ * is on.
  */
 const nothingPressedYet = () => {};
 
@@ -83,11 +104,11 @@ export const Running: Story = {
         run={RUN_RUNNING}
         runElapsed="11m 03s"
         machine={
-          <JobResources
-            reading={HOLDS_RUNNING}
+          <JobHoldsSummary
+            tail={TAIL_LIVE}
+            figures={SUMMARY_RUNNING}
             age="3s"
-            examined={EXAMINED_WORKING}
-            onExamine={nothingPressedYet}
+            onOpen={nothingPressedYet}
           />
         }
         where={WHERE}
@@ -158,11 +179,11 @@ export const WaitingOnYou: Story = {
         run={RUN_WAITING}
         runElapsed="13m 47s"
         machine={
-          <JobResources
-            reading={HOLDS_AT_THE_GATE}
+          <JobHoldsSummary
+            tail={TAIL_LIVE}
+            figures={SUMMARY_AT_THE_GATE}
             age="8s"
-            examined={null}
-            onExamine={nothingPressedYet}
+            onOpen={nothingPressedYet}
           />
         }
         where={WHERE}
@@ -324,11 +345,11 @@ export const OutOfAttempts: Story = {
         run={RUN_STOPPED}
         runElapsed="21m 55s"
         machine={
-          <JobResources
-            reading={HOLDS_IDLE}
+          <JobHoldsSummary
+            tail={TAIL_LIVE}
+            figures={SUMMARY_IDLE}
             age="4s"
-            examined={null}
-            onExamine={nothingPressedYet}
+            onOpen={nothingPressedYet}
           />
         }
         where={WHERE}
@@ -477,11 +498,11 @@ export const BlockedByPolicy: Story = {
         run={RUN_STOPPED}
         runElapsed="9m 12s"
         machine={
-          <JobResources
-            reading={HOLDS_IDLE}
+          <JobHoldsSummary
+            tail={TAIL_LIVE}
+            figures={SUMMARY_IDLE}
             age="6s"
-            examined={null}
-            onExamine={nothingPressedYet}
+            onOpen={nothingPressedYet}
           />
         }
         where={WHERE}
@@ -583,11 +604,11 @@ export const Failed: Story = {
         runElapsed="13m 54s"
         pulsing={false}
         machine={
-          <JobResources
-            reading={HOLDS_AFTER_THE_END}
+          <JobHoldsSummary
+            tail={TAIL_LIVE}
+            figures={SUMMARY_AFTER_THE_END}
             age="1m"
-            examined={null}
-            onExamine={nothingPressedYet}
+            onOpen={nothingPressedYet}
           />
         }
         where={WHERE}
@@ -637,17 +658,18 @@ export const Failed: Story = {
  * **Nothing has started, and something is happening.** Armada is cutting a
  * worktree and running the repository's preparation commands; every step is
  * `not_started` and no Drone exists, so the step's own activity log is empty
- * and correct to be. What Armada has done sits above the run — #437. **Above
- * the steps and not under the first one**: attaching these to the step about
- * to start reads as though it were running when it has not begun, which is the
- * confusion that made a wedged Job look healthy.
+ * and correct to be. What Armada has done is the tail of this block — #437 put
+ * it on this column and it is still here, folded into the reading rather than
+ * given a region of its own. **Not attached to the step about to start**:
+ * hanging these off step one reads as though it were running when it has not
+ * begun, which is the confusion that made a wedged Job look healthy.
  *
  * **And it is the state where nothing else on the screen says the Job is
  * dead.** The badge reads `running`, the tree reads `not started`, and both are
  * true — which is exactly what a person read for six minutes on 4 Sep 2026
- * while the Job held nothing. What it holds sits above the log, because the log
- * is the record of a span and this is what is true now: Fleet's last line is a
- * preparation command that failed, and no Drone was ever dispatched after it.
+ * while the Job held nothing. The tail and the figures answer it together:
+ * Armada's last line is a preparation command that failed, no process is held,
+ * and no Drone was ever dispatched after it.
  */
 export const NoDroneYet: Story = {
   render: () => (
@@ -657,14 +679,13 @@ export const NoDroneYet: Story = {
         run={RUN_NOT_STARTED}
         runElapsed="2m 45s"
         machine={
-          <JobResources
-            reading={HOLDS_WEDGED}
+          <JobHoldsSummary
+            tail={TAIL_PREPARING}
+            figures={SUMMARY_WEDGED}
             age="5s"
-            examined={EXAMINED_WEDGED}
-            onExamine={nothingPressedYet}
+            onOpen={nothingPressedYet}
           />
         }
-        fleet={<ActivityLog entries={FLEET_PREPARING} openId="f3" />}
         where={WHERE}
         brief={BRIEF}
         step={{
@@ -677,22 +698,24 @@ export const NoDroneYet: Story = {
     </div>
   ),
   // Two claims a rendering makes and cannot hold on its own. The first is that
-  // the reading survives the company it keeps: alone the panel is the only
-  // thing on screen, and here it competes with a log, a tree, seven paths and a
-  // whole panel, so the sentence a person came for is asserted to still be one
-  // of them. The second is the arrangement — what the Job holds reads before
-  // what Armada has done, and before the run — which is #437's decision and the
-  // one thing about this screen that a later region added above it would break
-  // silently.
+  // Armada's last line survives the company it keeps: it had a region of its
+  // own and is now two rows inside a reading, competing with a tree, seven
+  // paths and a whole panel — so the line a person came for is asserted to
+  // still be one of them.
+  //
+  // The second is the arrangement, and it is the one this change decided: the
+  // run reads first, the holdings after it, the pointers after those. Nothing
+  // about a rendering says which region a later one was inserted above, which
+  // is how this block came to sit at the top of the column in the first place.
   play: async ({ canvas }) => {
-    await expect(canvas.getByText(/is not doing what it should be/)).toBeVisible();
-    await expect(canvas.getByText(/Fleet holds no process for this job/)).toBeVisible();
+    await expect(canvas.getByText("A preparation command failed")).toBeVisible();
+    await expect(canvas.getByText("Processes")).toBeVisible();
 
-    const holds = canvas.getByText("What this Job holds");
-    const armada = canvas.getByText("What Armada has done");
     const run = canvas.getByText("The run");
-    await expect(holds.compareDocumentPosition(armada)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    await expect(armada.compareDocumentPosition(run)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    const holds = canvas.getByText("What this Job holds");
+    const where = canvas.getByText("Where things are");
+    await expect(run.compareDocumentPosition(holds)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    await expect(holds.compareDocumentPosition(where)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   },
 };
 
@@ -720,11 +743,12 @@ export const NothingServesTheStep: Story = {
         run={[]}
         runAbsent="Fleet did not answer for this Job, so its steps are unknown."
         machine={
-          <JobResources
-            reading={null}
-            examined={null}
-            nothingToAsk="no_answer"
-            onExamine={nothingPressedYet}
+          <JobHoldsSummary
+            tail={[]}
+            tailNote="Armada is not reading this Job's log."
+            figures={null}
+            note="Fleet did not answer, so what this Job holds is unknown."
+            onOpen={nothingPressedYet}
           />
         }
         where={undefined}
@@ -736,10 +760,274 @@ export const NothingServesTheStep: Story = {
       />
     </div>
   ),
+  /**
+   * **Nothing on this column offers to ask.** `Look now` went to the sheet with
+   * the reading it acts on, and the summary says why there is no reading rather
+   * than drawing an empty figure — a blank `Processes` row here would report a
+   * silent seam as a Job holding nothing, which is #462 in a smaller region.
+   */
   play: async ({ canvas }) => {
     await expect(
-      canvas.getByText(/Fleet is not answering, so there is nothing to ask/),
+      canvas.getByText(/Fleet did not answer, so what this Job holds is unknown/),
     ).toBeVisible();
+    await expect(canvas.queryByText("Processes")).toBeNull();
     await expect(canvas.queryByRole("button", { name: /Look now/ })).toBeNull();
   },
 };
+
+/**
+ * **The evidence surface — chapters four and five.** A Check result is an
+ * evidence record: it has a kind and a file, exactly like a Drone's evidence,
+ * and the only difference is who produced it. So the Checks are a chapter in
+ * the step's story rather than a status footer, and the panel that read them is
+ * the chapter after.
+ *
+ * **The whole state is the argument.** Every Check exited 0, and the Job is
+ * refused — because the suite went green by deleting the assertion that was
+ * failing. `exit 0 · 315 passed` cannot express that, and nothing else on this
+ * screen could either until the output became reachable.
+ *
+ * **The Verdicts chapter opens in place and the output does not.** A refusal is
+ * prose and fits the panel; 2,180 lines is not a longer preview, so the Checks
+ * chapter carries an act that leaves. That is the split `StepChapter` already
+ * names, applied to two new chapters rather than invented for them.
+ *
+ * Nothing on the wire serves any of this. `evidence.tsx` says what would have
+ * to — a `kind` and a `log_path` on a check result, and citations recorded by
+ * the judges that met a criterion as well as the ones that refused.
+ */
+export const TheEvidenceSurface: Story = {
+  render: () =>
+    aRefusedJob({
+      fields: [
+        { label: "Took", value: "8m 41s", mono: true },
+        { label: "Attempt", value: "3 of 3", mono: true },
+        { label: "Refused at", value: "15:02:44", mono: true },
+      ],
+      acts: <Button variant="secondary">Re-run the gate</Button>,
+      notice: {
+        tone: "stopped",
+        title: "All mechanical checks passed, but the panel of judges refused the work.",
+        children:
+          "The suite is green because one of its cases stopped existing. 2 of the 3 judges refused criterion 02, and the assertion they both cite is in the check output below.",
+      },
+      // One set of acts for the whole step. They sat inside the refusal block
+      // until 2026-09-08, which on the Job below would have offered to kill
+      // the same Job twice.
+      after: REFUSED_DECISION,
+    }),
+};
+
+/**
+ * **Two criteria refused on one panel.** This is the state that moved the
+ * refusal into the row: two blocks below the grid meant two `Refused — 0N`
+ * headings a reader had to map back to rows they had scrolled past, and the
+ * note about criteria being frozen — a second description of criterion 02 —
+ * sat four inches away from criterion 02.
+ *
+ * **One is open and the other says how large it is.** `2 of 3 refused` and
+ * `1 of 3 refused` are the same verdict and different situations, so the shape
+ * of the whole panel stays readable without opening anything.
+ */
+export const TwoCriteriaRefused: Story = {
+  render: () =>
+    aRefusedJob({
+      fields: [
+        { label: "Took", value: "8m 41s", mono: true },
+        { label: "Attempt", value: "3 of 3", mono: true },
+        { label: "Refused at", value: "15:02:44", mono: true },
+      ],
+      acts: <Button variant="secondary">Re-run the gate</Button>,
+      notice: {
+        tone: "stopped",
+        title: "All mechanical checks passed, and the panel refused two criteria.",
+        children:
+          "One is a deleted assertion that made the suite green; the other is an entry point only one judge went looking for. The two lead to different acts, which is why the panel names both rather than reporting a count.",
+      },
+      chapters: [...CHAPTERS, ...TWO_REFUSAL_CHAPTERS],
+      after: REFUSED_DECISION,
+    }),
+};
+
+/**
+ * **A Check's output, open in the viewer.** One layer, one artifact, and the
+ * panel underneath exactly as it was — the log and the diff already work this
+ * way, and a check's output is the third reading with no end.
+ *
+ * **The strip is a band on the sheet.** Every other artifact this step produced
+ * stays one press away, so changing what you are looking at never means closing
+ * the layer; and *Back to the default view* is what returns the page to the
+ * artifact it was composed with.
+ *
+ * **Line 2,322 is the design.** A transcript ending `315 passed` is a fact with
+ * no reference point. The same transcript with the parent commit's count under
+ * it is an argument — and the check emitted both lines, so Bridge renders what
+ * is already in the file rather than diffing two stored logs.
+ */
+export const AChecksOutputOpen: Story = {
+  render: () => aRefusedJob({ sheet: CONSOLE_SHEET }),
+};
+
+/**
+ * **The judgment's inputs — the view a log file could never give you.** A panel
+ * is only a panel if the judges ran independently on identical inputs, and the
+ * digest is the evidence for that guarantee. It is the first thing to doubt
+ * when a unanimous verdict looks too easy.
+ *
+ * **The criteria stay on the screen behind the layer.** Nothing the viewer ever
+ * shows covers the yardstick the work is being read against — which is the rule
+ * that decided the sheet's width rather than a full-screen route.
+ */
+export const TheJudgmentsInputs: Story = {
+  render: () => aRefusedJob({ sheet: INPUTS_SHEET }),
+};
+
+/**
+ * **The same refused Job, with every selector wired.** A check row, a chip, a
+ * citation, a run-tree fact and a phase-card row resolve their artifact id
+ * against one registry, in `playable.tsx`; the log keeps its own sheet and
+ * shares the slot, being a stream and no artifact. **Only this story holds
+ * state** — the rest are the record of a moment.
+ */
+export const Playable: Story = {
+  render: () => <PlayableJob />,
+  /**
+   * A selector opens the artifact it names rather than the composed one, the
+   * way back returns to that one, and the log replaces the viewer rather than
+   * stacking. A resolver answering every id alike fails on assertion two.
+   */
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.queryByRole("dialog")).toBeNull();
+    await userEvent.click(canvas.getByRole("button", { name: "output · 96 lines" }));
+    await expect(await canvas.findByText("check:bench — output")).toBeVisible();
+
+    await userEvent.click(canvas.getByRole("tab", { name: "Measurement" }));
+    await expect(canvas.getByText("check:bench — measured")).toBeVisible();
+
+    // The way back is the composed artifact's own chip, in the strip.
+    const strip = within(canvas.getByRole("dialog"));
+    await userEvent.click(strip.getByRole("button", { name: /check:test_suite/ }));
+    await expect(canvas.getByText("check:test_suite — output")).toBeVisible();
+    // One slot: the log takes the layer the viewer was on rather than stacking.
+    await userEvent.click(canvas.getByRole("button", { name: /Open the log/ }));
+    await expect(canvas.getAllByRole("dialog")).toHaveLength(1);
+    await expect(canvas.getByRole("dialog", { name: "Activity log" })).toBeVisible();
+
+    await userEvent.keyboard("{Escape}");
+    await expect(canvas.queryByRole("dialog")).toBeNull();
+  },
+};
+
+/**
+ * **A running Job, and the same two chapters.** The Checks chapter draws the
+ * one Check in flight and the two behind it as queued rows — the shape of what
+ * is coming is part of reading a running Job, and a list that grew as Checks
+ * started would make a Job look like it had fewer gates than it has.
+ *
+ * **The Verdicts chapter says `not reached` in words.** An empty region under a
+ * running step reads as a region that failed to load.
+ */
+export const EvidenceOnARunningJob: Story = {
+  render: () => (
+    <div className="armada-screen">
+      <InsideAJob
+        heading={{ ...HEADING, actions: JOB_ACTS }}
+        run={RUN_RUNNING}
+        runElapsed="4m 12s"
+        onOpenArtifact={nothingPressedYet}
+        where={WHERE}
+        brief={BRIEF}
+        step={{
+          label: "Verify",
+          fields: [
+            { label: "Running for", value: "4m 12s", mono: true },
+            { label: "Attempt", value: "1", mono: true },
+          ],
+          phases: RUNNING_PHASES,
+          chapters: [...CHAPTERS, ...QUEUED_EVIDENCE_CHAPTERS],
+        }}
+      />
+    </div>
+  ),
+};
+
+/**
+ * **The full reading, open.** The summary under the run says whether anything
+ * is wrong; this is what it opens when the answer is yes — `JobResources`
+ * whole, with the act that goes and looks, on the layer the log and the patch
+ * already use.
+ *
+ * **The panel underneath is exactly as it was.** That is the point of the
+ * layer, and the reason the reading left the column rather than shrinking
+ * inside it: the run stays on screen, and closing puts the reader back where
+ * they were reading.
+ */
+export const TheFullReadingOpen: Story = {
+  render: () => <WithTheReading />,
+  /**
+   * The two things a rendering cannot show: the control opens the sheet, and
+   * `Esc` returns to the panel rather than to another layer.
+   *
+   * **A drawn-open sheet proves neither.** The wiring is what breaks — a
+   * control that stopped opening, or a close that came back to a second sheet —
+   * and both render identically to a working screen at the instant they fail.
+   */
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.queryByRole("dialog")).toBeNull();
+
+    await userEvent.click(canvas.getByRole("button", { name: "Open the full reading" }));
+    const sheet = await canvas.findByRole("dialog", { name: "What this Job holds" });
+    await expect(sheet).toBeVisible();
+    await expect(canvas.getByRole("button", { name: /Look now/ })).toBeVisible();
+
+    await userEvent.keyboard("{Escape}");
+    await expect(canvas.queryByRole("dialog")).toBeNull();
+    await expect(canvas.getByText("Where things are")).toBeVisible();
+  },
+};
+
+/**
+ * The pair, wired the way `JobDetail` wires it: the summary holds the values,
+ * the sheet holds the reading, and one piece of state says whether it is open.
+ */
+function WithTheReading() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="armada-screen">
+      <InsideAJob
+        heading={{ ...HEADING, actions: JOB_ACTS }}
+        run={RUN_RUNNING}
+        runElapsed="11m 03s"
+        // The pulse goes with the reading: with a sheet open the tree's current
+        // step is behind the layer.
+        pulsing={!open}
+        machine={
+          <JobHoldsSummary
+            tail={TAIL_LIVE}
+            figures={SUMMARY_RUNNING}
+            age="3s"
+            onOpen={() => setOpen(true)}
+          />
+        }
+        where={WHERE}
+        brief={BRIEF}
+        step={{
+          label: "Fix",
+          fields: [{ label: "Running for", value: "6m 11s", mono: true }],
+          chapters: CHAPTERS,
+        }}
+        sheet={
+          <JobHoldsSheet
+            open={open}
+            jobId="job_2d90bb"
+            reading={HOLDS_RUNNING}
+            age="3s"
+            examined={EXAMINED_WORKING}
+            onExamine={nothingPressedYet}
+            onClose={() => setOpen(false)}
+          />
+        }
+      />
+    </div>
+  );
+}
