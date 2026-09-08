@@ -95,10 +95,12 @@ Skipping it where the answer looks obvious would cost the Job its entry zero, wh
 | 1 | A person opens Dispatch a Job |
 | 2 | They describe the work — typed, or a link to a ticket or a Notion document |
 | 3 | They dispatch. The proposer reads the request and every Job it became is created |
-| 4 | The proposal is visible filling in as it is worked out |
+| 4 | The wait says what the call is doing, and offers the stop |
 | 5 | The person approves. That is what starts the work |
 
-At step 3 the proposer works out what kind of work it is and which workflow it runs under. At step 4 the proposal fills in progressively rather than appearing complete at the end.
+At step 3 the proposer works out what kind of work it is and which workflow it runs under.
+
+**Step 4 draws the call, not a partial proposal.** This page asked for the proposal to fill in progressively; what shipped is one request and one response, so the Jobs arrive whole, once, at the end. What moves during the wait is the call's own progress — how far it has reached, how long it has been out against Fleet's budget, which model is reading it — and past a mark the surface says so and offers the stop. A skeleton of Job rows would claim rows are arriving one at a time, which is not what happens. Corrected 2026-09-08, against the built surface.
 
 **Every Job exists before any of them is approved.** Step 3 creates each at `awaiting_approval` and step 5 dispatches the one it is pressed on — see [Job Board](job-board.md), Job status on the Board.
 
@@ -120,7 +122,7 @@ Why: every Job the request became already stands at `awaiting_approval`, so a pl
 
 **Cost accepted:** one tap for a Job whose proposal is obvious — the approval sits on the proposal, so nobody opens a Job in order to agree with what is already on screen. What is given up is that the reading and the release are one gesture apart rather than two; the [Job Board](job-board.md) keeps the stricter arrangement, because there the proposal is not on screen.
 
-**Beyond the progressive fill, the surface is not drawn.** Dispatch a Job is design order 1 and everything else reuses its approval pattern.
+**The surface is drawn.** It is `DispatchRequest` in `packages/components`, whose own note carries what it decided and why; Dispatch a Job is design order 1 and everything else reuses its approval pattern.
 
 ## What is recorded
 

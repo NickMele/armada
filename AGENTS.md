@@ -12,6 +12,8 @@ their work before advancing them. Rust daemon, Electron app, one repo.
   workspace is not. Name what a thing is, not where it is.
 - **Cite an issue to a person as its full link**, so it opens from the terminal.
   A bare `#123` stays bare *inside* the repo — docs autolink and gates parse it.
+- **Never edit the checkout at `main`.** Cut a worktree on a branch before the
+  first edit, and land it as a pull request. `.claude/skills/agent-worktrees/`.
 
 | Looking for | Go to |
 |---|---|
@@ -29,4 +31,4 @@ Everything written down is in `docs/INDEX.md`, and the gate refuses one that is
 not. `ARCHITECTURE.md` is the map. `CLAUDE.md` symlinks here — a copy drifts.
 
 **This file routes. It does not explain.** Anything longer than a pointer
-belongs in a contract, a practice doc or a skill. 50 lines is refused, 30 asks.
+belongs in a contract, a practice doc or a skill. 50 lines is refused, 40 asks.

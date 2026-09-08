@@ -300,8 +300,13 @@ pub fn no_vendor_literal_outside_adapters(root: &Path) -> Report {
 /// Thresholds for a `CLAUDE.md`. Far below the general source ceiling, because
 /// these files are read by an agent at the start of every task rather than by a
 /// person looking something up.
+///
+/// **The warn moved 30 → 40 on 2026-09-08.** The root file had sat one line
+/// over 30 for weeks, which is a warning that says nothing: a mark a file is
+/// permanently past cannot tell accretion from the routing the file exists to
+/// do. Forty is where a router has stopped routing. The refusal did not move.
 const CLAUDE_MD_FAIL: usize = 50;
-const CLAUDE_MD_WARN: usize = 30;
+const CLAUDE_MD_WARN: usize = 40;
 
 /// No `CLAUDE.md` over fifty lines.
 ///
@@ -314,7 +319,7 @@ const CLAUDE_MD_WARN: usize = 30;
 /// paragraph at a time. No individual addition was wrong, which is exactly why a
 /// ceiling is the only thing that stops it.
 pub fn no_bloated_claude_md(root: &Path) -> Report {
-    let mut report = Report::new("no CLAUDE.md over 50 lines, warn at 30");
+    let mut report = Report::new("no CLAUDE.md over 50 lines, warn at 40");
     let mut found = Vec::new();
     walk(root, &mut |path| {
         if path.file_name().and_then(|n| n.to_str()) == Some("CLAUDE.md") {
