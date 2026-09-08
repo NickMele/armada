@@ -105,6 +105,7 @@ pub(super) fn record_a_whole_run(store: &mut Store, id: &str, saying: &str, when
             &step,
             &[Judgment {
                 criterion_id: CriterionId::new("c1"),
+                member: None,
                 verdict: JudgeVerdict::NotMet,
                 expected: Some("the cause is addressed".to_string()),
                 produced: Some(saying.to_string()),

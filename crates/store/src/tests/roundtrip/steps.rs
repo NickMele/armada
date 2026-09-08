@@ -101,6 +101,7 @@ fn what_the_judge_said_survives_the_process_that_asked() {
             &[
                 Judgment {
                     criterion_id: CriterionId::new("c1"),
+                    member: None,
                     verdict: JudgeVerdict::NotMet,
                     expected: Some("the reader stopping before `end`".to_string()),
                     produced: Some("the bound widened to match the reader".to_string()),
@@ -109,13 +110,15 @@ fn what_the_judge_said_survives_the_process_that_asked() {
                 },
                 Judgment {
                     criterion_id: CriterionId::new("c2"),
+                    member: None,
                     verdict: JudgeVerdict::Met,
                     expected: None,
                     produced: None,
                     consequence: None,
                     // A panel of one, and no file was kept for it. The read has
                     // to tell that from the row above rather than filling in a
-                    // path the writer never had.
+                    // path the writer never had. `member` is absent for the
+                    // same reason it is absent everywhere one judge answered.
                     brief_path: None,
                 },
             ],
@@ -148,6 +151,70 @@ fn what_the_judge_said_survives_the_process_that_asked() {
     assert!(
         read[0].1[1].expected.is_none(),
         "there is nothing a no-objection is refusing on"
+    );
+}
+
+/// Three members answer one criterion, and the record can tell them apart.
+///
+/// **The rows were always written and were never distinguishable.** `attempt`
+/// and `criterion` are identical across a panel and `ordinal` counts across
+/// criteria, so before `member` a reader had three rows meaning one thing. This
+/// asserts the read comes back in call order with the number on it, because a
+/// refusal from one of three is a different thing to read than a refusal from
+/// all three.
+#[test]
+fn a_panels_members_come_back_told_apart() {
+    let dir = TempDir::new();
+    let stored = top_level("01PNL");
+    let step = StepId::new("fix");
+    let mut store = open(&dir);
+    store.insert_job(&stored, &created_at()).expect("stored");
+    let member = |member: u32, verdict: JudgeVerdict| Judgment {
+        criterion_id: CriterionId::new("c1"),
+        member: Some(member),
+        verdict,
+        expected: (verdict == JudgeVerdict::NotMet).then(|| "the bound narrowed".to_string()),
+        produced: (verdict == JudgeVerdict::NotMet).then(|| "the bound widened".to_string()),
+        consequence: (verdict == JudgeVerdict::NotMet)
+            .then(|| "every caller reads one row too many".to_string()),
+        // One brief, three answers. `judged.rs` says why the path is shared.
+        brief_path: Some(".armada/briefs/01PNL/fix.1.c1.txt".to_string()),
+    };
+    store
+        .record_step_judgments(
+            &job_id("01PNL"),
+            &step,
+            &[
+                member(1, JudgeVerdict::Met),
+                member(2, JudgeVerdict::NotMet),
+                member(3, JudgeVerdict::Met),
+            ],
+            &created_at(),
+        )
+        .expect("recorded");
+    drop(store);
+
+    let read = open(&dir).step_judgments(&job_id("01PNL")).expect("loads");
+    assert_eq!(read[0].1.len(), 3, "one criterion, three calls, three rows");
+    assert_eq!(
+        read[0].1.iter().map(|one| one.member).collect::<Vec<_>>(),
+        vec![Some(1), Some(2), Some(3)],
+        "in the order the panel was asked"
+    );
+    let refused: Vec<u32> = read[0]
+        .1
+        .iter()
+        .filter(|one| one.verdict == JudgeVerdict::NotMet)
+        .filter_map(|one| one.member)
+        .collect();
+    assert_eq!(
+        refused,
+        vec![2],
+        "one member of three refused, and the record says which"
+    );
+    assert!(
+        read[0].1.iter().all(|one| one.brief_path.is_some()),
+        "every member answered the one brief that was kept"
     );
 }
 

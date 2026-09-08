@@ -215,3 +215,78 @@ describe("the strip and the badge are one reading", () => {
     expect(stages.find((held) => held.id === "working")?.state).toBe("current");
   });
 });
+
+describe("a panel's members", () => {
+  // Three calls, one criterion. Before `member` these three rows carried an
+  // identical `(attempt, criterion_id)` and only the count could tell there
+  // were three — so the strip drew the criterion three times and counted the
+  // calls as if each were a criterion of its own.
+  function panel(verdicts: ("met" | "not_met")[]) {
+    const { stages } = phasesOf(
+      step({
+        state: "advanced",
+        judge_checks: [
+          {
+            criteria: 1,
+            gaming_check: false,
+            // Absent at one, the convention the wire keeps for both this and
+            // `Judged.member`. A fixture that sent `1` would say "a panel of
+            // one", which is not a thing the daemon ever sends.
+            ...(verdicts.length > 1 ? { panel_size: verdicts.length } : {}),
+          },
+        ],
+        judged: verdicts.map((verdict, at) => ({
+          attempt: 1,
+          criterion_id: "c1",
+          member: verdicts.length > 1 ? at + 1 : undefined,
+          verdict,
+          brief_path: ".armada/briefs/01JOB/fix.1.c1.txt",
+          ...(verdict === "not_met"
+            ? {
+                expected: "the bound narrowed",
+                produced: "the bound widened",
+                consequence: "every caller reads one row too many",
+              }
+            : {}),
+        })),
+        attempts: [{ attempt: 1, outcome: "advanced", started_at: AT }],
+      }),
+      [{ criterion_id: "c1", text: "The bound narrows", source: "judge" }],
+      OPENS,
+      // The judge tier reads the step, not the Job. A running Job is the
+      // neutral value here; what this block is about is what the panel said.
+      RUNNING,
+    );
+    const judge = stages.find((held) => held.id === "judge");
+    expect(judge).toBeDefined();
+    return judge!;
+  }
+
+  it("read as one row per criterion, not one per call", () => {
+    expect(panel(["met", "met", "met"]).rows).toHaveLength(1);
+  });
+
+  it("count criteria rather than calls, so three judges are not three criteria", () => {
+    expect(panel(["met", "met", "met"]).label).toBe("Judge · 1 of 1 met");
+  });
+
+  it("refuse the criterion when one member of three objects, because unanimity", () => {
+    const one = panel(["met", "not_met", "met"]);
+    expect(one.state).toBe("failed");
+    expect(one.rows?.[0]?.named).toBe("not_met");
+  });
+
+  it("say how many of how many refused, which is what makes it a close call", () => {
+    expect(panel(["met", "not_met", "met"]).rows?.[0]?.result).toBe("refused by 1 of 3");
+    expect(panel(["not_met", "not_met", "not_met"]).rows?.[0]?.result).toBe("refused by 3 of 3");
+  });
+
+  it("say a panel cleared it, and how big the panel was", () => {
+    expect(panel(["met", "met", "met"]).rows?.[0]?.result).toBe("no objection · 3 judges");
+  });
+
+  it("say nothing about a panel where one judge answered", () => {
+    // `member` is absent at one, and the row reads as it always did.
+    expect(panel(["met"]).rows?.[0]?.result).toBe("no objection");
+  });
+});

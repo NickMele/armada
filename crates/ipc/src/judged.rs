@@ -41,6 +41,25 @@ pub struct Judged {
     /// Which criterion was asked. What a citation points at, and what stays
     /// meaningful at any panel size.
     pub criterion_id: CriterionId,
+    /// Which member of the panel answered, counted from one.
+    ///
+    /// **Absent at `panel_size: 1`**, the convention
+    /// [`DeclaredJudge::panel_size`](crate::DeclaredJudge::panel_size) already
+    /// keeps on this seam: a value always means a panel. A step that asks one
+    /// judge sends the row it has always sent.
+    ///
+    /// **This is what makes a panel's rows distinguishable.** `attempt` and
+    /// `criterion_id` are identical across the members of one panel, so before
+    /// this the three rows a `panel_size: 3` step sends had one key and were
+    /// interchangeable — Bridge drew one and dropped two, beside a declaration
+    /// saying three judges had answered.
+    ///
+    /// **A position, not a person**, and never part of a citation. Which member
+    /// refused is detail inside the record; the reference a Drone retries
+    /// against names the criterion and keeps its shape at any panel size. See
+    /// `docs/concepts/judge.md`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub member: Option<u32>,
     pub verdict: JudgeVerdict,
     /// What should be seen if the work were right.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -76,6 +95,7 @@ impl Judged {
         Judged {
             attempt,
             criterion_id: (&judgment.criterion_id).into(),
+            member: judgment.member,
             verdict: judgment.verdict.into(),
             expected: judgment.expected.clone(),
             produced: judgment.produced.clone(),

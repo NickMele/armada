@@ -27,6 +27,19 @@ export type Judged = {
   attempt: number;
   /** Which criterion was asked. Joins to `JobDetail.acceptance_criteria`. */
   criterion_id: string;
+  /**
+   * Which member of the panel answered, counted from one. Since 7.7.
+   *
+   * **Absent at `panel_size: 1`**, the convention `DeclaredJudge.panel_size`
+   * already keeps: a value always means a panel.
+   *
+   * **This is the only field that varies between the members of one panel.**
+   * `attempt` and `criterion_id` are identical across them, so a row list keys
+   * on this or it cannot key at all.
+   *
+   * A position, not a person, and never part of a citation.
+   */
+  member?: number;
   /** `criterion_verdict_judge`: `met` or `not_met`. */
   verdict: string;
   /** What should be seen if the work were right. */

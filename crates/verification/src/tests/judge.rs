@@ -119,6 +119,7 @@ fn scope_note() -> StepEvidence {
 fn refusal(id: &str) -> Judgment {
     Judgment {
         criterion_id: CriterionId::new(id),
+        member: None,
         verdict: JudgeVerdict::NotMet,
         expected: Some("the loop stops at n".into()),
         produced: Some("the loop stops at n - 1".into()),
@@ -130,6 +131,7 @@ fn refusal(id: &str) -> Judgment {
 fn met(id: &str) -> Judgment {
     Judgment {
         criterion_id: CriterionId::new(id),
+        member: None,
         verdict: JudgeVerdict::Met,
         expected: None,
         produced: None,

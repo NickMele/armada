@@ -88,8 +88,12 @@ pub(crate) async fn judged(
             );
             // Every member of a panel answers the same brief and none of them
             // sees another's verdict — there is nothing in this loop that
-            // carries one answer into the next call.
-            for _ in 0..check.panel_size() {
+            // carries one answer into the next call. **The counter is the one
+            // thing that crosses**, and it crosses in one direction: it names
+            // which call an answer came back from, so three rows for one
+            // criterion can be told apart. Without it they carry an identical
+            // key and Bridge draws one of them.
+            for member in 1..=check.panel_size() {
                 let ask = Ask::put(model.clone(), brief.question(), judging.environment.clone())
                     .map_err(|_| CallFailed::NothingToAsk)?;
                 nth += 1;
@@ -110,6 +114,10 @@ pub(crate) async fn judged(
                 let said = said(judging.client.as_ref(), &ask, judging.budget).await?;
                 let mut judgment = brief.read(&said).map_err(CallFailed::Unreadable)?;
                 judgment.brief_path.clone_from(&kept);
+                // Absent at one, so a value always means a panel — the
+                // convention `JudgeCheck::panel_size` already uses on the wire.
+                // A step that asks one judge records what it always recorded.
+                judgment.member = (check.panel_size() > 1).then_some(member);
                 judgments.push(judgment);
             }
         }

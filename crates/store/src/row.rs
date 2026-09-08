@@ -25,6 +25,14 @@ pub(crate) fn maybe(row: &Row<'_>, name: &'static str) -> Result<Option<String>,
     row.get(name).map_err(column("jobs", name))
 }
 
+/// A nullable `INTEGER` column, read as a count. `None` is the column being
+/// null, never a read that failed — and for `job_step_judgments.member` null is
+/// the answer for every row written before a panel's members were counted, and
+/// for every step that asks one judge.
+pub(crate) fn maybe_number(row: &Row<'_>, name: &'static str) -> Result<Option<u32>, RowError> {
+    row.get(name).map_err(column("jobs", name))
+}
+
 pub(crate) fn column(
     table: &'static str,
     name: &'static str,

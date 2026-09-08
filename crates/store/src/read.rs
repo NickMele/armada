@@ -34,7 +34,7 @@ use crate::columns;
 use crate::error::{fault, LoadAllError, LoadJobError, RowError};
 use crate::fold::replay;
 use crate::open::Store;
-use crate::row::{column, enum_value, malformed, maybe, string};
+use crate::row::{column, enum_value, malformed, maybe, maybe_number, string};
 
 /// What the boot read produced.
 #[derive(Debug, Default)]
@@ -413,7 +413,7 @@ impl Store {
         let rows = self
             .collect(
                 "SELECT step_id, criterion, verdict, expected, produced, consequence,
-                        brief_path
+                        brief_path, member
                  FROM job_step_judgments AS j WHERE job_id = ?1
                    AND attempt = (SELECT max(attempt) FROM job_step_judgments
                                   WHERE job_id = j.job_id AND step_id = j.step_id)
@@ -426,6 +426,7 @@ impl Store {
                         StepId::new(string(row, "step_id")?),
                         Judgment {
                             criterion_id: CriterionId::new(string(row, "criterion")?),
+                            member: maybe_number(row, "member")?,
                             verdict: enum_value(
                                 JudgeVerdict::from_wire,
                                 "job_step_judgments",
