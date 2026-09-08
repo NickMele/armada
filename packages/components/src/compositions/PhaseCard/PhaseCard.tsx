@@ -314,6 +314,21 @@ export type PhaseCardRow = {
    * person nothing about their own Job.
    */
   cited?: ReactNode;
+  /**
+   * The artifact this row produced — a Check's output, a panel's judgment.
+   *
+   * **Present makes the row a selector into the viewer.** A person who opens
+   * this card to find out why a tier is red is one press from the output that
+   * says so; without it they read `exit 101` here, shut the card, and go
+   * looking for the same Check again in the story below. That is the
+   * navigation the screen exists to remove, and it is the same rule the run
+   * tree's facts and the Checks chapter already carry.
+   *
+   * **Only a target where the caller can answer it.** Without `onOpenArtifact`
+   * the row stays a line of text — a control that goes nowhere is worse than a
+   * value that never offered.
+   */
+  opens?: string;
 };
 
 export type PhaseCardProps = {
@@ -344,6 +359,12 @@ export type PhaseCardProps = {
   floating?: boolean;
   /** Which edge the card is anchored to, and therefore where its arrow sits. */
   align?: "start" | "end";
+  /**
+   * Told when a row naming an artifact is pressed. Absent leaves every such
+   * row a line of text, which is what a card on a surface with no viewer
+   * should draw.
+   */
+  onOpenArtifact?: (artifactId: string) => void;
 };
 
 /** The card's header mark is 16px; the row marks are 12px, at strokeWidth 2. */
@@ -362,6 +383,7 @@ export function PhaseCard({
   detail,
   floating,
   align = "start",
+  onOpenArtifact,
 }: PhaseCardProps) {
   const Head = phaseGlyph(kind, state);
   const says = said === undefined ? phaseSaid(kind, state) : said;
@@ -396,26 +418,46 @@ export function PhaseCard({
             const Mark = phaseGlyph(kind, where);
             return (
               <li className="armada-phase-card__row" key={at}>
-                <span className="armada-phase-card__row-line">
-                  {Mark === undefined ? null : (
-                    <Mark
-                      size={ROW_GLYPH}
-                      strokeWidth={STROKE}
-                      className="armada-phase-card__row-mark"
-                      data-state={where}
-                      aria-hidden
-                    />
-                  )}
-                  <span
-                    className="armada-phase-card__row-label"
-                    data-mono={row.mono ? "true" : undefined}
-                  >
-                    {row.label}
-                  </span>
-                  {row.result === undefined ? null : (
-                    <span className="armada-phase-card__row-result">{row.result}</span>
-                  )}
-                </span>
+                {/* The whole line is the control where the row produced
+                    something. A separate `output` affordance per row would put
+                    six targets on a card whose job is to be read, and the row
+                    already names the thing being opened. */}
+                {(() => {
+                  const line = (
+                    <>
+                      {Mark === undefined ? null : (
+                        <Mark
+                          size={ROW_GLYPH}
+                          strokeWidth={STROKE}
+                          className="armada-phase-card__row-mark"
+                          data-state={where}
+                          aria-hidden
+                        />
+                      )}
+                      <span
+                        className="armada-phase-card__row-label"
+                        data-mono={row.mono ? "true" : undefined}
+                      >
+                        {row.label}
+                      </span>
+                      {row.result === undefined ? null : (
+                        <span className="armada-phase-card__row-result">{row.result}</span>
+                      )}
+                    </>
+                  );
+                  return row.opens === undefined || onOpenArtifact === undefined ? (
+                    <span className="armada-phase-card__row-line">{line}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="armada-phase-card__row-line"
+                      data-opens="true"
+                      onClick={() => onOpenArtifact(row.opens as string)}
+                    >
+                      {line}
+                    </button>
+                  );
+                })()}
                 {row.cited === undefined ? null : (
                   <span className="armada-phase-card__cited">{row.cited}</span>
                 )}

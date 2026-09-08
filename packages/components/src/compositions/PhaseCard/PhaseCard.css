@@ -1,14 +1,20 @@
 /* What a stage of the phase strip opens to. The drawing's `.card` flat on the
    panel, and its `.pop` floating off the strip — one content, two grounds.
 
-   460px is the drawn ceiling and it is a reading measure, not a layout: the
-   standing sentence for the Judge runs to three lines at this width and five
-   at the panel's. --space-12 nine times, plus --space-6 and --space-1. */
+   **The measure is the longest row, not the prose.** It was 460px, sized so
+   the Judge's standing sentence ran to three lines — but the rows under that
+   sentence are commands, and `cargo nextest run --workspace --locked` beside
+   its exit code wrapped at every width under about 700. A wrapped command is
+   the one thing on this card a person reads character by character, so the
+   ceiling is now --w-dialog-wide plus a --w-menu: 880px, wide enough for the
+   longest command this repository declares with its result still on the line.
+   The prose is the thing that has to live with the width now, and three lines
+   against six is the right way round. */
 .armada-phase-card {
   display: flex;
   flex-direction: column;
   gap: calc(var(--space-2) + var(--space-1) / 2);
-  max-width: calc(var(--space-12) * 9 + var(--space-6) + var(--space-1));
+  max-width: calc(var(--w-dialog-wide) + var(--w-menu));
   padding: var(--space-4);
   border: var(--border-width) solid var(--border-default);
   border-radius: var(--radius-md);
@@ -28,12 +34,30 @@
   box-shadow: var(--shadow-overlay);
 }
 
-/* The arrow, pointing back at the stage that opened it. Anchored to the edge
-   the card is aligned to, so a stage in the trailing half of the strip opens a
-   card that stays inside the panel and still points at itself. */
+/* The arrow, pointing back at the stage that opened it.
+
+   **Where it points is handed in, because this card cannot know.** The card is
+   anchored to the graph rather than to the node — a card hanging off a node
+   inside a scroll container gets clipped — so its own position says nothing
+   about which node opened it. It sat at a fixed inset instead, which pointed at
+   the first node on a leading card and the last on a trailing one whatever was
+   hovered; at 880px of card that is unmistakably the wrong node. `PhaseStrip`
+   measures the node and writes --armada-phase-arrow, from the edge this card is
+   aligned to.
+
+   Clamped inside the card, so a node near either end keeps the arrow on the
+   edge instead of past the corner. The fallback is the inset the card drew
+   before anything measured it, which is what a card on a surface with no strip
+   still wants. --space-1 is half the arrow's box: it turns a point into a
+   position. */
 .armada-phase-card[data-floating]::before {
   content: "";
   position: absolute;
+  --armada-phase-point: clamp(
+    var(--space-4),
+    calc(var(--armada-phase-arrow, calc(var(--space-4) + var(--space-1))) - var(--space-1)),
+    calc(100% - var(--space-4) - var(--space-2))
+  );
   top: calc(var(--space-1) / 2 * -1 - var(--border-width) * 2);
   width: var(--space-2);
   height: var(--space-2);
@@ -44,11 +68,11 @@
 }
 
 .armada-phase-card[data-floating][data-align="start"]::before {
-  left: var(--space-4);
+  left: var(--armada-phase-point);
 }
 
 .armada-phase-card[data-floating][data-align="end"]::before {
-  right: var(--space-4);
+  right: var(--armada-phase-point);
 }
 
 .armada-phase-card__head {
@@ -150,6 +174,38 @@
   align-items: baseline;
   gap: var(--space-2);
   min-width: 0;
+}
+
+/* A row that opens what it produced. It is a <button> when it does, so the
+   button chrome is reset back to the line it already was — the affordance is
+   the underline under the command, which is the mark every selector on job
+   detail carries. */
+.armada-phase-card__row-line[data-opens="true"] {
+  appearance: none;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.armada-phase-card__row-line[data-opens="true"] .armada-phase-card__row-label {
+  text-decoration: underline;
+  text-decoration-color: var(--accent-muted);
+  text-underline-offset: var(--space-1);
+}
+
+.armada-phase-card__row-line[data-opens="true"]:hover .armada-phase-card__row-label {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+
+.armada-phase-card__row-line[data-opens="true"]:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 /* Nudged onto the text's baseline: a 12px mark beside an 18px line box sits a
