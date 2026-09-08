@@ -60,7 +60,7 @@ pub(crate) fn looping(
     let declares_an_edge = table.present("verdict_routing");
 
     // **The one deferred key with a refusal of its own.** As an unknown key it
-    // would read as "M1 does not do that yet", when on a linear workflow it is
+    // would read as "Armada does not read that", when on a linear workflow it is
     // wrong at every milestone: the declared structure and the wiring disagree,
     // and the file says so about itself. `read` holds the other half of the
     // same rule, where a `loop` declares no edge at all.

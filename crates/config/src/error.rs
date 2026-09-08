@@ -53,21 +53,25 @@ impl Refusal {
 /// What was wrong with one key.
 ///
 /// The two "not a legal value" cases are deliberately separate variants.
-/// [`Fault::OutsideM1`] is a value the schema sanctions and this milestone does
+/// [`Fault::NotYetCarried`] is a value the schema sanctions and this version does
 /// not implement — the fix is to wait or to rewrite the workflow.
 /// [`Fault::NotInTheSchema`] is a value no version of Armada has ever had — the
 /// fix is a typo correction. Collapsing them would make every refusal read like
 /// a missing feature.
+///
+/// **No message here names a milestone.** `M1` is Armada's own schedule and
+/// means nothing to the person whose file was refused — it reached a screen
+/// once, where it read as a version they were expected to know.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Fault {
     /// A required key is absent.
     Missing,
-    /// A key nothing at M1 reads. **This is the hard-fail that makes every
-    /// deferred section additive later rather than a migration**: a file that
-    /// loads today cannot be carrying a key a later milestone will give a
+    /// A key nothing in this version reads. **This is the hard-fail that makes
+    /// every deferred section additive later rather than a migration**: a file
+    /// that loads today cannot be carrying a key a later milestone will give a
     /// different meaning to.
     Unknown {
-        /// What M1 does read at this position, so the message can name it.
+        /// What is read at this position, so the message can name it.
         known: &'static [&'static str],
     },
     /// The key is there and holds the wrong shape.
@@ -79,10 +83,10 @@ pub enum Fault {
     /// from [`Fault::Missing`]: the author wrote the key and left it blank,
     /// which is a different mistake from never having written it.
     Empty,
-    /// A value the schema sanctions that M1 does not carry.
-    OutsideM1 {
+    /// A value the schema sanctions that this version does not carry.
+    NotYetCarried {
         value: String,
-        /// What M1 carries at this key.
+        /// What is carried at this key.
         carried: &'static [&'static str],
     },
     /// A value outside the schema's own set.
@@ -309,14 +313,14 @@ impl fmt::Display for Fault {
             Fault::Missing => write!(f, "is required and is not there"),
             Fault::Unknown { known } => write!(
                 f,
-                "is not a key M1 reads. M1 reads {}",
+                "is not a key Armada reads. Armada reads {}",
                 Listed(known, "nothing here")
             ),
             Fault::WrongType { wanted, found } => write!(f, "wanted {wanted} and holds {found}"),
             Fault::Empty => write!(f, "is empty"),
-            Fault::OutsideM1 { value, carried } => write!(
+            Fault::NotYetCarried { value, carried } => write!(
                 f,
-                "is `{value}`, which M1 does not carry. M1 carries {}",
+                "is `{value}`, which Armada does not carry yet. Armada carries {}",
                 Listed(carried, "nothing yet")
             ),
             Fault::NotInTheSchema { value, legal } => write!(
@@ -475,7 +479,7 @@ impl fmt::Display for Fault {
 }
 
 /// A comma-separated value list with a stated fallback for the empty case, so
-/// no message ever ends in a dangling "M1 reads ".
+/// no message ever ends in a dangling "Armada reads ".
 struct Listed<'a>(&'a [&'a str], &'a str);
 
 impl fmt::Display for Listed<'_> {

@@ -174,7 +174,7 @@ fn the_test_check_excludes_the_crate_that_must_not_compile() {
 /// and says so correctly.
 ///
 /// **The structure is no longer what refuses it.** Until #263 that was this
-/// test's subject — `loop` was `OutsideM1`, one of two values the milestone had
+/// test's subject — `loop` was `NotYetCarried`, one of two values the milestone had
 /// not built — and both are carried now, so the claim is asked of the next
 /// deferral instead: `test_run` is a check type the schema sanctions and M1 has
 /// no per-step test invocation for.
@@ -204,7 +204,7 @@ fn the_designed_bug_workflow_is_refused_for_a_reason_a_later_milestone_removes()
     assert!(
         matches!(
             &deferred.fault,
-            Fault::OutsideM1 { value, .. } if value == "test_run"
+            Fault::NotYetCarried { value, .. } if value == "test_run"
         ),
         "deferred, not wrong: {:?}",
         deferred.fault

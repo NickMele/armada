@@ -64,7 +64,7 @@ pub enum Structure {
 
 const STRUCTURE_CARRIED: &[(&str, Structure)] =
     &[("linear", Structure::Linear), ("loop", Structure::Loop)];
-/// The schema's whole set, and now also the carried set — so [`Fault::OutsideM1`]
+/// The schema's whole set, and now also the carried set — so [`Fault::NotYetCarried`]
 /// is unreachable at this key and the third argument to [`yaml::word`] is the
 /// same list as the second. Kept as an argument rather than collapsed, because
 /// the two lists mean different things everywhere else and only the caller

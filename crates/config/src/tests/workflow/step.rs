@@ -61,7 +61,7 @@ fn a_gate_needing_a_manifest_policy_is_refused() {
         )));
         assert_eq!(
             fault_at(&refused, "steps[3].advance_gate"),
-            &Fault::OutsideM1 {
+            &Fault::NotYetCarried {
                 value: gate,
                 carried: &["auto", "auto_if_judge_passes", "human_always"],
             }
