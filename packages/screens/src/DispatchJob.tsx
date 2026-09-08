@@ -53,6 +53,24 @@ export type DispatchJobProps = {
   onPropose: (request: string) => Promise<Answered>;
   /** Open one of the jobs that came back, where its own gate is drawn. */
   onOpen: (jobId: string) => void;
+  /**
+   * Release the head of the proposal. **What starts the work, from the screen
+   * that proposed it** — the workflow, the name and the split are all on it, so
+   * approving is a press here rather than a trip to detail.
+   */
+  onApprove: (jobId: string) => void;
+  /** Jobs with an approval in flight, from the app. What stops a second press. */
+  approving: readonly string[];
+  /**
+   * What Fleet says a proposed Job is at now, or `undefined` where the board
+   * holds no row for it.
+   *
+   * **The proposal is this screen's and the status is Fleet's**, and approving
+   * one changes the status without changing the proposal. A row drawn from the
+   * answer alone would say `needs approval` for as long as the surface stayed
+   * open, under a job already queued.
+   */
+  statusOf?: (jobId: string) => string | undefined;
   /** Hand entry, built by the caller. The composer, and the override. */
   byHand: ReactNode;
   /**
@@ -81,6 +99,9 @@ export type DispatchJobProps = {
 export function DispatchJob({
   onPropose,
   onOpen,
+  onApprove,
+  approving,
+  statusOf,
   byHand,
   watching,
   onStop,
@@ -125,6 +146,20 @@ export function DispatchJob({
     setProposal({ at: "unasked" });
   }
 
+  // The rows, against the board's own reading of each Job where there is one.
+  // Every other status on this surface is what came back with the proposal;
+  // this one moves under it, because approving is now a press on the row.
+  const shown: Proposal =
+    proposal.at === "proposed" && statusOf !== undefined
+      ? {
+          ...proposal,
+          jobs: proposal.jobs.map((job) => {
+            const at = statusOf(job.id);
+            return at === undefined || at === job.status ? job : { ...job, status: at };
+          }),
+        }
+      : proposal;
+
   if (hand) {
     return (
       <div className="flex flex-col gap-4">
@@ -148,6 +183,8 @@ export function DispatchJob({
       onEnterByHand={() => setHand(true)}
       onReset={reset}
       onOpen={onOpen}
+      onApprove={onApprove}
+      approving={approving}
       // The two facts are joined here and nowhere else: the proposal is this
       // screen's and the watch is the app's, and the component takes one value.
       // A screen still `reading` with nothing published yet draws the wait
@@ -155,7 +192,7 @@ export function DispatchJob({
       proposal={
         proposal.at === "reading" && watching !== null
           ? { at: "reading", watch: watching }
-          : proposal
+          : shown
       }
       onStop={onStop}
       slowAfterMs={PROPOSAL_IS_SLOW}

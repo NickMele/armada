@@ -105,6 +105,10 @@ At step 3 the proposer works out what kind of work it is and which workflow it r
 **Approving a Job dispatches that Job, and it is the only approval act on this path.**
 Why: every Job the request became already stands at `awaiting_approval`, so a plan-level act would have nothing left to create.
 
+**Step 5 happens on the proposal, not on Job detail.** The head of the proposal carries its own approval control, beside the Review that opens it. Everything the gate approves — the workflow, the name and the split — is already on the screen the proposal is drawn on, so sending a person to detail to say yes to what they are reading is a second surface for no second fact. Settled 2026-09-08, from the owner's own complaint: *"I would love if I didn't need to click Review just to get to the approval button."*
+
+**Only the head of a proposal is approvable, and Review is still there.** A chained Job is not at its gate until the one before it completes, so the rows under the first offer no approval. Review opens any of them, for the case where the title is not enough to decide on.
+
 | What was proposed | What step 5 dispatches | What is left at the gate |
 | --- | --- | --- |
 | One Job | That Job. The ordinary case | Nothing |
@@ -114,7 +118,7 @@ Why: every Job the request became already stands at `awaiting_approval`, so a pl
 
 **It is the dispatch gate, not a gate of its own.** A proposal is approved where a mid-flight scope revision is approved, so the things called approval on a Job's path stay two — this gate, and a workflow's own human gate over finished work.
 
-**Cost accepted:** two taps for a Job whose proposal is obvious, mitigated by such a proposal being trivially acceptable.
+**Cost accepted:** one tap for a Job whose proposal is obvious — the approval sits on the proposal, so nobody opens a Job in order to agree with what is already on screen. What is given up is that the reading and the release are one gesture apart rather than two; the [Job Board](job-board.md) keeps the stricter arrangement, because there the proposal is not on screen.
 
 **Beyond the progressive fill, the surface is not drawn.** Dispatch a Job is design order 1 and everything else reuses its approval pattern.
 

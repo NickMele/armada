@@ -44,6 +44,24 @@ function held(): { promise: Promise<Answered>; answer: (read: Answered) => void 
   return { promise, answer };
 }
 
+/** A proposal of one, at its gate — what the surface draws after an answer. */
+const PROPOSED: Answered = {
+  proposal: {
+    at: "proposed",
+    request: REQUEST,
+    jobs: [
+      {
+        id: "job_2d90bb",
+        title: "Stop the board flickering on every event",
+        workflow: "bug",
+        status: "awaiting_approval",
+      },
+    ],
+  },
+  outcome: null,
+  request: null,
+};
+
 /**
  * Mount it, and hand back every request that reached the caller.
  *
@@ -59,6 +77,8 @@ function opened(answering: () => Promise<Answered>): { sent: string[] } {
         return answering();
       }}
       onOpen={() => {}}
+      onApprove={() => {}}
+      approving={[]}
       byHand={<p>The form, by hand</p>}
       // Nothing published, which is the state before Fleet's first message and
       // the one these cases are about: what the guard does is not a function of
@@ -165,4 +185,68 @@ test("hand entry is reachable and leavable", async () => {
 
   await userEvent.click(page.getByRole("button", { name: "Describe the work instead" }));
   await expect.element(field()).toBeVisible();
+});
+
+/**
+ * The head of a proposal is released from the screen that proposed it, with
+ * its own id. **The press that starts the work**, and the reason there is no
+ * trip to detail for it: the workflow, the name and the split are all on
+ * screen, so approving is the same reading either way.
+ */
+test("the proposal is approved from here", async () => {
+  const approved: string[] = [];
+  mount(
+    <DispatchJob
+      onPropose={() => Promise.resolve(PROPOSED)}
+      onOpen={() => {}}
+      onApprove={(jobId) => approved.push(jobId)}
+      approving={[]}
+      byHand={<p>The form, by hand</p>}
+      watching={null}
+      onStop={() => {}}
+      disabled={false}
+    />,
+  );
+
+  await userEvent.fill(field(), REQUEST);
+  await userEvent.click(page.getByRole("button", { name: "Dispatch" }));
+
+  await userEvent.click(
+    page.getByRole("button", { name: "Approve Stop the board flickering on every event" }),
+  );
+  expect(approved).toEqual(["job_2d90bb"]);
+});
+
+/**
+ * A Job's status is Fleet's, and approving one changes it. **The row is drawn
+ * against the board rather than against the answer** — a proposal held on this
+ * screen would otherwise go on saying `needs approval` under a Job already
+ * queued, and offer a gate that is no longer anybody's to open.
+ */
+test("the row follows the board, not the answer", async () => {
+  mount(
+    <DispatchJob
+      onPropose={() => Promise.resolve(PROPOSED)}
+      onOpen={() => {}}
+      onApprove={() => {}}
+      approving={[]}
+      // What the board says now, which is not what came back with the proposal.
+      statusOf={() => "queued"}
+      byHand={<p>The form, by hand</p>}
+      watching={null}
+      onStop={() => {}}
+      disabled={false}
+    />,
+  );
+
+  await userEvent.fill(field(), REQUEST);
+  await userEvent.click(page.getByRole("button", { name: "Dispatch" }));
+
+  await expect
+    .element(page.getByRole("button", { name: "Review Stop the board flickering on every event" }))
+    .toBeVisible();
+  expect(
+    page.getByRole("button", { name: /^Approve/ }).elements(),
+    "a released job still offered its gate",
+  ).toEqual([]);
 });

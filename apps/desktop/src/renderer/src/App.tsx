@@ -427,13 +427,21 @@ export function App() {
                 // every other elapsed figure on screen is drawn from.
                 watching={watchOf(state.proposing, now)}
                 onStop={() => void commands.stopProposal()}
-                // A proposed Job is opened, never approved from here: approval
-                // is a second act from detail, and this is the same signpost the
-                // Board's own `awaiting_approval` row carries.
+                // A proposed Job is opened where somebody wants to read it
+                // first, which is the same signpost the Board's own
+                // `awaiting_approval` row carries.
                 onOpen={(jobId) => {
                   setComposing(false);
                   setOpenJob(jobId);
                 }}
+                // And released without leaving, on the head of the proposal.
+                // The same command the detail's own gate calls, so a second
+                // approval is refused by the one guard rather than by two.
+                onApprove={(jobId) => void commands.approve(jobId)}
+                approving={state.approving}
+                // What the board says each proposed Job is at now. The fold
+                // `approveDispatch` does is what moves the row off its gate.
+                statusOf={(jobId) => state.jobs.find((job) => job.id === jobId)?.status}
                 disabled={!live}
                 onCopied={setCopied}
                 byHand={

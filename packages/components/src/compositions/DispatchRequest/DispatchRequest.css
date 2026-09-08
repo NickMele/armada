@@ -242,6 +242,16 @@
   line-height: var(--leading-2xs);
 }
 
+/* The row's controls, together at the trailing edge. Read then release, in
+   that order — the accent is last, where the reading ends, the same order the
+   card's own footer takes. */
+.armada-dispatch__job-acts {
+  display: flex;
+  flex: none;
+  gap: var(--space-2);
+  align-items: center;
+}
+
 .armada-dispatch__waits {
   min-width: 0;
   color: var(--fg-subtle);

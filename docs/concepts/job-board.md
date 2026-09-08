@@ -275,6 +275,8 @@ How a Convoy renders in the graph view is separate and unsettled — see Open qu
 
 **Selecting a ready Job opens a Job detail view first.** Approval is a deliberate, separate action from there, not an immediate action on click.
 
+**The rule is about a row somebody is browsing past, and about nothing else.** The Job proposer's own proposal carries an approval on its head row — settled 2026-09-08 — because there the workflow, the name and the split are all on the screen already, which is exactly what a Board row does not have. See [Job proposer](job-proposer.md), Where the proposal is approved.
+
 **So no row's control approves anything. A Job awaiting approval carries Review.** The built row shipped an Approve control, which contradicted this rule the whole time it was on screen; settled 2026-08-31 in favour of the rule. Review is the same word the `awaiting_review` row already carries, and it means the same thing in both places — *go read this* — because in both places the act itself happens on detail. The Board's keyboard model loses its Approve key entirely rather than moving it. Why: this keeps the one-by-one approval discipline intact even when browsing quickly — see the Armada brief on Drone dispatch control.
 
 ### Write-scope overlap on the detail
