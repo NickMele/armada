@@ -139,6 +139,14 @@ thing is the one that rots, and it rots silently because nothing tests prose.
 - **`CLAUDE.md`** — 50 lines is refused, 30 asks. It routes; it does not explain.
 - **`docs/INDEX.md`** — the gate refuses a document that is not in it, including
   a new skill.
+- **Issue bodies.** They are prose, they are public, and nothing gates them.
+  Confirmed 2026-09-07: seven issues cited `docs/journeys/<n>-<name>.md` after
+  the journeys were renamed without the number prefix, and #188 told whoever
+  picked it up to expect three open questions on `docs/concepts/doctor.md` that
+  the page had already answered and closed. Every path was still a live link in
+  the issue and a dead one in the tree. **Extract the paths an issue names and
+  test each for existence** — `verify-docs` will not, because an issue is not a
+  document it reads.
 
 ## 4. `docs/OPEN.md`, issues, milestones
 
