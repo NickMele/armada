@@ -333,7 +333,7 @@ export function JobDetail({
   const phases =
     whole === null || open === undefined
       ? undefined
-      : phasesOf(open, whole.acceptance_criteria, opensRecords);
+      : phasesOf(open, whole.acceptance_criteria, opensRecords, job.status);
 
   // The detail's contextual tier, and the open state it moves. Bound while a
   // Job is open and not before, so nothing on the Board listens for a key that

@@ -161,8 +161,11 @@ export function noticeOf(
   if (render === "reviewing") {
     return {
       tone: "waiting",
-      title: "Nothing is wrong. The workflow asks for a person here.",
-      children: "Everything mechanical has cleared. Nothing advances until you answer.",
+      // **It opens on what is true, not on a denial.** "Nothing is wrong"
+      // answers a worry the reader had not had yet, and reads as reassurance
+      // that something is.
+      title: "This Job needs your review before it can go on.",
+      children: "Every step passed its gates. Nothing advances until you answer.",
     };
   }
   // **The one thing a redirect into a healthy drone leaves behind.** That job

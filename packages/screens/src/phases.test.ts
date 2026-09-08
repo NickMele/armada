@@ -48,9 +48,12 @@ function step(over: Partial<StepDetail> = {}): StepDetail {
   };
 }
 
+/** The Job status under which a step's own `running` is the whole truth. */
+const RUNNING = "running";
+
 /** The `You` tier, which `phasesOf` always draws last. */
 function you(over: Partial<StepDetail> = {}) {
-  const { stages } = phasesOf(step(over), [], OPENS);
+  const { stages } = phasesOf(step(over), [], OPENS, RUNNING);
   const last = stages[stages.length - 1];
   expect(last?.id).toBe("you");
   return last;
@@ -142,7 +145,7 @@ const AT = "2026-09-02T09:00:00Z";
 
 describe("the hand-backs", () => {
   it("draws no loop on a step worked once", () => {
-    const { loops } = phasesOf(step({ attempts: [{ attempt: 1, outcome: "advanced", started_at: AT }] }), [], OPENS);
+    const { loops } = phasesOf(step({ attempts: [{ attempt: 1, outcome: "advanced", started_at: AT }] }), [], OPENS, RUNNING);
     expect(loops).toEqual([]);
   });
 
@@ -159,6 +162,7 @@ describe("the hand-backs", () => {
       }),
       [],
       OPENS,
+      RUNNING,
     );
     expect(loops).toEqual([{ from: "checks", to: "working", says: "handed back 2 times" }]);
   });
@@ -173,6 +177,7 @@ describe("the hand-backs", () => {
       }),
       [],
       OPENS,
+      RUNNING,
     );
     expect(loops?.[0]?.says).toBe("handed back once");
   });
@@ -185,7 +190,28 @@ describe("the hand-backs", () => {
       step({ state: "stopped", attempts: [{ attempt: 1, outcome: "stopped", started_at: AT }] }),
       [],
       OPENS,
+      RUNNING,
     );
     expect(loops).toEqual([]);
+  });
+});
+
+describe("the strip and the badge are one reading", () => {
+  // **The defect that made the screen look broken.** `phasesOf` was given the
+  // step and never the Job, so a Job holding at `awaiting_review` — whose last
+  // step is still `running` — drew Working two inches from a badge saying
+  // awaiting review. Every status below leaves a step `running` around a Job
+  // that has stopped.
+  it.each(["awaiting_review", "awaiting_approval", "escalated", "awaiting_repair", "piloted"])(
+    "does not draw Working on a running step beneath a Job that is %s",
+    (status) => {
+      const { stages } = phasesOf(step({ state: "running" }), [], OPENS, status);
+      expect(stages.find((held) => held.id === "working")?.state).not.toBe("current");
+    },
+  );
+
+  it("still draws Working on a running step beneath a running Job", () => {
+    const { stages } = phasesOf(step({ state: "running" }), [], OPENS, RUNNING);
+    expect(stages.find((held) => held.id === "working")?.state).toBe("current");
   });
 });
