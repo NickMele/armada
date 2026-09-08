@@ -10,8 +10,17 @@
  * path wrap rather than run the window's width — so this is a rename, not a
  * change of value.
  */
-.armada-tooltip {
+/* Two ways to be the thing a bubble hangs off. The wrapper is a span this
+ * component draws; `armada-tooltip-on` is the class it lends to a caller's own
+ * element under `asChild`, which is the only way a `td` or a `th` can be
+ * annotated. The lent class carries the positioning and nothing else — a
+ * `display` on a table cell would take it out of the table. */
+.armada-tooltip,
+.armada-tooltip-on {
   position: relative;
+}
+
+.armada-tooltip {
   display: inline-flex;
 }
 
@@ -36,10 +45,39 @@
   border: var(--border-width) solid var(--border-subtle);
   box-shadow: var(--shadow-overlay);
   color: var(--fg-default);
-  font-size: var(--text-xs);
-  line-height: var(--leading-xs);
+  /* Declared, never inherited.
+
+     The bubble is drawn *inside* its trigger — `asChild` clones the child and
+     appends it — so everything typographic reaches it from whatever it is
+     annotating. On a mono control it came out mono, and on one whose own size
+     was set locally it came out that size: hovering `output · 1,125 lines` gave
+     a large monospace tooltip. A tooltip is the surface talking, and it reads
+     the same over a command as over a criterion. `font` resets the family, the
+     weight, the style and the variant in one, so nothing a future trigger sets
+     leaks in through a property this rule forgot to name. */
+  font: var(--weight-body) var(--text-xs) / var(--leading-xs) var(--font-sans);
   text-wrap: pretty;
   pointer-events: none;
+}
+
+/* A hover that answers with a card rather than a sentence. `PhaseCard` with
+ * `floating` draws its own overlay surface, edge and shadow, so the bubble
+ * drops the ones it would otherwise put underneath — and the prose width cap
+ * with them, because the cap exists to stop a path running the window's width
+ * and a card sizes itself. */
+.armada-tooltip__bubble[data-card] {
+  max-width: none;
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+
+/* The bubble is hidden rather than unmounted, so `aria-describedby` names an
+ * element that exists from the first render. `display: inline-flex` above beats
+ * the attribute's own rule, so it is restated here. */
+.armada-tooltip__bubble[hidden] {
+  display: none;
 }
 
 .armada-tooltip__label {
@@ -111,7 +149,8 @@
  * The whole wrapper is the anchor rather than a trigger element, because a
  * tooltip wraps the thing it describes instead of sitting beside it. */
 @supports (anchor-name: --a) {
-  .armada-tooltip {
+  .armada-tooltip,
+  .armada-tooltip-on {
     anchor-name: --armada-tooltip-anchor;
     anchor-scope: --armada-tooltip-anchor;
   }
@@ -149,4 +188,11 @@
 
 .armada-tooltip-frame--bottom {
   align-items: flex-end;
+}
+
+/* Two triggers side by side, for the stories that hover one and then the next.
+ * Story furniture, like the frame above. */
+.armada-tooltip-row {
+  display: flex;
+  gap: var(--space-3);
 }
