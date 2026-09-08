@@ -297,7 +297,10 @@ function Looks({ looks }: { looks: Look[] }) {
 function Processes({ reading, examined }: { reading: Held; examined: JobExamined | null }) {
   if (reading.processes.length === 0) {
     return (
-      <p className="armada-holds__nothing" data-loud={loud(reading, examined) || undefined}>
+      <p
+        className="armada-holds__nothing"
+        data-loud={nothingRunningIsAFault(reading, examined) || undefined}
+      >
         {NO_PROCESS[reading.held]}
       </p>
     );
@@ -332,8 +335,13 @@ function Processes({ reading, examined }: { reading: Held; examined: JobExamined
  * believing something is running that is not is a fault at any status — and
  * `none` is left quiet, since a job at its approval gate holds nothing and is
  * right to.
+ *
+ * **Exported, because the summary above the sheet asks the same question.**
+ * `JobHoldsSummary` draws the process count in one figure and has to know
+ * whether nothing running is a fault; a second copy of this rule would let the
+ * summary and the reading it opens disagree about the same Job.
  */
-function loud(reading: Held, examined: JobExamined | null): boolean {
+export function nothingRunningIsAFault(reading: Held, examined: JobExamined | null): boolean {
   const look = examined?.looks.find((one) => one.asked === "process");
   if (look !== undefined) return look.found === "not_working";
   return reading.held === "gone" || reading.held === "replaced";

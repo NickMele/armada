@@ -15,7 +15,14 @@
 // **Two exits and no third.** The labelled control and `Esc`. A click on the
 // ground behind does not close a sheet.
 
-import { ActivityLogSheet, JobDiffSheet, railOfPatch, type JobDiffFile } from "@armada/components";
+import {
+  ActivityLogSheet,
+  JobDiffSheet,
+  JobHoldsSheet,
+  railOfPatch,
+  type JobDiffFile,
+  type JobHoldsSheetProps,
+} from "@armada/components";
 import { useMemo, type ReactNode } from "react";
 
 import type { Diff, Observed } from "@armada/protocol";
@@ -28,8 +35,15 @@ import { recourseOf } from "./recovery";
 import { drawn } from "./review";
 import { NOTHING_YET_ON_THIS_STEP, whyNotWatching, type LogRow } from "./story";
 
-/** Which sheet is open, or none. Two cannot be. */
-export type OpenSheet = "log" | "diff" | null;
+/**
+ * Which sheet is open, or none. Two cannot be.
+ *
+ * **`holds` is the third, and it is here for a different reason than the other
+ * two.** They left the panel because a reading has no end; this left the run
+ * column because it was the largest thing on it and the run is what a person
+ * opens a Job to read. Same layer, same two exits, same one-at-a-time rule.
+ */
+export type OpenSheet = "log" | "diff" | "holds" | null;
 
 /**
  * Where the log's reading was held, and how much it had then.
@@ -56,6 +70,12 @@ export type DetailSheetProps = {
   log: { region: string; openId: string | null; onOpen: (rowId: string | null) => void };
   held: HeldAt | null;
   onHold: (held: HeldAt) => void;
+  /**
+   * The full machine reading, exactly as the panel used to draw it — every
+   * state and every argument, `Look now` included. Built by the caller, because
+   * the arguments for how to read a `Holds` live in `resources.ts`.
+   */
+  holds: Omit<JobHoldsSheetProps, "open" | "floor" | "onClose">;
   /** Now, injected, because holding the reading records a wall clock. */
   now: number;
   /** The window is at `--window-floor`. */
@@ -75,6 +95,7 @@ export function DetailSheet({
   log,
   held,
   onHold,
+  holds,
   now,
   floor,
   onClose,
@@ -112,6 +133,9 @@ export function DetailSheet({
   }
   if (which === "diff") {
     return <DiffSheet job={job} diff={diff} floor={floor} onClose={onClose} />;
+  }
+  if (which === "holds") {
+    return <JobHoldsSheet open floor={floor} onClose={onClose} {...holds} />;
   }
   return null;
 }
