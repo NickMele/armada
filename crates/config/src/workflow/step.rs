@@ -412,7 +412,7 @@ fn gate(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<AdvanceGate> 
     // this parser deciding a repository's question for it.
     let deferred = found.starts_with("manifest_rule:");
     let fault = if deferred {
-        Fault::OutsideM1 {
+        Fault::NotYetCarried {
             value: found,
             carried: GATE_CARRIED,
         }

@@ -107,7 +107,7 @@ fn read(
         table.ignore("max_context_size");
         out.push(Refusal::new(
             table.at("max_context_size"),
-            Fault::OutsideM1 {
+            Fault::NotYetCarried {
                 value: "max_context_size".to_string(),
                 carried: SCOPE_KEYS,
             },

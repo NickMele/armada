@@ -166,7 +166,7 @@ fn check(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<MechanicalCh
         }
         other => {
             let fault = if CHECK_TYPE_LEGAL.contains(&other) {
-                Fault::OutsideM1 {
+                Fault::NotYetCarried {
                     value: kind.clone(),
                     carried: CHECK_TYPE_M1,
                 }

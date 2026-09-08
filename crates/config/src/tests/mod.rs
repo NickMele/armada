@@ -69,3 +69,46 @@ pub(crate) fn fault_at<'a>(refusals: &'a [Refusal], key: &str) -> &'a Fault {
 pub(crate) fn refused(refusals: &[Refusal], key: &str) -> bool {
     refusals.iter().any(|r| r.key == key)
 }
+
+/// **No refusal a person reads names a milestone.**
+///
+/// `M1` reached a screen in Bridge on 8 Sep 2026, in the message a refused
+/// `armada.yml` produces. It is Armada's own schedule: the person whose file
+/// was refused read it as a version they were expected to know, and it told
+/// them nothing about the key that was wrong.
+///
+/// Over every variant rather than over the two that were wrong, because the
+/// next one to be written is the one nobody thinks to check.
+#[test]
+fn no_refusal_names_a_milestone() {
+    use crate::Fault;
+
+    let every: &[Fault] = &[
+        Fault::Missing,
+        Fault::Unknown {
+            known: &["run", "when", "requires"],
+        },
+        Fault::WrongType {
+            wanted: "a string",
+            found: "a list",
+        },
+        Fault::Empty,
+        Fault::NotYetCarried {
+            value: String::from("loop"),
+            carried: &["linear"],
+        },
+        Fault::NotInTheSchema {
+            value: String::from("spiral"),
+            legal: &["linear", "loop"],
+        },
+    ];
+    for fault in every {
+        let said = fault.to_string();
+        for milestone in ["M0", "M1", "M2", "M3"] {
+            assert!(
+                !said.contains(milestone),
+                "`{said}` names {milestone}, which is Armada's schedule and not the reader's"
+            );
+        }
+    }
+}

@@ -328,7 +328,7 @@ pub(crate) fn word<T: Copy>(
         return Some(*mapped);
     }
     let fault = if legal.contains(&found.as_str()) {
-        Fault::OutsideM1 {
+        Fault::NotYetCarried {
             value: found,
             carried: m1,
         }

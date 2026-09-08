@@ -92,7 +92,7 @@ fn the_cap_nobody_has_decided_is_refused_as_deferred_rather_than_as_a_typo() {
     assert!(
         matches!(
             fault_at(&refusals, "steps[0].evidence_scope.max_context_size"),
-            Fault::OutsideM1 { .. }
+            Fault::NotYetCarried { .. }
         ),
         "the cap is a schema key with no decided value, not a typo"
     );
@@ -206,7 +206,7 @@ fn a_source_no_manifest_can_supply_is_refused_as_deferred() {
     ));
     assert!(matches!(
         fault_at(&refusals, "steps[0].evidence_scope.context_source"),
-        Fault::OutsideM1 { .. }
+        Fault::NotYetCarried { .. }
     ));
 }
 

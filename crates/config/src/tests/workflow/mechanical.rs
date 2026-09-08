@@ -20,7 +20,7 @@ fn the_two_unimplemented_check_types_are_refused_by_name() {
         )));
         assert_eq!(
             fault_at(&refused, "steps[3].mechanical_checks[0].type"),
-            &Fault::OutsideM1 {
+            &Fault::NotYetCarried {
                 value: kind.to_string(),
                 carried: &["manifest_check", "diff_nonempty", "artifact_exists"],
             }
