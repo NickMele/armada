@@ -28,7 +28,7 @@ use core_model::{JobId, Ulid};
 use crate::error::{fault, WriteError};
 use crate::open::Store;
 
-/// Version 21 — what a Job's branch came to after its last step.
+/// Version 21 — what a Job's branch came to when it was sent out.
 ///
 /// Beside the change it makes, like [`V20`](crate::note::V20): `schema.rs` is
 /// at the 900 the gate refuses at.

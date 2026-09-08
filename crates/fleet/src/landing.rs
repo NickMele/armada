@@ -115,6 +115,17 @@ where
                  so no branch was pushed and no pull request was opened",
                 None,
             ),
+            // **The one failure in there that is not about the branch.** Every
+            // other refusal below comes from git; `Adrift::Writing` is
+            // `note_delivery` alone, so the branch went out and what did not
+            // land is the record of where it went.
+            Err(adrift @ Adrift::Writing(_)) => self.noted_not_sent(
+                job,
+                step,
+                "the branch went out and the record of where it went did not: \
+                 the pull request is open and the Job's own page will not name it",
+                Some(&adrift),
+            ),
             Err(adrift) => self.noted_not_sent(
                 job,
                 step,

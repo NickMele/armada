@@ -11,8 +11,9 @@
 //!
 //! # `--autostash`, which is what makes a mid-Job rebase safe at all
 //!
-//! Fleet commits only at the last step, so at every earlier boundary the branch
-//! has no commits of its own and the worktree is full of uncommitted work. A
+//! Fleet commits once, on the step the workflow says delivers, so at every
+//! earlier boundary the branch has no commits of its own and the worktree is
+//! full of uncommitted work. A
 //! plain rebase over that either refuses or destroys it. `--autostash` puts the
 //! work aside, moves the branch, and puts it back — and where putting it back
 //! conflicts, git says so and keeps the stash, so nothing is lost either way.

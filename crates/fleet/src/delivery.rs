@@ -9,11 +9,12 @@
 //! # Two moments, and they used to be three
 //!
 //! At a **spawn** the rebase runs before the process exists and what moved
-//! rides the opening brief — `crate::spawning`. At the last step the branch is
-//! pushed and opened for review, with no Drone to hand anything to. The third
-//! was a boundary that is not the last, where the Drone was alive and heard
-//! what moved in the turn it got for the next step; a Drone belongs to a step
-//! now, so every boundary that is not the last is a spawn.
+//! rides the opening brief — `crate::spawning`. On the step the workflow says
+//! delivers, and as it is entered, the branch is committed, pushed and opened
+//! for review — `crate::landing`, which owns why that is an entry and not an
+//! advance. The third was a boundary where the Drone was alive and heard what
+//! moved in the turn it got for the next step; a Drone belongs to a step now,
+//! so every boundary is a spawn.
 //!
 //! # A boundary is asked, never the Drone
 //!
