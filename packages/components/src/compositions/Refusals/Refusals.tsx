@@ -84,6 +84,23 @@ export type RefusalsProps = {
    * which is the ordinary case.
    */
   note?: ReactNode;
+  /**
+   * What a fresh drone meets when it reaches for these again, and what would
+   * change it.
+   *
+   * **The rows said what was stopped and nothing said whether it stays
+   * stopped.** A person reading a refusal beside a restart button is being
+   * asked to spend a drone on a repeat, because a toolset is rendered at spawn
+   * and a restart renders the same one — so the list alone invites the press
+   * that reproduces it.
+   *
+   * **Last, and under the size note rather than over it.** The note is a
+   * caveat about the list; this is what follows from the list, and it sits
+   * against whatever the surface says about the acts on offer.
+   *
+   * Absent draws nothing, which is a surface that has no reading of the rows.
+   */
+  again?: ReactNode;
 };
 
 /**
@@ -105,8 +122,14 @@ export type RefusalsProps = {
  * the list's own note carries one level up, so the two are written in one
  * grammar rather than as two inventions: *showing 200 of 14,320 characters*
  * under a command, *showing 50 of 137 refused calls* under the list.
+ *
+ * **The list does not finish its own job, and `again` is what finishes it.** A
+ * refusal drawn beside a restart button says what was stopped and says nothing
+ * about whether restarting meets it again — so the rows read as a diagnosis
+ * and the press reads as the cure, and it is not one. What is true is a
+ * mechanism rather than advice, and the caller states it.
  */
-export function Refusals({ refused, said, note }: RefusalsProps) {
+export function Refusals({ refused, said, note, again }: RefusalsProps) {
   if (refused.length === 0) return null;
   return (
     <div className="armada-refusals">
@@ -135,6 +158,7 @@ export function Refusals({ refused, said, note }: RefusalsProps) {
         ))}
       </ul>
       {note === undefined ? null : <span className="armada-refusals__note">{note}</span>}
+      {again === undefined ? null : <span className="armada-refusals__again">{again}</span>}
     </div>
   );
 }

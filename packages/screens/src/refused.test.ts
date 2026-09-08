@@ -8,6 +8,10 @@
 // **A capped list must say it is capped.** A short list read as the whole one
 // is worse than no list: a person who widened an allowlist for the fifty they
 // could see would think they were done.
+//
+// **And a list must say what a restart meets.** The rows beside a `Restart
+// step` button read as a diagnosis with the button as its cure, and the toolset
+// is rendered at spawn — so the press reproduces the refusal it was made from.
 
 import { describe, expect, it } from "vitest";
 
@@ -163,5 +167,56 @@ describe("what a stopped job says it was refused", () => {
     // classification, and this is the same guard from the reading side.
     const drawn = refusedIn(whole({ refused: [refusal(), refusal()], refusals: 1 }));
     expect(drawn?.note).toBeUndefined();
+  });
+
+  it("says a restart builds the same toolset, on every list there is", () => {
+    // The fact that makes the rows actionable, and it is true of every refusal
+    // — so no shape of list may arrive without it.
+    const shapes = [
+      [refusal()],
+      [refusal({ tool: "WebFetch", detail: "https://docs.rs/tokio/latest/tokio" })],
+      [refusal({ detail: "" })],
+      [refusal(), refusal({ tool: "Write", detail: "xtask/src/rules_layers.rs" })],
+    ];
+    for (const refused of shapes) {
+      const drawn = refusedIn(whole({ refused, refusals: refused.length }));
+      expect(drawn?.again).toContain("a restart builds the same one");
+    }
+  });
+
+  it("names what declares a command where a command was refused", () => {
+    const drawn = refusedIn(whole({ refused: [refusal()], refusals: 1 }));
+    expect(drawn?.again).toContain("armada.yml");
+    expect(drawn?.again).toContain("commands");
+    // A command declared and marked destructive is withheld from every drone,
+    // so a sentence naming only the section sends a person to add an entry they
+    // already have.
+    expect(drawn?.again).toContain("destructive");
+  });
+
+  it("names no manifest where nothing a manifest declares was refused", () => {
+    // `WebFetch` is a capability Armada grants nowhere. Sending a person to
+    // `commands` for it is sending them to edit a file that cannot help.
+    const web = refusal({ tool: "WebFetch", detail: "https://docs.rs/tokio/latest/tokio" });
+    const drawn = refusedIn(whole({ refused: [web], refusals: 1 }));
+    expect(drawn?.again).not.toContain("armada.yml");
+  });
+
+  it("names the manifest where one refusal of several is a command", () => {
+    // A mixed list still has a command in it, and the sentence is about that
+    // row. Withholding it because a `WebFetch` sits beside it would drop the
+    // one route on the screen.
+    const web = refusal({ tool: "WebFetch", detail: "https://docs.rs/tokio/latest/tokio" });
+    const drawn = refusedIn(whole({ refused: [web, refusal()], refusals: 2 }));
+    expect(drawn?.again).toContain("armada.yml");
+  });
+
+  it("names the manifest off the tool and never off the command", () => {
+    // A `Write` of a path that looks like a shell line is still not a command,
+    // and the tool is the wire's own spelling — so the branch reads that and
+    // nothing else.
+    const wrote = refusal({ tool: "Write", detail: "cargo/config.toml" });
+    const drawn = refusedIn(whole({ refused: [wrote], refusals: 1 }));
+    expect(drawn?.again).not.toContain("armada.yml");
   });
 });
