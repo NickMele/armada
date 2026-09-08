@@ -19,9 +19,10 @@
 //! something a comparison knows, and a rule that picked one would be unusable
 //! in the case it was built for. The one softening runs one way, for
 //! [`crate::rules_protocol`]'s reason: a state the machine reaches beneath *no*
-//! status warns, because `retrying` and `awaiting_human` are a design ahead of
-//! their implementation and `step_machine.rs` says so itself. A state reached
-//! somewhere and not here is two built things disagreeing, and fails.
+//! status warns, because a registry ahead of its implementation is how this
+//! repository builds — `retrying` and then `awaiting_human` each stood there
+//! and each was answered (`#522`). A state reached somewhere and not here is
+//! two built things disagreeing, and fails.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;

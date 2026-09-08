@@ -134,8 +134,9 @@ async fn a_verdict_that_routes_backwards_puts_the_job_on_the_earlier_step() {
     );
     assert_eq!(
         sent_back.step(&gate()).map(|step| step.state()),
-        Some(StepState::Running),
-        "and the gate did not move: a step at a human gate stays `running`"
+        Some(StepState::AwaitingHuman),
+        "and the gate did not move: a person who asked for another draft has \
+         not answered the gate they are standing at, so it holds"
     );
 }
 

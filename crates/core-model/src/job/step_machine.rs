@@ -1,4 +1,4 @@
-//! The inner machine: the five step states M1 reaches, and the edges between.
+//! The inner machine: the six step states, and the edges between.
 //!
 //! # There is no registry edge table, and this does not invent one
 //!
@@ -7,16 +7,16 @@
 //!
 //! **`stopped -> running` is one edge for two acts**, and which of them a Job
 //! admits is decided by whether it holds a Drone — `fleet::resume`'s to ask,
-//! not this file's. **`stopped -> advanced`, `advanced -> running` and
-//! `running -> running` are one edge for one each**, walked by
-//! [`StepTarget::Overridden`], [`StepTarget::Returned`] and
-//! [`StepTarget::Revisited`] alone — an open edge at any of the three would
-//! admit the redispatch `fleet::resume` refuses above this layer. The last is a
-//! second pass at a step that never left `running` — a loop coming round to the
-//! step that emitted the verdict, or a person sending the work back at a gate.
+//! not this file's. **`stopped -> advanced`, `advanced -> running`,
+//! `running -> running` and `awaiting_human -> running` are one edge for one
+//! each**, walked by [`StepTarget::Overridden`], [`StepTarget::Returned`] and
+//! [`StepTarget::Revisited`] alone — an open edge at any of the four would
+//! admit the redispatch `fleet::resume` refuses above this layer. The last two
+//! are another pass at a step nobody dispatched into: a loop coming round to
+//! the step that emitted the verdict, or a person answering at a gate.
 //!
-//! `awaiting_human` has its gate now and is **still unreachable**: a step there
-//! stays `running`. It stays declared on [`StepState`], with no target.
+//! **`awaiting_human` is reached** (`#522`): a step at an open human gate holds
+//! there rather than reading `running` with no Drone on it.
 //!
 //! **The outer machine gates the inner one**, and [`ADVANCING_STATUSES`] is
 //! that rule — which is why a step stops *before* the Job escalates. It has two
@@ -79,11 +79,12 @@ pub static STEP_EDGES: &[StepEdge] = &[
     // pass is charged to the step named on the row, not to the step that moved.
     step_edge(StepState::Advanced, StepState::Running),
     // **The other half of a loop, and the only self-edge in the table.** A
-    // return leaves the *emitting* step `running` — a step at a human gate
-    // stays `running`, and #263 refused a seventh state to say otherwise — so
-    // when the loop comes round the forward walk arrives at a step that never
-    // left. Nothing could record that: `running -> running` did not exist, and
-    // the second pass stopped one move short of the gate that asked for it.
+    // return leaves the *emitting* step where it stood, so when the loop comes
+    // round the forward walk arrives at a step that never left. Nothing could
+    // record that: `running -> running` did not exist, and the second pass
+    // stopped one move short of the gate that asked for it. The gate's own
+    // state is `awaiting_human` now, and `awaiting_human -> running` below is
+    // this edge said from there.
     //
     // **`running` is true on both sides, and that is why it is an edge rather
     // than a state.** The step is being worked before and after; what did not
@@ -101,6 +102,40 @@ pub static STEP_EDGES: &[StepEdge] = &[
     // running` is: an open self-edge would legalise re-entering a step that is
     // already being worked, which is a redispatch with no move in it.
     step_edge(StepState::Running, StepState::Running),
+    // **The human gate opening, and the only entrance.** Every tier the step
+    // declared has held and the step's advance gate is `human_always`, so what
+    // is left is a person's answer. `fleet::gate` rules `HeldForReview` here
+    // and stands the Drone down, which is what makes a review cost no fleet
+    // time — so the row saying `running` said a Drone was working when there
+    // was none. Walked by [`StepTarget::HeldForReview`] alone.
+    step_edge(StepState::Running, StepState::AwaitingHuman),
+    // **The person approved.** [`StepTarget::Advanced`] and not
+    // [`StepTarget::Overridden`]: the gate did not refuse anything — every
+    // mechanical tier passed before it opened — so there is no verdict to keep
+    // beside the state, and a row carrying one would say a person overruled a
+    // refusal that never happened.
+    step_edge(StepState::AwaitingHuman, StepState::Advanced),
+    // **The person asked for another pass.** The same act `running -> running`
+    // records and the same target walks it, one state along: `fleet::reviewing`
+    // re-queues at the step somebody was standing at, and the loop coming round
+    // to the step that emitted a routed verdict arrives at the same place,
+    // because a gate is where a verdict is routed from.
+    //
+    // **It opens a pass and spends no retry**, which is `store::step_spent`'s
+    // to enforce and is named here because the edge is what that query keys on.
+    // Rounds of review are not attempts at a failing gate: bounding one by the
+    // other would silently cap how many times a person may ask for changes at
+    // whatever `retry_limit` a step declared for a different purpose.
+    //
+    // Walked by [`StepTarget::Revisited`] alone, narrowed as the self-edge is
+    // and refused by [`StepIsHeld`](IllegalStepTransition::StepIsHeld): a plain
+    // dispatch into a step a person is standing at is a redispatch.
+    step_edge(StepState::AwaitingHuman, StepState::Running),
+    // **The pass a person asked for is one the workflow does not have.**
+    // `fleet::reviewing::loop_is_spent` — the step's `iteration_cap` is reached,
+    // nothing failed, and the Job escalates on `loop_cap`. The step has to stop
+    // from where it stands, and it stands at the gate.
+    step_edge(StepState::AwaitingHuman, StepState::Stopped),
 ];
 
 const fn step_edge(from: StepState, to: StepState) -> StepEdge {
@@ -140,13 +175,9 @@ fn overruled_while_frozen(status: JobStatus, from: StepState, to: &StepTarget) -
 
 /// Where a step is going.
 ///
-/// Five moves across the four destinations M1 reaches — `advanced` is arrived
-/// at two ways and the trigger is what tells them apart. `not_started` is
-/// written at creation and is not a destination. `awaiting_human` needs a
-/// variant here plus two edges — a step at a human gate stays `running`
-/// instead, which renders less honestly and behaves identically — and cannot
-/// be passed to [`Job::transition_step`](crate::Job::transition_step), because
-/// there is nothing to pass.
+/// Eight moves across the five destinations reached — `advanced` is arrived at
+/// two ways and the trigger is what tells them apart, and `running` is arrived
+/// at four. `not_started` is written at creation and is not a destination.
 ///
 /// **Not [`Copy`], since [`Returned`](StepTarget::Returned) carries a
 /// [`StepId`].** It was `Copy` while every payload was a trigger, and the
@@ -272,6 +303,27 @@ pub enum StepTarget {
     /// [`StepIsAlreadyRunning`]: IllegalStepTransition::StepIsAlreadyRunning
     /// [`StepAlreadyAdvanced`]: IllegalStepTransition::StepAlreadyAdvanced
     Revisited,
+    /// Every mechanical tier held and the step's advance gate is a human one,
+    /// so the step is waiting on a person.
+    ///
+    /// **It carries nothing.** `fleet::gate` reaches `Ruling::HeldForReview`
+    /// only through `Verdict::Advance`, so nothing refused this and a trigger
+    /// on the row would say a refusal was being held over the person's head.
+    ///
+    /// **It is not [`Advanced`](StepTarget::Advanced) and it is not a stop.**
+    /// The step has not passed its advance gate — the gate is a person and they
+    /// have not answered — and `step-states.toml` keeps `stopped` apart from
+    /// this precisely so a designed human gate and a dead stop do not render
+    /// alike.
+    ///
+    /// **It begins no run.** `store::attempt` counts entries into `running` and
+    /// the run that reached this gate is over, so a target that counted here
+    /// would charge the person's reading time to the step as an attempt.
+    ///
+    /// **Nothing bounds how long a step holds here.** A pull request nobody
+    /// answers leaves the Job at `awaiting_review` for ever; that is a reaper's
+    /// question and there is no reaper. It costs no Drone and no slot.
+    HeldForReview,
 }
 
 impl StepTarget {
@@ -284,6 +336,7 @@ impl StepTarget {
             StepTarget::Advanced | StepTarget::Overridden(_) => StepState::Advanced,
             StepTarget::Stopped(_) => StepState::Stopped,
             StepTarget::Retrying(_) => StepState::Retrying,
+            StepTarget::HeldForReview => StepState::AwaitingHuman,
         }
     }
 
@@ -309,7 +362,8 @@ impl StepTarget {
             StepTarget::Running
             | StepTarget::Advanced
             | StepTarget::Returned(_)
-            | StepTarget::Revisited => None,
+            | StepTarget::Revisited
+            | StepTarget::HeldForReview => None,
             StepTarget::Stopped(why) | StepTarget::Overridden(why) | StepTarget::Retrying(why) => {
                 Some(*why)
             }
@@ -328,6 +382,7 @@ impl StepTarget {
             StepTarget::Running
             | StepTarget::Advanced
             | StepTarget::Revisited
+            | StepTarget::HeldForReview
             | StepTarget::Stopped(_)
             | StepTarget::Overridden(_)
             | StepTarget::Retrying(_) => None,
@@ -370,11 +425,21 @@ impl StepTarget {
             return None;
         }
         // The loop's other half, told apart the same way and by the same
-        // column: the only edge that leaves `running` for `running`.
-        if from == StepState::Running && state == StepState::Running && why.is_none() {
+        // column, and the person's road beside it: the two edges that arrive at
+        // `running` from somewhere nothing dispatches out of. `not_started`,
+        // `retrying` and `stopped` are the three a plain
+        // [`Running`](StepTarget::Running) leaves, and none of them is here.
+        if matches!(from, StepState::Running | StepState::AwaitingHuman)
+            && state == StepState::Running
+            && why.is_none()
+        {
             return Some(StepTarget::Revisited);
         }
         match (state, why) {
+            // The gate opened. It stores no reason, so the state is the whole
+            // row and there is nothing to tell two arrivals apart with —
+            // `awaiting_human` is reached one way.
+            (StepState::AwaitingHuman, None) => Some(StepTarget::HeldForReview),
             (StepState::Running, None) => Some(StepTarget::Running),
             (StepState::Advanced, None) => Some(StepTarget::Advanced),
             // The trigger is what tells the two arrivals at `advanced` apart,
@@ -446,13 +511,26 @@ pub enum IllegalStepTransition {
     /// onto work a Drone is already doing — a redispatch with no move in it,
     /// and one that would silently be legal the moment the edge existed.
     StepIsAlreadyRunning { step_id: StepId },
-    /// A revisit was aimed at a step that is not being worked.
+    /// A step held at an open human gate was dispatched into rather than
+    /// revisited.
+    ///
+    /// The fourth narrowing, and the same shape as the three above.
+    /// `awaiting_human -> running` exists so a person can open another pass at
+    /// the step they are standing at, and [`StepTarget::Revisited`] is the only
+    /// thing that walks it. A plain [`StepTarget::Running`] across it is a
+    /// dispatch onto work a person has not answered on yet — and unlike the
+    /// other three it is refused *here or nowhere*, since `fleet::resume`'s own
+    /// refusal reads a step that stopped and a held step did not.
+    StepIsHeld { step_id: StepId },
+    /// A revisit was aimed at a step that is neither being worked nor held.
     ///
     /// The other half of that narrowing, as [`NotAnAdvancedStep`] is of the
-    /// return's. A revisit says the loop came round to a step that never left
-    /// `running`; onto a step that is `not_started`, `advanced`, `retrying` or
-    /// `stopped` it is a dispatch, a return, a retry or a restart wearing a
-    /// loop's name, and each of those has its own target already.
+    /// return's. A revisit says another pass is opening at a step nobody
+    /// dispatched into — a loop coming round to one that never left `running`,
+    /// or a person answering at a gate; onto a step that is `not_started`,
+    /// `advanced`, `retrying` or `stopped` it is a dispatch, a return, a retry
+    /// or a restart wearing a loop's name, and each of those has its own target
+    /// already.
     ///
     /// [`NotAnAdvancedStep`]: Self::NotAnAdvancedStep
     NotARunningStep { step_id: StepId, from: StepState },
@@ -505,9 +583,16 @@ impl fmt::Display for IllegalStepTransition {
                  round; running it again otherwise is a redispatch",
                 step_id.as_str()
             ),
+            IllegalStepTransition::StepIsHeld { step_id } => write!(
+                f,
+                "step `{}` is held at a human gate, so it is entered again only as the pass a \
+                 person asked for; running it again otherwise is a redispatch",
+                step_id.as_str()
+            ),
             IllegalStepTransition::NotARunningStep { step_id, from } => write!(
                 f,
-                "step `{}` is {} and a loop comes round only to a step that is being worked",
+                "step `{}` is {} and another pass opens only at a step that is being worked or \
+                 held at a gate",
                 step_id.as_str(),
                 from.as_wire()
             ),
@@ -625,7 +710,19 @@ pub(crate) fn admits_step(
             step_id: step_id.clone(),
         });
     }
-    if from != StepState::Running && matches!(to, StepTarget::Revisited) {
+    // The fourth, and the same shape one state along. `awaiting_human ->
+    // running` is a person opening another pass at the step they are standing
+    // at; a plain dispatch across it would put a Drone back on work while the
+    // gate that asked for a person is still open, and nothing above this layer
+    // refuses it — `fleet::resume` reads a *stopped* step.
+    if from == StepState::AwaitingHuman && matches!(to, StepTarget::Running) {
+        return Err(IllegalStepTransition::StepIsHeld {
+            step_id: step_id.clone(),
+        });
+    }
+    if !matches!(from, StepState::Running | StepState::AwaitingHuman)
+        && matches!(to, StepTarget::Revisited)
+    {
         return Err(IllegalStepTransition::NotARunningStep {
             step_id: step_id.clone(),
             from,

@@ -171,9 +171,17 @@ impl JobStep {
                 // with is the *plan*, not this gate's ruling on the draft. The
                 // next ruling overwrites it, and `store::attempt` keeps every
                 // earlier one under its own run.
-                StepTarget::Running | StepTarget::Returned(_) | StepTarget::Revisited => {
-                    self.last_verdict
-                }
+                // **A human gate opening leaves it standing too, and it is not
+                // a pass.** `passed` means the step passed its *advance* gate,
+                // and the advance gate here is a person who has not answered —
+                // writing it would say the step had cleared the one tier still
+                // outstanding. Nothing was ruled by the move, so nothing is
+                // written, and `approve_review` writes `passed` one move later
+                // when the answer comes.
+                StepTarget::Running
+                | StepTarget::Returned(_)
+                | StepTarget::Revisited
+                | StepTarget::HeldForReview => self.last_verdict,
                 StepTarget::Advanced => Some(StepVerdict::Passed),
                 // **The verdict does not move on an override**, which is the
                 // whole difference between this and `Advanced`. The gate ruled
@@ -205,10 +213,14 @@ impl JobStep {
                 // `running` on the far side of the retry moves it — which is
                 // the same rule every other arm here follows, applied to the
                 // pair rather than to one edge of it.
+                // A gate opening does not re-enter the step either: the run
+                // that reached it is the run that entered it, and how long the
+                // step has taken is not restarted by somebody being asked.
                 StepTarget::Advanced
                 | StepTarget::Stopped(_)
                 | StepTarget::Overridden(_)
-                | StepTarget::Retrying(_) => self.entered_at.clone(),
+                | StepTarget::Retrying(_)
+                | StepTarget::HeldForReview => self.entered_at.clone(),
             },
             updated_at: at,
         }

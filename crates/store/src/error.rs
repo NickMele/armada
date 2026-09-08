@@ -170,11 +170,13 @@ pub enum RowError {
     },
     /// The log records a step arriving at a state no `StepTarget` names.
     ///
-    /// `awaiting_human` needs a human advance gate, and `retrying` and
-    /// `stopped` need a retry budget; M1 has neither, so no value in this build
-    /// moves a step to one. A row saying a step got there was written by a
-    /// machine this build does not have, and folding it as anything else would
-    /// be the store lying rather than refusing.
+    /// **Every state a step machine declares is reached now**, so this is no
+    /// longer the ordinary answer for a whole state — `stopped` and `retrying`
+    /// got their targets with the retry budget, and `awaiting_human` got one
+    /// when a human gate stopped being a step that merely read `running`. What
+    /// is left is a `(from, state, reason)` triple no target spells: a row
+    /// written by a machine this build does not have, and folding it as
+    /// anything else would be the store lying rather than refusing.
     StepStateNotReachable {
         job_id: JobId,
         seq: i64,

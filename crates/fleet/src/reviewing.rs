@@ -1,28 +1,28 @@
 //! The three answers a person gives at a human gate.
 //!
 //! **Every one is a transition, and none writes a status.** Approving advances
-//! the step on the inner machine and then moves the Job on the outer one;
-//! requesting changes re-queues it at the same step; rejecting ends it. All
-//! three go through `Job::transition`, so a review is a row in the same log as
-//! everything else, and the actor on it is **human**.
+//! the step and then moves the Job; requesting changes re-queues it at the same
+//! step; rejecting ends it. All three go through `Job::transition`, so a review
+//! is a row in the same log as everything else, and the actor is **human**.
 //!
 //! **All three refuse anywhere but `awaiting_review`.**
 //! `awaiting_approval -> rejected` is a legal edge and it is the *dispatch*
 //! gate's — `deny_dispatch`, a different act on a Job that never ran, and a
 //! reject that took it would be two operations sharing one route. What puts a
 //! Job at this gate is a step gated `advance_gate: human_always` whose tiers
-//! all held: `crate::gate` rules `HeldForReview`, `apply` takes the edge, and
-//! the step stays `running`.
+//! all held: `crate::gate` rules `HeldForReview`, `crate::dispatch` holds the
+//! step at `awaiting_human`, `apply` takes the Job's edge.
 //!
-//! **The step advances before the Job moves, and it has to.**
-//! `ADVANCING_STATUSES` is `running` and `awaiting_review`, so the inner
-//! machine freezes the moment the Job leaves the gate. Both step moves an
-//! approval makes are therefore made while it is still standing there, and
-//! `current_step_id` is what re-admission reads to know where to put the Drone.
+//! **The step being answered is `awaiting_human`, and every answer leaves that
+//! state** — `advanced`, `running` on another pass, `stopped` where
+//! `iteration_cap` refuses one, none of them spending a retry (`#522`). **It
+//! moves before the Job does, and it has to**: `ADVANCING_STATUSES` is
+//! `running` and `awaiting_review`, so the inner machine freezes the moment the
+//! Job leaves the gate, and `current_step_id` is what re-admission reads to
+//! know where to put the Drone.
 //!
 //! **The gate holds no Drone and no slot**, so a person's review costs no fleet
 //! time: both answers that keep the Job re-queue rather than resume.
-//! `job-statuses.toml`'s `awaiting_review` row says the same.
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
 use core_model::{
     Actor, Component, Envelope, Job, JobId, JobStatus, Level, RedirectWaiting, StepId, StepTarget,
@@ -201,6 +201,28 @@ where
             return self.load(job_id).await;
         }
         if working.as_ref().is_some_and(|at_work| at_work.is(job_id)) {
+            // **The step leaves the gate first, and it did not have to before.**
+            // A step at a human gate used to read `running`, so a Drone still
+            // holding its session was already on a row that said so and this
+            // path moved nothing. Now the gate holds the step at
+            // `awaiting_human`, and leaving it there would put a live Drone on a
+            // step the record says is waiting for a person — and the next
+            // `HeldForReview` would be refused, because there is no edge into
+            // the gate from inside it.
+            //
+            // **`Revisited`, which is the same target the path below takes.**
+            // The gate ruled on the run that reached it, so the resubmission
+            // this note asks for is another pass however loud the session still
+            // is; without a boundary `store::attempt` would file its Checks,
+            // judgments and evidence over the ones the note was about, which is
+            // `#418`'s defect on the road that keeps its Drone. It spends no
+            // retry, for `step_spent`'s reason.
+            //
+            // While the Job is still `awaiting_review`, which is in
+            // `ADVANCING_STATUSES` only until the move below leaves it.
+            let job = self
+                .move_step_by(&job, &step, StepTarget::Revisited, Actor::Human)
+                .await?;
             let job = self.move_job(&job, Target::Running, Actor::Human).await?;
             self.said(job_id, note, &working).await?;
             return Ok(job);
@@ -264,7 +286,7 @@ where
     /// **The step that moves is the one being redone, and it names the gate.**
     /// `StepTarget::Returned` carries the emitting step so the row says whose
     /// `iteration_count` this pass belongs to; the gate itself does not move and
-    /// stays `running`, which is how a step at a human gate already reads.
+    /// stays `awaiting_human` until the forward walk arrives there again.
     ///
     /// **A Drone in the slot is ended.** The gate ordinarily stood it down, so
     /// there is usually none — but a process still standing on the step the Job
