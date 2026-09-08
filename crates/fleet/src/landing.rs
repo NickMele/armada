@@ -1,5 +1,5 @@
-//! What happens when a Job's last step advances: the work is committed, then
-//! the Job is recorded complete, then the branch is delivered.
+//! What happens when a Job enters the step its workflow says delivers: the work
+//! is committed, and the branch is pushed and opened for review.
 //!
 //! # Fleet commits, because a Drone cannot
 //!
@@ -9,31 +9,31 @@
 //! correct, verified, and unmergeable, and `armada clean` would have destroyed
 //! it.
 //!
-//! # The last step only
+//! # The step that says so, on entry
 //!
-//! One Job is one change: a workflow's steps are one piece of work made in
-//! stages, not several things to review. A per-step commit would also put
-//! commits on the branch of a Job that then failed at `verify` — work whose
-//! Checks never all passed, on a branch a `git merge` would take. Uncommitted
-//! is what makes a failed Job's branch unmistakably not mergeable.
+//! A workflow names which of its steps sends the work out —
+//! `ResolvedStep::delivers`. Nothing infers it from the diff and nothing infers
+//! it from the step's position, so a workflow whose every step answers `false`
+//! finishes with no branch pushed. On *entry*, because the step that sends the
+//! work out is the step that then holds while a person reads what went out:
+//! delivering when the last step advanced put the branch out after they had
+//! already answered. `#520`.
 //!
-//! # A commit that fails does not lose the work
-//!
-//! The Job still reaches `completed_success`, its Drone is still ended and the
-//! slot still freed. The failure comes out as [`Adrift::NotCommitted`] once all
-//! of that has happened, and the worktree is untouched. Delivery is held the
-//! same way; see [`crate::delivery`].
-
+//! One Job is still one commit, and a workflow declaring one delivering step is
+//! what keeps that true. A per-step commit would put commits on the branch of a
+//! Job that then failed later — work whose Checks never all passed, on a branch
+//! a `git merge` would take.
 use adapter_traits::{
     AgentHarness, CommitTime, Committed, Delivery, Opened, Pushed, Vcs, WorkProduct, Worktree,
 };
-use core_model::{Job, JobId, StepId, StepTarget};
+use core_model::{Component, Envelope, FieldValue, Job, JobId, Level, StepId, StepTarget};
 use verification::OutcomeTurn;
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::delivery::Delivered;
 use crate::gate::Ruling;
+use crate::transcript;
 use crate::working::Working;
 
 impl<H, V, W> Fleet<H, V, W>
@@ -46,13 +46,15 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
-    /// End a Job that finished: advance the last step, commit, complete, tell
-    /// the Drone, end it.
+    /// End a Job that finished: advance the last step, complete, tell the
+    /// Drone, end it.
     ///
-    /// The commit comes **before** the Job is recorded complete, so a
-    /// `completed_success` on the Board is a Job whose work is on its branch.
-    /// It is held rather than raised, because the three things after it free
-    /// the slot.
+    /// **Nothing lands here any more.** The work went out when the Job entered
+    /// the step its workflow declares delivering — see
+    /// [`sent_out_on_entry`](Fleet::sent_out_on_entry) — so by the time the
+    /// last step advances the branch is already pushed and its pull request is
+    /// already open. A Job on a workflow that declares no delivering step
+    /// finishes with nothing pushed, which is the point of the key.
     pub(crate) async fn finish(
         &self,
         ruling: &Ruling,
@@ -63,7 +65,6 @@ where
     ) -> Result<(), Adrift> {
         let job = self.load(job_id).await?;
         let job = self.move_step(&job, step, StepTarget::Advanced).await?;
-        let landed = self.land_and_deliver(&job, working).await;
         // The Job is moved before the Drone is told, so a session that has gone
         // deaf cannot leave a finished Job at `running`.
         self.applied(&job, ruling).await?;
@@ -71,36 +72,129 @@ where
         // Drone for nothing.
         let told = self.tell(job_id, tell, None, working).await;
         self.end_the_drone(working).await;
-        landed?;
         told
+    }
+
+    /// Send the work out, where the step being entered is the one that says so.
+    ///
+    /// **The one caller is [`put_a_drone_on`](Fleet::put_a_drone_on)**, which
+    /// is the single funnel every spawn goes through — the same argument
+    /// `crate::delivery` makes for the rebase living there. Every path that
+    /// enters a step reaches it: a mechanical advance, a person's approval at a
+    /// gate, an override, and a restart.
+    ///
+    /// **After the catch-up and before the Drone**, both of which
+    /// `put_a_drone_on` owns. After, because a commit made over a tree the
+    /// rebase has not touched publishes work that will not replay; before,
+    /// because the branch has to be out while the step runs rather than once it
+    /// is over.
+    ///
+    /// **Held, never raised**, which is the one thing that changed about the
+    /// failure. A branch that would not go out does not stop the step: what
+    /// became of it is on the Job's record and in its log, and the person at
+    /// the gate reads that instead of an empty row. Escalating would stop a Job
+    /// over a remote that was briefly unreachable, on a step whose own work has
+    /// not started.
+    pub(crate) async fn sent_out_on_entry(&self, job: &Job, step: &StepId, worktree: &Worktree) {
+        // Off the frozen workflow, which is what a person approved. A step the
+        // workflow does not name is Fleet asking about somewhere the Job is
+        // not, and it sends nothing.
+        let delivers = job
+            .workflow()
+            .step(step)
+            .is_some_and(core_model::ResolvedStep::delivers);
+        if !delivers {
+            return;
+        }
+        match self.land_and_deliver(job, worktree).await {
+            Ok(Committed::Made { .. }) => {}
+            Ok(Committed::NothingToCommit) => self.noted_not_sent(
+                job,
+                step,
+                "this step sends the work out and the worktree held nothing new, \
+                 so no branch was pushed and no pull request was opened",
+                None,
+            ),
+            Err(adrift) => self.noted_not_sent(
+                job,
+                step,
+                "this step sends the work out and the branch did not go: the \
+                 work stays in the worktree and no pull request was opened",
+                Some(&adrift),
+            ),
+        }
+    }
+
+    /// Write into the Job's own log that the branch did not go out, and why.
+    ///
+    /// **Because nothing else would say so.** `note_delivery` records what
+    /// happened to the branch and writes nothing at all when nothing happened,
+    /// so both silences below would leave a person at the gate reading the same
+    /// blank row as a workflow that delivers nothing by design. Those are three
+    /// different facts and only this line tells them apart.
+    fn noted_not_sent(&self, job: &Job, step: &StepId, said: &'static str, cause: Option<&Adrift>) {
+        let mut envelope = Envelope::new(
+            self.now(),
+            Level::Warn,
+            Component::Fleet,
+            self.run().clone(),
+            said,
+        )
+        .in_job(job.id().as_ulid().clone())
+        .at_step(step.as_str());
+        if let Some(cause) = cause {
+            envelope = envelope.with_field("cause", FieldValue::Str(cause.to_string()));
+        }
+        // A log line that will not write does not undo anything, for
+        // `boundary::noted_stood_down`'s reason: the record already carries
+        // what the branch came to.
+        let _ = transcript::note(&self.host().repo_root, job.id(), &envelope);
     }
 
     /// Put the work on the branch and the branch where it is going.
     ///
-    /// Held rather than raised, so the caller can free the slot and tell the
-    /// Drone before it deals with the failure. **The two are one call because
-    /// the order between them is a rule and not a preference:** a push of a
-    /// branch whose work is still uncommitted would publish the commit the Job
-    /// started from, so nothing is delivered where the commit did not land.
+    /// Held rather than raised, so the caller can deal with the failure once it
+    /// has done everything the failure must not cost. **The two are one call
+    /// because the order between them is a rule and not a preference:** a push
+    /// of a branch whose work is still uncommitted would publish the commit the
+    /// Job started from, so nothing is delivered where the commit did not land.
     ///
-    /// Its second caller is `crate::reviewing`, where a person advances the
-    /// last step by hand. A Job recorded `completed_success` with its work
-    /// uncommitted is correct, verified and unmergeable, and which of Fleet or
-    /// a reviewer advanced the step changes nothing about that.
+    /// **One caller**, [`sent_out_on_entry`](Fleet::sent_out_on_entry). It is a
+    /// separate method from that one because what it does is the whole of
+    /// delivery and what that one does is decide whether this run of it happens
+    /// at all — and the tests that drive a commit through fakes want the first
+    /// without the second.
     pub(crate) async fn land_and_deliver(
         &self,
         job: &Job,
-        working: &Option<Working>,
-    ) -> Result<(), Adrift> {
+        worktree: &Worktree,
+    ) -> Result<Committed, Adrift> {
         // **One Job at a time from here.** The commit, the rebase and the push
         // all write into the one `.git` every worktree is cut from, and whether
         // two of them can do that concurrently is not established. See
         // `Fleet::merge_end`.
         let _at_the_merge_end = self.merge_end().lock().await;
-        let landed = self.land(job, working).await;
+        let landed = self.land(job, worktree).await;
+        // **A worktree holding nothing new is not pushed and opens nothing**,
+        // which is the same rule `deliver` already applies one stage later: a
+        // stage is skipped where the one before it says there is nothing to do
+        // it to, and a branch known to conflict is not pushed for the same
+        // reason a branch with no commits on it is not — a pull request over
+        // either is a review request nobody can act on.
+        //
+        // **This does not decide whether the workflow delivers**, and the
+        // distinction is the whole of `#520`. The workflow says whether; the
+        // tree says whether there is anything. Reading the tree for the first
+        // question is what pushed a design document, and it was wrong in both
+        // directions — a Prototype writes real code nobody wants merged, and an
+        // Epic that touched a tracked file would have been delivered for it.
+        //
+        // What it costs is silence on a Job whose delivering step found an
+        // empty tree, so `note_delivery` writes the commit's absence and the
+        // caller's log line says the branch did not go.
         let delivered = match landed {
-            Ok(_) => self.delivered(job, working).await,
-            Err(_) => Ok(Delivered::default()),
+            Ok(Committed::Made { .. }) => self.deliver(job, worktree).await,
+            Ok(Committed::NothingToCommit) | Err(_) => Ok(Delivered::default()),
         };
         // **Written down before it is handed to the turn.** `left_delivered`
         // leaves this where `take_delivered` *drains* it, so the Drone's
@@ -118,21 +212,10 @@ where
         if let Ok(delivered) = &delivered {
             self.left_delivered(job.id(), delivered.clone()).await;
         }
-        landed?;
+        let committed = landed?;
         delivered?;
         noted?;
-        Ok(())
-    }
-
-    /// Deliver the Job's branch, from the worktree the slot is holding.
-    ///
-    /// Deliver the branch of [`the worktree that is there`](Fleet::landable).
-    /// A Job with none delivers nothing.
-    async fn delivered(&self, job: &Job, working: &Option<Working>) -> Result<Delivered, Adrift> {
-        let Some(worktree) = self.landable(job, working)? else {
-            return Ok(Delivered::default());
-        };
-        self.deliver(job, &worktree).await
+        Ok(committed)
     }
 
     /// Write what the branch came to onto the Job's record.
@@ -184,10 +267,14 @@ where
     }
 
     /// Put the Job's work on its branch.
-    async fn land(&self, job: &Job, working: &Option<Working>) -> Result<Committed, Adrift> {
-        let Some(worktree) = self.landable(job, working)? else {
-            return Ok(Committed::NothingToCommit);
-        };
+    ///
+    /// **The worktree is the caller's**, and it is the one the Drone is about
+    /// to be put on. It used to be looked up — the slot's where the slot held
+    /// one, and the directory on disk where it did not — because the two
+    /// callers landing a finished Job disagreed about whether a Drone was still
+    /// there. Delivery happens on entry now, so there is exactly one caller and
+    /// it has the worktree in hand before anything else in this crate does.
+    async fn land(&self, job: &Job, worktree: &Worktree) -> Result<Committed, Adrift> {
         // Seconds, floored, because git's signature has no finer field and a
         // reading before 1970 must not round the wrong way.
         let at = CommitTime::seconds_since_epoch(
@@ -197,32 +284,11 @@ where
                 .div_euclid(1_000),
         );
         self.vcs()
-            .commit_all(&worktree, &commit_message(job), at)
+            .commit_all(worktree, &commit_message(job), at)
             .map_err(|cause| Adrift::NotCommitted {
                 job: job.id().clone(),
                 cause: Box::new(cause),
             })
-    }
-
-    /// The worktree a Job's work lands from: the slot's where the slot holds
-    /// one, and otherwise the directory on disk.
-    ///
-    /// **The fallback is not decoration.** Everything else that lands is
-    /// reached with the Drone still in the slot — a gate ruling exists because
-    /// the slot was full when it read it — but a person can advance the last
-    /// step of a Job whose Drone has gone, and until now that path recorded
-    /// `completed_success` over an uncommitted branch. Correct, verified and
-    /// unmergeable is the thing `land` exists to prevent, and the slot being
-    /// empty does not make it acceptable.
-    ///
-    /// `None` is a Job with nothing to land — one that never had a worktree, or
-    /// one whose worktree has been reclaimed — which is the answer
-    /// [`worktree_of`](Fleet::worktree_of) already gives.
-    fn landable(&self, job: &Job, working: &Option<Working>) -> Result<Option<Worktree>, Adrift> {
-        match working.as_ref() {
-            Some(at_work) => Ok(Some(at_work.standing().2)),
-            None => self.worktree_of(job),
-        }
     }
 }
 

@@ -230,6 +230,29 @@ fn read(path: &Path, root: &Value, roster: &Roster, out: &mut Vec<Refusal>) -> O
             }
         }
     }
+    // **A workflow delivers once, or not at all.** Which step sends the work
+    // out is what the file declares; two steps declaring it would push the same
+    // branch twice and leave a person at the gate with two pull requests and
+    // nothing saying which one their answer is about. Reported on the second
+    // and naming the first, which is `DuplicateStepId`'s shape and its reason.
+    //
+    // Zero is not refused, and is the whole point of the key: a workflow whose
+    // every step declares `false` produces something that is read rather than
+    // merged, and four of the eight shipped workflows are that.
+    let mut delivers_at: Option<usize> = None;
+    for (n, step) in &placed {
+        if !step.delivers() {
+            continue;
+        }
+        match delivers_at {
+            Some(first_at) => out.push(Refusal::new(
+                format!("steps[{n}].delivers"),
+                Fault::TwoDeliveringSteps { first_at },
+            )),
+            None => delivers_at = Some(*n),
+        }
+    }
+
     // **A routing edge has to name a step, and an earlier one.** Every other
     // name in this crate is resolved where it is written rather than at the
     // gate, for the reason `artifact_exists` gives: a step no Drone could pass

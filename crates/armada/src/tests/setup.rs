@@ -41,7 +41,7 @@ fn a_repository() -> TempDir {
 fn a_workflow(id: &str) -> String {
     format!(
         "version: 1\nworkflow_id: {id}\nname: {id}\nstructure: linear\nsteps:\n  - id: only\n    \
-         label: \"Only step\"\n    advance_gate: auto\n"
+         label: \"Only step\"\n    delivers: true\n    advance_gate: auto\n"
     )
 }
 

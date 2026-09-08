@@ -119,6 +119,12 @@
 # the change is, `implement` and `tests` each produce a diff a Check and a Judge
 # read, and all three stay on the Job's model by saying nothing. `handoff`
 # summarises work that is already done and already verified.
+#
+# **`handoff` is the step that sends the work out**, on entry rather than on
+# advance, and every other step declares `false`. `bug.json` carries the
+# reasoning; the shape is identical here because the ending is: a workflow that
+# produces a diff stops before it lands, and the branch has to be out before the
+# person at the gate can read it.
 {
   "version": 1,
   "workflow_id": "feature",
@@ -162,6 +168,7 @@
           ]
         }
       ],
+      "delivers": false,
       "advance_gate": "auto_if_judge_passes"
     },
     {
@@ -236,6 +243,7 @@
           ]
         }
       ],
+      "delivers": false,
       "advance_gate": "auto_if_judge_passes"
     },
     {
@@ -315,6 +323,7 @@
           }
         }
       ],
+      "delivers": false,
       "advance_gate": "auto_if_judge_passes"
     },
     {
@@ -322,6 +331,7 @@
       "label": "Summarise",
       "evidence_type": "facts_note",
       "model": "haiku",
+      "delivers": true,
       "advance_gate": "human_always"
     }
   ]

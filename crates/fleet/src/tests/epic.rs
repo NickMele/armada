@@ -66,7 +66,7 @@ fn a_piece() -> config::ResolvedWorkflow {
         std::path::Path::new("fixture.yml"),
         "version: 1\nworkflow_id: fixture-piece\nname: fixture-piece\n\
          structure: linear\nsteps:\n  - id: do_it\n    label: \"Do it\"\n    \
-         evidence_type: facts_note\n    advance_gate: auto\n",
+         evidence_type: facts_note\n    delivers: true\n    advance_gate: auto\n",
         &config::Roster::offering_nothing(),
     )
     .expect("the child workflow parses");

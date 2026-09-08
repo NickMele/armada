@@ -191,7 +191,12 @@ pub fn workflow() -> FrozenWorkflow {
             // is not the same sentence as a number, and a column that lost the
             // difference would put every step back on one constant.
             .quiet_after(Some(900))
-            .poking(Some(4)),
+            .poking(Some(4))
+            // The second step is where this workflow sends its work out, which
+            // is what the shipped definitions do and what the roundtrip has to
+            // carry: a `false` read back over a `true` is a Job whose branch
+            // never goes.
+            .delivering(true),
         ],
     )
 }

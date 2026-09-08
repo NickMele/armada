@@ -24,6 +24,7 @@ const WATCHED: &str = "
   - id: implement
     label: Implement
     evidence_type: diff
+    delivers: false
     advance_gate: auto
     declare_plan_at: step_start
     evidence_scope:
@@ -61,6 +62,7 @@ fn a_definition_that_authors_the_drones_answer_is_refused_by_name() {
         "
   - id: implement
     label: Implement
+    delivers: false
     advance_gate: auto
     evidence_scope:
       context_source: drone_declared
@@ -83,6 +85,7 @@ fn the_cap_nobody_has_decided_is_refused_as_deferred_rather_than_as_a_typo() {
         "
   - id: implement
     label: Implement
+    delivers: false
     advance_gate: auto
     evidence_scope:
       context_source: drone_declared
@@ -108,10 +111,12 @@ fn a_step_can_name_the_earlier_evidence_its_work_is_measured_against() {
   - id: scope
     label: Scope
     evidence_type: facts_note
+    delivers: false
     advance_gate: auto
   - id: implement
     label: Implement
     evidence_type: diff
+    delivers: false
     advance_gate: auto
     evidence_scope:
       context_source: drone_declared
@@ -139,6 +144,7 @@ fn a_reference_that_is_not_an_evidence_reference_is_refused() {
         "
   - id: implement
     label: Implement
+    delivers: false
     advance_gate: auto
     evidence_scope:
       context_source: drone_declared
@@ -180,6 +186,7 @@ fn declaring_when_the_plan_arrives_without_saying_what_it_is_for_is_refused() {
         "
   - id: implement
     label: Implement
+    delivers: false
     advance_gate: auto
     declare_plan_at: step_start
 ",
@@ -199,6 +206,7 @@ fn a_source_no_manifest_can_supply_is_refused_as_deferred() {
         "
   - id: implement
     label: Implement
+    delivers: false
     advance_gate: auto
     evidence_scope:
       context_source: manifest_default
@@ -219,6 +227,7 @@ fn a_scope_that_does_not_say_where_its_paths_came_from_is_refused() {
         "
   - id: implement
     label: Implement
+    delivers: false
     advance_gate: auto
     evidence_scope:
       scope_diff_check: true
@@ -239,6 +248,7 @@ fn a_step_with_no_scope_block_carries_none() {
   - id: implement
     label: Implement
     evidence_type: diff
+    delivers: false
     advance_gate: auto
 ",
     )

@@ -121,6 +121,54 @@ fn epic_s_dispatch_step_is_the_only_shipped_step_that_may_create_jobs() {
     );
 }
 
+/// **Which shipped workflows send their work out, read off the files.**
+///
+/// Four of the eight produce a diff somebody merges and four produce something
+/// somebody reads. Until a workflow could say so, all eight pushed a branch and
+/// opened a pull request for whatever was in the worktree — and the only thing
+/// standing between a design document and a pull request was this repository's
+/// `.gitignore` line over `.armada/`.
+///
+/// Asserted off the files rather than trusted to their headers, because this is
+/// the one property of the set that a single edit to one file can break for
+/// everybody: a workflow that starts delivering opens pull requests for
+/// documents, and one that stops leaves a Job's diff on a branch nobody sees.
+#[test]
+fn four_shipped_workflows_send_their_work_out_and_four_do_not() {
+    let mut delivering: Vec<(String, String)> = Vec::new();
+    let mut silent: Vec<String> = Vec::new();
+    for (path, text) in shipped() {
+        let def = config::WorkflowDef::parse(&path, &text, &roster())
+            .unwrap_or_else(|why| panic!("{} is refused:\n{why}", path.display()));
+        let sends: Vec<&config::Step> = def.steps().iter().filter(|s| s.delivers()).collect();
+        match sends.as_slice() {
+            [] => silent.push(def.id().as_str().to_string()),
+            [step] => delivering.push((
+                def.id().as_str().to_string(),
+                step.id().as_str().to_string(),
+            )),
+            _ => panic!("{} sends its work out more than once", path.display()),
+        }
+    }
+    delivering.sort();
+    silent.sort();
+    assert_eq!(
+        delivering,
+        vec![
+            (String::from("bug"), String::from("handoff")),
+            (String::from("feature"), String::from("handoff")),
+            (String::from("refactor"), String::from("handoff")),
+            (String::from("revert"), String::from("handoff")),
+        ],
+        "the four that produce a diff deliver, each on its last step",
+    );
+    assert_eq!(
+        silent,
+        vec!["code_review", "design_plan", "epic", "prototype"],
+        "and the four that produce something read rather than merged deliver nothing",
+    );
+}
+
 /// **The grant is on the step after the one a person answers.** The placement is
 /// the whole of `#215`'s gate decision and it is forced rather than chosen: an
 /// `advance_gate` is read after a step's Drone has submitted, so `human_always`
@@ -168,7 +216,7 @@ fn a_definition_may_grant_the_dispatch_tool() {
     let text = "version: 1\nworkflow_id: grants\nname: grants\nstructure: linear\n\
                 steps:\n  - id: split\n    label: \"Split\"\n    \
                 evidence_type: facts_note\n    may_dispatch_jobs: true\n    \
-                advance_gate: auto\n";
+                delivers: false\n    advance_gate: auto\n";
     let def = config::WorkflowDef::parse(Path::new("grants.yml"), text, &roster())
         .expect("a definition may say a step creates Jobs");
     assert!(def.steps()[0].may_dispatch_jobs());
@@ -182,7 +230,7 @@ fn a_dispatch_grant_that_is_not_a_boolean_is_refused() {
     let text = "version: 1\nworkflow_id: grants\nname: grants\nstructure: linear\n\
                 steps:\n  - id: split\n    label: \"Split\"\n    \
                 evidence_type: facts_note\n    may_dispatch_jobs: dispatches\n    \
-                advance_gate: auto\n";
+                delivers: false\n    advance_gate: auto\n";
     assert!(config::WorkflowDef::parse(Path::new("grants.yml"), text, &roster()).is_err());
 }
 

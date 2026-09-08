@@ -34,8 +34,8 @@ fn a_dispatching_workflow() -> config::ResolvedWorkflow {
         "version: 1\nworkflow_id: fixture-dispatcher\nname: fixture-dispatcher\n\
          structure: linear\nsteps:\n  - id: split\n    label: \"Split\"\n    \
          evidence_type: facts_note\n    may_dispatch_jobs: true\n    \
-         advance_gate: auto\n  - id: after\n    label: \"After\"\n    \
-         evidence_type: facts_note\n    advance_gate: auto\n",
+         delivers: false\n    advance_gate: auto\n  - id: after\n    label: \"After\"\n    \
+         evidence_type: facts_note\n    delivers: true\n    advance_gate: auto\n",
     )
 }
 
@@ -45,7 +45,7 @@ fn an_ordinary_workflow() -> config::ResolvedWorkflow {
     resolved(
         "version: 1\nworkflow_id: fixture-piece\nname: fixture-piece\n\
          structure: linear\nsteps:\n  - id: do_it\n    label: \"Do it\"\n    \
-         evidence_type: facts_note\n    advance_gate: auto\n",
+         evidence_type: facts_note\n    delivers: true\n    advance_gate: auto\n",
     )
 }
 

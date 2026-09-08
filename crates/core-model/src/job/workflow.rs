@@ -289,6 +289,23 @@ pub struct ResolvedStep {
     /// Whether a Drone on this step is given the tool that creates Jobs.
     /// **False on every step that does not say otherwise.**
     may_dispatch_jobs: bool,
+    /// Whether entering this step sends the work out: the branch is committed,
+    /// pushed, and opened for review, and the step then holds while a person
+    /// reads what went out.
+    ///
+    /// **True on at most one step**, which `config` refuses in the file it
+    /// parses. False on every step of a workflow that delivers nothing —
+    /// Design Plan, Code Review, Epic and Prototype produce something that is
+    /// read rather than merged, and a Job on one of them finishes with no
+    /// branch pushed.
+    ///
+    /// **False on every row frozen before the key existed**, and that is not
+    /// what those Jobs meant. `store::read_workflow` reads the whole step list
+    /// and puts the reading back where it was — the last step delivered, which
+    /// is what every Job in flight was created under — so the backfill is a
+    /// fact about the workflow rather than about one step, and lives where the
+    /// whole workflow is in hand.
+    delivers: bool,
     /// How many passes over this step a loop may make before the cap is spent.
     /// **Zero on a step no verdict routes back to**, which is every step of
     /// every linear workflow — and a count rather than an `Option` for
@@ -376,6 +393,7 @@ impl ResolvedStep {
             // every linear workflow, and the last two a `None` about a dial
             // almost no step touches.
             may_dispatch_jobs: false,
+            delivers: false,
             iteration_cap: 0,
             verdict_routing: BTreeMap::new(),
             quiet_after_seconds: None,
@@ -387,6 +405,14 @@ impl ResolvedStep {
     /// given it.
     pub fn dispatching(mut self, may: bool) -> ResolvedStep {
         self.may_dispatch_jobs = may;
+        self
+    }
+
+    /// Whether entering this step sends the work out, for the reason
+    /// [`frozen`](Self::frozen) is not given it: one step of a workflow
+    /// declares it and every other step would be restating a `false`.
+    pub fn delivering(mut self, delivers: bool) -> ResolvedStep {
+        self.delivers = delivers;
         self
     }
 
@@ -600,6 +626,14 @@ impl ResolvedStep {
     /// toolbelt is built, and again where a call of it arrives.
     pub fn may_dispatch_jobs(&self) -> bool {
         self.may_dispatch_jobs
+    }
+
+    /// **The one thing that sends a Job's work out** — read where a step is
+    /// entered, and nowhere else. A workflow whose every step answers `false`
+    /// finishes with nothing pushed and no pull request opened, which is what
+    /// four of the eight shipped workflows want.
+    pub fn delivers(&self) -> bool {
+        self.delivers
     }
 
     /// How long this step's Drone may say nothing, in seconds, where the step

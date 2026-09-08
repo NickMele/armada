@@ -237,6 +237,15 @@ pub enum Fault {
     /// make both of those a choice nothing records, so the second is refused
     /// where it is written rather than silently dropped at the gate.
     TwoDeliverables { first: String },
+    /// **A second step declaring `delivers: true`.** One Job is one change and
+    /// one delivery: the work goes out once, and the step it goes out on is the
+    /// step that then holds while a person reads what went out. Two of them
+    /// would send the same branch twice and leave nothing saying which pull
+    /// request the person at the gate is meant to be reading.
+    ///
+    /// Reported on the second and naming the first, for
+    /// [`Fault::DuplicateStepId`]'s reason: the fix is to look at both.
+    TwoDeliveringSteps { first_at: usize },
     /// **A step naming a model this machine does not offer.** Its own variant
     /// rather than [`Fault::NotInTheSchema`], because the legal set is not the
     /// schema's: it is whatever roster the caller resolved, so the same file is
@@ -394,6 +403,11 @@ impl fmt::Display for Fault {
             Fault::DuplicateStepId { first_at } => {
                 write!(f, "repeats the id already used by steps[{first_at}]")
             }
+            Fault::TwoDeliveringSteps { first_at } => write!(
+                f,
+                "is a second step that sends the work out, and steps[{first_at}] \
+                 already does. A workflow delivers once"
+            ),
             Fault::ContradictsStructure { structure: "loop" } => write!(
                 f,
                 "is `loop`, and no step declares a `verdict_routing` edge for \

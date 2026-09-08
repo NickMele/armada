@@ -70,6 +70,12 @@
 # reading the diff is the only thing standing between a real review and prose.
 # Both name none. `deliver` is the hand-off, which is what the paragraph above
 # already calls it.
+#
+# **No step of this workflow delivers, and all three steps say so.** What Code
+# Review produces is a review of somebody else's branch. There is nothing here
+# to merge, and `deliver` is the step that hands the review over rather than the
+# step that pushes anything -- the name predates the key and means the other
+# thing. `design-plan.json` carries the reasoning.
 {
   "version": 1,
   "workflow_id": "code_review",
@@ -86,6 +92,7 @@
           "target": ".armada/artifacts/read.md"
         }
       ],
+      "delivers": false,
       "advance_gate": "auto"
     },
     {
@@ -109,6 +116,7 @@
           "target/"
         ]
       },
+      "delivers": false,
       "advance_gate": "auto"
     },
     {
@@ -116,6 +124,7 @@
       "label": "Deliver the review",
       "evidence_type": "bundle",
       "model": "haiku",
+      "delivers": false,
       "advance_gate": "auto"
     }
   ]

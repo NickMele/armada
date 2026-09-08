@@ -451,12 +451,14 @@ where
         Ok(rejected)
     }
 
-    /// The last step passed, so the work lands and the Job is over.
+    /// The last step passed, so the Job is over.
     ///
-    /// The order is [`finish`](Fleet::finish)'s and for its reasons: the commit
-    /// comes before the Job is recorded complete, so a `completed_success` on
-    /// the Board is a Job whose work is on its branch, and the failure is held
-    /// until the Drone has been told and the slot freed.
+    /// **Nothing lands here any more**, and [`finish`](Fleet::finish) says why:
+    /// the work went out when the Job entered the step its workflow declares
+    /// delivering, so by the time a person approves the last step the branch is
+    /// already pushed and the pull request they were reading is already open.
+    /// This used to commit, and a person approving the last step by hand was
+    /// the second caller that made the ordering worth arguing about.
     pub(crate) async fn completed(
         &self,
         job: &Job,
@@ -464,7 +466,6 @@ where
         job_id: &JobId,
         working: &mut Option<crate::working::Working>,
     ) -> Result<Job, Adrift> {
-        let landed = self.land_and_deliver(job, working).await;
         let job = self
             .move_job(job, Target::CompletedSuccess, Actor::Human)
             .await?;
@@ -473,7 +474,6 @@ where
         // **Admission is the caller's**, and it is not an omission: this holds
         // a slot, and taking the roster while holding one is the lock order
         // reversed. Both callers admit once they have let the slot go.
-        landed?;
         said?;
         Ok(job)
     }

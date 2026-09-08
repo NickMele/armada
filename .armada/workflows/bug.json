@@ -255,6 +255,19 @@
 # its bill on cache writes against 27.6% warm. On a subscription that is latency
 # rather than money, and it is the argument against alternating step by step. One
 # switch, at the last step, is what this file spends.
+#
+# **`handoff` is the step that sends the work out, and `delivers` is where that
+# is written down.** Fleet commits the worktree, pushes the branch and opens it
+# for review when the Job *enters* this step -- not when the last step advances
+# -- so the pull request is there while `handoff` writes the summary and is
+# there for the person the `human_always` gate holds the Job for. A person
+# cannot review a branch that has not gone out, which is what the old ordering
+# asked of them.
+#
+# The other two steps declare `false`. Every step has to say, because a file
+# that leaves the key out has two readings and neither is safe --
+# `workflowdef-fields.toml` carries the trade -- and at most one step of a
+# workflow may say `true`.
 {
   "version": 1,
   "workflow_id": "bug",
@@ -298,6 +311,7 @@
           ]
         }
       ],
+      "delivers": false,
       "advance_gate": "auto_if_judge_passes"
     },
     {
@@ -389,6 +403,7 @@
           }
         }
       ],
+      "delivers": false,
       "advance_gate": "auto_if_judge_passes"
     },
     {
@@ -396,6 +411,7 @@
       "label": "Summarise",
       "evidence_type": "facts_note",
       "model": "haiku",
+      "delivers": true,
       "advance_gate": "human_always"
     }
   ]

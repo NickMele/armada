@@ -80,6 +80,26 @@ notes = """
 The other value is unspecified: evidence-submission time is the default behaviour and is described in prose, but the enum member naming it is never written down, and neither is what the field defaults to when absent.
 """
 
+[fields.delivers]
+type = "bool"
+concern = "Structure"
+parent = "steps[]"
+purpose = "Whether entering this step sends the workflow's work out: the branch is committed, pushed, and opened for review. Required on every step, and true on at most one."
+notes = """
+Declared per step because what a workflow says is *which* of its steps sends the work out, not whether the workflow does. The step that sends it is the step that then holds while a person reads what went out, so the two are one declaration.
+
+**Read on entry, never on advance.** A step that delivered when it advanced would put the branch out after the person at its gate had already answered, which is a review of something that had not been sent. Delivering on entry is what puts the branch in front of them first.
+
+**A workflow whose every step declares `false` never delivers at all**, and that is the sentence four of the eight shipped workflows had no way to write. Design Plan, Code Review, Epic and Prototype produce no code to merge, and until this key existed each of them pushed a branch and opened a pull request for its document on any repository that did not gitignore `.armada/`.
+
+**Required, with no default**, because neither absent reading is safe: taken as delivering, those four keep opening pull requests for documents wherever nobody opted in; taken as not delivering, every workflow file already written silently stops pushing a branch and a correct-looking Job lands nothing. `Fault::Missing` names the step and the line, which is what `crates/config` does for every other key it needs.
+
+**At most one step may declare it.** One Job is one change and one delivery; two delivering steps would send the same branch out twice and leave nothing saying which pull request a person is meant to read. `Fault::TwoDeliveringSteps` refuses the second and names the first.
+
+Not inferred from the diff, which is what happened by accident before it existed and is wrong in both directions: a Prototype writes real code nobody wants merged, and an Epic that touched a tracked file would be delivered for it.
+"""
+why = "Nothing in a workflow said whether its work is delivered at all, so a design document was opened for review like a code change and the only thing standing in the way was a `.gitignore` line."
+
 [fields.default_gate_policy]
 type = "object"
 concern = "Retry and loops"
@@ -422,7 +442,7 @@ No sample carries one yet.
 [fields."steps[]"]
 type = "array[step]"
 concern = "Structure"
-sub_items = ["id", "label", "model", "mechanical_checks", "judge_checks", "evidence_scope", "evidence_type", "advance_gate", "retry_limit", "verdict_routing", "iteration_cap", "hard_prerequisite", "on_fail", "on_gaming_flag", "declare_plan_at", "quiet_after_seconds", "poke_limit"]
+sub_items = ["id", "label", "model", "mechanical_checks", "judge_checks", "evidence_scope", "evidence_type", "advance_gate", "delivers", "retry_limit", "verdict_routing", "iteration_cap", "hard_prerequisite", "on_fail", "on_gaming_flag", "declare_plan_at", "quiet_after_seconds", "poke_limit"]
 purpose = "The ordered set of steps. Everything nested under this row is a field of a step, not of the WorkflowDef."
 notes = """
 Ordered, and loop-capable: `structure: "loop"` means a step returns to an earlier one by `verdict_routing`, not that the array is unordered.

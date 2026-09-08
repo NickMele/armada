@@ -96,6 +96,13 @@
 # reaches a Drone"*. `Splitting` in `crates/fleet/src/terms.rs` is the block,
 # and it is keyed off `may_dispatch_jobs` on this step or the next one rather
 # than off this workflow's name.
+#
+# **No step of this workflow delivers, and all three steps say so.** What an
+# Epic produces is a wave of child Jobs and a roll-up; each child delivers its
+# own work on its own branch, and the parent has none to send.
+# `design-plan.json` carries the reasoning, and it applies twice as hard here:
+# an Epic that happened to touch a tracked file would have been delivered for
+# it under the old rule, which read the diff rather than the declaration.
 {
   "version": 1,
   "workflow_id": "epic",
@@ -128,6 +135,7 @@
           ]
         }
       ],
+      "delivers": false,
       "advance_gate": "human_always"
     },
     {
@@ -141,6 +149,7 @@
           "target": ".armada/artifacts/dispatched.md"
         }
       ],
+      "delivers": false,
       "advance_gate": "auto"
     },
     {
@@ -153,6 +162,7 @@
           "target": ".armada/artifacts/roll-up.md"
         }
       ],
+      "delivers": false,
       "advance_gate": "human_always",
       "verdict_routing": {
         "request_changes": "plan"

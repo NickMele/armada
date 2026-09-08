@@ -283,6 +283,80 @@ fn a_steps_own_patience_and_its_absence_both_survive_the_column() {
     assert_eq!(step.poke_limit(), None);
 }
 
+/// **Which step sends the work out survives the column, and so does its
+/// absence on the steps that do not.** A `false` read back over a `true` is a
+/// Job whose branch never goes out and nothing saying why; a `true` read back
+/// over a `false` is a design document opened for review.
+#[test]
+fn which_step_sends_the_work_out_survives_the_column() {
+    let workflow =
+        crate::columns::read_workflow(&crate::columns::write_workflow(&crate::tests::workflow()))
+            .expect("a workflow that was just written");
+    assert!(workflow
+        .step(&StepId::new("fix"))
+        .expect("the step")
+        .delivers());
+    assert!(!workflow
+        .step(&StepId::new("reproduce"))
+        .expect("the step")
+        .delivers());
+}
+
+/// **A row frozen before a workflow could say reads back as the last step
+/// delivering**, which is what every such Job was created under: the last
+/// step's advance is what landed the work.
+///
+/// The two other readings are both a Job broken in flight. `false` everywhere
+/// stops an approved Job from ever pushing its branch, and refusing the row
+/// stops it from loading at all. A record says what it meant when it was
+/// written, which is the same rule `when` and `iteration_cap` are read by.
+///
+/// **Read over the whole step list, not off one step.** A step alone cannot
+/// tell "this step does not deliver" from "nothing on this record could say",
+/// and the two need opposite answers.
+#[test]
+fn a_workflow_frozen_before_a_step_could_say_delivers_on_its_last_step() {
+    let workflow = crate::columns::read_workflow(WITHOUT_WHEN).expect("a pre-`delivers` row");
+    assert!(
+        workflow
+            .step(&StepId::new("fix"))
+            .expect("the step")
+            .delivers(),
+        "the one step of this row is its last, and the last step is what landed the work"
+    );
+}
+
+/// And a row where a step *does* say is left exactly as it says, including the
+/// last step saying no — which is what four of the eight shipped workflows
+/// declare and what the backfill above must never overwrite.
+#[test]
+fn a_row_that_says_no_step_delivers_is_not_backfilled() {
+    let stored = WITHOUT_WHEN.replace(
+        r#""retry_limit": 0"#,
+        r#""retry_limit": 0, "delivers": false"#,
+    );
+    let workflow =
+        crate::columns::read_workflow(&stored).expect("a workflow that delivers nothing");
+    assert!(!workflow
+        .step(&StepId::new("fix"))
+        .expect("the step")
+        .delivers());
+}
+
+/// A value that is there and is not a boolean is a refusal rather than a
+/// `false`, for the stored retry budget's reason: a Job frozen with a
+/// delivering step must not lose it quietly.
+#[test]
+fn a_delivery_declaration_that_is_not_a_boolean_is_malformed() {
+    let stored = WITHOUT_WHEN.replace(
+        r#""retry_limit": 0"#,
+        r#""retry_limit": 0, "delivers": "yes""#,
+    );
+    let refused =
+        crate::columns::read_workflow(&stored).expect_err("a delivery that is not a flag");
+    assert!(refused.contains("delivers"), "{refused}");
+}
+
 /// A blank in the column is a refusal rather than a none. `""` is a workflow
 /// that meant to say something, and reading it as "use the Job's" would be the
 /// dial silently not applying.

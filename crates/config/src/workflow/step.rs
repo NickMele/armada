@@ -40,6 +40,7 @@ const STEP_KEYS: &[&str] = &[
     "mechanical_checks",
     "judge_checks",
     "advance_gate",
+    "delivers",
     "evidence_scope",
     "declare_plan_at",
     "retry_limit",
@@ -85,6 +86,7 @@ pub struct Step {
     mechanical_checks: Vec<MechanicalCheck>,
     judge_checks: Vec<JudgeCheck>,
     advance_gate: AdvanceGate,
+    delivers: bool,
     evidence_scope: Option<EvidenceScope>,
     retry_limit: u32,
     model: Option<ModelName>,
@@ -147,6 +149,17 @@ impl Step {
     /// the step reader why the agreement rule does not reach a human gate.
     pub fn advance_gate(&self) -> AdvanceGate {
         self.advance_gate
+    }
+
+    /// Whether entering this step sends the work out — committed, pushed, and
+    /// opened for review. **Required on every step, so there is no absent
+    /// reading here**, and true on at most one step of a workflow.
+    ///
+    /// The step that sends the work out is the step that then holds while a
+    /// person reads what went out, which is why this is a key on a step rather
+    /// than on the definition.
+    pub fn delivers(&self) -> bool {
+        self.delivers
     }
 
     /// What the step's evidence is scoped to. **`None` on a step that declared
@@ -300,6 +313,15 @@ pub(super) fn read(
     let poke_limit = table
         .optional("poke_limit")
         .and_then(|value| yaml::counted(&poke_key, value, out));
+    // **Required, and there is no default to fall back to.** A file that does
+    // not say whether a step sends the work out has two readings and neither is
+    // safe: taken as delivering, a workflow that produces a document opens a
+    // pull request for it; taken as not, every workflow already written stops
+    // pushing a branch and nothing says so. The registry row carries the trade.
+    let delivers_key = table.at("delivers");
+    let delivers = table
+        .required("delivers", out)
+        .and_then(|value| yaml::flag(&delivers_key, value, out));
     let gate_key = table.at("advance_gate");
     let advance_gate = table
         .required("advance_gate", out)
@@ -373,6 +395,7 @@ pub(super) fn read(
         mechanical_checks,
         judge_checks,
         advance_gate: advance_gate?,
+        delivers: delivers?,
         evidence_scope,
         retry_limit: retry_limit?,
         model,

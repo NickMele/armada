@@ -36,6 +36,12 @@
 # the person who asked for it, which is a reason to keep it capable rather than
 # a reason to make it cheap. `write_up` says what was learned once the answer is
 # in, and is the one step here whose work is reporting.
+#
+# **No step of this workflow delivers, and all three steps say so.** A prototype
+# writes real code and none of it is meant to be merged -- which is exactly why
+# the question cannot be answered from the diff. `write_up` is the last step and
+# used to push the branch and open a pull request for a throwaway.
+# `design-plan.json` carries the reasoning.
 {
   "version": 1,
   "workflow_id": "prototype",
@@ -46,12 +52,14 @@
       "id": "frame",
       "label": "Frame",
       "evidence_type": "facts_note",
+      "delivers": false,
       "advance_gate": "auto"
     },
     {
       "id": "build",
       "label": "Build",
       "evidence_type": "diff",
+      "delivers": false,
       "advance_gate": "human_always"
     },
     {
@@ -59,6 +67,7 @@
       "label": "Write up",
       "evidence_type": "facts_note",
       "model": "haiku",
+      "delivers": false,
       "advance_gate": "auto"
     }
   ]

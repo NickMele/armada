@@ -18,7 +18,9 @@ use config::Manifest;
 use store::Store;
 use testkit::{FakeHarness, FakeJudge, FakeLinkLookup, FakeVcs, FakeWorkProduct};
 
-use super::workflows::{manifest, one, two_steps, two_steps_gated_on_a_person};
+use super::workflows::{
+    manifest, one, two_steps, two_steps_delivering_nothing, two_steps_gated_on_a_person,
+};
 // Through the parent's re-exports, which are what every other module in the
 // suite reaches these four by.
 use super::{Counted, Ticking, NEVER_QUIET, UNTRIPPABLE};
@@ -166,6 +168,20 @@ pub fn a_fleet_committing_through(
     Fleet::assembled(fittings)
 }
 
+/// The same, on a workflow **neither of whose steps sends the work out**. What
+/// it buys is a step boundary with nothing published on it, which is what a
+/// case about the rebase alone wants — see `two_steps_delivering_nothing`.
+pub fn a_fleet_delivering_nothing(
+    home: &TempDir,
+    work: FakeWorkProduct,
+    vcs: FakeVcs,
+) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
+    let mut fittings = fittings(home, work);
+    fittings.workflows = one(two_steps_delivering_nothing());
+    fittings.vcs = vcs;
+    Fleet::assembled(fittings)
+}
+
 /// A Fleet whose workflow puts a person on one step's gate, committing through
 /// this version control — the second half is what the last-step case needs,
 /// since approving there lands the work.
@@ -176,7 +192,27 @@ pub fn a_fleet_gated_on_a_person(
     vcs: FakeVcs,
 ) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings = fittings(home, work);
-    fittings.workflows = one(two_steps_gated_on_a_person(gate_on, None));
+    fittings.workflows = one(two_steps_gated_on_a_person(
+        gate_on,
+        None,
+        Some("summarise"),
+    ));
+    fittings.vcs = vcs;
+    Fleet::assembled(fittings)
+}
+
+/// The same, on a workflow **neither of whose steps sends the work out**, for
+/// `a_fleet_delivering_nothing`'s reason: a case about what a human boundary
+/// does to a branch would otherwise read a commit, a second rebase, a push and
+/// a pull request out of the same delta.
+pub fn a_fleet_gated_on_a_person_delivering_nothing(
+    home: &TempDir,
+    work: FakeWorkProduct,
+    gate_on: &str,
+    vcs: FakeVcs,
+) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
+    let mut fittings = fittings(home, work);
+    fittings.workflows = one(two_steps_gated_on_a_person(gate_on, None, None));
     fittings.vcs = vcs;
     Fleet::assembled(fittings)
 }
