@@ -9,12 +9,12 @@
 //! would be the Drone marking its own work**, so most of what these prove is
 //! an absence.
 //!
-//! Why there are four modules: `report` is what comes back, `absence` is what
+//! Why there are five modules: `report` is what comes back, `absence` is what
 //! it did not decide and did not cost, `refusing` is the calls that get no
-//! report at all, and `offering` is what a Drone was told before it made one.
-//! The Fleet, the Checks and the wire are here, because a run assembled
-//! differently between them would leave four modules answering about four
-//! different steps.
+//! report at all, `offering` is what a Drone was told before it made one, and
+//! `narrowing` is the second of the two runs it can ask for. The Fleet, the
+//! Checks and the wire are here, because a run assembled differently between
+//! them would leave five modules answering about five different steps.
 //!
 //! # The clock ticks a second per reading and jumps when a test says so
 //!
@@ -24,6 +24,7 @@
 //! counts that time against the Drone.
 
 mod absence;
+mod narrowing;
 mod offering;
 mod refusing;
 mod report;
@@ -135,9 +136,25 @@ fn a_fleet_checking(
     clock: Arc<Held>,
     allowed: u32,
 ) -> Fixture {
+    a_fleet_over(home, workflow, clock, allowed, &["src/parse.rs"])
+}
+
+/// The same, over a worktree holding whichever paths the case is about.
+///
+/// **A parameter rather than a second fixture**, because what a narrowed run
+/// does is a function of the diff: the same step and the same Checks answer
+/// differently for a change under `crates` and a change under `docs`, and two
+/// fixtures would be two steps to keep in step.
+fn a_fleet_over(
+    home: &TempDir,
+    workflow: ResolvedWorkflow,
+    clock: Arc<Held>,
+    allowed: u32,
+    changed: &[&str],
+) -> Fixture {
     let mut fittings = fitted_with(
         home,
-        FakeWorkProduct::changed(&["src/parse.rs"]).showing("+    let x = 1;\n"),
+        FakeWorkProduct::changed(changed).showing("+    let x = 1;\n"),
         a_quiet_drone(),
     );
     fittings.workflows = one(workflow);
@@ -174,12 +191,20 @@ struct Said {
     is_error: bool,
 }
 
-/// The dry-run tool call, exactly as a client makes one: no `arguments`
-/// member at all, because the tool takes none.
+/// The dry-run tool call, exactly as a client makes one, asking for the whole
+/// run.
 async fn ask(app: &Router) -> Said {
+    asking(app, false).await
+}
+
+/// The same call, saying which of the two runs is wanted.
+async fn asking(app: &Router, only_what_changed: bool) -> Said {
     let body = post(
         app,
-        r#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"run_checks"}}"#,
+        &format!(
+            r#"{{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{{"name":"run_checks",
+                "arguments":{{"only_what_changed":{only_what_changed}}}}}}}"#
+        ),
     )
     .await;
     let at = body

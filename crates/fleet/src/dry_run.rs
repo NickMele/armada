@@ -22,7 +22,7 @@
 //! | A refusal while one runs | Two builds in one worktree, neither answer about the work |
 //! | [`DryRuns`], per step | Ask, change a line, ask again, for as long as the step lasts |
 //!
-//! **Which Checks is not the call's choice.** It takes no arguments at all.
+//! **The call chooses neither the Checks nor the bar** — [`Fleet::run_checks`].
 
 use std::fmt;
 use std::path::Path;
@@ -96,6 +96,12 @@ pub enum NotRun {
     AlreadySubmitted,
     /// The step has spent its allowance.
     Spent { allowed: u32 },
+    /// A narrowed run of a worktree holding no change. **Refused before
+    /// anything is spent**: a Drone asking what its own change broke, having
+    /// changed nothing, has an answer that costs no Check at all — and a run
+    /// narrowed to an empty list would either measure nothing or, worse,
+    /// measure everything under a command that read as narrow.
+    NothingChanged,
     /// The worktree could not be read, so `diff_nonempty` has no answer.
     /// **Refused before anything is spent**, which is why the reading is taken
     /// first: a report that guessed at this would tell a Drone its work changed
@@ -137,6 +143,12 @@ impl fmt::Display for NotRun {
                 "this part has already asked for the checks {allowed} times, \
                  which is all it gets. Finish the work and submit — the checks \
                  are run again then, and that run is the one that decides"
+            ),
+            NotRun::NothingChanged => out.write_str(
+                "you asked for the checks against what you have changed, and \
+                 your worktree holds no change yet. Nothing was run and nothing \
+                 has been spent — do some of the work and ask again, or ask \
+                 with `only_what_changed` false for the run the gate will make",
             ),
             NotRun::CouldNotRead { cause } => write!(
                 out,
@@ -180,9 +192,23 @@ where
     /// **its own** slot and the Job's own frozen workflow, which is
     /// `Fleet::declare_scope`'s binding and for the same reason. Which slot is
     /// `crate::peer`'s answer.
-    pub async fn run_checks(&self, caller: &JobId) -> Result<CheckReport, NotRun> {
+    ///
+    /// `only_what_changed` is the one thing the Drone does say, and it names
+    /// nothing either: the step's Checks run under both answers, and what moves
+    /// is how much of the tree each opens — against this worktree's own diff,
+    /// read here, only where the Manifest declared a narrower way to run it.
+    /// `#504`, and `docs/contracts/configuration.md` holds the syntax.
+    ///
+    /// **A narrowed answer is the smaller claim and the report says which it
+    /// is** — its own closing sentence, and the narrowed command on every row
+    /// that ran one. The gate goes on reading the whole of every Check.
+    pub async fn run_checks(
+        &self,
+        caller: &JobId,
+        only_what_changed: bool,
+    ) -> Result<CheckReport, NotRun> {
         let plan = self.dry_run_begins(caller).await?;
-        let ran = self.dry_run(&plan).await;
+        let ran = self.dry_run(&plan, only_what_changed).await;
         // **Before the result is returned, on both roads out.** A run that
         // failed to end would leave the clocks suspended for the rest of the
         // step, which is the tripwires switched off by an error path.
@@ -259,7 +285,7 @@ where
     }
 
     /// The run itself, with no lock held.
-    async fn dry_run(&self, plan: &Plan) -> Result<CheckReport, NotRun> {
+    async fn dry_run(&self, plan: &Plan, narrow: bool) -> Result<CheckReport, NotRun> {
         let Some(declared) = plan.record.workflow().step(&plan.step) else {
             return Err(NotRun::NoSuchStep {
                 step: plan.step.clone(),
@@ -291,10 +317,15 @@ where
         // that ran a Check the gate will not run would tell a Drone its work
         // failed something no gate is going to ask — and this report's closing
         // sentence promises the opposite: the same Checks, run by Fleet.
-        let touched: Vec<String> = match declared
-            .checks()
-            .iter()
-            .any(ResolvedCheck::needs_changed_paths)
+        //
+        // **A narrowed run reads them whatever the Checks declare**, because
+        // the narrowing is what they feed. So the condition is the union of the
+        // two reasons rather than the `when` one alone.
+        let touched: Vec<String> = match narrow
+            || declared
+                .checks()
+                .iter()
+                .any(ResolvedCheck::needs_changed_paths)
         {
             false => Vec::new(),
             true => match self.work().changed_files(&plan.worktree) {
@@ -306,6 +337,13 @@ where
                 }
             },
         };
+        // **After the reading and before any Check.** A narrowed run over an
+        // empty diff has nothing to narrow to, and answering it with a report
+        // of skips would spend one of the step's asks to say what this sentence
+        // says for nothing.
+        if narrow && touched.is_empty() {
+            return Err(NotRun::NothingChanged);
+        }
         // **The same batch the gate runs**, several at a time and in the step's
         // order, which matters more here than at the gate: this is the call a
         // Drone is sitting idle inside, and the report it reads back has to name
@@ -313,10 +351,12 @@ where
         let mut observed = Vec::with_capacity(declared.checks().len());
         let mut printed = Vec::new();
         let mut took = Vec::with_capacity(declared.checks().len());
+        let mut narrowed_to = Vec::with_capacity(declared.checks().len());
         for done in crate::checking::ran(
             declared.checks(),
             &touched,
             moved,
+            narrow,
             Path::new(plan.worktree.path()),
             self.budget().duration(),
         )
@@ -324,6 +364,7 @@ where
         {
             observed.push(done.observed);
             took.push(done.took);
+            narrowed_to.push(done.narrowed_to);
             if let Some(pair) = done.printed {
                 printed.push(pair);
             }
@@ -370,8 +411,14 @@ where
                     detail: row.produced,
                     took: took.get(at).copied().unwrap_or(Duration::ZERO),
                     log: row.output_path,
+                    // The command that actually ran, where it was not the
+                    // Check's own. A Drone reading a narrowed pass has to be
+                    // able to see what it was narrowed to, or the row claims
+                    // more than the run measured.
+                    narrowed_to: narrowed_to.get(at).cloned().flatten(),
                 })
                 .collect(),
+            narrowed: narrow,
         })
     }
 
@@ -392,7 +439,11 @@ where
         .in_job(plan.record.id().as_ulid().clone())
         .at_step(plan.step.as_str())
         .with_field("ran", FieldValue::Int(report.ran.len() as i64))
-        .with_field("failed", FieldValue::Int(report.failed() as i64));
+        .with_field("failed", FieldValue::Int(report.failed() as i64))
+        // Which of the two runs was asked for, as a field: a query for every
+        // step that asked has to be able to tell them apart, and the two cost
+        // very different amounts of a machine.
+        .with_field("narrowed", FieldValue::Bool(report.narrowed));
         // A log line that will not write does not fail the call: the Drone has
         // its answer, and nothing about the Job moved either way.
         let _ = transcript::note(&self.host().repo_root, plan.record.id(), &envelope);

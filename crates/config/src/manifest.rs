@@ -1,7 +1,7 @@
 //! `armada.yml`, in the slice M1 reads.
 //!
-//! **These keys, and nothing else.** `version`, `id`, `base`; `run`, `when`
-//! and `requires` under `checks.<name>`; `run` and `destructive` under
+//! **These keys, and nothing else.** `version`, `id`, `base`; `run`, `when`,
+//! `requires` and `narrow` under `checks.<name>`; `run` and `destructive` under
 //! `commands.<name>`; `setup.requires`; and `quiet_after_seconds` and
 //! `poke_limit` under `drone`, `#414`'s — the first section here that is a dial
 //! rather than a registry, spelled as a step spells it and named for the reason
@@ -27,7 +27,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use core_model::{Covers, ManifestId, PathPattern, Prerequisite, ResolvedCheck, Ulid};
+use core_model::{Covers, ManifestId, Narrowing, PathPattern, Prerequisite, ResolvedCheck, Ulid};
 use serde_yaml_ng::Value;
 
 use crate::error::{Fault, LoadError, Refusal};
@@ -46,7 +46,9 @@ const TOP_LEVEL: &[&str] = &[
     "after_merge",
 ];
 /// The keys M1 reads inside `checks.<name>`.
-const CHECK_KEYS: &[&str] = &["run", "when", "requires"];
+const CHECK_KEYS: &[&str] = &["run", "when", "requires", "narrow"];
+/// The keys M1 reads inside `checks.<name>.narrow`.
+const NARROW_KEYS: &[&str] = &["run", "each", "from", "under", "except"];
 /// The keys M1 reads inside `commands.<name>`.
 const COMMAND_KEYS: &[&str] = &["run", "destructive"];
 /// The keys M1 reads inside `setup`.
@@ -71,6 +73,7 @@ pub struct Check {
     run: String,
     when: Option<Covers>,
     requires: Vec<Prerequisite>,
+    narrow: Option<Narrowing>,
 }
 
 impl Check {
@@ -98,6 +101,18 @@ impl Check {
     /// to delete.
     pub fn requires(&self) -> &[Prerequisite] {
         &self.requires
+    }
+
+    /// How this Check is run against a subset of the tree. **`None` where the
+    /// file declares no `narrow`, and that means it runs whole** — never
+    /// "narrows to nothing".
+    ///
+    /// The second question about paths a Check can be asked, and it is not
+    /// [`when`](Check::when)'s: `when` decides whether the Check runs at all,
+    /// this decides what it reads once it does. `format` covers every path and
+    /// still narrows to the Rust ones, so one key could not carry both.
+    pub fn narrow(&self) -> Option<&Narrowing> {
+        self.narrow.as_ref()
     }
 }
 
@@ -545,12 +560,16 @@ fn after_merge(
             )),
             // `when` dropped and `expect_exit_code` zero: both are a step's
             // question, and after a merge there is no step to ask it of.
+            // `narrow` dropped for the same shape of reason one tier along —
+            // it is a Drone's question about its own change, and what merged
+            // is the whole tree.
             Some(check) => built.push(ResolvedCheck::ManifestCheck {
                 name,
                 run: check.run().to_string(),
                 expect_exit_code: 0,
                 when: None,
                 requires: Vec::new(),
+                narrow: None,
             }),
             None => out.push(Refusal::new(
                 key,
@@ -597,6 +616,7 @@ fn required_by(
                 run: draft.run,
                 when: draft.when,
                 requires,
+                narrow: draft.narrow,
             },
         );
     }
@@ -699,6 +719,68 @@ struct DraftCheck {
     /// runs before. Distinct from an empty list, which [`yaml::list`] refuses
     /// outright: `requires: []` is a key to delete rather than a list to read.
     requires: Option<Vec<(String, String)>>,
+    narrow: Option<Narrowing>,
+}
+
+/// `checks.<name>.narrow`, the second question a Check answers about paths.
+///
+/// **`run` and `each` are both required, and `run` is a whole command line.**
+/// The first Check narrowed here is `cargo nextest run --workspace`, and what
+/// has to go for `-p` to mean anything is `--workspace` — so no rule about
+/// appending arguments to the declared `run` could have produced the narrowed
+/// one. The file writes both.
+///
+/// **`under` is where the repository declares its own layout**, and it is the
+/// whole of the derivation from a path to an argument. `crates` turns
+/// `crates/ipc/src/lib.rs` into `ipc`; a `pnpm` repository writes something
+/// else. Nothing downstream knows either fact, which is the point — a runner
+/// that knew Cargo's layout would be wrong about the first repository that did
+/// not use it. `except` then drops values the whole run already excludes, which
+/// no `from` pattern could: the dialect refuses a leading `!` by name.
+///
+/// A refused value leaves the Check with no narrowing, and the refusal is
+/// already in `out` — no Manifest carrying one loads at all, which is
+/// `requires`' reasoning and not `when`'s: running whole is what a Check
+/// without this key does anyway, so there is no silent narrowing to fall into.
+fn narrowing(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<Narrowing> {
+    let mut table = Table::open(at, value, out)?;
+    let run = table
+        .required("run", out)
+        .and_then(|value| yaml::text(&table.at("run"), value, out));
+    let each_key = table.at("each");
+    let each = table
+        .required("each", out)
+        .and_then(|value| yaml::text(&each_key, value, out))
+        .and_then(|written| match written.contains("{}") {
+            true => Some(written),
+            false => {
+                out.push(Refusal::new(&each_key, Fault::NothingToSubstitute));
+                None
+            }
+        });
+    // Not `when`, and it cannot be folded into it: `format` covers every path
+    // and narrows only to the Rust ones. Absent means every changed path feeds
+    // it, which is the reading `when` gives absence one key up.
+    let from = match table.optional("from") {
+        None => Ok(None),
+        Some(value) => covers(&table.at("from"), value, out),
+    };
+    let under = table
+        .optional("under")
+        .and_then(|value| yaml::text(&table.at("under"), value, out));
+    // Values, not paths: `from` filters what feeds the derivation and this
+    // filters what it derived to. `except: []` is refused by `yaml::list` for
+    // `when`'s reason — a list with nothing in it is a key to delete.
+    let except = table
+        .optional("except")
+        .and_then(|value| yaml::list(&table.at("except"), value, out))
+        .map(|items| texts(items, out))
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(_, value)| value)
+        .collect();
+    table.close(NARROW_KEYS, out);
+    Some(Narrowing::declared(run?, each?, from.ok()?, under, except))
 }
 
 fn check_entry(
@@ -728,11 +810,15 @@ fn check_entry(
         .optional("requires")
         .map(|value| yaml::list(&table.at("requires"), value, out).unwrap_or_default())
         .map(|items| texts(items, out));
+    let narrow = table
+        .optional("narrow")
+        .and_then(|value| narrowing(&table.at("narrow"), value, out));
     table.close(known, out);
     Some(DraftCheck {
         run: run?,
         when: when.ok()?,
         requires,
+        narrow,
     })
 }
 

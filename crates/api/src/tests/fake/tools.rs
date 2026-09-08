@@ -88,10 +88,20 @@ impl Tools for FakeDaemon {
         })
     }
 
-    async fn run_checks(&self, _caller: crate::Caller) -> Result<CheckReport, NotRecorded> {
+    async fn run_checks(
+        &self,
+        _caller: crate::Caller,
+        only_what_changed: bool,
+    ) -> Result<CheckReport, NotRecorded> {
         self.while_working("checks to run")?;
         self.checked.fetch_add(1, Ordering::SeqCst);
-        Ok(shapes::check_report())
+        // The flag is answered back rather than dropped, so a router test can
+        // tell that what the Drone asked for reached the daemon. What a
+        // narrowed run actually runs is `fleet::dry_run`'s and is tested there.
+        Ok(CheckReport {
+            narrowed: only_what_changed,
+            ..shapes::check_report()
+        })
     }
 
     /// One minted id, and the call recorded. **The fake decides nothing about

@@ -147,7 +147,10 @@ async fn called<D: Tools>(
         // adds nothing to the unbounded-sink risk this module's comment names —
         // it is still one reply on the Drone's own connection — and what bounds
         // the cost is `Tools::run_checks`'s, not the transport's.
-        Incoming::RunChecks { id } => match served.daemon().run_checks(caller).await {
+        Incoming::RunChecks {
+            id,
+            only_what_changed,
+        } => match served.daemon().run_checks(caller, only_what_changed).await {
             Ok(report) => Answered::Checked { id, report },
             Err(why) => Answered::Refused { id, why },
         },

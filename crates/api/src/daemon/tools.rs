@@ -99,12 +99,16 @@ pub trait Tools: Send + Sync + 'static {
     /// per step, and a refusal while one is already running — because the
     /// convergence clocks are suspended for the duration and cannot bound it.
     ///
+    /// `only_what_changed` narrows what each Check reads and never which Checks
+    /// run. Paths on the wire would be a scope the Drone chose, and are refused.
+    ///
     /// Bound to a Job and a step the caller never names, for
-    /// [`submit_evidence`](Tools::submit_evidence)'s reason: there is no
-    /// parameter at all.
+    /// [`submit_evidence`](Tools::submit_evidence)'s reason: neither is a
+    /// parameter.
     fn run_checks(
         &self,
         caller: Caller,
+        only_what_changed: bool,
     ) -> impl Future<Output = Result<CheckReport, NotRecorded>> + Send;
 
     /// `declare_scope` — where the working Drone says its work for this step

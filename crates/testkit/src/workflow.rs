@@ -178,18 +178,47 @@ pub fn requiring(
     commands: &[(&str, &str)],
     requires: &[(&str, &[&str])],
 ) -> ResolvedWorkflow {
-    assembled(steps, 0, &[], commands, requires, &[])
+    assembled(steps, 0, &[], commands, requires, &[], &[])
 }
 
 /// The same fixture with some steps saying how long their own Drone may be
 /// quiet, and how often it is nudged. A step absent from `patience` declares
 /// neither, which is every other fixture in the workspace.
 pub fn patient(steps: &[Sketch<'_>], patience: &[Patience<'_>]) -> ResolvedWorkflow {
-    assembled(steps, 0, &[], &[], &[], patience)
+    assembled(steps, 0, &[], &[], &[], patience, &[])
+}
+
+/// How a named Check is run against a subset of the tree, as the fixture's
+/// Manifest writes it.
+///
+/// **A whole-fixture argument rather than a fifth field on [`Gate::Check`]**,
+/// for [`requiring`]'s reason: a narrowing is the whole subject of the handful
+/// of tests that want one and is noise on every other, and a Check absent from
+/// the list writes no `narrow:` at all — which is the Check that runs whole.
+#[derive(Debug, Clone, Copy)]
+pub struct Narrows<'a> {
+    /// The Check this narrowing belongs to.
+    pub check: &'a str,
+    /// The command a narrowed run starts from.
+    pub run: &'a str,
+    /// How one value is spelled as an argument. `{}` is the value.
+    pub each: &'a str,
+    /// Which changed paths feed it. Empty writes no `from:` key.
+    pub from: &'a [&'a str],
+    /// The directory whose child names the value. `None` writes no `under:`
+    /// key, which is the verbatim case.
+    pub under: Option<&'a str>,
+    /// Values the narrowing never produces. Empty writes no `except:` key.
+    pub except: &'a [&'a str],
+}
+
+/// The same fixture with some of its Checks declaring how they narrow.
+pub fn narrowing(steps: &[Sketch<'_>], narrows: &[Narrows<'_>]) -> ResolvedWorkflow {
+    assembled(steps, 0, &[], &[], &[], &[], narrows)
 }
 
 fn built(steps: &[Sketch<'_>], retry_limit: u32, models: &[(&str, &str)]) -> ResolvedWorkflow {
-    assembled(steps, retry_limit, models, &[], &[], &[])
+    assembled(steps, retry_limit, models, &[], &[], &[], &[])
 }
 
 fn assembled(
@@ -199,6 +228,7 @@ fn assembled(
     commands: &[(&str, &str)],
     requires: &[(&str, &[&str])],
     patience: &[Patience<'_>],
+    narrows: &[Narrows<'_>],
 ) -> ResolvedWorkflow {
     let roster = Roster::of(models.iter().map(|(_, model)| *model));
     let def = WorkflowDef::parse(
@@ -209,7 +239,7 @@ fn assembled(
     .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
     let manifest = Manifest::parse(
         Path::new("fixture-armada.yml"),
-        &manifest_text(steps, commands, requires),
+        &manifest_text(steps, commands, requires, narrows),
     )
     .unwrap_or_else(|refused| panic!("the fixture manifest did not parse: {refused}"));
     ResolvedWorkflow::resolve(&def, &manifest)
@@ -331,6 +361,7 @@ fn manifest_text(
     steps: &[Sketch<'_>],
     commands: &[(&str, &str)],
     requires: &[(&str, &[&str])],
+    narrows: &[Narrows<'_>],
 ) -> String {
     let mut declared: BTreeMap<&str, (&str, &[&str])> = BTreeMap::new();
     for step in steps {
@@ -364,6 +395,24 @@ fn manifest_text(
         // which is the point of writing YAML at all.
         if let Some((_, needed)) = requires.iter().find(|(check, _)| check == &name) {
             text.push_str(&format!("    requires: [{}]\n", needed.join(", ")));
+        }
+        // Same rule again: a Check the list does not name writes no `narrow:`,
+        // which is the Check that runs whole.
+        if let Some(narrow) = narrows.iter().find(|narrow| narrow.check == name) {
+            text.push_str(&format!(
+                "    narrow:\n      run: \"{}\"\n      each: \"{}\"\n",
+                narrow.run, narrow.each
+            ));
+            if !narrow.from.is_empty() {
+                let quoted: Vec<String> = narrow.from.iter().map(|p| format!("\"{p}\"")).collect();
+                text.push_str(&format!("      from: [{}]\n", quoted.join(", ")));
+            }
+            if let Some(under) = narrow.under {
+                text.push_str(&format!("      under: \"{under}\"\n"));
+            }
+            if !narrow.except.is_empty() {
+                text.push_str(&format!("      except: [{}]\n", narrow.except.join(", ")));
+            }
         }
     }
     if !commands.is_empty() {

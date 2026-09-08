@@ -212,6 +212,11 @@ pub enum Fault {
     /// other dialect matches nothing and a Check that silently never runs again
     /// is the failure `when` exists to prevent.
     NotAPathPattern { value: String, why: BadPattern },
+    /// **A `checks.<name>.narrow.each` with no `{}` in it.** The template
+    /// spells one value as one argument, so a template with nowhere to put the
+    /// value produces the same argument however many paths changed — a narrowed
+    /// run that is narrowed to nothing and says so nowhere.
+    NothingToSubstitute,
     /// **An `artifact_exists` target that cannot name one file.** Refused where
     /// the definition is parsed rather than discovered at the gate, because
     /// every one of these fails at the gate whatever the Drone wrote: v1
@@ -432,6 +437,11 @@ impl fmt::Display for Fault {
             Fault::NotAPathPattern { value, why } => {
                 write!(f, "is `{value}`, which is not a path pattern: {why}")
             }
+            Fault::NothingToSubstitute => f.write_str(
+                "holds no `{}`, so there is nowhere for a changed path to go. \
+                 Write the argument with `{}` where the value belongs, as in \
+                 `-p {}`",
+            ),
             Fault::TwoDeliverables { first } => write!(
                 f,
                 "is a second `artifact_exists` on one step, which already \

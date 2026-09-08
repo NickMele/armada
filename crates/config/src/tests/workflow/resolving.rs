@@ -29,6 +29,7 @@ fn a_resolved_workflow_carries_the_command_not_the_name() {
                 expect_exit_code: 0,
                 when: None,
                 requires: Vec::new(),
+                narrow: None,
             },
             ResolvedCheck::ManifestCheck {
                 name: "test".to_string(),
@@ -36,6 +37,7 @@ fn a_resolved_workflow_carries_the_command_not_the_name() {
                 expect_exit_code: 0,
                 when: None,
                 requires: Vec::new(),
+                narrow: None,
             },
             ResolvedCheck::DiffNonempty,
         ]

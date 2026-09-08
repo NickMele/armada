@@ -45,6 +45,16 @@ pub struct CheckRan {
     pub took: Duration,
     /// Where its output was written, relative to the repository root.
     pub log: Option<String>,
+    /// The command a narrowed run used instead of the Check's own, where this
+    /// row was narrowed at all. **`None` on every row of a whole run, and on a
+    /// row of a narrowed run whose Check the project gave no narrower way to
+    /// run** — the two are the same fact and read the same way: this row is the
+    /// whole Check.
+    ///
+    /// Printed in full rather than summarised. A Drone that wants to know which
+    /// packages it was measured over is holding the answer, and a command cut
+    /// short is one nobody can run again.
+    pub narrowed_to: Option<String>,
 }
 
 /// Every Check the step declares, with what each one did.
@@ -54,6 +64,14 @@ pub struct CheckReport {
     /// is refused rather than reported on, because a report with no rows reads
     /// as a run that found nothing wrong.
     pub ran: Vec<CheckRan>,
+    /// Whether the Drone asked for a run against its own change rather than
+    /// the whole tree.
+    ///
+    /// **On the report and not derived from the rows.** A narrowed run whose
+    /// Checks all turned out to have no narrower way to run has no narrowed row
+    /// in it, and is still a narrowed run — the closing sentence has to say
+    /// which question was asked, not which answers came back.
+    pub narrowed: bool,
 }
 
 impl CheckReport {
@@ -93,6 +111,20 @@ const NOT_A_VERDICT: &str = "This is not a verdict and nothing has advanced. You
                              checked again when you submit, against the same Checks run by \
                              Fleet.";
 
+/// The closing sentence a narrowed run gets instead.
+///
+/// **It says the smaller thing that was measured, and it says it first.** The
+/// whole run's sentence promises the same Checks at the gate, and a narrowed
+/// run cannot promise that: the commands were different and read less of the
+/// tree. A Drone told only "not a verdict" would carry a narrowed pass to
+/// `submit_evidence` as though it were the whole one, which is the failure this
+/// wording exists to stop.
+const NARROWED: &str = "These checks were narrowed to what you changed, so a pass here says \
+                        those parts hold and not that the repository does. This is not a \
+                        verdict and nothing has advanced. Your work is checked again when \
+                        you submit, against the whole of every Check, and only that run \
+                        decides anything.";
+
 impl fmt::Display for CheckReport {
     fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
         let width = self
@@ -118,6 +150,12 @@ impl fmt::Display for CheckReport {
             if let Some(log) = &check.log {
                 writeln!(out, "{:width$}  {log}", "")?;
             }
+            // Under the row rather than in `DETAIL`, for the reason `DETAIL` is
+            // last: a command line is unbounded and would push every other row
+            // out of alignment with it.
+            if let Some(narrowed) = &check.narrowed_to {
+                writeln!(out, "{:width$}  {narrowed}", "")?;
+            }
         }
         let failed = self.failed();
         let skipped = self.skipped();
@@ -142,7 +180,10 @@ impl fmt::Display for CheckReport {
                  did not touch and were not run."
             )?,
         }
-        write!(out, "\n{NOT_A_VERDICT}")
+        match self.narrowed {
+            true => write!(out, "\n{NARROWED}"),
+            false => write!(out, "\n{NOT_A_VERDICT}"),
+        }
     }
 }
 

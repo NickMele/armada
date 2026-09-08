@@ -104,13 +104,19 @@ pub enum Incoming {
         id: CallId,
         declaration: DeclareScope,
     },
-    /// A call of the dry-run tool. **It carries nothing** — the tool takes no
-    /// arguments, so there is no value here for a Drone to have chosen.
+    /// A call of the dry-run tool. **The one value it carries chooses no bar**
+    /// — which Checks run is the step's, frozen at approval, and this says only
+    /// how much of the tree each one opens.
     ///
     /// Not evidence either, and not a gate: what comes back is what the Checks
     /// printed, and no step moves on it in either direction.
     RunChecks {
         id: CallId,
+        /// Whether each Check is run against the worktree's own diff rather
+        /// than the whole tree, where the Manifest declared a narrower way to
+        /// run it. **Fleet reads the diff** — the Drone answers yes or no and
+        /// names nothing.
+        only_what_changed: bool,
     },
     /// A call of the dispatch tool that read as one Job's worth of asking.
     /// **Whether that Job may exist is the daemon's answer** — this module
@@ -298,18 +304,6 @@ fn called(id: CallId, params: Option<&Value>) -> Incoming {
         Ok(tool) => tool,
         Err(why) => return Incoming::NotASubmission { id, why },
     };
-    // **Before the arguments are looked for**, because this tool takes none and
-    // a client is entitled to omit the member entirely. A client that sends an
-    // empty object is answered by the same arm, one branch down.
-    if tool == CHECKS_TOOL {
-        let carried = params
-            .and_then(|params| params.get("arguments"))
-            .and_then(|arguments| arguments.as_object());
-        return match carried.map(tools::nothing).unwrap_or(Ok(())) {
-            Ok(()) => Incoming::RunChecks { id },
-            Err(why) => Incoming::NotASubmission { id, why },
-        };
-    }
     let Some(arguments) = params
         .and_then(|params| params.get("arguments"))
         .and_then(|arguments| arguments.as_object())
@@ -319,6 +313,19 @@ fn called(id: CallId, params: Option<&Value>) -> Incoming {
             why: tools::argumentless(tool),
         };
     };
+    // **No longer answered before the arguments are looked for.** It took none
+    // until `#504`, and a client was entitled to omit the member entirely; the
+    // one field it takes now is required, so an omitted `arguments` is the
+    // ordinary refusal every other tool gives and says what to send.
+    if tool == CHECKS_TOOL {
+        return match tools::checking(arguments) {
+            Ok(only_what_changed) => Incoming::RunChecks {
+                id,
+                only_what_changed,
+            },
+            Err(why) => Incoming::NotASubmission { id, why },
+        };
+    }
     if tool == SCOPE_TOOL {
         return match tools::declaration(arguments) {
             Ok(declaration) => Incoming::Declare { id, declaration },

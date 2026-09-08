@@ -432,6 +432,7 @@ pub fn check_report() -> CheckReport {
                 detail: None,
                 took: std::time::Duration::from_millis(300),
                 log: Some(".armada/checks/a-job/implement.dry.0.log".to_string()),
+                narrowed_to: None,
             },
             CheckRan {
                 name: "tests".to_string(),
@@ -439,7 +440,9 @@ pub fn check_report() -> CheckReport {
                 detail: Some("exit code 101, expected 0".to_string()),
                 took: std::time::Duration::from_secs(12),
                 log: Some(".armada/checks/a-job/implement.dry.1.log".to_string()),
+                narrowed_to: None,
             },
         ],
+        narrowed: false,
     }
 }

@@ -36,6 +36,7 @@ mod gaming;
 mod guard;
 mod ids;
 mod judge;
+mod narrowing;
 mod note;
 mod prerequisite;
 mod record;
@@ -71,6 +72,7 @@ pub use ids::{
     Title, WorkflowId,
 };
 pub use judge::{JudgeCheck, JudgeCriterion, JudgeVerdict, Judgment};
+pub use narrowing::Narrowing;
 pub use note::{RedirectAlreadyWaiting, RedirectWaiting};
 pub use prerequisite::Prerequisite;
 pub use record::{Job, NewJob, StepTransitioned, Transitioned};

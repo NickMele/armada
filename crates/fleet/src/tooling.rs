@@ -135,13 +135,19 @@ where
 
     /// The Drone asking whether its work passes. Which Checks, what they are
     /// run against and what bounds the asking are all `Fleet::run_checks`'s,
-    /// under the slot lock that binds them to one step.
+    /// under the slot lock that binds them to one step. `only_what_changed` is
+    /// carried through untouched: it is the Drone's question and Fleet's
+    /// worktree that answer it together, and nothing here is either.
     ///
     /// **What comes back is a report and never a verdict.** The step is exactly
     /// where it was when the call arrived, whatever the Checks said.
-    async fn run_checks(&self, caller: api::Caller) -> Result<CheckReport, NotRecorded> {
+    async fn run_checks(
+        &self,
+        caller: api::Caller,
+        only_what_changed: bool,
+    ) -> Result<CheckReport, NotRecorded> {
         let job = self.placed(&caller)?;
-        Ok(Fleet::run_checks(self, &job).await?)
+        Ok(Fleet::run_checks(self, &job, only_what_changed).await?)
     }
 
     /// The Drone asking for one more Job to exist.

@@ -27,7 +27,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use checks_runner::{Attempt, Output};
+use checks_runner::{Attempt, Narrowed, Output};
 use core_model::{Prerequisite, ResolvedCheck};
 use tokio::task::JoinSet;
 use tokio::time::Instant;
@@ -87,9 +87,62 @@ fn not_covered(check: &ResolvedCheck, touched: &[String]) -> Option<Observed> {
     }
 }
 
+/// What a Check runs when a Drone asked about its own change.
+///
+/// **Pure, and settled beside the skip decision** for the same reason: it reads
+/// the Check's frozen `narrow` against paths already in hand, so nothing is
+/// spawned and nothing is ordered by it.
+///
+/// **Three answers and each is a different sentence.** The Check runs whole,
+/// which is what a Check with no `narrow` does and what every gate run does;
+/// it runs a narrower command; or it is not run at all, because nothing the
+/// change touched feeds it. The third is a skip and not a pass — a Drone told
+/// `test` passed on a change that touched no crate would have been told
+/// something false about its own work.
+fn narrowed(
+    check: &ResolvedCheck,
+    name: &str,
+    run: &str,
+    touched: &[String],
+    narrow: bool,
+) -> Planned {
+    let whole = Planned::Command {
+        name: name.to_string(),
+        run: run.to_string(),
+        narrowed_to: None,
+    };
+    if !narrow {
+        return whole;
+    }
+    match checks_runner::narrowed(check.narrowing(), touched) {
+        Narrowed::Whole => whole,
+        Narrowed::To(command) => Planned::Command {
+            name: name.to_string(),
+            run: run.to_string(),
+            narrowed_to: Some(command),
+        },
+        // The same sentence a `when` skip writes, and it is the true one: a
+        // Check that narrows to a directory the change did not touch has
+        // nothing to say about the change. `Observed::Skipped` carries what a
+        // reader's first question is, so it carries what the narrowing looked
+        // at rather than what the Check covers.
+        Narrowed::Nothing => Planned::Already(Observed::Skipped {
+            covers: check
+                .narrowing()
+                .and_then(core_model::Narrowing::under)
+                .unwrap_or_default()
+                .to_string(),
+        }),
+    }
+}
+
 /// What was observed of one declared Check, and what it printed.
 pub(crate) struct Completed {
     pub observed: Observed,
+    /// The command this Check was narrowed to, where it was narrowed at all.
+    /// **`None` on every gate run**, which never narrows, and on a narrowed run
+    /// of a Check the Manifest gave no narrower way to run.
+    pub narrowed_to: Option<String>,
     /// The Check's name and its output, for a Check that ran a command. `None`
     /// for a skip and for `diff_nonempty`, neither of which prints anything.
     pub printed: Option<(String, Output)>,
@@ -115,7 +168,16 @@ enum Planned {
     /// Check whose row a person will open looking for it.
     Blocked { name: String, observed: Observed },
     /// A command, and the slot it belongs in.
-    Command { name: String, run: String },
+    ///
+    /// `narrowed_to` is the command a narrowed run replaced the Check's own
+    /// with, kept beside `run` rather than instead of it because the report has
+    /// to be able to say the run was narrowed at all — a command line with no
+    /// second reading is one a Drone would take for the Check itself.
+    Command {
+        name: String,
+        run: String,
+        narrowed_to: Option<String>,
+    },
 }
 
 /// A prerequisite that did not succeed, and what it printed.
@@ -228,6 +290,7 @@ pub(crate) async fn ran(
     checks: &[ResolvedCheck],
     touched: &[String],
     moved: bool,
+    narrow: bool,
     worktree: &Path,
     budget: Duration,
 ) -> Vec<Completed> {
@@ -236,10 +299,9 @@ pub(crate) async fn ran(
         .map(|check| match not_covered(check, touched) {
             Some(skipped) => Planned::Already(skipped),
             None => match check {
-                ResolvedCheck::ManifestCheck { name, run, .. } => Planned::Command {
-                    name: name.clone(),
-                    run: run.clone(),
-                },
+                ResolvedCheck::ManifestCheck { name, run, .. } => {
+                    narrowed(check, name, run, touched, narrow)
+                }
                 ResolvedCheck::DiffNonempty => Planned::Already(Observed::Diff { moved }),
                 ResolvedCheck::ArtifactExists { target } => {
                     Planned::Already(Observed::Artifact(looked_for(worktree, target)))
@@ -287,7 +349,12 @@ pub(crate) async fn ran(
         .iter()
         .enumerate()
         .filter_map(|(at, plan)| match plan {
-            Planned::Command { run, .. } => Some((at, run.clone())),
+            // The narrowed command where there is one: it is what this run is
+            // about, and the Check's own line is kept only so the report can
+            // say the two differed.
+            Planned::Command {
+                run, narrowed_to, ..
+            } => Some((at, narrowed_to.clone().unwrap_or_else(|| run.clone()))),
             Planned::Already(_) | Planned::Blocked { .. } => None,
         });
     let worktree = worktree.to_path_buf();
@@ -320,6 +387,7 @@ pub(crate) async fn ran(
         completed.push(match plan {
             Planned::Already(observed) => Completed {
                 observed,
+                narrowed_to: None,
                 printed: None,
                 took: Duration::ZERO,
             },
@@ -331,12 +399,18 @@ pub(crate) async fn ran(
             // Check's to claim.
             Planned::Blocked { name, observed } => Completed {
                 observed,
+                narrowed_to: None,
                 printed: not_met.as_ref().map(|failed| (name, failed.output.clone())),
                 took: Duration::ZERO,
             },
-            Planned::Command { name, run } => match done[at].take() {
+            Planned::Command {
+                name,
+                run,
+                narrowed_to,
+            } => match done[at].take() {
                 Some((attempt, took)) => Completed {
                     observed: Observed::Command(attempt.exit),
+                    narrowed_to,
                     printed: Some((name, attempt.output)),
                     took,
                 },
@@ -351,6 +425,7 @@ pub(crate) async fn ran(
                         program: run,
                         kind: std::io::ErrorKind::Interrupted,
                     })),
+                    narrowed_to,
                     printed: Some((name, Output::default())),
                     took: Duration::ZERO,
                 },

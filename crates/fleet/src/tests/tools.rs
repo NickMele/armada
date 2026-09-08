@@ -50,10 +50,18 @@ pub async fn declared_by_the_one(
     fleet.declare_scope(&job, declaration).await
 }
 
-/// Run the Checks as the Drone of the one Job being worked.
+/// Run the Checks as the Drone of the one Job being worked, whole.
 pub async fn checked_by_the_one(fleet: &Fixture) -> Result<CheckReport, NotRun> {
+    narrowly_checked_by_the_one(fleet, false).await
+}
+
+/// The same, saying which of the two runs is wanted.
+pub async fn narrowly_checked_by_the_one(
+    fleet: &Fixture,
+    only_what_changed: bool,
+) -> Result<CheckReport, NotRun> {
     let Some(job) = fleet.working_on().await.first().cloned() else {
         return Err(NotRun::NothingIsWorking);
     };
-    fleet.run_checks(&job).await
+    fleet.run_checks(&job, only_what_changed).await
 }

@@ -190,10 +190,13 @@ where
     // than by this loop being careful.
     let mut observed = Vec::with_capacity(step.checks().len());
     let mut output = Vec::new();
+    // **`false`, and it is the whole of why a narrowed dry run is safe.** The
+    // gate reads the whole of every Check whatever a Drone asked for mid-step.
     for done in checking::ran(
         step.checks(),
         &touched,
         moved,
+        false,
         Path::new(at.worktree().path()),
         budget.duration(),
     )

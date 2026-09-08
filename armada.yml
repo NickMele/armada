@@ -17,11 +17,39 @@ checks:
   build:
     # `--locked`: a Check that updates the lockfile changed what it measured.
     run: cargo build --workspace --locked
+    # What a Drone gets when it asks about its own change rather than the whole
+    # tree. `--workspace` is gone rather than joined by `-p`: cargo reads the
+    # two together as the whole workspace and drops the `-p` silently, so a
+    # narrowed run would have been the whole run wearing a shorter command.
+    #
+    # `under: crates` is this repository declaring its own layout, and it is
+    # the only Cargo fact anywhere in the chain. `xtask` sits at the root
+    # rather than under `crates`, so a change to it narrows to nothing and this
+    # Check is not run — the gate still reads it whole.
+    #
+    # No `except`, unlike `test` below: `--workspace` builds `acceptance` too,
+    # so `-p acceptance` measures nothing the whole run does not.
+    narrow:
+      run: cargo build --locked
+      each: "-p {}"
+      under: crates
 
   test:
     # `--exclude acceptance`: a milestone's claim is read on its own. See
     # docs/practices/acceptance-tests.md. `nextest` measured 3x `cargo test`.
     run: cargo nextest run --workspace --exclude acceptance
+    # `--exclude` goes with `--workspace`, and cargo refuses it without one —
+    # so the exclusion is restated as `except`, and it is the same exclusion
+    # for the same reason. A milestone's claim is read on its own, so a
+    # narrowed run that pulled `acceptance` back in would show a Drone a bar
+    # the gate deliberately does not apply to it, and a Drone shown a red test
+    # chases it green.
+    narrow:
+      run: cargo nextest run
+      each: "-p {}"
+      under: crates
+      except:
+        - acceptance
 
   # The Bridge half — `build` and `test` say nothing about `apps/` or
   # `packages/`. Three, because none subsumes another. All need `node_modules`,
@@ -50,6 +78,12 @@ checks:
     # this repository failed on it. A script is where a chain of commands can
     # be written, and the list stays explicit inside it.
     run: pnpm typecheck
+    # **No `narrow`, and that is an answer rather than an omission.** A project
+    # is the unit a TypeScript compilation has: `tsc` reads the files its
+    # tsconfig references whatever is handed to it, so there is nothing
+    # narrower to run. A Check that declares none runs whole, which is what the
+    # three below do too.
+    #
     # `domain/**` and `protocol-version.toml`: codegen emits TypeScript from
     # them, so a change there is a change to compiled code.
     when:
@@ -144,6 +178,20 @@ checks:
     run: cargo fmt --all --check
     requires:
       - fmt
+    # The other shape of narrowing: the changed paths, verbatim, with no
+    # derivation at all. `from` keeps everything but Rust out — rustfmt exits
+    # non-zero on a file it cannot parse, so a changed `.md` would fail this
+    # Check for a reason that is not the work.
+    #
+    # `rustfmt` and not `cargo fmt`, because `cargo fmt -- <path>` passes what
+    # follows `--` to rustfmt as options and computes its own file list from
+    # the workspace's targets: the paths are ignored and the whole tree is read.
+    # Measured here on 8 Sep 2026, on a file this repository does not compile.
+    narrow:
+      run: rustfmt --check --edition 2021
+      each: "{}"
+      from:
+        - "**/*.rs"
 
 # Commands gate nothing — they are what a Drone is given to run.
 commands:

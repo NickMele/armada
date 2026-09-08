@@ -550,7 +550,8 @@ async fn a_report_carrying_a_failure_is_not_a_tool_error() {
 
     let answered = call(
         &app,
-        r#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"run_checks"}}"#,
+        r#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"run_checks",
+            "arguments":{"only_what_changed":false}}}"#,
     )
     .await;
     assert_eq!(answered.status, StatusCode::OK);
@@ -573,7 +574,8 @@ async fn a_checks_call_with_nothing_working_is_a_tool_error() {
 
     let answered = call(
         &app,
-        r#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"run_checks"}}"#,
+        r#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"run_checks",
+            "arguments":{"only_what_changed":false}}}"#,
     )
     .await;
     assert_eq!(answered.status, StatusCode::OK);
