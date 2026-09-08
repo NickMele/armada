@@ -87,12 +87,14 @@ export function refusedIn(whole: JobWhole | null): Refusals | undefined {
  * is where an allowlist denial is already attributed: actor=Fleet, with no
  * verification source.
  *
- * **It sits against P5 as the `unheard` verb reads it** — *a failure headline
- * names what happened and not who* — and the compliant alternative is *the job
- * was blocked from the following*. This is not the band's headline, which is
- * `escalation()`'s and still names the trigger rather than an actor.
+ * **The subject is the job, which is P5.** *Fleet blocked the job from the
+ * following* was written first and ruled out on 8 Sep 2026: naming Fleet reads
+ * as the sentence's point when the point is what was blocked, and the two
+ * sentences beneath already say whose declaration decides it. This is not the
+ * band's headline, which is `escalation()`'s and names the trigger rather than
+ * an actor.
  */
-const SAID = "Fleet blocked the job from the following:";
+const SAID = "The job was blocked from the following:";
 
 /**
  * What a restart meets. **A mechanism and not a tip** — it says how a toolset

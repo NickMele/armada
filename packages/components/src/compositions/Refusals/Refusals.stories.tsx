@@ -10,7 +10,7 @@ export default meta;
 type Story = StoryObj<typeof Refusals>;
 
 /** The sentence the band says over the rows, at every state that has any. */
-const SAID = "Fleet blocked the job from the following:";
+const SAID = "The job was blocked from the following:";
 
 /**
  * What a restart meets, said under every list `screens` builds. The words are

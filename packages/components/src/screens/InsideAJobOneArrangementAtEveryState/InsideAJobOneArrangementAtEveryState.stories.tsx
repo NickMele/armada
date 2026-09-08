@@ -505,7 +505,7 @@ export const BlockedByPolicy: Story = {
             children: (
               <>
                 <Refusals
-                  said="Fleet blocked the job from the following:"
+                  said="The job was blocked from the following:"
                   note="showing 8 of 31 refused calls"
                   again={
                     "A drone's toolset is fixed when it starts, and a restart builds the same " +
