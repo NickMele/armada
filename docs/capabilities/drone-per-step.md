@@ -27,7 +27,7 @@ that was written down and checked.
 | | |
 |---|---|
 | The worktree and the branch | One per Job, held for its life |
-| The commit | One, at the last step |
+| The commit | One, on the step the workflow says delivers |
 | The Checks a step is measured against | Frozen when the Job is created |
 | A Drone's toolset | Resolved once, from the same snapshot |
 

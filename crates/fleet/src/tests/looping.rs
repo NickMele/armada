@@ -43,9 +43,9 @@ fn a_loop_of_two_steps(cap: u32) -> config::ResolvedWorkflow {
         &format!(
             "version: 1\nworkflow_id: fixture-loop\nname: fixture\nstructure: loop\n\
              steps:\n  - id: implement\n    label: \"Implement\"\n    evidence_type: diff\n    \
-             mechanical_checks:\n      - type: diff_nonempty\n    advance_gate: auto\n  - \
+             mechanical_checks:\n      - type: diff_nonempty\n    delivers: false\n    advance_gate: auto\n  - \
              id: summarise\n    label: \"Summarise\"\n    evidence_type: facts_note\n    \
-             advance_gate: human_always\n    verdict_routing:\n      \
+             delivers: true\n    advance_gate: human_always\n    verdict_routing:\n      \
              request_changes: implement\n    iteration_cap: {cap}\n"
         ),
         &config::Roster::offering_nothing(),

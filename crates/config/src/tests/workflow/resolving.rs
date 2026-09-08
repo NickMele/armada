@@ -48,7 +48,7 @@ fn a_resolved_workflow_carries_the_command_not_the_name() {
 #[test]
 fn a_step_naming_a_check_the_manifest_lacks_is_refused_before_dispatch() {
     let def = bug_with(
-        "  - id: lint\n    label: Lint\n    advance_gate: auto\n    mechanical_checks:\n      - { type: manifest_check, check: lint, expect_exit_code: 0 }\n",
+        "  - id: lint\n    label: Lint\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: manifest_check, check: lint, expect_exit_code: 0 }\n",
     )
     .expect("the definition itself is well formed");
     let error = ResolvedWorkflow::resolve(&def, &manifest()).expect_err("`lint` is not declared");
@@ -71,7 +71,7 @@ fn a_step_naming_a_check_the_manifest_lacks_is_refused_before_dispatch() {
 #[test]
 fn naming_a_command_where_a_check_belongs_is_told_which_mistake_it_was() {
     let def = bug_with(
-        "  - id: tidy\n    label: Tidy\n    advance_gate: auto\n    mechanical_checks:\n      - { type: manifest_check, check: fmt, expect_exit_code: 0 }\n",
+        "  - id: tidy\n    label: Tidy\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: manifest_check, check: fmt, expect_exit_code: 0 }\n",
     )
     .expect("well formed");
     let error = ResolvedWorkflow::resolve(&def, &manifest()).expect_err("`fmt` is a Command");
@@ -88,7 +88,7 @@ fn naming_a_command_where_a_check_belongs_is_told_which_mistake_it_was() {
 #[test]
 fn every_unresolved_name_is_reported_not_only_the_first() {
     let def = bug_with(
-        "  - id: lint\n    label: Lint\n    advance_gate: auto\n    mechanical_checks:\n      - { type: manifest_check, check: lint, expect_exit_code: 0 }\n      - { type: manifest_check, check: typecheck, expect_exit_code: 0 }\n",
+        "  - id: lint\n    label: Lint\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: manifest_check, check: lint, expect_exit_code: 0 }\n      - { type: manifest_check, check: typecheck, expect_exit_code: 0 }\n",
     )
     .expect("well formed");
     let error = ResolvedWorkflow::resolve(&def, &manifest()).expect_err("two names miss");
@@ -100,7 +100,7 @@ fn every_unresolved_name_is_reported_not_only_the_first() {
 #[test]
 fn a_step_with_no_checks_needs_nothing_from_the_manifest() {
     let def = parse(
-        "version: 1\nworkflow_id: fixture\nname: prototype\nstructure: linear\nsteps:\n  - id: frame\n    label: Frame\n    evidence_type: facts_note\n    advance_gate: auto\n",
+        "version: 1\nworkflow_id: fixture\nname: prototype\nstructure: linear\nsteps:\n  - id: frame\n    label: Frame\n    evidence_type: facts_note\n    delivers: false\n    advance_gate: auto\n",
     )
     .expect("well formed");
     let bare = Manifest::parse(&named("armada.yml"), "version: 1\nid: tooling\n").expect("bare");

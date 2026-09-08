@@ -49,6 +49,19 @@
 # cannot tell a considered design from a sentence. `present` is
 # `human_always`, so the reader of the design is a person, which is what this
 # workflow says it wants.
+#
+# **No step of this workflow delivers, and both steps say so.** What Design Plan
+# produces is a document somebody reads, not a change somebody merges. Until
+# `delivers` existed nothing could say that: `present` was the last step, the
+# last step's advance pushed the branch and opened a pull request, and the only
+# thing standing between a design document and a pull request was this
+# repository's `.gitignore` line over `.armada/`. On a repository that tracks
+# it, this workflow opened one on its first Job.
+#
+# The deliverable stays where it is. Where a deliverable *should* live is
+# `[deliverable-location]` in `docs/OPEN.md` and is a different question -- a
+# workflow that writes nothing anywhere still reached the delivery path, which
+# is what this key stops.
 {
   "version": 1,
   "workflow_id": "design_plan",
@@ -65,12 +78,14 @@
           "target": ".armada/artifacts/draft.md"
         }
       ],
+      "delivers": false,
       "advance_gate": "auto"
     },
     {
       "id": "present",
       "label": "Present",
       "evidence_type": "document",
+      "delivers": false,
       "advance_gate": "human_always",
       "verdict_routing": {
         "request_changes": "draft"

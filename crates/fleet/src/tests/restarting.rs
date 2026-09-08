@@ -46,18 +46,25 @@ type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 
 const IMPLEMENT: &str = "implement";
 
-/// One step, gated on nothing, so nothing but the acts under test moves the
-/// Job.
+/// One step, gated on nothing and **delivering nothing**, so nothing but the
+/// acts under test moves the Job.
+///
+/// A restart is an entry into a step, so a delivering step restarted sends its
+/// work out again. Here that would put a commit, a second rebase, a push and a
+/// pull request into the delta these cases read the catch-up out of.
 fn one_step() -> ResolvedWorkflow {
-    testkit::resolved(&[Sketch {
-        id: IMPLEMENT,
-        label: "Implement",
-        evidence_type: Some("diff"),
-        gates: &[],
-        judged_on: &[],
-        scope: None,
-        gaming: None,
-    }])
+    testkit::delivering(
+        &[Sketch {
+            id: IMPLEMENT,
+            label: "Implement",
+            evidence_type: Some("diff"),
+            gates: &[],
+            judged_on: &[],
+            scope: None,
+            gaming: None,
+        }],
+        None,
+    )
 }
 
 fn called() -> Vec<DroneEvent> {

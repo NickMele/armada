@@ -45,6 +45,9 @@
 # undoing one named change and nothing else, which is the deciding work of this
 # workflow entire -- it names no model and is run as the Job was proposed.
 # `handoff` reports.
+#
+# **`handoff` is the step that sends the work out**, on entry rather than on
+# advance, and `revert` declares `false`. `bug.json` carries the reasoning.
 {
   "version": 1,
   "workflow_id": "revert",
@@ -125,6 +128,7 @@
           ]
         }
       ],
+      "delivers": false,
       "advance_gate": "auto_if_judge_passes"
     },
     {
@@ -132,6 +136,7 @@
       "label": "Summarise",
       "evidence_type": "facts_note",
       "model": "haiku",
+      "delivers": true,
       "advance_gate": "human_always"
     }
   ]

@@ -103,12 +103,13 @@ pub enum Adrift {
     /// hearing it — so this says a session went deaf, not that a verdict was
     /// lost.
     NotTold { job: JobId, cause: io::Error },
-    /// The last step advanced and the work would not commit.
+    /// The delivering step was entered and the work would not commit.
     ///
-    /// **The Job is `completed_success` anyway**, because its Checks passed and
-    /// that is a fact about the work rather than about git. **Nothing is
-    /// lost**: the worktree holds the change exactly as the Drone left it, and
-    /// the cause below says how to take it by hand.
+    /// **The step runs anyway**, and the Job still reaches whatever its Checks
+    /// say — a repository that would not take a commit is not a verdict on the
+    /// work. **Nothing is lost**: the worktree holds the change exactly as the
+    /// Drone left it, the Job's own log says the branch did not go, and the
+    /// cause below says how to take it by hand.
     ///
     /// No trigger names an infrastructure failure at the gate, so this
     /// escalates nothing rather than borrowing a trigger that means something

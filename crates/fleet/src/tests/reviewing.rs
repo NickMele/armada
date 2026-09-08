@@ -27,8 +27,9 @@ use crate::gate::Ruling;
 use crate::process::{holder_of, Holder};
 use crate::tests::admitted::{dispatched, started};
 use crate::tests::daemon::{
-    a_fleet_gated_on_a_person, a_fleet_judged_by, a_proposal, diff_evidence, fittings,
-    note_evidence, one, two_steps_gated_on_a_person, worktree_directory,
+    a_fleet_gated_on_a_person, a_fleet_gated_on_a_person_delivering_nothing, a_fleet_judged_by,
+    a_proposal, diff_evidence, fittings, note_evidence, one, two_steps_gated_on_a_person,
+    worktree_directory,
 };
 use crate::tests::http::call;
 use crate::tests::tmp::TempDir;
@@ -46,6 +47,13 @@ fn job_id_of(job: &core_model::Job) -> JobId {
 /// Job at the gate builds one of these.
 pub(super) fn a_fleet_reviewing_the_first_step(home: &TempDir, work: FakeWorkProduct) -> Fixture {
     a_fleet_gated_on_a_person(home, work, "implement", FakeVcs::new())
+}
+
+/// The same, on a workflow that sends nothing out — for the two cases whose
+/// subject is what a human boundary does to the *branch*, where the delivery
+/// the approved step is entered on would be the rest of the delta.
+fn a_fleet_reviewing_and_delivering_nothing(home: &TempDir, work: FakeWorkProduct) -> Fixture {
+    a_fleet_gated_on_a_person_delivering_nothing(home, work, "implement", FakeVcs::new())
 }
 
 /// A Job dispatched, worked, and standing at a human gate — reached through the
@@ -143,7 +151,10 @@ fn three_commits_behind() -> Delivering {
 #[tokio::test]
 async fn a_boundary_a_person_approved_catches_the_branch_up() {
     let home = TempDir::new();
-    let fleet = a_fleet_gated_on_a_person(
+    // **Delivering nothing**, so the delta below is the catch-up and only the
+    // catch-up. A workflow's delivering step is sent out as it is entered, and
+    // the step this approval enters would be it.
+    let fleet = a_fleet_gated_on_a_person_delivering_nothing(
         &home,
         FakeWorkProduct::changed(&["src/log.rs"]),
         "implement",
@@ -185,7 +196,8 @@ async fn a_boundary_a_person_approved_catches_the_branch_up() {
 #[tokio::test]
 async fn a_branch_that_is_not_behind_is_left_alone_at_a_human_boundary() {
     let home = TempDir::new();
-    let fleet = a_fleet_reviewing_the_first_step(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    let fleet =
+        a_fleet_reviewing_and_delivering_nothing(&home, FakeWorkProduct::changed(&["src/log.rs"]));
     let job_id = at_the_gate(&fleet, &home).await;
 
     fleet
@@ -271,9 +283,9 @@ async fn a_step_after_a_human_boundary_does_not_advance_on_a_rebase_it_did_not_r
         std::path::Path::new("fixture.yml"),
         "version: 1\nworkflow_id: fixture-workflow\nname: fixture\nstructure: linear\n\
          steps:\n  - id: implement\n    label: \"Implement\"\n    evidence_type: diff\n    \
-         mechanical_checks:\n      - type: diff_nonempty\n    advance_gate: human_always\n  - \
+         mechanical_checks:\n      - type: diff_nonempty\n    delivers: false\n    advance_gate: human_always\n  - \
          id: verify\n    label: \"Verify\"\n    evidence_type: diff\n    \
-         mechanical_checks:\n      - type: diff_nonempty\n    advance_gate: auto\n",
+         mechanical_checks:\n      - type: diff_nonempty\n    delivers: true\n    advance_gate: auto\n",
         // The fixture names no model, so there is nothing for a roster to
         // offer. See `config::Roster`.
         &config::Roster::offering_nothing(),
@@ -338,12 +350,16 @@ async fn a_step_after_a_human_boundary_does_not_advance_on_a_rebase_it_did_not_r
     assert_eq!(failures, &[verification::CheckFailed::DiffEmpty]);
 }
 
-/// A gate on the workflow's last step. **Approving there lands the work**: the
-/// commit is made before the Job is recorded complete, for the reason
-/// `landing` gives — a `completed_success` whose branch is uncommitted is
-/// correct, verified and unmergeable.
+/// A gate on the workflow's last step, which is also the step that sends the
+/// work out. **The person at that gate is reading a branch that has already
+/// gone**, which is the whole of the inversion: the commit and the pull request
+/// are made as the step is *entered*, so approving is a verdict on something
+/// that exists rather than an instruction to produce it.
+///
+/// It used to be the other way round, and the person was answering about a
+/// branch nothing had published.
 #[tokio::test]
-async fn approving_the_last_step_commits_the_work_and_ends_the_job() {
+async fn the_last_step_is_approved_over_a_branch_that_already_went_out() {
     let home = TempDir::new();
     // The gate is on `summarise` here, so the first step advances on its own
     // and the Job walks to the last one the way a Job does.
@@ -378,9 +394,18 @@ async fn approving_the_last_step_commits_the_work_and_ends_the_job() {
         "the last step is a person's: {:?}",
         turned.ruled()
     );
+    assert_eq!(
+        fleet.vcs().committed().len(),
+        1,
+        "the branch the person is reading is a branch a merge can take"
+    );
     assert!(
-        fleet.vcs().committed().is_empty(),
-        "nothing lands while a person is still looking at it"
+        fleet
+            .vcs()
+            .delivered()
+            .iter()
+            .any(|did| matches!(did, Delivered::OpenedForReview { .. })),
+        "and the pull request is open while they read it, not after they answer"
     );
 
     let done = fleet
@@ -392,7 +417,7 @@ async fn approving_the_last_step_commits_the_work_and_ends_the_job() {
     assert_eq!(
         fleet.vcs().committed().len(),
         1,
-        "the branch a reviewer accepted is a branch a merge can take"
+        "and the answer publishes nothing further — one Job is one delivery"
     );
 }
 
@@ -490,7 +515,7 @@ async fn a_judge_under_a_human_gate_filters_what_reaches_the_person() {
         let fleet = a_fleet_judged_by(
             &home,
             FakeWorkProduct::changed(&["src/log.rs"]),
-            two_steps_gated_on_a_person("implement", Some(QUESTION)),
+            two_steps_gated_on_a_person("implement", Some(QUESTION), Some("summarise")),
             judge,
         );
         let job = fleet

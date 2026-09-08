@@ -24,9 +24,9 @@ use crate::workflow::WorkflowDef;
 fn two_steps(model: &str) -> String {
     format!(
         "version: 1\nworkflow_id: modelled\nname: modelled\nstructure: linear\nsteps:\n  \
-         - id: decide\n    label: Decide\n    evidence_type: diff\n    advance_gate: auto\n  \
+         - id: decide\n    label: Decide\n    evidence_type: diff\n    delivers: false\n    advance_gate: auto\n  \
          - id: report\n    label: Report\n    evidence_type: facts_note\n    model: \
-         {model}\n    advance_gate: auto\n"
+         {model}\n    delivers: false\n    advance_gate: auto\n"
     )
 }
 
@@ -122,6 +122,7 @@ fn judged(model: &str) -> String {
         "  - id: review",
         "    label: Review",
         "    evidence_type: diff",
+        "    delivers: false",
         "    advance_gate: auto_if_judge_passes",
         "    judge_checks:",
         &format!("      - model: {model}"),
@@ -202,6 +203,7 @@ fn the_two_model_keys_are_separate_and_neither_fills_in_for_the_other() {
         "    label: Review",
         "    evidence_type: diff",
         "    model: the-deciding-model",
+        "    delivers: false",
         "    advance_gate: auto_if_judge_passes",
         "    judge_checks:",
         "      - model: the-reporting-model",
@@ -239,6 +241,7 @@ fn a_judge_check_that_names_no_model_carries_none() {
         "    label: Review",
         "    evidence_type: diff",
         "    model: the-deciding-model",
+        "    delivers: false",
         "    advance_gate: auto_if_judge_passes",
         "    judge_checks:",
         "      - criteria:",

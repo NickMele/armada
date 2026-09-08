@@ -65,17 +65,25 @@ impl Clock for Held {
     }
 }
 
-/// One step, gated on nothing, so nothing but the footprint moves.
+/// One step, gated on nothing and delivering nothing, so nothing but the
+/// footprint moves.
+///
+/// **The delivery is what would otherwise move.** A delivering step is sent out
+/// as it is entered, and assembling the pull request reads the worktree — so
+/// the readings these cases count would each carry one nobody asked for.
 fn one_step(scope: Option<Scoped<'static>>) -> ResolvedWorkflow {
-    testkit::resolved(&[Sketch {
-        id: "implement",
-        label: "Implement",
-        evidence_type: Some("diff"),
-        gates: &[],
-        judged_on: &[],
-        scope,
-        gaming: None,
-    }])
+    testkit::delivering(
+        &[Sketch {
+            id: "implement",
+            label: "Implement",
+            evidence_type: Some("diff"),
+            gates: &[],
+            judged_on: &[],
+            scope,
+            gaming: None,
+        }],
+        None,
+    )
 }
 
 /// A Fleet over that worktree reading and that clock, with one step on it.

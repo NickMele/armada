@@ -55,7 +55,11 @@ fn a_judge_that_refuses() -> FakeJudge {
 /// Drone that changed nothing fails the mechanical tier and never reaches the
 /// Judge at all.
 fn judged_then_summarised() -> config::ResolvedWorkflow {
-    testkit::resolved(&[
+    testkit::resolved(judged_then_summarised_steps())
+}
+
+fn judged_then_summarised_steps() -> &'static [Sketch<'static>] {
+    &[
         Sketch {
             id: "implement",
             label: "Implement",
@@ -74,7 +78,7 @@ fn judged_then_summarised() -> config::ResolvedWorkflow {
             scope: None,
             gaming: None,
         },
-    ])
+    ]
 }
 
 /// A Job dispatched, worked, refused by the Judge, and standing escalated with
@@ -231,7 +235,11 @@ async fn a_refused_step_advances_when_a_person_overrules_the_judge() {
 async fn an_overruled_step_catches_the_branch_up_like_any_other_boundary() {
     let home = TempDir::new();
     let mut fittings = fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.workflows = one(judged_then_summarised());
+    // **Delivering nothing**, so the delta below is the catch-up and only the
+    // catch-up. The step an override advances to is `summarise`, which is where
+    // this fixture would otherwise send the work out — and a commit, a second
+    // rebase, a push and a pull request would all land in the same list.
+    fittings.workflows = one(testkit::delivering(judged_then_summarised_steps(), None));
     fittings.judge = Arc::new(a_judge_that_refuses());
     fittings.vcs = FakeVcs::new().delivering(Delivering {
         standing: Standing::Behind { commits: 2 },

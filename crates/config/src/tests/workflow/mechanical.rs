@@ -16,7 +16,7 @@ use crate::workflow::MechanicalCheck;
 fn the_two_unimplemented_check_types_are_refused_by_name() {
     for kind in ["test_run", "pr_merged"] {
         let refused = refusals(bug_with(&format!(
-            "  - id: close\n    label: Close\n    advance_gate: auto\n    mechanical_checks:\n      - {{ type: {kind} }}\n"
+            "  - id: close\n    label: Close\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - {{ type: {kind} }}\n"
         )));
         assert_eq!(
             fault_at(&refused, "steps[3].mechanical_checks[0].type"),
@@ -36,7 +36,7 @@ fn the_two_unimplemented_check_types_are_refused_by_name() {
 #[test]
 fn an_artifact_check_needs_the_path_it_is_looking_for() {
     let refused = refusals(bug_with(
-        "  - id: close\n    label: Close\n    advance_gate: auto\n    mechanical_checks:\n      - { type: artifact_exists }\n",
+        "  - id: close\n    label: Close\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: artifact_exists }\n",
     ));
     assert_eq!(
         fault_at(&refused, "steps[3].mechanical_checks[0].target"),
@@ -62,7 +62,7 @@ fn an_artifact_target_that_cannot_name_one_file_is_refused_where_it_is_written()
         (".armada/artifacts/", BadTarget::ADirectory),
     ] {
         let refused = refusals(bug_with(&format!(
-            "  - id: close\n    label: Close\n    advance_gate: auto\n    mechanical_checks:\n      - {{ type: artifact_exists, target: \"{target}\" }}\n"
+            "  - id: close\n    label: Close\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - {{ type: artifact_exists, target: \"{target}\" }}\n"
         )));
         assert_eq!(
             fault_at(&refused, "steps[3].mechanical_checks[0].target"),
@@ -83,7 +83,7 @@ fn an_artifact_target_that_cannot_name_one_file_is_refused_where_it_is_written()
 #[test]
 fn a_step_declaring_two_artifacts_is_refused_because_it_has_one_deliverable() {
     let refused = refusals(bug_with(
-        "  - id: close\n    label: Close\n    advance_gate: auto\n    mechanical_checks:\n      - { type: artifact_exists, target: a.md }\n      - { type: artifact_exists, target: b.md }\n",
+        "  - id: close\n    label: Close\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: artifact_exists, target: a.md }\n      - { type: artifact_exists, target: b.md }\n",
     ));
     assert_eq!(
         fault_at(&refused, "steps[3].mechanical_checks[1].target"),
@@ -99,7 +99,7 @@ fn a_step_declaring_two_artifacts_is_refused_because_it_has_one_deliverable() {
 #[test]
 fn an_artifact_check_carries_its_path_onto_the_step() {
     let def = bug_with(
-        "  - id: close\n    label: Close\n    advance_gate: auto\n    mechanical_checks:\n      - { type: artifact_exists, target: .armada/artifacts/close.md }\n",
+        "  - id: close\n    label: Close\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: artifact_exists, target: .armada/artifacts/close.md }\n",
     )
     .expect("the definition loads");
     assert_eq!(
@@ -126,7 +126,7 @@ fn an_artifact_check_carries_its_path_onto_the_step() {
 #[test]
 fn a_manifest_check_needs_both_the_check_name_and_the_expected_code() {
     let refused = refusals(bug_with(
-        "  - id: close\n    label: Close\n    advance_gate: auto\n    mechanical_checks:\n      - { type: manifest_check }\n",
+        "  - id: close\n    label: Close\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: manifest_check }\n",
     ));
     assert_eq!(
         fault_at(&refused, "steps[3].mechanical_checks[0].check"),
@@ -141,7 +141,7 @@ fn a_manifest_check_needs_both_the_check_name_and_the_expected_code() {
 #[test]
 fn diff_nonempty_carries_nothing_else() {
     let refused = refusals(bug_with(
-        "  - id: close\n    label: Close\n    advance_gate: auto\n    mechanical_checks:\n      - { type: diff_nonempty, check: build }\n",
+        "  - id: close\n    label: Close\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: diff_nonempty, check: build }\n",
     ));
     assert!(matches!(
         fault_at(&refused, "steps[3].mechanical_checks[0].check"),

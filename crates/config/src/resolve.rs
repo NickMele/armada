@@ -177,6 +177,10 @@ fn resolve_step(step: &Step, manifest: &Manifest, unknown: &mut Vec<UnknownCheck
         step.model().cloned(),
     )
     .dispatching(step.may_dispatch_jobs())
+    // Its own builder for `dispatching`'s reason, and read straight off the
+    // step: the file was required to say, and `config` already refused a
+    // second step saying yes, so there is nothing left to decide here.
+    .delivering(step.delivers())
     // **Both keys through one builder**, which is the shape `dispatching` set
     // and the reason `frozen`'s ten positional arguments did not become
     // twelve. The cap is a count and never an `Option` on the record: absent

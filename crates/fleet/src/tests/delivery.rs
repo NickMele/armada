@@ -15,8 +15,9 @@ use crate::daemon::Fleet;
 use crate::gate::Ruling;
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
-    a_fleet_committing_through, a_fleet_whose_manifest_declares_a_base, a_proposal, diff_evidence,
-    fittings, note_evidence, one, two_steps_both_gated_on_a_diff, worktree_directory,
+    a_fleet_committing_through, a_fleet_delivering_nothing, a_fleet_whose_manifest_declares_a_base,
+    a_proposal, diff_evidence, fittings, note_evidence, one, two_steps_both_gated_on_a_diff,
+    worktree_directory,
 };
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
@@ -40,7 +41,7 @@ fn three_commits_behind() -> Delivering {
 #[tokio::test]
 async fn a_branch_that_is_not_behind_is_not_rebased_at_a_boundary() {
     let home = TempDir::new();
-    let fleet = a_fleet_committing_through(
+    let fleet = a_fleet_delivering_nothing(
         &home,
         FakeWorkProduct::changed(&["src/log.rs"]),
         FakeVcs::new(),
@@ -66,7 +67,7 @@ async fn a_branch_that_is_not_behind_is_not_rebased_at_a_boundary() {
 #[tokio::test]
 async fn a_behind_branch_is_brought_up_to_date_at_a_step_boundary() {
     let home = TempDir::new();
-    let fleet = a_fleet_committing_through(
+    let fleet = a_fleet_delivering_nothing(
         &home,
         FakeWorkProduct::changed(&["src/log.rs"]),
         FakeVcs::new().delivering(three_commits_behind()),
@@ -91,7 +92,7 @@ async fn a_behind_branch_is_brought_up_to_date_at_a_step_boundary() {
     );
     assert_eq!(
         delivered.pushed, None,
-        "a boundary that is not the last publishes nothing"
+        "no step of this workflow sends the work out, so nothing is published"
     );
     // **Two, and the first one is the spawn's.** A fake scripted `Behind` is
     // behind on every call, including the one `put_a_drone_on` makes before the
@@ -244,9 +245,16 @@ async fn a_step_that_resolves_none_of_a_conflicted_rebase_fails_its_diff_check()
 
 // -------------------------------------------------------- at the last step
 
-/// What a completed Job leaves behind: a commit, a push, and a pull request.
+/// What entering the delivering step leaves behind: a commit, a push, and a
+/// pull request.
+///
+/// **The turn that publishes is the one that enters the step, not the one that
+/// ends the Job.** `summarise` is the fixture's delivering step, so the branch
+/// is out while it is being worked and is there for whoever the gate on it
+/// holds the Job for. Delivering when the last step *advanced* put the branch
+/// out after the person at its gate had already answered.
 #[tokio::test]
-async fn a_finished_job_is_pushed_and_opened_for_review() {
+async fn entering_the_delivering_step_pushes_and_opens_for_review() {
     let home = TempDir::new();
     let fleet = a_fleet_committing_through(
         &home,
@@ -261,11 +269,11 @@ async fn a_finished_job_is_pushed_and_opened_for_review() {
     dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
-    fleet.turn().await.unwrap();
-    submitted_by_the_one(&fleet, note_evidence()).await.unwrap();
     let turned = fleet.turn().await.unwrap();
 
-    let delivered = turned.delivered().expect("a finished Job delivers");
+    let delivered = turned
+        .delivered()
+        .expect("the step that says it delivers has been entered");
     assert_eq!(
         delivered.pushed,
         Some(Pushed::ToTheRemote {
@@ -355,8 +363,14 @@ async fn the_pull_request_body_is_assembled_from_what_was_checked() {
         body.contains("- `src/log.rs` — modified"),
         "and the outcome section is what the record can prove it changed: {body}"
     );
+    // **The delivering step has no verdict yet, and the body says so.** The
+    // branch goes out as that step is entered, which is what puts it in front
+    // of the person whose gate it then holds at — so the row for it reads as
+    // running rather than advanced, and that is the truth about the moment the
+    // pull request was opened.
     assert!(
-        body.contains("**Implement** — advanced") && body.contains("**Summarise** — advanced"),
+        body.contains("**Implement** — advanced")
+            && body.contains("**Summarise** — was still running"),
         "every step with its verdict: {body}"
     );
     assert!(
@@ -502,9 +516,10 @@ async fn a_job_on_a_repository_with_no_remote_completes_without_a_push() {
     dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
-    fleet.turn().await.unwrap();
-    submitted_by_the_one(&fleet, note_evidence()).await.unwrap();
+    // The turn that enters `summarise`, which is where this workflow delivers.
     let turned = fleet.turn().await.unwrap();
+    submitted_by_the_one(&fleet, note_evidence()).await.unwrap();
+    fleet.turn().await.unwrap();
 
     assert_eq!(
         fleet.load(job.id()).await.unwrap().status(),
@@ -564,11 +579,16 @@ async fn the_declared_base_overrides_what_would_have_been_inferred() {
         Some(Base::Declared(String::from("release")))
     );
     assert!(
-        fleet.vcs().delivered().iter().all(|did| did
-            == &Delivered::BroughtUpToDate {
-                branch: format!("armada/{}", job.id().as_str()),
-                base: String::from("release")
-            }),
+        fleet
+            .vcs()
+            .delivered()
+            .iter()
+            .filter(|did| matches!(did, Delivered::BroughtUpToDate { .. }))
+            .all(|did| did
+                == &Delivered::BroughtUpToDate {
+                    branch: format!("armada/{}", job.id().as_str()),
+                    base: String::from("release")
+                }),
         "every rebase named the declared branch, not the inferred one: {:?}",
         fleet.vcs().delivered()
     );

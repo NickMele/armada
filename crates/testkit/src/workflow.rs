@@ -178,14 +178,23 @@ pub fn requiring(
     commands: &[(&str, &str)],
     requires: &[(&str, &[&str])],
 ) -> ResolvedWorkflow {
-    assembled(steps, 0, &[], commands, requires, &[], &[])
+    assembled(
+        steps,
+        0,
+        &[],
+        commands,
+        requires,
+        &[],
+        &[],
+        Sends::TheLastStep,
+    )
 }
 
 /// The same fixture with some steps saying how long their own Drone may be
 /// quiet, and how often it is nudged. A step absent from `patience` declares
 /// neither, which is every other fixture in the workspace.
 pub fn patient(steps: &[Sketch<'_>], patience: &[Patience<'_>]) -> ResolvedWorkflow {
-    assembled(steps, 0, &[], &[], &[], patience, &[])
+    assembled(steps, 0, &[], &[], &[], patience, &[], Sends::TheLastStep)
 }
 
 /// How a named Check is run against a subset of the tree, as the fixture's
@@ -214,11 +223,53 @@ pub struct Narrows<'a> {
 
 /// The same fixture with some of its Checks declaring how they narrow.
 pub fn narrowing(steps: &[Sketch<'_>], narrows: &[Narrows<'_>]) -> ResolvedWorkflow {
-    assembled(steps, 0, &[], &[], &[], &[], narrows)
+    assembled(steps, 0, &[], &[], &[], &[], narrows, Sends::TheLastStep)
 }
 
 fn built(steps: &[Sketch<'_>], retry_limit: u32, models: &[(&str, &str)]) -> ResolvedWorkflow {
-    assembled(steps, retry_limit, models, &[], &[], &[], &[])
+    assembled(
+        steps,
+        retry_limit,
+        models,
+        &[],
+        &[],
+        &[],
+        &[],
+        Sends::TheLastStep,
+    )
+}
+
+/// Which step of a fixture sends the work out.
+///
+/// **Not `testkit::Delivering`**, which is the script a `FakeVcs` answers a
+/// push and a rebase from. This is the workflow's own declaration.
+///
+/// **A whole-fixture argument rather than a field on [`Sketch`]**, for
+/// [`retried`]'s reason, and with a second: `TheLastStep` is what every fixture
+/// in the workspace was written under, when the last step's advance was what
+/// landed a Job's work. A test about delivery says otherwise through
+/// [`delivering`]; nothing else has to state anything.
+#[derive(Debug, Clone, Copy)]
+enum Sends<'a> {
+    TheLastStep,
+    /// The step named, or no step at all — which is what a workflow producing
+    /// something read rather than merged declares.
+    Named(Option<&'a str>),
+}
+
+impl Sends<'_> {
+    fn is(self, steps: &[Sketch<'_>], n: usize) -> bool {
+        match self {
+            Sends::TheLastStep => n + 1 == steps.len(),
+            Sends::Named(at) => at == Some(steps[n].id),
+        }
+    }
+}
+
+/// The same fixture with the named step sending the work out, and no other step
+/// doing so. `None` is a workflow that delivers nothing at all.
+pub fn delivering(steps: &[Sketch<'_>], at: Option<&str>) -> ResolvedWorkflow {
+    assembled(steps, 0, &[], &[], &[], &[], &[], Sends::Named(at))
 }
 
 fn assembled(
@@ -229,11 +280,12 @@ fn assembled(
     requires: &[(&str, &[&str])],
     patience: &[Patience<'_>],
     narrows: &[Narrows<'_>],
+    delivers: Sends<'_>,
 ) -> ResolvedWorkflow {
     let roster = Roster::of(models.iter().map(|(_, model)| *model));
     let def = WorkflowDef::parse(
         Path::new("fixture-workflow.yml"),
-        &workflow_text(steps, retry_limit, models, patience),
+        &workflow_text(steps, retry_limit, models, patience, delivers),
         &roster,
     )
     .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
@@ -259,18 +311,21 @@ fn workflow_text(
     retry_limit: u32,
     models: &[(&str, &str)],
     patience: &[Patience<'_>],
+    delivers: Sends<'_>,
 ) -> String {
     let mut text = String::from(
         "version: 1\nworkflow_id: fixture-workflow\nname: fixture\nstructure: linear\nsteps:\n",
     );
-    for step in steps {
+    for (n, step) in steps.iter().enumerate() {
         let gate = match step.judged_on.is_empty() {
             true => "auto",
             false => "auto_if_judge_passes",
         };
+        // Every step has to say, and [`Sends`] is what says it.
+        let delivers = delivers.is(steps, n);
         text.push_str(&format!(
             "  - id: {}\n    label: \"{}\"\n    advance_gate: {gate}\n    \
-             retry_limit: {retry_limit}\n",
+             delivers: {delivers}\n    retry_limit: {retry_limit}\n",
             step.id, step.label
         ));
         if let Some(evidence) = step.evidence_type {

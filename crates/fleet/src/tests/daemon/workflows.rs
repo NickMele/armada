@@ -48,6 +48,41 @@ pub(super) fn two_steps() -> config::ResolvedWorkflow {
     ])
 }
 
+/// The same two steps, with **neither of them sending the work out** — a
+/// workflow whose product is read rather than merged, which four of the eight
+/// shipped workflows are.
+///
+/// What it buys the cases that use it is a step boundary with no delivery on
+/// it. The delivering step is sent out as it is entered, and on a two-step
+/// fixture the one boundary there is *is* that entry — so a case about what a
+/// boundary does to a branch would otherwise be reading a commit, a push and a
+/// pull request out of the same delta.
+pub fn two_steps_delivering_nothing() -> config::ResolvedWorkflow {
+    testkit::delivering(
+        &[
+            Sketch {
+                id: "implement",
+                label: "Implement",
+                evidence_type: Some("diff"),
+                gates: &[Gate::DiffNonempty],
+                judged_on: &[],
+                scope: None,
+                gaming: None,
+            },
+            Sketch {
+                id: "summarise",
+                label: "Summarise",
+                evidence_type: Some("facts_note"),
+                gates: &[],
+                judged_on: &[],
+                scope: None,
+                gaming: None,
+            },
+        ],
+        None,
+    )
+}
+
 /// Two steps, each gated on a non-empty diff. What the boundary needs: a
 /// second step whose `diff_nonempty` can fail, which `two_steps` cannot express
 /// because its second step is gated on nothing.
@@ -83,9 +118,13 @@ pub fn two_steps_both_gated_on_a_diff() -> config::ResolvedWorkflow {
 /// fixture does: a workflow a real `armada.yml` could not produce would prove
 /// nothing about the gate — and a human gate carrying a Judge is exactly the
 /// pairing the parser's agreement rule is asked about.
+/// `delivers` names the step that sends the work out, and `None` is a workflow
+/// that sends nothing — see [`two_steps_delivering_nothing`] for why a case
+/// about a boundary wants the second.
 pub fn two_steps_gated_on_a_person(
     gate_on: &str,
     question: Option<&str>,
+    delivers: Option<&str>,
 ) -> config::ResolvedWorkflow {
     let gate = |step: &str| match step == gate_on {
         true => "human_always",
@@ -104,15 +143,19 @@ pub fn two_steps_gated_on_a_person(
              criterion_id: c1\n            question: {question}\n"
         ),
     };
+    let sends = |step: &str| delivers == Some(step);
     let def = config::WorkflowDef::parse(
         std::path::Path::new("fixture.yml"),
         &format!(
             "version: 1\nworkflow_id: fixture-workflow\nname: fixture\nstructure: linear\n\
              steps:\n  - id: implement\n    label: \"Implement\"\n    evidence_type: diff\n    \
-             mechanical_checks:\n      - type: diff_nonempty\n{judge}    advance_gate: {}\n  - \
+             mechanical_checks:\n      - type: diff_nonempty\n{judge}    \
+             delivers: {}\n    advance_gate: {}\n  - \
              id: summarise\n    label: \"Summarise\"\n    evidence_type: facts_note\n    \
-             advance_gate: {}\n",
+             delivers: {}\n    advance_gate: {}\n",
+            sends("implement"),
             gate("implement"),
+            sends("summarise"),
             gate("summarise"),
         ),
         // The fixture names no model, so there is nothing for a roster to
@@ -160,7 +203,7 @@ fn workflow_named_and(id: &str, gated: bool) -> config::ResolvedWorkflow {
         &format!(
             "version: 1\nworkflow_id: {id}\nname: {id}\nstructure: linear\nsteps:\n  - id: \
              {step_id}\n    label: \"{step_id}\"\n    evidence_type: diff\n{mechanical}    \
-             advance_gate: auto\n"
+             delivers: true\n    advance_gate: auto\n"
         ),
         // The fixture names no model, so there is nothing for a roster to
         // offer. See `config::Roster`.

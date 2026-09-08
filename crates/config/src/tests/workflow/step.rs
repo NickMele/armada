@@ -21,6 +21,7 @@ fn judged(gate: &str, panel_size: u32, enabled: bool) -> String {
         // A judged step declares what it produces, because the Judge is shown
         // the work product and a step declaring none produces nothing.
         "    evidence_type: diff".to_string(),
+        "    delivers: false".to_string(),
         format!("    advance_gate: {gate}"),
         "    judge_checks:".to_string(),
         format!("      - enabled: {enabled}"),
@@ -42,10 +43,48 @@ fn a_step_needs_both_an_id_and_a_label() {
     // `id` is stable and everything routes on it; `label` is display only. Both
     // are required, so a workflow cannot be authored with one doing both jobs.
     let refused = refusals(parse(
-        "version: 1\nworkflow_id: fixture\nname: bug\nstructure: linear\nsteps:\n  - id: plan\n    advance_gate: auto\n  - label: Implement\n    advance_gate: auto\n",
+        "version: 1\nworkflow_id: fixture\nname: bug\nstructure: linear\nsteps:\n  - id: plan\n    delivers: false\n    advance_gate: auto\n  - label: Implement\n    delivers: false\n    advance_gate: auto\n",
     ));
     assert_eq!(fault_at(&refused, "steps[0].label"), &Fault::Missing);
     assert_eq!(fault_at(&refused, "steps[1].id"), &Fault::Missing);
+}
+
+/// **A step that does not say whether it sends the work out is refused, by
+/// name.** Neither absent reading is safe: taken as delivering, the four
+/// workflows that produce a document keep opening pull requests for one; taken
+/// as not, every workflow file already written silently stops pushing a branch,
+/// and a correct-looking Job lands nothing. So the file says, and a file that
+/// does not is refused at the line.
+#[test]
+fn a_step_that_does_not_say_whether_it_delivers_is_refused() {
+    let refused = refusals(bug_with(
+        "  - id: review
+    label: Review
+    advance_gate: auto
+",
+    ));
+    assert_eq!(fault_at(&refused, "steps[3].delivers"), &Fault::Missing);
+}
+
+/// And a value that is not a boolean is refused rather than read as `false`. A
+/// step written to send the work out that silently cannot is a Job that
+/// finishes with nothing on a remote and nothing saying why.
+#[test]
+fn a_delivery_declaration_that_is_not_a_boolean_is_refused() {
+    let refused = refusals(bug_with(
+        "  - id: review
+    label: Review
+    delivers: sometimes
+    advance_gate: auto
+",
+    ));
+    assert_eq!(
+        fault_at(&refused, "steps[3].delivers"),
+        &Fault::WrongType {
+            wanted: "true or false",
+            found: "text",
+        }
+    );
 }
 
 /// The prefix form, and it is the only gate still outside the milestone. It
@@ -57,7 +96,7 @@ fn a_gate_needing_a_manifest_policy_is_refused() {
     for key in ["review_gate", "auto_merge"] {
         let gate = format!("manifest_rule:{key}");
         let refused = refusals(bug_with(&format!(
-            "  - id: review\n    label: Review\n    advance_gate: {gate}\n"
+            "  - id: review\n    label: Review\n    delivers: false\n    advance_gate: {gate}\n"
         )));
         assert_eq!(
             fault_at(&refused, "steps[3].advance_gate"),
@@ -73,8 +112,10 @@ fn a_gate_needing_a_manifest_policy_is_refused() {
 /// which is what Design Plan's `present` and Prototype's `build` declare.
 #[test]
 fn a_human_gate_loads_and_needs_no_judge_to_do_it() {
-    let def = bug_with("  - id: review\n    label: Review\n    advance_gate: human_always\n")
-        .expect("a step a person answers");
+    let def = bug_with(
+        "  - id: review\n    label: Review\n    delivers: false\n    advance_gate: human_always\n",
+    )
+    .expect("a step a person answers");
     assert_eq!(def.steps()[3].advance_gate(), AdvanceGate::HumanAlways);
 }
 
@@ -100,7 +141,7 @@ fn a_human_gate_takes_a_judge_and_takes_none() {
 #[test]
 fn a_judge_gate_with_no_criterion_is_refused_and_so_is_a_criterion_with_no_judge_gate() {
     let no_criterion = refusals(bug_with(
-        "  - id: review\n    label: Review\n    advance_gate: auto_if_judge_passes\n",
+        "  - id: review\n    label: Review\n    delivers: false\n    advance_gate: auto_if_judge_passes\n",
     ));
     assert_eq!(
         fault_at(&no_criterion, "steps[3].advance_gate"),
@@ -124,7 +165,7 @@ fn a_judge_gate_with_no_criterion_is_refused_and_so_is_a_criterion_with_no_judge
 #[test]
 fn a_step_that_asks_the_judge_and_produces_nothing_is_refused() {
     let blind = refusals(bug_with(
-        "  - id: review\n    label: Review\n    advance_gate: auto_if_judge_passes\n    \
+        "  - id: review\n    label: Review\n    delivers: false\n    advance_gate: auto_if_judge_passes\n    \
          judge_checks:\n      - criteria:\n          - criterion_id: c1\n            \
          question: Is this right?\n",
     ));
@@ -139,8 +180,9 @@ fn a_step_that_asks_the_judge_and_produces_nothing_is_refused() {
 /// hand-off step rather than an edge case.
 #[test]
 fn a_step_that_produces_nothing_and_asks_nothing_still_loads() {
-    let def = bug_with("  - id: merge\n    label: Merge\n    advance_gate: auto\n")
-        .expect("a step that produces nothing a Judge reads");
+    let def =
+        bug_with("  - id: merge\n    label: Merge\n    delivers: false\n    advance_gate: auto\n")
+            .expect("a step that produces nothing a Judge reads");
     assert!(def.steps()[3].evidence_type().is_none());
     assert!(def.steps()[3].judge_checks().is_empty());
 }
@@ -176,6 +218,7 @@ fn gamed(baseline: &str, patterns: &[&str]) -> String {
     let mut text = [
         "  - id: review",
         "    label: Review",
+        "    delivers: false",
         "    advance_gate: auto",
         "    judge_checks:",
         "      - gaming_check:",
@@ -245,7 +288,7 @@ fn a_baseline_ref_that_is_not_a_step_s_evidence_is_refused() {
 #[test]
 fn a_gate_the_schema_never_had_is_a_different_refusal_from_a_deferred_one() {
     let refused = refusals(bug_with(
-        "  - id: review\n    label: Review\n    advance_gate: whenever\n",
+        "  - id: review\n    label: Review\n    delivers: false\n    advance_gate: whenever\n",
     ));
     assert!(matches!(
         fault_at(&refused, "steps[3].advance_gate"),
@@ -256,7 +299,7 @@ fn a_gate_the_schema_never_had_is_a_different_refusal_from_a_deferred_one() {
 #[test]
 fn a_step_key_m1_does_not_read_hard_fails() {
     let refused = refusals(bug_with(
-        "  - id: review\n    label: Review\n    advance_gate: auto\n    hard_prerequisite: true\n",
+        "  - id: review\n    label: Review\n    delivers: false\n    advance_gate: auto\n    hard_prerequisite: true\n",
     ));
     assert!(
         refused
@@ -272,7 +315,7 @@ fn a_step_key_m1_does_not_read_hard_fails() {
 #[test]
 fn a_step_carries_the_retry_budget_it_declares() {
     let def =
-        bug_with("  - id: review\n    label: Review\n    advance_gate: auto\n    retry_limit: 3\n")
+        bug_with("  - id: review\n    label: Review\n    delivers: false\n    advance_gate: auto\n    retry_limit: 3\n")
             .expect("a step declaring a retry budget loads");
     assert_eq!(def.steps()[3].retry_limit(), 3);
 }
@@ -290,7 +333,7 @@ fn a_step_that_declares_no_retry_budget_has_none() {
 #[test]
 fn a_retry_budget_of_zero_loads_where_a_version_of_zero_would_not() {
     let def =
-        bug_with("  - id: review\n    label: Review\n    advance_gate: auto\n    retry_limit: 0\n")
+        bug_with("  - id: review\n    label: Review\n    delivers: false\n    advance_gate: auto\n    retry_limit: 0\n")
             .expect("zero is a legal budget");
     assert_eq!(def.steps()[3].retry_limit(), 0);
 }
@@ -300,7 +343,7 @@ fn a_retry_budget_of_zero_loads_where_a_version_of_zero_would_not() {
 #[test]
 fn a_retry_budget_that_is_not_a_count_is_refused_rather_than_read_as_none() {
     let refused = refusals(bug_with(
-        "  - id: review\n    label: Review\n    advance_gate: auto\n    retry_limit: three\n",
+        "  - id: review\n    label: Review\n    delivers: false\n    advance_gate: auto\n    retry_limit: three\n",
     ));
     assert!(
         refused
@@ -317,7 +360,7 @@ fn a_retry_budget_that_is_not_a_count_is_refused_rather_than_read_as_none() {
 #[test]
 fn a_step_carries_either_half_of_its_patience_without_the_other() {
     let waits = bug_with(
-        "  - id: review\n    label: Review\n    advance_gate: auto\n    \
+        "  - id: review\n    label: Review\n    delivers: false\n    advance_gate: auto\n    \
          quiet_after_seconds: 900\n",
     )
     .expect("a step declaring how long its Drone may be quiet loads");
@@ -325,7 +368,7 @@ fn a_step_carries_either_half_of_its_patience_without_the_other() {
     assert_eq!(waits.steps()[3].poke_limit(), None);
 
     let nudges =
-        bug_with("  - id: review\n    label: Review\n    advance_gate: auto\n    poke_limit: 5\n")
+        bug_with("  - id: review\n    label: Review\n    delivers: false\n    advance_gate: auto\n    poke_limit: 5\n")
             .expect("a step declaring how many nudges its Drone gets loads");
     assert_eq!(nudges.steps()[3].poke_limit(), Some(5));
     assert_eq!(nudges.steps()[3].quiet_after_seconds(), None);
@@ -352,12 +395,12 @@ fn a_step_that_declares_no_patience_has_none() {
 #[test]
 fn no_pokes_is_a_sentence_and_no_patience_is_not() {
     let none =
-        bug_with("  - id: review\n    label: Review\n    advance_gate: auto\n    poke_limit: 0\n")
+        bug_with("  - id: review\n    label: Review\n    delivers: false\n    advance_gate: auto\n    poke_limit: 0\n")
             .expect("zero pokes is a legal budget");
     assert_eq!(none.steps()[3].poke_limit(), Some(0));
 
     let refused = refusals(bug_with(
-        "  - id: review\n    label: Review\n    advance_gate: auto\n    \
+        "  - id: review\n    label: Review\n    delivers: false\n    advance_gate: auto\n    \
          quiet_after_seconds: 0\n",
     ));
     assert!(
@@ -376,7 +419,7 @@ fn no_pokes_is_a_sentence_and_no_patience_is_not() {
 #[test]
 fn a_patience_that_is_not_a_count_is_refused_rather_than_read_as_absent() {
     let refused = refusals(bug_with(
-        "  - id: review\n    label: Review\n    advance_gate: auto\n    \
+        "  - id: review\n    label: Review\n    delivers: false\n    advance_gate: auto\n    \
          quiet_after_seconds: fifteen minutes\n",
     ));
     assert!(
@@ -394,7 +437,7 @@ fn an_evidence_type_outside_the_schema_is_refused() {
     // legal values. The registry records that as an open question; until it is
     // answered, the parser refuses it by name rather than guessing.
     let refused = refusals(bug_with(
-        "  - id: assess\n    label: Assess\n    evidence_type: review_findings\n    advance_gate: auto\n",
+        "  - id: assess\n    label: Assess\n    evidence_type: review_findings\n    delivers: false\n    advance_gate: auto\n",
     ));
     assert!(matches!(
         fault_at(&refused, "steps[3].evidence_type"),
@@ -404,7 +447,8 @@ fn an_evidence_type_outside_the_schema_is_refused() {
 
 #[test]
 fn a_step_may_declare_no_evidence_type() {
-    let def = bug_with("  - id: merge\n    label: Merge\n    advance_gate: auto\n")
-        .expect("a step that produces nothing a Judge reads");
+    let def =
+        bug_with("  - id: merge\n    label: Merge\n    delivers: false\n    advance_gate: auto\n")
+            .expect("a step that produces nothing a Judge reads");
     assert_eq!(def.steps()[3].evidence_type(), None);
 }

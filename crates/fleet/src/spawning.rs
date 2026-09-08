@@ -97,6 +97,14 @@ where
                 return Err(cause);
             }
         };
+        // **The branch goes out here, where the step it is declared on is being
+        // entered.** After the catch-up, because a commit over a tree the
+        // rebase has not touched publishes work that will not replay; before
+        // the Drone, because the step that sends the work out is the step that
+        // then holds while a person reads what went out. Almost every spawn
+        // asks this and answers no. `crate::landing` owns the rest, including
+        // why a branch that would not go does not stop the step.
+        self.sent_out_on_entry(job, step, &worktree).await;
         // Asked of the record on every spawn, and answered `None` on almost
         // all of them. It is read before the brief because it is part of the
         // brief, and kept beside it because clearing it needs the same value.

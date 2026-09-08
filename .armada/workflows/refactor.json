@@ -83,6 +83,10 @@
 # which is the whole of what a refactor is -- and `implement` produces the diff
 # the Checks and the Judge read; neither names a model, so both are run as the
 # Job was proposed. `handoff` reports.
+#
+# **`handoff` is the step that sends the work out**, on entry rather than on
+# advance, and every other step declares `false`. `bug.json` carries the
+# reasoning.
 {
   "version": 1,
   "workflow_id": "refactor",
@@ -122,6 +126,7 @@
           ]
         }
       ],
+      "delivers": false,
       "advance_gate": "auto_if_judge_passes"
     },
     {
@@ -206,6 +211,7 @@
           }
         }
       ],
+      "delivers": false,
       "advance_gate": "auto_if_judge_passes"
     },
     {
@@ -213,6 +219,7 @@
       "label": "Summarise",
       "evidence_type": "facts_note",
       "model": "haiku",
+      "delivers": true,
       "advance_gate": "human_always"
     }
   ]
