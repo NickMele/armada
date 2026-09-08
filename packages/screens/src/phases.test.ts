@@ -137,9 +137,12 @@ describe("the human tier", () => {
   });
 });
 
+/** When a run started. Every attempt carries one; none of these reads it. */
+const AT = "2026-09-02T09:00:00Z";
+
 describe("the hand-backs", () => {
   it("draws no loop on a step worked once", () => {
-    const { loops } = phasesOf(step({ attempts: [{ attempt: 1, outcome: "advanced" }] }), [], OPENS);
+    const { loops } = phasesOf(step({ attempts: [{ attempt: 1, outcome: "advanced", started_at: AT }] }), [], OPENS);
     expect(loops).toEqual([]);
   });
 
@@ -149,9 +152,9 @@ describe("the hand-backs", () => {
     const { loops } = phasesOf(
       step({
         attempts: [
-          { attempt: 1, outcome: "retrying" },
-          { attempt: 2, outcome: "retrying" },
-          { attempt: 3, outcome: "stopped" },
+          { attempt: 1, outcome: "retrying", started_at: AT },
+          { attempt: 2, outcome: "retrying", started_at: AT },
+          { attempt: 3, outcome: "stopped", started_at: AT },
         ],
       }),
       [],
@@ -164,8 +167,8 @@ describe("the hand-backs", () => {
     const { loops } = phasesOf(
       step({
         attempts: [
-          { attempt: 1, outcome: "retrying" },
-          { attempt: 2, outcome: "advanced" },
+          { attempt: 1, outcome: "retrying", started_at: AT },
+          { attempt: 2, outcome: "advanced", started_at: AT },
         ],
       }),
       [],
@@ -179,7 +182,7 @@ describe("the hand-backs", () => {
     // Drone kept alive and idle; it never re-enters `working`. Only `retrying`
     // is a hand-back, so a step the gate stopped has no edge to draw.
     const { loops } = phasesOf(
-      step({ state: "stopped", attempts: [{ attempt: 1, outcome: "stopped" }] }),
+      step({ state: "stopped", attempts: [{ attempt: 1, outcome: "stopped", started_at: AT }] }),
       [],
       OPENS,
     );

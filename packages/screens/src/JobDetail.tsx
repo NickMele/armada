@@ -305,6 +305,9 @@ export function JobDetail({
   const noted = logOf(journalled, job.id);
   const holding = holdingOf(resources, job.id);
   const looked = lookOf(examination, job.id);
+  // The finding itself, or none. Read twice — the summary asks whether an
+  // absence is a fault, the sheet draws every look — so it is named once.
+  const examinedNow = looked?.state === "found" ? looked.examined : null;
 
   const steps = whole === null ? [] : ordered(whole);
   const open = steps.find((step) => step.step_id === (selected ?? job.current_step_id)) ?? steps[0];

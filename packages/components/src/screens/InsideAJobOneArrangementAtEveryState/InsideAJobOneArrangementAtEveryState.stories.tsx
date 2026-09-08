@@ -46,6 +46,9 @@ import {
   RUNNING_PHASES,
   TWO_REFUSAL_CHAPTERS,
 } from "./evidence";
+// prettier-ignore
+import { PHASES_AT_THE_GATE, PHASES_BLOCKED, PHASES_CHECK_FAILED, PHASES_ENDED, PHASES_RETRIES_SPENT, PHASES_WORKING } from "./strips";
+import { WHAT_IT_TRIED } from "./tried";
 import { PlayableJob } from "./playable";
 
 /**
@@ -126,37 +129,7 @@ export const Running: Story = {
               <Button variant="primary">Redirect</Button>
             </>
           ),
-          phases: {
-            note: "The Drone is working. Nothing has been submitted, so no gate has been asked anything yet.",
-            stages: [
-              { id: "instructed", label: "Instructed", state: "cleared" },
-              { id: "working", label: "Working", state: "current" },
-              { id: "submitted", label: "Submitted", state: "ahead" },
-              {
-                id: "checks",
-                label: "build, test",
-                kind: "checks",
-                state: "ahead",
-                stands: "not run",
-                rows: [
-                  { label: "cargo build --workspace --locked", mono: true, result: "not run" },
-                  { label: "cargo nextest run --workspace", mono: true, result: "not run" },
-                ],
-              },
-              {
-                id: "judge",
-                label: "Judge · 2 criteria",
-                kind: "judge",
-                state: "ahead",
-                stands: "not reached",
-                rows: [
-                  { label: "Selectors import without the store", result: "not reached" },
-                  { label: "No behaviour change in the reducer", result: "not reached" },
-                ],
-              },
-              { id: "you", label: "You", kind: "human", state: "ahead" },
-            ],
-          },
+          phases: PHASES_WORKING,
           chapters: CHAPTERS,
         }}
       />
@@ -202,37 +175,7 @@ export const WaitingOnYou: Story = {
             children:
               "The suite passed and the Judge met both criteria. Nothing advances until you answer.",
           },
-          phases: {
-            note: "The suite passed and the Judge met both criteria. Nothing is wrong; the workflow asks for a person here.",
-            stages: [
-              { id: "instructed", label: "Instructed", state: "cleared" },
-              { id: "working", label: "Working", state: "cleared" },
-              { id: "submitted", label: "Submitted", state: "cleared" },
-              {
-                id: "checks",
-                label: "build, test",
-                kind: "checks",
-                state: "cleared",
-                stands: "2 of 2 passed",
-                rows: [
-                  { label: "cargo build --workspace --locked", mono: true, result: "exit 0 · 47s", named: "passed" },
-                  { label: "cargo nextest run --workspace", mono: true, result: "exit 0 · 1m 22s", named: "passed" },
-                ],
-              },
-              {
-                id: "judge",
-                label: "Judge · 2 of 2 met",
-                kind: "judge",
-                state: "cleared",
-                stands: "2 of 2 met",
-                rows: [
-                  { label: "Selectors import without the store", result: "met", named: "met" },
-                  { label: "No behaviour change in the reducer", result: "met", named: "met" },
-                ],
-              },
-              { id: "you", label: "You", kind: "human", state: "waiting", stands: "waiting · 2m 04s" },
-            ],
-          },
+          phases: PHASES_AT_THE_GATE,
           chapters: [
             ...CHAPTERS,
             {
@@ -296,27 +239,7 @@ export const ACheckFailed: Story = {
             children:
               "cargo nextest run --workspace exited 101 with 3 failures. Attempt 2 of 3 is running. Nothing needs you unless it runs out of attempts.",
           },
-          phases: {
-            note: "The Check went back to the Drone with its output. The tiers behind it are still ahead, not cancelled.",
-            stages: [
-              { id: "instructed", label: "Instructed", state: "cleared" },
-              { id: "working", label: "Working", state: "current" },
-              { id: "submitted", label: "Submitted", state: "cleared" },
-              {
-                id: "checks",
-                label: "test failed · fixing",
-                kind: "checks",
-                state: "failed",
-                stands: "exit 101 · attempt 2 of 3",
-                rows: [
-                  { label: "cargo build --workspace --locked", mono: true, result: "exit 0 · 47s", named: "passed" },
-                  { label: "cargo nextest run --workspace", mono: true, result: "exit 101 · 3 failures", named: "failed" },
-                ],
-              },
-              { id: "judge", label: "Judge · 2 criteria", kind: "judge", state: "ahead", stands: "not reached" },
-              { id: "you", label: "You", kind: "human", state: "ahead" },
-            ],
-          },
+          phases: PHASES_CHECK_FAILED,
           chapters: REPAIR_CHAPTERS,
         }}
       />
@@ -373,61 +296,8 @@ export const OutOfAttempts: Story = {
             children:
               "The same test has failed each time — visible_manifests_memoises. The Drone still has its session and its worktree, so a word from you costs no respawn.",
           },
-          phases: {
-            note: "A Check that fails ends the step before the Judge reads anything, so there is no verdict here. The Judge tier was never reached.",
-            stages: [
-              { id: "instructed", label: "Instructed", state: "cleared" },
-              { id: "working", label: "Working", state: "cleared" },
-              { id: "submitted", label: "Submitted", state: "cleared" },
-              {
-                id: "checks",
-                label: "test failed · retries spent",
-                kind: "checks",
-                state: "failed",
-                stands: "exit 101 · 3 of 3 attempts",
-                rows: [
-                  { label: "cargo build --workspace --locked", mono: true, result: "exit 0 · 47s", named: "passed" },
-                  { label: "cargo nextest run --workspace", mono: true, result: "exit 101 · same failure ×3", named: "failed" },
-                ],
-              },
-              { id: "judge", label: "Judge · 2 criteria", kind: "judge", state: "ahead", stands: "not reached" },
-              { id: "you", label: "You", kind: "human", state: "ahead" },
-            ],
-          },
-          before: (
-            <>
-              <div className="armada-screen__sunken">
-                <span className="armada-screen__eyebrow">The failure, every time</span>
-                <pre className="armada-screen__output">{`FAIL settings::selectors::visible_manifests_memoises
-  assert_eq!(a, b) — expected the same reference on repeat calls
-  left:  Manifests([..]) @0x7f9c2a
-  right: Manifests([..]) @0x7f9c31
-  packages/settings/test/selectors.test.ts:112`}</pre>
-                <p className="armada-screen__caption" data-note>
-                  The same assertion, at the same line, on all three attempts.
-                </p>
-              </div>
-              <div className="armada-screen__sunken">
-                <span className="armada-screen__eyebrow">What it tried, and what it said it was doing</span>
-                <p className="armada-screen__why">
-                  Attempt 1 · +18 −4 selectors.ts · same failure — memoised on the selector itself
-                  with a module-level cache.
-                </p>
-                <p className="armada-screen__why">
-                  Attempt 2 · +22 −18 selectors.ts · same failure — replaced the cache with a WeakMap
-                  keyed on the state object.
-                </p>
-                <p className="armada-screen__why">
-                  Attempt 3 · +6 −22 selectors.ts · same failure — went back to the module cache and
-                  widened the key.
-                </p>
-                <p className="armada-screen__recourse">
-                  Three different fixes, one unchanged failure. It is caching in the wrong place, not
-                  caching wrongly.
-                </p>
-              </div>
-            </>
-          ),
+          phases: PHASES_RETRIES_SPENT,
+          before: WHAT_IT_TRIED,
           chapters: [
             { ...REPAIR_CHAPTERS[0]!, summary: "14:44:20" },
             { ...REPAIR_CHAPTERS[1]!, summary: "126 entries · three attempts" },
@@ -569,17 +439,7 @@ export const BlockedByPolicy: Story = {
               </>
             ),
           },
-          phases: {
-            note: "Nothing was submitted, so no gate has been asked anything. The drone stopped reaching for what it needed.",
-            stages: [
-              { id: "instructed", label: "Instructed", state: "cleared" },
-              { id: "working", label: "Working", state: "current" },
-              { id: "submitted", label: "Submitted", state: "ahead" },
-              { id: "checks", label: "Checks", kind: "checks", state: "ahead", stands: "not reached" },
-              { id: "judge", label: "Judge · 2 criteria", kind: "judge", state: "ahead", stands: "not reached" },
-              { id: "you", label: "You", kind: "human", state: "waiting", stands: "waiting · 3m 02s" },
-            ],
-          },
+          phases: PHASES_BLOCKED,
           chapters: CHAPTERS,
         }}
       />
@@ -627,26 +487,7 @@ export const Failed: Story = {
             children:
               "cargo nextest run --workspace exited 101. The Judge was never reached, and nothing below this step ran.",
           },
-          phases: {
-            note: "Nothing advances this Job. Redispatch mints a replacement; it does not reopen this one.",
-            stages: [
-              { id: "instructed", label: "Instructed", state: "cleared" },
-              { id: "working", label: "Working", state: "cleared" },
-              { id: "submitted", label: "Submitted", state: "cleared" },
-              {
-                id: "checks",
-                label: "test failed",
-                kind: "checks",
-                state: "failed",
-                stands: "exit 101",
-                rows: [
-                  { label: "cargo build --workspace --locked", mono: true, result: "exit 0 · 47s", named: "passed" },
-                  { label: "cargo nextest run --workspace", mono: true, result: "exit 101", named: "failed" },
-                ],
-              },
-              { id: "judge", label: "Judge · 2 criteria", kind: "judge", state: "ahead", stands: "not reached" },
-            ],
-          },
+          phases: PHASES_ENDED,
           chapters: REPAIR_CHAPTERS,
         }}
       />
