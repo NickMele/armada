@@ -206,7 +206,9 @@ The remedy needs no new state: `depends_on` already sequences Jobs and already p
 
 ### What Fleet knows after the merge, and what it does not
 
-**Armada opens a pull request and a person merges it**, so everything after that moment is only ever knowable by asking. Fleet asks about **one** pull request per sweep and rotates, because the turn interval is 250ms and asking the forge is a process — an open pull request needs asking rarely and a merged one never again.
+**Armada opens a pull request, and a merge Fleet did not perform is only ever knowable by asking.** The decision to merge stays a person's: `auto_merge` says what Fleet may carry out on its own, and under `never` nothing merges until a person asks for it — see [Manifest](manifest.md), *Auto-merge and review gate*. A merge asked of Fleet is Fleet's own act, so what merged is proved on the spot; a merge made on the forge is found on a later sweep.
+
+Fleet asks about **one** pull request per sweep and rotates, because the turn interval is 250ms and asking the forge is a process — an open pull request needs asking rarely and a merged one never again.
 
 | What one ask answers | What follows |
 |---|---|
