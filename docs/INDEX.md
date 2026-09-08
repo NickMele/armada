@@ -187,6 +187,7 @@ can find them.
 | Writing a commit message | `commit-message` |
 | Writing anything a person reads on a surface | `armada-voice` |
 | Starting, checking or cleaning up a local Fleet | `armada-local` |
+| Finding out what a Job did and why it stopped | `what-happened-to-a-job` |
 | Reporting something Armada got wrong | `armada-bug` |
 | Working one issue end to end — worktree, plan, implement, test, commit, merge | `work-issue` |
 | Cutting an agent worktree, and giving it back when its branch merges | `agent-worktrees` |
