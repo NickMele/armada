@@ -376,11 +376,23 @@ tier = "Contextual"
 verb = "Open the log"
 icon = ""
 icon_absent = "undecided"
-shortcut = "Enter"
+shortcut = "L"
 scope = "detail"
 destructive = false
 confirms = false
-notes = "The step's activity log, opened to the layer that can hold it — 1676 entries on a real Job, which is not a longer version of anything the panel holds. `Enter` rather than a letter: every letter with a mnemonic is spent, and `Enter` already belongs to whatever holds focus, which here is the chapter `[` `]` landed on. Against `open_focused`, which is the same key on a list where nothing holds focus. No glyph — `list` and `file-text` are not registered, and inventing one belongs in the icon registry rather than here."
+notes = "The step's activity log, opened to the layer that can hold it — 1676 entries on a real Job, which is not a longer version of anything the panel holds. `L` and not `Enter`, changed 2026-09-08. The old binding argued that every mnemonic letter was spent and that `Enter` already belonged to whatever holds focus; both were true of the lowercase set and neither is true of the shifted one, where `X` has held shifted-`x` since kill & redispatch landed. What `Enter` cost was that job detail grew a second chapter with a reading behind it — a Check's output — and one `Enter` cannot open both: which of them answered depended on which chapter `[` `]` happened to land on, a binding nobody can learn, drawn as `Enter` twice in one story. Shifted rather than plain, because lowercase `l` is `disclose` — the expand half of `h`/`l` — and a mistyped motion key must not open a layer. `open_focused` keeps `Enter` on the list, where nothing else holds focus. No glyph — `list` and `file-text` are not registered, and inventing one belongs in the icon registry rather than here."
+
+[actions.open_output]
+kind = "Action"
+tier = "Contextual"
+verb = "Open the output"
+icon = ""
+icon_absent = "undecided"
+shortcut = "o"
+scope = "detail"
+destructive = false
+confirms = false
+notes = "A Check's own stdout, opened to the layer that can hold it — 2,180 lines on a real suite, which is the third reading on this screen with no end, after the activity log and the patch. Added 2026-09-08 with the Checks chapter: a chapter that opens a sheet gets a letter, which `open_diff` established with `f`, and this one had none. `o` rather than a spare letter because it is the mnemonic and it is free here — `open` holds `o` on the list, where this act does not exist, so the two never contend for one press. No glyph — the `shield-*` family is a Check's result rather than its output, and minting one belongs in the icon registry rather than here."
 
 [actions.open_diff]
 kind = "Action"
