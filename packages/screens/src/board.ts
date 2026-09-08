@@ -172,12 +172,14 @@ export const BOARD_SORTS: readonly { id: BoardSort; label: string }[] = [
  * a header, and a column of buttons is not a fact about the Job.
  *
  * **Three, not four.** `Dispatched by` is the fourth fact the Board wants and
- * the one it cannot draw: `enum-verbs.toml` carries all five `origin` rows, but
- * the vocabulary generator's wanted list does not name `origin`, so no map
- * reaches Bridge — and `sub_dispatched` is a form carrying a parent's id rather
- * than a word, so emitting one is a decision rather than a line. Issue #234.
- * Naming a column here before then would reserve a track for a value that never
- * arrives, which reads as one that failed to load.
+ * the one it cannot draw. The words exist: `enum-verbs.toml` carries all five
+ * `origin` rows and `sub_dispatched` carries a form rather than a word, both
+ * settled when #234 closed. Two things are still missing, and only the first is
+ * a line: the generator's wanted list does not name `origin`, so no `ORIGIN`
+ * map reaches Bridge; and `JobSummary` carries the full five-value `Origin`
+ * without `dispatched_by`, so on a sub-dispatched row the form has nothing to
+ * fill its slot with. Naming a column before both are answered would reserve a
+ * track for a value that never arrives, which reads as one that failed to load.
  */
 export const BOARD_COLUMNS = ["Workflow", "Progress", "Run time"];
 

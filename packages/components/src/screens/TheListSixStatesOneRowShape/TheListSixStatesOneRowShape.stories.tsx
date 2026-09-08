@@ -37,11 +37,12 @@ import { APPROVAL_TRACKS, TheListSixStatesOneRowShape } from "./TheListSixStates
  *
  * **The five origin sentences here are literals, and Bridge draws nothing in
  * that track on a real row.** `origin` is on `JobSummary` and `enum-verbs.toml`
- * carries a row for each of its five values; what no generator emits is a map
- * carrying them into Bridge, so these fixtures are the drawing rather than
- * proof the track is filled. Issue #234, which also has to decide
- * `sub_dispatched` — that row is a form with the parent Job's id in it rather
- * than a word, and no other vocabulary interpolates.
+ * carries a row for each of its five values, `sub_dispatched` included — that
+ * one as the form `Sub-dispatched by {dispatched_by.job_id}` rather than a
+ * word, which #234 settled before it closed. What no generator emits is a map
+ * carrying any of them into Bridge, and `JobSummary` carries no
+ * `dispatched_by` for the form to interpolate, so these fixtures are the
+ * drawing rather than proof the track is filled.
  */
 const meta: Meta<typeof TheListSixStatesOneRowShape> = {
   title: "Screens/The list — six states, one row shape",
@@ -351,7 +352,7 @@ export const Killed: Story = { render: () => one(killed) };
  * | Field | Why it is not here |
  * |---|---|
  * | Spend | Measured nowhere — not on the wire, not in the store, not computed |
- * | `Dispatched by you` | `origin` is on `JobSummary` and `enum-verbs.toml` carries all five rows, but no generator emits them — the wanted list in `apps/desktop/codegen/vocabulary.mjs` does not name `origin`, so nothing carries the words across and Bridge would have to retype them. #234 |
+ * | `Dispatched by you` | `origin` is on `JobSummary` and `enum-verbs.toml` carries all five rows, but no generator emits them — the wanted list in `apps/desktop/codegen/vocabulary.mjs` does not name `origin`, so nothing carries the words across and Bridge would have to retype them. Adding it is not the whole fix: `JobSummary` carries no `dispatched_by`, so `sub_dispatched`'s form has no slot to fill |
  * | Elapsed on a Job that is over | `JobSummary` carries no instant the Job stopped at, and a terminal elapsed running to now would read as still working |
  *
  * The step is its `step_id`, in mono: `StepDetail` carries a label, but a list
@@ -401,10 +402,12 @@ export const WhatTheWireServes: Story = {
  * and it says more rather than less, because every column has a word over it.
  *
  * **Three columns, not four.** `Dispatched by` is the fourth fact the Board
- * wants and the one it cannot draw: `enum-verbs.toml` carries every `origin`
- * row, but no map reaches Bridge and `sub_dispatched` is a form rather than a
- * word. Issue #234. A named column with nothing under it reads as a value that
- * failed to load, which is the argument that already keeps spend off the row.
+ * wants and the one it cannot draw. `enum-verbs.toml` carries every `origin`
+ * row and `sub_dispatched`'s form, both settled when #234 closed; what is left
+ * is that no map reaches Bridge, and that `JobSummary` carries no
+ * `dispatched_by` for that form to interpolate. A named column with nothing
+ * under it reads as a value that failed to load, which is the argument that
+ * already keeps spend off the row.
  *
  * **Progress is one cell, where the card spends two tracks on it.** A column
  * called Progress answering in two places would need two names. The bar keeps

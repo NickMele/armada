@@ -61,10 +61,14 @@
 // **Origin stays out too, and no longer for want of the word.**
 // `enum-verbs.toml` carries all five `origin` rows — `auto_detected` reads
 // `Found by Fleet`. What is missing is the carriage: the generator's wanted
-// list does not name `origin`, so no `ORIGIN` map reaches Bridge, and
-// `sub_dispatched` is a form with the parent's id in it rather than a word, so
-// emitting one is a decision rather than a line. The screen stories draw the
-// five as literals, so **the track is drawn there and empty here**. Issue #234.
+// list does not name `origin`, so no `ORIGIN` map reaches Bridge. #234 closed
+// once the verbs landed, and `sub_dispatched` carries the form
+// `Sub-dispatched by {dispatched_by.job_id}` rather than a word — settled
+// there, not still open. **Adding `origin` to the wanted list is not enough**:
+// `JobSummary` carries the full five-value `Origin` and does not carry
+// `dispatched_by`, so the form has nothing to fill its slot with. The screen
+// stories draw the five as literals, so the track is drawn there and empty
+// here. Unfiled.
 //
 // **The step reads its name**, since `StepDetail` carries a label Fleet fills
 // from the frozen workflow. A list row holds `JobSummary` and not the steps, so

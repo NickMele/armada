@@ -378,7 +378,7 @@
      floor a column never fills reads as a value that failed to load. So the
      count of fact columns picks the list rather than one list carrying a track
      for a fact the caller may not have: three today on the Board, where origin
-     has no carriage to Bridge yet (#234), and four wherever it does. */
+     has words but no carriage to Bridge, and four wherever it does. */
   --armada-job-table-tracks-3:
     minmax(var(--armada-track-badge), max-content)
     minmax(0, 1fr)
