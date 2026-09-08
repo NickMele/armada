@@ -136,7 +136,7 @@ thing is the one that rots, and it rots silently because nothing tests prose.
   saying why the verb is safe. The note outlives the reason.
 - **Manifest and config comments** — `armada.yml`, `settings.toml`.
 - **Doc comments naming a gap** — closing the gap is what makes them false.
-- **`CLAUDE.md`** — 50 lines is refused, 30 asks. It routes; it does not explain.
+- **`CLAUDE.md`** — 50 lines is refused, 40 asks. It routes; it does not explain.
 - **`docs/INDEX.md`** — the gate refuses a document that is not in it, including
   a new skill.
 - **Issue bodies.** They are prose, they are public, and nothing gates them.

@@ -31,4 +31,4 @@ Everything written down is in `docs/INDEX.md`, and the gate refuses one that is
 not. `ARCHITECTURE.md` is the map. `CLAUDE.md` symlinks here — a copy drifts.
 
 **This file routes. It does not explain.** Anything longer than a pointer
-belongs in a contract, a practice doc or a skill. 50 lines is refused, 30 asks.
+belongs in a contract, a practice doc or a skill. 50 lines is refused, 40 asks.
