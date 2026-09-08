@@ -12,6 +12,8 @@ their work before advancing them. Rust daemon, Electron app, one repo.
   workspace is not. Name what a thing is, not where it is.
 - **Cite an issue to a person as its full link**, so it opens from the terminal.
   A bare `#123` stays bare *inside* the repo — docs autolink and gates parse it.
+- **Never edit the checkout at `main`.** Cut a worktree on a branch before the
+  first edit, and land it as a pull request. `.claude/skills/agent-worktrees/`.
 
 | Looking for | Go to |
 |---|---|

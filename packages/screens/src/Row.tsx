@@ -141,8 +141,10 @@ export function Row({
   // names them, rather than this picking a glyph the registry does not have.
   if (reading.as !== "badge") return null;
   // **The row's one control names the act its state calls for, and opens the
-  // Job.** Nothing on the Board approves, attests or redirects: approval is a
-  // second act from detail by rule, a redirect is offered on `stuck.recourse`
+  // Job.** Nothing on the Board approves, attests or redirects: a row here is
+  // one somebody is browsing past and carries none of what a gate approves —
+  // which is why the Job proposer's own proposal does carry one and this does
+  // not — a redirect is offered on `stuck.recourse`
   // which is a `JobDetail` field a list row has never read, and nothing serves
   // an attestation at all. So the verb says why you are being sent to detail,
   // which is exactly what Review has always meant on an `awaiting_review` row.

@@ -87,7 +87,9 @@ const awaitingApproval: JobRowStackedProps = {
   // act from detail; it was settled 2026-08-31 in favour of the rule. Review is
   // the word an `awaiting_review` row already carries and means the same thing
   // in both places — go read this — because in both places the act is on
-  // detail. Nothing on the Board approves.
+  // detail. Nothing on the Board approves. The dispatch proposal is the one
+  // surface that does, because there what the gate approves is on screen
+  // already — settled 2026-09-08, and it changes nothing here.
   action: <SplitButton ground="card" items={menu}>Review</SplitButton>,
 };
 
