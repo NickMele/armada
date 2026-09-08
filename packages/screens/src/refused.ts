@@ -20,7 +20,8 @@
 // exactly the Jobs the classification got wrong.
 
 import type { Refused } from "@armada/components";
-import type { JobDetail as JobWhole } from "@armada/protocol";
+import type { JobDetail as JobWhole, Refusal } from "@armada/protocol";
+import { sizeOf } from "./story";
 
 /** The rows and the two sentences over and under them. */
 export type Refusals = {
@@ -50,6 +51,7 @@ export function refusedIn(whole: JobWhole | null): Refusals | undefined {
   const refused = stuck.refused.map((one) => ({
     tool: one.tool,
     detail: one.detail,
+    ...shownOf(one),
     // Absent rather than empty, because the row draws nothing for an absent
     // reason and `because` is empty on almost every refusal the harness sends.
     ...(one.because === "" ? {} : { because: one.because }),
@@ -63,6 +65,31 @@ export function refusedIn(whole: JobWhole | null): Refusals | undefined {
  * transcript a Job's log names, so several attempts' Drones fold into one list.
  */
 const SAID = "What this job reached for and was refused:";
+
+/**
+ * How much of one command is on the row, where it is not all of it.
+ *
+ * **The same sentence the transcript's own cut arguments carry**, through the
+ * same function rather than through a second one written to look like it —
+ * *showing 200 of 14,320 characters*. A command cut without saying so is one a
+ * person pastes into an allowlist believing it is whole, which is the failure
+ * this rides one level down from.
+ *
+ * **A row Fleet never sized says it was cut and claims no total.** `sizeOf`
+ * refuses a one-number sentence for the reason it gives: `200 characters shown`
+ * reads as the whole of it. Leading with `cut at` cannot be read that way, and
+ * an unstated total is the honest answer where nothing recorded one.
+ *
+ * The count is code points and not UTF-16 units, because `length` on the wire
+ * is Rust's `chars().count()` — the two disagree on any command carrying an
+ * astral character, and a shown count larger than the total would read as
+ * nonsense.
+ */
+function shownOf(one: Refusal): { size: string } | undefined {
+  if (!one.truncated) return undefined;
+  const shown = [...one.detail].length;
+  return { size: sizeOf(shown, one.length) ?? `cut at ${shown.toLocaleString()} characters` };
+}
 
 /**
  * That the list is shorter than what happened, in the words the transcript's

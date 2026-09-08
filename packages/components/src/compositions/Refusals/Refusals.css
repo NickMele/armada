@@ -99,6 +99,24 @@
   text-wrap: pretty;
 }
 
+/* How much of the command is on the row, where it is not all of it. In the
+   command's column and under it, because it is about that command — and on its
+   own line rather than trailing the command, so selecting the command does not
+   carry a caveat about it into the clipboard.
+
+   Sans and subtle, taking the list note's values exactly: the two say the same
+   kind of thing one level apart, so they read as one grammar. It wraps like
+   everything else here, so it can never push a row sideways. */
+.armada-refusals__size {
+  grid-column: 2;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  min-width: 0;
+  text-wrap: pretty;
+}
+
 /* The harness's own wording, on the rare refusal that carried one. Under the
    command and in the command's column, because it is about that command; sans,
    because it is prose the harness wrote. */

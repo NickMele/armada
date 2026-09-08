@@ -94,6 +94,45 @@ export const ACommandLongerThanTheRow: Story = {
 };
 
 /**
+ * **A command longer than the wire carries, said on the row.** Fleet stops at
+ * 200 characters and a heredoc does not, so the row shows what fits and states
+ * how much there was.
+ *
+ * **It sits on its own line and never trails the command.** Set inside the mono
+ * block it would be selected and copied with the command it is a caveat about,
+ * and a cut command pasted into an allowlist as a whole one is the failure this
+ * exists to prevent. A tooltip is worse still: it is not there at the moment
+ * the command is being copied.
+ *
+ * The sentence is the list note's, one level down — *showing 200 of 14,320
+ * characters* under a command, *showing 50 of 137 refused calls* under the
+ * list. The last row is a transcript written before Fleet recorded a size: it
+ * says it was cut and claims no total, because `200 characters shown` reads as
+ * the whole of it.
+ */
+export const ACommandCutByTheWire: Story = {
+  args: {
+    said: SAID,
+    refused: [
+      {
+        tool: "Bash",
+        detail:
+          "cat <<'EOF' > xtask/src/rules_tests/refused.rs use std::path::Path; " +
+          "use crate::Report; pub fn every_refusal_names_its_command(root: &Path) -> Report { let " +
+          "mut report = Report::new(\"every refu",
+        size: "showing 200 of 14,320 characters",
+      },
+      { tool: "Bash", detail: "cargo nextest run --package ipc 2>&1 | tail -80" },
+      {
+        tool: "Write",
+        detail: "packages/components/src/compositions/Refusals/Refusals.tsx",
+        size: "cut at 200 characters",
+      },
+    ],
+  },
+};
+
+/**
  * **The list is short and what happened was not.** *Showing 50 of 137* is a
  * size rather than a warning: a capped list read as the whole one is worse than
  * no list, and the count travels beside the rows on the wire for exactly this.

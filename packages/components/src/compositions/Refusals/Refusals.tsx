@@ -29,6 +29,21 @@ export type Refused = {
    */
   detail: string;
   /**
+   * That `detail` is less than what was sent, and how much there was —
+   * *showing 200 of 14,320 characters*.
+   *
+   * **In the row and never in a tooltip.** A person reads this command to
+   * decide what to widen an allowlist to, and a tooltip is not there at the
+   * moment the command is being copied: a cut command pasted as a whole one is
+   * the failure this row exists one level down from.
+   *
+   * **Its own line, never trailing the command.** Set inside the mono block it
+   * would be selected and copied with the command it is a caveat about.
+   *
+   * Absent on a command that arrived whole, which is almost every row.
+   */
+  size?: ReactNode;
+  /**
    * The harness's own wording, where it gave one.
    *
    * **Usually absent, and absent is the honest answer.** Nothing fills it in
@@ -85,6 +100,11 @@ export type RefusalsProps = {
  * the panel — and the tail of a command is the part that gets pasted into an
  * allowlist, so an ellipsis takes away the thing the row is for. Nothing here
  * is laid out to a width, so no row can scroll the panel sideways.
+ *
+ * **A row that was cut says so on a line of its own.** That is the same fact
+ * the list's own note carries one level up, so the two are written in one
+ * grammar rather than as two inventions: *showing 200 of 14,320 characters*
+ * under a command, *showing 50 of 137 refused calls* under the list.
  */
 export function Refusals({ refused, said, note }: RefusalsProps) {
   if (refused.length === 0) return null;
@@ -104,6 +124,9 @@ export function Refusals({ refused, said, note }: RefusalsProps) {
               </span>
             ) : (
               <span className="armada-refusals__detail">{one.detail}</span>
+            )}
+            {one.size === undefined ? null : (
+              <span className="armada-refusals__size">{one.size}</span>
             )}
             {one.because === undefined || one.because === "" ? null : (
               <span className="armada-refusals__because">{one.because}</span>

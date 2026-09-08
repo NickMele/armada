@@ -101,6 +101,49 @@ describe("what a stopped job says it was refused", () => {
     expect(refusedIn(whole({ refused: again, refusals: 5 }))?.refused).toHaveLength(5);
   });
 
+  it("says nothing about a size where the command arrived whole", () => {
+    expect(refusedIn(whole({ refused: [refusal()], refusals: 1 }))?.refused[0]?.size).toBeUndefined();
+  });
+
+  it("says how much of a cut command is on the row", () => {
+    // The failure one level down from the one this branch exists for: a command
+    // cut without saying so is one a person pastes into an allowlist whole.
+    const cut = refusal({ detail: "cat <<'EOF' > refused.rs", truncated: true, length: 14320 });
+    const drawn = refusedIn(whole({ refused: [cut], refusals: 1 }));
+    expect(drawn?.refused[0]?.size).toBe("showing 24 of 14,320 characters");
+  });
+
+  it("counts a command in the units the wire counted it in", () => {
+    // `length` is Rust's `chars().count()`, so a shown count in UTF-16 units
+    // would read larger than the total on any command carrying an astral
+    // character. Two code points, four UTF-16 units.
+    const cut = refusal({ detail: "🚀🚀", truncated: true, length: 900 });
+    expect(refusedIn(whole({ refused: [cut], refusals: 1 }))?.refused[0]?.size).toBe(
+      "showing 2 of 900 characters",
+    );
+  });
+
+  it("says a command was cut where nothing recorded how long it was", () => {
+    // Never `24 characters shown`, which reads as the whole of it — the
+    // sentence that made a cut argument look like a short one.
+    const cut = refusal({ detail: "cat <<'EOF' > refused.rs", truncated: true, length: undefined });
+    const drawn = refusedIn(whole({ refused: [cut], refusals: 1 }));
+    expect(drawn?.refused[0]?.size).toBe("cut at 24 characters");
+  });
+
+  it("never draws a cut command as a whole one", () => {
+    // The guard, stated over every shape the wire can send rather than over the
+    // two above: a truncated refusal always carries a sentence saying so.
+    const shapes = [
+      refusal({ truncated: true, length: 14320 }),
+      refusal({ truncated: true, length: undefined }),
+      refusal({ truncated: true, length: 47 }),
+      refusal({ detail: "", truncated: true, length: 900 }),
+    ];
+    const drawn = refusedIn(whole({ refused: shapes, refusals: shapes.length }));
+    for (const row of drawn?.refused ?? []) expect(row.size).toBeDefined();
+  });
+
   it("says nothing about a cap where every refusal fits", () => {
     expect(refusedIn(whole({ refused: [refusal()], refusals: 1 }))?.note).toBeUndefined();
   });

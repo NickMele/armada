@@ -447,11 +447,13 @@ export const OutOfAttempts: Story = {
  * command is on the next, joined by a call id that nothing joined, so the only
  * way to answer the question was to open the transcript and do it by hand.
  *
- * **Three things to read against the drawing.** The commands share one left
+ * **Four things to read against the drawing.** The commands share one left
  * edge however wide the tool names are; the same command refused three times is
  * three rows, because a Drone that did not learn is the most diagnostic thing
- * here; and the note under the list says the list is short, so nobody widens an
- * allowlist for the eight they can see and thinks they are done.
+ * here; the heredoc says how much of it is on the row, so nobody pastes a cut
+ * command into an allowlist as a whole one; and the note under the list says
+ * the list is short, so nobody widens an allowlist for the eight they can see
+ * and thinks they are done.
  */
 export const BlockedByPolicy: Story = {
   render: () => (
@@ -510,6 +512,7 @@ export const BlockedByPolicy: Story = {
                         "cat <<'EOF' > xtask/src/rules_tests/refused.rs " +
                         "use std::path::Path; use crate::Report; pub fn every_refusal_names_its_command" +
                         "(root: &Path) -> Report { let mut report = Repo",
+                      size: "showing 200 of 14,320 characters",
                     },
                     { tool: "Bash", detail: "" },
                   ]}
