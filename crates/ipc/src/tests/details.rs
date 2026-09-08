@@ -11,7 +11,9 @@
 //! skipped rather than written `null`.
 
 use crate::tests::{detail_of, job};
-use crate::{decode, encode, CheckRun, DeclaredCheck, JobDetail, Judged, StepFacts};
+use crate::{
+    decode, encode, CheckRun, DeclaredCheck, JobDetail, Judged, Refusal, StepFacts, Stuck,
+};
 
 /// **The distinction the whole field exists for.** An ungated step says so with
 /// an empty list; a step Fleet cannot answer for carries no key at all. A
@@ -273,5 +275,121 @@ fn a_check_covering_everything_carries_no_when() {
     assert_eq!(
         decode::<DeclaredCheck>("a declared check", json.as_bytes()).expect("it round-trips"),
         declared
+    );
+}
+
+/// The classification of the real Job this was written against: a policy
+/// stopped one `Bash` call, and the harness said nothing about why.
+fn blocked() -> Stuck {
+    Stuck {
+        stopped_by: Some(String::from("blocked_by_policy")),
+        step_id: None,
+        recourse: Vec::new(),
+        worktree_on_disk: true,
+        drone_unheard: false,
+        refused: vec![Refusal {
+            tool: String::from("Bash"),
+            call: String::from("toolu_01B13LL"),
+            detail: String::from("cargo nextest run --package ipc"),
+            truncated: false,
+            length: Some(30),
+            because: String::new(),
+        }],
+        refusals: 1,
+    }
+}
+
+/// **The command is what crosses, because the reason does not exist.** Every
+/// `permission_denied` line observed carried an empty `decision_reason`, so a
+/// client drawing `because` alone would draw the same blank a person was
+/// already looking at.
+#[test]
+fn a_refusal_crosses_with_its_command_and_keeps_its_empty_reason() {
+    let json = encode(&blocked()).expect("a classification is plain data");
+
+    assert!(
+        json.contains("\"detail\":\"cargo nextest run --package ipc\""),
+        "the command, joined off the `called` row: {json}"
+    );
+    assert!(
+        json.contains("\"because\":\"\""),
+        "an empty reason crosses as one rather than being dropped, so a client \
+         can tell it apart from a key it did not read: {json}"
+    );
+    assert!(
+        json.contains("\"call\":\"toolu_01B13LL\""),
+        "and the id `get_call` serves the whole argument by: {json}"
+    );
+    assert_eq!(
+        decode::<Stuck>("a classification", json.as_bytes()).expect("it reads back"),
+        blocked()
+    );
+}
+
+/// **A capped list says how many there were.** A client shown fifty of a
+/// hundred and thirty-seven and told nothing would render the fifty as the
+/// whole list, which is the defect one level down from the one this closes.
+#[test]
+fn the_count_crosses_beside_the_list_and_a_job_with_none_says_so() {
+    let many = Stuck {
+        refusals: 137,
+        ..blocked()
+    };
+    let json = encode(&many).expect("a classification is plain data");
+    assert!(json.contains("\"refusals\":137"), "{json}");
+
+    let quiet = Stuck {
+        refused: Vec::new(),
+        refusals: 0,
+        ..blocked()
+    };
+    let json = encode(&quiet).expect("a classification is plain data");
+    assert!(
+        json.contains("\"refused\":[]") && json.contains("\"refusals\":0"),
+        "empty is a Drone that was refused nothing, and it is stated rather \
+         than left to a missing key: {json}"
+    );
+}
+
+/// **A cut command has to say it was cut.** The whole of a heredoc stays in the
+/// file, so what crosses is a line — and a client that drew that line as the
+/// entire command would have somebody paste a truncated one into an allowlist,
+/// which is the failure this whole field exists to prevent, one step further
+/// on.
+#[test]
+fn a_cut_argument_says_so_and_how_much_there_was() {
+    let mut cut = blocked();
+    cut.refused[0].detail = String::from("cat <<EOF > out.txt word word word");
+    cut.refused[0].truncated = true;
+    cut.refused[0].length = Some(14_320);
+
+    let json = encode(&cut).expect("a classification is plain data");
+    assert!(json.contains("\"truncated\":true"), "{json}");
+    assert!(
+        json.contains("\"length\":14320"),
+        "the size of what there was, so a surface says a proportion rather \
+         than reporting that something was taken away: {json}"
+    );
+    assert_eq!(
+        decode::<Stuck>("a classification", json.as_bytes()).expect("it reads back"),
+        cut
+    );
+}
+
+/// A row written before the file recorded the size carries no length, and that
+/// is a different answer from an argument of no length.
+#[test]
+fn an_unmeasured_argument_carries_no_length_rather_than_nought() {
+    let mut old = blocked();
+    old.refused[0].length = None;
+
+    let json = encode(&old).expect("a classification is plain data");
+    assert!(
+        !json.contains("\"length\""),
+        "absent, never present-and-null: {json}"
+    );
+    assert_eq!(
+        decode::<Stuck>("a classification", json.as_bytes()).expect("it reads back"),
+        old
     );
 }

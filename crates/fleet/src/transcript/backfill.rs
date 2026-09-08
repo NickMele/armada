@@ -27,7 +27,7 @@
 use std::collections::VecDeque;
 use std::path::PathBuf;
 
-use core_model::{DroneId, JobId, Timestamp};
+use core_model::{DroneId, JobId, Refusal, Refusals, Timestamp};
 use ipc::{CallArguments, Saw, TranscriptRow};
 use serde::Deserialize;
 use tokio::fs;
@@ -40,6 +40,15 @@ use crate::transcript::{log_of, transcript_of};
 /// Far more than a person scrolls back through and small enough to hold in
 /// memory while it is written to a socket. What is left out is counted.
 pub const HISTORY: usize = 2048;
+
+/// How many refusals a classification carries.
+///
+/// A stopped Job's whole list, for every run anybody has looked at — the
+/// blocked run this was written against was refused once. It is a cap and not a
+/// window because past this the list has stopped being something a person
+/// reads: fifty distinct commands to unblock is a Manifest problem, not a Job
+/// one. What is left out is counted, and `Refusals::in_all` says so.
+pub const REFUSALS: usize = 50;
 
 /// The `msg` the transcript path is carried on. Written by
 /// [`crate::transcript::Recording::of`] before a single row.
@@ -128,6 +137,139 @@ pub async fn arguments(repo_root: &str, job: &JobId, call: &str) -> Option<CallA
         }
     }
     None
+}
+
+/// What this Job's Drones reached for and were refused.
+///
+/// # The two rows are joined here and nowhere else
+///
+/// A refusal is written down twice and neither half is the answer. The
+/// `called` row carries the tool and the command; the `refused` row carries the
+/// tool and the harness's reason, which is empty on every one observed. They
+/// share a call id and nothing joined them, so `blocked_by_policy` reached a
+/// person naming a policy and never naming what it stopped.
+///
+/// # Two passes, and the second is paid only by a Job that has refusals
+///
+/// The first keeps the refused calls; a Drone refused nothing stops there,
+/// which is the ordinary Job. Only where something was refused is the file read
+/// again, for the [`REFUSALS`] call ids that need a command against them, and
+/// it stops as soon as every one of them has it. **The alternative was a map of
+/// every call the Drone made** — a second copy of an unbounded file, held to
+/// answer a question about at most fifty rows of it.
+///
+/// A Job with no log, a transcript that was reclaimed and a Drone that was
+/// refused nothing all answer [`Refusals::none`]. None is an error.
+pub async fn refusals(repo_root: &str, job: &JobId) -> Refusals {
+    let files = transcripts(repo_root, job).await;
+    let (mut kept, in_all) = refused_calls(&files).await;
+    if kept.is_empty() {
+        return Refusals::none();
+    }
+    against(&files, &mut kept).await;
+    Refusals::of(kept, in_all)
+}
+
+/// Every refusal, counted, and the first [`REFUSALS`] of them kept without
+/// their commands.
+///
+/// **The first and not the last.** What stopped a Drone is what it reached for
+/// before it began working around being stopped; a window on the end of the
+/// list is a window on the flailing.
+async fn refused_calls(files: &[PathBuf]) -> (Vec<Refusal>, u64) {
+    let mut kept: Vec<Refusal> = Vec::new();
+    let mut in_all = 0u64;
+    for at in files {
+        let Ok(file) = fs::File::open(at).await else {
+            continue;
+        };
+        let mut lines = BufReader::new(file).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            let Ok(row) = ipc::decode::<TranscriptRow>("a transcript row", line.as_bytes()) else {
+                continue;
+            };
+            let Saw::Refused {
+                tool,
+                call,
+                because,
+            } = row.saw
+            else {
+                continue;
+            };
+            in_all += 1;
+            if kept.len() < REFUSALS {
+                kept.push(Refusal {
+                    tool,
+                    call,
+                    // Filled by [`against`], and left empty where the `called`
+                    // row is not in the file: a transcript that begins mid-run
+                    // is a real record, and an empty command is what
+                    // `CallDetail::none` already means. Nothing there was cut
+                    // either, which is the honest reading of a row that is not
+                    // in the file at all.
+                    detail: String::new(),
+                    truncated: false,
+                    length: None,
+                    because,
+                });
+            }
+        }
+    }
+    (kept, in_all)
+}
+
+/// What each refused call was on, read off the `called` row that shares its id.
+async fn against(files: &[PathBuf], kept: &mut [Refusal]) {
+    // Counted rather than re-derived, so the stop is checked per line without
+    // a scan over the list per line.
+    let mut owed = kept.len();
+    for at in files {
+        let Ok(file) = fs::File::open(at).await else {
+            continue;
+        };
+        let mut lines = BufReader::new(file).lines();
+        while owed > 0 {
+            let Ok(Some(line)) = lines.next_line().await else {
+                break;
+            };
+            let Ok(row) = ipc::decode::<TranscriptRow>("a transcript row", line.as_bytes()) else {
+                continue;
+            };
+            let Saw::Called {
+                call,
+                detail,
+                truncated,
+                detail_length,
+                ..
+            } = row.saw
+            else {
+                continue;
+            };
+            // The bounded line and never the whole: this is read on every open
+            // of a stopped Job, and the whole of a heredoc is what `get_call`
+            // is for. An empty one is a call whose arguments the decoder had no
+            // name for, and it stays owed rather than being counted as answered.
+            if detail.is_empty() {
+                continue;
+            }
+            if let Some(refusal) = kept
+                .iter_mut()
+                .find(|refusal| refusal.call == call && refusal.detail.is_empty())
+            {
+                refusal.detail = detail;
+                // **The row's own two, not a reading of the string.** Whether
+                // it was cut is on the row; comparing lengths here would call a
+                // pre-cut row whole on any file written before the size was
+                // recorded.
+                refusal.truncated = truncated;
+                refusal.length = detail_length;
+                owed -= 1;
+            }
+        }
+        if owed == 0 {
+            return;
+        }
+    }
 }
 
 /// The instant on the last row of one Drone's transcript.

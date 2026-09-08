@@ -15,15 +15,18 @@
 //! renderer reads no filesystem, so a restart was offered on a Job that had
 //! none. Every fact below is one only Fleet holds.
 //!
-//! # It costs one filesystem stat and nothing else
+//! # It costs one filesystem stat and one read of a stopped Job's transcripts
 //!
 //! The Check runs are the read `serving::get_job` already makes for the step
 //! detail, handed in rather than made again, and the slot and the workflow map
 //! are in memory. An open of a Job that is still going costs nothing at all —
-//! `Stuck::asked_of` answers first.
+//! `Stuck::asked_of` answers first. The transcript read is the trigger's own
+//! evidence — see [`Fleet::refused`].
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
-use core_model::{DroneStanding, Job, Standing, StepCheck, StepId, Stuck, TransitionReason};
+use core_model::{
+    DroneStanding, Job, Refusals, Standing, StepCheck, StepId, Stuck, TransitionReason,
+};
 
 use crate::daemon::Fleet;
 
@@ -49,11 +52,33 @@ where
         reason: Option<&TransitionReason>,
         ran: &[(StepId, Vec<StepCheck>)],
     ) -> Option<Stuck> {
-        // Asked first, so a Job that is still going costs no stat and no lock.
+        // Asked first, so a Job that is still going costs no stat, no lock and
+        // no transcript read.
         if !Stuck::asked_of(job.status()) {
             return None;
         }
-        Stuck::of(job, reason, self.standing_of(job, ran).await)
+        Stuck::of(
+            job,
+            reason,
+            self.standing_of(job, ran).await,
+            self.refused(job).await,
+        )
+    }
+
+    /// What this Job's Drones reached for and were refused.
+    ///
+    /// **Read for every stopped Job and not only a `blocked_by_policy` one.**
+    /// A Drone denied the command it needed goes on to escalate as `stalled` or
+    /// `silent` just as often, so evidence gathered only where the
+    /// classification already named a policy would be missing from exactly the
+    /// Jobs the classification got wrong.
+    ///
+    /// **The Drone's process is long gone by the time a person opens this.**
+    /// The events are not in memory and nothing on the record kept them; the
+    /// file under `.armada/transcripts/` is what survives, and the Job's log is
+    /// what names it.
+    async fn refused(&self, job: &Job) -> Refusals {
+        crate::transcript::refusals(&self.host().repo_root, job.id()).await
     }
 
     /// What Fleet knows about this Job that its record does not say.

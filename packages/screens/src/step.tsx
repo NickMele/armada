@@ -21,7 +21,13 @@
 // The header's counterpart is `heading.tsx`: what is there changes when the Job
 // does, and what is here changes when the selection does.
 
-import { DroneQuestion, GAMING_PATTERN, GamingFlags, JOB_LIFECYCLE } from "@armada/components";
+import {
+  DroneQuestion,
+  GAMING_PATTERN,
+  GamingFlags,
+  JOB_LIFECYCLE,
+  Refusals,
+} from "@armada/components";
 import type { JobDetailField, StepNotice } from "@armada/components";
 import type { ReactNode } from "react";
 
@@ -29,6 +35,7 @@ import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/prot
 import { span } from "./duration";
 import { Opening, type Opens } from "./phases";
 import { recourseOf } from "./recovery";
+import { refusedIn } from "./refused";
 import { escalation } from "./render";
 import { steeringOf } from "./steering";
 import { stoppedAt } from "./stopped";
@@ -136,6 +143,13 @@ export function questionOf(
  * acts, in the imperative, detached from every control it named. Each sentence
  * is on its act's tooltip now, with its binding, and the band says where the
  * step stands.
+ *
+ * **`refused` renders here for `flagged`'s reason.** The title names a trigger
+ * and the band is where the evidence for it goes: `blocked_by_policy` named a
+ * policy, nothing named what the policy stopped, and a person told to unblock a
+ * Job had nothing saying what from. It rides on every trigger rather than that
+ * one, because a Drone denied the command it needed escalates as `stalled` or
+ * `silent` just as often.
  */
 export function noticeOf(
   job: JobSummary,
@@ -174,6 +188,11 @@ export function noticeOf(
   // too, on the Check's own row; this one is where somebody is already looking.
   const log = at?.outputPath;
   const recourse = recourseOf(job, whole);
+  // What the Job reached for and was refused. **Beside the flags and for their
+  // reason**: the title names a trigger and this is the evidence for it, so a
+  // person told a policy stopped the Job is told what the policy stopped. It is
+  // `undefined` on a Job refused nothing, which is most of them.
+  const refused = refusedIn(whole);
   const flagged = step.flagged;
   return {
     // A Job that is over is red; one holding with a live Drone is not, because
@@ -212,9 +231,14 @@ export function noticeOf(
             citation="whole"
           />
         )}
-        <span>{recourse.stands}</span>
+        {refused === undefined ? null : <Refusals {...refused} />}
+        {/* Blocks, because the band's body is one inline span and these are two
+            sentences: run together inline they read as "…what happens next.
+            Restart is not offered…" with no break, which is what was on screen
+            for every job offering a redirect. */}
+        <span className="block">{recourse.stands}</span>
         {recourse.withheld === undefined ? null : (
-          <span className="text-fg-subtle">{recourse.withheld}</span>
+          <span className="block text-fg-subtle">{recourse.withheld}</span>
         )}
       </>
     ),

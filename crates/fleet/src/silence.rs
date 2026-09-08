@@ -29,7 +29,7 @@ use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use config::Manifest;
 use core_model::{
     Actor, Component, Envelope, EscalationTrigger, FieldValue, Job, JobId, JobStatus, Level,
-    StepId, Target,
+    Refusal, Refusals, StepId, Target,
 };
 
 use crate::adrift::Adrift;
@@ -331,9 +331,18 @@ where
             }
             return Ok(None);
         }
+        // **Only on the road that escalates.** A poke is not a stopped Job, so
+        // nothing is owed an explanation yet, and folding the run's whole
+        // stream on every threshold reading would pay for one on every quiet
+        // Drone that is about to carry on working.
+        let mut refused = Refusals::none();
         let said = if spent < liveness.pokes() {
             self.poke(working, after).await
         } else {
+            refused = working
+                .as_ref()
+                .map(|at_work| transcript::refused_in(&at_work.heard()))
+                .unwrap_or_default();
             self.move_job(&record, Target::Escalated(found), Actor::Fleet)
                 .await?;
             // **The Drone is not ended and the worktree is not touched.** It is
@@ -350,7 +359,7 @@ where
             }
         };
         // Nothing was reaped on this road: the poke ladder holds its Drone.
-        self.noted_quiet(&job, &step, after, &said, None);
+        self.noted_quiet(&job, &step, after, &said, None, &refused);
         Ok(Some(Quiet {
             job,
             step,
@@ -405,13 +414,19 @@ where
         // decides whether to reap at all. The terminating event is in it by
         // construction — `Working::at_rest` is true of nothing else — so the
         // classification does not depend on the drain that follows.
-        let Aftermath::JobMoves(target) = aftermath(
-            record.status(),
-            &Ending::of(&at_work.heard()),
-            self.left(&job),
-        ) else {
+        // Read once and folded twice. `Ending::of` says how the run finished
+        // and `transcript::refused_in` says what it was stopped from doing, and
+        // a second `heard()` for the second question would copy the run's whole
+        // stream again.
+        let heard = at_work.heard();
+        let Aftermath::JobMoves(target) =
+            aftermath(record.status(), &Ending::of(&heard), self.left(&job))
+        else {
             return Ok(None);
         };
+        // **Taken before the reap**, like the clock below it: afterwards the
+        // slot is empty and these events are the exited process's.
+        let refused = transcript::refused_in(&heard);
         let found = match &target {
             Target::Escalated(trigger) => trigger.clone(),
             // Unreachable while `aftermath` answers `JobMoves` only with an
@@ -429,7 +444,7 @@ where
             .unwrap_or_default();
         let reaped = self.drone_at_rest(target, working).await?;
         let said = Vigil::AtRest { found };
-        self.noted_quiet(&job, &step, after, &said, reaped.as_ref());
+        self.noted_quiet(&job, &step, after, &said, reaped.as_ref(), &refused);
         Ok(Some(Quiet {
             job,
             step,
@@ -479,6 +494,11 @@ where
     /// handed back on an incomplete reading — and `#371` is that case being
     /// real. `boundary::noted_stood_down` writes the same two fields under the
     /// same names for the same reason.
+    ///
+    /// **`refused` is the one field an agent debugging from a terminal needed
+    /// and did not have.** `found: blocked_by_policy` named a policy and no
+    /// line named what it stopped, so the answer was only reachable by joining
+    /// two transcript rows by hand. See [`crate::transcript::refused_in`].
     fn noted_quiet(
         &self,
         job: &JobId,
@@ -486,6 +506,7 @@ where
         after: Duration,
         said: &Vigil,
         reaped: Option<&StoodDown>,
+        refused: &Refusals,
     ) {
         let (level, wording) = match said {
             Vigil::Poked { .. } => (Level::Info, "the Drone has gone quiet and was poked"),
@@ -541,6 +562,19 @@ where
         if let Some(found) = escalated_as(said) {
             envelope = envelope.with_field("found", FieldValue::Str(found.as_wire().to_string()));
         }
+        // **Both keys or neither**, and only where something was refused: a
+        // `refusals: 0` on every quiet Drone would make the interesting line
+        // indistinguishable by grep from the ordinary one. The count is beside
+        // the list because the list is capped at [`NAMED`] and a short list
+        // nobody was told about reads as the whole one.
+        if refused.in_all() > 0 {
+            envelope = envelope
+                .with_field("refusals", FieldValue::Int(refused.in_all() as i64))
+                .with_field(
+                    "refused",
+                    FieldValue::List(refused.kept().iter().map(named).collect()),
+                );
+        }
         if let Some(reaped) = reaped {
             envelope = envelope
                 .with_field("signalled", FieldValue::Bool(reaped.terminated.is_ok()))
@@ -594,4 +628,25 @@ fn heard_at_all(at_work: &Working) -> EscalationTrigger {
         true => EscalationTrigger::Unheard,
         false => EscalationTrigger::Stalled,
     }
+}
+
+/// One refused call, as a log field: the tool, what it was reaching for, and
+/// the harness's reason where it gave one.
+///
+/// **The tool alone is what a refusal event carries**, and it is not enough —
+/// `Bash` twenty-two times cannot tell `ls` from `rm -rf`. The detail is empty
+/// only where the join missed or the decoder had no name for the arguments, and
+/// an empty one is left out rather than written as a gap.
+fn named(refusal: &Refusal) -> FieldValue {
+    let mut line = refusal.tool.clone();
+    if !refusal.detail.is_empty() {
+        line.push(' ');
+        line.push_str(&refusal.detail);
+    }
+    if !refusal.because.is_empty() {
+        line.push_str(" (");
+        line.push_str(&refusal.because);
+        line.push(')');
+    }
+    FieldValue::Str(line)
 }

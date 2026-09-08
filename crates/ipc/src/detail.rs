@@ -236,6 +236,108 @@ pub struct Stuck {
     /// `recourse`, decided here.
     #[serde(default)]
     pub drone_unheard: bool,
+    /// What the Drone reached for and was refused, oldest first.
+    ///
+    /// **The trigger's evidence, and nothing anywhere carried it.**
+    /// `blocked_by_policy` named a policy and no surface named what it stopped,
+    /// so a person was told to widen an allowlist without being told what to
+    /// widen it to. The tool and the command sat on two transcript rows joined
+    /// by a call id, and nothing made that join.
+    ///
+    /// **Empty is a Drone that was refused nothing**, which is most of them,
+    /// and it is not the same as [`refusals`](Stuck::refusals) being zero on a
+    /// Job whose transcripts were reclaimed — that reads empty here too, and
+    /// the count is what says so.
+    ///
+    /// It rides on every trigger and not only on `blocked_by_policy`. A Drone
+    /// refused a command it needed goes on to escalate as `stalled` or `silent`
+    /// just as often, and evidence withheld until the classification named it
+    /// would be missing from exactly the Jobs the classification got wrong.
+    #[serde(default)]
+    pub refused: Vec<Refusal>,
+    /// How many calls were refused altogether, counting the ones
+    /// [`refused`](Stuck::refused) left out.
+    ///
+    /// **A size rather than a flag**, which is `CallArguments::length`'s
+    /// reason: a surface can say *showing 50 of 137* instead of reporting that
+    /// something was taken away. Equal to `refused.len()` on every Job whose
+    /// refusals all fit, which is the ordinary case.
+    #[serde(default)]
+    pub refusals: u64,
+}
+
+/// One call the Drone reached for and was refused.
+///
+/// **[`detail`](Refusal::detail) is the field a person reads.** The harness
+/// usually sends no reason — the observed `permission_denied` line carried an
+/// empty `decision_reason` — so a row drawn from
+/// [`because`](Refusal::because) alone draws nothing, which is the whole of
+/// what was wrong.
+///
+/// **The whole argument stays in the file**, exactly as [`Shown`](crate::Shown)
+/// leaves it: a heredoc is a whole file and this crosses on every open of a
+/// stopped Job. What crosses instead is that the line was cut and how long the
+/// argument was — enough for a surface to say so, which is what a person about
+/// to paste a command into an allowlist needs. `get_call` is the operation that
+/// serves the rest.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Refusal {
+    /// The tool that was reached for, in the harness's own spelling.
+    ///
+    /// A string and not a mirrored enum, for [`Stuck::stopped_by`]'s reason:
+    /// the set is the harness's and no registry here declares it.
+    pub tool: String,
+    /// The call id the transcript rows carried.
+    ///
+    /// **What makes a cut detail openable**: `get_call` serves the whole
+    /// argument by this id, so a refused heredoc shown to its bound is not a
+    /// dead end.
+    pub call: String,
+    /// The argument as the transcript recorded it — the command, the path.
+    ///
+    /// Bounded where it was built, in `adapter_traits::CallDetail`, so a row
+    /// carries one line of it. **Empty is a tool whose arguments that
+    /// vocabulary has no name for**, and never an invented one.
+    pub detail: String,
+    /// Whether [`detail`](Refusal::detail) is less than what the Drone sent.
+    ///
+    /// **Said rather than implied**, `Saw::Called::truncated`'s reason: a
+    /// command can legitimately end in an ellipsis. Without it a surface draws
+    /// a cut command as the whole one, and the command is what somebody copies
+    /// into an allowlist.
+    #[serde(default)]
+    pub truncated: bool,
+    /// How many characters the argument had, before anything was cut.
+    ///
+    /// **A size rather than only a flag**, which is
+    /// [`CallArguments::length`](crate::CallArguments)'s reason: a surface says
+    /// *showing 200 of 14,320 characters* instead of reporting that something
+    /// was taken away.
+    ///
+    /// **`None` is a transcript row written before the file recorded the
+    /// size.** A surface holding `truncated: true` and no length has what there
+    /// is and no way to say how much is missing, and says that rather than
+    /// inventing a size.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub length: Option<usize>,
+    /// The harness's own wording, where it gave one.
+    ///
+    /// **Usually empty, and empty is the honest answer.** Nothing fills it in
+    /// from the trigger: a reason Armada wrote would read as the harness's.
+    pub because: String,
+}
+
+impl From<&core_model::Refusal> for Refusal {
+    fn from(refusal: &core_model::Refusal) -> Refusal {
+        Refusal {
+            tool: refusal.tool.clone(),
+            call: refusal.call.clone(),
+            detail: refusal.detail.clone(),
+            truncated: refusal.truncated,
+            length: refusal.length,
+            because: refusal.because.clone(),
+        }
+    }
 }
 
 impl Stuck {
@@ -255,6 +357,8 @@ impl Stuck {
                 .collect(),
             worktree_on_disk: stuck.standing().worktree_on_disk,
             drone_unheard: stuck.standing().drone == core_model::DroneStanding::Unheard,
+            refused: stuck.refused().kept().iter().map(Refusal::from).collect(),
+            refusals: stuck.refused().in_all(),
         }
     }
 }

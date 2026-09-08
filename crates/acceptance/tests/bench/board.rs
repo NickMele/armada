@@ -18,7 +18,7 @@
 //! [`ipc::decode`], so a field a `skip_serializing_if` drops on the way out
 //! fails there rather than passing here.
 
-use core_model::{Branch, DroneStanding, Job, Standing, Stuck, TransitionReason};
+use core_model::{Branch, DroneStanding, Job, Refusals, Standing, Stuck, TransitionReason};
 use fleet::Ruling;
 use ipc::{CheckRun, Flagged, JobDelivery, JobDetail, JobList, Judged, StepFacts};
 
@@ -121,7 +121,7 @@ pub fn standing(checks_passed: bool) -> Standing {
 /// `core-model` from the Job rather than described here, so nothing in this
 /// file can claim a recourse the domain would not offer.
 pub fn detail(job: &Job, reason: Option<&TransitionReason>, steps: &[StepFacts]) -> JobDetail {
-    let stuck = Stuck::of(job, reason, standing(true));
+    let stuck = Stuck::of(job, reason, standing(true), Refusals::none());
     JobDetail::of(
         job,
         reason,
@@ -150,7 +150,7 @@ pub fn delivered(
     steps: &[StepFacts],
     delivery: JobDelivery,
 ) -> JobDetail {
-    let stuck = Stuck::of(job, reason, standing(true));
+    let stuck = Stuck::of(job, reason, standing(true), Refusals::none());
     JobDetail::of(
         job,
         reason,

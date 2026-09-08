@@ -39,6 +39,8 @@ function stuck(over: Partial<Stuck> = {}): Stuck {
     recourse: ["restart_step", "redispatch_job"],
     worktree_on_disk: true,
     drone_unheard: false,
+    refused: [],
+    refusals: 0,
     ...over,
   };
 }

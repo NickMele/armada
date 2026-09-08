@@ -180,3 +180,6 @@ export * from "./compositions/HeldWorktree/HeldWorktree";
 // because the moment it is for is a person worried about a Job.
 export * from "./compositions/JobResources/JobResources";
 export * from "./compositions/ManifestNotice/ManifestNotice";
+// The calls a stopped job was refused, with the command each one was on. The
+// evidence for `blocked_by_policy`, which named a policy and nothing it stopped.
+export * from "./compositions/Refusals/Refusals";

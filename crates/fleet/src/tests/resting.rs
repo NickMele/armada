@@ -117,6 +117,18 @@ fn called() -> DroneEvent {
     }
 }
 
+/// The call above, refused — **with the empty reason the harness actually
+/// sends.** Every `permission_denied` line observed carried an empty
+/// `decision_reason`, so a fixture with wording in it would prove a surface
+/// works on input nothing produces.
+fn refused() -> DroneEvent {
+    DroneEvent::Refused {
+        tool: String::from("Read"),
+        call: String::from("a-call"),
+        because: String::new(),
+    }
+}
+
 /// The run ending, with the incident's own numbers on it.
 fn ended(refusals: usize) -> DroneEvent {
     DroneEvent::Ended {
@@ -144,24 +156,23 @@ fn a_drone_that_ends_having_called_nothing() -> FakeHarness {
         .reading("ENDED", vec![ended(0)])
 }
 
-/// The same, still being refused when it stopped.
+/// The same, having been refused the call it made.
 ///
-/// **The refusal is on the stream and not only in the count**, which is what
-/// makes this `blocked_by_policy` — a run whose last reach got through is a
-/// run the allowlist did not end, whatever its total says.
+/// **The refusal is on the stream and not only in the terminating event's
+/// count**, because that is what a harness sends: the observed run carried a
+/// `system/permission_denied` line for the call it stopped, and the count on
+/// the way out agreed with it. A fixture with the count alone would let a log
+/// line naming nothing pass — and it would no longer classify, because what
+/// makes this `blocked_by_policy` is that the last reach was refused rather
+/// than that the total was non-zero.
 fn a_drone_that_ends_refused() -> FakeHarness {
-    FakeHarness::running("/bin/sh", &["-c", "echo REFUSED; echo ENDED; sleep 30"])
-        .reading("REFUSED", vec![called(), refused()])
-        .reading("ENDED", vec![ended(3)])
-}
-
-/// The refusal that follows a call, as the transcript carries it.
-fn refused() -> DroneEvent {
-    DroneEvent::Refused {
-        tool: String::from("Read"),
-        call: String::from("a-call"),
-        because: String::from("not on the allowlist"),
-    }
+    FakeHarness::running(
+        "/bin/sh",
+        &["-c", "echo CALLED; echo REFUSED; echo ENDED; sleep 30"],
+    )
+    .reading("CALLED", vec![called()])
+    .reading("REFUSED", vec![refused()])
+    .reading("ENDED", vec![ended(1)])
 }
 
 /// The same again, with something of its own still holding the pipe — and out
@@ -452,6 +463,53 @@ async fn what_the_run_reported_on_its_way_out_is_what_the_job_is_held_for() {
             "{found:?}"
         );
     }
+}
+
+/// **The trigger arrives with its evidence, in the line an agent reads.**
+///
+/// The defect, in the owner's words: "it says it's blocked by policy but there
+/// are no details anywhere on what the hell blocked it". `found:
+/// blocked_by_policy` named a policy and no line named what the policy stopped,
+/// and the tool and the command sat on two transcript rows joined by a call id
+/// that nothing joined.
+///
+/// **The command is what is asserted, not the reason.** The harness sends none
+/// — `because` is empty on every refusal observed — so a line built from the
+/// reason would be as blank as the one it replaced.
+#[tokio::test]
+async fn the_line_for_a_policy_ending_names_the_call_that_was_refused() {
+    let home = TempDir::new();
+    let clock = Arc::new(Held::started());
+    let fleet = a_watched_fleet(&home, a_drone_that_ends_refused(), Arc::clone(&clock));
+    let job = started(&fleet, &home).await;
+    assert!(spoke(&fleet, 3).await, "the run never ended");
+
+    for _ in 0..40 {
+        if fleet.turn().await.expect("a turn").quiet().is_some() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    assert_eq!(
+        fleet.last_reason(&job).await.unwrap(),
+        Some(TransitionReason::Escalation(
+            EscalationTrigger::BlockedByPolicy
+        )),
+    );
+
+    let log = logged(&home, &job);
+    let line = log
+        .lines()
+        .find(|line| line.contains("nothing had been submitted"))
+        .expect("the ending is in the Job's log");
+    assert!(
+        line.contains("Read a file"),
+        "the line names the tool and what it was reaching for: {line}"
+    );
+    assert!(
+        line.contains("\"refusals\":1"),
+        "and how many there were, so a capped list is not read as the whole one: {line}"
+    );
 }
 
 /// **The other half of the pair the issue asks for.** A run that ends after
