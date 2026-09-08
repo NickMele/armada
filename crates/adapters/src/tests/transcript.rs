@@ -512,7 +512,8 @@ fn a_call_of_armada_s_own_tools_carries_its_argument() {
               "input":{"claimed":"the transcript names what was declared",
                        "shown_by":"cargo nextest run -p adapters, 41 pass",
                        "not_claimed":"the response body is still not carried"}},
-             {"type":"tool_use","id":"c","name":"mcp__armada__run_checks","input":{}}]}}"#,
+             {"type":"tool_use","id":"c","name":"mcp__armada__run_checks",
+              "input":{"only_what_changed":true}}]}}"#,
     );
     let shown: Vec<&str> = read
         .iter()
@@ -526,10 +527,30 @@ fn a_call_of_armada_s_own_tools_carries_its_argument() {
         vec![
             "crates/fleet/src/transcript, docs/concepts/observe.md",
             "the transcript names what was declared",
-            "",
+            "only what changed",
         ],
-        "run_checks takes no arguments, so its empty detail is the truth"
+        "run_checks's one argument is the whole of what its row can say"
     );
+}
+
+/// **The two runs cost very different amounts of a machine, so a row that named
+/// neither could not tell them apart.** This read as an empty detail until #504,
+/// under a comment saying an empty detail was the truth because the tool took no
+/// arguments — which it did, until it did not. `only_what_changed` is a boolean
+/// and every other key here is text, so it is the one argument that reaches a row
+/// only by being spelled out; a fall-through would drop it in silence, which is
+/// exactly the shape of #225.
+#[test]
+fn a_whole_run_and_a_narrowed_one_are_not_the_same_row() {
+    let whole = read(
+        r#"{"type":"assistant","message":{"content":[
+             {"type":"tool_use","id":"a","name":"mcp__armada__run_checks",
+              "input":{"only_what_changed":false}}]}}"#,
+    );
+    let [DroneEvent::Called { detail, .. }] = &whole[..] else {
+        panic!("{whole:?}");
+    };
+    assert_eq!(detail.shown(), "the whole repository");
 }
 
 /// A step that will change nothing has declared that. A blank detail is what a
