@@ -65,6 +65,13 @@ pnpm --filter @armada/desktop build && pnpm --filter @armada/desktop start
 always loads the built renderer rather than a dev server. Bridge finds Fleet
 through the runtime file, so nothing here needs a port.
 
+## Asking what one Job did
+
+**`./scripts/job <job-id>` prints the whole record of one Job** — its
+transitions, each step's verdict, what its Drone was refused, and how the run
+ended. Reach for it before opening anything under `.armada/` by hand.
+`.claude/skills/what-happened-to-a-job/SKILL.md` is how to read what it prints.
+
 ## Prefer the Manifest over the command it wraps
 
 **Run a Check through `armada check`, not by retyping what it declares.** That

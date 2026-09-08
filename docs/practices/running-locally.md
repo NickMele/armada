@@ -186,6 +186,60 @@ closing section naming what nothing checked.
 What the agent claimed is not in it. A claim is a signal the gate ruled on, and
 the record is what Fleet verified.
 
+## Asking what happened to a Job
+
+```sh
+./scripts/job <job-id>
+```
+
+**One command that prints the whole story of one Job**: what it is and which
+step it is on, every transition with times, each step's verdict with the
+Judge's findings and what the Checks did, **what its Drone was refused and the
+argument it was refused on**, what the run cost, and the tail of the Job's own
+log. It needs nothing built and no arguments but the id.
+
+**The refusal is the reason it exists.** A refused call is written down as a
+tool name and a tool-use id and never the argument, which sits on the `called`
+row a fraction of a second earlier under the same id. Reading a
+`blocked_by_policy` escalation therefore meant joining two rows of one JSONL
+file by hand, and until this command nothing did it. A Job that goes quiet is
+usually an argv the allowlist declined, so this is the first section to read.
+
+**It reads two sources and says which answered each section.** Fleet holds the
+Job record — the steps, the verdicts, the Judge's findings, the spend — and is
+asked for it over HTTP on the loopback port in the runtime file. `.armada/`
+holds the Drone transcripts and the Job's log, which no route serves.
+
+| Fleet | What you still get |
+|---|---|
+| Running, and holds the Job | Everything |
+| Running, and does not hold it — `armada clean` took it, or it was forgotten | The transitions from the Job's log, the refusals, what the run cost. It says which of these two happened |
+| Not running | The same, and the header says Fleet could not be reached |
+
+So a post-mortem works with Fleet down, which is usually when one is done.
+
+| Flag | For |
+|---|---|
+| `--full` | Do not cut a claim, a finding or a refused argument to an excerpt |
+| `--transcript` | Also print every transcript row, one line each. Hundreds of lines |
+| `--log N` | Lines of the Job's log, 20 by default, `0` for all of them |
+| `--repo PATH` | The checkout Fleet is serving, if it is not the one you are standing in |
+
+**Run from a worktree it still finds the records.** A Drone's worktree has an
+`.armada/` of its own holding only the tracked workflows, so the default is the
+main checkout rather than the directory you are in.
+
+**`armada clean` deletes what this reads.** The transcripts and the log go with
+the Job, so a Job worth understanding is one to read before clearing up.
+
+**It is not a Rust verb, and that was decided rather than deferred.**
+`crates/armada` may not call `serde_json::from_*` — `xtask` rule five and the
+write-hook both refuse it — so a client living there could fetch these answers
+and not read them. And the refusal join is on no HTTP route at all: refusals
+arrive on the `observe_job` WebSocket, so a Rust client would carry a WebSocket
+dependency into the binary every crate links into, to reach a fact that is
+already a file read away.
+
 ## Clearing up
 
 **Destructive. Read this before running `armada clean`.**

@@ -1,0 +1,487 @@
+#!/usr/bin/env python3
+#
+# What happened to one Job, in one command.
+#
+# The occasion: a Job escalated `blocked_by_policy` and nobody could find out
+# what had been blocked. Answering it by hand took a dozen shell commands and a
+# Python one-liner — read the Job's log, find the Drone, read its transcript,
+# then join every `refused` row to its `called` sibling on the tool-use id to
+# recover the argument the refusal itself does not carry. That join is section
+# 4 below and it is the reason this file exists.
+#
+# **Two sources, and it says which answered.** Fleet holds the Job record and
+# is asked for it over HTTP; `.armada/` holds the Drone transcripts and the
+# Job's log, which no route serves. A post-mortem is usually done with Fleet
+# down or wedged, so every section that can be answered from disk still is.
+#
+# **Not a Rust verb, and the reason is the dependency graph.** `crates/armada`
+# may not call `serde_json::from_*` — `xtask` rule five and the write-hook both
+# refuse it, so a client there could fetch these answers and not read them.
+# Parsing would have to live in `ipc`. And the refusal join is not on any HTTP
+# route at all: refusals arrive on the `observe_job` WebSocket, which would put
+# a WebSocket client in the binary every crate links into to reach a fact that
+# is already on disk. `docs/practices/running-locally.md` carries this decision.
+#
+# Documented in `docs/practices/running-locally.md`, under "Asking what happened
+# to a Job". `.claude/skills/what-happened-to-a-job/SKILL.md` is what an agent
+# reads to interpret the output.
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+
+# Loopback, never data. `fleet::runtime` writes only the port for this reason,
+# and this file keeps the same property: there is no host to configure here.
+HOST = "127.0.0.1"
+RUNTIME_FILE = os.path.expanduser(
+    "~/Library/Application Support/Armada/fleet.json"
+)
+
+# Long enough that a wedged Fleet is reported rather than waited on. Every
+# section this would have answered falls back to disk.
+TIMEOUT = 5.0
+
+# What a claim, a finding or an argument is cut to before `--full`. A transcript
+# is what this command exists to save somebody from reading.
+EXCERPT = 500
+
+
+# ---------------------------------------------------------------- where things are
+
+
+def repository_root(given):
+    """The checkout Fleet is serving, which is where `.armada/` is.
+
+    `--git-common-dir` rather than `--show-toplevel`: an agent runs from a
+    worktree, whose own `.armada/` holds only the tracked workflows. The
+    records are under the main checkout.
+    """
+    if given:
+        return os.path.abspath(given)
+    try:
+        common = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return os.getcwd()
+    return os.path.dirname(common)
+
+
+def fleet_port():
+    """The port from the runtime file, or None with the reason.
+
+    A file that will not parse is a refusal rather than "not running" — the
+    same distinction `fleet::runtime` draws, for the same reason.
+    """
+    try:
+        with open(RUNTIME_FILE) as handle:
+            published = json.load(handle)
+    except FileNotFoundError:
+        return None, "no runtime file, so no Fleet has published a port"
+    except (json.JSONDecodeError, OSError) as why:
+        return None, f"the runtime file could not be read ({why})"
+    port = published.get("port")
+    pid = published.get("pid")
+    if not port:
+        return None, "the runtime file names no port"
+    try:
+        os.kill(int(pid), 0)
+    except (OSError, TypeError, ValueError):
+        return None, f"the runtime file names pid {pid}, which nothing holds"
+    return port, f"Fleet on port {port}, pid {pid}"
+
+
+def ask(port, path):
+    """One GET against Fleet, and which of three things happened.
+
+    **Unreachable and not-held are different answers and stay different.** A
+    Fleet that is down and a Fleet that has forgotten this Job — `armada clean`
+    took it, or somebody called `forget_job` — would otherwise read the same,
+    and a post-mortem that cannot tell them apart is the failure this command
+    is for. `("gone", None)` is Fleet saying it does not hold this.
+    """
+    if port is None:
+        return "unreachable", None
+    try:
+        with urllib.request.urlopen(
+            f"http://{HOST}:{port}{path}", timeout=TIMEOUT
+        ) as response:
+            return "held", json.load(response)
+    except urllib.error.HTTPError as refused:
+        return ("gone" if refused.code == 404 else "unreachable"), None
+    except (urllib.error.URLError, json.JSONDecodeError, OSError):
+        return "unreachable", None
+
+
+def read_jsonl(path):
+    """Every row of a JSONL file, skipping any line that will not parse.
+
+    A half-written last line is what a live writer looks like, not corruption.
+    """
+    rows = []
+    try:
+        with open(path) as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rows.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    except OSError:
+        return []
+    return rows
+
+
+# ---------------------------------------------------------------- printing
+
+
+def heading(text):
+    print(f"\n\033[1m{text}\033[0m")
+
+
+def field(name, value):
+    print(f"  {name:<12} {value}")
+
+
+def excerpt(text, full):
+    """One block of a Drone's or a Judge's prose, cut unless --full."""
+    text = (text or "").strip()
+    if full or len(text) <= EXCERPT:
+        return text
+    return f"{text[:EXCERPT]}\n      … {len(text) - EXCERPT} more characters, --full for all of it"
+
+
+def indent(text, prefix="      "):
+    return "\n".join(prefix + line for line in text.splitlines())
+
+
+def money(micros):
+    return f"${micros / 1_000_000:.2f}" if micros is not None else "unknown"
+
+
+def clock(stamp):
+    """`2026-09-08T12:02:01.275Z` down to `12:02:01`. The date is in the header."""
+    if not stamp or "T" not in stamp:
+        return stamp or ""
+    return stamp.split("T", 1)[1].split(".")[0].rstrip("Z")
+
+
+# ---------------------------------------------------------------- 1. the Job
+
+
+def say_job(detail, standing, job_id, root, sources):
+    job = (detail or {}).get("job", {})
+    heading(f"JOB {job_id}")
+    if not detail:
+        if standing == "gone":
+            print("  Fleet answered and does not hold this Job — `armada clean` took")
+            print("  it, or it was forgotten. Its records outlive its row.")
+        else:
+            print("  Fleet could not be reached. What follows is what the records on")
+            print("  disk hold — every section says where it came from.")
+        print()
+        for line in sources:
+            print(f"  read from {line}")
+        return
+    print(f"  {job.get('title', '(no title)')}")
+    print()
+    reason = (job.get("reason") or {}).get("named")
+    field("status", job.get("status") + (f" — {reason}" if reason else ""))
+    steps = detail.get("steps") or []
+    here = job.get("current_step_id")
+    at = next((s for s in steps if s.get("step_id") == here), None)
+    where = f"{at.get('ordinal', 0) + 1} of {len(steps)}: {here} ({at.get('state')})" if at else here
+    field("workflow", f"{job.get('workflow_id')}, step {where}")
+    field("model", job.get("model"))
+    field("origin", job.get("origin"))
+    field("branch", job.get("branch"))
+    worktree = os.path.join(root, ".armada", "worktrees", job_id)
+    on_disk = "on disk" if os.path.isdir(worktree) else "gone"
+    field("worktree", f"{worktree} ({on_disk})")
+    stuck = detail.get("stuck")
+    if stuck:
+        recourse = ", ".join(stuck.get("recourse") or []) or "nothing — a dead end"
+        field("stopped by", f"{stuck.get('stopped_by')} at {stuck.get('step_id')}")
+        field("recourse", recourse)
+        if stuck.get("drone_unheard"):
+            field("", "its Drone is alive and cannot be reached")
+    overlaps = detail.get("write_scope_overlaps")
+    if overlaps:
+        field("overlaps", f"{len(overlaps)} other Job(s) claim paths this one claims")
+    print()
+    for line in sources:
+        print(f"  read from {line}")
+
+
+# ---------------------------------------------------------------- 2. transitions
+
+
+def say_transitions(events, log_rows):
+    heading("WHAT HAPPENED, IN ORDER")
+    if events and events.get("moves"):
+        for move in events["moves"]:
+            what = move.get("moved") or {}
+            kind = what.get("kind")
+            if kind == "status":
+                said = f"status → {what.get('to')}"
+            elif kind == "step":
+                said = f"step {what.get('step_id')}: {what.get('from')} → {what.get('to')}"
+            elif kind == "drone":
+                said = f"drone {what.get('drone_id')} on {what.get('step_id')}: {what.get('presence')}"
+            else:
+                said = json.dumps(what)
+            print(f"  {clock(move.get('at'))}  {move.get('actor', '?'):<6} {said}")
+        return
+    print("  Fleet did not give the transition record, so this is the Job's own log")
+    print("  instead — what Armada wrote down, not every status move.")
+    for row in log_rows:
+        print(f"  {clock(row.get('ts'))}  {row.get('level', ''):<6} {row.get('msg', '')}")
+
+
+# ---------------------------------------------------------------- 3. each step
+
+
+def say_steps(detail, evidence, full):
+    heading("EACH STEP — WHAT IT DECLARED, WHAT RAN, WHAT IT WAS JUDGED ON")
+    if not detail:
+        print("  Fleet did not give the Job's record, and the store is the only thing")
+        print("  that holds it. Nothing under .armada/ can answer this section.")
+        return
+    claims = {
+        step.get("step_id"): step for step in (evidence or {}).get("steps", [])
+    }
+    for step in detail.get("steps") or []:
+        name = step.get("step_id")
+        print(f"\n  \033[1m{name}\033[0m — {step.get('label')} ({step.get('state')})")
+        verdict = (step.get("last_verdict") or {}).get("named")
+        if verdict:
+            overridden = " (overridden by a person)" if step.get("overridden") else ""
+            print(f"    verdict: {verdict}{overridden}")
+        print(f"    gate: {step.get('advance_gate')}")
+
+        declared = step.get("checks")
+        runs = step.get("check_runs") or []
+        if declared is None:
+            print("    checks: Fleet cannot say — this Job names a workflow it does not hold")
+        elif runs:
+            for run in runs:
+                where = f"  → {run['output_path']}" if run.get("output_path") else ""
+                print(f"    check {run.get('name')}: {run.get('outcome')} (attempt {run.get('attempt')}){where}")
+        elif declared:
+            names = ", ".join(c.get("name") or c.get("kind") for c in declared)
+            print(f"    checks: none ran. {len(declared)} declared — {names}")
+        else:
+            print("    checks: none declared, an ungated step")
+
+        for found in step.get("judged") or []:
+            where = f"  → {found['brief_path']}" if found.get("brief_path") else ""
+            print(f"    judge {found.get('criterion_id')}: {found.get('verdict')} (attempt {found.get('attempt')}){where}")
+        for flag in step.get("flagged") or []:
+            print(f"    flagged: {json.dumps(flag)}")
+
+        claim = claims.get(name)
+        if claim:
+            print(f"    the Drone claimed ({claim.get('evidence_type')}):")
+            print(indent(excerpt(claim.get("claimed"), full)))
+            if claim.get("shown_by"):
+                print(f"      shown by: {claim['shown_by']}")
+            if claim.get("not_claimed"):
+                print("    and said it had not done:")
+                print(indent(excerpt(claim.get("not_claimed"), full)))
+        elif step.get("state") not in ("not_started",):
+            print("    the Drone submitted no evidence for this step")
+
+        for kept in step.get("deliverables") or []:
+            print(f"    deliverable (attempt {kept.get('attempt')}): {kept.get('path')}")
+
+
+# ---------------------------------------------------------------- 4. the refusals
+
+
+def say_refusals(transcripts, full):
+    """Every `refused` row, joined to its `called` sibling on the tool-use id.
+
+    **The refusal names the tool and never the argument.** The argument is on
+    the `called` row that came a fraction of a second earlier, under the same
+    `call` id, and a `called` row cut for the wire carries `whole` beside the
+    cut one. Nothing but this join says what was actually blocked.
+    """
+    heading("WHAT THE DRONE WAS REFUSED")
+    refusals = 0
+    for drone_id, rows in transcripts:
+        called = {row.get("call"): row for row in rows if row.get("event") == "called"}
+        for row in rows:
+            if row.get("event") != "refused":
+                continue
+            refusals += 1
+            sibling = called.get(row.get("call"))
+            because = row.get("because") or ""
+            print(f"\n  {clock(row.get('ts'))}  {row.get('tool')} on step {row.get('step')}, drone {drone_id}")
+            # `DroneEvent::Refused::because` is the harness's own wording,
+            # carried and never matched on, so an empty one means the harness
+            # said nothing rather than that Armada dropped it.
+            if because:
+                print(f"    because: {because}")
+            else:
+                print("    because: nothing was recorded — a silent allowlist denial looks exactly like this")
+            if not sibling:
+                print(f"    the argument is not in this transcript (call {row.get('call')})")
+                continue
+            argument = sibling.get("whole") or sibling.get("detail") or ""
+            if sibling.get("truncated") and not sibling.get("whole"):
+                argument += f"\n… cut at {len(argument)} of {sibling.get('detail_length')} characters"
+            print("    it tried to run:")
+            print(indent(excerpt(argument, full), "      "))
+    if refusals == 0:
+        if transcripts:
+            print("  Nothing was refused.")
+        else:
+            print("  No transcript was found for this Job's Drones, so nothing can be said.")
+            print("  A Job that never spawned one has none, and `armada clean` removes them.")
+
+
+# ---------------------------------------------------------------- 5. how it ended
+
+
+def say_ending(detail, transcripts, evidence):
+    heading("HOW THE RUN ENDED")
+    spend = (detail or {}).get("spend") or {}
+    if spend:
+        field("turns", f"{spend.get('turns')} of {spend.get('turn_cap')}")
+        field("cost", f"{money(spend.get('cost_micros'))} of {money(spend.get('cost_cap_micros'))}")
+        field("ran for", f"{round((spend.get('ran_ms') or 0) / 1000)}s over {spend.get('drones')} Drone(s)")
+    # None is Fleet not answering and `[]` is a Job that submitted nothing.
+    # Folding the two would report an unreachable Fleet as a Drone that claimed
+    # nothing, which is the finding this whole command exists to get right.
+    if evidence is None:
+        field("submitted", "Fleet did not answer; the store is the only thing that holds it")
+    else:
+        submitted = len(evidence.get("steps") or [])
+        field("submitted", f"{submitted} step(s) submitted evidence" if submitted else "nothing was submitted")
+    for drone_id, rows in transcripts:
+        end = next((r for r in rows if r.get("event") == "ended"), None)
+        start = next((r for r in rows if r.get("event") == "started"), None)
+        failed = sum(1 for r in rows if r.get("event") == "answered" and r.get("failed"))
+        unread = sum(1 for r in rows if r.get("event") == "unrecognised")
+        print(f"\n  drone {drone_id} on {(start or {}).get('step', '?')}")
+        if end:
+            print(f"    {end.get('turns')} turns, {money(end.get('cost_micros'))}, {end.get('refusals')} refusals")
+        else:
+            print("    no `ended` row — the transcript stops mid-run")
+        print(f"    {failed} tool call(s) came back failed, {unread} row(s) Armada did not recognise")
+
+
+# ---------------------------------------------------------------- 6. the log tail
+
+
+def say_log(log_rows, lines, path):
+    heading(f"THE LAST OF {path}")
+    if not log_rows:
+        print("  There is no log for this Job.")
+        return
+    for row in log_rows[-lines:]:
+        fields = row.get("fields") or {}
+        extra = "  " + ", ".join(f"{k}={v}" for k, v in fields.items()) if fields else ""
+        print(f"  {clock(row.get('ts'))} {row.get('level', ''):<5} {row.get('msg', '')}{extra}")
+    if len(log_rows) > lines:
+        print(f"\n  {len(log_rows) - lines} earlier line(s). --log 0 for all of them.")
+
+
+# ---------------------------------------------------------------- the transcript
+
+
+def say_transcript(transcripts, full):
+    heading("EVERY TRANSCRIPT ROW")
+    for drone_id, rows in transcripts:
+        print(f"\n  \033[1m{drone_id}\033[0m — {len(rows)} rows")
+        for row in rows:
+            event = row.get("event", "?")
+            said = {
+                "called": lambda r: f"{r.get('tool')} {r.get('detail', '')}",
+                "answered": lambda r: f"{r.get('call')} {'failed' if r.get('failed') else 'ok'}",
+                "refused": lambda r: f"{r.get('tool')} {r.get('call')}",
+                "said": lambda r: excerpt(r.get("text"), full),
+                "instructed": lambda r: f"{r.get('occasion')}: {excerpt(r.get('text'), full)}",
+                "unrecognised": lambda r: r.get("kind", ""),
+            }.get(event, lambda r: json.dumps({k: v for k, v in r.items() if k not in ("ts", "step", "by", "event")}))(row)
+            print(f"  {clock(row.get('ts'))} {row.get('by', ''):<6} {event:<13} {said}")
+
+
+# ---------------------------------------------------------------- assembly
+
+
+def drones_of(job_id, events, log_rows):
+    """Every Drone this Job has had, oldest first, from whichever source spoke.
+
+    Fleet's transition record is the authority; the Job's log names the same
+    ids and is what answers with Fleet down.
+    """
+    seen = []
+    for move in (events or {}).get("moves") or []:
+        what = move.get("moved") or {}
+        if what.get("kind") == "drone" and what.get("drone_id") not in seen:
+            seen.append(what["drone_id"])
+    for row in log_rows:
+        if row.get("drone_id") and row["drone_id"] not in seen:
+            seen.append(row["drone_id"])
+    return seen
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="scripts/job",
+        description="What happened to one Job: its shape, every transition, each "
+        "step's verdict, what its Drone was refused, and how the run ended.",
+    )
+    parser.add_argument("job_id", help="the Job's id, as Bridge and the log spell it")
+    parser.add_argument("--full", action="store_true", help="do not cut claims, findings or arguments")
+    parser.add_argument("--transcript", action="store_true", help="also print every transcript row, one per line")
+    parser.add_argument("--log", type=int, default=20, metavar="N", help="lines of the Job's log to show, 0 for all")
+    parser.add_argument("--repo", metavar="PATH", help="the checkout Fleet is serving, if not this one")
+    args = parser.parse_args()
+
+    root = repository_root(args.repo)
+    port, why = fleet_port()
+    sources = [why, f"{os.path.join(root, '.armada')}"]
+
+    standing, detail = ask(port, f"/jobs/{args.job_id}")
+    _, events = ask(port, f"/jobs/{args.job_id}/events")
+    _, evidence = ask(port, f"/jobs/{args.job_id}/evidence")
+
+    log_path = os.path.join(root, ".armada", "logs", f"{args.job_id}.jsonl")
+    log_rows = read_jsonl(log_path)
+    transcripts = []
+    for drone_id in drones_of(args.job_id, events, log_rows):
+        rows = read_jsonl(os.path.join(root, ".armada", "transcripts", f"{drone_id}.jsonl"))
+        if rows:
+            transcripts.append((drone_id, rows))
+
+    if not detail and not log_rows:
+        print(f"Nothing here knows Job {args.job_id}.", file=sys.stderr)
+        print(f"  {why}", file=sys.stderr)
+        print(f"  no log at {log_path}", file=sys.stderr)
+        return 1
+
+    say_job(detail, standing, args.job_id, root, sources)
+    say_transitions(events, log_rows)
+    say_steps(detail, evidence, args.full)
+    say_refusals(transcripts, args.full)
+    say_ending(detail, transcripts, evidence)
+    say_log(log_rows, len(log_rows) if args.log == 0 else args.log, log_path)
+    if args.transcript:
+        say_transcript(transcripts, args.full)
+    print()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
