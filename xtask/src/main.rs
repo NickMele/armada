@@ -34,6 +34,7 @@ mod rules_privacy;
 mod rules_protocol;
 mod rules_stories;
 mod rules_stylesheets;
+mod rules_tests;
 mod rules_tokens;
 mod rules_toolbelt;
 mod rules_unsafe;
@@ -128,6 +129,7 @@ fn verify_foundations() -> ExitCode {
         rules_bundled::no_workspace_package_is_left_for_node(&root),
         rules_node::the_pinned_node_satisfies_the_declared_floor(&root),
         rules_stylesheets::every_stylesheet_reaches_the_sheet_the_app_loads(&root),
+        rules_tests::every_test_file_is_declared(&root),
         rules_protocol::the_router_serves_what_the_inventory_names(&root),
         rules_protocol::version::the_version_and_its_generated_constant_agree(&root),
         rules_errors::one_code_names_one_failure(&root),
