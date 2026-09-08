@@ -361,7 +361,9 @@ It does not rest on output parsing, which was the point of making it a tool call
 
 **What is read instead explains an empty result rather than judging one.** `permission_denials[]` carries every refused call with its full input, and `tool_result_meta[].non_execution_kind` separates a call that was refused from one that ran and failed.
 
-A run ending with no evidence and at least one refusal is `blocked_by_policy` — a different condition from `silent`, which is a Drone that called nothing at all. Both come back empty and look identical in the envelope, and only one of them can be fixed by rewording the task.
+A run ending with no evidence and still being refused when it stopped is `blocked_by_policy` — a different condition from `silent`, which is a Drone that called nothing at all. Both come back empty and look identical in the envelope, and only one of them can be fixed by rewording the task.
+
+**It is the last refusal that decides and never a count of them.** `permission_denials[]` is a run total, so a Drone refused in its first minute and still calling tools in its seventh reads as blocked on the tally alone — and the allowlist a person would be sent to widen is the one that let the run carry on for six. What separates blocked from `stalled` is whether the Drone reached for anything after the last refusal, which is in the order of the calls and the refusals and not in the number of them.
 
 ### Fleet's response to Evidence
 
@@ -372,12 +374,13 @@ A run ending with no evidence and at least one refusal is `blocked_by_policy` �
 | Valid evidence, fails a Mechanical check with none left | Ends the Job. The Drone is terminated without a turn | Yes |
 | Valid evidence, and a Judge refused it | Escalates. The step stops and its Drone ends, unasked | No — the budget answers a check that ran and said no |
 | Missing or insufficient evidence | Prompts the Drone for more — a free clarification round | No |
-| No evidence, and at least one tool call refused | Escalates as `blocked_by_policy` | No |
+| No evidence, and the last call the Drone made was refused | Escalates as `blocked_by_policy` | No |
+| No evidence, refused earlier and reaching for things after it | Escalates as `stalled` — the allowlist is not what ended this run | No |
 
 - **On a mechanical failure with an attempt left**, the hand-back carries what each Check expected and produced, and what it printed — never a counter.
 - **On a Judge refusal, nothing goes back to the Drone.** Resubmitting under the same instructions produces the same work, so it is a person's to answer, and the step stopping is what ends the Drone. The record's `expected` and `produced` — never `consequence` — open the brief of the Drone a person restarts the step with, which is why the baseline promises a later turn only where the part is coming back.
 - **On missing or insufficient evidence**, the clarification round is capped, then escalates as `stalled`. `silent` is a sub-kind of `stalled`, not a separate trigger. The cap's value is a config row and is still undecided — tracked in `../contracts/configuration.md`.
-- **On `blocked_by_policy`**, the refused calls and their inputs go on the payload. No clarification round is spent first — asking again cannot produce a tool the Drone is not permitted to call, and nothing was attempted that a Check could fail.
+- **On `blocked_by_policy`**, the refused calls and their inputs go on the payload. No clarification round is spent first — asking again cannot produce a tool the Drone is not permitted to call, and nothing was submitted for a Check to run against.
 
 **Two distinct counters, not one.** This clarification-round cap — content arrived via the Evidence MCP tool but was not sufficient — is a separate counter from `poke_limit`, the liveness nudge used where nothing structured arrived at all. Both can end in the same `stalled` label, which reads ambiguous, but they check different things and are tracked independently. See [Workflow](workflow.md).
 
