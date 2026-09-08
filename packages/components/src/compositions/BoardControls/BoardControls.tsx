@@ -31,6 +31,11 @@ import {
  * already matched rather than of the whole board, so a suspended strip is still
  * a breakdown of what is on screen.
  *
+ * **The search's key is drawn inside the field.** Beside it, the hint read as a
+ * second control on the line and took the eye as one; inside, it is a property
+ * of the box it focuses. `Input` owns the room it needs, because the padding
+ * that makes it is `Input`'s to write.
+ *
  * **Nothing here is bound to a key.** The tabs display their keys and this
  * displays the search's, because the surface is the only thing that knows
  * whether a text input holds focus — and a single-key shortcut that fires while
@@ -126,13 +131,15 @@ export function BoardControls({
             aria-label={placeholder}
             onChange={(event) => onQuery(event.target.value)}
             onKeyDown={onSearchKey}
+            trailing={
+              searchKey === undefined ? undefined : (
+                <Kbd className="armada-board-controls__hint" aria-hidden>
+                  {searchKey}
+                </Kbd>
+              )
+            }
           />
         </div>
-        {searchKey === undefined ? null : (
-          <Kbd className="armada-board-controls__hint" aria-hidden>
-            {searchKey}
-          </Kbd>
-        )}
         <div className="armada-board-controls__sort">
           <Select aria-label="Sort" value={sort} onChange={(event) => onSort(event.target.value)}>
             {sorts.map((option) => (

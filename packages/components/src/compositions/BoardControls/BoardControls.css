@@ -30,9 +30,14 @@
   flex: none;
 }
 
-/* The key that focuses the field, beside it rather than inside it. Inside
-   would mean padding the input from out here, and a component owns its own
-   stylesheet — the hint would be this file reaching into `Input`'s.
+/* The key that focuses the field, inside the field's own box.
+   
+   It used to sit beside it, and the reason was ownership rather than design:
+   making room inside meant padding the input from out here, which is this file
+   reaching into `Input`'s. `Input` takes a `trailing` node now and owns the
+   room, so the hint can be where it belongs — a hint beside a search box reads
+   as a second control on the line, and the same hint inside reads as a
+   property of the field.
 
    It is hidden once the cursor is in the field: the hint answers "how do I get
    there", and somebody already there is being told something they did with
