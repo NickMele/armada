@@ -122,6 +122,7 @@ export function Row({
   onOpen,
   onKill,
   onCopied,
+  view = "card",
 }: {
   job: JobSummary;
   /** The title, plus which dispatch of the work this is where there is more than one. */
@@ -135,6 +136,15 @@ export function Row({
   onOpen: (jobId: string) => void;
   onKill: (jobId: string) => void;
   onCopied: (value: string) => void;
+  /**
+   * Which arrangement the list is drawing. **The field set differs, and that
+   * is the point of naming it here.** A card's run is a sentence a person
+   * reads left to right and may be five facts long; a table's row is a set of
+   * cells under named columns and must be exactly as many as there are names,
+   * in their order. So the table folds the bar and the step's name into one
+   * Progress cell and leaves out what has no column.
+   */
+  view?: "card" | "table";
 }) {
   const reading = readingOf(job);
   // Every row reaching here is renderable — the list filtered the rest out and
@@ -159,6 +169,60 @@ export function Row({
   // Checks since protocol 3. Compared against the whole step this silently
   // never matched, and every bar drew its first segment as the current one.
   const at = steps.findIndex((step) => step.step_id === job.current_step_id);
+
+  const bar = (
+    <StepBar
+      total={Math.max(steps.length, 1)}
+      current={at + 1}
+      activity={activityFor(job.status)}
+      label={
+        job.current_step_id === undefined
+          ? `Not started, ${steps.length} steps`
+          : `Step ${at + 1} of ${steps.length}`
+      }
+    />
+  );
+  const workflowValue =
+    workflow === undefined ? job.workflow_id : `${workflow.name}, ${steps.length} steps`;
+  const elapsedNow = elapsedOf(job, now);
+  const createdAt = absoluteOf(job.created_at) ?? undefined;
+
+  // **The table's cells, in the order `BOARD_COLUMNS` names them.** Three, and
+  // exactly three: a column with no header is a cell nobody can read, and a
+  // header with no cell is a track reserved for nothing.
+  //
+  // Progress is one cell where the card spends two tracks on it, because a
+  // column called Progress that answered in two places would need two names.
+  // The branch is not here: on a card it shares track one with the workflow and
+  // the row draws whichever it has, which a named column cannot do — so the
+  // column says Workflow and carries the workflow, and the branch stays a fact
+  // the detail holds.
+  const cells: JobRowField[] = [
+    {
+      label: "Workflow",
+      icon: Layers,
+      value: workflowValue,
+      mono: workflow === undefined,
+      copyValue: job.workflow_id,
+    },
+    {
+      label: "Progress",
+      value: (
+        <>
+          {bar}
+          <span className="armada-row-step">
+            {job.current_step_id === undefined ? "Not started" : job.current_step_id}
+          </span>
+        </>
+      ),
+    },
+    {
+      label: "Run time",
+      value: elapsedNow ?? createdAt ?? "—",
+      mono: true,
+      quiet: elapsedNow === undefined,
+    },
+  ];
 
   const fields: JobRowField[] = [
     // Track one, the drawing's switch: the branch the moment a worktree exists,
@@ -254,7 +318,7 @@ export function Row({
       statusLabel={reading.verb}
       headline={headline}
       jobId={job.id}
-      fields={fields}
+      fields={view === "table" ? cells : fields}
       // **Every running row, and the row applies the ceiling.** Two Jobs run
       // at once now, so this alone would breathe twice on one board — which
       // Motion forbids and then names: the pulse rides the focused row. The

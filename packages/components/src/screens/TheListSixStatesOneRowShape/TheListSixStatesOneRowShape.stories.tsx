@@ -391,6 +391,112 @@ export const WhatTheWireServes: Story = {
 };
 
 /**
+ * **The same six Jobs, in the table view.** Not a second component: these are
+ * the rows above with their facts named and reordered, and the arrangement is
+ * one prop on the list.
+ *
+ * **The header is what buys the height back.** A card labels a fact by where it
+ * sits in a run a person has to learn; a table names it once at the top for the
+ * whole Board. So this row is `--h-row-table` at 52px against the card's 84px,
+ * and it says more rather than less, because every column has a word over it.
+ *
+ * **Three columns, not four.** `Dispatched by` is the fourth fact the Board
+ * wants and the one it cannot draw: `enum-verbs.toml` carries every `origin`
+ * row, but no map reaches Bridge and `sub_dispatched` is a form rather than a
+ * word. Issue #234. A named column with nothing under it reads as a value that
+ * failed to load, which is the argument that already keeps spend off the row.
+ *
+ * **Progress is one cell, where the card spends two tracks on it.** A column
+ * called Progress answering in two places would need two names. The bar keeps
+ * its 72px and the step sits beside it.
+ *
+ * The branch is not here either. On a card it shares track one with the
+ * workflow and the row draws whichever it has; a named column cannot do that,
+ * so the column says Workflow and carries the workflow.
+ */
+export const TheBoardAsATable: Story = {
+  render: () => (
+    <div className="armada-screen">
+      <TheListSixStatesOneRowShape
+        heading="Active jobs"
+        summary="1 job needs you. 6 on the Board."
+        action={<Button variant="primary">New job</Button>}
+        view="table"
+        columns={["Workflow", "Progress", "Run time"]}
+        controls={
+          <BoardControls
+            query=""
+            onQuery={() => {}}
+            searchKey="/"
+            view="table"
+            onView={() => {}}
+            sorts={[
+              { id: "critical_first", label: "Critical first" },
+              { id: "oldest_first", label: "Oldest first" },
+            ]}
+            sort="critical_first"
+            onSort={() => {}}
+            tabs={[
+              { id: "all", label: "All", count: 6, shortcut: "1" },
+              { id: "needs-you", label: "Needs you", count: 1, shortcut: "2" },
+              { id: "running", label: "Running", count: 1, shortcut: "3" },
+              { id: "queued", label: "Queued", count: 1, shortcut: "4" },
+              { id: "finished", label: "Finished", count: 3, shortcut: "5" },
+            ]}
+            tab="all"
+            onTab={() => {}}
+          />
+        }
+        rows={SIX.map((row, i) => ({
+          ...row,
+          // `tracks` is the card's standalone fallback and means nothing here:
+          // inside a list the columns are the list's.
+          tracks: undefined,
+          fields: asCells(row),
+          actionKey: KEYS[i],
+          focused: i === 0 || undefined,
+        }))}
+      />
+    </div>
+  ),
+};
+
+/**
+ * A card's field run, read as the three cells the table names.
+ *
+ * **The fixtures are the card's**, and reshaping them here rather than writing
+ * a second set is the point: two sets authored separately drift, and the whole
+ * claim of the toggle is that it is one row's facts in two arrangements.
+ */
+function asCells(row: JobRowStackedProps): JobRowStackedProps["fields"] {
+  const [origin, bar, step, ...rest] = row.fields;
+  // **Only a mono field, and no fallback to the last one.** The gate row's run
+  // ends `created 09:12` then `Dispatched by you`, and taking the last of them
+  // put a person's name under Run time. A Job that has not started has no run
+  // time, and the column says so with a dash rather than with whatever was
+  // nearest.
+  const elapsed = rest.find((field) => field.mono === true);
+  return [
+    { label: "Workflow", value: origin?.value, mono: origin?.mono, icon: origin?.icon },
+    {
+      label: "Progress",
+      value: (
+        <>
+          {bar?.value}
+          <span className="armada-row-step">{step?.value}</span>
+        </>
+      ),
+    },
+    {
+      label: "Run time",
+      value: elapsed?.value ?? "—",
+      mono: true,
+      quiet: elapsed === undefined || undefined,
+    },
+  ];
+}
+
+/**
  * How long each row has been alive, for the three that are not over. Written
  * here because a story is a fixture; the app measures it from `created_at`.
  */

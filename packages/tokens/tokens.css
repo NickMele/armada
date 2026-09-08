@@ -342,6 +342,14 @@
      action sits beside rows that have none. */
   --h-row-action: 44px;
   --h-row-stacked: 84px;  /* the Job row: FLOOR, not a cap. See --pad-row-stacked */
+  /* The same Job row in the table view, where the headline sits beside its
+     facts rather than over them. A floor for the same reason --h-row-stacked
+     is one, and set by the same arithmetic: 20px of content — one line of
+     --text-sm — plus --space-2 above and below, then rounded to the four-unit
+     grid. It is not a second row height so much as the one-line case of the
+     row that already exists, which is why it lives beside it rather than in
+     the composition that draws it. */
+  --h-row-table: 52px;
   --h-control: 36px;      /* default button, input, select */
   --h-control-sm: 32px;   /* sm — use inside table rows */
   --h-badge: 20px;

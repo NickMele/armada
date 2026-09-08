@@ -86,7 +86,29 @@ export type BoardControlsProps = {
   suspended?: boolean;
   /** The key that focuses the field, drawn beside it. Omitted draws nothing. */
   searchKey?: string;
+  /**
+   * Which arrangement the list beneath is drawn in, and the control that
+   * changes it. Omitted draws no control, which is what a surface offering one
+   * arrangement passes.
+   *
+   * **Beside sort, not among the tabs.** A tab picks which Jobs exist and this
+   * picks how the ones that exist are drawn — the same distinction that keeps
+   * the text match off the tab line. Sort is its neighbour because the two are
+   * the same kind of thing: neither changes the set.
+   *
+   * **Words, not glyphs.** A table and a card have no silhouette a person
+   * reads at 13px without learning it first, and the icon registry has no row
+   * for either. Two short words cost less than a wrong picture.
+   */
+  view?: "card" | "table";
+  onView?: (view: "card" | "table") => void;
 };
+
+/** The two arrangements, in the order they are drawn. */
+const VIEWS: readonly { id: "card" | "table"; label: string }[] = [
+  { id: "card", label: "Cards" },
+  { id: "table", label: "Table" },
+];
 
 /** What the field says when the surface does not say otherwise. */
 const SEARCHES_EVERYTHING = "Search every job";
@@ -105,6 +127,8 @@ export function BoardControls({
   onTab,
   suspended = false,
   searchKey,
+  view,
+  onView,
 }: BoardControlsProps) {
   // Escape clears the field and gives the cursor back, in that order and always
   // both: a field that cleared but kept focus leaves the person somewhere no
@@ -140,6 +164,21 @@ export function BoardControls({
             }
           />
         </div>
+        {view === undefined || onView === undefined ? null : (
+          <div className="armada-board-controls__view" role="group" aria-label="View">
+            {VIEWS.map((one) => (
+              <button
+                type="button"
+                key={one.id}
+                className="armada-board-controls__view-option"
+                aria-pressed={view === one.id}
+                onClick={() => onView(one.id)}
+              >
+                {one.label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="armada-board-controls__sort">
           <Select aria-label="Sort" value={sort} onChange={(event) => onSort(event.target.value)}>
             {sorts.map((option) => (

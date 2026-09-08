@@ -55,3 +55,51 @@
 .armada-board-controls__search input::-webkit-search-cancel-button {
   display: none;
 }
+
+/* The view switch — which arrangement the rows take, beside sort because
+   neither of them changes which rows exist.
+
+   One box holding two buttons, rather than two buttons beside each other: the
+   choice is exclusive and the shared edge is what says so. `aria-pressed` is
+   the state, not a class, so the control is honest to a screen reader without
+   a second attribute meaning the same thing. */
+.armada-board-controls__view {
+  display: inline-flex;
+  flex: none;
+  border-radius: var(--radius-md);
+  border: var(--border-width) solid var(--border-default);
+  background: var(--bg-sunken);
+  overflow: hidden;
+}
+
+.armada-board-controls__view-option {
+  height: calc(var(--h-control) - var(--border-width) * 2);
+  padding: 0 var(--space-3);
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease),
+    color var(--duration-fast) var(--ease);
+}
+
+.armada-board-controls__view-option:hover {
+  color: var(--fg-default);
+  background: var(--bg-hover);
+}
+
+/* The chosen arrangement takes the raised fill and full contrast, which is the
+   same pair the rest of the system uses for a control that is on. */
+.armada-board-controls__view-option[aria-pressed="true"] {
+  background: var(--bg-raised);
+  color: var(--fg-default);
+}
+
+.armada-board-controls__view-option:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(var(--focus-ring-offset) * -1);
+}

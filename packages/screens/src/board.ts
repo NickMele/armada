@@ -167,6 +167,21 @@ export const BOARD_SORTS: readonly { id: BoardSort; label: string }[] = [
 ];
 
 /**
+ * What the table view's columns are called, in the order the row supplies its
+ * facts. The badge and the actions take no name: a status reads as one without
+ * a header, and a column of buttons is not a fact about the Job.
+ *
+ * **Three, not four.** `Dispatched by` is the fourth fact the Board wants and
+ * the one it cannot draw: `enum-verbs.toml` carries all five `origin` rows, but
+ * the vocabulary generator's wanted list does not name `origin`, so no map
+ * reaches Bridge — and `sub_dispatched` is a form carrying a parent's id rather
+ * than a word, so emitting one is a decision rather than a line. Issue #234.
+ * Naming a column here before then would reserve a track for a value that never
+ * arrives, which reads as one that failed to load.
+ */
+export const BOARD_COLUMNS = ["Workflow", "Progress", "Run time"];
+
+/**
  * The Board's default order, recorded as `job_board.default_sort`.
  *
  * **Critical first: the needs-you cluster, then oldest inside every group.**
