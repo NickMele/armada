@@ -214,6 +214,67 @@ export type Stuck = {
    * gone. Both are real, and this is what tells them apart.
    */
   drone_unheard: boolean;
+  /**
+   * What the drone reached for and was refused, oldest first. Since protocol
+   * 7.5.
+   *
+   * **The trigger's evidence, and nothing carried it.** `blocked_by_policy`
+   * named a policy and no surface named what it stopped, so a person was told
+   * to widen an allowlist without being told what to widen it to — the tool and
+   * the command sat on two transcript rows joined by a call id that nothing
+   * joined.
+   *
+   * **Empty is a drone that was refused nothing**, which is most of them. It
+   * rides on every trigger and not only `blocked_by_policy`: a drone denied the
+   * command it needed goes on to escalate as `stalled` or `silent` just as
+   * often.
+   */
+  refused: Refusal[];
+  /**
+   * How many calls were refused altogether, counting the ones `refused` left
+   * out. Since protocol 7.5.
+   *
+   * **A size rather than a flag**, so a surface says *showing 50 of 137*
+   * instead of reporting that something was taken away. Equal to
+   * `refused.length` on every job whose refusals all fit, which is the ordinary
+   * case.
+   */
+  refusals: number;
+};
+
+/**
+ * One call the drone reached for and was refused. `crates/ipc/src/detail.rs`.
+ *
+ * **`detail` is the field a person reads.** The harness usually sends no reason
+ * — the observed `permission_denied` line carried an empty `decision_reason` —
+ * so a row drawn from `because` alone draws nothing, which is the whole of what
+ * was wrong.
+ */
+export type Refusal = {
+  /** The tool that was reached for, in the harness's own spelling. */
+  tool: string;
+  /**
+   * The call id the transcript rows carried.
+   *
+   * **What makes a cut `detail` openable**: `get_call` serves the whole argument
+   * by this id, so a refused heredoc shown to its bound is not a dead end.
+   */
+  call: string;
+  /**
+   * The argument as the transcript recorded it — the command, the path.
+   *
+   * Bounded by fleet at 200 characters, so it is one line. **Empty is a tool
+   * whose arguments the decoder has no name for**, and never an invented one.
+   */
+  detail: string;
+  /**
+   * The harness's own wording, where it gave one.
+   *
+   * **Usually empty, and empty is the honest answer.** Nothing fills it in from
+   * the trigger, so a surface must not either — `detail` is what carries the
+   * meaning.
+   */
+  because: string;
 };
 
 /**

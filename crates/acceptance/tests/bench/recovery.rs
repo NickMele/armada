@@ -14,7 +14,7 @@
 //!
 //! [`bench::board`]: super::board
 
-use core_model::{Actor, Job, Standing, StepId, StepTarget, Stuck, TransitionReason};
+use core_model::{Actor, Job, Refusals, Standing, StepId, StepTarget, Stuck, TransitionReason};
 use ipc::{JobDetail, StepFacts};
 
 use super::{Bench, Run};
@@ -71,7 +71,7 @@ pub fn opened(
     standing: Standing,
     steps: &[StepFacts],
 ) -> JobDetail {
-    let stuck = Stuck::of(job, reason, standing);
+    let stuck = Stuck::of(job, reason, standing, Refusals::none());
     JobDetail::of(
         job,
         reason,

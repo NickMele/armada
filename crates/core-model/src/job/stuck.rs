@@ -24,6 +24,7 @@
 //! trigger and the wrong condition. This reports it as recorded beside the
 //! worktree fact, so the acts are right even where the trigger is not.
 
+use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::job::escalation::EscalationTrigger;
@@ -150,6 +151,88 @@ pub struct Standing {
     pub workflow_held: bool,
 }
 
+/// One call the Drone reached for and was refused.
+///
+/// **[`detail`](Refusal::detail) is the field a person reads.** The harness
+/// usually sends no reason at all — the observed `permission_denied` line
+/// carried an empty `decision_reason` — so a row showing only
+/// [`because`](Refusal::because) shows nothing, which is the defect this type
+/// exists to close.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Refusal {
+    /// The tool that was reached for, in the harness's own spelling.
+    pub tool: String,
+    /// The call id both rows carried, which is what joined them.
+    ///
+    /// **It is what makes a cut detail openable.** `get_call` serves the whole
+    /// argument by this id, so a refused heredoc shown to its bound is not a
+    /// dead end.
+    pub call: String,
+    /// The argument as the transcript recorded it — the command, the path.
+    ///
+    /// Bounded where it was built, in `adapter_traits::CallDetail`. **Empty is
+    /// a tool whose arguments that vocabulary has no name for**, and never an
+    /// invented one.
+    pub detail: String,
+    /// The harness's own wording, where it gave one. Often empty, and an empty
+    /// one is the honest answer rather than a reason to guess.
+    pub because: String,
+}
+
+/// What a Job's Drones reached for and were refused, bounded.
+///
+/// **The trigger's evidence, and nothing carried it.** `blocked_by_policy`
+/// named a policy and no surface named what the policy stopped, so a person was
+/// told to widen an allowlist without being told what to widen it to. It is
+/// carried here and read by no rule below, which is why it is an argument to
+/// [`Stuck::of`] rather than a fifth field on [`Standing`].
+///
+/// **The pair is one value because neither half is readable alone.** A list of
+/// fifty says nothing about whether it is the whole list, and a truncated list
+/// nobody was told about reads as the whole one — the rule
+/// `adapter_traits::DroneEvent::Unreadable` states for a decoder, applied to a
+/// read.
+///
+/// **Private fields and one constructor**, so [`in_all`](Refusals::in_all) can
+/// never be spelled smaller than what is kept.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Refusals {
+    kept: Vec<Refusal>,
+    in_all: u64,
+}
+
+impl Refusals {
+    /// The refusals a reader is handed, and how many there were altogether.
+    ///
+    /// A total below what is kept is raised to it rather than refused: the
+    /// caller counted and the caller collected, and a classification is not
+    /// worth failing over the two disagreeing.
+    pub fn of(kept: Vec<Refusal>, in_all: u64) -> Refusals {
+        let in_all = in_all.max(kept.len() as u64);
+        Refusals { kept, in_all }
+    }
+
+    /// A Drone that was refused nothing, which is most of them.
+    pub fn none() -> Refusals {
+        Refusals::default()
+    }
+
+    /// The calls carried, oldest first — **the earliest refusals and not the
+    /// last**. What stopped a Drone is what it reached for before it started
+    /// working around being stopped.
+    pub fn kept(&self) -> &[Refusal] {
+        &self.kept
+    }
+
+    /// How many calls were refused altogether, counting the ones left out.
+    ///
+    /// The same word `adapter_traits::DroneEvent::Ended` uses for the same
+    /// count, so the two cannot be read as different quantities.
+    pub fn in_all(&self) -> u64 {
+        self.in_all
+    }
+}
+
 /// Why a Job stopped, and what moves it.
 ///
 /// Built once, so the sentence a person reads and the buttons they are offered
@@ -161,6 +244,7 @@ pub struct Stuck {
     step: Option<StepId>,
     recourse: Vec<Recourse>,
     standing: Standing,
+    refused: Refusals,
 }
 
 impl Stuck {
@@ -178,7 +262,18 @@ impl Stuck {
     /// them. A step-level trigger is read off the stopped step's own verdict
     /// instead, because that is the reading every act already makes and a
     /// second path to one answer is how the two come to disagree.
-    pub fn of(job: &Job, reason: Option<&TransitionReason>, standing: Standing) -> Option<Stuck> {
+    ///
+    /// `refused` is evidence and decides nothing here. **It is an argument
+    /// rather than a fifth field on [`Standing`]**, because every field of that
+    /// struct is read by a rule below and this one is read by none — folding it
+    /// in would make `Standing` two things at once, and would cost its `Copy`
+    /// for a value no rule consults.
+    pub fn of(
+        job: &Job,
+        reason: Option<&TransitionReason>,
+        standing: Standing,
+        refused: Refusals,
+    ) -> Option<Stuck> {
         if !Stuck::asked_of(job.status()) {
             return None;
         }
@@ -254,6 +349,7 @@ impl Stuck {
             step: stopped.map(|(step, _)| step),
             recourse,
             standing,
+            refused,
         })
     }
 
@@ -309,6 +405,16 @@ impl Stuck {
     /// act is missing rather than only that it is.
     pub fn standing(&self) -> Standing {
         self.standing
+    }
+
+    /// What the Drone reached for and was refused, and how much of it is here.
+    ///
+    /// **Empty on every Job whose Drone was refused nothing**, which is most of
+    /// them. It is not among the facts the acts were decided from: widening an
+    /// allowlist is not one of Fleet's acts, so this names what to change
+    /// rather than offering to change it.
+    pub fn refused(&self) -> &Refusals {
+        &self.refused
     }
 
     /// Whether one act applies. **The predicate every caller wants**, so that

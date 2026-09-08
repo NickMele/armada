@@ -25,6 +25,7 @@
 //! `crate::readopting` reopens the same file and writes what nothing observed.
 
 mod backfill;
+mod refused;
 mod row;
 
 use std::io;
@@ -43,7 +44,8 @@ use tokio::task::JoinHandle;
 use crate::clock::Clock;
 use row::Line;
 
-pub use backfill::{arguments, history, last_heard, HISTORY};
+pub use backfill::{arguments, history, last_heard, refusals, HISTORY, REFUSALS};
+pub use refused::refused_in;
 
 /// How many rows may be waiting to be written.
 ///

@@ -11,7 +11,9 @@
 //! skipped rather than written `null`.
 
 use crate::tests::{detail_of, job};
-use crate::{decode, encode, CheckRun, DeclaredCheck, JobDetail, Judged, StepFacts};
+use crate::{
+    decode, encode, CheckRun, DeclaredCheck, JobDetail, Judged, Refusal, StepFacts, Stuck,
+};
 
 /// **The distinction the whole field exists for.** An ungated step says so with
 /// an empty list; a step Fleet cannot answer for carries no key at all. A
@@ -273,5 +275,76 @@ fn a_check_covering_everything_carries_no_when() {
     assert_eq!(
         decode::<DeclaredCheck>("a declared check", json.as_bytes()).expect("it round-trips"),
         declared
+    );
+}
+
+/// The classification of the real Job this was written against: a policy
+/// stopped one `Bash` call, and the harness said nothing about why.
+fn blocked() -> Stuck {
+    Stuck {
+        stopped_by: Some(String::from("blocked_by_policy")),
+        step_id: None,
+        recourse: Vec::new(),
+        worktree_on_disk: true,
+        drone_unheard: false,
+        refused: vec![Refusal {
+            tool: String::from("Bash"),
+            call: String::from("toolu_01B13LL"),
+            detail: String::from("cargo nextest run --package ipc"),
+            because: String::new(),
+        }],
+        refusals: 1,
+    }
+}
+
+/// **The command is what crosses, because the reason does not exist.** Every
+/// `permission_denied` line observed carried an empty `decision_reason`, so a
+/// client drawing `because` alone would draw the same blank a person was
+/// already looking at.
+#[test]
+fn a_refusal_crosses_with_its_command_and_keeps_its_empty_reason() {
+    let json = encode(&blocked()).expect("a classification is plain data");
+
+    assert!(
+        json.contains("\"detail\":\"cargo nextest run --package ipc\""),
+        "the command, joined off the `called` row: {json}"
+    );
+    assert!(
+        json.contains("\"because\":\"\""),
+        "an empty reason crosses as one rather than being dropped, so a client \
+         can tell it apart from a key it did not read: {json}"
+    );
+    assert!(
+        json.contains("\"call\":\"toolu_01B13LL\""),
+        "and the id `get_call` serves the whole argument by: {json}"
+    );
+    assert_eq!(
+        decode::<Stuck>("a classification", json.as_bytes()).expect("it reads back"),
+        blocked()
+    );
+}
+
+/// **A capped list says how many there were.** A client shown fifty of a
+/// hundred and thirty-seven and told nothing would render the fifty as the
+/// whole list, which is the defect one level down from the one this closes.
+#[test]
+fn the_count_crosses_beside_the_list_and_a_job_with_none_says_so() {
+    let many = Stuck {
+        refusals: 137,
+        ..blocked()
+    };
+    let json = encode(&many).expect("a classification is plain data");
+    assert!(json.contains("\"refusals\":137"), "{json}");
+
+    let quiet = Stuck {
+        refused: Vec::new(),
+        refusals: 0,
+        ..blocked()
+    };
+    let json = encode(&quiet).expect("a classification is plain data");
+    assert!(
+        json.contains("\"refused\":[]") && json.contains("\"refusals\":0"),
+        "empty is a Drone that was refused nothing, and it is stated rather \
+         than left to a missing key: {json}"
     );
 }

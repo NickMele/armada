@@ -96,7 +96,7 @@ fn unheard_job() -> Job {
 }
 
 fn classify(job: &Job, standing: Standing) -> Stuck {
-    Stuck::of(job, None, standing).expect("a stopped Job is classified")
+    Stuck::of(job, None, standing, Refusals::none()).expect("a stopped Job is classified")
 }
 
 /// The absence is half the answer: a Job that has not stopped gets no
@@ -113,7 +113,7 @@ fn a_job_that_has_not_stopped_is_not_classified() {
         JobStatus::CompletedSuccess,
     ] {
         assert!(
-            Stuck::of(&reach(status), None, all_there()).is_none(),
+            Stuck::of(&reach(status), None, all_there(), Refusals::none()).is_none(),
             "{} is not a Job a person opens asking why it stopped",
             status.as_wire()
         );
@@ -193,7 +193,8 @@ fn an_unheard_drone_with_no_worktree_is_not_offered_the_restart() {
 #[test]
 fn a_job_level_trigger_is_read_off_the_transition_reason() {
     let reason = TransitionReason::Escalation(EscalationTrigger::Stalled);
-    let stuck = Stuck::of(&stalled(), Some(&reason), all_there()).expect("escalated");
+    let stuck =
+        Stuck::of(&stalled(), Some(&reason), all_there(), Refusals::none()).expect("escalated");
 
     assert_eq!(stuck.stopped_by(), Some(EscalationTrigger::Stalled));
 }
@@ -490,4 +491,57 @@ fn every_act_is_spelled_as_the_operation_that_performs_it() {
         assert_eq!(Recourse::from_wire(act.as_wire()), Some(*act));
     }
     assert_eq!(Recourse::from_wire("pilot"), None);
+}
+
+/// One refusal, shaped as the real one was: a command, and **no reason**.
+fn a_refusal() -> Refusal {
+    Refusal {
+        tool: String::from("Bash"),
+        call: String::from("toolu_01B13LL"),
+        detail: String::from("cargo nextest run --package ipc"),
+        because: String::new(),
+    }
+}
+
+/// **The evidence rides with the trigger and decides nothing.** A person shown
+/// `blocked_by_policy` was left to work out what the policy stopped, and the
+/// answer was in two transcript rows nothing joined.
+#[test]
+fn a_classification_carries_what_the_drone_was_refused() {
+    let stuck = Stuck::of(
+        &stopped_on(EscalationTrigger::BlockedByPolicy),
+        None,
+        all_there(),
+        Refusals::of(vec![a_refusal()], 1),
+    )
+    .expect("escalated");
+
+    assert_eq!(stuck.refused().kept(), [a_refusal()]);
+    assert_eq!(stuck.refused().in_all(), 1);
+    assert_eq!(
+        stuck.recourse(),
+        classify(&stopped_on(EscalationTrigger::BlockedByPolicy), all_there()).recourse(),
+        "the acts are decided from `Standing` alone, which is why this is not a \
+         fifth field on it"
+    );
+}
+
+/// **A short list says it is short.** A truncated list nobody was told about
+/// reads as the whole one, which is the rule `DroneEvent::Unreadable` states
+/// for a decoder.
+#[test]
+fn a_capped_list_carries_how_many_there_were() {
+    let refused = Refusals::of(vec![a_refusal()], 137);
+    assert_eq!(refused.kept().len(), 1);
+    assert_eq!(refused.in_all(), 137);
+
+    let miscounted = Refusals::of(vec![a_refusal(), a_refusal()], 1);
+    assert_eq!(
+        miscounted.in_all(),
+        2,
+        "a total below what is carried is raised to it: the pair cannot say \
+         that fewer were refused than are named"
+    );
+    assert_eq!(Refusals::none().in_all(), 0);
+    assert!(Refusals::none().kept().is_empty());
 }
