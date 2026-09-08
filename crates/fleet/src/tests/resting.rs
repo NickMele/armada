@@ -175,15 +175,6 @@ fn a_drone_that_ends_refused() -> FakeHarness {
     .reading("ENDED", vec![ended(1)])
 }
 
-/// The refusal that follows a call, as the transcript carries it.
-fn refused() -> DroneEvent {
-    DroneEvent::Refused {
-        tool: String::from("Read"),
-        call: String::from("a-call"),
-        because: String::from("not on the allowlist"),
-    }
-}
-
 /// The same again, with something of its own still holding the pipe — and out
 /// of reach of the signal that ends the Drone.
 ///
