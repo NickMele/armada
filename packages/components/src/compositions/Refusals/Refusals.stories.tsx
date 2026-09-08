@@ -10,7 +10,21 @@ export default meta;
 type Story = StoryObj<typeof Refusals>;
 
 /** The sentence the band says over the rows, at every state that has any. */
-const SAID = "What this job reached for and was refused:";
+const SAID = "Fleet blocked the job from the following:";
+
+/**
+ * What a restart meets, said under every list `screens` builds. The words are
+ * `refused.ts`'s; they are spelled here so the stories draw the shape the app
+ * draws rather than a placeholder that reads shorter than the real one.
+ */
+const AGAIN =
+  "A drone's toolset is fixed when it starts, and a restart builds the same one from the same " +
+  "declaration. A drone that reaches for these again is refused again.";
+
+/** The second sentence, on a list with a refused command in it. */
+const DECLARED =
+  "A command is in that toolset only where the repository's armada.yml declares it under " +
+  "commands and does not mark it destructive.";
 
 /**
  * **The report, as one row.** A job stopped saying it was blocked by policy,
@@ -24,6 +38,54 @@ export const OneCallRefused: Story = {
   args: {
     said: SAID,
     refused: [{ tool: "Bash", detail: "cargo nextest run --package ipc 2>&1 | tail -80" }],
+  },
+};
+
+/**
+ * **What a restart meets, which the rows alone do not say.** This is the state
+ * the report came from: refusals listed beside a screen whose one control was
+ * *Restart step*, so the list read as the diagnosis and the button read as the
+ * cure. It is not one — a drone's toolset is rendered when it spawns, and a
+ * restart renders the same one.
+ *
+ * **A mechanism and not a tip.** It says how the toolset is built and what has
+ * to change for it to differ. Nothing here tells a person to do anything, and
+ * nothing here is hedged: the allowlist is what it is.
+ *
+ * The second sentence is here because a `Bash` row is here. Every `Bash` grant
+ * is one declared command and there is no other spelling of one, so a refused
+ * command is always a command the Manifest does not declare to this step.
+ */
+export const WhatARestartMeets: Story = {
+  args: {
+    said: SAID,
+    again: `${AGAIN} ${DECLARED}`,
+    refused: [
+      { tool: "Bash", detail: "cargo nextest run --package ipc 2>&1 | tail -80" },
+      { tool: "Bash", detail: "cargo nextest run --package ipc" },
+      { tool: "Bash", detail: "cargo test -p ipc detail" },
+    ],
+  },
+};
+
+/**
+ * **Nothing a Manifest declares was refused, so no Manifest is named.**
+ * `WebFetch` is a capability Armada grants nowhere, and `commands` is a section
+ * that cannot widen it — a sentence sending a person there would send them to
+ * edit a file that cannot help them.
+ *
+ * What survives is the half that is true of every refusal: the toolset is fixed
+ * at spawn, and a restart builds the same one. That is a dead end honestly
+ * drawn rather than a route invented to avoid one.
+ */
+export const NothingAManifestDeclares: Story = {
+  args: {
+    said: SAID,
+    again: AGAIN,
+    refused: [
+      { tool: "WebFetch", detail: "https://docs.rs/tokio/latest/tokio/sync/struct.Mutex.html" },
+      { tool: "WebSearch", detail: "tokio mutex poisoning" },
+    ],
   },
 };
 

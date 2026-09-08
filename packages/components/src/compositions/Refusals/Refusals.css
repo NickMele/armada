@@ -139,3 +139,23 @@
   line-height: var(--leading-2xs);
   color: var(--fg-subtle);
 }
+
+/* What a fresh drone meets when it reaches for these again. Sans and at the
+   band body's own values, because it is one paragraph with the sentence the
+   band draws under it — set at the caption's weight it would read as a second
+   heading over rows it is not about.
+
+   `--fg-muted` and regular weight, which is exactly `.armada-inside__notice-body`:
+   the two sentences are read as one, and a difference in either would say they
+   answer different questions.
+
+   Set off from the rows by a space, because it is a statement about the list
+   rather than a row of it. */
+.armada-refusals__again {
+  margin-top: var(--space-1);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}

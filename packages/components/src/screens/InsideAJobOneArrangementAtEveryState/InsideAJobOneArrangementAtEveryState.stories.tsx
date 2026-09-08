@@ -454,6 +454,20 @@ export const OutOfAttempts: Story = {
  * command into an allowlist as a whole one; and the note under the list says
  * the list is short, so nobody widens an allowlist for the eight they can see
  * and thinks they are done.
+ *
+ * **The second report, and the sentence under the rows is the answer to it.**
+ * The list arrived and the screen still offered a restart beside it with
+ * nothing saying whether restarting met the same wall: *"I feel like if I
+ * restart, the drone is going to do the same thing again. Nothing on the screen
+ * is giving me confidence that I can unblock the drone and not run into the
+ * same issue."* It would have. A Drone's toolset is rendered when it spawns and
+ * a restart renders the same one, so the rows read as a diagnosis and the
+ * button read as its cure.
+ *
+ * **Read the band top to bottom and it is three things in order**: what was
+ * blocked, that a restart meets it again and what would change that, then the
+ * act. Neither sentence tells a person to do anything — they say how the
+ * toolset is built, which is a fact this screen was withholding.
  */
 export const BlockedByPolicy: Story = {
   render: () => (
@@ -491,8 +505,14 @@ export const BlockedByPolicy: Story = {
             children: (
               <>
                 <Refusals
-                  said="What this job reached for and was refused:"
+                  said="Fleet blocked the job from the following:"
                   note="showing 8 of 31 refused calls"
+                  again={
+                    "A drone's toolset is fixed when it starts, and a restart builds the same " +
+                    "one from the same declaration. A drone that reaches for these again is " +
+                    "refused again. A command is in that toolset only where the repository's " +
+                    "armada.yml declares it under commands and does not mark it destructive."
+                  }
                   refused={[
                     { tool: "Bash", detail: "cargo nextest run --package ipc 2>&1 | tail -80" },
                     { tool: "Bash", detail: "cargo nextest run --package ipc" },
