@@ -1,0 +1,93 @@
+/* The evidence viewer on a trailing sheet. The layer, its header and its bands
+   are `Sheet`; what lives here is the strip band, the body and the one control
+   that leaves the screen.
+
+   MISSING TOKENS on the line below — the same two `ActivityLogSheet` reports,
+   for the same band on the same layer.
+   --armada-hairline: no border-width token exists in packages/tokens.
+   --armada-band-ground: a band on an overlay is one surface step under it, and
+     no token carries "sunken, against --bg-overlay". Reported. */
+.armada-evidence-sheet__strip {
+  --armada-hairline: var(--border-width);
+  --armada-band-ground: color-mix(in srgb, var(--bg-sunken) 55%, var(--bg-overlay));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-2) var(--space-6);
+  background: var(--armada-band-ground);
+  border-bottom: var(--armada-hairline) solid var(--border-subtle);
+}
+
+.armada-sheet[data-floor] .armada-evidence-sheet__strip {
+  padding: var(--space-2) var(--space-4);
+}
+
+/* Machine text in the subtitle — the artifact's own name, the Job, the extent.
+   Mono because every one of them is a value the system reported. */
+.armada-evidence-sheet__mono {
+  font-family: var(--font-mono);
+}
+
+/* The body carries its own padding, per `bleed` — an artifact runs edge to
+   edge, and a console transcript inset from both sides reads as a quotation of
+   a quotation. */
+.armada-evidence-sheet__body {
+  padding: var(--space-4) var(--space-6);
+}
+
+.armada-sheet[data-floor] .armada-evidence-sheet__body {
+  padding: var(--space-3) var(--space-4);
+}
+
+/* Leaving the screen. Last, under the artifact: it is what you reach for after
+   the sheet was not enough, never the first control the eye lands on. */
+.armada-evidence-sheet__leave {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 var(--space-6) var(--space-4);
+}
+
+.armada-sheet[data-floor] .armada-evidence-sheet__leave {
+  padding: 0 var(--space-4) var(--space-3);
+}
+
+/* Where to go next, after what you came for.
+
+   The strip was a band above the body, which meant pressing Verdicts opened a
+   layer whose first content was a list of what the step produced. A reader who
+   asked for one thing should meet that thing; this is the way onward and it
+   reads last, shut, costing one line until it is wanted. */
+.armada-evidence-sheet__more {
+  margin: 0 var(--space-6) var(--space-4);
+  border-top: var(--border-width) solid var(--border-subtle);
+  padding-top: var(--space-3);
+}
+
+.armada-sheet[data-floor] .armada-evidence-sheet__more {
+  margin: 0 var(--space-4) var(--space-3);
+}
+
+/* The summary is the control. Quiet: it is a way out of the reading rather
+   than part of it, and it must not compete with the artifact above. */
+.armada-evidence-sheet__more-head {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.armada-evidence-sheet__more-head:hover {
+  color: var(--fg-default);
+}
+
+.armada-evidence-sheet__more-head:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.armada-evidence-sheet__more-body {
+  padding-top: var(--space-2);
+}

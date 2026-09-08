@@ -1,0 +1,191 @@
+/* Check runs — what each Check came to, and the output behind it.
+
+   Rows on the card, not the well: these are selectors, and a well would read
+   as something already being quoted. The one hued surface is the row whose
+   output is open, and it takes the accent rather than a verdict colour —
+   selection is not a result. */
+.armada-check-runs {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+}
+
+.armada-check-runs__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.armada-check-runs__label {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+
+/* Where the output comes from, said once over the list rather than on every
+   row. It is true of all of them and it is not a fact about any one Check. */
+.armada-check-runs__note {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-check-runs__list {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+/* Four columns: the mark, the finding, the output control and the result. The
+   control and the result are `max-content` so a list where one row says
+   `output · 2,180 lines` and another says `verdicts` still lines its results
+   up on one right edge. */
+.armada-check-runs__row {
+  display: grid;
+  grid-template-columns: var(--space-4) minmax(0, 1fr) max-content max-content;
+  align-items: start;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  /* The selected row's bar sits in this reserved edge, so selecting a row
+     never moves the text beside it. */
+  border-left: var(--row-focus-bar);
+  border-left-color: transparent;
+}
+
+.armada-check-runs__row + .armada-check-runs__row {
+  border-top: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-check-runs__row[data-open="true"] {
+  background: var(--surface-row-selected);
+  border-left-color: var(--accent);
+}
+
+.armada-check-runs__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  color: var(--fg-subtle);
+}
+
+.armada-check-runs__what {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  min-width: 0;
+}
+
+/* What the Check came to. Sans, because it is a finding somebody can read —
+   the identifier under it is what a machine joins on. */
+.armada-check-runs__says {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-default);
+}
+
+.armada-check-runs__id {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  overflow-wrap: anywhere;
+}
+
+/* The output control. Underlined in the accent rather than filled: everything
+   on this screen that opens the viewer is marked the same way, and a filled
+   button per row would read as four decisions to make. */
+.armada-check-runs__output {
+  appearance: none;
+  flex: none;
+  padding: calc(var(--space-1) / 2) var(--space-1);
+  border: var(--border-width) solid var(--border-default);
+  border-bottom-color: var(--accent);
+  border-radius: var(--radius-sm);
+  background: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.armada-check-runs__output:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.armada-check-runs__output[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--bg-base);
+}
+
+.armada-check-runs__output:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* A Check with nothing to open keeps the column so the results stay in one
+   line down the list. */
+.armada-check-runs__no-output {
+  display: block;
+}
+
+/* The exit code or the state. Mono and measured, hued per row and never summed
+   onto the step or the Job — a red result here sits under a running step
+   without the two contradicting each other. */
+.armada-check-runs__result {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.armada-check-runs__row[data-named="passed"] .armada-check-runs__result,
+.armada-check-runs__row[data-named="passed"] .armada-check-runs__mark {
+  color: var(--verdict-met);
+}
+
+.armada-check-runs__row[data-named="failed"] .armada-check-runs__result,
+.armada-check-runs__row[data-named="failed"] .armada-check-runs__mark,
+.armada-check-runs__row[data-named="refused"] .armada-check-runs__result,
+.armada-check-runs__row[data-named="refused"] .armada-check-runs__mark {
+  color: var(--verdict-not-met);
+}
+
+.armada-check-runs__row[data-named="running"] .armada-check-runs__result,
+.armada-check-runs__row[data-named="running"] .armada-check-runs__mark {
+  color: var(--step-running);
+}
+
+/* Queued. No hue at all — a Check that has not run is not a state with a
+   colour, it is a position in a list, and the whole row recedes to say so. */
+.armada-check-runs__row[data-named="queued"] .armada-check-runs__says {
+  color: var(--fg-subtle);
+}
+
+.armada-check-runs__row[data-named="queued"] .armada-check-runs__result {
+  color: var(--fg-subtle);
+}
+
+/* A second line that is a name rather than an identifier. Sans, because mono
+   claims a value a machine produced and something can join on — and the Judge's
+   row has no such value: a panel is one `judge_checks[]` entry on a step, so
+   the row used to draw the enum itself. */
+.armada-check-runs__id[data-name="true"] {
+  font-family: var(--font-sans);
+}
