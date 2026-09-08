@@ -1,0 +1,224 @@
+/* Judge verdicts — criteria against judges.
+
+   A real table, because that is what a panel's output is: two axes and one
+   answer per pair. The grid also gets the header association free, which is
+   what lets a mark in the third column be read as j3's rather than as the
+   third mark on the row. */
+.armada-judge-verdicts {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+}
+
+.armada-judge-verdicts__label {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+
+/* The track list is the composition's, per the primitive's rule. The judge
+   columns are the width of a 12px mark plus the cell's own padding and they
+   never grow — every extra pixel belongs to the criterion, which is the column
+   somebody reads. */
+.armada-judge-verdicts__grid {
+  table-layout: auto;
+}
+
+/* The disclosure's gutter, left of the number. It is the width of a 16px
+   chevron plus the cell's own padding, and it never grows: every pixel beyond
+   the control belongs to the criterion. */
+.armada-judge-verdicts__gutter {
+  width: var(--space-4);
+  padding-right: 0;
+}
+
+/* The number. Second column now — the chevron sat inline before the criterion
+   until 2026-09-08 and indented every refused title by its own width, so a
+   column of criteria did not share a left edge. */
+.armada-judge-verdicts__grid .armada-table-header-cell:nth-child(2),
+.armada-judge-verdicts__grid .armada-table-cell:nth-child(2) {
+  width: var(--space-8);
+  text-align: right;
+}
+
+.armada-judge-verdicts__judge {
+  width: var(--space-6);
+  text-align: center;
+}
+
+/* The criterion's name and its words, stacked. The name carries the row and
+   the words qualify it, so the words are the ones that recede. */
+.armada-judge-verdicts__name {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-default);
+}
+
+.armada-judge-verdicts__text {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+/* One mark per judge. Hue on the glyph and nothing else — the row carries no
+   surface, so a verdict never sums onto the step or the Job. */
+.armada-judge-verdicts__mark {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.armada-judge-verdicts__mark[data-mark="met"] {
+  color: var(--verdict-met);
+}
+
+.armada-judge-verdicts__mark[data-mark="not_met"] {
+  color: var(--verdict-not-met);
+}
+
+/* The Judge could not read the artifact at all. Neither verdict hue, because
+   the criterion went unjudged rather than judged — the same assignment
+   circle-minus carries in the registry. */
+.armada-judge-verdicts__mark[data-mark="gate_undecided"] {
+  color: var(--fg-subtle);
+}
+
+/* A criterion a Check settled, banded across every judge column.
+
+   No ground. A fill here drew an L-shaped dark block over three of five
+   columns — the eye read it as a region rather than as a cell, and a row where
+   nothing happened became the loudest thing in the grid. What says these rows
+   are a different kind of answer is that the marks are missing and a sentence
+   stands in their place, which is already the whole difference. */
+.armada-judge-verdicts__measured {
+  text-align: center;
+  color: var(--fg-subtle);
+}
+
+/* The refused row. Marked by weight, by the mark's own hue and by this edge —
+   three channels, which is what lets the rows stay in their frozen order
+   instead of sorting the refusal to the top to be found. */
+.armada-judge-verdicts__grid .armada-table-row[data-refused="true"] .armada-table-cell:first-child {
+  border-left: var(--row-focus-bar);
+  border-left-color: var(--verdict-not-met);
+}
+
+/* Every other row reserves the same edge, so marking one never shifts the
+   numbers in the column beside it. */
+.armada-judge-verdicts__grid .armada-table-cell:first-child {
+  border-left: var(--row-focus-bar);
+  border-left-color: transparent;
+}
+
+/* The refusal's own row carries the same edge, so the criterion and the
+   reading beneath it read as one block rather than as a row and a region that
+   happen to be adjacent. */
+.armada-judge-verdicts__refusal .armada-table-cell:first-child {
+  border-left-color: var(--verdict-not-met);
+}
+
+/* A row that opens. The pointer says so and the chevron says which way it
+   goes. */
+.armada-judge-verdicts__grid .armada-table-row[data-opens="true"] {
+  cursor: pointer;
+}
+
+.armada-judge-verdicts__grid .armada-table-row[data-opens="true"]:hover {
+  background: var(--surface-row-hover);
+}
+
+/* A collapsed refusal is a row and takes no space. `display: none` on a <tr>
+   is what `hidden` already means; it is restated because the primitive sets
+   `display` on its rows and the attribute would otherwise lose. */
+.armada-judge-verdicts__grid .armada-table-row[hidden] {
+  display: none;
+}
+
+/* The disclosure. `StepRow` draws its chevron the same way and for the same
+   reason: a control in a gutter sets nothing else's alignment. */
+.armada-judge-verdicts__caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--fg-subtle);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-judge-verdicts__caret:hover {
+  color: var(--fg-default);
+}
+
+.armada-judge-verdicts__caret:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* How large the refusal is, on the closed row. Mono and set back: it is a
+   count, and it must not compete with the criterion it qualifies — nor take a
+   hue, because a refusal is a refusal whatever its size. */
+.armada-judge-verdicts__split {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* The refusal, in the cell that spans the grid.
+
+   It undoes the number column's own rules rather than those rules excluding it:
+   the spanning cell is a `:first-child` too, so it inherited the right-aligned
+   `#` column's alignment and every paragraph in the refusal set itself against
+   the far edge of the table.
+
+   It runs from the row's own left edge. It was inset past the gutter and the
+   number to line up under the criterion's title, which bought alignment with
+   one column and spent a third of the width the reading had to run in. */
+.armada-judge-verdicts__grid .armada-judge-verdicts__refusal .armada-table-cell:first-child {
+  width: auto;
+  padding-top: 0;
+  padding-left: var(--space-3);
+  text-align: left;
+}
+
+/* The row's edge already marks the refusal, and the block inside carries one of
+   its own for the standalone use. Both at once drew two red bars an inch apart
+   around one reading, so the inner one stands down and the row's continues
+   through — which is what says the criterion and its grounds are one thing. */
+.armada-judge-verdicts__refusal .armada-judge-refusal__block {
+  padding-left: 0;
+  border-left: 0;
+  background: none;
+}
+
+/* The refused row. --step-failed-bg is the step surface and would say the Job
+   failed; a refusal says the work runs and is not what was asked for. The row
+   is marked by weight and by the mark's own hue, and by its edge. */
+.armada-judge-verdicts__grid .armada-table-row[data-refused="true"] .armada-judge-verdicts__text {
+  color: var(--fg-default);
+}
+
+.armada-judge-verdicts__sr {
+  position: absolute;
+  width: var(--border-width);
+  height: var(--border-width);
+  padding: 0;
+  margin: calc(var(--border-width) * -1);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

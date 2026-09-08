@@ -65,15 +65,12 @@ export const DIFF_CHAPTER = "produced";
 /** Which chapter the activity log is in. */
 export const LOG_CHAPTER = "log";
 
-/**
- * The log of what Fleet did to the Job itself, which is not in a chapter.
- *
- * **A region name and not a chapter id.** The chapters are a step's story and
- * this one belongs to no step, so it is named here beside them for the same
- * reason they are named at all: a log's region is how the keyboard finds its
- * rows, and a literal at the call site is what broke `h`/`l` the last time.
- */
-export const FLEET_LOG = "fleet";
+/* `FLEET_LOG` was here, naming the region that drew what Fleet did to the Job
+   itself. That region is gone: it and the holdings card both answered *what is
+   happening on this machine right now*, so the tail moved into
+   `JobHoldsSummary` below the run and the standalone region went with it. The
+   constant outlived the thing it named by one change, which is how a keyboard
+   map ends up addressing regions nobody draws. */
 
 /** The attribute that names the step a label belongs to. Written by `namesStep`. */
 const STEP = "data-armada-step";
@@ -120,6 +117,10 @@ export type DetailPress =
   | { act: "chapter"; by: 1 | -1 }
   /** `f` — open the Job's patch, on the layer that can hold it. */
   | { act: "diff" }
+  /** `L` — open the step's activity log, on the layer that can hold it. */
+  | { act: "log" }
+  /** `o` — open a Check's output, on the layer that can hold it. */
+  | { act: "output" }
   /** `g` — open a stage of the phase strip. */
   | { act: "stage" }
   /** `b` — say this job failed in error. The only act key this surface binds. */
@@ -165,6 +166,12 @@ export function detailPressOf(event: KeyboardEvent): DetailPress | null {
       return { act: "chapter", by: 1 };
     case "f":
       return { act: "diff" };
+    // Shifted, because plain `l` is the expand half of `h`/`l` above and a
+    // mistyped motion key must not open a layer.
+    case "L":
+      return { act: "log" };
+    case "o":
+      return { act: "output" };
     case "g":
       return { act: "stage" };
     case "b":
@@ -207,6 +214,23 @@ export type DetailShape = {
    * Absent leaves the press unswallowed, as `onReport` does.
    */
   onOpenSheet?: () => void;
+  /**
+   * Open the step's activity log on the trailing layer — `L`.
+   *
+   * **It has a key of its own now.** It answered `Enter` on whichever chapter
+   * `[` `]` had landed on, which held while the log was the only chapter with
+   * a reading behind it and stopped the moment a Check's output became the
+   * second: one `Enter` cannot open both, and the story drew the same binding
+   * twice with no way to tell which would answer.
+   *
+   * Absent leaves the press unswallowed, as `onReport` does.
+   */
+  onOpenLog?: () => void;
+  /**
+   * Open a Check's output on the trailing layer — `o`. Absent leaves the press
+   * unswallowed.
+   */
+  onOpenOutput?: () => void;
   /**
    * Open the report dialog. **The one entry here that moves nothing on the
    * screen** — every other act opens something this file already holds, and
@@ -356,11 +380,28 @@ function act(press: DetailPress, shape: DetailShape, on: Moves): boolean {
       return chapter(press.by, shape, on);
     case "diff":
       return diff(shape);
+    case "log":
+      return sheet(shape.onOpenLog);
+    case "output":
+      return sheet(shape.onOpenOutput);
     case "stage":
       return stage(shape, on);
     case "report":
       return report(shape);
   }
+}
+
+/**
+ * Open one of the trailing sheets, where the screen gave a way to.
+ *
+ * **One spelling for two keys.** `L` and `o` differ only in which reading they
+ * open, and two near-identical functions is two places for the swallow rule to
+ * drift apart.
+ */
+function sheet(open: (() => void) | undefined): boolean {
+  if (open === undefined) return false;
+  open();
+  return true;
 }
 
 /**

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Clamped } from "../Clamped/Clamped";
 
 /**
  * Job brief — what the Job was told, what done means for it, and whatever is
@@ -66,6 +67,15 @@ export type JobBriefProps = {
    */
   criteriaLabel?: ReactNode;
   factsLabel?: ReactNode;
+  /**
+   * How many lines of `facts` to show before the rest is a press away.
+   *
+   * **A brief has no ceiling and this region does.** It is the first thing in
+   * the panel, above the step and its whole story, so a long one pushes what a
+   * reader opened the Job for off the screen. Four lines is enough to tell one
+   * Job from another, which is what a reader is doing when they glance here.
+   */
+  factsLines?: number;
   waitingLabel?: ReactNode;
   /**
    * Draw one half rather than both.
@@ -89,6 +99,7 @@ export function JobBrief({
   waiting,
   criteriaLabel = "Done means",
   factsLabel = "What it was told",
+  factsLines = 4,
   waitingLabel = "Waiting to be told",
   only,
 }: JobBriefProps) {
@@ -134,7 +145,15 @@ export function JobBrief({
           {facts === undefined ? (
             <p className="armada-job-brief__note">{factsAbsent}</p>
           ) : (
-            <p className="armada-job-brief__facts">{facts}</p>
+            // Held to a few lines. What a Job was told runs to whatever length
+            // the person writing it needed, and it sits above the step, the
+            // strip and the whole story — an unbounded paragraph here pushes
+            // everything a reader opened the Job for off the screen. The
+            // control only draws where there is more, so a short brief is
+            // untouched.
+            <Clamped lines={factsLines}>
+              <p className="armada-job-brief__facts">{facts}</p>
+            </Clamped>
           )}
         </div>
       )}

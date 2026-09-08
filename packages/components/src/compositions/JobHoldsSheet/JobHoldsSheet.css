@@ -1,0 +1,19 @@
+/* The full reading on a trailing sheet. The layer and its header are `Sheet`;
+   the card inside is `JobResources`, untouched. What lives here is the gutter
+   between the two. */
+
+/* The Job id in the subtitle. Mono, because it is a value the system reported. */
+.armada-holds-sheet__mono {
+  font-family: var(--font-mono);
+}
+
+/* The body carries its own padding, per `bleed`. A gutter rather than
+   `--pad-card`: the card sets that inset itself, and the sheet's default body
+   padding on top of it doubles the inset without adding a boundary. */
+.armada-holds-sheet__body {
+  padding: var(--space-4);
+}
+
+.armada-sheet[data-floor] .armada-holds-sheet__body {
+  padding: var(--space-3);
+}

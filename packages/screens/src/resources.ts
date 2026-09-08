@@ -26,8 +26,10 @@
 // and a restart brings back the build that caused it. #344 classifies that
 // same condition as a fault on the command seam, for the same reason.
 
-import type { NothingToAsk } from "@armada/components";
-import type { Holds } from "@armada/protocol";
+import type { HoldsFigures, HoldsLine, NothingToAsk } from "@armada/components";
+import { nothingRunningIsAFault, sized } from "@armada/components";
+import type { Holds, JobExamined, JobResources as Held } from "@armada/protocol";
+import type { LogRow } from "./story";
 
 /**
  * What a failed look says, and it says nothing about the Job.
@@ -103,3 +105,102 @@ export function nothingToAsk(resources: Holds): NothingToAsk | undefined {
       return undefined;
   }
 }
+
+// # The summary under the run
+//
+// The full reading is a sheet now, and what sits under the run is five lines.
+// Both are drawn from this one answer — a second reading of the same `Held`
+// would let the block and the sheet it opens disagree about the same Job.
+
+/**
+ * The figures the summary draws, or `null` where no reading arrived.
+ *
+ * **`null` is not a Job holding nothing**, and the summary's `note` is what
+ * says which — the same split the full reading keeps.
+ *
+ * **The size is dropped rather than zeroed where there is no worktree.**
+ * `sized(0)` is a figure, and a figure says something was measured; the
+ * worktree row above it already says there is nothing on disk.
+ *
+ * **`sized` is the panel's own formatter**, imported rather than retyped:
+ * binary units, because `du` and `df` answer in them.
+ */
+export function summarised(
+  reading: Held | null,
+  examined: JobExamined | null,
+): HoldsFigures | null {
+  if (reading === null) return null;
+  const worktree = standingOf(reading, examined);
+  return {
+    processes: reading.processes.length,
+    nothingRunningIsWrong: nothingRunningIsAFault(reading, examined),
+    worktree: worktree.said,
+    worktreeIsWrong: worktree.wrong,
+    size:
+      reading.worktree === undefined
+        ? undefined
+        : reading.worktree.bytes === undefined
+          ? NOT_MEASURED
+          : sized(reading.worktree.bytes),
+  };
+}
+
+/**
+ * What became of the worktree, in a phrase.
+ *
+ * **`healthy` is a finding and nothing may say it unasked.** Without a look
+ * there is a directory on disk and no claim about it, which is `on disk` — a
+ * summary that promoted the fact to a verdict would spend a person's suspicion
+ * and return nothing, which is the failure the full reading's `cannot_tell`
+ * arm exists for.
+ */
+function standingOf(reading: Held, examined: JobExamined | null): { said: string; wrong?: boolean } {
+  if (reading.worktree === undefined) return { said: NONE_ON_DISK };
+  const look = examined?.looks.find((one) => one.asked === "worktree");
+  if (look === undefined) return { said: "on disk" };
+  if (look.found === "not_working") return { said: "gone", wrong: true };
+  if (look.found === "cannot_tell") return { said: "could not be read" };
+  return { said: "healthy" };
+}
+
+/** A walk that ran past its bound. Its own answer, and never a zero. */
+const NOT_MEASURED = "not measured";
+
+/** No checkout. A Job at its gate or one already reclaimed — a real answer. */
+const NONE_ON_DISK = "none on disk";
+
+/**
+ * The last lines the machine wrote, newest first — what the standalone Fleet
+ * region drew before it was folded into the summary.
+ *
+ * **Two of them.** The region this replaced bounded at 15rem and still pushed
+ * the run below the fold; the whole claim of the block is that it does not.
+ *
+ * **A line is wrong when its payload was written at error level.** `notesOf` is
+ * where a level becomes a rendering — `error` names a payload line `failed` —
+ * so this reads that answer rather than making a second one from the level.
+ */
+export function tailOf(rows: readonly LogRow[]): HoldsLine[] {
+  return rows
+    .slice(-2)
+    .reverse()
+    .map((row) => ({
+      at: row.at,
+      actor: SAYS[row.actor],
+      said: row.message,
+      wrong: row.payload.some((line) => line.named === "failed") || undefined,
+    }));
+}
+
+/**
+ * Who wrote a line, as a person reads it.
+ *
+ * **Capitalised here and nowhere else.** The wire spells these lowercase
+ * because most of its readings are mid-sentence; this is the first word of a
+ * column, and the log's own rows draw it their own way.
+ */
+const SAYS: Record<LogRow["actor"], string> = {
+  armada: "Armada",
+  drone: "Drone",
+  fleet: "Fleet",
+};

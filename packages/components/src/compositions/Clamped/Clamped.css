@@ -1,0 +1,58 @@
+/* A passage held to a few lines, with the rest one press away.
+
+   The component owns the clamp and the control and nothing else — no size, no
+   colour, no family. It wraps a brief, a Drone's instructions and whatever
+   else runs long, and each of those already reads at the size its own region
+   set. A clamp that also restyled its content would be a second voice inside
+   every region it landed in. */
+.armada-clamped {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(var(--space-1) / 2);
+  min-width: 0;
+}
+
+/* The clamp. A line count rather than a height: the type scale belongs to the
+   surface, and a passage cut at 64px shows three lines in one region and two
+   and a half in another. */
+.armada-clamped__body {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--armada-clamped-lines, 3);
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* Open, it is ordinary text again. `display: block` rather than unsetting the
+   box: the clamp only applies to `-webkit-box`, and leaving the element a box
+   with no clamp changes how its children lay out for no reason. */
+.armada-clamped__body[data-open="true"] {
+  display: block;
+  overflow: visible;
+}
+
+/* The control. A link and not a button-shaped thing — it reveals text that is
+   already on the page rather than acting on the Job, and every filled control
+   on this screen means something happened. */
+.armada-clamped__more {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.armada-clamped__more:hover {
+  text-decoration: underline;
+  text-underline-offset: var(--space-1);
+}
+
+.armada-clamped__more:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}

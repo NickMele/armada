@@ -55,9 +55,10 @@ const CRITERIA = [
  * everything past it ahead — no hue at all, because a stage still ahead is a
  * position and not a state.
  *
- * The connectors are what make this an order rather than a set, and `You`
- * closes it. The build stopped at the Judge, which said a step could only ever
- * be waiting on a machine.
+ * **A clean run, and the proof that nothing regressed**: no loop, so the graph
+ * is the straight chain the strip always drew, with an arrowhead on each edge
+ * where a bare rule used to be. `You` closes it — the build stopped at the
+ * Judge, which said a step could only ever be waiting on a machine.
  */
 export const AllFourStates: Story = {
   args: {
@@ -240,18 +241,166 @@ export const ACheckFailed: Story = {
 };
 
 /**
- * A stage in the trailing half of the strip, pinned. The card hangs off the
- * trailing edge instead of the leading one, so it stays inside the panel and
- * still points at itself.
+ * A stage in the trailing half of the graph, pinned. The card hangs off the
+ * graph's trailing edge instead of its leading one, so it stays inside the
+ * panel and still points at the end the pinned node is at.
  *
- * Decided by position rather than by measurement — there is nothing to
- * recompute when the window resizes, which is the failure this app exists to
- * escape.
+ * **It is anchored to the graph rather than to the node**, which is what the
+ * scroll cost: a card hanging out of a scroll container is a card that gets
+ * clipped, and for a node in the middle of the graph the arrow now points at
+ * the panel's edge rather than at the node itself.
+ *
+ * Which edge is still decided by position rather than by measurement — there
+ * is nothing to recompute when the window resizes, which is the failure this
+ * app exists to escape.
  */
 export const OpenedNearTheTrailingEdge: Story = {
   args: {
     ...WithYouPresent.args,
     pinnedId: "you",
+  },
+};
+
+/**
+ * **A step handed back twice by a failed Check.** The loop is the whole point
+ * of the drawing: without it this renders identically to a step that was worked
+ * once, and the hand-backs are the most important thing that happened to it.
+ *
+ * The edge takes the hue of the ruling that produced it — the Checks tier is
+ * red, so the arc is red — and it lands on the edge the step re-entered rather
+ * than on the node's corner, because what a hand-back returns to is a point in
+ * the path and not a chip.
+ */
+export const HandedBackByACheck: Story = {
+  args: {
+    note: "A command exited non-zero twice. The Drone has the step again; no model has been asked anything.",
+    loops: [{ from: "checks", to: "working", says: "handed back ×2" }],
+    stages: [
+      { id: "instructed", label: "Instructed", state: "cleared" },
+      { id: "working", label: "Working", state: "current" },
+      { id: "submitted", label: "Submitted", state: "cleared" },
+      {
+        id: "checks",
+        label: "test failed · fixing",
+        kind: "checks",
+        state: "failed",
+        stands: "1 of 2 failed",
+        rows: [
+          { label: "cargo build --workspace", mono: true, state: "cleared", result: "exit 0" },
+          { label: "cargo nextest run --workspace", mono: true, state: "failed", result: "exit 101" },
+        ],
+      },
+      { id: "judge", label: "Judge · 2 criteria", kind: "judge", state: "ahead", rows: CRITERIA },
+      { id: "you", label: "You", kind: "human", state: "ahead" },
+    ],
+  },
+  /**
+   * **A node in a drawing is still a control, and pinning still works.** That is
+   * the one thing the rendering cannot show: the graph is SVG and grid geometry
+   * now, and a node redrawn as a picture of a node would look right in every
+   * screenshot while being unreachable by keyboard and unnameable to a screen
+   * reader.
+   *
+   * The loop is the second assertion, on the tier that ruled. An arc says
+   * nothing to a screen reader, so the words have to be attached to a control —
+   * and the tier is the end of the loop that always is one. **The node it
+   * returned to is a phase**, which draws as a marker rather than as a control
+   * that opens an empty box, so a description there would sit on a `span` and
+   * be announced by nothing.
+   */
+  play: async ({ canvas, userEvent }) => {
+    const checks = canvas.getByRole("button", { name: /test failed/ });
+    const away = canvas.getByText(/A command exited non-zero/);
+
+    await userEvent.click(checks);
+    await userEvent.hover(away);
+    await expect(canvas.getByRole("dialog")).toBeVisible();
+
+    await userEvent.keyboard("{Escape}");
+    await expect(canvas.queryByRole("dialog")).toBeNull();
+
+    await expect(checks).toHaveAccessibleDescription("handed back ×2");
+  },
+};
+
+/**
+ * **A person returned it once**, and the loop lands somewhere else entirely: a
+ * `request_changes` re-briefs the step, so the edge goes back to Instructed
+ * rather than to Working. That is why `loops` names its ends by stage id — a
+ * boolean `retried` could only ever have drawn one of the two.
+ *
+ * Amber, because the ruling was a person's and the tier that made it is amber.
+ * It is back with them now, which is what a returned step comes to once the
+ * Drone has answered it.
+ */
+export const ReturnedByAPerson: Story = {
+  args: {
+    note: "You returned this step once. The Drone has redone it, and it is waiting on you again.",
+    loops: [{ from: "you", to: "instructed", says: "returned by you ×1" }],
+    stages: [
+      { id: "instructed", label: "Instructed", state: "cleared" },
+      { id: "working", label: "Working", state: "cleared" },
+      { id: "submitted", label: "Submitted", state: "cleared" },
+      {
+        id: "checks",
+        label: "build, test",
+        kind: "checks",
+        state: "cleared",
+        stands: "2 of 2 passed",
+        rows: CHECKS.map((row) => ({ ...row, state: "cleared" as const, result: "exit 0" })),
+      },
+      {
+        id: "judge",
+        label: "Judge · 2 of 2 met",
+        kind: "judge",
+        state: "cleared",
+        stands: "2 of 2 met",
+        rows: CRITERIA,
+      },
+      {
+        id: "you",
+        label: "You",
+        kind: "human",
+        state: "waiting",
+        stands: "waiting 2m 04s",
+        cardNote: "Approve, or send it back with a reason. Both are recorded on the Job.",
+      },
+    ],
+  },
+};
+
+/**
+ * **A step that never reached its later tiers, and was handed back anyway.**
+ * The loop is drawn over the part of the path that ran; the tiers past the
+ * Check carry no hue, because nothing past a failed Check ran and the graph
+ * says that by leaving them unlit rather than by greying them out.
+ */
+export const HandedBackBeforeTheLaterTiers: Story = {
+  args: {
+    note: "The command has failed on every attempt. The Judge has not been asked, and nor have you.",
+    loops: [{ from: "checks", to: "instructed", says: "re-instructed ×3" }],
+    stages: [
+      { id: "instructed", label: "Instructed", state: "cleared" },
+      { id: "working", label: "Working", state: "cleared" },
+      { id: "submitted", label: "Submitted", state: "cleared" },
+      {
+        id: "checks",
+        label: "test failed",
+        kind: "checks",
+        state: "failed",
+        stands: "1 of 1 failed",
+        rows: [
+          {
+            label: "cargo nextest run --workspace",
+            mono: true,
+            state: "failed",
+            result: "exit 101",
+          },
+        ],
+      },
+      { id: "judge", label: "Judge · 2 criteria", kind: "judge", state: "ahead", rows: CRITERIA },
+      { id: "you", label: "You", kind: "human", state: "ahead" },
+    ],
   },
 };
 

@@ -31,11 +31,9 @@ const refused: CriterionVerdict = {
   named: "not_met",
   verdict: "refused",
   icon: NOT_MET,
-  expected: "A 401 from the refresh endpoint clears the session and returns the caller to sign-in.",
-  produced:
-    "The refresh error is swallowed in `session.ts:212` and the stale token is retried on the next request.",
-  consequence:
-    "A user whose refresh token has been revoked keeps a working-looking session until the next full reload, so a revoked device is not signed out.",
+  expected: "Signed out at sign-in after a 401 from the refresh endpoint",
+  produced: "Still signed in, with session.ts:212 swallowing the 401 and retrying the stale token",
+  consequence: "A revoked device keeps a working session until the next full reload",
 };
 
 const met: CriterionVerdict = {
@@ -102,9 +100,9 @@ export const TheCriterionIsNotOnScreen: Story = {
         named: "not_met",
         verdict: "refused",
         icon: NOT_MET,
-        expected: "The migration is reversible.",
-        produced: "`down()` is empty.",
-        consequence: "A bad deploy cannot be rolled back without restoring from a snapshot.",
+        expected: "down() restoring the columns this migration adds",
+        produced: "down() empty, so the columns stay after a rollback",
+        consequence: "A bad deploy can only be undone from a snapshot",
       },
     ],
   },

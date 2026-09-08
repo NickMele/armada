@@ -39,6 +39,7 @@ import { readingFor, whyNoFootprint } from "./files";
 import { Log } from "./Log";
 import { keptOf, type KeptRead, type Opens } from "./phases";
 import { producedIn } from "./produced";
+import type { OpenSheet } from "./Sheets";
 import { entriesOf, NOTHING_YET_ON_THIS_STEP } from "./story";
 
 /**
@@ -102,8 +103,14 @@ export function chaptersOf({
    * land in either.
    */
   calls: Calls;
-  /** Which sheet is open, so the chapter behind it says so and stops offering. */
-  sheet: "log" | "diff" | null;
+  /**
+   * Which sheet is open, so the chapter behind it says so and stops offering.
+   *
+   * **`holds` is one of them and no chapter answers it.** It opens from the run
+   * column rather than from the story, so every chapter here is behind it and
+   * none of them is the one it came from.
+   */
+  sheet: OpenSheet;
   /**
    * How the step's deliverable is opened, and where a refusal is said.
    *

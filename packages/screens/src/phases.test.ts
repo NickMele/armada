@@ -136,3 +136,56 @@ describe("the human tier", () => {
     expect(unknown?.detail).toBeNull();
   });
 });
+
+/** When a run started. Every attempt carries one; none of these reads it. */
+const AT = "2026-09-02T09:00:00Z";
+
+describe("the hand-backs", () => {
+  it("draws no loop on a step worked once", () => {
+    const { loops } = phasesOf(step({ attempts: [{ attempt: 1, outcome: "advanced", started_at: AT }] }), [], OPENS);
+    expect(loops).toEqual([]);
+  });
+
+  it("draws one edge however many times the Drone was handed the step back", () => {
+    // Three arcs between one pair of nodes is a picture of nothing. The count
+    // lives in the words on the edge instead.
+    const { loops } = phasesOf(
+      step({
+        attempts: [
+          { attempt: 1, outcome: "retrying", started_at: AT },
+          { attempt: 2, outcome: "retrying", started_at: AT },
+          { attempt: 3, outcome: "stopped", started_at: AT },
+        ],
+      }),
+      [],
+      OPENS,
+    );
+    expect(loops).toEqual([{ from: "checks", to: "working", says: "handed back 2 times" }]);
+  });
+
+  it("counts a single hand-back in the singular", () => {
+    const { loops } = phasesOf(
+      step({
+        attempts: [
+          { attempt: 1, outcome: "retrying", started_at: AT },
+          { attempt: 2, outcome: "advanced", started_at: AT },
+        ],
+      }),
+      [],
+      OPENS,
+    );
+    expect(loops?.[0]?.says).toBe("handed back once");
+  });
+
+  it("draws nothing for a refusal, which never returns to the Drone", () => {
+    // A Judge refusal goes straight to `Ruling::Refused` and escalates with the
+    // Drone kept alive and idle; it never re-enters `working`. Only `retrying`
+    // is a hand-back, so a step the gate stopped has no edge to draw.
+    const { loops } = phasesOf(
+      step({ state: "stopped", attempts: [{ attempt: 1, outcome: "stopped", started_at: AT }] }),
+      [],
+      OPENS,
+    );
+    expect(loops).toEqual([]);
+  });
+});

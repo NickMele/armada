@@ -183,6 +183,10 @@ pub const THEME: &[(&str, Slot)] = &[
         Slot::CssOnly("v4 has no --delay-* namespace; read it in CSS"),
     ),
     (
+        "--tooltip-grace",
+        Slot::CssOnly("v4 has no --delay-* namespace; read it in CSS"),
+    ),
+    (
         "--border-width",
         Slot::CssOnly("a hairline every edge reads; not a scale"),
     ),

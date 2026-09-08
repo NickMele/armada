@@ -184,6 +184,7 @@
    --duration-fast — v4 has no --duration-* namespace; read it in CSS
    --duration-base — v4 has no --duration-* namespace; read it in CSS
    --tooltip-delay — v4 has no --delay-* namespace; read it in CSS
+   --tooltip-grace — v4 has no --delay-* namespace; read it in CSS
    --duration-pulse — v4 has no --duration-* namespace; read it in CSS
    --focus-ring — an outline shorthand, not a scale value
    --focus-ring-offset — paired with --focus-ring

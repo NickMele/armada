@@ -1,9 +1,26 @@
-/* Where this step is — the phases and the gate tiers as one progression. */
+/* The path a step took — the phases, the gate tiers and the hand-backs between
+   them, as one graph. */
 .armada-phases {
   display: flex;
   flex-direction: column;
   gap: calc(var(--space-2) - var(--space-1) / 4);
   min-width: 0;
+
+  /* The drawing's three measures, and the two the SVG coordinates are pinned
+     to. --phase-edge is 20 and --phase-node is 24 in every `viewBox` in
+     PhaseStrip.tsx, so nothing in the drawing is scaled; changing either here
+     without changing it there squashes the arrowheads rather than failing.
+
+     --phase-edge is wider than the 14px connector it replaces because an edge
+     now carries a chevron and a loop's corner, neither of which fits in 14. */
+  --phase-edge: calc(var(--space-4) + var(--space-1));
+  /* A node's height, fixed at one line of --text-2xs with 3px above and below.
+     Fixed because a loop's stem is drawn down to the chain line: a stem that
+     had to be measured is a stem that is wrong for one frame on every resize,
+     and reflow on resize is the failure this app exists to escape. */
+  --phase-node: calc(var(--leading-2xs) + var(--space-1) + var(--space-1) / 2);
+  /* A loop's lane: the edge, and its words underneath. */
+  --phase-loop: calc(var(--leading-2xs) + var(--space-2));
 }
 
 /* Sentence case, plain text. Not a caption: a caption announces a region, and
@@ -14,49 +31,48 @@
   color: var(--fg-subtle);
 }
 
-/* The strip wraps rather than scrolls. A step with three Checks and a Judge is
-   six stages, and a horizontally scrolling progression hides the end of itself
-   — which is where the step actually is. */
-.armada-phases__strip {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.armada-phases__stage {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  /* The card hangs off the stage. */
+/* What the card hangs off. The graph scrolls and the card must not, so the
+   card is anchored here rather than inside the scroll container. */
+.armada-phases__frame {
   position: relative;
   min-width: 0;
 }
 
-/* The connector. Six chips with a gap between them is a set; six joined by a
-   line is an order, and the order is the whole claim the strip makes. The
-   drawn 14px: --space-3 plus a half --space-1. */
-.armada-phases__conn {
-  flex: none;
-  width: calc(var(--space-3) + var(--space-1) / 2);
-  height: var(--border-width);
-  background: var(--border-default);
+/* The graph. Columns alternate edge, node, edge …, so every node has a column
+   on each side for an arrow or for a loop's stem; rows are a lane per loop
+   above the nodes.
+
+   It scrolls rather than wraps, which reverses what the strip did. A wrapped
+   row of chips was a defensible order; a wrapped GRAPH is not, because a loop
+   drawn over one line of nodes has nothing to say about a node that has moved
+   to the next. The end of the graph is where the step actually is, so the
+   scroll is the cost of drawing the edge that says how it got there.
+
+   The padding is the focus ring's, which a scroll container would otherwise
+   clip at both edges; the negative margin puts the drawing back where it
+   would have sat without it. */
+.armada-phases__graph {
+  display: grid;
+  align-items: center;
+  overflow-x: auto;
+  padding: var(--space-1);
+  margin: calc(var(--space-1) * -1);
 }
 
-/* A stage. Not a button: the strip is a progression a person reads first and
+/* A node. Not a button's weight: the graph is a path a person reads first and
    presses second, and six filled buttons in a row would read as six decisions.
    A tint and the hue of where it stands, with the hue carried by the glyph as
    well as the text so the reading survives at a glance. */
-.armada-phases__control {
+.armada-phases__node {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: calc(var(--space-1) + var(--space-1) / 2);
-  /* The drawn 3px 9px. --space-1 less a quarter, and --space-2 plus a quarter:
-     wider than it is tall, because the label is a phrase and not a word. */
-  padding: calc(var(--space-1) - var(--space-1) / 4) calc(var(--space-2) + var(--space-1) / 4);
+  height: var(--phase-node);
+  /* The drawn 9px sides. --space-2 plus a quarter: wider than it is tall,
+     because the label is a phrase and not a word. The vertical padding is the
+     fixed height's now, so that the stems have something to end at. */
+  padding: 0 calc(var(--space-2) + var(--space-1) / 4);
   border: 0;
   border-radius: var(--radius-sm);
   background: var(--bg-sunken);
@@ -70,11 +86,11 @@
     background var(--duration-fast) var(--ease);
 }
 
-button.armada-phases__control {
+button.armada-phases__node {
   cursor: pointer;
 }
 
-button.armada-phases__control:focus-visible {
+button.armada-phases__node:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
 }
@@ -90,14 +106,14 @@ button.armada-phases__control:focus-visible {
    only where tokens/status.css declares it. It is told from `ahead` by its
    label and by carrying no glyph, which is how every same-hue state in this
    system differentiates. */
-.armada-phases__control[data-state="cleared"] {
+.armada-phases__node[data-state="cleared"] {
   color: var(--step-advanced);
   background: var(--status-completed-success-bg);
 }
 
 /* The live stage takes an inset ring as well as the tint. It is the only ring
-   on the strip, so it says where the step is without a second hue. */
-.armada-phases__control[data-state="current"] {
+   on the graph, so it says where the step is without a second hue. */
+.armada-phases__node[data-state="current"] {
   color: var(--step-running);
   background: var(--status-running-bg);
   box-shadow: inset 0 0 0 var(--border-width)
@@ -106,14 +122,14 @@ button.armada-phases__control:focus-visible {
 
 /* Amber, not red. It is waiting on you, not broken — the one shape that must
    never read as a failure. */
-.armada-phases__control[data-state="waiting"] {
+.armada-phases__node[data-state="waiting"] {
   color: var(--step-waiting);
   background: var(--status-awaiting-review-bg);
   box-shadow: inset 0 0 0 var(--border-width)
     color-mix(in srgb, var(--status-awaiting-review) 35%, transparent);
 }
 
-.armada-phases__control[data-state="failed"] {
+.armada-phases__node[data-state="failed"] {
   color: var(--step-failed);
   background: var(--status-completed-failed-bg);
   box-shadow: inset 0 0 0 var(--border-width)
@@ -121,23 +137,143 @@ button.armada-phases__control:focus-visible {
 }
 
 /* The open stage. Lifted to the floating ground with a neutral ring, so the
-   chip and the card it opened read as one object — and the stage's own hue is
+   node and the card it opened read as one object — and the stage's own hue is
    deliberately dropped, because the card beneath it is now carrying that. */
-.armada-phases__control[data-open] {
+.armada-phases__node[data-open] {
   color: var(--fg-default);
   background: var(--bg-overlay);
   box-shadow: inset 0 0 0 var(--border-width) var(--border-strong);
 }
 
-/* --- the card a stage opens ---------------------------------------------- */
+/* --- the edges ------------------------------------------------------------ */
+
+/* One step of the chain. Neutral, and the arrowhead is the whole addition: a
+   line between two nodes is an order and an arrow is a direction, which is
+   what a graph carrying a backwards edge has to be able to tell apart. */
+.armada-phases__chain {
+  display: block;
+  width: var(--phase-edge);
+  height: var(--phase-node);
+  color: var(--border-default);
+}
+
+/* A hand-back. Laid over the chain, spanning from the edge column before the
+   node it returned to through the edge column after the tier that ruled.
+
+   Nothing here is a target — the lane covers the nodes it spans, and a stem
+   crossing a chip would otherwise swallow the press that opens it. */
+.armada-phases__loop {
+  display: flex;
+  align-items: stretch;
+  /* The lane is drawn against the chain line below it, so it takes the height
+     of the rows it spans rather than of the words it carries. */
+  align-self: stretch;
+  pointer-events: none;
+  /* The hue of the ruling that produced the edge, and neutral where the tier
+     that ruled has no hue of its own. --fg-subtle rather than
+     --border-default: the loop carries words, and a hairline's colour is not
+     a colour text can be read at. */
+  color: var(--fg-subtle);
+}
+
+.armada-phases__loop[data-state="cleared"] {
+  color: var(--step-advanced);
+}
+
+.armada-phases__loop[data-state="current"] {
+  color: var(--step-running);
+}
+
+.armada-phases__loop[data-state="waiting"] {
+  color: var(--step-waiting);
+}
+
+.armada-phases__loop[data-state="failed"] {
+  color: var(--step-failed);
+}
+
+/* Where a loop turns down or up. The padding is what stops the stem at the
+   chain line instead of at the bottom of the node row — the arrowhead lands on
+   the edge the step re-entered, which is the claim the drawing makes. */
+.armada-phases__cap {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: var(--phase-edge);
+  padding-bottom: calc(var(--phase-node) / 2);
+}
+
+.armada-phases__turn,
+.armada-phases__head {
+  display: block;
+  flex: none;
+  width: var(--phase-edge);
+}
+
+.armada-phases__turn {
+  height: calc(var(--phase-node) / 2);
+}
+
+.armada-phases__head {
+  height: var(--space-2);
+}
+
+/* The straight part, and the only part that stretches. A curve cannot be
+   stretched without deforming, which is why the corners above are fixed boxes
+   and this is a rule and not an SVG. */
+.armada-phases__stem {
+  flex: 1;
+  width: var(--border-width);
+  background: currentcolor;
+}
+
+.armada-phases__run {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.armada-phases__rule {
+  width: 100%;
+  height: var(--border-width);
+  background: currentcolor;
+}
+
+/* What the ruling was, under its own edge. It takes the edge's hue rather than
+   --fg-subtle: the words and the line are one statement, and a red arc with
+   grey words reads as two. */
+.armada-phases__says {
+  margin-top: var(--space-1);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  white-space: nowrap;
+}
+
+/* Every stroke in the drawing is a hairline in the edge's own hue. Round caps
+   and joins, matching the glyphs the nodes carry. */
+.armada-phases__chain path,
+.armada-phases__turn path,
+.armada-phases__head path {
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: var(--border-width);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* --- the card a node opens ------------------------------------------------ */
 
 /* Where the card sits. The card owns its own arrow and its own surface; this
    owns only the position, so the two are separable and the card renders flat
    on a panel with nothing changed.
 
-   Aligned by which half of the strip the stage is in rather than by
-   measurement: a stage past the halfway point opens leftward, so the card
-   stays inside the panel with nothing to recompute on a resize. */
+   Anchored to the graph rather than to the node, which is what changed when
+   the graph became scrollable: a card hanging out of a scroll container is a
+   card that gets clipped, and the detail is the whole reason the node is a
+   control. Which edge it takes is still decided by which half of the graph the
+   node is in rather than by measurement — nothing to recompute on a resize. */
 .armada-phases__pop {
   position: absolute;
   top: calc(100% + var(--space-2));

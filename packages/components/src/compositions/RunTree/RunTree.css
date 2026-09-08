@@ -25,3 +25,28 @@
   gap: calc(var(--space-1) / 2);
 }
 
+
+/* A fact that opens the artifact behind it.
+
+   The chip inside is untouched — a fact chip is a value being read, and that
+   is still what it is. What makes this a target is the wrapper: the accent
+   underline every selector on job detail carries, so the tree and the panel
+   say "this opens the viewer" with one mark rather than two. */
+.armada-run-tree__opens {
+  appearance: none;
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  border-bottom: var(--border-width) solid var(--accent-muted);
+  background: none;
+  cursor: pointer;
+}
+
+.armada-run-tree__opens:hover {
+  border-bottom-color: var(--accent);
+}
+
+.armada-run-tree__opens:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}

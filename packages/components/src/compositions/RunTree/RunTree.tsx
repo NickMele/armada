@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
+import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 import { FactChip, type FactChipNamed } from "../FactChip/FactChip";
 import { PathChip } from "../PathChip/PathChip";
 import { StepRow, type StepRowFact } from "../StepRow/StepRow";
@@ -89,6 +90,35 @@ export type RunTreeFact = {
    */
   paths?: RunTreePath[];
   /**
+   * The artifact this fact is the one-line summary of — a Check's output, a
+   * patch, a panel's judgment.
+   *
+   * **Present makes the value a selector into the viewer**, so a person who
+   * reads `test failed · exit 101` on attempt 1 can press it and be looking
+   * at the output of that attempt's run. The tree is where a reader notices
+   * something is wrong, and making them find the same fact again further down
+   * the panel to act on it is the navigation this screen exists to remove.
+   *
+   * **It is only drawn as a target where the caller can answer it.** Without
+   * `onOpenArtifact` the value stays an ordinary chip — a control that goes
+   * nowhere is worse than a value that never claimed to.
+   */
+  opens?: string;
+  /**
+   * What the value opens to on hover — a `PhaseCard`, and nothing else.
+   *
+   * **The rich hover, and it exists because some values cannot be explained in
+   * a sentence.** `not run` beside `Checks` raises exactly one question, *which
+   * commands*, and the answer is the list the phase strip's card already draws.
+   * Reusing that card rather than minting a hover card is why this is a node
+   * and not a shape: two drawings of one card is the defect, and the strip's is
+   * the one that exists.
+   *
+   * Absent leaves the value with whatever its label's concept says, which is
+   * what every measurement wants.
+   */
+  card?: ReactNode;
+  /**
    * That attempt's own Checks, Judge and Verdict, nested beneath its row.
    *
    * **Only an attempt fact carries these, and only on a step worked more than
@@ -116,6 +146,11 @@ export type RunTreeStep = {
    * see the header note. Absent on a step that has not started.
    */
   elapsed?: ReactNode;
+  /**
+   * When the step began, as a clock reading — `14:22:07`. What the elapsed
+   * figure is hovered for: a duration says how long and nothing about when.
+   */
+  startedAt?: ReactNode;
   /**
    * The activity in words — `waiting on you`, `retries spent`. **The mark's
    * accessible name, and nothing visible**: hue and silhouette are the two
@@ -182,6 +217,12 @@ export type RunTreeProps = {
   onOpen?: (stepId: string, open: boolean) => void;
   /** A clipboard write is silent, so the surface confirms every one. */
   onCopied?: (value: string) => void;
+  /**
+   * Told when a fact naming an artifact is pressed. Absent leaves every such
+   * fact an ordinary chip, which is what a tree on a surface with no viewer
+   * should draw.
+   */
+  onOpenArtifact?: (artifactId: string) => void;
 };
 
 /**
@@ -189,13 +230,45 @@ export type RunTreeProps = {
  * an attempt's own Checks, Judge and Verdict, and nothing deeper: `RunTreeFact`
  * itself is one level, so there is nothing further to descend into.
  */
-function drawFact(fact: RunTreeFact, onCopied: RunTreeProps["onCopied"]): StepRowFact {
+function drawFact(
+  fact: RunTreeFact,
+  onCopied: RunTreeProps["onCopied"],
+  onOpenArtifact: RunTreeProps["onOpenArtifact"],
+): StepRowFact {
+  const bare =
+    fact.value === undefined ? null : (
+      <FactChip named={fact.named as FactChipNamed | undefined}>{fact.value}</FactChip>
+    );
+  // The card hangs off the chip rather than off the whole fact: the label
+  // beside it already answers what a Check *is*, and this answers what this
+  // step's Checks are. The wrapper rather than `asChild`, because `FactChip`
+  // forwards no handlers and a clone would drop the hover with no sign of it.
+  const chip =
+    bare === null || fact.card === undefined ? (
+      bare
+    ) : (
+      <Tooltip card label={fact.card}>
+        {bare}
+      </Tooltip>
+    );
   return {
     label: fact.label,
     value: (
       <>
-        {fact.value === undefined ? null : (
-          <FactChip named={fact.named as FactChipNamed | undefined}>{fact.value}</FactChip>
+        {fact.opens === undefined || onOpenArtifact === undefined ? (
+          chip
+        ) : (
+          // The chip is unchanged inside it. A fact chip is a value being read
+          // and stays one — what makes this a target is the wrapper, which
+          // carries the accent underline every selector on this screen carries,
+          // so the tree and the panel mark "this opens the viewer" one way.
+          <button
+            type="button"
+            className="armada-run-tree__opens"
+            onClick={() => onOpenArtifact(fact.opens as string)}
+          >
+            {chip}
+          </button>
         )}
         {(fact.paths ?? []).map((path, p) => (
           <PathChip
@@ -208,7 +281,7 @@ function drawFact(fact: RunTreeFact, onCopied: RunTreeProps["onCopied"]): StepRo
         ))}
       </>
     ),
-    children: fact.children?.map((child) => drawFact(child, onCopied)),
+    children: fact.children?.map((child) => drawFact(child, onCopied, onOpenArtifact)),
   };
 }
 
@@ -233,6 +306,7 @@ export function RunTree({
   openSteps,
   onOpen,
   onCopied,
+  onOpenArtifact,
 }: RunTreeProps) {
   const [held, setHeld] = useState<ReadonlySet<string>>(
     () => new Set(steps.filter((step) => step.factsOpen).map((step) => step.id)),
@@ -274,6 +348,7 @@ export function RunTree({
             activity={step.activity}
             status={step.status ?? step.activity}
             elapsed={step.elapsed}
+            startedAt={step.startedAt}
             selected={step.current}
             open={open.has(step.id)}
             onToggle={() => toggle(step.id)}
@@ -283,7 +358,7 @@ export function RunTree({
             pulsing={pulsing && (step.current ?? false)}
             factsId={`armada-run-facts-${step.id}`}
             factsAbsent={step.factsAbsent}
-            facts={(step.facts ?? []).map((fact) => drawFact(fact, onCopied))}
+            facts={(step.facts ?? []).map((fact) => drawFact(fact, onCopied, onOpenArtifact))}
           />
         </li>
       ))}

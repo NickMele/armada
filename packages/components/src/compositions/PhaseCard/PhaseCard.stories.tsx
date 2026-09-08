@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { expect, fn } from "storybook/test";
 import { PhaseCard, type PhaseCardProps } from "./PhaseCard";
 
 const meta: Meta<typeof PhaseCard> = {
@@ -86,9 +86,11 @@ export const AChecksFailed: Story = { args: CHECKS_FAILED };
  *
  * A skipped Check names the whole path set it covers, which is a value with no
  * ceiling — this one is the real Manifest's, and there is no shorter true way
- * to say it. The card is a reading measure and cannot widen, so the result
- * wraps onto its own line under its command rather than painting across the
- * card's right edge.
+ * to say it. **A wider card does not fix this and the card is wider now**: the
+ * ceiling went from 460px to 880 on 2026-09-08 so a command sits on one line
+ * with its result, and a value with no ceiling still overruns any ceiling. The
+ * result wraps onto its own line under its command rather than painting across
+ * the card's right edge.
  *
  * **The long value is not the reported one.** A story that only proved the
  * screenshot would pass again the next time a Manifest declared a longer set.
@@ -115,6 +117,56 @@ export const AChecksSkipped: Story = {
           "pnpm-workspace.yaml, apps/desktop/**, tsconfig.base.json",
       },
     ],
+  },
+};
+
+/**
+ * **Every row that produced something opens it.** A person opens this card to
+ * find out why a tier went red; making them shut it again and hunt for the same
+ * Check further down the screen is the navigation the surface exists to remove.
+ *
+ * **The whole line is the target, and only where there is something to open.**
+ * The skipped Check below has no output and stays a line of text — a control
+ * that goes nowhere is worse than a value that never offered one.
+ */
+export const RowsThatOpenWhatTheyProduced: Story = {
+  args: {
+    kind: "checks",
+    name: "Checks",
+    state: "failed",
+    stands: "1 of 3 failed",
+    onOpenArtifact: fn(),
+    rows: [
+      {
+        label: "cargo nextest run --workspace",
+        mono: true,
+        state: "failed",
+        result: "exit 101 · 3 failures",
+        opens: "chk-suite",
+      },
+      {
+        label: "cargo build --workspace --locked",
+        mono: true,
+        state: "cleared",
+        result: "exit 0 · 47s",
+        opens: "chk-build",
+      },
+      {
+        label: "pnpm -C packages/components build-storybook",
+        mono: true,
+        state: "ahead",
+        result: "not run · no changed file is under packages/**",
+      },
+    ],
+  },
+  play: async ({ canvas, userEvent, args }) => {
+    // Only the two Checks that ran are controls. A row with no output must not
+    // be a target that refuses.
+    const opens = canvas.getAllByRole("button");
+    await expect(opens).toHaveLength(2);
+
+    await userEvent.click(opens[0]);
+    await expect(args.onOpenArtifact).toHaveBeenCalledWith("chk-suite");
   },
 };
 

@@ -1,0 +1,150 @@
+/* What this Job holds, in a few lines, above the full reading it opens.
+
+   A well and not a card, which is the line the design system draws: the card
+   is `JobResources`, on the layer where the acting happens. This is a reading
+   that sits between the run and the pointers under it, and a second card in
+   that column would compete with the one the panel is. */
+.armada-holds-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-well);
+}
+
+/* The tail. Two lines, and never a scrolling well: the region this replaced
+   bounded at 15rem and still pushed the run below the fold. */
+.armada-holds-summary__tail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+/* Instant, then who, then the one line — the grammar every log in this app
+   reads in. The line is the only column that flexes, so the two fixed columns
+   stay in place across both rows and the eye reads down them. */
+.armada-holds-summary__line {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-holds-summary__at {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.armada-holds-summary__actor {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--text-label);
+}
+
+/* Clipped rather than wrapped. A summary that reflowed to three lines when a
+   Fleet message ran long is the region growing back. */
+.armada-holds-summary__said {
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--text-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A line that recorded something going wrong. The hue on the text alone, as
+   the full reading's verdict takes it — no tint and no box, because a tinted
+   chip in this column is what a Job status is. */
+.armada-holds-summary__line[data-wrong] .armada-holds-summary__said {
+  color: var(--error);
+}
+
+.armada-holds-summary__figures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  min-width: 0;
+}
+
+/* Label left, figure right, so three figures of different lengths still line
+   up as a column a person reads down. */
+.armada-holds-summary__figure {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.armada-holds-summary__label {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--text-label);
+}
+
+.armada-holds-summary__value {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--text-body);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.armada-holds-summary__figure[data-wrong] .armada-holds-summary__value {
+  color: var(--error);
+}
+
+/* Why there is no tail, or no reading. Prose, because both are sentences and
+   neither is a figure — an empty block here would read as a Job holding
+   nothing, which is a different answer. */
+.armada-holds-summary__note {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* The instant and the one control. The control is last on the row at every
+   width, so the age never pushes it out of the corner a reader reaches for. */
+.armada-holds-summary__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-holds-summary__read-at {
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.armada-holds-summary__foot > .armada-button {
+  margin-inline-start: auto;
+}

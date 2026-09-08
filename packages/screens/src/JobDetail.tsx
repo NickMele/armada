@@ -62,7 +62,7 @@
 // region could be written. The pull request link and Pilot's slot are the two
 // most recent, and both are the header's — they go in `heading.tsx` now.
 
-import { JobResources } from "@armada/components";
+import { JobHoldsSummary } from "@armada/components";
 import { useEffect, useMemo, useState } from "react";
 import { InsideAJob, type RunTreeStep } from "@armada/components";
 
@@ -82,7 +82,7 @@ import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
 import type { ConfirmableAct } from "./Acts";
 import { useCallArguments, type ReadCall } from "./calls";
 import type { OpenArtifact, OpenPullRequest } from "./opening";
-import { DIFF_CHAPTER, FLEET_LOG, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-keys";
+import { DIFF_CHAPTER, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-keys";
 import { useAtFloor } from "@armada/shell";
 import { DetailSheet, holdOf, type HeldAt, type OpenSheet } from "./Sheets";
 import { chaptersOf } from "./chapters";
@@ -99,7 +99,7 @@ import { askingOf, fieldsOf, noticeOf, questionOf } from "./step";
 import { StepActs } from "./StepActs";
 import { NOTHING_FROM_FLEET_YET, notesOf, whyNoNotes } from "./notes";
 import { entriesOf, whyNotWatching } from "./story";
-import { LOOK_FAILED, nothingToAsk, whyNoReading } from "./resources";
+import { LOOK_FAILED, nothingToAsk, summarised, tailOf, whyNoReading } from "./resources";
 import { briefOf, whyNoWork, workOf } from "./work";
 
 export type { ConfirmableAct, JobAct } from "./Acts";
@@ -305,6 +305,9 @@ export function JobDetail({
   const noted = logOf(journalled, job.id);
   const holding = holdingOf(resources, job.id);
   const looked = lookOf(examination, job.id);
+  // The finding itself, or none. Read twice — the summary asks whether an
+  // absence is a fault, the sheet draws every look — so it is named once.
+  const examinedNow = looked?.state === "found" ? looked.examined : null;
 
   const steps = whole === null ? [] : ordered(whole);
   const open = steps.find((step) => step.step_id === (selected ?? job.current_step_id)) ?? steps[0];
@@ -366,7 +369,7 @@ export function JobDetail({
    * it, and opening the log takes the reading's position: from here on the tail
    * is not followed, and what arrives is counted rather than scrolled to.
    */
-  function openSheet(which: "log" | "diff"): void {
+  function openSheet(which: "log" | "diff" | "holds"): void {
     setSheet(which);
     if (which === "log") setHeld(holdOf(now, rows.length));
   }
@@ -375,12 +378,20 @@ export function JobDetail({
    * Close it, and put focus back where it came from. **The chapter line is the
    * way back** — `4k`'s third still — so `[` `]` carry on from the chapter the
    * reader opened rather than from the top of the story.
+   *
+   * **The holdings sheet lands nowhere, because it came from nowhere in the
+   * story.** It opens from the run column rather than from a chapter, and
+   * putting a reader who closed it onto a chapter they never opened would move
+   * them further than `Esc` promised. Its control is the natural landing and
+   * the summary is not part of the keyboard's chapter line. Reported.
    */
   function closeSheet(): void {
     const was = sheet;
     setSheet(null);
     setHeld(null);
-    if (was !== null) keys.onFocusChapter(was === "log" ? LOG_CHAPTER : DIFF_CHAPTER);
+    if (was === "log" || was === "diff") {
+      keys.onFocusChapter(was === "log" ? LOG_CHAPTER : DIFF_CHAPTER);
+    }
   }
 
   const chapters =
@@ -442,30 +453,25 @@ export function JobDetail({
       run={run.map(named)}
       runElapsed={span(job.created_at, now) ?? undefined}
       runAbsent={whyNoSteps(watched, job.id)}
-      // What Fleet did to the Job itself, above the run. **Drawn at every
-      // state**, not only while a Job is preparing: the lines that belong to no
-      // step are also the ones a reader wants after it stopped — what was
-      // reclaimed, what was adopted, what went outside its scope.
-      // What it holds on this machine, above the log. The log is the record of
-      // what happened in this span and this is what is true now, which is the
-      // question a person opening a Job they suspect has wedged came with.
+      // What it holds on this machine, below the run and above the pointers.
+      // **Five lines, and the reading a press away.** It answers *is this
+      // working*, which is what a person suspecting a wedged Job came with —
+      // but the run is what they opened the Job to read, so the reading is on
+      // the sheet and what stays here is what changes the answer.
+      //
+      // **Fleet's last lines are the tail of it.** They had a region of their
+      // own above the run — #437 — and both regions answered *what is happening
+      // on this machine right now*, which is one region too many. Drawn at
+      // every state, not only while a Job is preparing: the lines that belong
+      // to no step are also the ones a reader wants after it stopped.
       machine={
-        <JobResources
-          reading={holding}
+        <JobHoldsSummary
+          tail={tailOf(fleetSaid)}
+          tailNote={whyNoNotes(journalled) ?? NOTHING_FROM_FLEET_YET}
+          figures={summarised(holding, examinedNow)}
           note={whyNoReading(resources)}
           age={holding === null ? undefined : (span(holding.read_at, now) ?? undefined)}
-          examined={looked?.state === "found" ? looked.examined : null}
-          looking={looked?.state === "looking"}
-          lookFailed={looked?.state === "failed" ? LOOK_FAILED : undefined}
-          nothingToAsk={nothingToAsk(resources)}
-          onExamine={() => onExamine(job.id)}
-        />
-      }
-      fleet={
-        <Log
-          rows={fleetSaid}
-          emptyNote={whyNoNotes(journalled) ?? NOTHING_FROM_FLEET_YET}
-          {...keys.inLog(FLEET_LOG)}
+          onOpen={() => openSheet("holds")}
         />
       }
       // One animated mark per screen, on the thing being read — and nothing
@@ -560,6 +566,20 @@ export function JobDetail({
             log={keys.inLog("sheet")}
             held={held}
             onHold={setHeld}
+            // The full reading, unchanged from what the run column used to
+            // draw — `Look now` came with it, because it acts on this reading
+            // and not on the five lines that open it.
+            holds={{
+              jobId: job.id,
+              reading: holding,
+              note: whyNoReading(resources),
+              age: holding === null ? undefined : (span(holding.read_at, now) ?? undefined),
+              examined: examinedNow,
+              looking: looked?.state === "looking",
+              lookFailed: looked?.state === "failed" ? LOOK_FAILED : undefined,
+              nothingToAsk: nothingToAsk(resources),
+              onExamine: () => onExamine(job.id),
+            }}
             now={now}
             floor={floor}
             onClose={closeSheet}

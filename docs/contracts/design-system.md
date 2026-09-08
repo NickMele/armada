@@ -639,7 +639,7 @@ a modifier.
 ```
 j / k / ↓ / ↑  move focus
 Enter          open the focused job. Acts on nothing   (list only)
-o              open. The same act, named so the palette can display it
+o              open. The same act, named so the palette can display it   (list only)
 r              review
 t              attest
 d              redirect
@@ -658,8 +658,9 @@ u              submit for verification  (piloted job only)
 e              redispatch as a new job
 h / l / ← / →  expand and collapse  (detail only)
 [ ]            move between chapters  (detail only)
-Enter          open the log         (detail only)
+L              open the log         (detail only)
 f              open the diff        (detail only)
+o              open the output      (detail only)
 g              open the stage       (detail only)
 ```
 
@@ -1025,11 +1026,36 @@ fit are under Floating layers.
 surface  --bg-overlay · --border-subtle · --radius-sm · shadow
 type     --text-xs · --fg-default · 8px / 4px padding
 timing   400ms delay in, --duration-fast
+group    300ms grace: inside it the next tooltip opens on arrival
 ```
 
-Tooltips carry the full value of anything truncated in a row — a path,
-a branch name, a full timestamp. They never carry an explanation the
-row should have made plain, per the briefing-register rule.
+**A tooltip carries one of three things, and never a fourth.** A path,
+a branch name or a full timestamp — the value behind an abbreviated
+one. What pressing a control does, written at the control. Or what a
+word naming an Armada concept *is*, from the one place those sentences
+live. It never restates the text it sits on, and it never carries an
+explanation the row should have made plain, per the briefing-register
+rule. A criterion sentence, a Judge's grounds, a log line and a step's
+own name already read as themselves.
+
+**An act names the control it is on, and never the one beside it.** A
+reader who presses on the strength of one that describes a neighbour
+has learnt that the surface lies, which costs more than every correct
+hover on the screen was worth — so this is worse than no tooltip, not
+merely less good. The run tree's chevron nearly took *Click to open
+details in the right panel*: true of the step name one column over, and
+false of the chevron, which opens that step's facts in place.
+
+**The delay is per group, not per tooltip.** Crossing a row of eight
+annotated chips is one wait: the first waits out `--tooltip-delay`, and
+for `--tooltip-grace` after any one closes the next opens on arrival.
+A delay held per instance is eight waits, which is why nobody reads the
+second chip.
+
+**A concept sentence has exactly one home.** The three gate tiers are
+`phaseSaid`; every other word is `concepts.ts` beside it, keyed by the
+word a reader sees. Two explanations of what a Check is would be two
+things that can disagree, which is the distinction the gate rests on.
 
 Placement, alignment and collision are under Floating layers.
 

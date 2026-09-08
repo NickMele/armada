@@ -1,6 +1,8 @@
 import { ChevronRight, Copy, ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback } from "react";
+import { conceptSaid } from "../../concepts";
+import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
 /**
  * One row of *Where things are* — a label, the machine value beside it, and
@@ -77,6 +79,24 @@ const SAYS: Record<WhereRowAct, string> = {
   into: "Open this",
 };
 
+/**
+ * The same three acts, named against the row's own label — *Click to copy the
+ * worktree* rather than *Copy this value*.
+ *
+ * **The hover names what it acts on and the accessible name does not.** A
+ * screen reader reaches this row having just read the label column, so a
+ * description repeating it is a word said twice; a pointer arrives at a glyph
+ * with the label two columns away. They are the same act read under different
+ * conditions, which is why one string cannot serve both.
+ */
+function actSays(act: WhereRowAct, label: ReactNode): string | undefined {
+  if (typeof label !== "string") return undefined;
+  const named = label.toLowerCase();
+  if (act === "copy") return `Click to copy the ${named}`;
+  if (act === "open") return `Click to open this ${named} where it lives`;
+  return `Click to open this ${named}`;
+}
+
 const MARK = { open: ExternalLink, copy: Copy, into: ChevronRight };
 
 export function WhereRow({
@@ -108,9 +128,21 @@ export function WhereRow({
   const Mark = MARK[act];
   const says = actLabel ?? SAYS[act];
 
+  // The label column names the thing; the concept says what that thing is.
+  // `asChild`, because the row is a three-track grid and a wrapper would take
+  // the label's track.
+  const named = conceptSaid(label);
+  const key = <span className="armada-wrow__k">{label}</span>;
+
   const body = (
     <>
-      <span className="armada-wrow__k">{label}</span>
+      {named === undefined ? (
+        key
+      ) : (
+        <Tooltip asChild label={named}>
+          {key}
+        </Tooltip>
+      )}
       <span className="armada-wrow__v">
         {value}
         {note === undefined ? null : <span className="armada-wrow__note">{note}</span>}
@@ -127,10 +159,17 @@ export function WhereRow({
     );
   }
 
+  // The row is the control, so its hover says what pressing it does. `title` is
+  // gone with it: the browser's own bubble carries no delay grouping, no
+  // placement and no token, and two tooltips answering one hover is one too
+  // many.
+  const pressSays = actLabel ?? actSays(act, label) ?? says;
   return (
-    <button type="button" className="armada-wrow" data-act={act} onClick={press} title={says}>
-      {body}
-      <span className="armada-wrow__sr">{says}</span>
-    </button>
+    <Tooltip asChild label={pressSays}>
+      <button type="button" className="armada-wrow" data-act={act} onClick={press}>
+        {body}
+        <span className="armada-wrow__sr">{says}</span>
+      </button>
+    </Tooltip>
   );
 }

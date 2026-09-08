@@ -38,6 +38,16 @@ release/
 .gnhf/
 .lavish/
 
+# A reviewer's note against a story. The same argument as above — it names
+# whatever the review was about, and this repository is public.
+.notes/
+
+# Each subdirectory here is its own git working tree, not this one's content —
+# `git worktree add` puts a `.git` file, not a directory, at its root. Nothing
+# above matches it, so a worktree cut for a session sat untracked in the
+# checkout above it until this line.
+.claude/worktrees/
+
 # Golden-comparison output, written beside a fixture when one fails so the diff
 # can be read. Never the fixture itself.
 *.actual

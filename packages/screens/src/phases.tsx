@@ -31,7 +31,7 @@
 
 import type { ReactNode } from "react";
 import { Button } from "@armada/components";
-import type { PhaseStage, PhaseStageRow, PhaseStripProps } from "@armada/components";
+import type { PhaseLoop, PhaseStage, PhaseStageRow, PhaseStripProps } from "@armada/components";
 
 import { ADVANCE_GATE, CHECK_ADVANCES, CHECK_OUTCOME, CRITERION_VERDICT_CHECK, CRITERION_VERDICT_JUDGE } from "@armada/components";
 import type { CheckRun, Criterion, Judged, StepDetail } from "@armada/protocol";
@@ -182,7 +182,43 @@ export function phasesOf(
   // tier, and a tier that can never ask is not one that has not asked yet.
   stages.push(youStage(step));
 
-  return { stages, note: noteOf(step, checks !== undefined, judge !== undefined) };
+  return {
+    stages,
+    loops: handedBack(step),
+    note: noteOf(step, checks !== undefined, judge !== undefined),
+  };
+}
+
+/**
+ * The hand-backs, as edges on the graph.
+ *
+ * **`attempts[]` is the only place an earlier run survives.** `state` and
+ * `last_verdict` are both the latest, so a step that passed on its third try
+ * and one that passed on its first were the same message — and the strip drew
+ * them the same, which is what this answers. An attempt whose `outcome` is
+ * `retrying` is a run that failed inside its budget and went back to the Drone;
+ * that return is the edge.
+ *
+ * **From the Checks tier, because only a mechanical failure is handed back.** A
+ * Judge refusal goes straight to `Ruling::Refused`, stops the step and
+ * escalates the Job with the Drone kept alive — it never re-enters `working`,
+ * so drawing it as a loop would put an edge where the machine has none.
+ * `crates/fleet/src/gate.rs` is where that split lives.
+ *
+ * **One edge for all of them, not one per attempt.** Three hand-backs are the
+ * same return travelled three times, and three arcs between the same pair of
+ * nodes is a picture of nothing. The count is in the words.
+ */
+function handedBack(step: StepDetail): PhaseLoop[] {
+  const spent = step.attempts.filter((attempt) => attempt.outcome === "retrying").length;
+  if (spent === 0) return [];
+  return [
+    {
+      from: "checks",
+      to: "working",
+      says: spent === 1 ? "handed back once" : `handed back ${spent} times`,
+    },
+  ];
 }
 
 /** The step states that mean the Drone has handed the work over. */

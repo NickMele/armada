@@ -507,6 +507,15 @@
     status = "Specified"
     paired_with = "chevron-right"
 
+[icons.chevron-up]
+  means = "collapse what is open"
+  group = "Chrome"
+  size = "16px"
+  status = "Specified"
+  paired_with = "chevron-down"
+  reserved = "Closing something already open, where the control is a labelled Close rather than a bare caret. Never a sort or direction indicator, never scroll-to-top, and never disclosure on a closed thing — that is chevron-down beside a split button's label, or chevron-right on a tree."
+  notes = "Added 2026-09-07. The registry carried down and right for expand-and-collapse and nothing for the third case, so `Chapter`'s Close drew chevron-down under a label reading Close — a caret pointing into the thing it was about to shut. The component said so in a comment and followed the pair, which was right at the time: the contract wins over a drawing, and a missing glyph is reported rather than invented. This is the report answered. It does not displace the pair: chevron-down stays disclosure on a closed record and chevron-right stays a tree that goes further; what this adds is the one shape neither covers, a control whose whole label is Close. Directionality is the entire claim, which is why it survives the interior-detail floor at 16px with room to spare."
+
 [icons.chevron-right]
   means = "expand and collapse"
   group = "Chrome"

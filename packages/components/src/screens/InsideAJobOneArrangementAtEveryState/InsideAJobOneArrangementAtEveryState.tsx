@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { Fragment, useCallback, useState } from "react";
+import { conceptSaid } from "../../concepts";
+import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 import { JobBrief, type JobBriefProps } from "../../compositions/JobBrief/JobBrief";
 import { JobDetailHeaderActions } from "../../compositions/JobDetailHeaderActions/JobDetailHeaderActions";
 import type { JobDetailField } from "../../compositions/JobDetailHeaderActions/JobDetailHeaderActions";
@@ -123,30 +125,23 @@ export type InsideAJobProps = {
   /** Why there is no run to draw, where there is none. */
   runAbsent?: string;
   /**
-   * What Fleet has done to the Job itself — the lines its own log carries that
-   * belong to no step.
+   * What the Job holds on this machine, in a few lines — the tail of Fleet's
+   * own log, the process count, the worktree, the disk. `JobHoldsSummary`, and
+   * the full reading is a press away on the sheet.
    *
-   * **Above the run, and the Job's rather than a step's.** Cutting a worktree,
-   * running a repository's preparation commands and reclaiming one all happen
-   * with every step `not_started`, so there is no step whose story they are.
-   * Attaching them to the step about to start was rejected: it reads as though
-   * step one is running when it has not begun, which is exactly the confusion
-   * that made a wedged Job look healthy.
+   * **Below the run and above the pointers.** It used to be a whole card above
+   * the run, which is the largest thing in this column standing in front of the
+   * thing a person opens a Job to read. It is context for the run, so it reads
+   * after it.
    *
-   * Absent draws nothing. A Job Fleet has recorded nothing about is not a hole
-   * in the screen — the same rule `record` below keeps.
-   */
-  fleet?: ReactNode;
-  fleetLabel?: ReactNode;
-  /**
-   * What the Job holds on this machine, and the act that goes and looks.
+   * **It carries Fleet's tail, and no second region does.** Cutting a worktree,
+   * running a repository's preparation commands and reclaiming one belong to no
+   * step, and they used to have a region of their own above the run. Both
+   * regions answered *what is happening on this machine right now*, which is
+   * one region too many.
    *
-   * **Above the log and above the run.** It answers *is this working*, which is
-   * the question a person opening a Job they suspect has wedged came with —
-   * everything else on the screen is what happened, and this is what is true
-   * now. The log below it is the record of the same span.
-   *
-   * Absent draws nothing, like `fleet`.
+   * Absent draws nothing. A Job with nothing read and nothing recorded is not a
+   * hole in the screen — the same rule `record` below keeps.
    */
   machine?: ReactNode;
   machineLabel?: ReactNode;
@@ -165,6 +160,16 @@ export type InsideAJobProps = {
   openSteps?: readonly string[];
   /** Told when a step's facts are opened or closed. */
   onOpenStep?: (stepId: string, open: boolean) => void;
+  /**
+   * Told when a fact in the tree names an artifact and is pressed — an
+   * attempt's Check output, a step's patch.
+   *
+   * **The tree is where a reader notices something is wrong.** Making them find
+   * the same fact again in the panel below to act on it is the navigation this
+   * screen exists to remove, so the fact that says `test failed · exit 101`
+   * opens the output of that attempt's run.
+   */
+  onOpenArtifact?: (artifactId: string) => void;
   /**
    * Where things are — the worktree, the branch, the Manifest, the workflow,
    * the log, the transcript, the Drone. **A path opens where it lives; an
@@ -220,14 +225,13 @@ export function InsideAJob({
   runLabel = "The run",
   runElapsed,
   runAbsent = "Nothing serves this Job's workflow, so its steps are unknown.",
-  fleet,
-  fleetLabel = "What Armada has done",
   machine,
   machineLabel = "What this Job holds",
   pulsing = true,
   onSelectStep,
   openSteps,
   onOpenStep,
+  onOpenArtifact,
   where,
   whereLabel = "Where things are",
   whereNote,
@@ -248,40 +252,8 @@ export function InsideAJob({
       <div className="armada-inside">
         {/* The run, and the pointers beneath it. Left, at every state. */}
         <div className="armada-inside__run">
-          {/* Above the run, because it is the Job's and not a step's, and
-              because it is what there is to read at the one moment the run has
-              nothing in it. */}
-          {/* **No well around it, unlike the log below.** `armada-inside__fleet`
-              bounds at 15rem and scrolls the surplus — right for a stream with
-              no end, wrong for a reading that ends. It cut the panel mid-line
-              and hid the table, the disk figure and the instant they were read
-              at. This is a card already and draws its own surface. */}
-          {machine === undefined ? null : (
-            <>
-              <span className="armada-screen__eyebrow">{machineLabel}</span>
-              {machine}
-            </>
-          )}
-
-          {fleet === undefined ? null : (
-            <>
-              <span
-                className="armada-screen__eyebrow"
-                data-spaced={machine !== undefined || undefined}
-              >
-                {fleetLabel}
-              </span>
-              <div className="armada-inside__fleet">{fleet}</div>
-            </>
-          )}
-
           <div className="armada-inside__region-head">
-            <span
-              className="armada-screen__eyebrow"
-              data-spaced={fleet !== undefined || machine !== undefined || undefined}
-            >
-              {runLabel}
-            </span>
+            <Eyebrow>{runLabel}</Eyebrow>
             {runElapsed === undefined ? null : (
               <span className="armada-inside__elapsed">{runElapsed}</span>
             )}
@@ -298,12 +270,20 @@ export function InsideAJob({
               openSteps={openSteps}
               onOpen={onOpenStep}
               onCopied={onCopied}
+              onOpenArtifact={onOpenArtifact}
             />
           )}
 
-          <span className="armada-screen__eyebrow" data-spaced>
-            {whereLabel}
-          </span>
+          {/* Context for the run, so it reads after it — and before the
+              pointers, which is where you go once it says something is wrong. */}
+          {machine === undefined ? null : (
+            <>
+              <Eyebrow spaced>{machineLabel}</Eyebrow>
+              {machine}
+            </>
+          )}
+
+          <Eyebrow spaced>{whereLabel}</Eyebrow>
           {where === undefined || where.length === 0 ? (
             <div className="armada-screen__slot">
               <Absent name="Where things are" note={whereAbsent} />
@@ -314,9 +294,7 @@ export function InsideAJob({
 
           {record === undefined ? null : (
             <>
-              <span className="armada-screen__eyebrow" data-spaced>
-                {recordLabel}
-              </span>
+              <Eyebrow spaced>{recordLabel}</Eyebrow>
               {record}
             </>
           )}
@@ -329,7 +307,7 @@ export function InsideAJob({
         {/* The panel. Same regions in the same order at every state. */}
         <div className="armada-inside__panel">
           <div className="armada-inside__brief">
-            <span className="armada-screen__eyebrow">Brief</span>
+            <Eyebrow>Brief</Eyebrow>
             {brief === undefined ? (
               <div className="armada-screen__slot">
                 <Absent name="Brief" note={briefAbsent} />
@@ -357,7 +335,7 @@ export function InsideAJob({
                     {step.fields.map((field, f) => (
                       <span className="armada-inside__field" key={f}>
                         {field.label === undefined ? null : (
-                          <span className="armada-inside__field-label">{field.label}</span>
+                          <FieldLabel>{field.label}</FieldLabel>
                         )}
                         {field.value === undefined ? null : (
                           <span
@@ -392,7 +370,11 @@ export function InsideAJob({
                     "Nothing serves this step's gates, so where it stands is unknown."}
                 </p>
               ) : (
-                <PhaseStrip {...step.phases} />
+                // The screen's own handler falls through to the strip unless
+                // the caller gave the strip one of its own, so a Check's row
+                // in a phase card opens the same viewer every other selector
+                // on this screen opens.
+                <PhaseStrip onOpenArtifact={onOpenArtifact} {...step.phases} />
               )}
 
               {step.before === undefined ? null : (
@@ -416,6 +398,47 @@ export function InsideAJob({
 
       {sheet}
     </div>
+  );
+}
+
+/**
+ * A region's band, and what that region is where its name is an Armada word.
+ *
+ * **The sentence is looked up rather than written here.** Six regions on this
+ * screen name a thing rather than describe it — `Brief`, `The run`, `Where
+ * things are` — and a screen that answered them itself would be a second place
+ * the vocabulary is explained. `concepts.ts` is the first.
+ *
+ * `asChild`, because the brief's own rule keys off the band's class: a wrapper
+ * would be the `:not(.armada-screen__eyebrow)` child and take the flex meant
+ * for the brief itself.
+ */
+function Eyebrow({ children, spaced }: { children: ReactNode; spaced?: boolean }) {
+  const says = conceptSaid(children);
+  const band = (
+    <span className="armada-screen__eyebrow" data-spaced={spaced || undefined}>
+      {children}
+    </span>
+  );
+  return says === undefined ? (
+    band
+  ) : (
+    <Tooltip asChild label={says}>
+      {band}
+    </Tooltip>
+  );
+}
+
+/** A step field's label, on the same rule as the header's and the tree's. */
+function FieldLabel({ children }: { children: ReactNode }) {
+  const says = conceptSaid(children);
+  const label = <span className="armada-inside__field-label">{children}</span>;
+  return says === undefined ? (
+    label
+  ) : (
+    <Tooltip asChild label={says}>
+      {label}
+    </Tooltip>
   );
 }
 
