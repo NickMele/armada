@@ -107,6 +107,13 @@ function basename(path: string): string {
   return path.slice(path.lastIndexOf("/") + 1);
 }
 
+/**
+ * The one Job status under which a step's own `running` is the whole truth.
+ * Every other status that leaves a step `running` has stopped the Job around
+ * it — see `crates/core-model/domain/job-statuses.toml`.
+ */
+const RUNNING = "running";
+
 /** The gate value whose whole meaning is "the Checks are the whole gate". */
 const AUTO = "auto";
 /** The gate value that holds the Job for a person whatever the machines said. */
@@ -126,9 +133,16 @@ export function phasesOf(
   step: StepDetail,
   criteria: Criterion[],
   opens: Opens,
+  status: string,
 ): PhaseStripProps {
   const submitted = HAS_SUBMITTED.has(step.state);
-  const working = step.state === "running" || step.state === "retrying";
+  // **A step is only working while its Job is.** `running` on a step outlives
+  // the Drone that earned it: a Job holding at `awaiting_review` leaves its
+  // last step `running`, and an escalated Job keeps one running with the Drone
+  // alive and idle. Read off the step alone, the strip said Working two inches
+  // from a badge saying awaiting review, and the screen read as broken.
+  const working =
+    (step.state === "running" || step.state === "retrying") && status === RUNNING;
   const kept = keptRows(keptOf(step, opens));
   const stages: PhaseStage[] = [
     {
@@ -530,7 +544,7 @@ function noteOf(step: StepDetail, checks: boolean, judge: boolean): string {
       : "This step declares no Check and asks no Judge. Its evidence advances it, and nothing else.";
   }
   if (step.state === "awaiting_human") {
-    return "Everything mechanical has cleared. Nothing is wrong; the workflow asks for a person here.";
+    return "Everything mechanical has cleared. The workflow asks for a person here.";
   }
   if (step.state === "running" || step.state === "retrying") {
     return onlyCurrentAttempt(step, step.check_runs).length === 0

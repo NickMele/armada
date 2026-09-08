@@ -27,6 +27,9 @@ import { chaptersOf } from "./chapters";
 // against each other and there is no third place both are reachable from.
 import { phasesOf, type Opens } from "./phases";
 
+/** The Job status under which a step's own `running` is the whole truth. */
+const RUNNING = "running";
+
 /** The brief as `crates/fleet/src/briefing.rs` writes it, three blocks of it. */
 const BRIEF = [
   "JOB BRIEF",
@@ -382,7 +385,7 @@ describe("a step retried twice, on both surfaces", () => {
 
   /** What the strip's Submitted tier lists. The result is beside the label. */
   function onTheStrip(one: StepDetail): string[] {
-    const stage = phasesOf(one, [], OPENS).stages.find((held) => held.id === "submitted");
+    const stage = phasesOf(one, [], OPENS, RUNNING).stages.find((held) => held.id === "submitted");
     return (stage?.rows ?? []).flatMap((row) =>
       documentsIn(renderToStaticMarkup(row.label) + renderToStaticMarkup(row.result)),
     );
