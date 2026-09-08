@@ -1,0 +1,121 @@
+/* Judge citations — every pointer the panel made.
+
+   Rows that are entirely controls, marked the way every selector on this
+   screen is marked: the accent on the edge, never a fill. A list of fifteen
+   filled buttons would read as fifteen decisions. */
+.armada-judge-citations {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+}
+
+.armada-judge-citations__label {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+
+.armada-judge-citations__list {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.armada-judge-citations__row + .armada-judge-citations__row {
+  border-top: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-judge-citations__open {
+  appearance: none;
+  display: grid;
+  grid-template-columns: var(--space-12) minmax(0, 1fr) max-content;
+  align-items: start;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-left: var(--row-focus-bar);
+  border-left-color: transparent;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.armada-judge-citations__open:hover {
+  background: var(--surface-row-hover);
+  border-left-color: var(--accent);
+}
+
+.armada-judge-citations__open:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(var(--focus-ring-offset) * -1);
+}
+
+/* Which judge, on which criterion. The accent, because it is what the row
+   points with — every citation on the screen resolves through this pair. */
+.armada-judge-citations__who {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.armada-judge-citations__what {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  min-width: 0;
+}
+
+/* The criterion, in the requester's words. Sans: it is the sentence the judge
+   was answering. */
+.armada-judge-citations__criterion {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-default);
+}
+
+/* Where it points. Mono, and it wraps rather than clips — a citation clipped
+   from the right is a citation with no line numbers on it. */
+.armada-judge-citations__where {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+
+/* Which way that judge went. Hue per row, never summed — a met citation beside
+   a refusal is the comparison the list exists to make possible. */
+.armada-judge-citations__verdict {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+.armada-judge-citations__row[data-named="not_met"] .armada-judge-citations__verdict {
+  color: var(--verdict-not-met);
+}
+
+.armada-judge-citations__row[data-named="met"] .armada-judge-citations__verdict {
+  color: var(--verdict-met);
+}
+
+.armada-judge-citations__empty {
+  margin: 0;
+  padding: var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}

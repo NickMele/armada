@@ -1,0 +1,276 @@
+/* A refusal, whole.
+
+   The block carries an edge in --verdict-not-met rather than a red ground:
+   --step-failed-bg is the step surface and means the Job failed, which a
+   refusal does not — the work runs and is not what was asked for. The bar is
+   the same treatment CriterionVerdicts gives its citation, one level out. */
+.armada-judge-refusal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.armada-judge-refusal__block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  border-left: var(--row-focus-bar);
+  border-left-color: var(--verdict-not-met);
+  background: var(--bg-raised);
+}
+
+.armada-judge-refusal__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+/* The criterion takes its own line. Run in beside the split it made one long
+   mono sentence with two different jobs in it — which criterion was refused,
+   and how many refused it — and the second wrapped onto a line of its own
+   anyway, so the break was happening at a width rather than at a meaning. */
+.armada-judge-refusal__heading {
+  flex-basis: 100%;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--verdict-not-met);
+}
+
+/* How large the refusal is. Mono, beside the heading and never coloured by how
+   large it is — a split that changed hue would say the Job is somehow less
+   refused than it is. */
+.armada-judge-refusal__split,
+.armada-judge-refusal__otherwise {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* The two facts are separate sentences and ran together into one when they
+   shared a line. A separator rather than a period: both are fragments, and a
+   full stop after a fragment reads as a sentence that lost its verb. */
+.armada-judge-refusal__between {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* The reason, as a callout. It was an unlabelled paragraph sitting among five
+   labelled sections, which made the one sentence a person came for read like
+   the surface's own commentary. The label says what it is and the ground
+   separates it from the machinery around it. */
+.armada-judge-refusal__finding {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  /* One step down from the card, not the same step.
+
+     It was --bg-raised, which is what the panel this sits inside already is —
+     so the callout had no ground of its own at rest and only appeared when the
+     row's own hover changed what was behind it. A surface that shows up when
+     you point at it is not a surface. `PhaseCard` puts its rows in the same
+     well for the same reason: what happened reads as a different thing from
+     the card holding it. */
+  background: var(--surface-well);
+}
+
+.armada-judge-refusal__finding-label {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--verdict-not-met);
+}
+
+/* The three fields, on one grid so their values share a column edge. The same
+   arrangement `CriterionVerdicts` draws one level down, because it is the same
+   record. */
+.armada-judge-refusal__fields {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: calc(var(--space-1) / 2) var(--space-3);
+  align-items: baseline;
+  margin: 0;
+}
+
+.armada-judge-refusal__field {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-judge-refusal__value {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+
+/* The line a person triages on, and the reason the block is on screen. It
+   carries the weight the two facts above it do not — the same treatment
+   `CriterionVerdicts` gives the same field. */
+.armada-judge-refusal__value[data-field="consequence"] {
+  color: var(--fg-default);
+  font-weight: var(--weight-medium);
+}
+
+.armada-judge-refusal__quote-lead {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+/* The lines the refusal rests on. Quoted, so mono, so a rule down the left and
+   nothing else — a quotation is not a code block with a ground of its own, and
+   it scrolls rather than wraps because its spacing is part of what is quoted. */
+.armada-judge-refusal__quoted {
+  margin: 0;
+  padding: calc(var(--space-1) / 2) 0 calc(var(--space-1) / 2) var(--space-2);
+  border-left: var(--border-width) solid var(--border-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  overflow-x: auto;
+}
+
+.armada-judge-refusal__cited {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+}
+
+/* A sentence, not a word. `Cited` alone left the reader asking cited by whom,
+   of what, and whether it was something to press. */
+.armada-judge-refusal__cited-label {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-judge-refusal__citations {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+/* A row, not a chip.
+
+   A bordered box around a value on a raised ground reads as a filled-in form
+   field to anyone who has used a form, and a column of them reads as a form.
+   The affordance is the underline on the name — the same mark every other
+   selector on this screen carries — and the row is the target. */
+.armada-judge-refusal__citation {
+  appearance: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  width: 100%;
+  padding: calc(var(--space-1) / 2) 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.armada-judge-refusal__citation:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* What was cited, in the reader's words; where it is, in the machine's. */
+.armada-judge-refusal__citation-says {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: var(--accent-muted);
+  text-underline-offset: var(--space-1);
+}
+
+.armada-judge-refusal__citation:hover .armada-judge-refusal__citation-says {
+  text-decoration-color: var(--accent);
+}
+
+.armada-judge-refusal__citation-where {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* Where the judges differ, and what that means — one block, because they are
+   one thought.
+
+   **A footer, not a quotation.** It carried an accent bar down its left edge,
+   which is the mark this app puts on a selected row and on a citation that
+   opens something: it read as a thing to press and it is a thing to read. A
+   rule above it and the block's own ground say the same *this is the surface
+   talking, not the Judge* without borrowing an affordance. */
+.armada-judge-refusal__differ {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  margin-top: calc(var(--space-1) / 2);
+  padding: var(--space-2);
+  border-top: var(--border-width) solid var(--border-subtle);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  background: var(--surface-well);
+}
+
+.armada-judge-refusal__differ-label {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* What each judge cited. Set back from the reading under it: this is the
+   observation, and the line after it is the conclusion. */
+.armada-judge-refusal__overlap-says {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+}
+
+/* The conclusion, one weight up from the observation above it. */
+.armada-judge-refusal__reading-says {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+}
+
+/* What a judge that met the criterion produced.
+
+   Left, like every other line in the block. It was centred inside a dashed
+   frame, which made an aside about the contract look like a callout worth
+   stopping on — and it is the least important line here. No frame either: the
+   block already has an edge, and a second border inside it draws a box around
+   a sentence. */
+.armada-judge-refusal__silence {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
