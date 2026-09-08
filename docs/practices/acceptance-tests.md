@@ -23,6 +23,7 @@ the gate asserts about it.
 | Focus | A Drone belongs to the step it was given | `crates/acceptance/tests/drone_per_step.rs` |
 | Board | Every Job is a row, and opening one says what it did | `crates/acceptance/tests/board.rs` |
 | Recovery | A Job that needs me says so, and can be unstuck without leaving Bridge | `crates/acceptance/tests/recovery.rs` |
+| Landing | A Job's work reaches the thing it was for | `crates/acceptance/tests/landing.rs` |
 
 The apparatus is `crates/acceptance/tests/bench/`, shared, with a file per
 milestone. Claim and apparatus are separated so that what a milestone claims and
