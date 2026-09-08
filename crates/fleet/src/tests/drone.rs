@@ -22,8 +22,8 @@
 use std::time::Duration;
 
 use adapter_traits::{
-    DroneEvent, DroneSpawnConfig, Environment, McpConfig, Model, Prompt, Speaker, Toolbelt,
-    Worktree,
+    CallDetail, DroneEvent, DroneSpawnConfig, Environment, McpConfig, Model, Prompt, Speaker,
+    Toolbelt, Worktree,
 };
 use core_model::{EscalationTrigger, Target};
 use testkit::FakeHarness;
@@ -321,6 +321,7 @@ fn an_unreadable_line_still_counts_as_a_drone_that_was_producing_output() {
         Ending::Reported {
             refusals: 0,
             called_something: false,
+            reached_after_refusal: false,
         }
     );
 }
@@ -332,6 +333,7 @@ fn evidence_waiting_means_the_gate_decides_and_the_dead_drone_changes_nothing() 
         Ending::Reported {
             refusals: 3,
             called_something: true,
+            reached_after_refusal: false,
         },
     ] {
         assert_eq!(
@@ -352,6 +354,7 @@ fn a_drone_that_died_mid_step_never_leaves_the_job_running() {
             Ending::Reported {
                 refusals: 2,
                 called_something: true,
+                reached_after_refusal: false,
             },
             EscalationTrigger::BlockedByPolicy,
         ),
@@ -359,6 +362,7 @@ fn a_drone_that_died_mid_step_never_leaves_the_job_running() {
             Ending::Reported {
                 refusals: 0,
                 called_something: false,
+                reached_after_refusal: false,
             },
             EscalationTrigger::Silent,
         ),
@@ -366,6 +370,7 @@ fn a_drone_that_died_mid_step_never_leaves_the_job_running() {
             Ending::Reported {
                 refusals: 0,
                 called_something: true,
+                reached_after_refusal: true,
             },
             EscalationTrigger::Stalled,
         ),
@@ -389,6 +394,7 @@ fn a_refused_call_and_a_quiet_drone_are_told_apart() {
         &Ending::Reported {
             refusals: 1,
             called_something: true,
+            reached_after_refusal: false,
         },
         crate::Left::Nothing,
     );
@@ -397,8 +403,93 @@ fn a_refused_call_and_a_quiet_drone_are_told_apart() {
         &Ending::Reported {
             refusals: 0,
             called_something: false,
+            reached_after_refusal: false,
         },
         crate::Left::Nothing,
     );
     assert_ne!(blocked, silent);
+}
+
+/// The incident of `#503`, folded from the events it actually emitted.
+///
+/// **Two refusals early, thirty calls after them, and nothing submitted.** The
+/// run-total count called this `blocked_by_policy`, which tells a person to go
+/// and widen an allowlist that the run had already carried on past for four
+/// minutes. It is `stalled`: it worked and never submitted.
+#[test]
+fn a_drone_that_was_refused_and_went_on_reaching_stalled_rather_than_blocked() {
+    let recovered = Ending::of(&[
+        call("Bash"),
+        refusal("Bash"),
+        call("Bash"),
+        refusal("Bash"),
+        call("Read"),
+        call("Edit"),
+        DroneEvent::Ended {
+            turns: 45,
+            cost_micros: 0,
+            refusals: 2,
+        },
+    ]);
+    assert_eq!(
+        recovered,
+        Ending::Reported {
+            refusals: 2,
+            called_something: true,
+            reached_after_refusal: true,
+        }
+    );
+    assert_eq!(
+        aftermath(JobStatus::Running, &recovered, crate::Left::Nothing),
+        Aftermath::JobMoves(Target::Escalated(EscalationTrigger::Stalled)),
+        "a refusal it recovered from is not what ended the run"
+    );
+}
+
+/// The other side of the same fold, and what `blocked_by_policy` is for.
+#[test]
+fn a_drone_still_being_refused_when_it_stopped_is_blocked() {
+    let blocked = Ending::of(&[
+        call("Bash"),
+        refusal("Bash"),
+        call("Bash"),
+        refusal("Bash"),
+        DroneEvent::Ended {
+            turns: 2,
+            cost_micros: 0,
+            refusals: 2,
+        },
+    ]);
+    assert_eq!(
+        blocked,
+        Ending::Reported {
+            refusals: 2,
+            called_something: true,
+            reached_after_refusal: false,
+        }
+    );
+    assert_eq!(
+        aftermath(JobStatus::Running, &blocked, crate::Left::Nothing),
+        Aftermath::JobMoves(Target::Escalated(EscalationTrigger::BlockedByPolicy)),
+        "the last thing it reached for was refused; widening is the act"
+    );
+}
+
+/// A reach, as the transcript carries it. **A refused call emits this first**,
+/// which is what makes the order of the two the fold's whole subject.
+fn call(tool: &str) -> DroneEvent {
+    DroneEvent::Called {
+        tool: String::from(tool),
+        call: String::from("a-call"),
+        detail: CallDetail::of("a file"),
+    }
+}
+
+/// The refusal that follows it.
+fn refusal(tool: &str) -> DroneEvent {
+    DroneEvent::Refused {
+        tool: String::from(tool),
+        call: String::from("a-call"),
+        because: String::from("not on the allowlist"),
+    }
 }

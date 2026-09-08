@@ -232,9 +232,14 @@ pub enum DroneEvent {
         /// accumulated is a budget that drifts. Six decimal places is what the
         /// harness itself reports, so nothing is lost converting.
         cost_micros: u64,
-        /// How many calls were refused across the turn. Non-zero with no
-        /// evidence is `blocked_by_policy`; zero with no evidence is `silent`,
-        /// and the remedies are opposite.
+        /// How many calls were refused across the turn.
+        ///
+        /// **A total, and a total does not say what ended the run.** A Drone
+        /// refused early and reaching for things at the end recovered; one
+        /// refused at the end did not, and only the second is
+        /// `blocked_by_policy`. Telling them apart takes the `Refused` and
+        /// `Called` rows in order, which is `fleet::Ending`'s fold and not
+        /// this number.
         refusals: usize,
     },
     /// Something arrived that this vocabulary has no variant for. Carried by

@@ -257,12 +257,22 @@ pub enum Ending {
     /// is an ending only once the process is also gone, which
     /// `crate::holder_of` answers and this enum does not.
     Reported {
-        /// How many calls the Drone was refused. Non-zero with no evidence is
-        /// `blocked_by_policy`; zero with no evidence is `silent`, and the
-        /// remedies are opposite.
+        /// How many calls the Drone was refused, over the whole run.
+        ///
+        /// **A run total, so it classifies nothing on its own** — read it with
+        /// `reached_after_refusal`, which is what `crate::aftermath` matches
+        /// on and why.
         refusals: usize,
         /// Whether the Drone reached for anything at all.
         called_something: bool,
+        /// Whether the Drone reached for something after the last call it was
+        /// refused — equivalently, whether the last reach in the stream got
+        /// through.
+        ///
+        /// **`refusals` is what gives it a subject.** With nothing refused
+        /// there is no refusal to have reached past, and the field says only
+        /// that the run's last call was allowed.
+        reached_after_refusal: bool,
     },
     /// The process is gone and no terminating event ever arrived.
     Vanished,
@@ -271,17 +281,29 @@ pub enum Ending {
 impl Ending {
     /// Fold a run's events into an ending, given that the process is gone.
     ///
-    /// Reads the stream once and keeps three counts. `Unreadable` lines are
-    /// **not** skipped: a line that did not decode still proves the Drone was
-    /// producing output, so a run full of them is not a silent one.
+    /// Reads the stream once and keeps what the classification needs.
+    /// `Unreadable` lines are **not** skipped: a line that did not decode still
+    /// proves the Drone was producing output, so a run full of them is not a
+    /// silent one.
     pub fn of(events: &[DroneEvent]) -> Ending {
         let mut reported = None;
         let mut called_something = false;
+        let mut reached_after_refusal = false;
         for event in events {
             match event {
                 DroneEvent::Ended { refusals, .. } => reported = Some(*refusals),
-                DroneEvent::Called { .. } => called_something = true,
-                DroneEvent::Refused { .. } => called_something = true,
+                DroneEvent::Called { .. } => {
+                    called_something = true;
+                    reached_after_refusal = true;
+                }
+                // A refused call emits `Called` and then `Refused`, so this
+                // takes back the reach the arm above just recorded. What the
+                // flag holds at the end of the stream is whether the Drone
+                // went on reaching past the last thing it was refused.
+                DroneEvent::Refused { .. } => {
+                    called_something = true;
+                    reached_after_refusal = false;
+                }
                 _ => {}
             }
         }
@@ -289,6 +311,7 @@ impl Ending {
             Some(refusals) => Ending::Reported {
                 refusals,
                 called_something,
+                reached_after_refusal,
             },
             None => Ending::Vanished,
         }
@@ -327,30 +350,31 @@ pub enum Aftermath {
     AlreadyStopped,
 }
 
-/// What a dead Drone means for its Job.
-///
-/// The answers, and each is a different thing for a person to do:
+/// What a dead Drone means for its Job. Each answer is a different act:
 ///
 /// | Status | Ending | Left | Answer |
 /// | --- | --- | --- | --- |
 /// | working | anything | evidence | the gate rules |
-/// | working | reported, refusals | nothing | `blocked_by_policy` — widen the allowlist, do not rephrase |
+/// | working | reported, refused and never reached again | nothing | `blocked_by_policy` — widen the allowlist, do not rephrase |
 /// | working | reported, called nothing | nothing | `silent` — rephrase, then redispatch |
-/// | working | reported, called things | nothing | `stalled` — it worked and never submitted |
+/// | working | reported, called things | nothing | `stalled` — it worked and never submitted, refused on the way or not |
 /// | working | vanished | nothing | `interrupted` — the process died; a person decides |
 /// | stopped | anything | anything | nothing moves; the Job is now restartable |
 ///
-/// **Every answer other than the first two leaves the Job escalated, which is
-/// not terminal**, and the milestone step's own words say terminal. The
-/// registry wins: `escalated` holds the worktree and the port span as-is until
-/// a person answers, and answering is what takes it terminal. What the step is
-/// actually asking for is that the Job does not stay `running`, and no path
-/// here leaves it there.
+/// **A refusal count is a run total, so it classifies nothing on its own.** A
+/// Drone refused early and still calling tools at the end carried on past the
+/// allowlist a person would be sent to widen; what decides is whether it
+/// reached again after the last refusal.
 ///
-/// **`status` is the first question and not a guard bolted on.** An escalated
-/// Job keeps its Drone alive and idle, so a Drone dying is no longer proof the
-/// Job was working — and asking a Job that already stopped to stop again is
-/// the `escalated -> escalated` move the machine refuses.
+/// **Every answer but the first two leaves the Job escalated, which is not
+/// terminal** — the registry wins over the milestone step's word: `escalated`
+/// holds the worktree and the port span until a person answers, and answering
+/// is what takes it terminal. What the step asks is that the Job never stays
+/// `running`, and no path here leaves it there.
+///
+/// **`status` is the first question, not a guard bolted on.** An escalated Job
+/// keeps its Drone alive and idle, so a dying Drone is no longer proof the Job
+/// was working, and stopping one twice is `escalated -> escalated`, refused.
 pub fn aftermath(status: JobStatus, ending: &Ending, left: Left) -> Aftermath {
     if status != JobStatus::Running {
         return Aftermath::AlreadyStopped;
@@ -359,7 +383,11 @@ pub fn aftermath(status: JobStatus, ending: &Ending, left: Left) -> Aftermath {
         return Aftermath::TheGateDecides;
     }
     Aftermath::JobMoves(Target::Escalated(match ending {
-        Ending::Reported { refusals, .. } if *refusals > 0 => EscalationTrigger::BlockedByPolicy,
+        Ending::Reported {
+            refusals,
+            reached_after_refusal: false,
+            ..
+        } if *refusals > 0 => EscalationTrigger::BlockedByPolicy,
         Ending::Reported {
             called_something: false,
             ..

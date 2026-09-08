@@ -51,7 +51,7 @@
 [triggers.blocked_by_policy]
 kind = "Trigger"
 level = "Step"
-meaning = "The Drone was refused a tool or command it needed and finished having submitted no evidence. Distinct from silent, which is a Drone that called nothing at all: this one tried and was stopped. The remedy differs — a rephrase cannot help, and the fix is a configuration change."
+meaning = "The Drone was refused a tool or command it needed, never reached for anything again, and finished having submitted no evidence. Distinct from silent, which is a Drone that called nothing at all: this one tried and was stopped. The remedy differs — a rephrase cannot help, and the fix is a configuration change. **It is the last refusal that decides, never a count of them.** A run refused early and still calling tools at the end was not stopped by the allowlist, and belongs to stalled; sending a person to widen a policy that run had already carried on past is the wrong act."
 in_code = "Not yet"
 open_questions = ["What does Fleet accept as proof a Drone did the work, given the result envelope reports success for a run that did nothing?"]
 
@@ -377,7 +377,7 @@ Not stopping the Job at all was the other, and is refused because a Judge that w
 
 [triggers.silent]
 kind = "Sub-kind"
-meaning = "Sub-kind of stalled. The Drone process exited normally having called no tool at all. A Drone that did call tools and had every one of them refused is blocked_by_policy instead — the two look identical in the result envelope and take opposite remedies, so the boundary is the tool call and not the empty result."
+meaning = "Sub-kind of stalled. The Drone process exited normally having called no tool at all. A Drone that did call tools and was still being refused when it stopped is blocked_by_policy instead — the two look identical in the result envelope and take opposite remedies, so the boundary is the tool call and not the empty result."
 open_questions = ["What does Fleet accept as proof a Drone did the work, given the result envelope reports success for a run that did nothing?"]
 notes = """
 No `fleet.verdict`, no `fleet.report`, no question raised — the Drone ran to completion and said nothing. It is a sub-kind of `stalled` rather than its own trigger because the two behave identically: both pause the Job and surface it the same way, differing only in the suggested action.

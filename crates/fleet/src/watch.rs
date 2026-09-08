@@ -3,12 +3,12 @@
 //! # Why the stream is read at all, given the gate does not read it
 //!
 //! Nothing a Drone says gates its own step. But `crate::aftermath` needs an
-//! [`Ending`](crate::Ending) — a fold over what the Drone emitted: whether it
-//! called anything, and how often it was refused. Those three answers,
-//! `blocked_by_policy`, `silent` and `stalled`, are three different things for
-//! a person to do, and a Fleet that never read the stream could only ever say
-//! `interrupted`. An `Unreadable` line is kept rather than filtered: a run full
-//! of them is not a silent run.
+//! [`Ending`](crate::Ending) — a fold over what the Drone emitted: what it
+//! called, how often it was refused, and whether it reached again after the
+//! last refusal. Those three answers, `blocked_by_policy`, `silent` and
+//! `stalled`, are three different things for a person to do, and a Fleet that
+//! never read the stream could only ever say `interrupted`. An `Unreadable`
+//! line is kept rather than filtered: a run full of them is not a silent run.
 //!
 //! # EOF is the signal, not a poll
 //!

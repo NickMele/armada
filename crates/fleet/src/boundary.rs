@@ -212,7 +212,18 @@ fn said(ending: &Ending) -> String {
         Ending::Reported {
             refusals,
             called_something,
-        } => format!("reported, {refusals} refusal(s), called_something={called_something}"),
+            reached_after_refusal,
+        } => format!(
+            "reported, {refusals} refusal(s){}, called_something={called_something}",
+            // The count alone is what sent a person to widen an allowlist a
+            // run had already carried on past, so the line says which of the
+            // two happened rather than leaving it to be inferred.
+            match (*refusals > 0, reached_after_refusal) {
+                (true, false) => " and still blocked at the end",
+                (true, true) => " and reaching past them",
+                (false, _) => "",
+            }
+        ),
         Ending::Vanished => String::from("no terminating event ever arrived"),
     }
 }
