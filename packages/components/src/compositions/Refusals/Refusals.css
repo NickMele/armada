@@ -1,0 +1,123 @@
+/* What a job reached for and was refused — the evidence for `blocked_by_policy`,
+   drawn in the band that names it.
+
+   No hue of its own. The band around it already carries the step's, and hue
+   below Job level exists only where tokens/status.css declares it — a refusal
+   is not a state a step holds, so it takes weight and position instead. */
+.armada-refusals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* What the rows are, said once over them. Sans, because it is a statement about
+   what happened rather than a value the system reported.
+
+   --fg-muted and not --fg-default, which is where this parts company with the
+   gaming check's rows: both captions sit under the band's own title, and at the
+   title's weight and the title's colour the band reads as having two headlines.
+   The status grammar is a headline and then fields — this is over the fields. */
+.armada-refusals__said {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-muted);
+}
+
+/* The tracks are declared once for the whole list and borrowed by every row, so
+   the commands share one left edge however wide the widest tool name is. Sized
+   per row, `Bash` and `WebFetch` would step the column in and out down the
+   list, which is the flip-flop v1's failure log carried as its own complaint.
+
+   `minmax(0, …)` on both: a tool name from an MCP server is long enough to eat
+   the row, and a 200-character command has to be free to wrap rather than push
+   the panel sideways. */
+.armada-refusals__list {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  column-gap: var(--space-2);
+  row-gap: calc(var(--space-1) / 2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+/* One refusal. **Never collapsed by command**: five refusals of one command is
+   a drone that did not learn, and one row with a count says a single denial.
+
+   `subgrid`, so a row that wraps to two lines keeps its columns aligned with
+   every other row instead of setting its own. */
+.armada-refusals__refusal {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: baseline;
+  min-width: 0;
+}
+
+/* Which capability was denied. Mono, because it is the harness's own spelling,
+   and --fg-subtle because it is the label on the row rather than the finding —
+   the command beside it is what a person reads and acts on. */
+.armada-refusals__tool {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  overflow-wrap: anywhere;
+}
+
+/* The command. Mono, --fg-default, and the one thing on the row at full
+   contrast: this is the answer to "unblock it from what", and a command read at
+   metadata contrast is one the surface is telling you not to read.
+
+   It wraps and is never clipped. Fleet bounds the argument at 200 characters
+   with whitespace already collapsed, so the worst row is a few lines here — and
+   the tail of a command is the part that gets pasted into an allowlist, so an
+   ellipsis takes away the thing the row exists for. `anywhere` is what holds a
+   single long path with no spaces in it inside the column. */
+.armada-refusals__detail {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-default);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A refusal whose `called` row is not in the transcript. Sans and subtle,
+   because it is a sentence about an absence and not a command — set in mono
+   beside the rows above it, it would read as something to run. */
+.armada-refusals__unrecorded {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-subtle);
+  min-width: 0;
+  text-wrap: pretty;
+}
+
+/* The harness's own wording, on the rare refusal that carried one. Under the
+   command and in the command's column, because it is about that command; sans,
+   because it is prose the harness wrote. */
+.armada-refusals__because {
+  grid-column: 2;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  min-width: 0;
+  text-wrap: pretty;
+}
+
+/* That the list is shorter than what happened. A size and not a warning, so it
+   reads at metadata contrast under the rows rather than as a second finding
+   above them. */
+.armada-refusals__note {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}

@@ -146,3 +146,7 @@
 /* What Fleet's last read of `armada.yml` came to. Appended, per the rule at the
    head of this file. */
 @import "./compositions/ManifestNotice/ManifestNotice.css";
+
+/* What a job reached for and was refused. Appended, per the rule at the head of
+   this file. */
+@import "./compositions/Refusals/Refusals.css";

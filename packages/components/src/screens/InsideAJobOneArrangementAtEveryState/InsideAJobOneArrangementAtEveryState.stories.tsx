@@ -3,11 +3,13 @@ import { expect } from "storybook/test";
 import { Button } from "../../primitives/Button/Button";
 import { ActivityLog } from "../../compositions/ActivityLog/ActivityLog";
 import { JobResources } from "../../compositions/JobResources/JobResources";
+import { Refusals } from "../../compositions/Refusals/Refusals";
 import { InsideAJob } from "./InsideAJobOneArrangementAtEveryState";
 import {
   BRIEF,
   CHAPTERS,
   ESCALATED_HEADING,
+  escalatedHeading,
   EXAMINED_WEDGED,
   EXAMINED_WORKING,
   FAILED_HEADING,
@@ -428,6 +430,113 @@ export const OutOfAttempts: Story = {
               </div>
             </div>
           ),
+        }}
+      />
+    </div>
+  ),
+};
+
+/**
+ * **Blocked by policy — and now the screen says what by.** The report this
+ * story exists for: *"It says it's blocked by policy but there are no details
+ * anywhere on what the hell blocked it. I can't review anything. It's telling
+ * me I need to unblock but — what am I unblocking it from?"*
+ *
+ * The badge, the trigger and the acts were all here already. What was not was
+ * the command each refusal was on: the tool is on one transcript row and the
+ * command is on the next, joined by a call id that nothing joined, so the only
+ * way to answer the question was to open the transcript and do it by hand.
+ *
+ * **Three things to read against the drawing.** The commands share one left
+ * edge however wide the tool names are; the same command refused three times is
+ * three rows, because a Drone that did not learn is the most diagnostic thing
+ * here; and the note under the list says the list is short, so nobody widens an
+ * allowlist for the eight they can see and thinks they are done.
+ */
+export const BlockedByPolicy: Story = {
+  render: () => (
+    <div className="armada-screen">
+      <InsideAJob
+        heading={{ ...escalatedHeading("blocked_by_policy"), actions: JOB_ACTS }}
+        run={RUN_STOPPED}
+        runElapsed="9m 12s"
+        machine={
+          <JobResources
+            reading={HOLDS_IDLE}
+            age="6s"
+            examined={null}
+            onExamine={nothingPressedYet}
+          />
+        }
+        where={WHERE}
+        brief={BRIEF}
+        step={{
+          label: "Regression check",
+          fields: [
+            { label: "Held for", value: "3m 02s", mono: true },
+            { label: "Attempt", value: "1", mono: true },
+            { label: "Drone", value: "alive, idle" },
+          ],
+          acts: (
+            <>
+              <Button variant="secondary">Restart step</Button>
+              <Button variant="primary">Redirect</Button>
+            </>
+          ),
+          notice: {
+            tone: "stopped",
+            title: "blocked by policy · stopped at Regression check",
+            children: (
+              <>
+                <Refusals
+                  said="What this job reached for and was refused:"
+                  note="showing 8 of 31 refused calls"
+                  refused={[
+                    { tool: "Bash", detail: "cargo nextest run --package ipc 2>&1 | tail -80" },
+                    { tool: "Bash", detail: "cargo nextest run --package ipc" },
+                    { tool: "Bash", detail: "cargo nextest run --package ipc 2>&1 | tail -80" },
+                    {
+                      tool: "Bash",
+                      detail: "mkdir -p xtask/src/rules_tests",
+                    },
+                    { tool: "Write", detail: "xtask/src/rules_tests/refused.rs" },
+                    {
+                      tool: "WebFetch",
+                      detail: "https://docs.rs/tokio/latest/tokio/sync/struct.Mutex.html",
+                    },
+                    {
+                      tool: "Bash",
+                      detail:
+                        "cat <<'EOF' > xtask/src/rules_tests/refused.rs " +
+                        "use std::path::Path; use crate::Report; pub fn every_refusal_names_its_command" +
+                        "(root: &Path) -> Report { let mut report = Repo",
+                    },
+                    { tool: "Bash", detail: "" },
+                  ]}
+                />
+                <div>
+                  The drone is holding at this step. Nothing advances until you decide what happens
+                  next.
+                </div>
+                <div>
+                  Restart is not offered while the drone is alive: a restart throws that session
+                  away.
+                </div>
+              </>
+            ),
+          },
+          phases: {
+            note: "Nothing was submitted, so no gate has been asked anything. The drone stopped reaching for what it needed.",
+            stages: [
+              { id: "instructed", label: "Instructed", state: "cleared" },
+              { id: "working", label: "Working", state: "current" },
+              { id: "submitted", label: "Submitted", state: "ahead" },
+              { id: "checks", label: "Checks", kind: "checks", state: "ahead", stands: "not reached" },
+              { id: "judge", label: "Judge · 2 criteria", kind: "judge", state: "ahead", stands: "not reached" },
+              { id: "you", label: "You", kind: "human", state: "waiting", stands: "waiting · 3m 02s" },
+            ],
+          },
+          chapters: CHAPTERS,
         }}
       />
     </div>
