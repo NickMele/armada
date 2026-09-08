@@ -453,7 +453,13 @@ it("does not fetch the patch again when the stream drops events under a live soc
   await published.until(
     (state) => state.connection.state === "connected" && state.connection.cursor === 9,
   );
-  await published.until(() => fleet.read(SCREEN.resources) === 2);
+  // **Both counters, because the two re-fetches are independent requests.**
+  // Waiting on `resources` alone proved nothing about `detail`, and this
+  // assertion failed three runs in three when the file ran alone — a test
+  // synchronised on one thing and asserting another. #507.
+  await published.until(
+    () => fleet.read(SCREEN.detail) === 2 && fleet.read(SCREEN.resources) === 2,
+  );
   expect(fleet.read(SCREEN.detail)).toBe(2);
   expect(fleet.read(SCREEN.evidence)).toBe(1);
   expect(fleet.read(SCREEN.diff)).toBe(1);
