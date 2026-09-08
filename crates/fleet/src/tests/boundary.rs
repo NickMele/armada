@@ -285,7 +285,8 @@ async fn the_last_thing_a_drone_said_survives_the_reader_being_behind() {
         Ending::of(&watching.events()),
         Ending::Reported {
             refusals: 2,
-            called_something: true
+            called_something: true,
+            reached_after_refusal: true
         },
         "the whole run folds, including the terminating event that was still \
          in the pipe"
@@ -333,7 +334,8 @@ async fn the_drain_gives_up_on_a_pipe_a_surviving_tool_still_holds() {
         Ending::of(&watching.events()),
         Ending::Reported {
             refusals: 2,
-            called_something: true
+            called_something: true,
+            reached_after_refusal: true
         },
         "everything the Drone itself wrote is still read — the bound gives up \
          a wait, not a transcript"
@@ -386,7 +388,8 @@ async fn a_drone_whose_tool_outlives_it_dies_with_it_at_the_step_boundary() {
         stood_down.ending,
         Ending::Reported {
             refusals: 2,
-            called_something: true
+            called_something: true,
+            reached_after_refusal: true
         },
         "and what the Drone said before it went was read, not traded for the \
          bound"

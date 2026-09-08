@@ -144,11 +144,24 @@ fn a_drone_that_ends_having_called_nothing() -> FakeHarness {
         .reading("ENDED", vec![ended(0)])
 }
 
-/// The same, having been refused every call it made.
+/// The same, still being refused when it stopped.
+///
+/// **The refusal is on the stream and not only in the count**, which is what
+/// makes this `blocked_by_policy` — a run whose last reach got through is a
+/// run the allowlist did not end, whatever its total says.
 fn a_drone_that_ends_refused() -> FakeHarness {
-    FakeHarness::running("/bin/sh", &["-c", "echo CALLED; echo ENDED; sleep 30"])
-        .reading("CALLED", vec![called()])
+    FakeHarness::running("/bin/sh", &["-c", "echo REFUSED; echo ENDED; sleep 30"])
+        .reading("REFUSED", vec![called(), refused()])
         .reading("ENDED", vec![ended(3)])
+}
+
+/// The refusal that follows a call, as the transcript carries it.
+fn refused() -> DroneEvent {
+    DroneEvent::Refused {
+        tool: String::from("Read"),
+        call: String::from("a-call"),
+        because: String::from("not on the allowlist"),
+    }
 }
 
 /// The same again, with something of its own still holding the pipe — and out

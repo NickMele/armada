@@ -23,10 +23,16 @@ use crate::job::status::JobStatus;
 /// `domain/escalation-triggers.toml`, one variant each.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum EscalationTrigger {
-    /// The Drone was refused a tool or command it needed and finished having
-    /// submitted no evidence. It tried and was stopped, where
-    /// [`Silent`](Self::Silent) called nothing at all — the remedies are
-    /// opposite, so the boundary is the tool call and not the empty result.
+    /// The Drone was refused a tool or command it needed, never reached for
+    /// anything again, and finished having submitted no evidence. It tried and
+    /// was stopped, where [`Silent`](Self::Silent) called nothing at all — the
+    /// remedies are opposite, so the boundary is the tool call and not the
+    /// empty result.
+    ///
+    /// **The last refusal decides it, never a count of them.** A run refused
+    /// early and still calling tools at the end carried on past the allowlist,
+    /// so it is [`Stalled`](Self::Stalled) and widening anything is the wrong
+    /// act. `fleet::aftermath` is where that is decided.
     BlockedByPolicy,
     /// A Check hit its own bound. The Check did not fail, it did not finish, so
     /// retrying would reproduce the same hang.

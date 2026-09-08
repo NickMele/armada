@@ -204,6 +204,7 @@ async fn ending_a_drone_leaves_a_step_a_restart_can_land_on() {
     let ending = Ending::Reported {
         refusals: 0,
         called_something: true,
+        reached_after_refusal: true,
     };
     assert_eq!(
         aftermath(run.job.status(), &ending, Left::Nothing),
