@@ -502,8 +502,10 @@ async fn a_step_sent_back_twice_files_each_pass_apart_from_the_last() {
             .iter()
             .map(|run| run.outcome.as_wire())
             .collect::<Vec<_>>(),
-        vec!["awaiting_human", "awaiting_human", "running"],
-        "the two a person ended say so, and the one still being reviewed is open"
+        vec!["awaiting_human", "awaiting_human", "awaiting_human"],
+        "all three ended at the gate, including the one being read now: `#522` \
+         gave the gate a state, so the run the gate closed is closed on the \
+         wire too rather than drawn as a Drone still at work"
     );
     assert!(
         drawn.verdicts.is_empty(),

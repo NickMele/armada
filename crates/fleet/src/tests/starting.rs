@@ -240,8 +240,9 @@ async fn an_approval_over_a_reclaimed_worktree_refuses_at_the_press() {
     assert_eq!(
         held.step(&core_model::StepId::new("implement".to_string()))
             .map(|step| step.state()),
-        Some(core_model::StepState::Running),
-        "the step did not advance either — the refusal is before every move"
+        Some(core_model::StepState::AwaitingHuman),
+        "the step did not advance either — it is still held at the gate, and \
+         the refusal is before every move"
     );
 }
 

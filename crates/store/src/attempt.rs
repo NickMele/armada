@@ -262,13 +262,18 @@ pub(crate) fn iteration_now(
 /// never `at`, which is injected and may repeat — a pass boundary read off
 /// timestamps could put a run on the wrong side of it.
 ///
-/// **Both of the loop's edges open a pass**, which is the whole of why the
-/// inner query names two `state_from` values. `advanced -> running` is a
-/// verdict routed back to this step and `running -> running` is the loop
-/// coming round to the step that emitted it; each is a re-entry as designed,
-/// and `retry_count`'s registry row gives a re-entry as designed a fresh
-/// budget. `retrying -> running` and `stopped -> running` are inside a pass —
-/// a failure answered and a person restarting — and must not reset it.
+/// **Every edge that opens a pass resets it**, which is the whole of why the
+/// inner query names three `state_from` values. `advanced -> running` is a
+/// verdict routed back to this step, `running -> running` is the loop coming
+/// round to the step that emitted it, and `awaiting_human -> running` is a
+/// person at that step's gate asking for another pass; each is a re-entry as
+/// designed, and `retry_count`'s registry row gives a re-entry as designed a
+/// fresh budget. `retrying -> running` and `stopped -> running` are inside a
+/// pass — a failure answered and a person restarting — and must not reset it.
+///
+/// **The third keeps a review budget out of a retry budget** (`#522`): rounds
+/// of review are bounded by `iteration_cap` and by nothing else, and a set left
+/// at two would have made each one spend the step's `retry_limit` instead.
 ///
 /// `coalesce(max(seq), 0)` is the linear case written once: a step no loop has
 /// touched has no boundary, so every entry into `running` is inside its one
@@ -287,7 +292,7 @@ pub(crate) fn spent_now(
                    (SELECT max(seq) FROM job_events
                     WHERE job_id = ?1 AND step_id = ?2
                       AND kind = 'step_transition'
-                      AND state_from IN ('advanced', 'running')
+                      AND state_from IN ('advanced', 'running', 'awaiting_human')
                       AND state_to = 'running'), 0)",
             (job_id.as_str(), step_id.as_str()),
             |row| row.get(0),

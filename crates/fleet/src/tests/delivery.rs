@@ -363,14 +363,18 @@ async fn the_pull_request_body_is_assembled_from_what_was_checked() {
         body.contains("- `src/log.rs` — modified"),
         "and the outcome section is what the record can prove it changed: {body}"
     );
-    // **The delivering step has no verdict yet, and the body says so.** The
-    // branch goes out as that step is entered, which is what puts it in front
-    // of the person whose gate it then holds at — so the row for it reads as
-    // running rather than advanced, and that is the truth about the moment the
-    // pull request was opened.
+    // **The delivering step has no verdict yet, and the body says so in the
+    // present tense.** The branch goes out as that step is entered, which is
+    // what puts it in front of the person whose gate it then holds at — so the
+    // row for it reads as being worked rather than advanced. "was still
+    // running" is what it said until `#522` read the sentence against the
+    // moment `#520` had moved it to: a post-mortem verb on the one step a
+    // reviewer is being asked to read.
     assert!(
         body.contains("**Implement** — advanced")
-            && body.contains("**Summarise** — was still running"),
+            && body.contains(
+                "**Summarise** — is being worked — the branch went out as it was entered"
+            ),
         "every step with its verdict: {body}"
     );
     assert!(

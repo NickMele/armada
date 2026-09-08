@@ -66,7 +66,7 @@ mode = "Waited on"
 who_is_acting = "Person"
 drone_process = "None"
 step_machine = "Initialised at creation. Frozen where it stood on a re-approval"
-step_states = ["advanced", "not_started", "retrying", "running", "stopped"]
+step_states = ["advanced", "awaiting_human", "not_started", "retrying", "running", "stopped"]
 reason_storage = "None"
 reason_vocabulary = "None"
 transitions_in = ["queued -> awaiting_approval", "running -> awaiting_approval"]
@@ -82,7 +82,7 @@ mode = "Waited on"
 who_is_acting = "Person"
 drone_process = "None"
 step_machine = "Frozen, final step advanced"
-step_states = ["advanced", "not_started", "retrying", "running", "stopped"]
+step_states = ["advanced", "awaiting_human", "not_started", "retrying", "running", "stopped"]
 reason_storage = "Stored"
 reason_vocabulary = "The criterion_ids owed — a reference, not an enum"
 transitions_in = ["running -> awaiting_attestation", "awaiting_review -> awaiting_attestation"]
@@ -97,7 +97,7 @@ mode = "Waited on"
 who_is_acting = "Person"
 drone_process = "None. The retry budget is spent, and what is left is a person's to answer — so the session ends and the working slot goes back, exactly as at `awaiting_review`. Clock suspended, for that row's reason"
 step_machine = "Frozen at the step whose budget was spent. That step is `stopped` and carries `failed(gate_failure)`, which is what it carried when this landed at `completed_failed` instead"
-step_states = ["advanced", "not_started", "retrying", "stopped"]
+step_states = ["advanced", "awaiting_human", "not_started", "retrying", "stopped"]
 reason_storage = "None"
 reason_vocabulary = "None"
 transitions_in = ["running -> awaiting_repair"]
@@ -110,7 +110,7 @@ A step spent its gate-failure retry budget and the work is unfinished. **The Job
 
 **The redirect is absent too, and that is this row's own correction.** #208 kept the Drone alive so an instruction would cost no respawn, which kept the working slot for as long as a person took to read the failure — the trade `awaiting_review` made and gave up on 30 Aug 2026, after one Job held the only slot from 13:42 to 18:38 while somebody read it. A repair a person may take a day over is that wait wearing another name, so the session ends, `awaiting_repair -> running` is gone rather than left unfired, and every road out goes through the queue.
 
-**The narrow `step_states` is the guard, not a row nobody looked at.** `running -> awaiting_repair` is guarded on `no_step_running` — #179's guard, carried across from the edge it used to sit on — so the step is stopped before the Job moves and `running` cannot arrive. `awaiting_human` is a state nothing writes yet.
+**The narrow `step_states` is the guard, not a row nobody looked at.** `running -> awaiting_repair` is guarded on `no_step_running` — #179's guard, carried across from the edge it used to sit on — so the step is stopped before the Job moves and `running` cannot arrive. `awaiting_human` does arrive: the guard admits it, because a step held at a human gate is not one being worked.
 """
 why = "It joins the `awaiting_*` family because it carries that family's pair — waited on, by a person — and because it says what is owed rather than what went wrong. `stalled` was taken by a Drone gone silent and `stopped` is the step-level word."
 
@@ -143,7 +143,7 @@ mode = "N/A"
 who_is_acting = "None"
 drone_process = "None"
 step_machine = "Frozen at the failed step"
-step_states = ["advanced", "not_started", "retrying", "running", "stopped"]
+step_states = ["advanced", "awaiting_human", "not_started", "retrying", "running", "stopped"]
 reason_storage = "None"
 reason_vocabulary = "None"
 transitions_in = ["awaiting_repair -> completed_failed", "escalated -> completed_failed", "awaiting_attestation -> completed_failed"]
@@ -164,7 +164,9 @@ in_code = "Not yet"
 notes = """
 Last step advanced, every criterion verified. The status is immutable once reached: a merge that later breaks main produces a new Job — a revert or a fix — linked back through `subject`, rather than reopening this one.
 
-Armada does not watch what happens after a merge. Under `auto_merge: never`, a person merges and nothing observes, so a person raises any problem found later.
+**A Job no longer arrives here the moment its last step advances.** Where that step is gated `human_always` — which is every workflow that delivers, on `handoff` — the gate opens first: the Job holds at `awaiting_review` with the step at `awaiting_human`, the pull request is already open, and `completed_success` is reached only when a person answers. `running -> completed_success` is still walked, by a workflow whose last step is auto-gated, and those are exactly the workflows that send nothing out. #522.
+
+Armada does not watch what happens after a merge, and the decision to merge stays a person's: `auto_merge` says what Fleet may carry out on its own, and under `never` nothing merges until a person asks for it. A merge asked of Fleet is Fleet's own act; a merge made on the forge is found on a later sweep. Either way nothing observes what a merge does afterwards, so a person raises any problem found later.
 """
 why = "The record only needs to make raising a problem possible; detecting one automatically is out of scope. See Fleet."
 
@@ -174,7 +176,7 @@ mode = "Waited on"
 who_is_acting = "Person"
 drone_process = "Alive and idle where the step stopped mid-work, which is where escalation usually happens. None at a boundary, or where no step is running"
 step_machine = "Frozen where the step stood — stopped where retries were spent, and running only while a Drone is still on it and still working. The poke ladder leaves the step running because that reading is true: the Drone is there and idle, and a redirect reaches it. The moment the process goes the reading stops being true, so both acts that take one away stop the step in the same breath — `kill_drone` under `drone_killed`, and Fleet's own reap of a Drone whose run has ended under `run_ended`. A step nothing owns and nothing can restart is not a state this row sanctions"
-step_states = ["advanced", "not_started", "retrying", "running", "stopped"]
+step_states = ["advanced", "awaiting_human", "not_started", "retrying", "running", "stopped"]
 reason_storage = "Stored"
 reason_vocabulary = "The escalation trigger enum, which Workflow owns"
 transitions_in = ["queued -> escalated", "running -> escalated", "awaiting_review -> escalated"]
@@ -189,7 +191,7 @@ mode = "N/A"
 who_is_acting = "None"
 drone_process = "Terminated"
 step_machine = "Frozen where it stood"
-step_states = ["advanced", "not_started", "retrying", "running", "stopped"]
+step_states = ["advanced", "awaiting_human", "not_started", "retrying", "running", "stopped"]
 reason_storage = "None"
 reason_vocabulary = "None"
 transitions_in = ["awaiting_approval -> killed", "queued -> killed", "running -> killed", "awaiting_review -> killed", "awaiting_repair -> killed", "escalated -> killed", "piloted -> killed", "awaiting_attestation -> killed"]
@@ -202,7 +204,7 @@ mode = "Working"
 who_is_acting = "Person"
 drone_process = "Terminated. Parked under Assist"
 step_machine = "Frozen where the Drone left it"
-step_states = ["advanced", "not_started", "retrying", "running", "stopped"]
+step_states = ["advanced", "awaiting_human", "not_started", "retrying", "running", "stopped"]
 reason_storage = "Stored"
 reason_vocabulary = "take_over / restart_step / assist"
 transitions_in = ["running -> piloted", "awaiting_review -> piloted", "awaiting_repair -> piloted", "escalated -> piloted", "awaiting_attestation -> piloted"]
@@ -217,7 +219,7 @@ mode = "Waited on"
 who_is_acting = "Drone"
 drone_process = "None"
 step_machine = "Initialised at creation. Frozen where it stood on a re-approval"
-step_states = ["advanced", "not_started", "retrying", "running", "stopped"]
+step_states = ["advanced", "awaiting_human", "not_started", "retrying", "running", "stopped"]
 reason_storage = "Derived"
 reason_vocabulary = "blocked_by_dependency / over_budget / waiting_on_resources / none"
 transitions_in = ["awaiting_approval -> queued", "awaiting_review -> queued", "awaiting_repair -> queued", "escalated -> queued", "running -> queued"]
@@ -231,7 +233,7 @@ mode = "N/A"
 who_is_acting = "None"
 drone_process = "None"
 step_machine = "Frozen at the gate step"
-step_states = ["advanced", "not_started", "retrying", "running", "stopped"]
+step_states = ["advanced", "awaiting_human", "not_started", "retrying", "running", "stopped"]
 reason_storage = "None"
 reason_vocabulary = "None"
 transitions_in = ["awaiting_approval -> rejected", "awaiting_review -> rejected"]
@@ -244,7 +246,7 @@ mode = "Working"
 who_is_acting = "Drone"
 drone_process = "Alive, working — except between one step's Drone ending and the next one's starting"
 step_machine = "Live, advancing"
-step_states = ["advanced", "not_started", "retrying", "running", "stopped"]
+step_states = ["advanced", "awaiting_human", "not_started", "retrying", "running", "stopped"]
 reason_storage = "None"
 reason_vocabulary = "None"
 transitions_in = ["queued -> running", "awaiting_review -> running", "escalated -> running", "piloted -> running"]
@@ -258,7 +260,7 @@ mode = "N/A"
 who_is_acting = "None"
 drone_process = "Terminated"
 step_machine = "Frozen, and no longer describes the work"
-step_states = ["advanced", "not_started", "retrying", "running", "stopped"]
+step_states = ["advanced", "awaiting_human", "not_started", "retrying", "running", "stopped"]
 reason_storage = "None"
 reason_vocabulary = "None"
 transitions_in = ["piloted -> superseded"]

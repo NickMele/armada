@@ -44,7 +44,9 @@ pub enum JobStatus {
     AwaitingRepair,
     /// A human advance gate is open. The work passed the step's machine gates,
     /// which is what ends a Drone, so the gate holds none — the worktree is
-    /// kept and the liveness clock is suspended.
+    /// kept and the liveness clock is suspended. The step it is open on holds
+    /// at [`StepState::AwaitingHuman`], and the Job cannot reach
+    /// [`CompletedSuccess`](Self::CompletedSuccess) while it does.
     AwaitingReview,
     /// Terminal. A person accepting the failure as the outcome, from
     /// [`Escalated`](Self::Escalated) or [`AwaitingRepair`](Self::AwaitingRepair),
@@ -53,6 +55,13 @@ pub enum JobStatus {
     CompletedFailed,
     /// Terminal. Last step advanced, every criterion verified. Immutable once
     /// reached: a merge that later breaks main produces a new Job.
+    ///
+    /// **Not reached the moment the last step advances, where that step's gate
+    /// is a person.** Every edge in is guarded on `every_step_advanced`, and a
+    /// step at an open human gate is [`StepState::AwaitingHuman`] rather than
+    /// advanced — so a Job on a workflow that ends at `handoff` stands at
+    /// [`AwaitingReview`](Self::AwaitingReview) with its pull request open
+    /// until somebody answers.
     CompletedSuccess,
     /// Fleet paused the Job and a person must decide. The Drone is alive and
     /// idle, and the worktree and port span are held as-is. The reason is an
@@ -216,7 +225,9 @@ const NOT_UNDER_A_SPENT_BUDGET: &[JobStatus] = &[
 pub enum StepState {
     /// The step passed its advance gate.
     Advanced,
-    /// The step's advance gate is a human gate, and it is open.
+    /// The step's advance gate is a human gate, and it is open. The Drone that
+    /// reached it has been stood down, so a step here is waiting on a person
+    /// and on nothing mechanical.
     AwaitingHuman,
     /// Written at Job creation for every step of the frozen WorkflowDef.
     NotStarted,
@@ -280,13 +291,15 @@ impl StepState {
     /// beneath it (#208, carrying #179's guard across from the edge that used
     /// to end the Job).
     ///
-    /// `awaiting_human` is the narrowest answer and the one state nothing
-    /// reaches: it has no [`StepTarget`](crate::StepTarget), so it is where its
-    /// design puts it rather than where a walk found it.
+    /// **`awaiting_human` answered with one status until `#522` gave it a
+    /// [`StepTarget`](crate::StepTarget)**: the arm said where its design put
+    /// it rather than where a walk found it. It is now as wide as the rest bar
+    /// `completed_success`, which is the whole point of reaching it — a Job
+    /// whose last step is a human gate cannot end while the gate is open.
     pub fn seen_under(&self) -> &'static [JobStatus] {
         match self {
             StepState::Advanced => JobStatus::ALL,
-            StepState::AwaitingHuman => &[JobStatus::AwaitingReview],
+            StepState::AwaitingHuman => NOT_UNDER_COMPLETED_SUCCESS,
             StepState::NotStarted => NOT_UNDER_COMPLETED_SUCCESS,
             StepState::Retrying => NOT_UNDER_COMPLETED_SUCCESS,
             StepState::Running => NOT_UNDER_A_SPENT_BUDGET,

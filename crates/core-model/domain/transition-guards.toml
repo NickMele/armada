@@ -59,7 +59,7 @@ On the one edge a gate takes when it stops the work, and on no inbound edge of `
 
 **It moved with its edge.** #208 replaced `running -> completed_failed` with `running -> awaiting_repair` — a spent retry budget is unfinished work rather than a failed Job — and the guard belongs to the moment the gate stops the work, not to the destination it used to have. `awaiting_repair` is the one status whose `step_states` narrows behind it, which is what makes the row say something a reader learns from.
 
-Everything but `running` is admitted, because the guard asserts what its name says and no more. `retrying` is passed through rather than rested in — see `step_machine` — and `awaiting_human` is a state nothing writes yet.
+Everything but `running` is admitted, because the guard asserts what its name says and no more. `retrying` is passed through rather than rested in — see `step_machine` — and `awaiting_human` crosses on its own merits: a step held at a human gate has had its Drone stood down, so it is not one being worked. #522.
 
 Defence in depth. `fleet::dispatch` stops the step before it moves the Job on every ruling that ends one, so nothing in the workspace should reach this refusal. **"Already correct at the one call site" is exactly how #179 happened**: `gate_undecided` was fixed the same way in #156, the failure path was not, and a Job's `tests` step read `running` beneath a terminal status with no verdict on it.
 """

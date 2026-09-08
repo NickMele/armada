@@ -61,8 +61,8 @@ fn a_fleet_reviewing_and_delivering_nothing(home: &TempDir, work: FakeWorkProduc
 ///
 /// The Drone submits its diff, the step's `diff_nonempty` holds, and the gate
 /// answers [`Ruling::HeldForReview`] because the step is gated `human_always`.
-/// The step is still `running` while the Job stands there, which is what lets
-/// `approve_review` advance it from the gate.
+/// The step holds at `awaiting_human` while the Job stands there, which is what
+/// `approve_review` advances from.
 pub(super) async fn at_the_gate(fleet: &Fixture, home: &TempDir) -> JobId {
     let job = fleet
         .propose(a_proposal("fix the off-by-one"))
@@ -86,8 +86,9 @@ pub(super) async fn at_the_gate(fleet: &Fixture, home: &TempDir) -> JobId {
     assert_eq!(
         held.step(&core_model::StepId::new("implement".to_string()))
             .map(|step| step.state()),
-        Some(StepState::Running),
-        "the step is what the person is standing at, not something already moved"
+        Some(StepState::AwaitingHuman),
+        "the step is what the person is standing at — held, and not a Drone at \
+         work on a step whose Drone the gate just stood down"
     );
     job.id().clone()
 }

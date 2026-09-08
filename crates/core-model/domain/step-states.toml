@@ -15,7 +15,7 @@
 # `cargo xtask verify-foundations`. Both halves had gone stale before anything
 # read either. Why nearly every state is seen beneath nearly every status is on
 # job-statuses.toml's own header: a frozen step crosses an unguarded edge
-# holding what it held. `completed_success` is absent from four of these rows
+# holding what it held. `completed_success` is absent from five of these rows
 # because every edge arriving there is guarded on `every_step_advanced`, so a
 # step in any other state cannot be carried across one. `awaiting_repair` is
 # absent from exactly one — `running` — for the mirror-image reason: its single
@@ -40,8 +40,15 @@ Reached a second way, from `stopped`, when a person overrules the gate that refu
 
 [states.awaiting_human]
 meaning = "The step's advance gate is a human gate, and it is open"
-seen_under = ["awaiting_review"]
+seen_under = ["awaiting_approval", "awaiting_attestation", "awaiting_repair", "awaiting_review", "completed_failed", "escalated", "killed", "piloted", "queued", "rejected", "running", "superseded"]
 in_code = "Not yet"
+notes = """
+This row said `awaiting_review` alone until something walked an edge into the state, and it was the narrowest claim in the file for the reason `status.rs` gave: the state had no `StepTarget`, so the row said where its design put it rather than where a walk found it. #522 gave it four edges, and the walk then answers what every wide row here answers — a frozen step crosses an unguarded edge holding what it held, so a Job killed, escalated or piloted at a human gate carries a held step across, and a person routing the work back to an earlier step leaves the gate holding while the Job goes back to `running`.
+
+**`completed_success` is the one absence and it is the guard.** Every edge arriving there is guarded on `every_step_advanced`, so a step still waiting on a person cannot be carried across one — which is the whole of what reaching this state buys: a Job whose last step is a human gate cannot end while the gate is open.
+
+**`awaiting_repair` is present, unlike `running`.** That status's one inbound edge is guarded on `no_step_running`, and a step held at a gate is not one being worked.
+"""
 
 [states.not_started]
 meaning = "Written at Job creation for every step of the frozen WorkflowDef"

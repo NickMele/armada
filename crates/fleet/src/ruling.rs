@@ -70,7 +70,8 @@ pub enum Ruling {
         judged: Vec<Judgment>,
     },
     /// Every tier the step declared held, and the step is gated `human_always`.
-    /// **The Job reaches `awaiting_review` and the step does not move.**
+    /// **The Job reaches `awaiting_review` and the step holds at
+    /// `awaiting_human`.**
     ///
     /// It is the only ruling that stops a Job without anything having gone
     /// wrong, which is why it carries no failure of any kind: the checks, the
@@ -88,11 +89,9 @@ pub enum Ruling {
     /// (`#207`), and re-queues as an approval does: the slot this gave up is
     /// very often somebody else's by the time a person answers.
     ///
-    /// The step stays `running` while the Job stands at the gate.
-    /// `ADVANCING_STATUSES` admits `awaiting_review`, so the inner machine is
-    /// still live there and `approve_review` moves the step before it moves the
-    /// Job. `step_machine`'s own comment says what rendering it as
-    /// `awaiting_human` instead would cost.
+    /// **The step holds at `awaiting_human` and no longer at `running`**
+    /// (`#522`), so the commonest halt in the fleet stops being recorded as a
+    /// Drone at work on a step this ruling had just stood one down on.
     HeldForReview {
         checks: Vec<StepCheck>,
         output: Vec<CheckOutput>,

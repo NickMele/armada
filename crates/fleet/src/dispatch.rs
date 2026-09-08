@@ -259,10 +259,12 @@ where
             // The whole of what finishing a Job is, including the commit that
             // makes its branch mergeable, is `landing`'s.
             Ruling::Finished { tell, .. } => self.finish(ruling, tell, job_id, step, working).await,
-            // The Job moves to the gate and its Drone ends there. The step
-            // stays `running` — it is what the person is standing at, and
-            // `approve_review` advances it from there while the Job is still at
-            // the gate.
+            // The Job moves to the gate and its Drone ends there. **The step
+            // moves first and holds at `awaiting_human`** — `#522`, and the
+            // order is not the freeze's doing, since the inner machine advances
+            // beneath both statuses. It is what a client watching would
+            // otherwise see: a Job at `awaiting_review` whose current step still
+            // said a Drone was working it.
             //
             // **A person's review costs no fleet time**, and that is what the
             // ending is for. The work passed the machine gates, which is what
@@ -275,14 +277,12 @@ where
             // **The cost is that `request_changes` cannot inject anything.**
             // There is no Drone to give the note to, so `#207` gives it
             // somewhere to wait: the note goes onto the Job and the Drone
-            // re-admission puts back on the step opens with it. Nothing here
-            // softens the ending, because a Drone kept alive for that one path
-            // would keep the slot for it too.
-            //
-            // The Job moves first, so the departure is published over a record
-            // that already says where the Job stands.
+            // re-admission puts back on the step opens with it.
             Ruling::HeldForReview { .. } => {
                 let job = self.load(job_id).await?;
+                let job = self
+                    .move_step(&job, step, StepTarget::HeldForReview)
+                    .await?;
                 self.applied(&job, ruling).await?;
                 self.stood_down(job_id, working).await?;
                 Ok(())
@@ -671,12 +671,19 @@ where
     ///
     /// **One place asks it, because a forward walk cannot tell by looking.**
     /// Every step of every linear workflow is entered as
-    /// [`StepTarget::Running`]; a step a loop has come round to is already
-    /// `running`, because a return leaves the emitting step there, and entering
-    /// it again is [`StepTarget::Revisited`]. The two walk different edges and
-    /// the machine refuses each in the other's place, so a call site choosing
-    /// by hand is a call site that can be wrong — and the three that walk
-    /// forward would each have had to choose.
+    /// [`StepTarget::Running`]; a step a loop has come round to has not been
+    /// dispatched into, because a return leaves the emitting step where it
+    /// stood, and entering it again is [`StepTarget::Revisited`]. The two walk
+    /// different edges and the machine refuses each in the other's place, so a
+    /// call site choosing by hand is a call site that can be wrong — and the
+    /// three that walk forward would each have had to choose.
+    ///
+    /// **Two states answer `Revisited` and they are the same fact.** A verdict
+    /// is routed back from a step's advance gate, so the emitter is `running`
+    /// where the routing was mechanical and `awaiting_human` where a person at
+    /// the gate asked for it. Reading only the first is what left the loop's
+    /// second pass one move short of the gate that asked for it, one state
+    /// along.
     ///
     /// **It never invents a return.** A step that has `advanced` answers
     /// [`StepTarget::Running`] here and the machine refuses it, which is
@@ -684,7 +691,7 @@ where
     /// return needs the step that routed it, and this cannot see one.
     pub(crate) fn entering(&self, job: &Job, step: &StepId) -> StepTarget {
         match job.step(step).map(|row| row.state()) {
-            Some(StepState::Running) => StepTarget::Revisited,
+            Some(StepState::Running | StepState::AwaitingHuman) => StepTarget::Revisited,
             _ => StepTarget::Running,
         }
     }
@@ -700,12 +707,11 @@ where
     /// Fleet overruled itself.
     ///
     /// **`crate::reviewing` is the other caller, and the actor is what tells
-    /// its row from the loop's.** Both walk `running -> running` as
-    /// [`StepTarget::Revisited`] and neither carries a payload; Fleet on that
-    /// row is a loop coming round to the step that emitted the verdict, and a
-    /// person on it is a person sending the work back to the step they were
-    /// standing at. Nothing else on the row distinguishes them, so nothing else
-    /// had to be added to make it.
+    /// its row from the loop's.** Both reach [`StepTarget::Revisited`] and
+    /// neither carries a payload; Fleet on that row is a loop coming round to
+    /// the step that emitted the verdict, and a person on it is a person
+    /// sending the work back to the step they were standing at. Nothing else on
+    /// the row distinguishes them, so nothing else had to be added to make it.
     pub(crate) async fn move_step_by(
         &self,
         job: &Job,

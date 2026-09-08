@@ -102,7 +102,7 @@ to = "completed_success"
 on = "approve on the final gate"
 guard = "every_step_advanced"
 in_code = "Not yet"
-notes = "The step at a human gate stays `running`, so approving advances it and then moves the Job. The guard is why that order is the only one: the inner machine freezes the moment the Job leaves the gate."
+notes = "The step at a human gate holds at `awaiting_human`, so approving advances it and then moves the Job. The guard is why that order is the only one, and why this edge cannot be taken around the person: `every_step_advanced` admits `advanced` alone, and the inner machine freezes the moment the Job leaves the gate. #522."
 
 [[transitions]]
 from = "awaiting_review"

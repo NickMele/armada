@@ -317,14 +317,13 @@ fn a_step_state_column_this_build_cannot_spell_is_refused() {
     }
 }
 
-/// The one state M1 cannot reach has no `StepTarget`, so a logged move into it
-/// is a machine this build does not have. Refused, never folded as something
-/// else.
+/// A state no `StepTarget` arrives at is a machine this build does not have.
+/// Refused, never folded as something else.
 ///
-/// `retrying` was the second until it had a budget to be inside. It now has a
-/// target and two edges, and the row below is what a hand-back writes — which
-/// is why this one is `awaiting_human`, still unreachable because a step at a
-/// human gate stays `running`.
+/// **This row said `awaiting_human` until `#522`**, and `retrying` before that.
+/// Both have targets now, so what is left is the one state that is written at
+/// creation and is not a destination: `not_started` spells a `StepState`, so the
+/// column reads back, and `arriving_at` still answers with nothing.
 #[test]
 fn a_logged_step_state_nothing_reaches_is_named_rather_than_folded() {
     let dir = TempDir::new();
@@ -337,7 +336,7 @@ fn a_logged_step_state_nothing_reaches_is_named_rather_than_folded() {
                  step_id, state_from, state_to, actor, at
              ) VALUES ('step_transition', '01ATTHEGATE', 'awaiting_approval',
                  'awaiting_approval', 'unqualified', NULL, 'fix', 'not_started',
-                 'awaiting_human', 'fleet', '2026-08-26T10:00:00.000Z')",
+                 'not_started', 'fleet', '2026-08-26T10:00:00.000Z')",
             [],
         )
         .expect("a machine that does not exist, writing");
@@ -349,7 +348,7 @@ fn a_logged_step_state_nothing_reaches_is_named_rather_than_folded() {
             ..
         })) => {
             assert_eq!(step_id.as_str(), "fix");
-            assert_eq!(state, StepState::AwaitingHuman);
+            assert_eq!(state, StepState::NotStarted);
         }
         other => panic!("expected a refusal, found {other:?}"),
     }

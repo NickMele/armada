@@ -90,10 +90,9 @@ impl StepAttempt {
     /// three passes and this served one — the same half of the same defect,
     /// one layer out.
     ///
-    /// **The run it closes reads `awaiting_human`.** It ended because a person
-    /// was standing at the step and answered, which is what that state says and
-    /// the one state nothing else here produces; `running` with an end on it
-    /// would say nothing, and `advanced` would say it passed.
+    /// **The run it closes reads `awaiting_human`, which the log now says for
+    /// itself** since `#522`: the ordinary arm below closes the run on the
+    /// recorded move, and this one is the self-edge's alone.
     pub fn over<'a>(moves: impl Iterator<Item = Move<'a>>) -> Vec<StepAttempt> {
         let running = StepState::from(core_model::StepState::Running);
         let held = StepState::from(core_model::StepState::AwaitingHuman);

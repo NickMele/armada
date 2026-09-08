@@ -437,6 +437,8 @@ The full transition table — every legal edge, its trigger and its guard — is
 
 **Materialising the rows at creation is what makes the freeze structural.** A WorkflowDef edited in the repo mid-Job cannot reach a Job already running against it, because the Job runs against its rows.
 
+**A step at an open human gate is `awaiting_human`, not `running`.** It is the one state that waits on a person rather than on a machine: the Drone was stood down when the gate opened, so a row reading `running` there claimed work nobody was doing. It is also what keeps the Job at the gate — every edge into `completed_success` is guarded on every step having advanced, and a held step has not. Rounds of review are bounded by the step's `iteration_cap` and never by its retry budget; nothing bounds how long the gate may stand open.
+
 The full set of step states is in `crates/core-model/domain/step-states.toml`. The columns of `job_steps` are part of the Job schema in `crates/core-model/domain/job-fields.toml`.
 
 **No [Convoy](convoy.md) shape here.** The rows are keyed per step, not per Workspace. A Convoy's shared `retry_count` and single combined approval gate are unaffected, consistent with Convoy recording that no `workflow_status` change is needed. Nothing in this map reads `write_targets` or `atomic`.

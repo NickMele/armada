@@ -5,7 +5,7 @@
 //! answers nothing, or is refused. The real thing git does with an index is
 //! asserted in `adapters`, against a repository.
 
-use core_model::{JobStatus, Timestamp};
+use core_model::{JobStatus, StepState, Timestamp};
 use testkit::{Delivered, FakeVcs, FakeWorkProduct};
 
 use api::Journal;
@@ -15,8 +15,8 @@ use crate::gate::Ruling;
 use crate::journal::JobLogs;
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
-    a_fleet_committing_through, a_fleet_delivering_nothing, a_proposal, diff_evidence,
-    note_evidence, worktree_directory,
+    a_fleet_committing_through, a_fleet_delivering_nothing, a_fleet_gated_on_a_person, a_proposal,
+    diff_evidence, note_evidence, worktree_directory,
 };
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
@@ -298,5 +298,90 @@ async fn a_refused_commit_still_completes_the_job_and_says_so() {
         line.msg.contains("stays in the worktree"),
         "and says where the work is: {}",
         line.msg
+    );
+}
+
+/// **The whole of `#522`.** A Job whose *last* step is a human gate does not end
+/// when that step's tiers hold. It stands at `awaiting_review` holding a step
+/// that is `awaiting_human`, the pull request is already open — delivery is on
+/// the entry to that step, `#520` — and `completed_success` is refused by the
+/// machine until a person answers.
+///
+/// **The refusal is the guard and not this file's arithmetic.**
+/// `every_step_advanced` admits `advanced` alone, so the status a person's
+/// approval is needed for cannot be reached around them. Before this, the step
+/// at the gate read `running`, which the same guard also refused — what changed
+/// is that the record now says *why* it is not advanced.
+#[tokio::test]
+async fn a_job_whose_last_step_is_a_gate_cannot_end_until_a_person_answers() {
+    let home = TempDir::new();
+    let fleet = a_fleet_gated_on_a_person(
+        &home,
+        FakeWorkProduct::changed(&["src/log.rs"]),
+        "summarise",
+        FakeVcs::new(),
+    );
+    let job = fleet
+        .propose(a_proposal("fix the off-by-one in the log reader"))
+        .await
+        .expect("a Job at the approval gate");
+    let job_id = job.id().clone();
+    worktree_directory(&home, &job_id);
+    dispatched(&fleet, &job_id).await.expect("it dispatches");
+
+    // The first step is auto-gated, so the machine walks it and the turn puts a
+    // Drone on the last one.
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
+    fleet.turn().await.expect("the first gate runs");
+    submitted_by_the_one(&fleet, note_evidence()).await.unwrap();
+    let turned = fleet.turn().await.expect("the last gate runs");
+    assert!(
+        matches!(turned.ruled(), Some(Ruling::HeldForReview { .. })),
+        "the last step is a person's: {:?}",
+        turned.ruled()
+    );
+
+    let held = fleet.load(&job_id).await.expect("the Job is there");
+    let last = core_model::StepId::new("summarise".to_string());
+    assert_eq!(
+        held.status(),
+        JobStatus::AwaitingReview,
+        "the last step's tiers holding is not the Job finishing"
+    );
+    assert_eq!(
+        held.step(&last).map(|step| step.state()),
+        Some(StepState::AwaitingHuman),
+        "and the step says what it is waiting for"
+    );
+    let refused = held
+        .transition(
+            core_model::Target::CompletedSuccess,
+            core_model::Actor::Fleet,
+            fleet.now(),
+        )
+        .expect_err("a Job holding at a human gate cannot be completed around it");
+    assert!(
+        matches!(
+            refused,
+            core_model::IllegalTransition::GuardRefused {
+                holding: StepState::AwaitingHuman,
+                ..
+            }
+        ),
+        "and the guard names the step that is holding: {refused:?}"
+    );
+
+    let done = fleet
+        .approve_review(&job_id)
+        .await
+        .expect("the work is taken");
+    assert_eq!(
+        done.status(),
+        JobStatus::CompletedSuccess,
+        "a person answering is what ends it, and nothing else could"
+    );
+    assert_eq!(
+        done.step(&last).map(|step| step.state()),
+        Some(StepState::Advanced)
     );
 }

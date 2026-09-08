@@ -92,6 +92,13 @@ fn every_edge_in_the_table_is_admitted() {
                 &first(),
                 StepTarget::Advanced,
             ),
+            // Two moves past the start, and the only way to stand here: the
+            // gate opened on a step that was being worked.
+            StepState::AwaitingHuman => step(
+                &step(&running(), &first(), StepTarget::Running),
+                &first(),
+                StepTarget::HeldForReview,
+            ),
             other => panic!("no way to reach {} by transitioning", other.as_wire()),
         };
         // The reason follows the *edge* and not the destination alone, which
@@ -326,13 +333,14 @@ fn naming_a_step_the_job_does_not_have_is_refused_rather_than_ignored() {
 // ------------------------------------------------- what cannot be asked for
 
 #[test]
-fn the_two_states_m1_cannot_reach_have_no_target_to_arrive_by() {
-    // One state, now that `retrying` has a budget to be inside. `awaiting_human`
-    // has its gate and is still unreachable, because a step at that gate stays
-    // `running` — `step_machine`'s own comment says what changing that costs.
-    assert!(
-        StepTarget::arriving_at(StepState::Running, StepState::AwaitingHuman, None, None).is_none(),
-        "awaiting_human needs a variant and two edges, and M1 has neither"
+fn the_one_state_no_target_arrives_at_is_the_one_written_at_creation() {
+    // **`awaiting_human` was here and is not any more.** `#522` gave it
+    // `HeldForReview`, so the only state left with no way in is the one a row
+    // is written in.
+    assert_eq!(
+        StepTarget::arriving_at(StepState::Running, StepState::AwaitingHuman, None, None),
+        Some(StepTarget::HeldForReview),
+        "the gate opening is one target and one edge"
     );
     assert!(
         StepTarget::arriving_at(
@@ -342,11 +350,96 @@ fn the_two_states_m1_cannot_reach_have_no_target_to_arrive_by() {
             None
         )
         .is_none(),
-        "and a trigger does not buy one"
+        "and it stores no reason: nothing refused a step every tier cleared"
     );
     assert!(
         StepTarget::arriving_at(StepState::Running, StepState::NotStarted, None, None).is_none(),
         "not_started is written at creation and is not a destination"
+    );
+}
+
+/// The gate is left by three targets and no fourth, and none of them is a
+/// dispatch.
+///
+/// **The narrowing is the point.** `awaiting_human -> running` exists so a
+/// person can open another pass at the step they are standing at; a plain
+/// `Running` across it would put a Drone back on work nobody has answered on,
+/// and `fleet::resume`'s own refusal does not reach it because that one reads a
+/// step that *stopped*.
+#[test]
+fn a_held_step_is_left_by_an_answer_and_never_by_a_dispatch() {
+    let held = step(
+        &step(&running(), &first(), StepTarget::Running),
+        &first(),
+        StepTarget::HeldForReview,
+    );
+    assert_eq!(
+        held.step(&first()).expect("the row is there").state(),
+        StepState::AwaitingHuman
+    );
+    for (target, arriving) in [
+        (StepTarget::Advanced, StepState::Advanced),
+        (StepTarget::Revisited, StepState::Running),
+        (
+            StepTarget::Stopped(gate_failure().expect("gate_failure is step-level")),
+            StepState::Stopped,
+        ),
+    ] {
+        assert_eq!(
+            step(&held, &first(), target)
+                .step(&first())
+                .expect("the row is there")
+                .state(),
+            arriving
+        );
+    }
+    match held.transition_step(&first(), StepTarget::Running, Actor::Fleet, when()) {
+        Err(IllegalStepTransition::StepIsHeld { step_id }) => {
+            assert_eq!(step_id, first());
+        }
+        other => panic!("expected a redispatch refusal, found {other:?}"),
+    }
+    match held.transition_step(
+        &first(),
+        StepTarget::Retrying(gate_failure().unwrap()),
+        Actor::Fleet,
+        when(),
+    ) {
+        Err(IllegalStepTransition::NoSuchEdge { from, to, .. }) => {
+            assert_eq!((from, to), (StepState::AwaitingHuman, StepState::Retrying));
+        }
+        other => panic!("a held step passed its tiers, so nothing hands it back: {other:?}"),
+    }
+}
+
+/// A held step keeps whatever the gate last ruled, and the state is not a pass.
+///
+/// **`advanced` means the step passed its advance gate**, and the advance gate
+/// here is a person who has not answered. Writing `passed` on the way in would
+/// leave nothing anywhere saying the one tier still outstanding was outstanding.
+#[test]
+fn opening_a_human_gate_writes_no_verdict_and_re_enters_nothing() {
+    let running = step(&running(), &first(), StepTarget::Running);
+    let entered = running
+        .step(&first())
+        .expect("the row is there")
+        .entered_at()
+        .clone();
+    let held = step(&running, &first(), StepTarget::HeldForReview);
+    let row = held.step(&first()).expect("the row is there");
+    assert_eq!(
+        row.last_verdict(),
+        None,
+        "the gate opening rules nothing, so it writes nothing"
+    );
+    assert_eq!(
+        row.entered_at(),
+        &entered,
+        "somebody being asked does not restart the step's clock"
+    );
+    assert!(
+        !StepTarget::HeldForReview.begins_a_run(),
+        "the run that reached the gate is the run the gate ended"
     );
 }
 

@@ -331,6 +331,7 @@ fn a_step_state_the_machine_reaches_is_seen_beneath_every_status_but_the_guarded
         StepState::NotStarted,
         StepState::Retrying,
         StepState::Running,
+        StepState::AwaitingHuman,
     ] {
         assert!(
             !state.seen_under().contains(&JobStatus::CompletedSuccess),
@@ -351,13 +352,19 @@ fn a_step_state_the_machine_reaches_is_seen_beneath_every_status_but_the_guarded
             .contains(&JobStatus::AwaitingRepair),
         "a step still being worked cannot be beneath a Job held for repair"
     );
-    // The one nothing reaches yet is where its design puts it. `retrying`
-    // was beside it here and does not belong: `Running -> Retrying` is a
-    // real edge, so a step between attempts is carried across an unguarded
-    // status edge like any other frozen step, and it is in the loop above.
-    assert_eq!(
-        StepState::AwaitingHuman.seen_under(),
-        &[JobStatus::AwaitingReview]
+    // **`awaiting_human` is in the loop above and used to be the exception
+    // here**, held to `[awaiting_review]` because nothing reached it and the
+    // arm therefore said where its design put it. `#522` gave it edges, and it
+    // answers exactly as `stopped` and `retrying` do: a Job killed, escalated
+    // or piloted at a human gate carries a held step across, and only
+    // `every_step_advanced` keeps it out of `completed_success`. That last
+    // exclusion is the whole point of reaching the state, so it is asserted on
+    // its own rather than left to the loop.
+    assert!(
+        !StepState::AwaitingHuman
+            .seen_under()
+            .contains(&JobStatus::CompletedSuccess),
+        "a Job whose last step is a human gate cannot end while the gate is open"
     );
 }
 

@@ -84,8 +84,8 @@ impl Guard {
             // gate reads these arms out of the source text, so a set built by
             // filtering `StepState::ALL` would be a set it could not read. The
             // list says what the name says and no more — a `retrying` step is
-            // passed through and not rested in, and `awaiting_human` is a state
-            // nothing writes yet.
+            // passed through and not rested in, and a step at `awaiting_human`
+            // had its Drone stood down when the gate opened.
             Guard::NoStepRunning => &[
                 StepState::Advanced,
                 StepState::AwaitingHuman,

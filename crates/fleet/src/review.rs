@@ -251,13 +251,22 @@ fn unchecked(job: &Job) -> Vec<String> {
 }
 
 /// A step's state, as a sentence rather than a wire value.
+///
+/// **Present tense on everything that is not over, because this body is written
+/// mid-Job.** It used to be composed when the last step advanced, so every
+/// state here could be said in the past. `#520` moved delivery to the *entry*
+/// of the step a workflow declares delivering, so at the moment this is written
+/// that step is `running` with its own work not yet begun, and the steps after
+/// it have not been reached. "was still running" and "never started" read as a
+/// post-mortem on a Job that stopped early — the opposite of what a reviewer is
+/// looking at, which is a Job whose branch has just gone out.
 fn said(state: StepState) -> &'static str {
     match state {
         StepState::Advanced => "advanced",
         StepState::AwaitingHuman => "is waiting for a person",
-        StepState::NotStarted => "never started",
-        StepState::Retrying => "was being reattempted",
-        StepState::Running => "was still running",
+        StepState::NotStarted => "has not been reached",
+        StepState::Retrying => "is being reattempted",
+        StepState::Running => "is being worked — the branch went out as it was entered",
         StepState::Stopped => "stopped with its retries spent",
     }
 }
