@@ -1,5 +1,7 @@
 //! What `get_capacity` must keep true, and the one row of the skew table it is
-//! the only case for.
+//! the only case for — plus `resumption`'s closed set, checked here rather
+//! than beside `held_by`'s open one because both are cases over what a newer
+//! Fleet may or may not have widened.
 //!
 //! **`held_by` is the one open set on this seam.** Every other closed set here
 //! refuses a spelling the domain does not have, and these cases assert that this
