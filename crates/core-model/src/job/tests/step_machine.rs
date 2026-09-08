@@ -99,7 +99,10 @@ fn every_edge_in_the_table_is_admitted() {
                 &first(),
                 StepTarget::HeldForReview,
             ),
-            other => panic!("no way to reach {} by transitioning", other.as_wire()),
+            // No catch-all, and the absence is the assertion. Every state is
+            // walked to above, so a seventh added to `StepState` fails to
+            // compile here rather than passing through an arm that panics at
+            // runtime — and #522 is what made the sixth reachable at all.
         };
         // The reason follows the *edge* and not the destination alone, which
         // is the rule `arriving_at` holds once `advanced` has two ways in: a
