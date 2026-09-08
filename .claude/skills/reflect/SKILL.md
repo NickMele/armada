@@ -216,6 +216,18 @@ say exactly what blocks each ❌.
 Label every line with who acts: already handled, waiting on the owner, or context
 only. **One sentence when nothing needs them** — do not leave it to be inferred.
 
+**PASS is not compatible with anything the owner has to remember.** Every item
+left for them names the surface that will put it in front of them again —
+`docs/OPEN.md`, an issue on the board, a failing gate line — and an item that
+names none is a ❌ on the follow-up row whatever else is true. Confirmed
+2026-09-08: a run reported PASS and then listed three things waiting on the
+owner, and the owner said the two did not go together and that he was reluctant
+to close on it. He was right. Two of the three were in `docs/OPEN.md` and on the
+board; the third existed only in the history file, which this page already says
+is not a home. **Writing "waiting on you" without naming where it waits is the
+same defect as not filing it** — the item is real, the owner is holding it, and
+nothing in the repository will raise it again.
+
 ## Gotchas
 
 - **A pipe masks a failed merge.** Confirmed 2026-08-31: `git merge --ff-only X
