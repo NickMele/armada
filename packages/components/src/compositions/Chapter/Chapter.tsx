@@ -1,5 +1,7 @@
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronRight, ChevronUp } from "lucide-react";
 import type { ReactNode } from "react";
+import { conceptSaid } from "../../concepts";
+import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
 /**
  * One chapter of a step's story — a numbered header line, and a body that
@@ -59,6 +61,17 @@ export type ChapterProps = {
    */
   live?: boolean;
   tone?: ChapterTone;
+  /**
+   * What the header says on hover, where what it does is the interesting half —
+   * `Click to view the files`.
+   *
+   * **Written at the control, because it is an act.** Where it is absent the
+   * chapter's own name is looked up in the vocabulary instead: `Drone
+   * instructions` and `Activity log` name Armada concepts and have one
+   * explanation between every surface that draws them. A name that is neither
+   * draws no tooltip.
+   */
+  says?: ReactNode;
   /** Whether the body is shown. Closed collapses to the header line. */
   open?: boolean;
   /** Open or close. Absent draws the header as a label, not a control. */
@@ -84,13 +97,16 @@ export type ChapterProps = {
   moreLabel?: ReactNode;
   onMore?: () => void;
   /**
-   * Whether `moreLabel` closes rather than opens. Picks the glyph, out of the
-   * registry's expand-and-collapse pair: `chevron-down` on a chapter already
-   * open, `chevron-right` on one that goes further.
+   * Whether `moreLabel` closes rather than opens. Picks the glyph:
+   * `chevron-up` on a chapter already open, `chevron-right` on one that goes
+   * further.
    *
-   * The drawing puts a chevron pointing **up** on Close. The registry carries
-   * no `chevron-up` and pairs down with right for exactly this, so the pair
-   * wins over the drawing. Reported.
+   * **It drew `chevron-down` here until 2026-09-07** — a caret pointing into
+   * the thing it was about to shut — because the registry carried only the
+   * down-and-right pair and the contract wins over a drawing. The report was
+   * answered rather than overruled: `chevron-up` is registered now, reserved
+   * to a control whose whole label is Close, and down keeps disclosure on a
+   * closed record.
    */
   moreCloses?: boolean;
   /** For a caller that needs to point at the body. */
@@ -107,6 +123,7 @@ export function Chapter({
   meta,
   live,
   tone = "neutral",
+  says,
   open = true,
   onToggle,
   act,
@@ -131,21 +148,33 @@ export function Chapter({
     </>
   );
 
+  const hover = says ?? conceptSaid(name);
+  const line =
+    onToggle === undefined ? (
+      <div className="armada-chapter__head">{head}</div>
+    ) : (
+      <button
+        type="button"
+        className="armada-chapter__head"
+        aria-expanded={open}
+        aria-controls={bodyId}
+        onClick={onToggle}
+      >
+        {head}
+      </button>
+    );
+
   return (
     <section className="armada-chapter" data-tone={tone} data-open={open || undefined}>
       <div className="armada-chapter__line">
-        {onToggle === undefined ? (
-          <div className="armada-chapter__head">{head}</div>
+        {/* `asChild`, because the line is a grid and the header takes its first
+            track — a wrapper here would push the act out of the row. */}
+        {hover === undefined ? (
+          line
         ) : (
-          <button
-            type="button"
-            className="armada-chapter__head"
-            aria-expanded={open}
-            aria-controls={bodyId}
-            onClick={onToggle}
-          >
-            {head}
-          </button>
+          <Tooltip asChild label={hover}>
+            {line}
+          </Tooltip>
         )}
         {act === undefined ? null : <div className="armada-chapter__act">{act}</div>}
       </div>
@@ -159,7 +188,7 @@ export function Chapter({
           <button type="button" className="armada-chapter__more" onClick={onMore}>
             {moreLabel}
             {moreCloses ? (
-              <ChevronDown size={GLYPH} strokeWidth={STROKE} aria-hidden />
+              <ChevronUp size={GLYPH} strokeWidth={STROKE} aria-hidden />
             ) : (
               <ChevronRight size={GLYPH} strokeWidth={STROKE} aria-hidden />
             )}

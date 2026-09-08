@@ -56,6 +56,12 @@ export type StepChapter = {
    * the decision chapter on a step stopped at a human gate.
    */
   tone?: ChapterTone;
+  /**
+   * What the header says on hover, where what pressing it does is the
+   * interesting half — `Click to view the files`. Absent looks the chapter's
+   * name up in the vocabulary instead; see `ChapterProps.says`.
+   */
+  says?: ReactNode;
   /** What it shows while nothing in the story is open. */
   preview?: ReactNode;
   /**
@@ -114,7 +120,14 @@ export function StepStory({ chapters, openId, openChapter, onOpen }: StepStoryPr
   return (
     <ol className="armada-story">
       {chapters.map((chapter) => {
-        const opens = chapter.content !== undefined;
+        // Two different questions, and they were one until 2026-09-08. `more`
+        // is whether there is anything past the preview, which is what draws
+        // the control at the foot. `opens` is whether the header can be
+        // pressed — and with another chapter open, a chapter collapsed to its
+        // header line had no way back except closing that one. Pressing
+        // `Produced` now shows `Produced`, which is what a reader means by it.
+        const more = chapter.content !== undefined;
+        const opens = more || chapter.preview !== undefined;
         const shown = open === chapter.id;
         // A chapter that is not the open one collapses to its header the
         // moment anything is open. Nothing else changes: same chapters, same
@@ -128,17 +141,18 @@ export function StepStory({ chapters, openId, openChapter, onOpen }: StepStoryPr
               meta={chapter.summary}
               live={chapter.live}
               tone={chapter.tone}
+              says={chapter.says}
               open={!collapsed}
               onToggle={opens ? () => toggle(chapter.id) : undefined}
               act={chapter.act}
               bodyId={`${bodies}-${chapter.id}`}
               moreLabel={
-                !opens ? undefined : shown ? (chapter.closeLabel ?? "Close") : (chapter.openLabel ?? "Open")
+                !more ? undefined : shown ? (chapter.closeLabel ?? "Close") : (chapter.openLabel ?? "Open")
               }
-              onMore={opens ? () => toggle(chapter.id) : undefined}
+              onMore={more ? () => toggle(chapter.id) : undefined}
               moreCloses={shown}
             >
-              {shown ? chapter.content : chapter.preview}
+              {shown ? (chapter.content ?? chapter.preview) : chapter.preview}
             </Chapter>
           </li>
         );

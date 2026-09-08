@@ -1,6 +1,12 @@
 import { ChevronDown, ChevronRight, Lock } from "lucide-react";
 import type { ReactNode } from "react";
-import { StepActivityMark, type StepActivity } from "../StepActivityMark/StepActivityMark";
+import { conceptSaid } from "../../concepts";
+import { Tooltip } from "../../primitives/Tooltip/Tooltip";
+import {
+  StepActivityMark,
+  stepActivitySaid,
+  type StepActivity,
+} from "../StepActivityMark/StepActivityMark";
 
 /**
  * One row of the run — a step, its mark, its elapsed figure, and the short
@@ -88,6 +94,15 @@ export type StepRowProps = {
    */
   elapsed?: ReactNode;
   /**
+   * When the step began, as a clock reading — `14:22:07`. **What the elapsed
+   * figure is hovered for**: `6m 40s` says how long and nothing about when, and
+   * when is what a reader lining a step up against a log needs.
+   *
+   * Absent leaves the figure unannotated rather than guessing backwards from a
+   * duration, which would be a second reading of a clock nothing here holds.
+   */
+  startedAt?: ReactNode;
+  /**
    * The step's 1-based position, where the caller wants a number in the mark's
    * slot instead of a silhouette. **Job detail does not pass one**: the drawing
    * gives an unreached step a hollow ring, and a list number in a tree of six
@@ -142,6 +157,7 @@ export function StepRow({
   activity,
   status,
   elapsed,
+  startedAt,
   ordinal,
   selected,
   hovered,
@@ -156,6 +172,15 @@ export function StepRow({
   factsId,
 }: StepRowProps) {
   const lockSays = lockedLabel ?? "Cannot be skipped, even on retry";
+  // The step and its state in words. The state half is the registry's word and
+  // the name half is this row's, which is the only place both are in hand.
+  const verb = stepActivitySaid(activity);
+  const markSays =
+    verb === undefined
+      ? undefined
+      : typeof label === "string"
+        ? `${label}, ${verb}`
+        : `This step is ${verb}`;
   return (
     <div className="armada-srow-group">
       <div
@@ -171,20 +196,30 @@ export function StepRow({
         {onToggle === undefined ? (
           <span className="armada-srow__chevron" aria-hidden />
         ) : (
-          <button
-            type="button"
-            className="armada-srow__chevron"
-            aria-expanded={open}
-            aria-controls={factsId}
-            aria-label={open ? "Close this step's facts" : "Open this step's facts"}
-            onClick={onToggle}
+          // Every hover on this row is `asChild`: the row is a four-track grid
+          // and a wrapper span would take the track, so the chevrons, marks and
+          // durations down the tree would stop sharing a column.
+          <Tooltip
+            asChild
+            label={
+              open ? "Click to close this step's facts" : "Click to open this step's facts, in the tree"
+            }
           >
-            {open ? (
-              <ChevronDown size={GLYPH} strokeWidth={STROKE} aria-hidden />
-            ) : (
-              <ChevronRight size={GLYPH} strokeWidth={STROKE} aria-hidden />
-            )}
-          </button>
+            <button
+              type="button"
+              className="armada-srow__chevron"
+              aria-expanded={open}
+              aria-controls={factsId}
+              aria-label={open ? "Close this step's facts" : "Open this step's facts"}
+              onClick={onToggle}
+            >
+              {open ? (
+                <ChevronDown size={GLYPH} strokeWidth={STROKE} aria-hidden />
+              ) : (
+                <ChevronRight size={GLYPH} strokeWidth={STROKE} aria-hidden />
+              )}
+            </button>
+          </Tooltip>
         )}
 
         <StepActivityMark
@@ -192,6 +227,7 @@ export function StepRow({
           label={status ?? activity}
           ordinal={ordinal}
           pulsing={pulsing}
+          says={markSays}
         />
 
         {onSelect === undefined ? (
@@ -200,19 +236,27 @@ export function StepRow({
             {locked ? <StepRowLock says={lockSays} /> : null}
           </span>
         ) : (
-          <button
-            type="button"
-            className="armada-srow__name"
-            data-identifier={labelIsAnIdentifier || undefined}
-            aria-current={selected ? "true" : undefined}
-            onClick={onSelect}
-          >
-            {label}
-            {locked ? <StepRowLock says={lockSays} /> : null}
-          </button>
+          <Tooltip asChild label="Click to open this step in the panel">
+            <button
+              type="button"
+              className="armada-srow__name"
+              data-identifier={labelIsAnIdentifier || undefined}
+              aria-current={selected ? "true" : undefined}
+              onClick={onSelect}
+            >
+              {label}
+              {locked ? <StepRowLock says={lockSays} /> : null}
+            </button>
+          </Tooltip>
         )}
 
-        <span className="armada-srow__dur">{elapsed ?? NO_DURATION}</span>
+        {startedAt === undefined || elapsed === undefined ? (
+          <span className="armada-srow__dur">{elapsed ?? NO_DURATION}</span>
+        ) : (
+          <Tooltip asChild label={<>Started at {startedAt}</>}>
+            <span className="armada-srow__dur">{elapsed}</span>
+          </Tooltip>
+        )}
       </div>
 
       {/* Kept in the document while closed so the chevron's `aria-controls`
@@ -226,13 +270,13 @@ export function StepRow({
         ) : (
           facts.map((fact, at) => (
             <div className="armada-srow__fact" key={at}>
-              <span className="armada-srow__fact-label">{fact.label}</span>
+              <FactLabel>{fact.label}</FactLabel>
               {fact.value}
               {fact.children === undefined || fact.children.length === 0 ? null : (
                 <div className="armada-srow__fact-children">
                   {fact.children.map((child, c) => (
                     <div className="armada-srow__fact" key={c}>
-                      <span className="armada-srow__fact-label">{child.label}</span>
+                      <FactLabel>{child.label}</FactLabel>
                       {child.value}
                     </div>
                   ))}
@@ -243,6 +287,27 @@ export function StepRow({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * A fact's name, and what it means where the name is an Armada word.
+ *
+ * **The sentence is looked up, never written here.** `Checks`, `Judge`,
+ * `Produced` and `Attempt` are the vocabulary, not this row's copy, so the
+ * answer comes from `concepts.ts` — a fact label spelled the same way in the
+ * tree, in a chapter title and in the header gets one explanation between them.
+ * A label naming nothing in the vocabulary draws no tooltip at all.
+ */
+function FactLabel({ children }: { children: ReactNode }) {
+  const says = conceptSaid(children);
+  const label = <span className="armada-srow__fact-label">{children}</span>;
+  return says === undefined ? (
+    label
+  ) : (
+    <Tooltip asChild label={says}>
+      {label}
+    </Tooltip>
   );
 }
 

@@ -1,4 +1,6 @@
 import { Check, CircleDashed, CircleDot, Eye, Flag, Power, RotateCw, X, type LucideIcon } from "lucide-react";
+import { JOB_STATUS, STEP_STATE } from "../../generated/vocabulary";
+import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
 /**
  * Step activity mark — the glyph one rail row carries, and the single place
@@ -75,6 +77,33 @@ const GLYPH: Record<StepActivity, LucideIcon> = {
  */
 export const STEP_ACTIVITY_CARRIES_A_SURFACE: readonly StepActivity[] = ["stopped", "failed"];
 
+/**
+ * The two activity values `job_steps.state` does not carry, and the Job status
+ * each borrows its word from. Same borrowing the glyphs above make, for the
+ * same reason: a refusal lands in `last_verdict` and `killed` is the Job's
+ * status showing through, so neither has a step verb to read — and writing one
+ * here would mint a vocabulary the registry never agreed to.
+ */
+const BORROWS_FROM_JOB: Partial<Record<StepActivity, string>> = {
+  failed: "completed_failed",
+  killed: "killed",
+};
+
+/**
+ * The activity in the registry's own word — `running`, `awaiting review`,
+ * `stopped`. **Read from `enum-verbs.toml`, never retyped**: that file decides
+ * a state's verb, and a second spelling in a tooltip is exactly the drift
+ * `lib/job-states.js` was deleted over.
+ *
+ * `undefined` where the registry carries no verb, which is a gap rather than a
+ * default — a caller draws nothing rather than inventing one.
+ */
+export function stepActivitySaid(activity: StepActivity): string | undefined {
+  const borrowed = BORROWS_FROM_JOB[activity];
+  const rendering = borrowed === undefined ? STEP_STATE[activity] : JOB_STATUS[borrowed];
+  return rendering?.verb ?? undefined;
+}
+
 /** Step marks are 12px at strokeWidth 2 — an exact half of lucide's 24 grid. */
 const MARK_ICON = 12;
 const MARK_STROKE = 2;
@@ -99,9 +128,24 @@ export type StepActivityMarkProps = {
    * bar and never a second row. Only `running` animates.
    */
   pulsing?: boolean;
+  /**
+   * What the mark says on hover — the step and its state in words, `Fix,
+   * running`. **Composed by the caller**, because the step's own name is the
+   * half this component has never been given; the state half is
+   * `stepActivitySaid` above and is read rather than written.
+   *
+   * Absent draws no tooltip.
+   */
+  says?: string;
 };
 
-export function StepActivityMark({ activity, label, ordinal, pulsing = false }: StepActivityMarkProps) {
+export function StepActivityMark({
+  activity,
+  label,
+  ordinal,
+  pulsing = false,
+  says,
+}: StepActivityMarkProps) {
   const Icon = GLYPH[activity];
   // Only the running mark pulses. Motion carries "still working", which is a
   // claim no other activity value makes.
@@ -113,7 +157,7 @@ export function StepActivityMark({ activity, label, ordinal, pulsing = false }: 
   // `WorkflowRail` does for every row) is not a competing rendering — that
   // glyph always wins, unchanged from before this value had one.
   const showOrdinal = activity === "not_started" && ordinal !== undefined;
-  return (
+  const mark = (
     <span className="armada-step-mark" data-activity={activity} data-pulsing={animates || undefined}>
       {showOrdinal ? (
         <span className="armada-step-mark__ordinal" aria-hidden>
@@ -124,5 +168,15 @@ export function StepActivityMark({ activity, label, ordinal, pulsing = false }: 
       )}
       <span className="armada-step-mark__name">{label}</span>
     </span>
+  );
+  // `asChild`, so the mark stays the grid item its row placed it as. A wrapper
+  // would take the mark's column and the glyph would stop lining up with the
+  // five above it.
+  return says === undefined ? (
+    mark
+  ) : (
+    <Tooltip asChild label={says}>
+      {mark}
+    </Tooltip>
   );
 }

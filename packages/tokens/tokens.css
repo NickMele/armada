@@ -504,6 +504,11 @@
   --duration-base: 180ms;  /* panel and dropdown transitions */
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --tooltip-delay: 400ms;
+  /* How long a tooltip group stays warm after one closes. Inside it the next
+     tooltip opens instantly, so crossing a row of eight annotated chips is one
+     wait and not eight; past it the delay applies again, because a pointer that
+     has been elsewhere for a third of a second is not still reading. */
+  --tooltip-grace: 300ms;
   --duration-pulse: 1600ms; /* the running step mark, and nothing else */
 }
 

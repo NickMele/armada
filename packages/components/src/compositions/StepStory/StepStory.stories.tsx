@@ -186,3 +186,33 @@ export const HeldByTheCaller: Story = {
     await expect(produced).toHaveAttribute("aria-expanded", "false");
   },
 };
+
+/**
+ * **A chapter with only a preview can still be pressed back open.** With
+ * another chapter open, one collapsed to its header line had no way back except
+ * closing the one that was open — so `Drone instructions`, which has nothing
+ * past its preview, was a header a reader pressed and nothing happened to. That
+ * is the same dead control the run tree's facts were given a rule about.
+ *
+ * **And it gains no control at the foot of its body**, because there is still
+ * nothing past the preview. The two are different questions and were one until
+ * this: whether the header can be pressed, and whether there is more to show.
+ */
+export const AChapterWithOnlyAPreviewStillOpens: Story = {
+  args: { chapters: CHAPTERS },
+  play: async ({ canvas, userEvent }) => {
+    const instructions = canvas.getByRole("button", { name: /Drone instructions/ });
+    const log = canvas.getByRole("button", { name: /Activity log/ });
+
+    await userEvent.click(log);
+    await expect(instructions).toHaveAttribute("aria-expanded", "false");
+
+    await userEvent.click(instructions);
+    await expect(instructions).toHaveAttribute("aria-expanded", "true");
+    await expect(log).toHaveAttribute("aria-expanded", "false");
+
+    // Nothing past the preview, so no `Close` at the foot of it. The log has
+    // one and this must not gain one by being pressable.
+    await expect(canvas.queryByRole("button", { name: "Close" })).toBeNull();
+  },
+};

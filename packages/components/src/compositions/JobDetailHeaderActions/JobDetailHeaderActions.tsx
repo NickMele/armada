@@ -1,7 +1,9 @@
 import type { LucideIcon } from "lucide-react";
 import type { MouseEvent, ReactNode } from "react";
 import { Fragment, useCallback } from "react";
+import { conceptSaid } from "../../concepts";
 import { Badge } from "../../primitives/Badge/Badge";
+import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
 /**
  * Job detail header — what this Job is, and whatever you can do to it from
@@ -179,7 +181,7 @@ export function JobDetailHeaderActions({
                   {j > 0 ? ", " : null}
                   {field.label ? (
                     <>
-                      {field.label}
+                      <FactLabel>{field.label}</FactLabel>
                       {field.value !== undefined ? " " : null}
                     </>
                   ) : null}
@@ -217,5 +219,28 @@ export function JobDetailHeaderActions({
       </div>
       {actions ? <div className="armada-job-head__actions">{actions}</div> : null}
     </div>
+  );
+}
+
+/**
+ * A fact's label, and what it means where the label is an Armada word.
+ *
+ * **The sentence is looked up, never written here.** `Workflow`, `Branch` and
+ * `Spend, estimated` are the vocabulary rather than this header's copy, so one
+ * explanation serves the header, the run tree and *Where things are* alike —
+ * the same word explained twice is two things that can disagree. A label naming
+ * nothing in the vocabulary draws nothing.
+ *
+ * `asChild` on a bare span: the fact run is one nowrap line per fact and a
+ * wrapper with a display of its own would break the label off its value.
+ */
+function FactLabel({ children }: { children: ReactNode }) {
+  const says = conceptSaid(children);
+  return says === undefined ? (
+    <>{children}</>
+  ) : (
+    <Tooltip asChild label={says}>
+      <span>{children}</span>
+    </Tooltip>
   );
 }
