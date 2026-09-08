@@ -192,9 +192,9 @@ The remedy needs no new state: `depends_on` already sequences Jobs and already p
 | A first dispatch | the Drone being spawned, in its opening brief |
 | A restart of a stopped step | the Drone being spawned, in its opening brief |
 | An override where the step's Drone has gone | the Drone being spawned, in its opening brief |
-| A finished Job | nobody — the branch is caught up, and a conflicted one is not pushed and gets no pull request |
+| The step that sends the work out, being entered | the Drone being spawned, in its opening brief — and the catch-up is what the branch is pushed from, so a conflicted one is not pushed and gets no pull request |
 
-**This table used to divide by whether a Drone was there to be told**, and the first three rows read "the live Drone, in the turn carrying the verdict". A Drone belongs to a workflow step ([Drone](drone.md)), so a step boundary ends one and starts another — there is no live session at a boundary and nothing to inject a turn into. The division collapsed, and what is left is one shape: **everything but a finished Job rides an opening brief.**
+**This table used to divide by whether a Drone was there to be told**, and the first three rows read "the live Drone, in the turn carrying the verdict". A Drone belongs to a workflow step ([Drone](drone.md)), so a step boundary ends one and starts another — there is no live session at a boundary and nothing to inject a turn into. The division collapsed, and what is left is one shape: **every catch-up rides an opening brief.** The last row used to read *a finished Job — nobody*, because the branch went out when the Job ended and there was no Drone to tell. It goes out when the step that declares `delivers` is entered now, and that is a spawn like any other.
 
 **The conflict is therefore always the new Drone's opening work.** Refusing the act instead would put a person at a merge conflict inside a Drone's worktree, which is the one job the Drone is already in the right place to do.
 
