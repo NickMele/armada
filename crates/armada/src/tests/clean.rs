@@ -597,7 +597,7 @@ fn the_record_behind_a_kept_checkout_is_kept_too() {
     )
     .expect("a clean");
 
-    let mut store = Store::open(&machine.path().join(STORE_FILE)).expect("a store");
+    let store = Store::open(&machine.path().join(STORE_FILE)).expect("a store");
     assert!(
         store.load_job(&JobId::carried(Ulid::carried(JOB))).is_ok(),
         "the row that derives the checkout outlives a clean that kept it"

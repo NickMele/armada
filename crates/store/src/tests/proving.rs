@@ -15,7 +15,7 @@ use core_model::{CheckOutcome, StepCheck};
 
 use crate::schema::tables_pointing_at_a_job;
 use crate::tests::{at, job_id, open, top_level, TempDir};
-use crate::{Proved, Store};
+use crate::Proved;
 
 const MERGED_INTO: &str = "9b2c1f4e5a7d3c8b0e6f2a4d9c1b7e3f5a8d0c2b";
 
