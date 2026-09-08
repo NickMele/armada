@@ -309,15 +309,23 @@ export function JobRowStacked({
               data-mono={field.mono || undefined}
               data-emphasis={field.emphasis || undefined}
               data-quiet={field.quiet || undefined}
+              data-labelled={field.label !== undefined || undefined}
             >
-              {field.icon ? <field.icon size={FIELD_ICON} strokeWidth={FIELD_STROKE} aria-hidden /> : null}
+              {/* **The name comes first in the markup, whichever view draws
+                  it.** A card stacks it over the value in small caps; a table
+                  takes it off the screen and lets the column header say it
+                  once. Same field, same data, and the arrangement decides —
+                  which is the whole claim the two views make. */}
               {field.label ? <span className="armada-job-row__field-label">{field.label}</span> : null}
-              <Copyable
-                className="armada-job-row__field-value"
-                value={field.value}
-                copyValue={field.copyValue}
-                onCopied={onCopied}
-              />
+              <span className="armada-job-row__field-body">
+                {field.icon ? <field.icon size={FIELD_ICON} strokeWidth={FIELD_STROKE} aria-hidden /> : null}
+                <Copyable
+                  className="armada-job-row__field-value"
+                  value={field.value}
+                  copyValue={field.copyValue}
+                  onCopied={onCopied}
+                />
+              </span>
             </span>
           ))}
         </div>

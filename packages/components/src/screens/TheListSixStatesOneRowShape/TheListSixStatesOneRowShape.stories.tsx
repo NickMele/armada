@@ -1,11 +1,14 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { Check, CircleDot, Cpu, GitBranch, Power, UserCheck, X } from "lucide-react";
+import { Check, CircleDot, Cpu, Power, UserCheck, X } from "lucide-react";
 import { BoardControls } from "../../compositions/BoardControls/BoardControls";
 import { Button } from "../../primitives/Button/Button";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
 import { StepBar } from "../../compositions/StepBar/StepBar";
-import type { JobRowStackedProps } from "../../compositions/JobRowStacked/JobRowStacked";
-import { APPROVAL_TRACKS, TheListSixStatesOneRowShape } from "./TheListSixStatesOneRowShape";
+import { useState } from "react";
+import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
+import type { JobRowField, JobRowStackedProps } from "../../compositions/JobRowStacked/JobRowStacked";
+import { TheListSixStatesOneRowShape } from "./TheListSixStatesOneRowShape";
 
 /**
  * Journey · Monitor Active Work. Six Job states, one row shape, in the order
@@ -63,158 +66,195 @@ const open = (
   </SplitButton>
 );
 
-const workflow = (
-  <>
-    <span className="armada-screen__mono">bug</span>, 4 steps
-  </>
-);
+/**
+ * One Job, as the fixtures hold it — the facts, not a field run.
+ *
+ * **The six were six hand-written field arrays, and that is what made this file
+ * hard to read.** Each arrangement wrote its own list, so a row could carry a
+ * branch where the column said Workflow and nothing caught it: the table drew
+ * four branches under WORKFLOW because it was handed track one, which on a card
+ * is whichever of the two the Job has.
+ *
+ * Facts here, arrangements below. A Job has a workflow whether or not it has a
+ * worktree, so a column named Workflow can always be filled.
+ */
+type Job = {
+  status: string;
+  statusIcon: LucideIcon;
+  statusLabel: string;
+  headline: string;
+  jobId: string;
+  /** The workflow and how many steps it has. Every Job has one. */
+  workflow: string;
+  /** Where the run got to, as the bar draws it. */
+  bar: ReactNode;
+  /** The step it is on, or `Not started`. */
+  step: string;
+  /** Absent on a Job that has not started, which is not the same as zero. */
+  runTime?: string;
+  /** Where the Job came from, one of `enum-verbs.toml`'s five origin rows. */
+  origin: string;
+  action: ReactNode;
+};
 
-const awaitingApproval: JobRowStackedProps = {
+/**
+ * The four facts a row carries, named.
+ *
+ * **The name is data, and the arrangement decides how it is drawn** — stacked
+ * over the value in small caps on a card, taken off the screen on a table where
+ * the column header says it once. One list feeds both, which is what stops the
+ * two from drifting.
+ */
+function factsOf(job: Job): JobRowField[] {
+  return [
+    { label: "Workflow", value: job.workflow },
+    {
+      label: "Progress",
+      value: (
+        <>
+          {job.bar}
+          <span className="armada-row-step">{job.step}</span>
+        </>
+      ),
+    },
+    {
+      label: "Run time",
+      // A dash, never a blank: a Job that has not started has no run time, and
+      // an empty cell in a named column reads as one that failed to load.
+      value: job.runTime ?? "\u2014",
+      mono: true,
+      quiet: job.runTime === undefined || undefined,
+    },
+    // **Origin, not "Dispatched by".** Only one of the five origin rows is a
+    // dispatch: the others read `Found by Fleet`, `Drafted in Helm` and
+    // `Workflow-triggered`, and none of them is something a person did. The
+    // registry's verbs are whole sentences by design — `auto_detected`'s notes
+    // say the row draws the string as written — so a label saying `Dispatched
+    // by` over a value saying `Found by Fleet` contradicts itself on four rows
+    // out of five.
+    { label: "Origin", value: job.origin },
+  ];
+}
+
+function rowOf(job: Job): JobRowStackedProps {
+  return {
+    status: job.status,
+    statusIcon: job.statusIcon,
+    statusLabel: job.statusLabel,
+    headline: job.headline,
+    jobId: job.jobId,
+    fields: factsOf(job),
+    action: job.action,
+  };
+}
+
+const BAR_STEPS = 4;
+
+const awaitingApproval: Job = {
   status: "awaiting-approval",
   statusIcon: UserCheck,
   statusLabel: "Needs approval",
   headline: "Coalesce concurrent token refreshes",
   jobId: "job_7c31",
-  tracks: APPROVAL_TRACKS,
-  fields: [
-    { value: workflow },
-    { value: <StepBar total={4} current={0} label="Not started, 4 steps" /> },
-    { value: "Not started", quiet: true },
-    { value: "created 09:12", quiet: true },
-    { value: "Dispatched by you" },
-  ],
+  workflow: "bug, 4 steps",
+  bar: <StepBar total={BAR_STEPS} current={0} label="Not started, 4 steps" />,
+  step: "Not started",
+  origin: "Dispatched by you",
   // **Review, not Approve.** The drawing gave this row an Approve control and
   // flagged it as a departure from the settled rule that approval is a second
   // act from detail; it was settled 2026-08-31 in favour of the rule. Review is
   // the word an `awaiting_review` row already carries and means the same thing
   // in both places — go read this — because in both places the act is on
-  // detail. Nothing on the Board approves. The dispatch proposal is the one
-  // surface that does, because there what the gate approves is on screen
-  // already — settled 2026-09-08, and it changes nothing here.
-  action: <SplitButton ground="card" items={menu}>Review</SplitButton>,
+  // detail. Nothing on the Board approves.
+  action: (
+    <SplitButton ground="card" items={menu}>
+      Review
+    </SplitButton>
+  ),
 };
 
-const queued: JobRowStackedProps = {
+const queued: Job = {
   status: "not-started",
   statusIcon: Cpu,
   // The reason supplies the verb as well as the glyph. This carried cpu with
-  // "Queued" beside it, which is half the registry's rule, and the field
-  // beneath said "Waiting on a drone" — the reason a second time, and named
-  // for the one drone Fleet used to run. The resource is the concurrency cap.
+  // "Queued" beside it, which is half the registry's rule, and the resource is
+  // the concurrency cap rather than one drone.
   statusLabel: "Waiting on resources",
   headline: "Retire the legacy poke path",
   jobId: "job_8b42",
-  tracks: APPROVAL_TRACKS,
-  fields: [
-    { value: workflow },
-    { value: <StepBar total={4} current={0} label="Not started, 4 steps" /> },
-    { value: "Not started", quiet: true },
-    { value: "approved 09:20", quiet: true },
-    { value: "Dispatched by you" },
-  ],
+  workflow: "bug, 4 steps",
+  bar: <StepBar total={BAR_STEPS} current={0} label="Not started, 4 steps" />,
+  step: "Not started",
+  origin: "Dispatched by you",
   action: open,
 };
 
-const running: JobRowStackedProps = {
+const running: Job = {
   status: "running",
   statusIcon: CircleDot,
   statusLabel: "Running",
   headline: "Split the settings reducer",
   jobId: "job_2d90bb",
-  pulsing: true,
-  fields: [
-    {
-      value: "fix/settings-split",
-      mono: true,
-      icon: GitBranch,
-      copyValue: "fix/settings-split",
-    },
-    { value: <StepBar total={4} current={2} activity="running" label="Step 2 of 4" /> },
-    { value: "Implement", emphasis: true },
-    { value: "11m 03s", mono: true },
-    { value: "~$1.80", mono: true },
-    { value: "Dispatched by you" },
-  ],
+  workflow: "feature, 4 steps",
+  bar: <StepBar total={BAR_STEPS} current={2} activity="running" label="Step 2 of 4" />,
+  step: "Implement",
+  runTime: "11m 03s",
+  origin: "Dispatched by you",
   action: open,
 };
 
-const failed: JobRowStackedProps = {
+const failed: Job = {
   status: "completed-failed",
   statusIcon: X,
   statusLabel: "Failed",
   headline: "Cache the manifest read",
   jobId: "job_91ab",
-  fields: [
-    {
-      value: "feat/manifest-cache",
-      mono: true,
-      icon: GitBranch,
-      copyValue: "feat/manifest-cache",
-    },
-    { value: <StepBar total={4} current={3} activity="failed" label="Step 3 of 4" /> },
-    { value: "Run tests", emphasis: true },
-    { value: "22m 41s", mono: true },
-    { value: "~$2.10", mono: true },
-    { value: "Found by Fleet" },
-  ],
+  workflow: "bug, 4 steps",
+  bar: <StepBar total={BAR_STEPS} current={3} activity="failed" label="Step 3 of 4" />,
+  step: "Run tests",
+  runTime: "22m 41s",
+  origin: "Found by Fleet",
   action: open,
 };
 
-const done: JobRowStackedProps = {
+const done: Job = {
   status: "completed-success",
   statusIcon: Check,
   statusLabel: "Done",
   headline: "Add a retry ceiling to the poke loop",
   jobId: "job_4f10",
-  fields: [
-    {
-      value: "fix/poke-ceiling",
-      mono: true,
-      icon: GitBranch,
-      copyValue: "fix/poke-ceiling",
-    },
-    {
-      value: (
-        <StepBar total={4} current={5} activity="advanced" label="All 4 of 4 steps advanced" />
-      ),
-    },
-    { value: "Summarise" },
-    { value: "18m 22s", mono: true },
-    { value: "~$2.40", mono: true },
-    { value: "Drafted in Helm" },
-  ],
+  workflow: "fix, 4 steps",
+  bar: (
+    <StepBar total={BAR_STEPS} current={5} activity="advanced" label="All 4 of 4 steps advanced" />
+  ),
+  step: "Summarise",
+  runTime: "18m 22s",
+  origin: "Drafted in Helm",
   action: open,
 };
 
-const killed: JobRowStackedProps = {
+const killed: Job = {
   status: "killed",
   statusIcon: Power,
   statusLabel: "Killed",
   headline: "Rename the session token field",
   jobId: "job_5e88",
-  fields: [
-    {
-      value: "feat/session-rename",
-      mono: true,
-      icon: GitBranch,
-      copyValue: "feat/session-rename",
-    },
-    { value: <StepBar total={4} current={2} activity="killed" label="Step 2 of 4" /> },
-    { value: "Implement", emphasis: true },
-    { value: "4m 09s", mono: true },
-    { value: "~$0.60", mono: true },
-    { value: "Workflow-triggered" },
-  ],
+  workflow: "feature, 4 steps",
+  bar: <StepBar total={BAR_STEPS} current={2} activity="killed" label="Step 2 of 4" />,
+  step: "Implement",
+  runTime: "4m 09s",
+  origin: "Workflow-triggered",
   action: open,
 };
 
-const SIX = [awaitingApproval, queued, running, failed, done, killed];
+const JOBS = [awaitingApproval, queued, running, failed, done, killed];
+const SIX = JOBS.map(rowOf);
 
 /** One row, framed, with no count sentence above it — a row is not a surface. */
-function one(row: JobRowStackedProps) {
+function one(job: Job) {
   return (
     <div className="armada-screen">
-      <TheListSixStatesOneRowShape label="Active jobs" rows={[row]} />
+      <TheListSixStatesOneRowShape label="Active jobs" rows={[rowOf(job)]} />
     </div>
   );
 }
@@ -268,18 +308,31 @@ export const TheList: Story = {
  * approves. The row at the gate carries Review — see
  * `docs/concepts/job-board.md`.
  */
-export const TheBoard: Story = {
-  render: () => (
+/**
+ * The Board, with a working switch.
+ *
+ * **The toggle holds real state rather than being drawn set**, because the one
+ * thing worth checking about two arrangements is that the same six rows survive
+ * moving between them. A story that hard-coded `view` could not show that, and
+ * the switch was missing from this story entirely while the table had its own.
+ */
+function Board({ start }: { start: "card" | "table" }) {
+  const [view, setView] = useState<"card" | "table">(start);
+  return (
     <div className="armada-screen">
       <TheListSixStatesOneRowShape
         heading="Active jobs"
         summary="1 job needs you. 6 on the Board."
         action={<Button variant="primary">New job</Button>}
+        view={view}
+        columns={COLUMNS}
         controls={
           <BoardControls
             query=""
             onQuery={() => {}}
             searchKey="/"
+            view={view}
+            onView={setView}
             sorts={[
               { id: "critical_first", label: "Critical first" },
               { id: "oldest_first", label: "Oldest first" },
@@ -304,8 +357,13 @@ export const TheBoard: Story = {
         }))}
       />
     </div>
-  ),
-};
+  );
+}
+
+/** What the table names its columns, in the order the rows supply their facts. */
+const COLUMNS = ["Workflow", "Progress", "Run time", "Origin"];
+
+export const TheBoard: Story = { render: () => <Board start="card" /> };
 
 /**
  * Which key each of the six rows answers to, in the order they are drawn.
@@ -341,50 +399,44 @@ export const Done: Story = { render: () => one(done) };
 export const Killed: Story = { render: () => one(killed) };
 
 /**
- * **The same six rows, carrying only what Fleet serves a list.** Four of the
- * drawing's five fields survive the trip now, and this story is here so what
- * does not is something you can see rather than something you have to be told.
+ * **The same six rows with every fact Bridge cannot fill taken out.** The
+ * stories above are the drawing; this one is what a real Board can put on the
+ * screen today, so the difference is something you look at rather than
+ * something you have to be told.
  *
- * `branch` and `created_at` are on `JobSummary`, so track one makes the
- * drawing's switch — the branch the moment a worktree exists, the workflow
- * until then — and elapsed is measured from creation to now.
+ * It was called `What the wire serves`, which named the subject and not the
+ * question — it read like a protocol dump next to five state stories. The point
+ * is the gap.
  *
- * | Field | Why it is not here |
+ * | Taken out | Why Bridge cannot fill it |
  * |---|---|
- * | Spend | Measured nowhere — not on the wire, not in the store, not computed |
- * | `Dispatched by you` | `origin` is on `JobSummary` and `enum-verbs.toml` carries all five rows, but no generator emits them — the wanted list in `apps/desktop/codegen/vocabulary.mjs` does not name `origin`, so nothing carries the words across and Bridge would have to retype them. Adding it is not the whole fix: `JobSummary` carries no `dispatched_by`, so `sub_dispatched`'s form has no slot to fill |
- * | Elapsed on a Job that is over | `JobSummary` carries no instant the Job stopped at, and a terminal elapsed running to now would read as still working |
+ * | `Origin` | `origin` is on `JobSummary` and `enum-verbs.toml` carries all five rows, `sub_dispatched`'s form included. Nothing emits them: the wanted list in `apps/desktop/codegen/vocabulary.mjs` does not name `origin`. Adding it is not the whole fix — `JobSummary` carries no `dispatched_by`, so that form has no slot to fill |
+ * | Run time on a Job that is over | `JobSummary` carries no instant the Job stopped at, and an elapsed running to now would read as still working |
  *
- * The step is its `step_id`, in mono: `StepDetail` carries a label, but a list
- * row holds `JobSummary` and the summary carries only the id. The name is one
- * click away, on the rail.
+ * **The step is its `step_id` rather than its name**, in mono: `StepDetail`
+ * carries a label and a list row holds `JobSummary`, which carries only the id.
+ * The name is one click away, on the rail.
  *
- * Absent rather than blank, in every case: a labelled gap on every row of the
- * list reads as a value that failed to load, which is worse than a shorter row.
+ * Absent rather than blank, in every case. A named cell with nothing in it
+ * reads as a value that failed to load, which is worse than a shorter row.
  */
-export const WhatTheWireServes: Story = {
+export const OnlyWhatBridgeCanFill: Story = {
   render: () => (
     <div className="armada-screen">
       <TheListSixStatesOneRowShape
         heading="Active jobs"
         summary="6 jobs. 1 awaiting approval."
-        rows={SIX.map((row) => ({
-          ...row,
-          tracks: undefined,
-          // Track one is the branch where the row has one and the workflow
-          // where it does not; the step is the id it was dispatched on; and
-          // elapsed is only on a Job still working. Spend is dropped, never
-          // drawn empty.
-          fields: [
-            row === awaitingApproval || row === queued ? { value: workflow } : row.fields[0]!,
-            row.fields[1]!,
-            row === awaitingApproval || row === queued
-              ? { value: "Not started", quiet: true }
-              : { ...row.fields[2]!, mono: true },
-            ...(row === awaitingApproval || row === queued || row === running
-              ? [{ value: STILL_RUNNING[SIX.indexOf(row)] ?? "", mono: true, quiet: true }]
-              : []),
-          ],
+        rows={JOBS.map((job) => ({
+          ...rowOf(job),
+          fields: factsOf({
+            ...job,
+            // The id, because that is what a summary carries.
+            step: job.step === "Not started" ? "Not started" : job.jobId.replace("job_", "step_"),
+            // Elapsed climbs only while the Job is still working.
+            ...(job.status === "running" || job.status.startsWith("awaiting") || job.status === "not-started"
+              ? {}
+              : { runTime: undefined }),
+          }).filter((field) => field.label !== "Origin"),
         }))}
       />
     </div>
@@ -417,90 +469,4 @@ export const WhatTheWireServes: Story = {
  * workflow and the row draws whichever it has; a named column cannot do that,
  * so the column says Workflow and carries the workflow.
  */
-export const TheBoardAsATable: Story = {
-  render: () => (
-    <div className="armada-screen">
-      <TheListSixStatesOneRowShape
-        heading="Active jobs"
-        summary="1 job needs you. 6 on the Board."
-        action={<Button variant="primary">New job</Button>}
-        view="table"
-        columns={["Workflow", "Progress", "Run time"]}
-        controls={
-          <BoardControls
-            query=""
-            onQuery={() => {}}
-            searchKey="/"
-            view="table"
-            onView={() => {}}
-            sorts={[
-              { id: "critical_first", label: "Critical first" },
-              { id: "oldest_first", label: "Oldest first" },
-            ]}
-            sort="critical_first"
-            onSort={() => {}}
-            tabs={[
-              { id: "all", label: "All", count: 6, shortcut: "1" },
-              { id: "needs-you", label: "Needs you", count: 1, shortcut: "2" },
-              { id: "running", label: "Running", count: 1, shortcut: "3" },
-              { id: "queued", label: "Queued", count: 1, shortcut: "4" },
-              { id: "finished", label: "Finished", count: 3, shortcut: "5" },
-            ]}
-            tab="all"
-            onTab={() => {}}
-          />
-        }
-        rows={SIX.map((row, i) => ({
-          ...row,
-          // `tracks` is the card's standalone fallback and means nothing here:
-          // inside a list the columns are the list's.
-          tracks: undefined,
-          fields: asCells(row),
-          actionKey: KEYS[i],
-          focused: i === 0 || undefined,
-        }))}
-      />
-    </div>
-  ),
-};
-
-/**
- * A card's field run, read as the three cells the table names.
- *
- * **The fixtures are the card's**, and reshaping them here rather than writing
- * a second set is the point: two sets authored separately drift, and the whole
- * claim of the toggle is that it is one row's facts in two arrangements.
- */
-function asCells(row: JobRowStackedProps): JobRowStackedProps["fields"] {
-  const [origin, bar, step, ...rest] = row.fields;
-  // **Only a mono field, and no fallback to the last one.** The gate row's run
-  // ends `created 09:12` then `Dispatched by you`, and taking the last of them
-  // put a person's name under Run time. A Job that has not started has no run
-  // time, and the column says so with a dash rather than with whatever was
-  // nearest.
-  const elapsed = rest.find((field) => field.mono === true);
-  return [
-    { label: "Workflow", value: origin?.value, mono: origin?.mono, icon: origin?.icon },
-    {
-      label: "Progress",
-      value: (
-        <>
-          {bar?.value}
-          <span className="armada-row-step">{step?.value}</span>
-        </>
-      ),
-    },
-    {
-      label: "Run time",
-      value: elapsed?.value ?? "—",
-      mono: true,
-      quiet: elapsed === undefined || undefined,
-    },
-  ];
-}
-
-/**
- * How long each row has been alive, for the three that are not over. Written
- * here because a story is a fixture; the app measures it from `created_at`.
- */
-const STILL_RUNNING: Record<number, string> = { 0: "1h 04m", 1: "38m 12s", 2: "11m 03s" };
+export const TheBoardAsATable: Story = { render: () => <Board start="table" /> };

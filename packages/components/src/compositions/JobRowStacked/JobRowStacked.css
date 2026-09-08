@@ -233,6 +233,57 @@
   color: var(--fg-muted);
 }
 
+/* Icon and value, together, so a label can sit above the pair rather than
+   between the glyph and the word it belongs to. */
+.armada-job-row__field-body {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* **A labelled field in the card view stacks: the name above the value.**
+   Two channels rather than one — the name is --text-2xs small caps in
+   --fg-subtle and the value a step up in --fg-default — and that contrast is
+   the hierarchy a run of same-sized tags could not give. Every tag reading
+   equally loud is what made the old row impossible to rank.
+
+   Only where there is a label. A field with none is a value on its own line,
+   which is the row as it always was. */
+.armada-job-row__field[data-labelled] {
+  flex-direction: column;
+  align-items: flex-start;
+  /* 2px. The pair is one block, so the gap is under the base unit — the same
+     value and the same argument `__body` uses for the headline and its run. */
+  gap: calc(var(--space-1) / 2);
+  overflow: visible;
+}
+
+.armada-job-row__field[data-labelled] > .armada-job-row__field-label {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+
+.armada-job-row__field[data-labelled] > .armada-job-row__field-body {
+  color: var(--fg-default);
+  max-width: 100%;
+}
+
+/* The table takes the name off the screen and lets the header say it once, so
+   the field is a single line again. `visibility` is not enough and
+   `display: none` would take it out of the accessibility tree with it — the
+   list's stylesheet hides it the way an accessible name is hidden. */
+.armada-job-row[data-view="table"] .armada-job-row__field[data-labelled],
+.armada-job-row-list[data-view="table"] .armada-job-row__field[data-labelled] {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-1);
+  overflow: hidden;
+}
+
 .armada-job-row__field-value {
   min-width: 0;
   overflow: hidden;
