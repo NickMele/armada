@@ -28,6 +28,7 @@ const meta: Meta<typeof DispatchRequest> = {
     onEnterByHand: fn(),
     onReset: fn(),
     onOpen: fn(),
+    onApprove: fn(),
     onStop: fn(),
     proposal: { at: "unasked" } satisfies Proposal,
   },
@@ -244,20 +245,60 @@ export const OneJob: Story = {
     },
   },
   /**
-   * The row opens the job. **It does not approve it** — nothing on a list
-   * approves, and a control here that dispatched would be a second gate over a
-   * proposal the first one already holds. A rendering cannot show which of the
-   * two a press does.
+   * Both acts, on one row and sent with the row's own id. **Approving here is
+   * what starts the work** — everything the gate approves is on the screen, so
+   * the trip to detail is the exception rather than the way through. Review
+   * still opens it, for the case where the title is not enough.
    */
   play: async ({ args, canvas, userEvent }) => {
-    await expect(
-      canvas.queryByRole("button", { name: /approve/i }),
-    ).toBeNull();
-
     await userEvent.click(
       canvas.getByRole("button", { name: "Review Stop the board flickering on every event" }),
     );
     await expect(args.onOpen).toHaveBeenCalledWith("job_2d90bb");
+
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Approve Stop the board flickering on every event" }),
+    );
+    await expect(args.onApprove).toHaveBeenCalledWith("job_2d90bb");
+  },
+};
+
+/**
+ * The approval is out. **The control says so and is dead** — approving twice
+ * does not spawn twice, but a control that looks unpressed invites the second
+ * press and then says nothing about the first.
+ */
+export const Approving: Story = {
+  args: {
+    approving: ["job_2d90bb"],
+    proposal: {
+      at: "proposed",
+      request: REQUEST,
+      jobs: [{ id: "job_2d90bb", title: "Stop the board flickering on every event", workflow: "bug", status: "awaiting_approval" }],
+    },
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const approving = canvas.getByRole("button", { name: /Approving/ });
+    await expect(approving).toBeDisabled();
+    await userEvent.click(approving);
+    await expect(args.onApprove).not.toHaveBeenCalled();
+  },
+};
+
+/**
+ * Released, and the row says so. **The badge is Fleet's**, so a Job that has
+ * left its gate draws no second approval — by this press or by anybody else's.
+ */
+export const Approved: Story = {
+  args: {
+    proposal: {
+      at: "proposed",
+      request: REQUEST,
+      jobs: [{ id: "job_2d90bb", title: "Stop the board flickering on every event", workflow: "bug", status: "queued" }],
+    },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole("button", { name: /^Approve/ })).toBeNull();
   },
 };
 
@@ -268,9 +309,10 @@ export const OneJob: Story = {
  * each member waits on the one before it reaching `completed_success` — so
  * position carries it and no second field restates it.
  *
- * **Nothing here approves all three.** Fleet's rule is strictly one by one, so
- * each job takes its own approval when its turn comes, and the line under the
- * list is what says so before anybody looks for a control that is not there.
+ * **Only the first is approvable, and nothing here approves all three.**
+ * Fleet's rule is strictly one by one, and the second is not at its gate until
+ * the first completes — so the rows under the head carry Review alone, and the
+ * line under the list says why before anybody looks for a control.
  */
 export const SeveralJobs: Story = {
   args: {
@@ -296,6 +338,15 @@ export const SeveralJobs: Story = {
       canvas.getByRole("button", { name: "Review Tell an unreachable Fleet from a missing one" }),
     );
     await expect(args.onOpen).toHaveBeenCalledWith("job_11a2");
+
+    // One gate on screen, and it is the head's. Three rows at
+    // `awaiting_approval` is what the answer says; which of them a person may
+    // release is not the same question.
+    await expect(canvas.getAllByRole("button", { name: /^Approve/ })).toHaveLength(1);
+    await userEvent.click(
+      canvas.getByRole("button", { name: "Approve Move the runtime file into its own crate" }),
+    );
+    await expect(args.onApprove).toHaveBeenCalledWith("job_11a0");
   },
 };
 

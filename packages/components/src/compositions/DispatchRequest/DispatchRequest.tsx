@@ -70,13 +70,23 @@ import { JOB_STATUS } from "../../generated/vocabulary";
  * the list says out loud what the gate approves: the workflow, the name and the
  * split.
  *
- * # Approving is somewhere else, and stays somewhere else
+ * # Approving happens here, on the job you just read
  *
- * Every Job that comes back already exists, at `awaiting_approval`. This does
- * not approve one, and it offers no control that approves several at once —
- * nothing on a list approves, approval is a second act from detail, and Fleet's
- * rule is strictly one by one. The control on a row is Review, which is the
- * same signpost the Job Board's own row carries for this status.
+ * Every Job that comes back already exists, at `awaiting_approval`. **The head
+ * of the proposal carries its own approval**, because everything the gate
+ * approves — the workflow, the name and the split — is on this screen already,
+ * and sending somebody to detail to say yes to what they are looking at is a
+ * second surface for no second fact. Settled 2026-09-08, against the earlier
+ * reading that approval is always a second act from detail.
+ *
+ * **It is one approval, and only the head's.** Fleet's rule is strictly one by
+ * one, and a chained Job is not at its gate until the one before it completes,
+ * so every row under the first carries Review alone and nothing here approves
+ * several at once. The Job Board is unchanged: a row somebody is browsing past
+ * still only signposts, because there the proposal is not on screen.
+ *
+ * Review stays beside the approval, for the case where the title is not enough
+ * and the Job itself is what somebody wants to read.
  */
 export type DispatchRequestProps = {
   /**
@@ -93,6 +103,20 @@ export type DispatchRequestProps = {
   onReset: () => void;
   /** Open one of the jobs that came back, where its own gate is drawn. */
   onOpen: (jobId: string) => void;
+  /**
+   * Release the job at the head of the proposal, which is what starts the work.
+   *
+   * **Offered on one row and never on two.** Only the head is at its gate — the
+   * rest of a chain reach theirs as the one before them completes — so this is
+   * called with the first job's id or not at all.
+   */
+  onApprove: (jobId: string) => void;
+  /**
+   * Jobs whose approval is out, by id. The control says `Approving` and goes
+   * dead: approving twice does not spawn twice, but a control that looks
+   * unpressed invites the second press and then says nothing about the first.
+   */
+  approving?: readonly string[];
   /** What the proposer answered, or that it has not been asked. */
   proposal: Proposal;
   /**
@@ -217,6 +241,15 @@ function badgeOf(status: string): { status: string; icon: LucideIcon; verb: stri
  */
 const REVIEW = ACTION["review"];
 
+/**
+ * What the row's forward control is called. The same row of `actions.toml` the
+ * detail's own gate answers — one act, one word, wherever it is offered.
+ */
+const APPROVE = ACTION["approve"];
+
+/** The status a job is at when its gate is somebody's to release. */
+const AT_THE_GATE = "awaiting_approval";
+
 /** What the field asks for, and the two things it takes. */
 const PLACEHOLDER = "Describe the work, or paste a link to a ticket.";
 
@@ -230,6 +263,8 @@ export function DispatchRequest({
   onEnterByHand,
   onReset,
   onOpen,
+  onApprove,
+  approving = [],
   proposal,
   onStop,
   slowAfterMs,
@@ -255,7 +290,12 @@ export function DispatchRequest({
           </p>
 
           {answered ? (
-            <Answered proposal={proposal} onOpen={onOpen} />
+            <Answered
+              proposal={proposal}
+              onOpen={onOpen}
+              onApprove={onApprove}
+              approving={approving}
+            />
           ) : (
             <Textarea
               label="Request"
@@ -485,9 +525,13 @@ function lasting(ms: number): string {
 function Answered({
   proposal,
   onOpen,
+  onApprove,
+  approving,
 }: {
   proposal: Extract<Proposal, { at: "proposed" }>;
   onOpen: (jobId: string) => void;
+  onApprove: (jobId: string) => void;
+  approving: readonly string[];
 }) {
   const several = proposal.jobs.length > 1;
 
@@ -520,17 +564,30 @@ function Answered({
             </div>
             <AtTheGate status={job.status} />
 
-            {/* Opens the job. It does not approve one: approval is a second act
-                from detail, and a control here that dispatched would be a
-                second gate over a proposal the first one already holds. */}
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => onOpen(job.id)}
-              aria-label={`${REVIEW === undefined ? "Review" : REVIEW.verb} ${job.title}`}
-            >
-              {REVIEW === undefined ? "Review" : REVIEW.verb}
-            </Button>
+            <div className="armada-dispatch__job-acts">
+              {/* Opens the job, for the case where the title is not enough. It
+                  is not the way to approve one any more, but it is still the
+                  only way to read one before releasing it. */}
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => onOpen(job.id)}
+                aria-label={`${REVIEW === undefined ? "Review" : REVIEW.verb} ${job.title}`}
+              >
+                {REVIEW === undefined ? "Review" : REVIEW.verb}
+              </Button>
+
+              {/* The gate, on the one row that holds it. The status is Fleet's
+                  and is checked rather than assumed: a job already released —
+                  by this press or from anywhere else — draws no second one. */}
+              {index === 0 && job.status === AT_THE_GATE ? (
+                <Releasing
+                  job={job}
+                  out={approving.includes(job.id)}
+                  onApprove={onApprove}
+                />
+              ) : null}
+            </div>
           </li>
         ))}
       </ol>
@@ -546,6 +603,36 @@ function Answered({
         is the workflow&rsquo;s first step.
       </p>
     </div>
+  );
+}
+
+/**
+ * The gate, as a control. **The label and the accessible name are the same
+ * words** — a button reading `Approving` under a name saying `Approve` tells a
+ * screen reader the press is still there to make.
+ */
+function Releasing({
+  job,
+  out,
+  onApprove,
+}: {
+  job: ProposedJob;
+  /** This job's approval is in flight. */
+  out: boolean;
+  onApprove: (jobId: string) => void;
+}) {
+  const verb = APPROVE === undefined ? "Approve" : APPROVE.verb;
+  const says = out ? "Approving" : verb;
+  return (
+    <Button
+      variant="primary"
+      size="sm"
+      disabled={out}
+      onClick={() => onApprove(job.id)}
+      aria-label={`${says} ${job.title}`}
+    >
+      {says}
+    </Button>
   );
 }
 
