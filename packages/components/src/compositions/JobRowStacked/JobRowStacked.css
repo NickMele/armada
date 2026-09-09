@@ -95,7 +95,14 @@
      it rather than clipping, and the floor is what keeps rows aligned down a
      column across the Board, Alerts, Reviews and Active jobs. */
   min-height: var(--h-row-stacked);
-  padding: var(--pad-row-stacked) var(--space-4);
+  /* **The left is short by the focus bar's width, so content lines up with the
+     head above it.** The bar is reserved on every row and transparent at rest,
+     which is what stops a row shifting when the cursor lands on it — and it
+     also pushed every row's content 2px right of everything else in the pane.
+     Reserved and subtracted, so the row still never moves and the column still
+     starts where the heading does. */
+  padding: var(--pad-row-stacked) var(--space-4) var(--pad-row-stacked)
+    calc(var(--space-4) - var(--border-width));
   border-bottom: var(--border-width) solid var(--border-subtle);
   /* The left edge is --row-focus-bar with its colour dropped to transparent at
      rest, so focus adds no width and no row shifts when the cursor lands. */
