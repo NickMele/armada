@@ -464,3 +464,37 @@ it("does not fetch the patch again when the stream drops events under a live soc
   expect(fleet.read(SCREEN.evidence)).toBe(1);
   expect(fleet.read(SCREEN.diff)).toBe(1);
 });
+
+it("re-reads the open Job when a Drone comes on or off a step", async () => {
+  const fleet = await serving();
+  const home = await runtimeFile(fleet.port);
+  const published = publishing();
+  const connection = new FleetConnection({
+    home,
+    publish: (state) => published.publish(state),
+    now: () => 1_756_840_000_000,
+  });
+  opened.push(() => connection.stop());
+
+  connection.start();
+  const stream = await fleet.stream(0);
+  stream.send(resyncing(1));
+  await published.until((state) => state.connection.state === "connected");
+  await connection.watchJob(A_JOB);
+  await published.until((state) => state.watched.state === "read");
+
+  // **The exit is the first message a Drone's cost can be read back on**: Fleet
+  // writes the spend row before publishing it — `crates/fleet/src/allowance.rs`.
+  // Both kinds carry the row rather than a `job_id`, so an unmatched one reached
+  // the tail as a move about a Job this window had never seen — a full `GET /jobs`
+  // apiece, and the open Job never re-read. The count is the cursor because each
+  // event is one detail read, the reading the Job opened with being the first.
+  const drone = { job: A_ROW, step_id: "scope", drone_id: "01M2224R7V001AYN6FX0", actor: "fleet" };
+  for (const [cursor, kind] of [[2, "drone.exited"], [3, "drone.spawned"]] as const) {
+    const event = { kind, ...drone, at: "2026-09-02T19:09:59.615Z" };
+    stream.send(JSON.stringify({ message: "event", cursor, event }));
+    await published.until(() => fleet.read(SCREEN.detail) === cursor);
+  }
+  expect(fleet.read(SCREEN.detail)).toBe(3);
+  expect(fleet.read("/jobs")).toBe(0);
+});
