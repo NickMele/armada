@@ -45,11 +45,24 @@ pub struct FakeHarness {
     configured: Mutex<Vec<DroneSpawnConfig>>,
 }
 
+/// How a turn Fleet wrote looks coming back, as far as the fake reads it.
+///
+/// **`fleet::session::Turn`'s own serialisation**, which puts `type` first
+/// because the struct does. The real decoder asks the same question of a parsed
+/// object; this asks it of the bytes, which is the whole difference between a
+/// fixture and `adapters::transcript`.
+pub const REPLAYED: &str = "{\"type\":\"user\"";
+
 impl FakeHarness {
     /// A Drone that holds its input open and echoes every turn it is given.
     ///
     /// The default, because it is the one that stays alive long enough for a
     /// test to speak to it.
+    ///
+    /// **The echo is the point and not an accident of `/bin/cat`.** A real
+    /// Drone runs under `--replay-user-messages`, so a turn coming back is the
+    /// harness saying it handed one over — which is what `crate::converging`
+    /// measures its report grace from. See [`REPLAYED`].
     pub fn that_listens() -> FakeHarness {
         FakeHarness::running("/bin/cat", &[])
     }
@@ -163,9 +176,24 @@ impl AgentHarness for FakeHarness {
     fn read(&self, line: &str) -> Vec<DroneEvent> {
         match self.scripted.get(line) {
             Some(events) => events.clone(),
+            // **A turn coming back is Armada's, and `/bin/cat` is what makes
+            // that real.** The agent CLI runs with `--replay-user-messages`,
+            // which re-emits an injected turn when the Drone is handed it — so
+            // `that_listens` echoing Fleet's own line is the fixture's whole
+            // model of delivery, and attributing it to the Drone made every
+            // fake Drone one that was never told anything.
+            //
+            // **A prefix rather than a parse**, because the gate keeps
+            // untyped JSON reads inside `store` and `ipc`. It is exactly what
+            // `fleet::session::Turn` serialises to, and
+            // `a_turn_fleet_writes_is_read_back_as_armadas` pins the two
+            // together so this cannot drift quietly.
+            None if line.starts_with(REPLAYED) => vec![DroneEvent::Said {
+                text: String::from(line),
+                by: Speaker::Armada,
+            }],
             // The Drone's, because a scripted line stands in for something a
-            // Drone wrote. A test that wants Armada's turn echoed back scripts
-            // the event itself.
+            // Drone wrote. A test that wants a different event scripts it.
             None => vec![DroneEvent::Said {
                 text: String::from(line),
                 by: Speaker::Drone,

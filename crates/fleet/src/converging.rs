@@ -364,6 +364,10 @@ where
         // it as having been there all along — which reads as a Drone that
         // never answered.
         let rested_before = working.as_ref().map(Working::rested).unwrap_or_default();
+        // Read here for the same reason and with a sharper edge: the write
+        // below is what moves this counter, so a reading taken after it would
+        // mistake the directive's own acknowledgement for one already there.
+        let handed_before = working.as_ref().map(Working::handed).unwrap_or_default();
         let stage = match found {
             Err(cause) => Stage::CouldNotLook { tripped, cause },
             Ok(Convergence::Thrashing(why)) => {
@@ -384,6 +388,7 @@ where
                 Stage::AskedToReport { why, asked_at, .. } => at_work.reporting(
                     asked_at.clone(),
                     rested_before,
+                    handed_before,
                     why.clone(),
                     in_plan.clone(),
                 ),
@@ -418,7 +423,40 @@ where
             }
             return Ok(None);
         }
-        if elapsed(asked_at, &self.now()) < self.norms().report_grace() {
+        // **The grace runs from when the Drone was told, not from when Fleet
+        // spoke.** Injection lands at a turn boundary, so a Drone inside a tool
+        // call is handed nothing until that call returns — and until it is, it
+        // is not failing to report, it has not been asked. Job
+        // `01M21BKVPW002DC0ATD1X9T0VF` is the instance: told at 02:37:42,
+        // handed the turn at 02:39:14, wrote its deliverable at 02:39:40, and
+        // stopped at `no_report` at 02:39:42. It obeyed in 26 seconds and had
+        // 28 of its 120 left by the time it could hear.
+        //
+        // **The deadline is pushed rather than the comparison widened.** A
+        // larger `report_grace` would be a guess at a delay that has no bound —
+        // it is whatever is left of the current tool call — and it would spend
+        // the same slack on a Drone that was handed the turn at once. This is
+        // `still_reporting`'s re-arm on a second reason, and it costs a Drone
+        // nothing that is genuinely quiet: once the turn lands the clock runs
+        // in full.
+        if at_work.was_handed_the_directive() {
+            if let Some(at_work) = working.as_mut() {
+                at_work.handed_the_directive_at(self.now());
+            }
+        }
+        // **`asked_at` is not touched, and that is the second half.** It dates
+        // the look, and the row this escalation writes quotes it as the instant
+        // the finding was taken — so moving it to re-arm a deadline would make
+        // the record say the look happened later than it did. The two are
+        // different facts and now sit in different fields.
+        let Some(handed_at) = working
+            .as_ref()
+            .and_then(Working::handed_the_directive)
+            .cloned()
+        else {
+            return Ok(None);
+        };
+        if elapsed(&handed_at, &self.now()) < self.norms().report_grace() {
             return Ok(None);
         }
         let record = self.load(job).await?;

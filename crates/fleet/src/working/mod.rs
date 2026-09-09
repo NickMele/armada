@@ -122,6 +122,11 @@ pub(crate) struct Working {
     /// How many times the Drone had come to rest by the moment it was told to
     /// report. The baseline the forced report is read against.
     rested_before: usize,
+    /// The pair that says whether the Drone was handed the directive, and when.
+    /// Zero and `None` on a step nobody has told to report — and `None` for as
+    /// long as the Drone is inside a call. See `crate::working::converging`.
+    handed_before: usize,
+    handed_at: Option<Timestamp>,
     /// Where this step stands in the thrashing chain.
     chain: Chain,
     /// When the Drone was last heard from, as the injected clock read it on the
@@ -340,6 +345,8 @@ impl Working {
             step_began: at.clone(),
             calls_before: 0,
             rested_before: 0,
+            handed_before: 0,
+            handed_at: None,
             chain: Chain::Working,
             heard_at: at,
             heard: 0,
@@ -401,6 +408,8 @@ impl Working {
             step_began: at.clone(),
             calls_before: 0,
             rested_before: 0,
+            handed_before: 0,
+            handed_at: None,
             chain: Chain::Working,
             heard_at: at,
             heard: 0,

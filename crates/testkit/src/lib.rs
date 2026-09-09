@@ -32,7 +32,7 @@ mod vcs;
 mod work_product;
 mod workflow;
 
-pub use harness::{FakeHarness, FakeHarnessRefused};
+pub use harness::{FakeHarness, FakeHarnessRefused, REPLAYED};
 pub use job::{asked_for, asking};
 pub use judge::{refusal, FakeJudge};
 pub use link_lookup::FakeLinkLookup;

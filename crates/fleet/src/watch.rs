@@ -132,6 +132,28 @@ pub struct Progress {
     /// is a line nobody could attribute. None of them is the Drone taking a
     /// turn.
     pub turned: usize,
+    /// How many turns Armada put into this session the Drone has actually been
+    /// handed.
+    ///
+    /// **The acknowledgement, and the one thing that says a directive landed.**
+    /// `--replay-user-messages` re-emits an injected turn *at the moment it is
+    /// consumed* rather than when it was written, which spike 4 relied on to
+    /// measure delivery at all — its words: an acknowledgement, not an echo of
+    /// the write. Nothing else in this stream can date the arrival.
+    ///
+    /// **A third counter, because [`turned`](Progress::turned) must not count
+    /// these and cannot.** That one asks whether the Drone acted, and the arm
+    /// above says what counting an echo there did: a redirect read as taken up
+    /// the moment the harness repeated it. This asks the opposite question —
+    /// whether the Drone has been *spoken to* yet — so it needs the row that
+    /// one throws away.
+    ///
+    /// **Why anything asks.** Injection lands at a turn boundary, so a Drone
+    /// inside a tool call is handed nothing until that call returns; spike 4
+    /// measured 1.59s between two fast calls and 33.14s inside a slow one, and
+    /// Job `01M21BKVPW002DC0ATD1X9T0VF` waited 92s. A grace measured from the
+    /// send spends itself on a Drone that has not been told anything yet.
+    pub delivered: usize,
 }
 
 /// How much of the transcript the drain got.
@@ -295,6 +317,14 @@ impl Watching {
                         by: Speaker::Drone, ..
                     }
                     | DroneEvent::Refused { .. } => so_far.turned += 1,
+                    // **The same row the arm above refuses, counted for the
+                    // opposite question.** Armada's own prose coming back is
+                    // the harness saying it handed the turn over, which is not
+                    // the Drone acting and is the only proof it was told.
+                    DroneEvent::Said {
+                        by: Speaker::Armada,
+                        ..
+                    } => so_far.delivered += 1,
                     _ => {}
                 }
                 // Outside the match, deliberately: every event is one, and an
