@@ -279,8 +279,29 @@ eighth — a gate that quietly stopped covering something. It is a thing a step
 **says**: an empty `mechanical_checks` is an ungated step and stays one, because
 half the shipped workflows have steps producing a document nothing compiles.
 The schema is `crates/core-model/domain/workflowdef-fields.toml`, which carries
-the rest — that it does not compose with a named Check on the same step, and
-that a Manifest declaring no Checks refuses it.
+the rest — including that it does not compose with a named Check on the same
+step.
+
+**The order `checks:` is written in is the order they run in, and there is no
+key to state it twice with.** Fleet starts four of a step's Checks at a time off
+that order, so the first four declared are the four that start. Until a step
+could gate on every Check, the workflow file's list was the only place a
+repository sequenced its gate — so `checks:` inherits the sequencing along with
+the naming, and reordering it for tidiness now changes the gate. This is the
+`steps[]` rule a file along: order is already the semantics, and two statements
+of it can disagree.
+
+**A repository declaring no Checks expands it to nothing, and that is recorded
+rather than refused.** An ungated workspace is a state this document's own
+nearest-ancestor rule sanctions, so refusing would make a documented state
+unusable with any shipped workflow; and *run what this repository declares*
+reads literally. What the empty expansion must not do is go quiet, because an
+empty check list then means two opposite things — *asked for a gate and got
+none* and *never asked*. So the declaration is frozen onto the step beside the
+expansion, and served as a declared check of that kind ahead of whatever it
+came to. That is the general rule this instance follows: **where a resolution
+can legitimately produce nothing, the record carries what was asked for, not
+only what it came to.**
 
 ## Two tiers of path boundary, and only one of them is configuration
 

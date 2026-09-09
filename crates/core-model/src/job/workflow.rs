@@ -153,6 +153,15 @@ pub const MANIFEST_CHECK: &str = "manifest_check";
 pub const DIFF_NONEMPTY: &str = "diff_nonempty";
 /// The schema's `type` value for the built-in artifact assertion.
 pub const ARTIFACT_EXISTS: &str = "artifact_exists";
+/// The schema's `type` value for *every Check this Manifest declares*.
+///
+/// **Not a [`ResolvedCheck`] variant, and that is the point.** The entry is
+/// expanded against a Manifest before dispatch, so what the Job freezes is one
+/// [`ResolvedCheck::ManifestCheck`] per declared Check and never a promise that
+/// would re-read `armada.yml` mid-Job. What survives the expansion is the fact
+/// that the step said it — [`ResolvedStep::gates_on_every_check`] — and this is
+/// the word that fact is drawn with.
+pub const EVERY_MANIFEST_CHECK: &str = "every_manifest_check";
 
 impl ResolvedCheck {
     /// The WorkflowDef schema's `type` value for this check.
@@ -289,6 +298,27 @@ pub struct ResolvedStep {
     /// Whether a Drone on this step is given the tool that creates Jobs.
     /// **False on every step that does not say otherwise.**
     may_dispatch_jobs: bool,
+    /// Whether the definition said `every_manifest_check` rather than naming
+    /// Checks one at a time.
+    ///
+    /// **The one thing about the expansion that the list of checks cannot say.**
+    /// A step gating on every Check is resolved into one entry per declared
+    /// Check, and once that is done a step whose repository declared none is
+    /// indistinguishable from a step that declared no gate at all — the same
+    /// two-readings-of-one-value failure `when`'s `Option<Covers>` refuses. The
+    /// two need opposite readings: the first verified nothing while asking to,
+    /// and the second never asked.
+    ///
+    /// So the declaration is frozen beside the expansion, and it is what
+    /// [`ResolvedStep::checks`] cannot carry: a Job read back a week later says
+    /// *this step gated on every Check its repository declared*, and the empty
+    /// list beside it says the repository declared none. `fleet::wire` draws it
+    /// as a declared check of this kind, which is the row a person sees.
+    ///
+    /// **False on every row frozen before the key existed**, and that reading
+    /// is right rather than a backfill: no workflow could say it, so no step
+    /// did.
+    gates_on_every_check: bool,
     /// Whether entering this step sends the work out: the branch is committed,
     /// pushed, and opened for review, and the step then holds while a person
     /// reads what went out.
@@ -387,13 +417,14 @@ impl ResolvedStep {
             evidence_scope,
             retry_limit,
             model,
-            // Set by the four builders below: a tenth parameter would make ten
+            // Set by the builders below: a tenth parameter would make ten
             // callers state a value that is false on all but one step, an
             // eleventh and a twelfth a zero and an empty map on every step of
             // every linear workflow, and the last two a `None` about a dial
             // almost no step touches.
             may_dispatch_jobs: false,
             delivers: false,
+            gates_on_every_check: false,
             iteration_cap: 0,
             verdict_routing: BTreeMap::new(),
             quiet_after_seconds: None,
@@ -413,6 +444,17 @@ impl ResolvedStep {
     /// declares it and every other step would be restating a `false`.
     pub fn delivering(mut self, delivers: bool) -> ResolvedStep {
         self.delivers = delivers;
+        self
+    }
+
+    /// Whether the definition said `every_manifest_check`, for
+    /// [`dispatching`](Self::dispatching)'s reason.
+    ///
+    /// Separate from the checks it expanded to, because the expansion is what
+    /// runs and this is what was asked for — and on a repository declaring no
+    /// Checks the two say different things.
+    pub fn gating_on_every_check(mut self, every: bool) -> ResolvedStep {
+        self.gates_on_every_check = every;
         self
     }
 
@@ -495,8 +537,26 @@ impl ResolvedStep {
     }
 
     /// All entries must pass. Empty on the common case of an ungated step.
+    ///
+    /// **Empty has two readings once a step may gate on every declared Check**,
+    /// and this list cannot tell them apart:
+    /// [`gates_on_every_check`](ResolvedStep::gates_on_every_check) is what
+    /// does.
     pub fn checks(&self) -> &[ResolvedCheck] {
         &self.checks
+    }
+
+    /// Whether the definition asked for every Check its repository declares,
+    /// rather than naming them.
+    ///
+    /// **True with an empty [`checks`](ResolvedStep::checks) is the state worth
+    /// naming**: the step asked to be gated on everything and the Manifest
+    /// declared nothing, so nothing was verified and no check row exists to say
+    /// so. It is legitimate — `docs/concepts/manifest.md` sanctions a Manifest
+    /// declaring no Checks — and the answer is to record it rather than refuse
+    /// it, because silence was the defect and not the expansion.
+    pub fn gates_on_every_check(&self) -> bool {
+        self.gates_on_every_check
     }
 
     pub fn advance_gate(&self) -> AdvanceGate {

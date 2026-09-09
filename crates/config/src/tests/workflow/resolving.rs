@@ -281,6 +281,8 @@ fn a_step_may_gate_on_every_check_the_manifest_declares() {
     assert_eq!(checks[0].run(), Some("cargo build --workspace"));
     assert_eq!(checks[1].expects(), Some(1));
     assert_eq!(checks[2], ResolvedCheck::DiffNonempty);
+    // And the step keeps saying what it asked for, beside what that came to.
+    assert!(resolved.steps()[0].gates_on_every_check());
 }
 
 /// **A step that declares no mechanical check is still ungated.** The
@@ -296,23 +298,99 @@ fn declaring_no_checks_is_not_declaring_every_check() {
     let manifest = Manifest::parse(&named("armada.yml"), FAILING_MANIFEST).expect("a manifest");
     let resolved = ResolvedWorkflow::resolve(&def, &manifest).expect("nothing to resolve");
     assert!(resolved.steps()[0].checks().is_empty());
+    // The Manifest declares two, so the empty list here is not the registry
+    // being empty — it is the step never having asked, and the record says
+    // which of the two an empty list means.
+    assert!(!resolved.steps()[0].gates_on_every_check());
 }
 
-/// **Every Check of none is a step that reads as gated and is not.** Unlike a
-/// `when` that matches nothing, no run records a skip here — there is no Check
-/// to skip — so the only place this is visible is before dispatch.
+/// **A repository declaring no Checks expands to nothing, and is not refused.**
+/// `docs/concepts/manifest.md` sanctions an ungated workspace as a state rather
+/// than a mistake, and *run what this repository declares* reads literally: a
+/// repository declaring nothing runs nothing. Refusing would have made a
+/// documented state unusable with any shipped workflow.
+///
+/// **What was wrong was the silence.** The step is frozen saying it asked for
+/// every Check, so the empty list beside it reads as *the repository declared
+/// none* rather than as *this step declared no gate*.
 #[test]
-fn gating_on_every_check_where_the_manifest_declares_none_is_refused() {
+fn gating_on_every_check_where_the_manifest_declares_none_expands_to_nothing_and_says_so() {
     let def = parse(
         "version: 1\nworkflow_id: feature\nname: feature\nstructure: linear\nsteps:\n  - id: implement\n    label: Implement\n    evidence_type: diff\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: every_manifest_check }\n",
     )
     .expect("well formed");
     let bare = Manifest::parse(&named("armada.yml"), "version: 1\nid: tooling\n").expect("bare");
-    let error = ResolvedWorkflow::resolve(&def, &bare).expect_err("there is nothing to gate on");
-    assert_eq!(
-        disagreements(&error),
-        [Disagreement::NoChecksDeclared {
-            step: core_model::StepId::new("implement".to_string()),
-        }]
+    let resolved = ResolvedWorkflow::resolve(&def, &bare).expect("an ungated repository is legal");
+    let step = &resolved.steps()[0];
+    assert!(step.checks().is_empty(), "there was nothing to expand to");
+    assert!(
+        step.gates_on_every_check(),
+        "and the record still says the step asked for all of them"
     );
+}
+
+/// A Manifest whose declaration order is not its alphabetical order, so the
+/// two are told apart by what comes back rather than by luck.
+const OUT_OF_ORDER_MANIFEST: &str = r#"
+version: 1
+id: armada
+checks:
+  zebra:
+    run: run zebra
+  build:
+    run: run build
+  apple:
+    run: run apple
+"#;
+
+/// **The expansion is the file's order, not the alphabet's.** `checks:` is
+/// where a repository sequences its gate — `fleet::checking` starts four at a
+/// time off this order — and until a step could gate on every Check, the
+/// workflow file was the only place that sequence was written. Expanding
+/// alphabetically would have reordered every repository's gate silently, and
+/// this repository's own `armada.yml` argues the sequence in its own words,
+/// with measured seconds.
+///
+/// `check_names` is the other view of the same set and stays sorted, because a
+/// message listing what is declared is scanned by a person for a name they
+/// expected. Both are asserted here so neither can quietly become the other.
+#[test]
+fn every_manifest_check_expands_in_the_order_the_manifest_writes_not_the_alphabet() {
+    let def = parse(
+        "version: 1\nworkflow_id: feature\nname: feature\nstructure: linear\nsteps:\n  - id: implement\n    label: Implement\n    evidence_type: diff\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: every_manifest_check }\n",
+    )
+    .expect("well formed");
+    let manifest =
+        Manifest::parse(&named("armada.yml"), OUT_OF_ORDER_MANIFEST).expect("a manifest");
+    assert_eq!(
+        manifest.checks_as_written(),
+        ["zebra", "build", "apple"],
+        "the file's order survives the parse"
+    );
+    assert_eq!(
+        manifest.check_names(),
+        ["apple", "build", "zebra"],
+        "and the sorted view is still sorted, for the message that reads it"
+    );
+
+    let resolved = ResolvedWorkflow::resolve(&def, &manifest).expect("every name declared");
+    assert_eq!(
+        resolved.steps()[0]
+            .checks()
+            .iter()
+            .map(ResolvedCheck::label)
+            .collect::<Vec<&str>>(),
+        ["zebra", "build", "apple"],
+        "the gate runs them as the file wrote them"
+    );
+}
+
+/// A step that named its Checks one at a time never claims it asked for all of
+/// them, however many the Manifest happens to declare.
+#[test]
+fn naming_checks_by_hand_does_not_read_as_gating_on_every_one() {
+    let def = parse(BUG).expect("the worked example");
+    let resolved = ResolvedWorkflow::resolve(&def, &manifest()).expect("every name declared");
+    assert_eq!(resolved.steps()[1].checks().len(), 3);
+    assert!(!resolved.steps()[1].gates_on_every_check());
 }

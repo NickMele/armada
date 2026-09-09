@@ -166,21 +166,29 @@ fn resolve_step(
             // which Checks the Job actually gated on rather than a promise
             // that would re-read `armada.yml` mid-Job.
             //
-            // **Sorted, because a registry has no order to keep.** `checks:`
-            // is a map, so unlike `setup.requires` there is no sequence
-            // somebody wrote; `check_names` hands back the `BTreeMap`'s order
-            // and one machine reads it the same as the next.
+            // **`checks_as_written` and never `check_names`.** The names this
+            // replaced were read top to bottom out of the workflow file, which
+            // was the only place a repository could sequence its gate —
+            // alphabetical would reorder it silently. That accessor holds the
+            // argument and the measured seconds behind it.
+            //
+            // **An empty registry expands to nothing and is not refused.**
+            // `docs/concepts/manifest.md` sanctions a Manifest declaring no
+            // Checks — nearest-ancestor ownership makes an ungated workspace a
+            // state rather than a mistake — so refusing here would make that
+            // documented state unusable with any shipped workflow. And *run
+            // what this repository declares* reads literally: a repository
+            // declaring nothing runs nothing.
+            //
+            // What was wrong with it was the silence, not the expansion, so
+            // the declaration is frozen onto the step and the record says both
+            // halves. `ResolvedStep::gates_on_every_check` carries it.
             MechanicalCheck::EveryManifestCheck => {
-                if manifest.check_names().is_empty() {
-                    disagreements.push(Disagreement::NoChecksDeclared {
-                        step: step.id().clone(),
-                    });
-                }
-                for name in manifest.check_names() {
+                for name in manifest.checks_as_written() {
                     let declared = manifest
-                        .check(&name)
-                        .expect("a name `check_names` handed back is declared");
-                    checks.push(lifted(name, declared, declared.expect_exit_code()));
+                        .check(name)
+                        .expect("`checks_as_written` holds the keys of `checks`");
+                    checks.push(lifted(name.clone(), declared, declared.expect_exit_code()));
                 }
             }
             MechanicalCheck::ManifestCheck {
@@ -247,6 +255,14 @@ fn resolve_step(
     // step: the file was required to say, and `config` already refused a
     // second step saying yes, so there is nothing left to decide here.
     .delivering(step.delivers())
+    // **What the expansion above cannot leave behind.** One entry per declared
+    // Check is what runs; that the step asked for all of them is a separate
+    // fact, and on a repository declaring none it is the only one left.
+    .gating_on_every_check(
+        step.mechanical_checks()
+            .iter()
+            .any(|check| matches!(check, MechanicalCheck::EveryManifestCheck)),
+    )
     // **Both keys through one builder**, which is the shape `dispatching` set
     // and the reason `frozen`'s ten positional arguments did not become
     // twelve. The cap is a count and never an `Option` on the record: absent

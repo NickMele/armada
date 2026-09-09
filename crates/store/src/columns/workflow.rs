@@ -71,6 +71,14 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
             // and `read_workflow` puts that reading back rather than letting it
             // fall to `false` — see there.
             "delivers": step.delivers(),
+            // Written on every step, for `may_dispatch_jobs`' reason — and it
+            // needs no `read_workflow`-style correction the way `delivers`
+            // does: a row frozen before the key existed comes from a workflow
+            // that could not have said it, so `false` is the fact rather than a
+            // gap. It is written beside `checks` and not folded into it,
+            // because on a repository declaring no Checks the expansion is
+            // empty and this is the only thing left that says the step asked.
+            "gates_on_every_check": step.gates_on_every_check(),
             // Null where the step named none, which is almost every step and
             // every row written before `#60`. It is not backfilled with what
             // Fleet was running at the time: absent is the step deferring to
@@ -234,6 +242,7 @@ fn read_step(entry: &Map<String, Value>) -> Result<ResolvedStep, Malformed> {
     // deliver" from "nothing on this record could say", and the two need
     // opposite answers.
     .delivering(read_delivers(entry)?)
+    .gating_on_every_check(read_gates_on_every_check(entry)?)
     .looping(read_verdict_routing(entry)?, read_iteration_cap(entry)?)
     .quiet_after(read_patience(entry, "quiet_after_seconds")?)
     .poking(read_patience(entry, "poke_limit")?))
@@ -370,6 +379,23 @@ fn read_delivers(entry: &Map<String, Value>) -> Result<bool, Malformed> {
         None | Some(Value::Null) => Ok(false),
         Some(Value::Bool(found)) => Ok(*found),
         Some(other) => Err(format!("`delivers` is {}", kind(other))),
+    }
+}
+
+/// Whether the definition asked for every declared Check rather than naming
+/// them. **Absent reads as `false` and needs no second half**, unlike
+/// [`read_delivers`]: no workflow frozen before the key existed could say it,
+/// so `false` is what those steps meant.
+///
+/// A value that is there and is not a boolean is a refusal rather than a
+/// `false`, for [`read_may_dispatch_jobs`]'s reason: this is the only thing on
+/// the record that tells a step gated on an empty Checks registry from a step
+/// that declared no gate, and losing it quietly is losing the distinction.
+fn read_gates_on_every_check(entry: &Map<String, Value>) -> Result<bool, Malformed> {
+    match entry.get("gates_on_every_check") {
+        None | Some(Value::Null) => Ok(false),
+        Some(Value::Bool(found)) => Ok(*found),
+        Some(other) => Err(format!("`gates_on_every_check` is {}", kind(other))),
     }
 }
 

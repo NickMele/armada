@@ -343,6 +343,56 @@ fn a_row_that_says_no_step_delivers_is_not_backfilled() {
         .delivers());
 }
 
+/// **The one thing an empty check list cannot say survives the column.** A step
+/// that gated on every declared Check against a repository declaring none
+/// freezes an empty list, and without this flag it reads back exactly like a
+/// step that declared no gate at all — one verified nothing while asking to,
+/// the other never asked, and the two need opposite readings.
+#[test]
+fn a_step_that_gated_on_every_declared_check_still_says_so_after_the_column() {
+    let stored = WITHOUT_WHEN.replace(
+        r#""retry_limit": 0"#,
+        r#""retry_limit": 0, "gates_on_every_check": true"#,
+    );
+    let workflow = crate::columns::read_workflow(&stored).expect("a sweeping step");
+    let step = workflow.step(&StepId::new("fix")).expect("the step");
+    assert!(step.gates_on_every_check());
+    // And it survives being written back out, which is the round trip the
+    // column exists for.
+    let again = crate::columns::read_workflow(&crate::columns::write_workflow(&workflow))
+        .expect("a workflow that was just written");
+    assert!(again
+        .step(&StepId::new("fix"))
+        .expect("the step")
+        .gates_on_every_check());
+}
+
+/// **Absent reads as `false` and needs no second half**, unlike `delivers`: no
+/// workflow frozen before the key existed could say it, so `false` is the fact
+/// rather than a gap in the row.
+#[test]
+fn a_row_frozen_before_a_step_could_gate_on_every_check_says_it_did_not() {
+    let workflow = crate::columns::read_workflow(WITHOUT_WHEN).expect("a pre-key row");
+    assert!(!workflow
+        .step(&StepId::new("fix"))
+        .expect("the step")
+        .gates_on_every_check());
+}
+
+/// A value that is there and is not a boolean is a refusal rather than a
+/// `false`, for `delivers`' reason: this is the only thing on the record that
+/// tells a step gated on an empty Checks registry from a step that declared no
+/// gate, and losing it quietly is losing the distinction.
+#[test]
+fn a_gates_on_every_check_that_is_not_a_boolean_is_malformed() {
+    let stored = WITHOUT_WHEN.replace(
+        r#""retry_limit": 0"#,
+        r#""retry_limit": 0, "gates_on_every_check": "all""#,
+    );
+    let refused = crate::columns::read_workflow(&stored).expect_err("a flag that is not a flag");
+    assert!(refused.contains("gates_on_every_check"), "{refused}");
+}
+
 /// A value that is there and is not a boolean is a refusal rather than a
 /// `false`, for the stored retry budget's reason: a Job frozen with a
 /// delivering step must not lose it quietly.
