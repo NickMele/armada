@@ -32,7 +32,14 @@
 // to be.
 
 import { useEffect, useState, type ReactNode } from "react";
-import { plural, Select, TheShell, type FleetState, type StatusBarProps } from "@armada/components";
+import {
+  plural,
+  Select,
+  TheShell,
+  Tooltip,
+  type FleetState,
+  type StatusBarProps,
+} from "@armada/components";
 import { ArmadaLockupHorizontal, ArmadaMark } from "@armada/brand";
 
 import type { Connection } from "@armada/protocol";
@@ -171,11 +178,14 @@ function statusOf(
   jobs: readonly JobSummary[],
   capacity: FleetCapacity | null,
 ): StatusBarProps {
-  const detail = [statement.detail, drones(capacity)].filter((part) => part !== "").join(" · ");
+  const detailParts: ReactNode[] = [];
+  if (statement.detail !== "") detailParts.push(statement.detail);
+  const droneCount = drones(capacity);
+  if (droneCount !== null) detailParts.push(droneCount);
   return {
     fleet: fleetOf(connection),
     fleetLabel: statement.headline,
-    detail: detail === "" ? undefined : detail,
+    detail: detailParts.length === 0 ? undefined : interleave(detailParts, " · "),
     advice: statement.next ?? undefined,
     items: [plural(jobs.length), ...held(jobs, capacity)],
     escalations: jobs.filter((job) => job.status === "escalated").length,
@@ -183,16 +193,38 @@ function statusOf(
   };
 }
 
+/** `parts` with `separator` between each, as one array `detail` can render. */
+function interleave(parts: readonly ReactNode[], separator: string): ReactNode[] {
+  return parts.flatMap((part, i) =>
+    i === 0 ? [part] : [<span key={`sep-${i}`}>{separator}</span>, part],
+  );
+}
+
 /**
- * "2 of 2 drones", the contract's third mono value, and empty where Fleet has
+ * "2 of 2 drones", the contract's third mono value, and absent where Fleet has
  * not answered.
  *
- * **Empty rather than "0 of 0"**, because a Fleet that has not been asked and a
- * Fleet with nothing running are different facts and one of them is not known.
+ * **Absent rather than "0 of 0"**, because a Fleet that has not been asked and
+ * a Fleet with nothing running are different facts and one of them is not
+ * known.
+ *
+ * **Carries a tooltip naming `bound` a ceiling.** "1 of 2" reads as one drone
+ * missing rather than as one of two slots in use — `bound` is
+ * `settings.concurrency-cap`, not a census, and nothing else on the bar says
+ * so.
  */
-function drones(capacity: FleetCapacity | null): string {
-  if (capacity === null) return "";
-  return `${capacity.occupied} of ${capacity.bound} ${capacity.bound === 1 ? "drone" : "drones"}`;
+function drones(capacity: FleetCapacity | null): ReactNode {
+  if (capacity === null) return null;
+  const { occupied, bound } = capacity;
+  const label = `${occupied} of ${bound} ${bound === 1 ? "drone" : "drones"}`;
+  const hint = `Fleet runs up to ${bound} ${bound === 1 ? "drone" : "drones"} at once. ${occupied} ${
+    occupied === 1 ? "is" : "are"
+  } working now.`;
+  return (
+    <Tooltip key="drones" label={hint}>
+      {label}
+    </Tooltip>
+  );
 }
 
 /**
@@ -208,12 +240,25 @@ function drones(capacity: FleetCapacity | null): string {
  * reason this build has never heard of — additive by design — and it renders as
  * its own wire spelling, which is the fallback every other surface takes rather
  * than inventing a second vocabulary.
+ *
+ * **Carries a tooltip where the registry has one.** The verb alone names which
+ * of the four is short; `ADMISSION_HOLD[hold]?.hint` says why, and is absent
+ * for a wire spelling this build has never heard of.
  */
-function held(jobs: readonly JobSummary[], capacity: FleetCapacity | null): string[] {
+function held(jobs: readonly JobSummary[], capacity: FleetCapacity | null): ReactNode[] {
   const hold = capacity?.held_by;
   if (hold === undefined) return [];
   if (!jobs.some((job) => job.status === "queued")) return [];
-  return [ADMISSION_HOLD[hold]?.verb ?? hold];
+  const rendering = ADMISSION_HOLD[hold];
+  const verb = rendering?.verb ?? hold;
+  if (rendering?.hint) {
+    return [
+      <Tooltip key="held" label={rendering.hint}>
+        {verb}
+      </Tooltip>,
+    ];
+  }
+  return [verb];
 }
 
 /**

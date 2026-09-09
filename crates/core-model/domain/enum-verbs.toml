@@ -82,6 +82,13 @@
 #                  every "In code" here is false as a claim about this
 #                  workspace
 #   notes        - the reasoning the row carried
+#   hint         - the sentence a status bar tooltip reads for the variant,
+#                  where the verb alone gives no reasoning. Carried only by
+#                  `admission_hold`'s four rows today; every other table
+#                  leaves it unset and the generator emits `null`. Never a
+#                  measured figure — `FleetCapacity` carries no headroom
+#                  number over the wire at all (`crates/ipc/src/capacity.rs`),
+#                  so the sentence names what is short and claims no percentage
 #   verb_and_icon_from
 #                - names the enum a variant borrows both from, where it has
 #                  neither of its own. Carried by no row today — see below
@@ -288,6 +295,7 @@ status_token = "--status-not-started"
 vocabulary = "Admission hold"
 in_code = ""
 notes = "The specific form of waiting on resources, so it is spelled the same way and reads as the same axis. A place is held for as long as a Job holds a Drone, which is not the same as the Job running — an escalated Job keeps its Drone alive and idle so a redirect costs no respawn. No glyph: the status bar carries none, and the queued_reason glyph cpu is reserved to that vocabulary."
+hint = "Every drone slot the fleet allows is already in use. This starts once one finishes or is redispatched."
 
 [verbs.admission_hold.cpu]
 verb = "waiting on CPU"
@@ -296,6 +304,7 @@ status_token = "--status-not-started"
 vocabulary = "Admission hold"
 in_code = ""
 notes = "CPU as an initialism rather than lowercase. The ban on ALL CAPS targets shouting, and every other spelling of this word in the repository is capitalised."
+hint = "Fleet did not find enough spare CPU to start another drone."
 
 [verbs.admission_hold.memory]
 verb = "waiting on memory"
@@ -304,6 +313,7 @@ status_token = "--status-not-started"
 vocabulary = "Admission hold"
 in_code = ""
 notes = "The reading over-reads — ps summed said 64% where darwin said 26% — so this is the backstop rather than the signal that ordinarily fires. The verb says what is short and claims no figure."
+hint = "Fleet did not find enough spare memory to start another drone."
 
 [verbs.admission_hold.disk]
 verb = "waiting on disk"
@@ -312,6 +322,7 @@ status_token = "--status-not-started"
 vocabulary = "Admission hold"
 in_code = ""
 notes = "The one of the three that has actually run out: 31 Aug 2026, a volume filled during a parallel agent run and three agents died at zero bytes free holding uncommitted work. Named first by short_of for that reason."
+hint = "Fleet did not find enough free disk space to start another drone."
 
 [verbs.resumption.reviewed]
 verb = "reviewed"

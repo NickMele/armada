@@ -105,7 +105,10 @@ const WANTED = [
 // verb and a token and no glyph, so all four land in `GAPS` as missing one —
 // which is accurate: the status bar carries no icons, and `cpu` is reserved to
 // `queued_reason` in `packages/icons/icons.toml`. Nothing renders a glyph for
-// these today and nothing should invent one.
+// these today and nothing should invent one. It is the one table whose rows
+// also carry `hint`: the verb alone names which of the four is held and gives
+// no reasoning, and a tooltip on the status bar's held-reason item reads the
+// sentence instead.
 //
 // **It is the one vocabulary Fleet may widen without a protocol bump.** The map
 // below is keyed by the wire value with an `undefined` answer for a key this
@@ -296,6 +299,7 @@ for (const [header, table] of verbs) {
   const verb = table.verb ?? "";
   const icon = table.icon ?? "";
   const token = table.status_token ?? "";
+  const hint = table.hint ?? "";
   const missing = [];
   if (verb === "") missing.push("verb");
   if (icon === "") missing.push("icon");
@@ -309,7 +313,7 @@ for (const [header, table] of verbs) {
   // `--status-{stem}-bg` itself, so the stem is derived from the token rather
   // than from the variant name — `queued` renders `--status-not-started`.
   const stem = token.startsWith("--status-") ? token.slice("--status-".length) : "";
-  rows.push({ variant, verb, icon: usable ? icon : "", token, stem });
+  rows.push({ variant, verb, icon: usable ? icon : "", token, stem, hint });
 }
 
 const imported = [...glyphs].sort().map(pascal);
@@ -339,6 +343,13 @@ lines.push("  readonly icon: LucideIcon | null;");
 lines.push("  /** Badge's `status` prop: the token stem, without its `--status-` prefix. */");
 lines.push("  readonly badgeStatus: string | null;");
 lines.push("  readonly statusToken: string | null;");
+lines.push("  /**");
+lines.push("   * The sentence a tooltip reads for this variant, where the verb alone");
+lines.push("   * gives no reasoning. `null` where the registry carries none — most");
+lines.push("   * tables do not, and a surface renders no tooltip rather than one with");
+lines.push("   * an empty label.");
+lines.push("   */");
+lines.push("  readonly hint: string | null;");
 lines.push("};");
 lines.push("");
 
@@ -359,7 +370,8 @@ lines.push(`export const ${constant}: Readonly<Record<string, Rendering | undefi
     const icon = row.icon === "" ? "null" : pascal(row.icon);
     lines.push(
       `  ${JSON.stringify(row.variant)}: { verb: ${quoted(row.verb)}, icon: ${icon}, ` +
-        `badgeStatus: ${quoted(row.stem)}, statusToken: ${quoted(row.token)} },`,
+        `badgeStatus: ${quoted(row.stem)}, statusToken: ${quoted(row.token)}, ` +
+        `hint: ${quoted(row.hint)} },`,
     );
   }
   lines.push("};");
