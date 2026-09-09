@@ -122,7 +122,7 @@ async fn a_repository_that_says_auto_if_judge_passes_advances_a_judged_step() {
         .propose(a_proposal("fix the off-by-one"))
         .await
         .expect("a Job at the approval gate");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.expect("it dispatches");
     submitted_by_the_one(&fleet, diff_evidence())
         .await
@@ -166,7 +166,7 @@ async fn a_judgeless_step_holds_for_a_person_however_the_policy_resolved() {
         .propose(a_proposal("fix the off-by-one"))
         .await
         .expect("a Job at the approval gate");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.expect("it dispatches");
     submitted_by_the_one(&fleet, diff_evidence())
         .await
@@ -211,7 +211,7 @@ async fn auto_merge_always_still_holds_the_step_and_does_not_advance_it() {
         .propose(a_proposal("fix the off-by-one"))
         .await
         .expect("a Job at the approval gate");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.expect("it dispatches");
     submitted_by_the_one(&fleet, diff_evidence())
         .await
