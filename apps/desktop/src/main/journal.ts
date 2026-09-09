@@ -72,9 +72,19 @@ export class JournalSocket {
   }
 
   close(): void {
-    this.socket?.removeAllListeners();
-    this.socket?.close();
+    const socket = this.socket;
     this.socket = null;
+    if (socket === null) return;
+    socket.removeAllListeners();
+    // **One listener stays.** A socket still shaking hands does not close; ws
+    // aborts the handshake and reports that abort as an `error`, on the next
+    // tick and not this one — so removing every listener and closing leaves an
+    // `error` with nothing listening, which Node throws. It crashed the main
+    // process whenever a Job was opened while Fleet was still connecting.
+    // Closing on purpose is not a failure a reader needs told, so this one
+    // swallows it rather than routing it to `broke`.
+    socket.on("error", () => {});
+    socket.close();
   }
 
   private arrived(text: string): void {
