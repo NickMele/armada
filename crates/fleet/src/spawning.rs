@@ -34,7 +34,7 @@ use core_model::{Component, DroneId, Envelope, EscalationTrigger, Job, JobId, Le
 
 use crate::adrift::Adrift;
 use crate::briefing::Opening;
-use crate::crossing::Redirected;
+use crate::crossing::{Overtaken, Redirected};
 use crate::daemon::Fleet;
 use crate::drone::{self, environment, HostPaths};
 use crate::transcript::{Spine, Taps};
@@ -109,7 +109,14 @@ where
         // all of them. It is read before the brief because it is part of the
         // brief, and kept beside it because clearing it needs the same value.
         let waiting = job.redirect_waiting().map(Redirected::of);
-        let opening = opening.also_carrying(waiting.clone());
+        // Asked of the board on every spawn, and answered `None` on all but a
+        // Job read off a request that split. Beside the redirect because it is
+        // the same kind of fact — what is true of this Job at the moment a
+        // Drone starts, rather than what the act that reached this spawn knew.
+        let overtaken = self.overtaken_by_a_sibling(job).await;
+        let opening = opening
+            .also_carrying(waiting.clone())
+            .overtaken_by(overtaken);
         let brief = match opening.turn(job, job.workflow(), step, moved.as_ref()) {
             Ok(brief) => brief,
             Err(cause) => {
@@ -382,4 +389,44 @@ fn dispatches(job: &Job, step: &StepId) -> bool {
             .workflow()
             .step(step)
             .is_some_and(core_model::ResolvedStep::may_dispatch_jobs)
+}
+
+impl<H, V, W> Fleet<H, V, W>
+where
+    H: AgentHarness + Send + Sync + 'static,
+    H::Error: std::error::Error + Send + Sync + 'static,
+    V: Vcs + Delivery + Send + Sync + 'static,
+    V::Error: std::error::Error + Send + Sync + 'static,
+    V::CommitError: std::error::Error + Send + Sync + 'static,
+    W: WorkProduct + Send + Sync + 'static,
+    W::Error: std::error::Error + Send + Sync + 'static,
+{
+    /// What a Job read off the same request has landed, where one has.
+    ///
+    /// **`None` for almost every spawn, and it costs a `proposal_id` check to
+    /// say so.** A Job nobody proposed, and a proposal that stayed one Job,
+    /// never read the board at all — which is every hand-entered Job and every
+    /// sub-dispatch.
+    ///
+    /// **No model call, unlike `crate::superseding`.** That one decides whether
+    /// to close a Job and has to be sure; this one states a fact and lets the
+    /// Drone decide, so there is nothing to be sure about. The two are the same
+    /// reading at two moments, and the difference in what they do with it is
+    /// the whole difference in what they cost.
+    ///
+    /// **The most recent, where several landed.** A brief is read at the top of
+    /// a turn and a list of siblings is a list a Drone skims; the one that
+    /// landed last is the one whose claim is truest about the base it is
+    /// starting from.
+    async fn overtaken_by_a_sibling(&self, job: &Job) -> Option<Overtaken> {
+        job.proposal_id()?;
+        let (loaded, _) = self.every_job().await.ok()?;
+        let landed = crate::superseding::siblings_of(job, loaded.jobs.iter());
+        let store = self.store().lock().await;
+        landed.iter().rev().find_map(|peer| {
+            let evidence = store.step_evidence(peer.id()).ok()?;
+            let (_, latest) = evidence.last()?;
+            Some(Overtaken::of(peer.title().as_str(), &latest.claimed))
+        })
+    }
 }

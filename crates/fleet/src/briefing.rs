@@ -31,7 +31,7 @@ use core_model::{
 };
 use verification::TheBaseMoved;
 
-use crate::crossing::{Crossed, Produced, Reconciling, Redirected};
+use crate::crossing::{Crossed, Overtaken, Produced, Reconciling, Redirected};
 use crate::terms::{Checking, Declaring, Delivering, Splitting};
 
 /// Layer 1, verbatim from the Agent Prompt Contract's M1 rendering: **mechanics,
@@ -153,6 +153,19 @@ impl Opening {
     pub(crate) fn also_carrying(self, redirect: Option<Redirected>) -> Opening {
         Opening {
             crossed: self.crossed.and_redirect(redirect),
+            ..self
+        }
+    }
+
+    /// The same opening, plus what a Job from the same request landed while
+    /// this one was between steps.
+    ///
+    /// **Folded in rather than passed in**, for `also_carrying`'s reason: a
+    /// sibling landing is a fact about the Job at the moment a Drone starts,
+    /// and a caller that had to remember it is a caller that could forget.
+    pub(crate) fn overtaken_by(self, overtaken: Option<Overtaken>) -> Opening {
+        Opening {
+            crossed: self.crossed.and_overtaken(overtaken),
             ..self
         }
     }
@@ -532,6 +545,14 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed
     // a dispatch has no other way to learn that the Jobs exist.
     if let Some(dispatched) = crossed.dispatched() {
         blocks.headed(dispatched.text());
+    }
+    // **After the instruction and before the step.** It is not something the
+    // person asked for, so it does not come first; it is something about the
+    // base this part starts from, so a Drone that reads the step without it
+    // reads a step that may already be done. `crossing::Overtaken` says why the
+    // Drone is told rather than the Job stopped.
+    if let Some(overtaken) = crossed.overtaken() {
+        blocks.headed(&overtaken.text());
     }
     if let Some(step) = workflow.steps().iter().find(|step| step.id() == at) {
         blocks.headed(&step_block(step));
