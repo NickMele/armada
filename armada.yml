@@ -13,6 +13,15 @@ id: armada
 base: main
 
 # Checks gate advancement. A step naming one not declared here is refused.
+#
+# **The order below is load-bearing, so reordering these for tidiness changes
+# the gate.** A step that says `every_manifest_check` runs them in the order
+# this file writes them, and `fleet::checking` starts four at a time off that
+# order, refilling as each finishes — so the first four declared are the four
+# that start. The compile checks lead on purpose: a Drone that broke the build
+# should not wait on a browser to be told. There is no `order:` key to state it
+# with, for the reason a workflow's `steps[]` has none — order is already the
+# semantics, and two statements of it can disagree.
 checks:
   build:
     # `--locked`: a Check that updates the lockfile changed what it measured.

@@ -257,7 +257,9 @@ notes = """
 
 **A step says this; a step never omits its way into meaning it.** An empty `mechanical_checks` is an ungated step and stays one. Half the shipped workflows have steps producing a document nothing compiles, and reading absence as *all* would gate every one of them on the repository's build.
 
-**It resolves before dispatch and never reaches the record.** `config::ResolvedWorkflow` expands it against the Manifest in hand, so a Job freezes one `manifest_check` per declared Check and the word never appears in `store` or on the wire. A Check added to `armada.yml` afterwards is gated on by the next Job, not this one, which is the same freezing rule `run`, `when`, `requires` and `narrow` follow.
+**It resolves before dispatch and never reaches the record.** `config::ResolvedWorkflow` expands it against the Manifest in hand, so a Job freezes one `manifest_check` per declared Check. A Check added to `armada.yml` afterwards is gated on by the next Job, not this one, which is the same freezing rule `run`, `when`, `requires` and `narrow` follow.
+
+**It expands in the order `armada.yml` writes its Checks, which is the order they run in.** `fleet::checking` starts four at a time off that order and refills as each finishes, so the first four declared are the four that start. Until a step could say this, the workflow file's `mechanical_checks` array was the only place a repository could sequence its gate; expanding alphabetically would have reordered every repository's gate silently, and on Armada's own `armada.yml` it puts the two slowest Checks first, so a Drone that broke the compile waits on a browser to be told. There is no `order:` key in either file to state the sequence twice with, for the reason `steps[]` has none: order is already the semantics.
 
 **It does not compose with a named Check on the same step**, in either order, and two of it on one step is refused too: it already covers every name, so the pair would run one Check twice. It does compose with `diff_nonempty`, which is what `implement` needs — a build passes cleanly on an empty diff.
 

@@ -282,6 +282,15 @@ The schema is `crates/core-model/domain/workflowdef-fields.toml`, which carries
 the rest — including that it does not compose with a named Check on the same
 step.
 
+**The order `checks:` is written in is the order they run in, and there is no
+key to state it twice with.** Fleet starts four of a step's Checks at a time off
+that order, so the first four declared are the four that start. Until a step
+could gate on every Check, the workflow file's list was the only place a
+repository sequenced its gate — so `checks:` inherits the sequencing along with
+the naming, and reordering it for tidiness now changes the gate. This is the
+`steps[]` rule a file along: order is already the semantics, and two statements
+of it can disagree.
+
 **A repository declaring no Checks expands it to nothing, and that is recorded
 rather than refused.** An ungated workspace is a state this document's own
 nearest-ancestor rule sanctions, so refusing would make a documented state

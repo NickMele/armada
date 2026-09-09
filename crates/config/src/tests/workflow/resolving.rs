@@ -329,6 +329,62 @@ fn gating_on_every_check_where_the_manifest_declares_none_expands_to_nothing_and
     );
 }
 
+/// A Manifest whose declaration order is not its alphabetical order, so the
+/// two are told apart by what comes back rather than by luck.
+const OUT_OF_ORDER_MANIFEST: &str = r#"
+version: 1
+id: armada
+checks:
+  zebra:
+    run: run zebra
+  build:
+    run: run build
+  apple:
+    run: run apple
+"#;
+
+/// **The expansion is the file's order, not the alphabet's.** `checks:` is
+/// where a repository sequences its gate — `fleet::checking` starts four at a
+/// time off this order — and until a step could gate on every Check, the
+/// workflow file was the only place that sequence was written. Expanding
+/// alphabetically would have reordered every repository's gate silently, and
+/// this repository's own `armada.yml` argues the sequence in its own words,
+/// with measured seconds.
+///
+/// `check_names` is the other view of the same set and stays sorted, because a
+/// message listing what is declared is scanned by a person for a name they
+/// expected. Both are asserted here so neither can quietly become the other.
+#[test]
+fn every_manifest_check_expands_in_the_order_the_manifest_writes_not_the_alphabet() {
+    let def = parse(
+        "version: 1\nworkflow_id: feature\nname: feature\nstructure: linear\nsteps:\n  - id: implement\n    label: Implement\n    evidence_type: diff\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: every_manifest_check }\n",
+    )
+    .expect("well formed");
+    let manifest =
+        Manifest::parse(&named("armada.yml"), OUT_OF_ORDER_MANIFEST).expect("a manifest");
+    assert_eq!(
+        manifest.checks_as_written(),
+        ["zebra", "build", "apple"],
+        "the file's order survives the parse"
+    );
+    assert_eq!(
+        manifest.check_names(),
+        ["apple", "build", "zebra"],
+        "and the sorted view is still sorted, for the message that reads it"
+    );
+
+    let resolved = ResolvedWorkflow::resolve(&def, &manifest).expect("every name declared");
+    assert_eq!(
+        resolved.steps()[0]
+            .checks()
+            .iter()
+            .map(ResolvedCheck::label)
+            .collect::<Vec<&str>>(),
+        ["zebra", "build", "apple"],
+        "the gate runs them as the file wrote them"
+    );
+}
+
 /// A step that named its Checks one at a time never claims it asked for all of
 /// them, however many the Manifest happens to declare.
 #[test]

@@ -84,6 +84,13 @@ pub struct Manifest {
     version: u32,
     base: Option<String>,
     checks: BTreeMap<String, Check>,
+    /// Every name in `checks`, in the order `armada.yml` wrote them.
+    ///
+    /// **A second view of one set, never a second set.** It is built from the
+    /// same walk as `checks` and holds exactly its keys, so the two cannot
+    /// disagree about what is declared — only about what order to read it in,
+    /// which is the whole reason both exist.
+    checks_as_written: Vec<String>,
     commands: BTreeMap<String, Command>,
     prepared_by: Vec<Preparation>,
     proved_after_a_merge: Vec<ResolvedCheck>,
@@ -179,8 +186,34 @@ impl Manifest {
         self.commands.get(name)
     }
 
+    /// Every declared Check name, **in the order `armada.yml` writes them,
+    /// which is the order they run in**.
+    ///
+    /// **Order is the semantics, and there is no key to state it twice with.**
+    /// This is `config`'s existing rule about a workflow's `steps[]` — see
+    /// `order_is_the_semantics_and_there_is_no_field_for_it` — applied a file
+    /// along, and it had to be kept the moment a step could gate on every Check
+    /// without naming one. Until then the workflow file was the only place a
+    /// repository could sequence its gate, and the sequence was lost in this
+    /// parse without anything saying so.
+    ///
+    /// The sequence is worth keeping because a gate is read for the first
+    /// failure. `armada.yml` argues it in its own words on `bridge_test` — *"the
+    /// order is the order they answer in, so a failure surfaces as early as it
+    /// can"* — with measured figures beside it: `build` 37.6s, `test` 41s,
+    /// `bridge_test` 6s then 40s. Alphabetically the two slowest lead, and a
+    /// Drone that broke the compile waits on the browser to be told.
+    ///
+    /// **Not [`check_names`](Manifest::check_names)**, which is the same set
+    /// sorted, for a message rather than for a run.
+    pub fn checks_as_written(&self) -> &[String] {
+        &self.checks_as_written
+    }
+
     /// Every declared Check name, sorted. Handed to a refusal so the message
-    /// can name what the file does declare beside what it does not.
+    /// can name what the file does declare beside what it does not — a list a
+    /// person scans for a name they expected wants to be alphabetical, which is
+    /// the opposite of what a list a machine runs wants.
     pub fn check_names(&self) -> Vec<String> {
         self.checks.keys().cloned().collect()
     }
@@ -300,18 +333,28 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         .optional("base")
         .and_then(|value| yaml::text("base", value, out));
 
-    let drafted = match top.optional("checks") {
+    let (drafted, checks_as_written) = match top.optional("checks") {
         Some(value) => registry(value, "checks", CHECK_KEYS, out, check_entry),
-        None => BTreeMap::new(),
+        None => (BTreeMap::new(), Vec::new()),
     };
-    let commands = match top.optional("commands") {
+    let (commands, _) = match top.optional("commands") {
         Some(value) => registry(value, "commands", COMMAND_KEYS, out, command_entry),
-        None => BTreeMap::new(),
+        None => (BTreeMap::new(), Vec::new()),
     };
     // Both `requires` keys are resolved after `commands`, because every entry
-    // is resolved against it. Nothing about the order of the file matters —
-    // `Table` reads by name — only that the registry is built before it is
-    // consulted.
+    // is resolved against it. **Which section comes first does not matter** —
+    // `Table` reads by name, so an author never has to put `commands:` above
+    // `checks:` — only that the registry is built before it is consulted.
+    //
+    // The order *within* `checks:` does matter, and is kept: see
+    // [`Manifest::checks_as_written`]. The two are different questions and this
+    // sentence used to answer both, which stopped being true the day a step
+    // could gate on every Check without naming one.
+    //
+    // The Commands registry has no such order to keep. What runs before a Check
+    // is sequenced by that Check's own `requires` list, and preparation by
+    // `setup.requires` — both of which are arrays, where order is already the
+    // semantics.
     let declares: BTreeSet<String> = drafted.keys().cloned().collect();
     let checks = required_by(drafted, &declares, &commands, out);
     let prepared_by = match top.optional("setup") {
@@ -348,6 +391,7 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         version: version?,
         base,
         checks,
+        checks_as_written,
         commands,
         prepared_by,
         proved_after_a_merge,
@@ -574,24 +618,44 @@ fn texts(items: Vec<(String, &Value)>, out: &mut Vec<Refusal>) -> Vec<(String, S
 }
 
 /// An open-ended map of author-chosen names to entries of one shape.
+/// The entries by name, **and the order the file wrote them in**.
+///
+/// Two returns rather than one ordered map, because the two are asked
+/// different questions and only one caller asks the second. A name is looked up
+/// far more often than a registry is walked, and a message listing what is
+/// declared reads better sorted — so the map stays a `BTreeMap` and the order
+/// travels beside it.
+///
+/// **Order is the semantics here, exactly as it is for `steps[]`.** `config`'s
+/// own `order_is_the_semantics_and_there_is_no_field_for_it` states the rule on
+/// a workflow's steps and it holds a file along: `checks:` is what a repository
+/// sequences its gate with, and there is no `order` key to state it twice with.
+/// It went missing between the parse and the caller until
+/// `every_manifest_check` needed it — see [`Manifest::checks_as_written`].
 fn registry<T>(
     value: &Value,
     key: &'static str,
     known: &'static [&'static str],
     out: &mut Vec<Refusal>,
     entry: fn(&str, &Value, &'static [&'static str], &mut Vec<Refusal>) -> Option<T>,
-) -> BTreeMap<String, T> {
+) -> (BTreeMap<String, T>, Vec<String>) {
     let mut built = BTreeMap::new();
+    let mut written = Vec::new();
     let Some(table) = Table::open(key, value, out) else {
-        return built;
+        return (built, written);
     };
     for (name, item) in table.into_entries() {
         let at = format!("{key}.{name}");
         if let Some(parsed) = entry(&at, item, known, out) {
+            // First appearance, so the two agree on their contents whatever a
+            // duplicated key in the document does to the map.
+            if !built.contains_key(&name) {
+                written.push(name.clone());
+            }
             built.insert(name, parsed);
         }
     }
-    built
+    (built, written)
 }
 
 /// A Check whose `requires` entries have been read and not yet resolved.
