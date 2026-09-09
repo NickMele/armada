@@ -95,19 +95,19 @@ where
     pub(crate) fn budget(&self) -> CheckBudget {
         self.budget
     }
-    /// **The machine tier alone**, and the answer for no particular Job. What
-    /// a Job may actually spend is [`Fleet::allowance_for`], which resolves the
-    /// repository's cap and the Job's own over this one.
+    /// What this Job may spend: the composition root's constant, then
+    /// `armada.yml`'s `drone.cost_cap_micros_per_job`, then the Job's own
+    /// column. `Allowance::at` is where the order is written.
+    ///
+    /// **There is no accessor for the machine tier on its own, and that is the
+    /// point.** One shipped beside this for a day and had no callers by the end
+    /// of it: every reader wants what a *Job* may spend, and the one that took
+    /// the constant instead was drawing the wrong cap on the detail of a Job
+    /// carrying an override. A tier is not a question anything asks.
     ///
     /// **Not [`Fleet::budget`]**, which is how long one Check may take — the
     /// two words collided before either shipped and the names are kept apart on
     /// purpose.
-    pub(crate) fn allowance(&self) -> Allowance {
-        self.allowance
-    }
-    /// What this Job may spend: the constant above, then `armada.yml`'s
-    /// `drone.cost_cap_micros_per_job`, then the Job's own column.
-    /// `Allowance::at` is where the order is written.
     pub(crate) fn allowance_for(&self, job: &Job) -> Allowance {
         self.allowance.at(self.manifest(), job)
     }
