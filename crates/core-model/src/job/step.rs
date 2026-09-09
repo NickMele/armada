@@ -340,6 +340,25 @@ pub struct StepFrame {
     pub bytes: u64,
     /// Which checkout it is a photograph of.
     pub side: Side,
+    /// A digest over the file's own bytes, taken when the copy was made.
+    ///
+    /// **What decides whether a pair is worth drawing.** Two frames of one name
+    /// from the two sides are a before and an after; most of them are the same
+    /// picture, because a spec that photographs ten screens is photographing
+    /// ten screens of which the change touched one. This is how a surface folds
+    /// the nine away without opening a file.
+    ///
+    /// **It is sound in one direction only, and that is the direction that
+    /// matters.** Digests that differ mean *draw it*, which is at worst noise —
+    /// a PNG encoder may spell one picture two ways, and the pair is shown
+    /// looking identical. Digests that agree mean *fold it*, and being wrong
+    /// there would hide the change a person came to see. Bytes are compared
+    /// beside it for that reason.
+    ///
+    /// **Never a signature**, which is `verification::digest`'s rule one record
+    /// over: both values are written by one Fleet in one turn, and nothing
+    /// authenticates anything with it.
+    pub digest: String,
 }
 
 /// Which of the two checkouts a frame was taken against.

@@ -87,6 +87,26 @@ BEGIN
 END;
 "#;
 
+/// Version 42 — a digest of each frame's own bytes.
+///
+/// **What lets a surface fold a pair away without opening a file.** A spec that
+/// photographs ten screens photographs ten screens of which the change touched
+/// one, and the nine that did not are the noise `#209`'s panel exists to cut.
+/// Comparing two digests on the record is how it is cut; comparing two files
+/// would be Bridge reading a filesystem it has no access to, and Fleet serving
+/// twenty images so that eighteen could be discarded.
+///
+/// **Empty rather than backfilled, which is the opposite of [`V41`]'s call and
+/// for the same rule.** That migration could say what every existing row was,
+/// because until it landed there was only one side to be on — an observation.
+/// This one cannot: nothing recorded the bytes of a frame kept before it, and a
+/// digest invented here would be a value that compares unequal to everything
+/// including itself re-read. Empty is the honest answer, and it reads as *this
+/// pair cannot be folded* — which draws both frames, the safe direction.
+pub(crate) const V42: &str = r#"
+ALTER TABLE job_step_frames ADD COLUMN digest TEXT NOT NULL DEFAULT '';
+"#;
+
 fn unreadable(cause: rusqlite::Error) -> LoadJobError {
     LoadJobError::Unreadable(RowError::Database(fault("reading a step's frames")(cause)))
 }
@@ -95,6 +115,9 @@ fn frame(row: &Row<'_>) -> Result<StepFrame, RowError> {
     Ok(StepFrame {
         name: string(row, "name")?,
         path: string(row, "path")?,
+        // Empty on every row written before V42, which reads as *this pair
+        // cannot be folded* and so draws both frames. The safe direction.
+        digest: string(row, "digest")?,
         // A negative size is not a row this ever writes, and clamping is what
         // keeps a corrupt one from becoming a panic on a read taken to draw a
         // panel. `u64` is the shape `CheckOutput::bytes` already crosses as.
@@ -152,8 +175,9 @@ impl Store {
         for (ordinal, frame) in frames.iter().enumerate() {
             tx.execute(
                 "INSERT INTO job_step_frames (
-                     job_id, step_id, attempt, ordinal, name, path, bytes, kept_at, side
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                     job_id, step_id, attempt, ordinal, name, path, bytes, kept_at, side,
+                     digest
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 rusqlite::params![
                     job_id.as_str(),
                     step_id.as_str(),
@@ -164,6 +188,7 @@ impl Store {
                     frame.bytes as i64,
                     at.as_str(),
                     frame.side.as_wire(),
+                    frame.digest.as_str(),
                 ],
             )
             .map_err(fault("writing a frame"))
@@ -193,7 +218,7 @@ impl Store {
         let mut asking = self
             .conn
             .prepare(
-                "SELECT step_id, attempt, name, path, bytes, side FROM job_step_frames
+                "SELECT step_id, attempt, name, path, bytes, side, digest FROM job_step_frames
                  WHERE job_id = ?1 ORDER BY step_id, attempt, ordinal",
             )
             .map_err(unreadable)?;

@@ -222,6 +222,137 @@ export function framesSummary(frames: KeptFrame[]): string | undefined {
   return both ? `${said} · ${asBefore} and ${asAfter}` : said;
 }
 
+// ------------------------------------------------------------ the two sides
+//
+// **Pairing is here rather than in the component**, because what makes two
+// frames a pair is a fact about the record — the name, the run, the side and
+// the digest — and a component that knew any of those would be the second place
+// the rule is written. What crosses is `Paired`, which says only: here is a
+// before, here is an after, and whether they are the same picture.
+
+/**
+ * One frame's two sides, married by name within one run.
+ *
+ * **The name is the join and the run is the scope.** A harness names its own
+ * frames, so `home.png` from the base and `home.png` from the branch are one
+ * screen photographed twice — but only within one attempt. A step worked three
+ * times captured three sets, and pairing across runs would put this run's after
+ * beside the last run's before, which is a comparison nobody asked for and
+ * cannot tell from the real one.
+ */
+export type Paired = {
+  /** The name both sides share, or the one side's where it has no pair. */
+  name: string;
+  attempt: number;
+  /** The base's frame, absent where the change added this screen. */
+  before?: ShownFrame;
+  /** The branch's frame, absent where the change removed it. */
+  after?: ShownFrame;
+  /**
+   * Whether the two sides carry the same picture, and so may be folded away.
+   *
+   * **False wherever it cannot be established**, which is the whole of what
+   * makes folding safe. One side missing, a frame kept before the digest
+   * existed, a size that disagrees — none of those is *the same*, and each one
+   * draws.
+   */
+  same: boolean;
+};
+
+/** One side of a pair, with what decides whether it matches the other. */
+type Half = { shown: ShownFrame; digest: string; bytes: number };
+
+/**
+ * What a step's frames come to, pair by pair.
+ *
+ * **Wire order.** Fleet answers in the record's order and re-sorting is the
+ * column flip-flop the failure log named; a pair takes the position of
+ * whichever of its sides the record listed first, so a name that exists only on
+ * the base still lands where it belongs rather than at the end.
+ *
+ * **A side is only ever taken once.** Two frames of one name on one side of one
+ * run is a harness that wrote the same file twice, which one directory cannot
+ * hold — so the first wins and nothing here has to choose between them.
+ */
+export function pairedFrames(frames: KeptFrame[], held: Frames): Paired[] {
+  const shown = shownFrames(frames, held);
+  const order: string[] = [];
+  const building = new Map<string, { name: string; attempt: number; before?: Half; after?: Half }>();
+
+  frames.forEach((frame, at) => {
+    const key = `${frame.attempt} ${frame.name}`;
+    let pair = building.get(key);
+    if (pair === undefined) {
+      pair = { name: frame.name, attempt: frame.attempt };
+      building.set(key, pair);
+      order.push(key);
+    }
+    const side = (frame.side ?? "branch") === "base" ? "before" : "after";
+    if (pair[side] !== undefined) return;
+    pair[side] = {
+      shown: shown[at]!,
+      digest: frame.digest ?? "",
+      bytes: frame.bytes,
+    };
+  });
+
+  return order.map((key) => {
+    const pair = building.get(key)!;
+    return {
+      name: pair.name,
+      attempt: pair.attempt,
+      ...(pair.before === undefined ? {} : { before: pair.before.shown }),
+      ...(pair.after === undefined ? {} : { after: pair.after.shown }),
+      same: theSamePicture(pair.before, pair.after),
+    };
+  });
+}
+
+/**
+ * Whether a pair is the same picture twice.
+ *
+ * **Every unknown answers no, and that is the design.** Folding is the only act
+ * on this surface that can hide something, so it is taken only where both sides
+ * are present, both carry a digest, and the digest *and* the byte count agree.
+ * Anything else draws — at worst a pair a reader glances past, which is what
+ * the surface did before any of this existed.
+ *
+ * **The size is compared beside the digest** rather than trusted to it. Sixty-
+ * four bits over data nobody is choosing adversarially is not a risk anybody
+ * meets, and the count is already on the row: two comparisons that must both
+ * hold cost nothing and remove the one failure that would be silent.
+ *
+ * **An empty digest never matches, including another empty.** A frame kept
+ * before the field existed carries none, and two absences reading as agreement
+ * would fold away exactly the old Jobs nobody can photograph again.
+ */
+function theSamePicture(before: Half | undefined, after: Half | undefined): boolean {
+  if (before === undefined || after === undefined) return false;
+  if (before.digest === "" || after.digest === "") return false;
+  return before.digest === after.digest && before.bytes === after.bytes;
+}
+
+/**
+ * What a chapter says about a set that has two sides.
+ *
+ * **The count that matters is what moved, not what was taken.** Ten screens
+ * photographed twice is twenty images and one sentence worth reading: how many
+ * of the ten are not the same picture. A summary that said `20 frames` would be
+ * counting the work rather than the answer.
+ */
+export function pairedSummary(pairs: Paired[]): string | undefined {
+  if (pairs.length === 0) return undefined;
+  const moved = pairs.filter((pair) => !pair.same).length;
+  const runs = new Set(pairs.map((pair) => pair.attempt));
+  const said =
+    moved === 0
+      ? "nothing moved"
+      : moved === pairs.length
+        ? `${moved} ${moved === 1 ? "frame" : "frames"}`
+        : `${moved} of ${pairs.length} changed`;
+  return runs.size <= 1 ? said : `${said} · ${runs.size} runs`;
+}
+
 /**
  * A holder that has nothing and asks for nothing.
  *

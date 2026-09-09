@@ -361,6 +361,10 @@ fn collected(harness: &Harness, worktree: &Path, side: Side) -> Shown {
                 // path never leaves this module.
                 path: String::new(),
                 bytes,
+                // Filled in by `kept` as well, and for the same reason: the
+                // digest is taken from the bytes that are copied, not from a
+                // second read of a file that has been listed and not yet moved.
+                digest: String::new(),
                 // Which run this was, carried from the call rather than read
                 // off anything: the directory a listing came from is the same
                 // directory both sides shoot into, so nothing about the file
@@ -417,12 +421,21 @@ pub fn kept(
         .iter()
         .filter_map(|frame| {
             let source = worktree.join(from).join(&frame.name);
-            std::fs::copy(&source, dir.join(&frame.name)).ok()?;
+            // **Read, then written, rather than copied** — the digest is taken
+            // from the same bytes that land in `.armada/frames`, so a file the
+            // harness rewrote between the listing and the copy cannot leave a
+            // digest describing the version nobody kept. A frame is hundreds of
+            // kilobytes and this is the one moment it is already being moved.
+            let bytes = std::fs::read(&source).ok()?;
+            std::fs::write(dir.join(&frame.name), &bytes).ok()?;
             Some(StepFrame {
                 name: frame.name.clone(),
                 path: format!("{relative}/{}", frame.name),
-                bytes: frame.bytes,
+                // Counted off what was written rather than carried from the
+                // listing, for the reason above: one read, one truth.
+                bytes: bytes.len() as u64,
                 side,
+                digest: verification::digest_of(&bytes),
             })
         })
         .collect()

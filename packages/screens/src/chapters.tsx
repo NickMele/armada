@@ -33,6 +33,7 @@ import {
   ChangedFiles,
   DroneBrief,
   Clamped,
+  FramesPaired,
   FramesShown,
   Kbd,
   changedFilesSummary,
@@ -54,7 +55,14 @@ import {
   type DetailKeys,
 } from "./detail-keys";
 import { evidenceChaptersOf, type Unnumbered } from "./evidence";
-import { framesSummary, shownFrames, type Frames } from "./frames";
+import {
+  framesSummary,
+  pairedFrames,
+  pairedSummary,
+  shownFrames,
+  type Frames,
+  type Paired,
+} from "./frames";
 import { readingFor, whyNoFootprint } from "./files";
 import { Log } from "./Log";
 import type { Outputs } from "./outputs";
@@ -186,6 +194,7 @@ export function chaptersOf({
   // came to state one ordering separately. #321.
   const documents = keptOf(step, opens);
   const shown = shownFrames(step.frames ?? [], frames);
+  const pairs = pairedFrames(step.frames ?? [], frames);
   // **Numbered over what is drawn.** Every chapter below is built without an
   // ordinal and counted once, at the end — because which chapters exist
   // depends on the step. One that gates on nothing has no evidence chapter,
@@ -290,7 +299,7 @@ export function chaptersOf({
     // **Only where there are frames.** A chapter saying a step declared no
     // visual evidence would be on almost every step of almost every Job,
     // reporting the absence of a thing nobody asked for.
-    ...(shown.length === 0 ? [] : [framesChapter(shown, step.frames ?? [])]),
+    ...(shown.length === 0 ? [] : [framesChapter(shown, step.frames ?? [], pairs)]),
     {
       id: DIFF_CHAPTER,
       title: "Produced",
@@ -370,16 +379,26 @@ export function chaptersOf({
  * already show, and a control that opens what is already on screen is a second
  * answer to a question nobody asked.
  */
-function framesChapter(shown: ShownFrame[], rows: KeptFrame[]): Unnumbered {
+function framesChapter(shown: ShownFrame[], rows: KeptFrame[], pairs: Paired[]): Unnumbered {
+  // **Two sides is a different question from two frames**, so it is a different
+  // drawing. With a base to compare against, what a reader wants is what the
+  // change did to the screen — the pairs that moved, and the ones that did not
+  // folded out of the way. With only the branch there is nothing to fold and
+  // nothing to flip, and the flat gallery is the honest answer.
+  const compared = pairs.some((pair) => pair.before !== undefined);
   return {
     id: FRAMES_CHAPTER,
     title: "Shown",
-    // The count, and the runs it spans where it spans more than one — a
-    // collapsed chapter that read `3 frames` over three attempts would hide
-    // the fact that decides whether what is about to be opened is current.
-    summary: framesSummary(rows),
-    says: "Click to see what the step produced",
-    preview: (
+    // What moved, where there are two sides; how many frames, where there is
+    // one. A collapsed chapter reading `20 frames` over ten screens
+    // photographed twice would be counting the work rather than the answer.
+    summary: compared ? pairedSummary(pairs) : framesSummary(rows),
+    says: compared
+      ? "Click to see what the change did to the screen"
+      : "Click to see what the step produced",
+    preview: compared ? (
+      <FramesPaired pairs={pairs} emptyNote={NOTHING_SHOWN} />
+    ) : (
       <FramesShown
         frames={shown}
         // Unreachable — the chapter is not built where the list is empty — and

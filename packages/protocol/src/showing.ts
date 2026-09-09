@@ -98,4 +98,23 @@ export type KeptFrame = {
    * ran; a Bridge talking to an older Fleet reads the absence, not a gap.
    */
   side?: Side;
+  /**
+   * A digest of this frame's own bytes. Since 9.6.
+   *
+   * **What lets a surface fold a pair away without fetching either image.** A
+   * spec that photographs ten screens photographs ten of which the change
+   * touched one; comparing two of these is how the nine that did not are cut,
+   * and it costs no round trip.
+   *
+   * **Sound in one direction only, which is the direction that matters.**
+   * Digests that differ mean *draw it* — at worst noise, since a PNG encoder
+   * may spell one picture two ways. Digests that agree mean *fold it*, and
+   * being wrong there hides the change somebody came to see, so `bytes` is
+   * compared beside it.
+   *
+   * **Empty or absent is not a match.** A frame kept before this field existed
+   * carries none, and two of those must not read as a pair that agrees — the
+   * pair is drawn, which is what would have happened anyway.
+   */
+  digest?: string;
 };

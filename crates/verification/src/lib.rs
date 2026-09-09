@@ -62,6 +62,6 @@ pub use product::{
 };
 pub use request::Request;
 pub use scope::{drifted, InScope, Lifted, OutsideScope};
-pub use shown::digest;
+pub use shown::{digest, digest_of};
 pub use submission::{Claimed, NotASubmission, NotClaimed, ShownBy, Submission};
 pub use widening::{NotWidened, Widened, WideningBrief};
