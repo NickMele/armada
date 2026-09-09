@@ -213,8 +213,48 @@ impl TempRepo {
 }
 
 impl Drop for TempRepo {
+    /// Everything this repository's name owns, and not a list of two.
+    ///
+    /// **A directory left behind is a flaky test, not untidiness.** The name is
+    /// `armada-adapters-<pid>-<n>`, and nextest runs each test in its own
+    /// process — so `<n>` is almost always zero and the whole of what
+    /// distinguishes one run's paths from another's is a pid the operating
+    /// system recycles. A sibling that outlives its test is therefore a
+    /// directory a later run can be dealt by chance, and `git clone` into an
+    /// existing non-empty directory refuses. The failure lands on whichever
+    /// test drew the collision, which is why it looked like several unrelated
+    /// tests failing at random.
+    ///
+    /// **Swept by name rather than enumerated.** This used to remove `root` and
+    /// `root.remote.git`, which was every sibling that existed when it was
+    /// written; `landing.rs` later cloned a third — `.elsewhere`, standing in
+    /// for the forge — and nothing here knew. Two thousand two hundred of them
+    /// had accumulated by the time it was found. A list that has to be extended
+    /// by whoever adds a sibling is a list that is wrong between the two
+    /// commits, so this reads the directory instead: anything beside `root`
+    /// whose name begins with `root`'s belongs to this repository and goes with
+    /// it.
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.root);
-        let _ = std::fs::remove_dir_all(self.root.with_extension("remote.git"));
+        let (Some(parent), Some(mine)) = (self.root.parent(), self.root.file_name()) else {
+            return;
+        };
+        let Ok(listing) = std::fs::read_dir(parent) else {
+            return;
+        };
+        // `armada-adapters-1-0` is a prefix of `armada-adapters-1-01`, so the
+        // separator is required rather than the stem alone — a repository must
+        // not sweep away its neighbour's directories.
+        let mut owned = mine.to_os_string();
+        owned.push(".");
+        for entry in listing.flatten() {
+            if entry
+                .file_name()
+                .as_encoded_bytes()
+                .starts_with(owned.as_encoded_bytes())
+            {
+                let _ = std::fs::remove_dir_all(entry.path());
+            }
+        }
     }
 }
