@@ -17,7 +17,7 @@
 //! [`V29`](crate::proving::V29) and for its reason: that file is at the 900
 //! lines the gate refuses at.
 
-use core_model::{JobId, StepFrame, StepId, Timestamp};
+use core_model::{JobId, Side, StepFrame, StepId, Timestamp};
 use rusqlite::Row;
 
 use crate::attempt::attempt_now;
@@ -37,11 +37,12 @@ use crate::row::{column, string};
 /// one, so the database refuses such a row rather than reading it as a first
 /// run.
 ///
-/// **No column for which side the frame came from.** Fleet runs the harness on
-/// the branch, and the run against `base` that would make a pair is the next
-/// slice of `#209` — a nullable column added then says what an existing row
-/// honestly is, which is V5's rule, and a column added now would be one nothing
-/// writes.
+/// **No column for which side the frame came from.** That waited for the run
+/// against `base` to exist and it now does — [`V41`] adds it, and adds it
+/// backfilled rather than nullable, which is what V5's rule permits here: every
+/// row this table held before that migration was taken on the branch, because
+/// the branch was the only place a harness ran. That is an observation, not a
+/// default.
 ///
 /// **`bytes` and no media type.** The file's own extension is in `name` and in
 /// `path`, and a second field naming the same fact is a second place to keep it
@@ -60,6 +61,32 @@ CREATE TABLE job_step_frames (
 ) STRICT;
 "#;
 
+/// Version 41 — which checkout each frame is a photograph of.
+///
+/// **Backfilled to `branch` rather than left null**, which is the one shape V5's
+/// rule allows and only because the fact is observed: until the migration above
+/// this one, `fleet::showing` served and shot the Job's own worktree and
+/// nothing else, so every existing row *is* a branch frame. A nullable column
+/// would say Fleet cannot tell, which would be untrue of every row it applies
+/// to.
+///
+/// **A trigger and not a `CHECK`.** SQLite's `ALTER TABLE ADD COLUMN` takes no
+/// constraint, and the alternative — rebuilding the table to carry one — would
+/// move every row to add a word. The trigger is what `jobs_are_never_given_a_
+/// blank_branch` already does for the same reason, and it refuses the same
+/// thing: a value nothing in [`Side`](core_model::Side) spells, which would
+/// reach a reader as a frame belonging to neither side of a pair.
+pub(crate) const V41: &str = r#"
+ALTER TABLE job_step_frames ADD COLUMN side TEXT NOT NULL DEFAULT 'branch';
+
+CREATE TRIGGER frames_are_taken_on_one_of_two_sides
+BEFORE INSERT ON job_step_frames
+WHEN NEW.side NOT IN ('base', 'branch')
+BEGIN
+    SELECT RAISE(ABORT, 'a frame is taken on the base or on the branch');
+END;
+"#;
+
 fn unreadable(cause: rusqlite::Error) -> LoadJobError {
     LoadJobError::Unreadable(RowError::Database(fault("reading a step's frames")(cause)))
 }
@@ -75,6 +102,13 @@ fn frame(row: &Row<'_>) -> Result<StepFrame, RowError> {
             .get::<_, i64>("bytes")
             .map_err(column("job_step_frames", "bytes"))?
             .max(0) as u64,
+        // A word `Side` does not spell is a row nothing wrote — the trigger on
+        // V41 refuses one — so it is a corrupt row rather than an old one, and
+        // it is refused here rather than read as the branch. Calling an unknown
+        // photograph the *after* is exactly what would put it beside a real one
+        // and label the two a pair.
+        side: Side::of(&string(row, "side")?)
+            .ok_or_else(|| column("job_step_frames", "side")(rusqlite::Error::InvalidQuery))?,
     })
 }
 
@@ -118,8 +152,8 @@ impl Store {
         for (ordinal, frame) in frames.iter().enumerate() {
             tx.execute(
                 "INSERT INTO job_step_frames (
-                     job_id, step_id, attempt, ordinal, name, path, bytes, kept_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                     job_id, step_id, attempt, ordinal, name, path, bytes, kept_at, side
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 rusqlite::params![
                     job_id.as_str(),
                     step_id.as_str(),
@@ -129,6 +163,7 @@ impl Store {
                     frame.path.as_str(),
                     frame.bytes as i64,
                     at.as_str(),
+                    frame.side.as_str(),
                 ],
             )
             .map_err(fault("writing a frame"))
@@ -158,7 +193,7 @@ impl Store {
         let mut asking = self
             .conn
             .prepare(
-                "SELECT step_id, attempt, name, path, bytes FROM job_step_frames
+                "SELECT step_id, attempt, name, path, bytes, side FROM job_step_frames
                  WHERE job_id = ?1 ORDER BY step_id, attempt, ordinal",
             )
             .map_err(unreadable)?;

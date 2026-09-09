@@ -201,6 +201,7 @@ where
                 at.step(),
                 attempt,
                 &landed.submission,
+                &job,
                 std::path::Path::new(worktree.path()),
             )
             .await?

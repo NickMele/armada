@@ -338,4 +338,58 @@ pub struct StepFrame {
     /// What the file weighs. Read when the copy was made, because that is the
     /// one moment the count is both cheap and final.
     pub bytes: u64,
+    /// Which checkout it is a photograph of.
+    pub side: Side,
+}
+
+/// Which of the two checkouts a frame was taken against.
+///
+/// **The whole of what makes a pair a pair.** `#209` asks for the branch *and*
+/// the base so a reviewer sees what changed rather than what is, and two frames
+/// called `home.png` are only a before and an after if something says which is
+/// which. Nothing else on [`StepFrame`] could: the name is the harness's, and
+/// both runs are one attempt of one step.
+///
+/// **Two variants and no third for "the only one there was".** A repository
+/// with no base, or a base run that would not start, produces branch frames and
+/// no base frames — which is a set with one side in it, readable from what is
+/// there, and a variant for it would be a second way to say the same thing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Side {
+    /// The base checkout — what the screen looked like before this Job.
+    ///
+    /// **First in every ordering**, which is why it is the first variant: a
+    /// before that drew after its after would be a comparison a reader has to
+    /// reverse in their head.
+    Base,
+    /// The Job's own worktree — what the screen looks like with the change in.
+    Branch,
+}
+
+impl Side {
+    /// The word the record and the wire both use.
+    ///
+    /// **One spelling, here**, because the column, the JSON and any sentence a
+    /// surface writes are the same fact, and a second `match` somewhere would
+    /// be the one that drifts.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Side::Base => "base",
+            Side::Branch => "branch",
+        }
+    }
+
+    /// What a stored word means, or `None` where it means nothing.
+    ///
+    /// **`None` rather than a default of [`Branch`](Side::Branch).** A row that
+    /// spells its side some third way is a row nothing wrote, and reading it as
+    /// the after would put an unknown photograph beside a real one and call
+    /// them a pair.
+    pub fn of(said: &str) -> Option<Side> {
+        match said {
+            "base" => Some(Side::Base),
+            "branch" => Some(Side::Branch),
+            _ => None,
+        }
+    }
 }
