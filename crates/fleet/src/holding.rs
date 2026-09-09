@@ -106,6 +106,11 @@ pub enum Held {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Holding {
     pub job: JobId,
+    /// What the Job's worktree and branch are named — its handle. **Read off
+    /// the same Job the tests were applied to**, for `title`'s reason and one
+    /// more: deriving it later would mean a store read on a path a sweep walks
+    /// once per held worktree.
+    pub handle: String,
     /// What the Job is called, and where it got to. **Read off the same Job
     /// the tests were applied to**, so a row cannot describe one Job and be
     /// held for another's reasons.
@@ -209,7 +214,7 @@ where
         let held = self.worktrees_held().await?;
         let mut gave_back = Vec::new();
         for one in held.iter().filter(|one| one.provably_safe()) {
-            if let Some(taken) = self.gave_back(&one.job) {
+            if let Some(taken) = self.gave_back(&one.job, &one.handle) {
                 gave_back.push(taken);
             }
         }
@@ -240,7 +245,7 @@ where
     /// know what is in it. What the order buys is that a Job whose worktree git
     /// cannot be asked about still reports the reasons that do not need git.
     fn holding_of(&self, job: &Job, board: &[&Job]) -> Option<Holding> {
-        let spec = WorktreeSpec::for_job(&self.host().repo_root, job.id().as_str()).ok()?;
+        let spec = WorktreeSpec::for_job(&self.host().repo_root, &job.handle()).ok()?;
         let stands = adapters::standing(&spec, self.manifest().base()).ok()?;
         if stands.empty_handed() {
             return None;
@@ -279,6 +284,7 @@ where
             held.push(Held::DependedOn { by: waiting });
         }
         Some(Holding {
+            handle: job.handle(),
             job: job.id().clone(),
             title: job.title().as_str().to_string(),
             status: job.status(),
@@ -296,8 +302,8 @@ where
     /// Fleet must never be the thing that destroys work nobody has taken — and
     /// a second reading that disagreed with the first would be caught by it
     /// rather than acted on.
-    fn gave_back(&self, job: &JobId) -> Option<GaveBack> {
-        let spec = WorktreeSpec::for_job(&self.host().repo_root, job.as_str()).ok()?;
+    fn gave_back(&self, job: &JobId, handle: &str) -> Option<GaveBack> {
+        let spec = WorktreeSpec::for_job(&self.host().repo_root, handle).ok()?;
         let reclaimed = adapters::reclaim(&spec, self.manifest().base(), UnmergedWork::Keep)
             .inspect_err(|cause| self.noted_unreclaimed(job, &cause.why))
             .ok()?;

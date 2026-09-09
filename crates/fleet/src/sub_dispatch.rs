@@ -183,6 +183,13 @@ where
         // `crate::drafting` makes — a blank title, a workflow this repository
         // does not hold, a Manifest that is not this one — is made here too,
         // which is why a Drone cannot create a Job a person could not have.
+        // Allocated and written under one lock, for `Fleet::proposed_job`'s
+        // reason: a number read before it is written is a number two callers
+        // can be handed.
+        let mut store = self.store().lock().await;
+        let number = store
+            .next_job_number(self.manifest().id())
+            .map_err(Adrift::Reading)?;
         let (new, _) = self.drafted(
             proposal(ipc::ManifestId::from(self.manifest().id()), asked, waits_on),
             StatedBy::TheSplit {
@@ -194,13 +201,11 @@ where
             // and `dispatched_by` is the link that says so. A shared reading
             // is a different relation and this Job is in none.
             None,
+            number,
         )?;
         let child = Job::create_sub_dispatched(new, dispatching.origin(), at.clone());
-        self.store()
-            .lock()
-            .await
-            .insert_job(&child, &at)
-            .map_err(Adrift::Writing)?;
+        store.insert_job(&child, &at).map_err(Adrift::Writing)?;
+        drop(store);
         // After the write, for `Fleet::proposed_job`'s reason: a client told
         // about a row the store then refused would hold a Job that is not
         // there. **The actor is Fleet** — a person approved the split, and the

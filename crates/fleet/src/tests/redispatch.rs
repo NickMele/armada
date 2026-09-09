@@ -19,7 +19,7 @@ use crate::daemon::Fleet;
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
     a_fleet, a_fleet_holding_all, a_fleet_minting_from, a_proposal, a_proposal_for, diff_evidence,
-    workflow_named_gated_on_diff, worktree_directory,
+    workflow_named_gated_on_diff, worktree_directory, worktree_directory_named,
 };
 use crate::tests::planted::the_drone_it_holds_is_gone;
 use crate::tests::tmp::TempDir;
@@ -58,7 +58,7 @@ async fn an_escalated_job(home: &TempDir) -> JobId {
             .propose(a_proposal("a Drone that could not spawn"))
             .await
             .expect("a Job at the gate");
-        worktree_directory(home, job.id());
+        worktree_directory(home, &job);
         dispatched(&fleet, job.id()).await.expect("released to run");
         // **Ended here rather than left to the drop.** A Drone outlives the
         // Fleet that spawned it by design, and one still in the process table
@@ -113,7 +113,7 @@ async fn an_escalated_job_is_replaced_by_a_new_one_pointing_back_at_it() {
     );
     assert_eq!(both.dispatched.title, both.replaced.title);
 
-    the_record_survives(&home, failed.as_str(), both.dispatched.id.as_str());
+    the_record_survives(&home, &both.replaced.handle, &both.dispatched.handle);
 }
 
 /// The failure's worktree and branch are still there, and the replacement's are
@@ -122,6 +122,10 @@ async fn an_escalated_job_is_replaced_by_a_new_one_pointing_back_at_it() {
 /// **This is why the id has to change.** `create_worktree` refuses an existing
 /// branch and nothing anywhere removes one, so a replacement under the same id
 /// could only run by destroying the record of why the first one stopped.
+///
+/// **Handles, not ids**: a worktree and a branch are named by what a person
+/// calls the Job, and a replacement takes a number of its own — which is what
+/// puts the two checkouts in different directories.
 fn the_record_survives(home: &TempDir, failed: &str, dispatched: &str) {
     let path = home.path().to_string_lossy().to_string();
     let failure =
@@ -159,7 +163,7 @@ async fn a_job_a_check_failed_is_replaced_and_the_original_is_cleared() {
         .await
         .expect("a Job at the gate");
     let failed = job.id().clone();
-    worktree_directory(&home, &failed);
+    worktree_directory(&home, &job);
     dispatched(&fleet, &failed).await.expect("released to run");
     submitted_by_the_one(&fleet, diff_evidence())
         .await
@@ -195,7 +199,7 @@ async fn a_job_a_check_failed_is_replaced_and_the_original_is_cleared() {
             .map(|id| id.as_str()),
         Some(failed.as_str())
     );
-    the_record_survives(&home, failed.as_str(), both.dispatched.id.as_str());
+    the_record_survives(&home, &both.replaced.handle, &both.dispatched.handle);
 }
 
 /// **A Job stopped by hand, wanted back.** The same act as a failure's, and the
@@ -209,7 +213,7 @@ async fn a_killed_job_is_replaced_and_stays_killed() {
         .await
         .expect("a Job at the gate");
     let killed = job.id().clone();
-    worktree_directory(&home, &killed);
+    worktree_directory(&home, &job);
     dispatched(&fleet, &killed).await.expect("released to run");
     fleet.kill_job(&killed).await.expect("ended by hand");
 
@@ -228,7 +232,7 @@ async fn a_killed_job_is_replaced_and_stays_killed() {
             .map(|id| id.as_str()),
         Some(killed.as_str())
     );
-    the_record_survives(&home, killed.as_str(), both.dispatched.id.as_str());
+    the_record_survives(&home, &both.replaced.handle, &both.dispatched.handle);
 }
 
 /// **A rejected Job never ran**, so the refusal says that rather than naming
@@ -325,7 +329,7 @@ async fn a_redispatch_freezes_the_failed_jobs_own_workflow_not_the_first_one_hel
         .await
         .expect("beta is a workflow this Fleet holds");
     let failed = job.id().clone();
-    worktree_directory(&home, &failed);
+    worktree_directory(&home, &job);
     dispatched(&fleet, &failed).await.expect("released to run");
     submitted_by_the_one(&fleet, diff_evidence())
         .await
@@ -388,7 +392,7 @@ async fn killed(
     home: &TempDir,
     job_id: &JobId,
 ) {
-    worktree_directory(home, job_id);
+    worktree_directory_named(home, &fleet.load(job_id).await.expect("the Job").handle());
     dispatched(&fleet, job_id).await.expect("released to run");
     fleet.kill_job(job_id).await.expect("ended by hand");
 }

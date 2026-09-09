@@ -38,6 +38,7 @@ mod gaming;
 mod judged;
 /// The note a boundary is holding, and the column it waits in.
 mod note;
+mod numbering;
 mod open;
 /// What a step said its work would be, kept after the slot that held it is
 /// gone.

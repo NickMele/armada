@@ -14,6 +14,7 @@ import type { JobSummary } from "@armada/protocol";
 function job(over: Partial<JobSummary> = {}): JobSummary {
   return {
     id: "a",
+    handle: "12-a-job",
     title: "Coalesce concurrent token refreshes",
     status: "running",
     workflow_id: "bug",

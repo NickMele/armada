@@ -15,7 +15,7 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use core_model::{Attempt, CriterionId, JobId, StepId};
+use core_model::{Attempt, CriterionId, StepId};
 
 use crate::check_output::one_component;
 
@@ -36,11 +36,11 @@ use crate::check_output::one_component;
 ///
 /// Until `#69` lands, `armada clean --all` and deleting this directory by hand
 /// are the only prunes, and both are a person's act.
-pub fn briefs_dir(repo_root: &str, job: &JobId) -> PathBuf {
+pub fn briefs_dir(repo_root: &str, handle: &str) -> PathBuf {
     Path::new(repo_root)
         .join(".armada")
         .join("briefs")
-        .join(job.as_str())
+        .join(handle)
 }
 
 /// Where a Judge's brief is kept while its call is out.
@@ -62,13 +62,15 @@ pub struct Asked(Option<Under>);
 #[derive(Clone)]
 struct Under {
     repo_root: String,
-    job: JobId,
+    /// **The handle, not the id.** A brief sits beside the worktree and the
+    /// deliverables, and all three are named by what a person calls the Job.
+    handle: String,
 }
 
 impl Asked {
     /// Keep this Job's briefs under this repository.
-    pub fn under(repo_root: String, job: JobId) -> Asked {
-        Asked(Some(Under { repo_root, job }))
+    pub fn under(repo_root: String, handle: String) -> Asked {
+        Asked(Some(Under { repo_root, handle }))
     }
 
     /// Keep nothing. See the type's own note.
@@ -106,11 +108,11 @@ impl Asked {
     ) -> Option<String> {
         let under = self.0.as_ref()?;
         let name = file_name(step, attempt, criterion)?;
-        let dir = briefs_dir(&under.repo_root, &under.job);
+        let dir = briefs_dir(&under.repo_root, &under.handle);
         std::fs::create_dir_all(&dir).ok()?;
         let mut file = std::fs::File::create(dir.join(&name)).ok()?;
         file.write_all(question.as_bytes()).ok()?;
-        Some(format!(".armada/briefs/{}/{name}", under.job.as_str()))
+        Some(format!(".armada/briefs/{}/{name}", under.handle))
     }
 }
 

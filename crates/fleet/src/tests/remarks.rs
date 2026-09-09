@@ -50,7 +50,7 @@ async fn a_finished_job(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
         .propose(a_proposal("fix the off-by-one in the log reader"))
         .await
         .unwrap();
-    worktree_directory(home, job.id());
+    worktree_directory(home, &job);
     dispatched(fleet, job.id()).await.unwrap();
     submitted_by_the_one(fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();

@@ -239,7 +239,7 @@ async fn a_refusal_escalates_the_job_and_its_citation_reaches_the_detail_view() 
         .await
         .expect("a Job at the gate");
     let job_id = job.id().clone();
-    worktree_directory(&home, &job_id);
+    worktree_directory(&home, &job);
     dispatched(&fleet, &job_id).await.expect("released to run");
     submitted_by_the_one(&fleet, crate::tests::daemon::diff_evidence())
         .await

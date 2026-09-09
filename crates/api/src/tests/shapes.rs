@@ -97,6 +97,7 @@ fn step_rail(
 pub fn job_at(id: &str, spelling: &str) -> JobSummary {
     JobSummary {
         id: JobId::carried(id),
+        handle: String::from("1-a-job"),
         title: format!("a Job called {id}"),
         status: status(spelling),
         created_at: Instant::carried("2026-01-01T00:00:00.000Z"),

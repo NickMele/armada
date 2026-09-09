@@ -279,7 +279,7 @@ async fn a_step_sent_back_carries_no_verdict_about_the_part_before_it() {
         .await
         .expect("a Job at the approval gate");
     let job_id = job.id().clone();
-    worktree_directory(&home, &job_id);
+    worktree_directory(&home, &job);
     dispatched(&fleet, &job_id).await.expect("it dispatches");
     submitted_by_the_one(&fleet, diff_evidence())
         .await
@@ -346,7 +346,7 @@ async fn a_note_waiting_behind_a_busy_fleet_is_on_the_wire_until_it_is_delivered
         .await
         .expect("a proposal");
     let other_id = other.id().clone();
-    worktree_directory(&home, &other_id);
+    worktree_directory(&home, &other);
     dispatched(&fleet, &other_id)
         .await
         .expect("the second Job takes the slot");

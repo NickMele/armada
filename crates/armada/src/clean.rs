@@ -326,15 +326,32 @@ fn forget_this_manifests_jobs(
     let declared_base = manifest.base().map(str::to_string);
     let base = declared_base.as_deref();
 
-    let mine: Vec<(JobId, String)> = loaded
+    // The id joins the record, the handle names the worktree and the branch,
+    // and the title is what a person reads back. Three values, one pass.
+    let mine: Vec<(JobId, String, String)> = loaded
         .jobs
         .iter()
         .filter(|job| job.owner_manifest_id().as_str() == manifest.id().as_str())
-        .map(|job| (job.id().clone(), job.title().as_str().to_string()))
+        .map(|job| {
+            (
+                job.id().clone(),
+                job.handle(),
+                job.title().as_str().to_string(),
+            )
+        })
         .collect();
 
-    for (job_id, title) in mine {
-        match give_back(store, root, &job_id, base, unmerged, Keep::Record, cleaned) {
+    for (job_id, handle, title) in mine {
+        match give_back(
+            store,
+            root,
+            &job_id,
+            &handle,
+            base,
+            unmerged,
+            Keep::Record,
+            cleaned,
+        ) {
             GaveBack::Done { reclaimed, record } => cleaned.jobs.push(JobCleaned {
                 job_id: job_id.as_str().to_string(),
                 title,
@@ -385,10 +402,13 @@ fn clear_this_manifests_unreadable_rows(
             cleaned.unreadable_elsewhere += 1;
             continue;
         }
+        // A row that will not rebuild has no handle to derive; its checkout is
+        // whatever it was named when it was cut, which `give_back` reads off disk.
         match give_back(
             store,
             root,
             &named.job_id,
+            named.job_id.as_str(),
             base,
             unmerged,
             Keep::Nothing,
@@ -452,12 +472,28 @@ fn give_back(
     store: &mut Store,
     root: &Path,
     job_id: &JobId,
+    handle: &str,
     base: Option<&str>,
     unmerged: UnmergedWork,
     keep: Keep,
     cleaned: &mut Cleaned,
 ) -> GaveBack {
-    let spec = match WorktreeSpec::for_job(&root.to_string_lossy(), job_id.as_str()) {
+    // **The handle first, and the id if nothing is there under it.** A worktree
+    // cut before Jobs had handles is named by the id, and it is still a
+    // directory somebody has to get back — so this reads what is on disk rather
+    // than assuming every checkout was made by this build. A Job with neither
+    // has nothing to give back, and the handle is the name reported for it.
+    let under_the_handle = WorktreeSpec::for_job(&root.to_string_lossy(), handle);
+    let under_the_id = WorktreeSpec::for_job(&root.to_string_lossy(), job_id.as_str());
+    let on_disk = |spec: &Result<WorktreeSpec, _>| {
+        spec.as_ref()
+            .is_ok_and(|spec| Path::new(&spec.worktree_path()).exists())
+    };
+    let spec = match (on_disk(&under_the_handle), on_disk(&under_the_id)) {
+        (false, true) => under_the_id,
+        _ => under_the_handle,
+    };
+    let spec = match spec {
         Ok(spec) => spec,
         Err(refused) => {
             cleaned

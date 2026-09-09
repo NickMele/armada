@@ -119,8 +119,10 @@ async fn a_merged_branch_and_its_worktree_are_both_given_back() {
     let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
     a_repository(&home);
     let job_id = a_finished_job(&fleet, "reclaim me").await;
-    a_worktree_for(&home, job_id.as_str());
-    let path = home.path().join(".armada/worktrees").join(job_id.as_str());
+    let handle = fleet.load(&job_id).await.expect("the Job").handle();
+    a_worktree_for(&home, &handle);
+    let handle = fleet.load(&job_id).await.expect("the Job").handle();
+    let path = home.path().join(".armada/worktrees").join(&handle);
     assert!(path.is_dir(), "the fixture built a checkout to reclaim");
 
     let gave_back = Fleet::reclaim_worktree(&fleet, &job_id)
@@ -139,7 +141,7 @@ async fn a_merged_branch_and_its_worktree_are_both_given_back() {
     );
     assert!(!path.exists(), "the directory is really gone");
     assert!(
-        !branches(home.path()).contains(&format!("armada/{}", job_id.as_str())),
+        !branches(home.path()).contains(&format!("armada/{handle}")),
         "the branch is really gone"
     );
     assert!(
@@ -161,8 +163,9 @@ async fn a_branch_holding_unmerged_work_survives_its_own_worktree() {
     let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
     a_repository(&home);
     let job_id = a_finished_job(&fleet, "keep my commits").await;
-    a_worktree_for(&home, job_id.as_str());
-    let worktree = home.path().join(".armada/worktrees").join(job_id.as_str());
+    let handle = fleet.load(&job_id).await.expect("the Job").handle();
+    a_worktree_for(&home, &handle);
+    let worktree = home.path().join(".armada/worktrees").join(&handle);
     std::fs::write(worktree.join("work.txt"), "what the drone wrote\n").expect("a change");
     git(&worktree, &["add", "work.txt"]);
     commit(&worktree, "work nobody has taken");
@@ -182,7 +185,7 @@ async fn a_branch_holding_unmerged_work_survives_its_own_worktree() {
     assert_eq!(base, "main");
     assert_eq!(commits, 1);
     assert!(
-        branches(home.path()).contains(&format!("armada/{}", job_id.as_str())),
+        branches(home.path()).contains(&format!("armada/{handle}")),
         "the branch is still there for a person to merge by hand"
     );
 }
@@ -244,8 +247,9 @@ async fn the_seam_answers_with_both_halves_over_http() {
     let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
     a_repository(&home);
     let job_id = a_finished_job(&fleet, "over the wire").await;
-    a_worktree_for(&home, job_id.as_str());
-    let worktree = home.path().join(".armada/worktrees").join(job_id.as_str());
+    let handle = fleet.load(&job_id).await.expect("the Job").handle();
+    a_worktree_for(&home, &handle);
+    let worktree = home.path().join(".armada/worktrees").join(&handle);
     std::fs::write(worktree.join("work.txt"), "what the drone wrote\n").expect("a change");
     git(&worktree, &["add", "work.txt"]);
     commit(&worktree, "work nobody has taken");

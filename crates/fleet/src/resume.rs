@@ -550,7 +550,7 @@ where
     /// earlier steps' work is not on disk and there is nothing to resume onto.
     pub(crate) fn surviving_worktree(&self, job: &Job) -> Result<Worktree, Adrift> {
         let spec =
-            WorktreeSpec::for_job(&self.host().repo_root, job.id().as_str()).map_err(|cause| {
+            WorktreeSpec::for_job(&self.host().repo_root, &job.handle()).map_err(|cause| {
                 Adrift::Unworkable {
                     job: job.id().clone(),
                     cause,

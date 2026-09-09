@@ -528,7 +528,7 @@ async fn a_running_drone_can_be_watched_and_a_finished_one_leaves_its_history() 
         .propose(crate::tests::daemon::a_proposal("watch this one"))
         .await
         .expect("a proposal Fleet holds everything for");
-    crate::tests::daemon::worktree_directory(&home, proposed.id());
+    crate::tests::daemon::worktree_directory(&home, &proposed);
     dispatched(&fleet, proposed.id())
         .await
         .expect("approval releases it");
@@ -587,7 +587,7 @@ async fn a_row_written_after_a_step_advances_carries_the_step_it_was_written_und
         .propose(crate::tests::daemon::a_proposal("advance once"))
         .await
         .expect("a proposal Fleet holds everything for");
-    crate::tests::daemon::worktree_directory(&home, job.id());
+    crate::tests::daemon::worktree_directory(&home, &job);
     dispatched(&fleet, job.id())
         .await
         .expect("approval puts a Drone on `implement`");
@@ -635,7 +635,7 @@ async fn the_record_carries_what_armada_said_and_what_fleet_did_beside_the_drone
         .propose(crate::tests::daemon::a_proposal("advance once"))
         .await
         .expect("a proposal Fleet holds everything for");
-    crate::tests::daemon::worktree_directory(&home, job.id());
+    crate::tests::daemon::worktree_directory(&home, &job);
     dispatched(&fleet, job.id())
         .await
         .expect("approval puts a Drone on `implement`");

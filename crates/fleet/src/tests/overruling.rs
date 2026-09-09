@@ -89,7 +89,7 @@ async fn refused(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
         .await
         .expect("a Job at the approval gate");
     let job_id = job.id().clone();
-    worktree_directory(home, &job_id);
+    worktree_directory(home, &job);
     dispatched(&fleet, &job_id).await.expect("released to run");
     submitted_by_the_one(&fleet, diff_evidence())
         .await
@@ -155,7 +155,7 @@ async fn flagged(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
         .await
         .expect("a Job at the approval gate");
     let job_id = job.id().clone();
-    worktree_directory(home, &job_id);
+    worktree_directory(home, &job);
     dispatched(&fleet, &job_id).await.expect("released to run");
     submitted_by_the_one(&fleet, diff_evidence())
         .await
@@ -269,7 +269,10 @@ async fn an_overruled_step_catches_the_branch_up_like_any_other_boundary() {
     assert_eq!(
         fleet.vcs().delivered().split_off(before),
         vec![Delivered::BroughtUpToDate {
-            branch: format!("armada/{}", job_id.as_str()),
+            branch: format!(
+                "armada/{}",
+                fleet.load(&job_id).await.expect("the Job").handle()
+            ),
             base: String::from("main"),
         }],
         "the step an override advanced to starts where an auto-advanced one would"
@@ -480,7 +483,7 @@ async fn a_failed_mechanical_check_cannot_be_overruled() {
         .await
         .expect("a Job at the approval gate");
     let job_id = job.id().clone();
-    worktree_directory(&home, &job_id);
+    worktree_directory(&home, &job);
     dispatched(&fleet, &job_id).await.expect("released to run");
     submitted_by_the_one(&fleet, diff_evidence())
         .await
@@ -541,7 +544,7 @@ async fn a_gate_that_could_not_decide_has_no_verdict_to_overrule() {
         .await
         .expect("a Job at the approval gate");
     let job_id = job.id().clone();
-    worktree_directory(&home, &job_id);
+    worktree_directory(&home, &job);
     dispatched(&fleet, &job_id).await.expect("released to run");
     submitted_by_the_one(&fleet, diff_evidence())
         .await

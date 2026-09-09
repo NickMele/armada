@@ -147,13 +147,19 @@ where
         // a pointer, and a peer that does not exist is the one shape a cycle
         // needs. `coupling::peers_held` carries why.
         self.peers_held(&proposal.dependencies).await?;
-        let (new, origin) = self.drafted(proposal, stated, &at, minted_by)?;
+        // **Allocated and written under one lock**, which is what makes the
+        // number an allocation rather than a guess: two proposals reading
+        // before either wrote would be handed the same number, and the unique
+        // index would refuse the second. Holding the lock across both is what
+        // stops that happening at all.
+        let mut store = self.store.lock().await;
+        let number = store
+            .next_job_number(&self.the_manifest_named(&proposal.owner_manifest_id)?)
+            .map_err(Adrift::Reading)?;
+        let (new, origin) = self.drafted(proposal, stated, &at, minted_by, number)?;
         let job = Job::create_top_level(new, origin, at.clone());
-        self.store
-            .lock()
-            .await
-            .insert_job(&job, &at)
-            .map_err(Adrift::Writing)?;
+        store.insert_job(&job, &at).map_err(Adrift::Writing)?;
+        drop(store);
         // After the write, never before: a client told about a row the store
         // then refused would hold a Job that does not exist, and a resync would
         // silently remove it.

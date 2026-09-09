@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use adapter_traits::{Environment, Footprint, Model, Worktree};
 use config::ResolvedWorkflow;
-use core_model::{Attempt, CriterionId, JobId, StepId, Ulid};
+use core_model::{Attempt, CriterionId, StepId};
 use testkit::{FakeJudge, FakeWorkProduct, Gate, Sketch};
 use verification::{Lifted, Request};
 
@@ -24,13 +24,13 @@ use crate::tests::gate::{budget, diff_evidence, worktree};
 use crate::tests::keeping::keeping_nowhere;
 use crate::tests::tmp::TempDir;
 
-const JOB: &str = "01J0000000000000000000JOB0";
 const FIRST: &str = "Does the fix address the cause the note names?";
 const SECOND: &str = "Does the change stay inside the paths the step declared?";
 
-fn job() -> JobId {
-    JobId::carried(Ulid::carried(JOB))
-}
+/// What the Job is called, which is what its brief directory is named after.
+/// A separate constant from [`JOB`] because the two are separate values now:
+/// the id joins the record and the handle names the paths.
+const HANDLE: &str = "12-the-reader-drops-a-line";
 
 /// One step, one passing Check, and two questions — so a test can tell one
 /// criterion's file from another's rather than asserting on a single one.
@@ -94,7 +94,7 @@ async fn a_verdict_can_be_read_against_the_question_that_went_out() {
     let root = dir.path().to_string_lossy().to_string();
     let ruling = ruled(
         Arc::clone(&judge),
-        Asked::under(root.clone(), job()),
+        Asked::under(root.clone(), HANDLE.to_string()),
         &worktree(),
     )
     .await;
@@ -112,7 +112,7 @@ async fn a_verdict_can_be_read_against_the_question_that_went_out() {
         assert_eq!(
             path,
             format!(
-                ".armada/briefs/{JOB}/implement.1.{}.txt",
+                ".armada/briefs/{HANDLE}/implement.1.{}.txt",
                 judgment.criterion_id.as_str()
             ),
             "the path is the row's own key"
@@ -180,13 +180,13 @@ async fn a_pass_keeps_its_brief_as_a_refusal_does() {
             "the loop stops at n - 1",
             "the last row is dropped",
         )),
-        Asked::under(root.clone(), job()),
+        Asked::under(root.clone(), HANDLE.to_string()),
         &worktree(),
     )
     .await;
     let met = ruled(
         Arc::new(FakeJudge::with_no_objection()),
-        Asked::under(root, job()),
+        Asked::under(root, HANDLE.to_string()),
         &worktree(),
     )
     .await;
@@ -210,7 +210,12 @@ async fn a_call_that_never_answered_still_left_what_it_was_asked() {
     let dir = TempDir::new();
     let judge = Arc::new(FakeJudge::that_fails("the quota"));
     let root = dir.path().to_string_lossy().to_string();
-    let ruling = ruled(Arc::clone(&judge), Asked::under(root, job()), &worktree()).await;
+    let ruling = ruled(
+        Arc::clone(&judge),
+        Asked::under(root, HANDLE.to_string()),
+        &worktree(),
+    )
+    .await;
 
     assert!(
         ruling.judged().is_empty(),
@@ -218,7 +223,7 @@ async fn a_call_that_never_answered_still_left_what_it_was_asked() {
     );
     let kept = std::fs::read_to_string(
         dir.path()
-            .join(format!(".armada/briefs/{JOB}/implement.1.c1.txt")),
+            .join(format!(".armada/briefs/{HANDLE}/implement.1.c1.txt")),
     )
     .expect("the brief of a call that failed");
     assert_eq!(
@@ -235,7 +240,7 @@ async fn a_call_that_never_answered_still_left_what_it_was_asked() {
 #[test]
 fn a_panel_shares_one_file_because_it_shares_one_brief() {
     let dir = TempDir::new();
-    let keeping = Asked::under(dir.path().to_string_lossy().to_string(), job());
+    let keeping = Asked::under(dir.path().to_string_lossy().to_string(), HANDLE.to_string());
     let (step, criterion) = (StepId::new("implement"), CriterionId::new("c1"));
 
     let paths: Vec<Option<String>> = (0..3)
@@ -244,7 +249,7 @@ fn a_panel_shares_one_file_because_it_shares_one_brief() {
 
     assert_eq!(paths[0], paths[1]);
     assert_eq!(paths[1], paths[2], "three answers, one question, one file");
-    let held = std::fs::read_dir(dir.path().join(".armada/briefs").join(JOB))
+    let held = std::fs::read_dir(dir.path().join(".armada/briefs").join(HANDLE))
         .expect("the directory")
         .count();
     assert_eq!(held, 1, "and one file on disk, not three copies of it");
@@ -257,7 +262,7 @@ fn a_panel_shares_one_file_because_it_shares_one_brief() {
 #[test]
 fn an_id_that_is_not_one_path_component_keeps_nothing() {
     let dir = TempDir::new();
-    let keeping = Asked::under(dir.path().to_string_lossy().to_string(), job());
+    let keeping = Asked::under(dir.path().to_string_lossy().to_string(), HANDLE.to_string());
 
     for (step, criterion) in [
         ("../implement", "c1"),

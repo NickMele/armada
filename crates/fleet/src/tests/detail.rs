@@ -51,7 +51,7 @@ async fn a_dispatched_job_carries_its_branch_and_its_steps() {
         .await
         .expect("a Job at the gate");
     let job_id = job.id().clone();
-    worktree_directory(&home, &job_id);
+    worktree_directory(&home, &job);
     dispatched(&fleet, &job_id).await.expect("released to run");
     let events = fleet.events();
     let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
@@ -64,7 +64,7 @@ async fn a_dispatched_job_carries_its_branch_and_its_steps() {
     assert_eq!(detail.job.status.as_wire(), "running");
     assert_eq!(
         detail.branch.as_deref(),
-        Some(format!("armada/{}", job_id.as_str()).as_str()),
+        Some(format!("armada/{}", job.handle()).as_str()),
         "what dispatch actually made, recorded when it made it"
     );
     assert_eq!(detail.steps.len(), 2, "the frozen workflow's two steps");
@@ -129,7 +129,7 @@ async fn the_branch_survives_a_fleet_restart() {
             .propose(a_proposal("interrupted mid-flight"))
             .await
             .expect("a Job at the gate");
-        worktree_directory(&home, job.id());
+        worktree_directory(&home, &job);
         dispatched(&fleet, job.id()).await.expect("released to run");
         // **Ended here rather than left to the drop.** A Drone outlives the
         // Fleet that spawned it by design, and one still in the process table
@@ -149,7 +149,7 @@ async fn the_branch_survives_a_fleet_restart() {
     assert_eq!(detail.job.status.as_wire(), "escalated");
     assert_eq!(
         detail.branch.as_deref(),
-        Some(format!("armada/{}", job_id.as_str()).as_str()),
+        Some(format!("armada/{}", detail.job.handle).as_str()),
         "a column, not a fold — the log carries no worktree"
     );
 }

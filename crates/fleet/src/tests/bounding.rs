@@ -86,7 +86,7 @@ async fn working(fleet: &Fixture, home: &TempDir, title: &str) -> JobId {
         .propose(a_proposal(title))
         .await
         .expect("a Job at the approval gate");
-    worktree_directory(home, job.id());
+    worktree_directory(home, &job);
     dispatched(&fleet, job.id()).await.expect("released to run");
     job.id().clone()
 }

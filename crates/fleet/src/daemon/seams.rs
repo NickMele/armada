@@ -117,7 +117,7 @@ where
     /// what the call was asked is filed under the Job it was asked about. A
     /// Judge call is still assembled from the step and the workflow, and there
     /// is no arrangement of this argument that puts a Job id into a brief.
-    pub(crate) fn judging(&self, job: &JobId) -> Result<Judging, SpawnConfigRefused> {
+    pub(crate) fn judging(&self, job: &Job) -> Result<Judging, SpawnConfigRefused> {
         Ok(Judging {
             client: Arc::clone(&self.judge),
             budget: self.judge_budget,
@@ -128,13 +128,13 @@ where
                 home: &self.host.home,
             })?,
             marking: Marking::on(
-                job.into(),
+                job.id().into(),
                 self.aloft.clone(),
                 self.events.clone(),
                 Arc::clone(&self.clock),
                 self.judge_budget,
             ),
-            asked: Asked::under(self.host.repo_root.clone(), job.clone()),
+            asked: Asked::under(self.host.repo_root.clone(), job.handle()),
         })
     }
     /// The Judge call that is out, for `serving` to put on `get_job`.

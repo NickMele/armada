@@ -103,7 +103,7 @@ fn a_partial_row_is_skipped_rather_than_read_wrong() {
 /// `du -s -k` prints kibibytes and a path. Bytes are what crosses.
 #[test]
 fn the_worktree_reading_is_taken_off_du_in_kibibytes() {
-    let said = "1048576\t/repo/.armada/worktrees/01JOB\n";
+    let said = "1048576\t/repo/.armada/worktrees/1-a-checkout-exists\n";
 
     assert_eq!(measured(said), Some(1024 * 1024 * 1024));
 }
@@ -200,11 +200,11 @@ async fn a_worktree_on_disk_is_measured_and_named() {
         .propose(a_proposal("a checkout exists"))
         .await
         .expect("a Job at the gate");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     std::fs::write(
         home.path()
             .join(".armada/worktrees")
-            .join(job.id().as_str())
+            .join(job.handle())
             .join("work.txt"),
         "what the drone wrote\n",
     )
@@ -213,8 +213,8 @@ async fn a_worktree_on_disk_is_measured_and_named() {
     let held = fleet.job_resources(&job).await.expect("a reading");
 
     let worktree = held.worktree.expect("a checkout was found");
-    assert!(worktree.path.ends_with(job.id().as_str()));
-    assert_eq!(worktree.branch, format!("armada/{}", job.id().as_str()));
+    assert!(worktree.path.ends_with(&job.handle()));
+    assert_eq!(worktree.branch, format!("armada/{}", job.handle()));
     assert!(
         worktree.bytes.is_some(),
         "the walk finished inside its bound"

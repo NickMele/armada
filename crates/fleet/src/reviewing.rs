@@ -568,7 +568,7 @@ where
     /// a reading that found no change. A directory that will not open is an
     /// error rather than either.
     pub(crate) fn worktree_of(&self, job: &Job) -> Result<Option<Worktree>, Adrift> {
-        let spec = WorktreeSpec::for_job(&self.host().repo_root, job.id().as_str())
+        let spec = WorktreeSpec::for_job(&self.host().repo_root, &job.handle())
             .map_err(Adrift::NoReadingWorktree)?;
         if !Path::new(&spec.worktree_path()).is_dir() {
             return Ok(None);

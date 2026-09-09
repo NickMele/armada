@@ -391,7 +391,7 @@ where
             })?;
         let rows = check_output::kept_dry(
             &self.host().repo_root,
-            plan.record.id(),
+            &plan.record.handle(),
             &plan.step,
             on,
             &ran.recorded(),

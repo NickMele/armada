@@ -97,6 +97,7 @@ async fn a_narrowed_run_runs_the_command_the_manifest_declared_for_it() {
     ));
     let app = router(&fleet);
     let job = started(&fleet, &home).await;
+    let handle = fleet.load(&job).await.expect("the Job").handle();
 
     let said = asking(&app, true).await;
     assert!(!said.is_error, "{}", said.text);
@@ -114,7 +115,7 @@ async fn a_narrowed_run_runs_the_command_the_manifest_declared_for_it() {
         "the narrowed command is on the row: {}",
         said.text
     );
-    let log = crate::check_output::checks_dir(&home.path().to_string_lossy(), &job)
+    let log = crate::check_output::checks_dir(&home.path().to_string_lossy(), &handle)
         .join("implement.1.dry.0.log");
     assert!(
         std::fs::read_to_string(&log)

@@ -76,7 +76,7 @@ async fn dispatching(home: &TempDir) -> (Fixture, JobId) {
         .propose(a_proposal_for("the parent", "fixture-dispatcher"))
         .await
         .expect("the proposal lands");
-    worktree_directory(home, job.id());
+    worktree_directory(home, &job);
     dispatched(&fleet, job.id()).await.expect("approval lands");
     let id = job.id().clone();
     (fleet, id)
@@ -187,7 +187,7 @@ async fn a_drone_on_a_workflow_that_dispatches_nothing_is_refused() {
         .propose(a_proposal_for("an ordinary Job", "fixture-piece"))
         .await
         .expect("the proposal lands");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.expect("approval lands");
 
     let refused = fleet
@@ -222,7 +222,7 @@ async fn a_sub_dispatched_job_running_on_a_dispatching_step_still_cannot_dispatc
         .sub_dispatch(&parent, &asked)
         .await
         .expect("a child on the same workflow is a legal thing to create");
-    worktree_directory(&home, &child);
+    worktree_directory(&home, &fleet.load(&child).await.expect("the child"));
 
     // The parent's step advances, it gives up its slot, and the next turn puts
     // a Drone on the child — which is the whole arrangement this refusal has to
@@ -264,7 +264,7 @@ async fn a_parent_waiting_for_its_children_gives_up_its_slot() {
         .sub_dispatch(&parent, &asking("one piece", &[]))
         .await
         .expect("the child is created");
-    worktree_directory(&home, &child);
+    worktree_directory(&home, &fleet.load(&child).await.expect("the child"));
 
     submitted_by_the_one(&fleet, note_evidence())
         .await
@@ -301,7 +301,7 @@ async fn a_waiting_parent_reads_as_blocked_and_as_nobody_having_put_it_back() {
         .sub_dispatch(&parent, &asking("one piece", &[]))
         .await
         .expect("the child is created");
-    worktree_directory(&home, &child);
+    worktree_directory(&home, &fleet.load(&child).await.expect("the child"));
     submitted_by_the_one(&fleet, note_evidence())
         .await
         .expect("the evidence is taken");
@@ -336,7 +336,7 @@ async fn the_parent_comes_back_on_the_next_step_once_its_children_are_done() {
         .sub_dispatch(&parent, &asking("one piece", &[]))
         .await
         .expect("the child is created");
-    worktree_directory(&home, &child);
+    worktree_directory(&home, &fleet.load(&child).await.expect("the child"));
 
     // The parent dispatches and stands down; the child is admitted and works
     // its one step; the parent is admitted again.

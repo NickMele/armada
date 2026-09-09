@@ -19,7 +19,9 @@ use ipc::{JobList, JobSummary, RunId};
 use testkit::FakeWorkProduct;
 
 use crate::tests::admitted::dispatched;
-use crate::tests::daemon::{a_fleet, a_proposal, diff_evidence, note_evidence, worktree_directory};
+use crate::tests::daemon::{
+    a_fleet, a_proposal, diff_evidence, note_evidence, worktree_directory, worktree_directory_named,
+};
 use crate::tests::http::call;
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
@@ -64,7 +66,7 @@ async fn the_operations_answer_from_a_real_fleet() {
 
     // The Drone needs a directory that is really there — see the note in
     // `tests::daemon`.
-    worktree_directory(&home, &proposed.id.to_domain());
+    worktree_directory_named(&home, &proposed.handle);
 
     let (status, body) = call(
         &app,
@@ -162,7 +164,7 @@ async fn a_job_approved_over_the_api_reaches_a_terminal_state() {
     let (status, body) = call(&app, "POST", "/jobs", A_PROPOSAL).await;
     assert_eq!(status, StatusCode::CREATED);
     let proposed: JobSummary = ipc::decode("a proposed Job", &body).expect("a JobSummary");
-    worktree_directory(&home, &proposed.id.to_domain());
+    worktree_directory_named(&home, &proposed.handle);
 
     let (status, _) = call(
         &app,
@@ -234,7 +236,7 @@ async fn a_move_the_machine_refuses_is_a_conflict() {
     let home = TempDir::new();
     let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
     let job = fleet.propose(a_proposal("approved twice")).await.unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     let events = fleet.events();
     let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
 
@@ -300,7 +302,7 @@ async fn a_step_that_moves_while_a_client_is_connected_reaches_that_client() {
         .propose(a_proposal("watch it advance"))
         .await
         .expect("a Job at the gate");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     let events = fleet.events();
     let mut watching = events.subscribe();
 

@@ -96,7 +96,12 @@ export function headingOf({
     // first word in the badge, and the badge is the header.
     statusLabel: leading(reading.verb),
     headline: job.title,
-    jobId: job.id,
+    // **The handle, not the ULID.** This is the mono value a person copies out
+    // of the header, and what they copy is what they have to type back — into
+    // a branch name, a worktree path, or a sentence to somebody else. The id
+    // still names every request the screen makes; it is just not the thing a
+    // person is asked to read.
+    jobId: job.handle,
     fields: factsOf(job, whole, workflow, now),
     // The acts that end or replace the Job. **Pilot's slot is this one**, left
     // of the kill group — #250, and it lands without this line changing.

@@ -29,6 +29,7 @@ async fn a_drone_asking_for_the_checks_is_told_what_each_one_did() {
     ));
     let app = router(&fleet);
     let job = started(&fleet, &home).await;
+    let handle = fleet.load(&job).await.expect("the Job").handle();
 
     let said = ask(&app).await;
     assert!(!said.is_error, "{}", said.text);
@@ -60,7 +61,7 @@ async fn a_drone_asking_for_the_checks_is_told_what_each_one_did() {
 
     // The path it named is a file that is there, holding what the Check
     // printed — a pointer to nothing would be worse than no pointer.
-    let log = crate::check_output::checks_dir(&home.path().to_string_lossy(), &job)
+    let log = crate::check_output::checks_dir(&home.path().to_string_lossy(), &handle)
         .join("implement.1.dry.0.log");
     assert!(
         log.is_file(),
@@ -78,7 +79,7 @@ async fn a_drone_asking_for_the_checks_is_told_what_each_one_did() {
     // carry the attempt, so this holds per run rather than once per step —
     // #63 made a step workable twice and the path is the whole key.
     assert!(
-        !crate::check_output::checks_dir(&home.path().to_string_lossy(), &job)
+        !crate::check_output::checks_dir(&home.path().to_string_lossy(), &handle)
             .join("implement.1.0.log")
             .exists(),
         "a dry run wrote over the gate's log"

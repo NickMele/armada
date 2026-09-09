@@ -43,7 +43,7 @@ async fn a_step_gated_on_a_manifest_policy_holds_for_a_person() {
             .propose(a_proposal("fix the off-by-one"))
             .await
             .expect("a Job at the approval gate");
-        worktree_directory(&home, job.id());
+        worktree_directory(&home, &job);
         dispatched(&fleet, job.id()).await.expect("it dispatches");
         submitted_by_the_one(&fleet, diff_evidence())
             .await
@@ -83,7 +83,7 @@ async fn the_record_keeps_the_policy_rather_than_the_answer() {
         .propose(a_proposal("fix the off-by-one"))
         .await
         .expect("a Job at the approval gate");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     let dispatched = dispatched(&fleet, job.id()).await.expect("it dispatches");
     assert_eq!(
         dispatched

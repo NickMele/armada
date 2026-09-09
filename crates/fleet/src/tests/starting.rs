@@ -66,7 +66,7 @@ async fn a_worktree_git_would_not_make_stops_the_job_as_no_worktree() {
         .propose(a_proposal("a Job with nowhere to work"))
         .await
         .expect("proposed");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     fleet.vcs().refuse_next("a full disk");
 
     let refused = dispatched(&fleet, job.id())
@@ -112,7 +112,7 @@ async fn attachments_that_will_not_copy_stop_the_job_as_no_worktree() {
     }];
 
     let job = fleet.propose(proposal).await.expect("promoted");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     // Between promotion and dispatch, which is where a reaper or a person with
     // a shell gets to it. The Job still names the attachment; the bytes have
     // gone.
@@ -264,7 +264,7 @@ async fn a_spawn_config_that_is_refused_stops_the_job_as_not_configurable() {
         .propose(a_proposal("a Job no spawn can be built for"))
         .await
         .expect("proposed");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
 
     let refused = dispatched(&fleet, job.id())
         .await
@@ -305,7 +305,7 @@ async fn a_harness_that_refuses_to_spawn_stops_the_job_as_would_not_start() {
         .propose(a_proposal("a Job the machine will not start"))
         .await
         .expect("proposed");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
 
     let refused = dispatched(&fleet, job.id())
         .await

@@ -92,7 +92,7 @@ async fn an_approved_dependent_is_not_admitted_before_its_upstream_lands() {
         .propose_from("two coupled changes", None)
         .await
         .expect("a plan");
-    worktree_directory(&home, made[1].id());
+    worktree_directory(&home, &made[1]);
 
     // The dependent alone, approved out of turn. The slot is free, so nothing
     // but the edge is keeping it from running.
@@ -125,8 +125,8 @@ async fn a_dependent_is_admitted_once_its_upstream_completes() {
         .propose_from("two coupled changes", None)
         .await
         .expect("a plan");
-    worktree_directory(&home, made[0].id());
-    worktree_directory(&home, made[1].id());
+    worktree_directory(&home, &made[0]);
+    worktree_directory(&home, &made[1]);
     dispatched(&fleet, made[0].id())
         .await
         .expect("the upstream runs");

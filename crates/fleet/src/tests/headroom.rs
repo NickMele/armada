@@ -108,7 +108,7 @@ fn watching(home: &TempDir, plant: &Arc<Plant>, polling: Polling) -> Fixture {
 /// Approve a Job, with the worktree its dispatch would want.
 async fn approved(fleet: &Fixture, home: &TempDir, title: &str) -> core_model::JobId {
     let job = fleet.propose(a_proposal(title)).await.expect("a proposal");
-    worktree_directory(home, job.id());
+    worktree_directory(home, &job);
     dispatched(&fleet, job.id())
         .await
         .expect("a person approves it");
@@ -484,7 +484,7 @@ async fn a_restart_is_accepted_and_then_held_by_short_headroom() {
         .propose(a_proposal("a step that will stop"))
         .await
         .expect("a Job at the approval gate");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.expect("released to run");
     let record = fleet.load(job.id()).await.expect("the Job reads");
     let record = fleet

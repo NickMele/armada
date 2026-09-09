@@ -113,13 +113,13 @@ async fn dispatch_copies_the_attachment_and_the_brief_names_it() {
         .propose(proposal_with(staged_path, "repro.png"))
         .await
         .expect("promoted");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
 
     let approved = dispatched(&fleet, job.id()).await.expect("dispatch runs");
     assert_eq!(approved.status(), JobStatus::Running);
 
-    let spec = WorktreeSpec::for_job(&home.path().to_string_lossy(), job.id().as_str())
-        .expect("a legal spec");
+    let spec =
+        WorktreeSpec::for_job(&home.path().to_string_lossy(), &job.handle()).expect("a legal spec");
     let worktree_path = spec.worktree_path();
     let copied = std::path::Path::new(&worktree_path)
         .join(".armada")

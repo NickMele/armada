@@ -68,7 +68,7 @@ pub(super) async fn at_the_gate(fleet: &Fixture, home: &TempDir) -> JobId {
         .propose(a_proposal("fix the off-by-one"))
         .await
         .expect("a Job at the approval gate");
-    worktree_directory(home, job.id());
+    worktree_directory(home, &job);
     let job = dispatched(&fleet, job.id()).await.expect("it dispatches");
     assert_eq!(job.status(), JobStatus::Running);
 
@@ -184,7 +184,7 @@ async fn a_boundary_a_person_approved_catches_the_branch_up() {
     assert_eq!(
         fleet.vcs().delivered().split_off(before),
         vec![Delivered::BroughtUpToDate {
-            branch: format!("armada/{}", job_id.as_str()),
+            branch: format!("armada/{}", job.handle()),
             base: String::from("main"),
         }],
         "a step a person let through starts from the same place an auto-advanced one does"
@@ -316,7 +316,7 @@ async fn a_step_after_a_human_boundary_does_not_advance_on_a_rebase_it_did_not_r
         .propose(a_proposal("fix the off-by-one in the log reader"))
         .await
         .expect("a Job at the approval gate");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.expect("it dispatches");
 
     // The first step does real work and stops at the person's gate.
@@ -374,7 +374,7 @@ async fn the_last_step_is_approved_over_a_branch_that_already_went_out() {
         .propose(a_proposal("fix the off-by-one"))
         .await
         .expect("a Job at the approval gate");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     let job = dispatched(&fleet, job.id()).await.expect("it dispatches");
 
     submitted_by_the_one(&fleet, diff_evidence())
@@ -473,7 +473,7 @@ async fn work_that_fails_a_check_never_reaches_the_person() {
         .propose(a_proposal("fix the off-by-one"))
         .await
         .expect("a Job at the approval gate");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.expect("it dispatches");
 
     submitted_by_the_one(&fleet, diff_evidence())
@@ -523,7 +523,7 @@ async fn a_judge_under_a_human_gate_filters_what_reaches_the_person() {
             .propose(a_proposal("fix the off-by-one"))
             .await
             .expect("a Job at the approval gate");
-        worktree_directory(&home, job.id());
+        worktree_directory(&home, &job);
         dispatched(&fleet, job.id()).await.expect("it dispatches");
 
         submitted_by_the_one(&fleet, diff_evidence())
@@ -573,7 +573,7 @@ async fn a_job_a_person_is_reading_holds_no_process_and_no_slot() {
         .propose(a_proposal("fix the off-by-one"))
         .await
         .expect("a Job at the approval gate");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.expect("it dispatches");
 
     let pid = fleet
@@ -611,7 +611,7 @@ async fn a_job_a_person_is_reading_holds_no_process_and_no_slot() {
         .propose(a_proposal("something else entirely"))
         .await
         .expect("a second Job");
-    worktree_directory(&home, next.id());
+    worktree_directory(&home, &next);
     let next = dispatched(&fleet, next.id()).await.expect("it dispatches");
     assert_eq!(
         next.status(),
@@ -644,7 +644,7 @@ async fn a_job_approved_while_another_holds_the_slot_waits_its_turn() {
         .propose(a_proposal("something else entirely"))
         .await
         .expect("a second Job");
-    worktree_directory(&home, next.id());
+    worktree_directory(&home, &next);
     dispatched(&fleet, next.id()).await.expect("it dispatches");
 
     let approved = fleet

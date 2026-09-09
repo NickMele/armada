@@ -73,6 +73,7 @@ pub(super) fn a_job() -> Job {
             subject: None,
             redispatched_from: None,
             proposal_id: None,
+            number: core_model::JobNumber::carried(1),
             facts: Facts::new("the reader is off by one"),
             scope_revisions: Vec::new(),
             attachments: Vec::new(),
@@ -460,7 +461,7 @@ pub(super) async fn told_across_the_boundary(
         .propose(a_proposal("plan then do"))
         .await
         .expect("a proposal");
-    worktree_directory(home, job.id());
+    worktree_directory(home, &job);
     dispatched(&fleet, job.id()).await.expect("it is approved");
     let plan = DeclareScope {
         context_paths: vec!["docs".to_string()],

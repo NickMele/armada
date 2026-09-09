@@ -36,6 +36,7 @@ function whole(over: Partial<Stuck> = {}): JobWhole {
   return {
     job: {
       id: "01M130Y1380016YK5S0JXBXDQ5",
+      handle: "12-a-job",
       title: "Coalesce concurrent token refreshes",
       status: "escalated",
       workflow_id: "bug",

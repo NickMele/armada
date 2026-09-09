@@ -23,7 +23,7 @@ use testkit::FakeWorkProduct;
 use tower::ServiceExt;
 
 use crate::daemon::Fleet;
-use crate::tests::daemon::{a_fleet, worktree_directory};
+use crate::tests::daemon::{a_fleet, worktree_directory_named};
 use crate::tests::tmp::TempDir;
 
 type FixtureFleet = Fleet<testkit::FakeHarness, testkit::FakeVcs, FakeWorkProduct>;
@@ -131,7 +131,7 @@ async fn running(home: &TempDir) -> (Arc<FixtureFleet>, Router) {
     let (status, body) = post(&app, "/jobs", A_PROPOSAL).await;
     assert_eq!(status, StatusCode::CREATED);
     let proposed: JobSummary = ipc::decode("a proposed Job", &body).expect("a JobSummary");
-    worktree_directory(home, &proposed.id.to_domain());
+    worktree_directory_named(home, &proposed.handle);
     let (status, _) = post(
         &app,
         &format!("/jobs/{}/approve_dispatch", proposed.id.as_str()),

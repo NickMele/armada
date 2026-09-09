@@ -287,9 +287,11 @@ where
             &adding,
             &request.reason,
         );
-        let judging = self.judging(&job).map_err(|why| NotWidened::CouldNotAsk {
-            cause: format!("{why:?}"),
-        })?;
+        let judging = self
+            .judging(&record)
+            .map_err(|why| NotWidened::CouldNotAsk {
+                cause: format!("{why:?}"),
+            })?;
         let answer = judging::widening(declared, &brief, &judging)
             .await
             .map_err(|why| NotWidened::CouldNotAsk {

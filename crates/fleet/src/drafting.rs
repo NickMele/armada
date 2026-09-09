@@ -26,9 +26,9 @@
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
-    AcceptanceCriterion, Actor, Attachment, CriterionId, DependencyEdge, Facts, JobId, ModelName,
-    NewJob, ProposalId, RepoPath, ScopeRevision, ScopeRevisionOutcome, StepSeed, Subject,
-    Timestamp, Title, TopLevelOrigin, WriteTargets,
+    AcceptanceCriterion, Actor, Attachment, CriterionId, DependencyEdge, Facts, JobId, JobNumber,
+    ModelName, NewJob, ProposalId, RepoPath, ScopeRevision, ScopeRevisionOutcome, StepSeed,
+    Subject, Timestamp, Title, TopLevelOrigin, WriteTargets,
 };
 
 use crate::adrift::Adrift;
@@ -99,6 +99,7 @@ where
         stated: StatedBy,
         at: &Timestamp,
         minted_by: Option<ProposalId>,
+        number: JobNumber,
     ) -> Result<(NewJob, TopLevelOrigin), Adrift> {
         let title = Title::new(&proposal.title).map_err(|_| Adrift::Unnameable)?;
         let atomic = proposal.atomic;
@@ -164,6 +165,7 @@ where
             }),
             redispatched_from: None,
             proposal_id: minted_by,
+            number,
             facts: Facts::new(proposal.facts),
             scope_revisions: vec![entry_zero(write_targets.as_ref(), atomic, stated, at)],
             attachments,
@@ -239,7 +241,7 @@ where
     /// The proposal's Manifest, if it is the one this Fleet was started
     /// against. One at M1 — Fleet is pointed at a repository and reads the
     /// `armada.yml` at its root — so there is one value this can be.
-    fn the_manifest_named(
+    pub(crate) fn the_manifest_named(
         &self,
         named: &ipc::ManifestId,
     ) -> Result<core_model::ManifestId, Adrift> {

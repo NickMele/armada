@@ -24,9 +24,10 @@
 
 use core_model::{
     Attachment, Branch, CheckOutcome, CriterionId, DispatchOrigin, EvidenceType, Facts,
-    GateManifest, GateOutcome, Job, JobId, JobStatus, JudgeVerdict, Judgment, ManifestId,
-    ModelName, NewJob, Origin, ProposalId, RedirectWaiting, RepoPath, StepCheck, StepEvidence,
-    StepId, StepSeed, StepState, Subject, Timestamp, Title, Ulid, Urgency, WriteTargets,
+    GateManifest, GateOutcome, Job, JobId, JobNumber, JobStatus, JudgeVerdict, Judgment,
+    ManifestId, ModelName, NewJob, Origin, ProposalId, RedirectWaiting, RepoPath, StepCheck,
+    StepEvidence, StepId, StepSeed, StepState, Subject, Timestamp, Title, Ulid, Urgency,
+    WriteTargets,
 };
 use rusqlite::Row;
 
@@ -237,6 +238,17 @@ impl Store {
                 .map(|id| JobId::carried(Ulid::carried(id))),
             proposal_id: maybe(row, "proposal_id")?
                 .map(|id| ProposalId::carried(Ulid::carried(id))),
+            // **`NOT NULL` in the file, so null is unreachable here.** V34
+            // backfilled every row and the unique index keeps it so. A null
+            // that reached this would be a file no Armada wrote; it reads as
+            // the malformed column it is, rather than as job zero.
+            number: JobNumber::carried(maybe_number(row, "number")?.ok_or_else(|| {
+                RowError::MalformedColumn {
+                    table: "jobs",
+                    column: "number",
+                    detail: String::from("null, and the column is NOT NULL"),
+                }
+            })?),
             facts: Facts::new(string(row, "facts")?),
             scope_revisions: columns::read_scope_revisions(&string(row, "scope_revisions")?)
                 .map_err(malformed("scope_revisions"))?,

@@ -17,8 +17,8 @@
 use std::sync::LazyLock;
 
 use core_model::{
-    AcceptanceCriterion, CriterionId, CriterionSource, Facts, Job, JobId, ManifestId, ModelName,
-    NewJob, StepSeed, Timestamp, TopLevelOrigin, Ulid, Urgency,
+    AcceptanceCriterion, CriterionId, CriterionSource, Facts, Job, JobId, JobNumber, ManifestId,
+    ModelName, NewJob, StepSeed, Timestamp, TopLevelOrigin, Ulid, Urgency,
 };
 
 use crate::workflow::{frozen, Sketch};
@@ -70,6 +70,7 @@ pub fn asking(title: &str, facts: &str, criteria: &[&str]) -> Job {
             subject: None,
             redispatched_from: None,
             proposal_id: None,
+            number: JobNumber::carried(1),
             facts: Facts::new(facts),
             scope_revisions: Vec::new(),
             attachments: Vec::new(),

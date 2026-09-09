@@ -253,7 +253,7 @@ async fn a_job_that_drifted_is_answerable_rather_than_over() {
         ),
     );
     let job = fleet.propose(a_proposal("write the plan")).await.unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
     declared_by_the_one(
         &fleet,
@@ -355,7 +355,7 @@ async fn a_step_editing_outside_its_plan_is_caught_while_it_runs() {
         FakeWorkProduct::changed(&["docs/plan.md", "crates/fleet/src/gate.rs"]),
     );
     let job = fleet.propose(a_proposal("write the plan")).await.unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     declared_by_the_one(
@@ -389,7 +389,7 @@ async fn the_same_drift_is_reported_once_and_not_every_turn() {
     let home = TempDir::new();
     let fleet = a_watching_fleet(&home, FakeWorkProduct::changed(&["src/lib.rs"]));
     let job = fleet.propose(a_proposal("write the plan")).await.unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
     declared_by_the_one(
         &fleet,
@@ -418,7 +418,7 @@ async fn a_drifting_drone_is_told_once_per_path_and_not_again() {
     let home = TempDir::new();
     let fleet = a_watching_fleet(&home, FakeWorkProduct::changed(&["src/lib.rs"]));
     let job = fleet.propose(a_proposal("write the plan")).await.unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
     declared_by_the_one(
         &fleet,
@@ -462,7 +462,7 @@ async fn declaring_again_replaces_the_plan_and_clears_what_drifted() {
     let home = TempDir::new();
     let fleet = a_watching_fleet(&home, FakeWorkProduct::changed(&["src/lib.rs"]));
     let job = fleet.propose(a_proposal("write the plan")).await.unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
     declared_by_the_one(
         &fleet,
@@ -495,7 +495,7 @@ async fn a_step_with_no_scope_is_not_watched_and_takes_no_declaration() {
     let home = TempDir::new();
     let fleet = crate::tests::daemon::a_fleet(&home, FakeWorkProduct::changed(&["src/lib.rs"]));
     let job = fleet.propose(a_proposal("fix the thing")).await.unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     let refused = declared_by_the_one(
@@ -526,7 +526,7 @@ async fn a_declaration_naming_an_excluded_path_is_refused_where_it_is_made() {
         1,
     );
     let job = fleet.propose(a_proposal("read the keys")).await.unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     let refused = declared_by_the_one(
@@ -589,7 +589,7 @@ async fn the_plan_does_not_survive_the_step_it_was_declared_for() {
         1,
     );
     let job = fleet.propose(a_proposal("plan then do")).await.unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
     declared_by_the_one(
         &fleet,

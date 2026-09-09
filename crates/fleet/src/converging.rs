@@ -346,10 +346,15 @@ where
         // the file has already been found by a mechanical check.
         let held = crate::gate::deliverable(declared_step, Path::new(worktree.path()))
             .and_then(Result::ok);
-        let judging = self.judging(job).map_err(|cause| Adrift::NotConfigurable {
-            job: job.clone(),
-            cause,
-        })?;
+        // Loaded for the handle, which is what names the directory the brief is
+        // kept under — `asked::briefs_dir`.
+        let record = self.load(job).await?;
+        let judging = self
+            .judging(&record)
+            .map_err(|cause| Adrift::NotConfigurable {
+                job: job.clone(),
+                cause,
+            })?;
         let found = judging::converging(
             declared_step,
             &patch,

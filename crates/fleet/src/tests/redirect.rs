@@ -121,7 +121,7 @@ async fn started(fleet: &Fixture, home: &TempDir) -> JobId {
         .propose(a_proposal("make the parser take it"))
         .await
         .unwrap();
-    worktree_directory(home, job.id());
+    worktree_directory(home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
     settled(fleet).await;
     job.id().clone()

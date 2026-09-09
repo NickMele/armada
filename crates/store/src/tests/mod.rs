@@ -35,14 +35,16 @@ mod tmp;
 
 use std::collections::BTreeMap;
 
+use core::sync::atomic::{AtomicU32, Ordering};
+
 use core_model::{
     AcceptanceCriterion, Actor, AdvanceGate, Attachment, ContextSource, Covers, CriterionId,
     CriterionSource, DeclarePlanAt, DependencyDirection, DependencyEdge, DispatchOrigin,
     EvidenceRef, EvidenceScope, EvidenceType, Facts, FrozenWorkflow, GamingCheck, GamingPattern,
-    GateManifest, GateOutcome, GateVerdict, Job, JobId, JudgeCheck, JudgeCriterion, ManifestId,
-    ModelName, Narrowing, NewJob, NotRunReason, PathPattern, Prerequisite, ProposalId, RepoPath,
-    ResolvedCheck, ResolvedStep, ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, Subject,
-    Timestamp, Title, TopLevelOrigin, Ulid, Urgency, WorkflowId, WriteTargets,
+    GateManifest, GateOutcome, GateVerdict, Job, JobId, JobNumber, JudgeCheck, JudgeCriterion,
+    ManifestId, ModelName, Narrowing, NewJob, NotRunReason, PathPattern, Prerequisite, ProposalId,
+    RepoPath, ResolvedCheck, ResolvedStep, ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed,
+    Subject, Timestamp, Title, TopLevelOrigin, Ulid, Urgency, WorkflowId, WriteTargets,
 };
 
 use crate::Store;
@@ -202,6 +204,11 @@ pub fn workflow() -> FrozenWorkflow {
     )
 }
 
+/// What the next fixture Job is numbered. A live Fleet reads `max + 1` from the
+/// table under the insert's own lock; a fixture has no table yet when it builds
+/// the record, so it counts here instead.
+static NEXT_NUMBER: AtomicU32 = AtomicU32::new(1);
+
 /// A Job with nothing left null: every `Option` filled, every array non-empty.
 pub fn full_new_job(id: &str) -> NewJob {
     NewJob {
@@ -264,6 +271,11 @@ pub fn full_new_job(id: &str) -> NewJob {
         }),
         redispatched_from: Some(job_id("01REPLACED")),
         proposal_id: Some(ProposalId::carried(ulid("01PROPOSALREAD"))),
+        // **A number of its own per call.** The unique index is on
+        // `(owner_manifest_id, number)` and these fixtures share a Manifest, so
+        // a constant here would make the second insert in any test a conflict —
+        // reported, correctly now, as `JobNumberTaken`.
+        number: JobNumber::carried(NEXT_NUMBER.fetch_add(1, Ordering::Relaxed)),
         facts: Facts::new("the daemon writes its own log line\nand reads it back"),
         scope_revisions: vec![ScopeRevision {
             at_step: Some(StepId::new("fix")),
@@ -288,6 +300,20 @@ pub fn full_new_job(id: &str) -> NewJob {
 /// A top-level Job, at `awaiting_approval`.
 pub fn top_level(id: &str) -> Job {
     Job::create_top_level(full_new_job(id), TopLevelOrigin::HelmDrafted, created_at())
+}
+
+/// The same, numbered the way a live Fleet numbers one: `max + 1` read off the
+/// file this is about to be written to.
+///
+/// **For a test whose file already holds Jobs the fixture counter never saw** —
+/// a migrated file, whose rows V34 backfilled. A live Fleet has no such gap
+/// because it never numbers from anything but the table.
+pub fn top_level_numbered(store: &Store, id: &str) -> Job {
+    let mut new = full_new_job(id);
+    new.number = store
+        .next_job_number(&new.owner_manifest_id)
+        .expect("the next number");
+    Job::create_top_level(new, TopLevelOrigin::HelmDrafted, created_at())
 }
 
 /// A sub-dispatched Job, at `queued`.

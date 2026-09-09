@@ -578,7 +578,7 @@ fn kept_for(
         .iter()
         .filter_map(|run| Some((run.attempt, core_model::Attempt::stored(run.attempt)?)))
         .flat_map(|(number, attempt)| {
-            crate::keeping::kept_deliverables(repo_root, job.id(), step, attempt, target)
+            crate::keeping::kept_deliverables(repo_root, &job.handle(), step, attempt, target)
                 .into_iter()
                 .map(move |path| KeptDeliverable {
                     attempt: number,

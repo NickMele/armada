@@ -32,6 +32,20 @@ import type { ProtocolVersion } from "./version";
 /** A Job, as a list row. `crates/ipc/src/job.rs`. */
 export type JobSummary = {
   id: string;
+  /**
+   * What a person calls this Job — `12-the-drone-count-is-wrong`.
+   *
+   * **Beside `id`, never instead of it.** The id is what every other message
+   * names and what a surface passes back; this is what a person reads, types
+   * and finds in a branch name, a worktree directory and a pull request. A
+   * ULID sorts by time, so two Jobs from one proposal share every character
+   * but a few — the two hardest to tell apart are the two most worth telling
+   * apart.
+   *
+   * Fleet derives it from the Job's number and title. A surface renders it and
+   * never composes one.
+   */
+  handle: string;
   /** What the Job is called. The one field on a row a person actually reads. */
   title: string;
   status: string;

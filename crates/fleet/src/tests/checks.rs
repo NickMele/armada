@@ -364,7 +364,7 @@ async fn what_the_gate_found_reaches_the_detail_view() {
         .await
         .expect("a Job at the gate");
     let job_id = job.id().clone();
-    worktree_directory(&home, &job_id);
+    worktree_directory(&home, &job);
     dispatched(&fleet, &job_id).await.expect("released to run");
     submitted_by_the_one(&fleet, crate::tests::daemon::diff_evidence())
         .await
@@ -413,7 +413,7 @@ async fn the_record_survives_a_fleet_restart() {
             .propose(a_proposal("change nothing"))
             .await
             .expect("a Job at the gate");
-        worktree_directory(&home, job.id());
+        worktree_directory(&home, &job);
         dispatched(&fleet, job.id()).await.expect("released to run");
         submitted_by_the_one(&fleet, crate::tests::daemon::diff_evidence())
             .await

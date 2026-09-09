@@ -493,6 +493,23 @@ Empty and absent are different claims: a Drone saying it left nothing behind is 
 
 **`what_changed` exists only on attempts after the first**, as a distinct variant of the record rather than a nullable field, so its absence on a first attempt cannot be read as a Drone omitting it. It is stored rather than derived: comparing consecutive attempts shows what differs, not what the Drone decided to do about the feedback, and a self-report cannot be synthesised.
 
+## What a Job is called
+
+**Two names, and neither replaces the other.**
+
+| | What it is | Where it is used |
+| --- | --- | --- |
+| `job_id` | A ULID. Unique across every Manifest, minted without asking anything | The record's key, every message, every request a surface makes |
+| The handle | `12-the-drone-count-is-wrong` — the Job's `number` and its title, derived | What a person reads, types and copies; the branch, the worktree, and every path under `.armada/` |
+
+**The number counts within a Manifest**, allocated by the store as `max + 1` under the same lock as the insert. Never reused: a killed Job keeps its number the way a closed issue keeps its own. Not global, because a person works in one repository at a time.
+
+**The handle is derived, never stored.** Both halves are frozen at creation — the store allocates the number once and a title cannot change — so a second copy on the record would be a second thing to keep true.
+
+Why: a ULID sorts by time, so the Jobs minted together share nearly every character, and the two hardest to tell apart are the two a person most needs to. A git-style short prefix was rejected for that reason — it degrades exactly where it is needed. Before this, every merged pull request read *from NickMele/armada/01M222EJWH004FA17WAMCQEKXR*.
+
+**A title naming a credential is carried by its number alone.** A branch is pushed to a forge and never passes the report redactor, so a title reading `AGENT_API_TOKEN=…` was redacted on a report's Title line and written out in full on the Branch line beside it. `crates/core-model/src/job/handle.rs` holds the guard, and shares one credential-name list with `fleet::redaction`.
+
 ## Title, subject and Facts
 
 Three fields, three readers, and none of them substitutes for another.

@@ -70,7 +70,7 @@ async fn a_killed_upstream_escalates_its_dependent_as_dependency_failed() {
         .propose_from("two coupled changes", None)
         .await
         .expect("a plan");
-    worktree_directory(&home, made[1].id());
+    worktree_directory(&home, &made[1]);
     dispatched(&fleet, made[1].id())
         .await
         .expect("the dependent");
@@ -120,8 +120,8 @@ async fn the_chain_below_the_first_dependent_is_left_where_it_was() {
         .await
         .expect("a plan");
     assert_eq!(made.len(), 3);
-    worktree_directory(&home, made[1].id());
-    worktree_directory(&home, made[2].id());
+    worktree_directory(&home, &made[1]);
+    worktree_directory(&home, &made[2]);
     dispatched(&fleet, made[1].id()).await.expect("the second");
     dispatched(&fleet, made[2].id()).await.expect("the third");
     fleet.kill_job(made[0].id()).await.expect("the first");
@@ -160,7 +160,7 @@ async fn a_second_turn_strands_nothing_more() {
         .propose_from("two coupled changes", None)
         .await
         .expect("a plan");
-    worktree_directory(&home, made[1].id());
+    worktree_directory(&home, &made[1]);
     dispatched(&fleet, made[1].id())
         .await
         .expect("the dependent");
