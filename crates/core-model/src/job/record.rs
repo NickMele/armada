@@ -19,10 +19,10 @@
 //! cannot be asked for.
 //!
 //! **The other mutators write one field and mint nothing** —
-//! [`on_branch`](Job::on_branch), [`redirect_waits`](Job::redirect_waits),
-//! [`redirect_delivered`](Job::redirect_delivered) — because no event carries a
-//! worktree or a person's note. [`drone_spawned`](Job::drone_spawned) and
-//! [`drone_exited`](Job::drone_exited) do mint one: presence has to fold.
+//! [`Job::on_branch`], [`Job::redirect_waits`], [`Job::redirect_delivered`] and
+//! [`Job::cost_capped`] — because no event carries a worktree, a note or a
+//! ceiling. [`Job::drone_spawned`] and [`Job::drone_exited`] do mint one:
+//! presence has to fold.
 
 use alloc::vec::Vec;
 
@@ -147,6 +147,17 @@ pub struct Job {
     /// across a gate, and on every Job whose note has been delivered — see
     /// [`note`](mod@crate::job::note) for why those two are one value.
     redirect_waiting: Option<RedirectWaiting>,
+    /// What this one Job may spend, in millionths of a dollar. **`None` is
+    /// unset and defers to the tier above**, which is not the same answer as
+    /// `Some(0)` — a cap of zero says this Job starts nothing. `fleet::
+    /// Allowance::at` is where the tiers meet and the only place their order
+    /// is written.
+    ///
+    /// **Not on [`NewJob`], for `branch`'s reason**: it is set after the Job
+    /// exists, by a person raising a ceiling the Job has already met. Micros
+    /// as a bare `u64` because `Micros` is Fleet's type and nothing under this
+    /// crate may depend on Fleet.
+    cost_cap_micros: Option<u64>,
     subject: Option<Subject>,
     facts: Facts,
     scope_revisions: Vec<ScopeRevision>,
@@ -208,6 +219,10 @@ impl Job {
             branch: None,
             // Nothing has been said to a Job that does not exist yet.
             redirect_waiting: None,
+            // Unset, which is this Job taking whatever the repository and the
+            // machine say. A number here at creation would be a ceiling
+            // nobody chose.
+            cost_cap_micros: None,
             subject: new.subject,
             facts: new.facts,
             scope_revisions: new.scope_revisions,
@@ -260,6 +275,29 @@ impl Job {
     pub fn on_branch(&self, branch: Branch) -> Job {
         let mut job = self.clone();
         job.branch = Some(branch);
+        job
+    }
+
+    /// Set, raise, lower or clear what this Job may spend.
+    ///
+    /// **It overwrites, and `None` clears** — both are what the lever is for. A
+    /// cap raised on a Job already over it is the case this whole tier exists
+    /// for, and one cleared is a Job handed back to the repository's number
+    /// rather than pinned to the last one somebody typed.
+    ///
+    /// **Live and never frozen.** A workflow step is frozen at Job creation so
+    /// an edit to `.armada/workflows/` cannot move a running Job's terms under
+    /// an approval nobody re-gave; this is the opposite request. The Job that
+    /// wants raising is already refused, so a cap that only took effect on the
+    /// next Job would be no lever at all.
+    ///
+    /// The sixth mutator, and the third the log does not describe: no event
+    /// carries a ceiling, so the column is this field's authority the way
+    /// `branch` is. It takes `&self` and returns a new `Job`, so the no-setter
+    /// property is unchanged.
+    pub fn cost_capped(&self, micros: Option<u64>) -> Job {
+        let mut job = self.clone();
+        job.cost_cap_micros = micros;
         job
     }
 
@@ -593,6 +631,12 @@ impl Job {
     /// note left it.
     pub fn redirect_waiting(&self) -> Option<&RedirectWaiting> {
         self.redirect_waiting.as_ref()
+    }
+    /// This Job's own ceiling in millionths of a dollar, or `None` where it has
+    /// none of its own and takes the repository's or the machine's. `Some(0)`
+    /// is a Job that starts nothing and is a different answer from `None`.
+    pub fn cost_cap_micros(&self) -> Option<u64> {
+        self.cost_cap_micros
     }
     pub fn subject(&self) -> Option<&Subject> {
         self.subject.as_ref()

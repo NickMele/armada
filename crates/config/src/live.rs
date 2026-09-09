@@ -2,11 +2,12 @@
 //! handle that may change them.
 //!
 //! **Not the whole file, and not even the whole of one section.**
-//! `crates/config/settings.toml` files two of `armada.yml`'s keys as
-//! `lifetime = "Live"` — `drone.quiet_after_seconds` and `drone.poke_limit` —
-//! and files the Checks and Commands registries and `drone.exclude_paths` as
+//! `crates/config/settings.toml` files three of `armada.yml`'s keys as
+//! `lifetime = "Live"` — `drone.quiet_after_seconds`, `drone.poke_limit` and
+//! `drone.cost_cap_micros_per_job` — and files the Checks and Commands
+//! registries and `drone.exclude_paths` as
 //! *Frozen for the Job*. The last of those sits in the same `drone:` block as
-//! the two live ones, which is why [`Frozen`] names a key there and a section
+//! the three live ones, which is why [`Frozen`] names a key there and a section
 //! everywhere else: what decides is what was resolved against a value at boot. Swapping the whole
 //! Manifest would move the second pair too, and every [`ResolvedWorkflow`] was
 //! checked against the Checks the file declared at boot: holding a
@@ -29,12 +30,23 @@ use std::sync::{Arc, RwLock};
 use crate::error::LoadError;
 use crate::manifest::Manifest;
 
-/// The repository's patience with a quiet Drone: the two live keys, together
-/// because they are read together and never separately.
+/// What `drone:` says that a save may move, together because one re-read
+/// adopts all of it or none of it.
+///
+/// **Named for the section and not for patience**, which is what it was called
+/// while it held two numbers about a quiet Drone. A cost cap is not patience,
+/// and a type whose name covers two of its three fields is one nobody can add
+/// a fourth to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(crate) struct Patience {
+pub(crate) struct Dials {
     pub(crate) quiet_after_seconds: Option<u32>,
     pub(crate) poke_limit: Option<u32>,
+    /// Millionths of a dollar one Job of this repository may spend. **A `u32`
+    /// where the Job's own column is a `u64`**: `u32::MAX` micros is $4,294.96
+    /// and a per-Job ceiling above that is not a ceiling, so the narrower type
+    /// loses nothing and is what keeps a move reportable without widening
+    /// [`Moved`] and the wire type built from it.
+    pub(crate) cost_cap_micros: Option<u32>,
 }
 
 /// Where the live keys are kept, shared by every clone of one Manifest.
@@ -43,18 +55,18 @@ pub(crate) struct Patience {
 /// the file, hands the Manifest to Fleet by value, and a reload has to reach the
 /// one Fleet is holding rather than a copy nobody consults.
 #[derive(Debug, Clone)]
-pub(crate) struct Cell(Arc<RwLock<Patience>>);
+pub(crate) struct Cell(Arc<RwLock<Dials>>);
 
 impl Cell {
-    pub(crate) fn holding(patience: Patience) -> Cell {
-        Cell(Arc::new(RwLock::new(patience)))
+    pub(crate) fn holding(dials: Dials) -> Cell {
+        Cell(Arc::new(RwLock::new(dials)))
     }
 
     /// **A poisoned lock is read through rather than unwrapped.** What it
-    /// guards is two `Option<u32>`, so a panic elsewhere cannot have left it
+    /// guards is three `Option<u32>`, so a panic elsewhere cannot have left it
     /// half-written — and a Fleet that goes down because a lock was poisoned by
     /// an unrelated panic is exactly the failure this whole module refuses.
-    pub(crate) fn read(&self) -> Patience {
+    pub(crate) fn read(&self) -> Dials {
         *self
             .0
             .read()
@@ -63,12 +75,12 @@ impl Cell {
 
     /// Write, and hand back what was there. For [`Cell::read`]'s reason a
     /// poisoned lock is written through.
-    fn replace(&self, patience: Patience) -> Patience {
+    fn replace(&self, dials: Dials) -> Dials {
         let mut held = self
             .0
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        std::mem::replace(&mut held, patience)
+        std::mem::replace(&mut held, dials)
     }
 }
 
@@ -78,6 +90,12 @@ impl Cell {
 pub enum LiveKey {
     QuietAfterSeconds,
     PokeLimit,
+    /// **Live, and that is the whole reason it exists.** A Job over its cap is
+    /// refused at every admission until the number moves, so a cap needing a
+    /// restart would be a lever nobody can pull while the thing it is about is
+    /// happening. One Job was refused its last step at $5.28 against a $5
+    /// compile-time constant, and there was no reachable number anywhere.
+    CostCapMicrosPerJob,
 }
 
 impl LiveKey {
@@ -86,6 +104,7 @@ impl LiveKey {
         match self {
             LiveKey::QuietAfterSeconds => "drone.quiet_after_seconds",
             LiveKey::PokeLimit => "drone.poke_limit",
+            LiveKey::CostCapMicrosPerJob => "drone.cost_cap_micros_per_job",
         }
     }
 }
@@ -103,8 +122,8 @@ pub enum Frozen {
     Checks,
     Commands,
     Setup,
-    /// **A key, where every other variant is a section.** Two of `drone:`'s
-    /// three keys are live and this one is not — every `ResolvedWorkflow` took
+    /// **A key, where every other variant is a section.** Three of `drone:`'s
+    /// four keys are live and this one is not — every `ResolvedWorkflow` took
     /// its copy of this list at boot — so naming the section would tell a
     /// person that a `quiet_after_seconds` they just changed needs a restart,
     /// which is the opposite of true.
@@ -297,7 +316,7 @@ impl Reloads {
     /// that ignored the edit.
     pub fn reread(&self) -> Result<Adopted, LoadError> {
         let fresh = Manifest::load(&self.path)?;
-        let after = fresh.patience();
+        let after = fresh.dials();
         let before = self.live.replace(after);
         Ok(Adopted {
             moved: moved(before, after),
@@ -306,11 +325,11 @@ impl Reloads {
     }
 }
 
-/// Which of the two halves actually changed. **Each on its own**, for the
-/// reason `crates/config/settings.toml` holds two rows rather than one pair:
-/// a repository that changed its poke budget did not thereby change its
-/// patience, and a message saying both moved would be wrong.
-fn moved(before: Patience, after: Patience) -> Vec<Moved> {
+/// Which of the three actually changed. **Each on its own**, for the reason
+/// `crates/config/settings.toml` holds a row apiece: a repository that changed
+/// its poke budget did not thereby change its patience or what it will spend,
+/// and a message saying they all moved would be wrong.
+fn moved(before: Dials, after: Dials) -> Vec<Moved> {
     let mut changed = Vec::new();
     if before.quiet_after_seconds != after.quiet_after_seconds {
         changed.push(Moved {
@@ -324,6 +343,13 @@ fn moved(before: Patience, after: Patience) -> Vec<Moved> {
             key: LiveKey::PokeLimit,
             before: before.poke_limit,
             after: after.poke_limit,
+        });
+    }
+    if before.cost_cap_micros != after.cost_cap_micros {
+        changed.push(Moved {
+            key: LiveKey::CostCapMicrosPerJob,
+            before: before.cost_cap_micros,
+            after: after.cost_cap_micros,
         });
     }
     changed

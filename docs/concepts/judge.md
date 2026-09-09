@@ -208,7 +208,7 @@ Summary prose is prompt plus mechanical lint. **Substance requirement: every Jud
 
 **`review_gate` is the repo's trust decision**, same pattern as `auto_merge`. `auto_if_judge_high_confidence` is retired vocabulary — no confidence scale ever existed; see [Workflow](workflow.md).
 
-**The Judge cost cap per check row still reads `undecided`**, and was reviewed and left open on 28 Aug 2026 rather than guessed at (see Open questions). Verification bills against the Job budget with no sub-limit of its own. What bounds Judge spend today is count-shaped rather than money-shaped: the call-count ceiling bounds `criteria × panel_size` per step, and the Machine budget cap bounds the Job — the Manifest cap this used to name is gone, because a Manifest has no budget.
+**The Judge cost cap per check row still reads `undecided`**, and was reviewed and left open on 28 Aug 2026 rather than guessed at (see Open questions). Verification bills against the Job budget with no sub-limit of its own. What bounds Judge spend today is count-shaped rather than money-shaped: the call-count ceiling bounds `criteria × panel_size` per step, and the cost cap bounds the Job — which since 8 Sept 2026 a Manifest and the Job itself may each state, over the machine's number. That changes who can move the bound, not that the bound is the Job's.
 
 **Verification `max_context_size` is deliberately ownerless.** Why: the cap bounds all of verification rather than the Judge Check alone.
 
