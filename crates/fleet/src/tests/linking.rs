@@ -111,8 +111,15 @@ async fn a_link_that_fails_to_resolve_leaves_the_request_unchanged_and_notes_why
     );
 }
 
-/// The request rides on every member's `facts`, and the lookup that enriches
-/// it runs once for the whole plan rather than once per Job minted from it.
+/// The lookup runs once for the whole plan rather than once per Job minted
+/// from it — and what it resolved reaches the proposer, not the Drones.
+///
+/// **A member of a split is briefed on its own part and nothing else**, which
+/// is the resolved body's fate too: the proposer reads it and writes each
+/// Job's `scope` line knowing it, and no member carries the body itself. What
+/// that costs is real — a Drone on a split no longer reads the issue its
+/// request named — and it is the same cost as the request's other sentences,
+/// paid for the same reason.
 #[tokio::test]
 async fn resolving_a_link_runs_once_for_a_plan_of_several_jobs() {
     let home = TempDir::new();
@@ -132,8 +139,9 @@ async fn resolving_a_link_runs_once_for_a_plan_of_several_jobs() {
     assert_eq!(made.len(), 2, "the plan this judge answers with");
     assert!(
         made.iter()
-            .all(|job| job.facts().as_str().contains("the body")),
-        "every member's facts carries the same resolved text"
+            .all(|job| !job.facts().as_str().contains("the body")),
+        "a member of a split is briefed on its own part, and the resolved body \
+         is read by the proposer that wrote those parts rather than passed on"
     );
     assert_eq!(
         links.resolved_count(),

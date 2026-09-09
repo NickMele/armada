@@ -44,8 +44,19 @@ Doing that by hand means knowing the workflow catalogue before you can ask for a
 | `title` | What the Job is called, written from the description or the prompt |
 | `workflow_id` | Which WorkflowDef the work should run under |
 | A graph, where the work is several Jobs | The order they must land in |
+| `scope`, where the work is several Jobs | What each one is for, and none of what the others are |
 
 **Naming the Job is part of the same reading**, so nobody types a title for work they have already described — the call has the description in front of it and a [Job](job.md) requires a name.
+
+### A Job is briefed on its own part
+
+**One Job's `facts` is the request as the person wrote it.** Nothing was divided, so its part is all of it.
+
+**A member of a split gets its `scope` line and nothing else.** Not the rest of the request, and not the other Jobs' titles. What that line says is the whole of what its [Drone](drone.md) is told, which is why a plan of several whose member names no part is refused rather than handed the undivided request.
+
+Why: a request naming a bug and an addition became two Jobs on 9 Sep 2026, and the first one did both. Every member carried the whole request, so the split lived in the two titles and nowhere a Drone reads — and the second Job was queued to redo work that had already landed.
+
+What it costs is real and is the same cost in every direction: a Drone on a split no longer reads the sentences that were another Job's, including the body of any link the request named. The proposer read them, and writing each part is what it read them for.
 
 [Workflow](workflow.md) owns the workflow catalogue. The resolved definition is frozen into the Job at creation, so the proposer chooses which one and the freeze is what stops it moving afterwards. A graph is proposed in one pass, and each member waits on the one before it reaching `completed_success`.
 
@@ -126,7 +137,7 @@ Why: every Job the request became already stands at `awaiting_approval`, so a pl
 
 ## What is recorded
 
-**Its output is not stored as its own record.** `workflow_id` and `title` land on the [Job](job.md), and no field says a proposal happened.
+**Its output is not stored as its own record.** `workflow_id`, `title` and the Job's own brief land on the [Job](job.md) — the last as `facts` — and no field says a proposal happened.
 
 **Its reasoning is.** Entry zero of a Job's `scope_revisions[]` carries a `rationale` — why that workflow. It names no paths, because none were proposed; the scope step's own declaration is the entry that names them. That rationale is the only durable trace the call ever ran.
 

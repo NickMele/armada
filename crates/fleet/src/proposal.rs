@@ -244,7 +244,7 @@ where
                 )
             }));
             let minted = self
-                .proposed_job(self.as_proposal(request, job, waits_on), stated)
+                .proposed_job(self.as_proposal(job, waits_on), stated)
                 .await?;
             if let Enriched::Failed(cause) = &outcome {
                 self.noted_lookup_failed(minted.id(), cause);
@@ -280,12 +280,14 @@ where
 
     /// One proposed Job, as the wire shape `drafted` refuses or accepts.
     ///
-    /// The request rides on **every** member's `facts`, not only the first: each
-    /// Job gets its own Drone and its own worktree, and one briefed from a title
-    /// alone is one the description was thrown away for.
+    /// **`facts` is what the proposer settled this Job's brief to be**, which
+    /// is the request itself where nothing was split and this Job's own part
+    /// where something was — `ProposedJob::brief`. A title is never the whole
+    /// of it either way: each Job gets its own Drone and its own worktree, and
+    /// one briefed from a title alone is one the description was thrown away
+    /// for.
     fn as_proposal(
         &self,
-        request: &str,
         job: &ProposedJob,
         dependencies: Vec<ipc::DependencyEdge>,
     ) -> ipc::ProposeJob {
@@ -308,7 +310,7 @@ where
             model: None,
             acceptance_criteria: Vec::new(),
             subject: None,
-            facts: request.to_string(),
+            facts: job.brief.clone(),
             attachments: Vec::new(),
         }
     }

@@ -35,15 +35,19 @@ use crate::judging::CallFailed;
 
 /// The block an answer owes per Job, and the one word that declines.
 ///
-/// The last two paragraphs are load-bearing and neither is decoration. The
-/// first stops a list being answered from; the second stops one Job becoming
-/// three, which is the failure a proposer that *can* split work invents.
+/// The last three paragraphs are load-bearing and none is decoration. The
+/// first stops one Job becoming three, which is the failure a proposer that
+/// *can* split work invents; the second is what makes a member of a split
+/// briefable on its own part, since that line is the only thing its Drone is
+/// given; the third stops a list of paths being answered from.
 const ANSWER_FORMAT: &str = "\
 Answer with nothing but the block below, once for each Job the work needs.
 
     job: <its number, counting from 1>
     workflow: <the id, spelled exactly as it appears above>
     title: <what to call this Job, in the words the request used>
+    scope: <what this Job is to do, and none of what the others are. Leave \
+the line out where you write one Job>
     because: <why that workflow, in one line>
     after: <the job numbers that must finish first, comma separated. Leave \
 the line out where none do>
@@ -60,6 +64,12 @@ not something anybody can correct afterwards.
 Write one Job unless the work genuinely cannot land as one change. A split \
 that could have landed together is three reviews where one was needed.
 
+Where you write several, `scope` is the whole of what that Job's worker is \
+told. It is not shown the rest of the request and it is not shown the other \
+Jobs, so anything above that it needs has to be inside its own `scope` line — \
+in the requester's own words, on one line, and carrying none of what another \
+Job is for.
+
 Do not work out which files are involved. That is the first step's, and it is \
 answered there by reading the code rather than guessed at here.";
 
@@ -68,6 +78,19 @@ answered there by reading the code rather than guessed at here.";
 pub struct ProposedJob {
     pub workflow_id: WorkflowId,
     pub title: String,
+    /// **What this Job's Drone is told, and the whole of it.**
+    ///
+    /// One Job's is the request as the person wrote it; nothing was divided,
+    /// so its part is all of it. A member of a split gets its own `scope` line
+    /// and nothing else — not the rest of the request, and not its siblings.
+    ///
+    /// It read the other way until 9 Sep 2026, when a request naming a bug and
+    /// an addition became two Jobs and the first one fixed both: every member
+    /// carried the whole request, so the split lived in the titles and nowhere
+    /// a Drone reads. `read` is where this is settled, because that is where
+    /// the plan's size is known and a member without a part can still be
+    /// refused.
+    pub brief: String,
     /// Why this workflow. **Entry zero's rationale**, and the only durable
     /// trace the call ever ran — nothing else on the record says a proposal
     /// happened.
@@ -133,6 +156,13 @@ pub enum NotProposed {
     /// plan at all. **Neither is creatable**: an edge points at a minted id, so
     /// a plan is created in order or not at all.
     OutOfOrder { at: usize, after: usize },
+    /// A member of a split named no part of the work. **Refused rather than
+    /// given the whole request**, which is what it used to get: a Drone handed
+    /// the undivided brief does the other Jobs' work as well as its own, and
+    /// nothing downstream can tell that apart from the work it was for.
+    ///
+    /// Only ever a plan of several. One Job's part is the request.
+    NamesNoScope { at: usize },
 }
 
 impl fmt::Display for NotProposed {
@@ -150,6 +180,10 @@ impl fmt::Display for NotProposed {
                 out,
                 "job {at} waits on job {after}, which is not before it in the plan"
             ),
+            NotProposed::NamesNoScope { at } => write!(
+                out,
+                "the answer splits the request and job {at} says no part of it is its own"
+            ),
         }
     }
 }
@@ -164,6 +198,9 @@ impl std::error::Error for NotProposed {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Brief {
     question: String,
+    /// The request as it was handed in, kept because [`read`](Brief::read) is
+    /// what settles each Job's own brief and one Job's brief is this.
+    request: String,
 }
 
 impl Brief {
@@ -205,7 +242,10 @@ impl Brief {
         }
         question.push('\n');
         question.push_str(ANSWER_FORMAT);
-        Brief { question }
+        Brief {
+            question,
+            request: request.to_string(),
+        }
     }
 
     /// The text that goes to the model, exactly as it goes.
@@ -218,8 +258,9 @@ impl Brief {
     /// **The catalogue is a parameter and not a convenience.** It is what makes
     /// a workflow nothing holds unrepresentable in the `Ok` half: there is no
     /// input to this that produces a `Resolved` naming an id the map does not
-    /// have, none that produces one with a blank title, and none that produces
-    /// a plan whose edges do not point backwards.
+    /// have, none that produces one with a blank title, none that produces a
+    /// plan whose edges do not point backwards, and none that produces a
+    /// member of a split holding the undivided request as its brief.
     pub fn read(
         &self,
         answer: &str,
@@ -236,7 +277,7 @@ impl Brief {
                 because: field(first, "because"),
             }));
         }
-        let mut jobs = Vec::with_capacity(blocks.len());
+        let mut jobs: Vec<(Option<String>, ProposedJob)> = Vec::with_capacity(blocks.len());
         for (position, block) in blocks.iter().enumerate() {
             let at = position + 1;
             let Some(named) = field(block, "workflow") else {
@@ -251,13 +292,39 @@ impl Brief {
             if let Some(&ahead) = after.iter().find(|&&waits| waits >= at || waits == 0) {
                 return Err(NotProposed::OutOfOrder { at, after: ahead });
             }
-            jobs.push(ProposedJob {
-                workflow_id,
-                title,
-                because: field(block, "because"),
-                after,
-            });
+            // **Held rather than resolved here**, because what one member's
+            // brief is depends on how many there are and the last block has
+            // not been read yet. A single `scope` on a plan of one is dropped
+            // below rather than refused: the line was asked to be left out,
+            // and a model that wrote one anyway has not said anything the
+            // request does not already say better.
+            let scope = field(block, "scope");
+            jobs.push((
+                scope,
+                ProposedJob {
+                    workflow_id,
+                    title,
+                    brief: String::new(),
+                    because: field(block, "because"),
+                    after,
+                },
+            ));
         }
+        let split = jobs.len() > 1;
+        let jobs = jobs
+            .into_iter()
+            .enumerate()
+            .map(|(position, (scope, job))| match split {
+                false => Ok(ProposedJob {
+                    brief: self.request.clone(),
+                    ..job
+                }),
+                true => match scope {
+                    Some(part) => Ok(ProposedJob { brief: part, ..job }),
+                    None => Err(NotProposed::NamesNoScope { at: position + 1 }),
+                },
+            })
+            .collect::<Result<Vec<ProposedJob>, NotProposed>>()?;
         Ok(Proposal::Resolved(jobs))
     }
 }

@@ -30,12 +30,14 @@ const A_CHAIN: &str = "\
 job: 1
 workflow: feature
 title: Add the endpoint
+scope: add the endpoint. The consumer and the field are other Jobs'
 because: nothing can be written against something that is not there
 writes: crates/api/src/routes.rs
 
 job: 2
 workflow: feature
 title: Update the consumer
+scope: update the consumer to read the endpoint the first Job adds
 because: it reads the endpoint the first Job adds
 writes: apps/desktop/src/main/connection.ts
 after: 1
@@ -43,6 +45,7 @@ after: 1
 job: 3
 workflow: feature
 title: Draw the new field
+scope: draw the field the consumer now has
 because: it renders what the consumer now has
 writes: packages/screens/src/Jobs.tsx
 after: 2

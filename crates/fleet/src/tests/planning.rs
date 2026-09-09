@@ -8,13 +8,18 @@
 use core_model::JobStatus;
 use testkit::{FakeJudge, FakeWorkProduct};
 
-use crate::proposing::NotProposed;
+use crate::proposing::{NotProposed, Proposal};
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_fleet_proposing_through, diff_evidence, worktree_directory};
-use crate::tests::proposing::{a_catalogue, read};
+use crate::tests::proposing::{a_catalogue, read, A_REQUEST};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
 
+/// **A `scope:` line on each, because this is a split** — `Brief::read`
+/// refuses a plan of several where a member names no part of the work, and
+/// what that line says is the whole of what its Drone is given. A fixture
+/// without one is a plan that could not be proposed.
+///
 /// **No `writes:` line, because the proposer's own answer format forbids one**
 /// — "Do not work out which files are involved" — and `Brief::read` parses
 /// four keys, none of them that. A fixture carrying a key nothing reads is a
@@ -25,11 +30,13 @@ pub(crate) const A_PLAN: &str = "\
 job: 1
 workflow: feature
 title: Add the endpoint
+scope: move the endpoint. The consumer is another Job's and is not yours
 because: the consumer cannot be written against something that is not there
 
 job: 2
 workflow: feature
 title: Update the consumer
+scope: update the consumer to read the endpoint where it now is
 because: it reads the endpoint the first Job adds
 after: 1
 ";
@@ -139,6 +146,100 @@ async fn a_dependent_is_admitted_once_its_upstream_completes() {
         turned.admitted,
         vec![made[1].id().clone()],
         "the edge cleared the moment the upstream landed, and not before"
+    );
+}
+
+/// The request that made this claim necessary: one message naming a bug and an
+/// addition, which the proposer correctly read as two Jobs.
+///
+/// **The first Job did both.** Every member carried the whole message, so the
+/// split existed in the titles and nowhere its Drone reads, and the second Job
+/// was queued to do work the first had already done.
+const TWO_ITEMS: &str = "\
+in the app shell there are two things to adjust. one is a bug and one is an \
+addition:
+
+1. the shell says 1 of 2 drones while one Job runs one Drone
+2. when it says waiting on CPU it should say why
+";
+
+/// What one member of a split is told, which is its own part and no more.
+#[tokio::test]
+async fn a_member_of_a_split_is_briefed_on_its_part_and_not_on_its_siblings() {
+    let home = TempDir::new();
+    let fleet = a_fleet_proposing_through(
+        &home,
+        FakeWorkProduct::changed(&["packages/shell/src/Shell.tsx"]),
+        a_catalogue(),
+        FakeJudge::saying(
+            "job: 1\nworkflow: bug\ntitle: The drone count is wrong\n\
+             scope: the shell says 1 of 2 drones while one Job runs one Drone\n\
+             because: a defect with a symptom somebody can see\n\n\
+             job: 2\nworkflow: feature\ntitle: Say why a Job is waiting\n\
+             scope: when the shell says waiting on CPU it should say why\n\
+             because: nothing there says it today",
+        ),
+    );
+
+    let made = fleet.propose_from(TWO_ITEMS, None).await.expect("a plan");
+
+    let [bug, addition] = &made[..] else {
+        panic!("two Jobs, not {}", made.len())
+    };
+    assert!(
+        bug.facts().as_str().contains("1 of 2 drones"),
+        "its own part reaches it: {}",
+        bug.facts().as_str()
+    );
+    assert!(
+        !bug.facts().as_str().contains("waiting on CPU"),
+        "and the other Job's does not, which is the whole defect: {}",
+        bug.facts().as_str()
+    );
+    assert!(
+        !addition.facts().as_str().contains("1 of 2 drones"),
+        "in both directions: {}",
+        addition.facts().as_str()
+    );
+    assert!(
+        addition.facts().as_str().contains("waiting on CPU"),
+        "{}",
+        addition.facts().as_str()
+    );
+}
+
+/// A split whose member claims no part of the work is not a plan.
+///
+/// **Refused rather than handed the undivided request**, which is what it used
+/// to be handed. A Drone that reads the whole of a request somebody split does
+/// the other Jobs' work, and no step after it can tell that apart from its own.
+#[test]
+fn a_member_of_a_split_that_names_no_part_is_unreadable() {
+    let silent = "job: 1\nworkflow: bug\ntitle: First\nscope: the first half\n\n\
+                  job: 2\nworkflow: bug\ntitle: Second\n";
+
+    assert!(matches!(
+        read(silent),
+        Err(NotProposed::NamesNoScope { at: 2 })
+    ));
+}
+
+/// One Job is not a split, so its part is the request and `scope` says nothing
+/// the request does not say better.
+#[test]
+fn one_job_is_briefed_on_the_whole_request_whatever_it_says_about_scope() {
+    let with_a_scope = "workflow: bug\ntitle: Only\nscope: the half I chose\n";
+
+    let Ok(Proposal::Resolved(jobs)) = read(with_a_scope) else {
+        panic!("one Job")
+    };
+    let [only] = &jobs[..] else {
+        panic!("one Job, not {}", jobs.len())
+    };
+    assert_eq!(
+        only.brief, A_REQUEST,
+        "the line was asked to be left out, and a model that wrote one anyway \
+         has divided nothing"
     );
 }
 
