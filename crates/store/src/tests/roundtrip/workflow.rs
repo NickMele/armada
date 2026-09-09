@@ -416,3 +416,44 @@ fn a_blank_model_in_the_column_is_malformed_rather_than_read_as_none() {
     let refused = crate::columns::read_workflow(&stored).expect_err("a blank model");
     assert!(refused.contains("model"), "{refused}");
 }
+
+/// **A `manifest_rule:` gate survives the column unresolved.**
+///
+/// It is the one field of a frozen step whose value is deliberately not an
+/// answer, so the round trip is what proves nothing along the way collapsed it
+/// into one. A row that came back `human_always` would read as a workflow that
+/// had said so — and would go on saying so after the repository changed its
+/// mind, which is exactly what the policy being `Live` forbids.
+#[test]
+fn a_gate_naming_a_manifest_policy_survives_the_column_unresolved() {
+    for gate in [
+        AdvanceGate::ManifestRuleAutoMerge,
+        AdvanceGate::ManifestRuleReviewGate,
+    ] {
+        let stored = WITHOUT_WHEN.replace(r#""advance_gate": "auto""#, &{
+            let wire = gate.as_wire();
+            format!(r#""advance_gate": "{wire}""#)
+        });
+        let workflow = crate::columns::read_workflow(&stored).expect("a policy gate");
+        assert_eq!(
+            workflow
+                .step(&StepId::new("fix"))
+                .expect("the step")
+                .advance_gate(),
+            gate
+        );
+    }
+}
+
+/// A gate spelling the column does not have refuses rather than reading as
+/// `auto`. `manifest_rule:nonsense` is the shape that gets here: `config`
+/// refuses it at load, so a row carrying one was written by something else.
+#[test]
+fn a_manifest_rule_key_the_column_does_not_have_is_malformed() {
+    let stored = WITHOUT_WHEN.replace(
+        r#""advance_gate": "auto""#,
+        r#""advance_gate": "manifest_rule:nonsense""#,
+    );
+    let refused = crate::columns::read_workflow(&stored).expect_err("a key nothing defines");
+    assert!(refused.contains("manifest_rule:nonsense"), "{refused}");
+}

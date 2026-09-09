@@ -31,9 +31,9 @@
 #                                inner half of the two-level machine
 #                                `job_status` is the outer half of
 #   advance_gate               - what it takes to advance past one step. No
-#                                registry file of its own: the set is three of
-#                                the WorkflowDef schema's four, the fourth
-#                                being refused where a definition is parsed
+#                                registry file of its own: the set is the
+#                                WorkflowDef schema's four forms, of which
+#                                `manifest_rule:<key>` is one key per row
 #   check_outcome              - how one declared Check ended. Keys match
 #                                check-outcomes.toml
 #   criterion_verdict_check    - one criterion, as a mechanical Check saw it
@@ -749,6 +749,22 @@ status_token = ""
 vocabulary = "Advance gate"
 in_code = ""
 notes = "The two other values name a tier and this one names an actor, which is the distinction everything downstream turns on, so the verb names the actor and says nothing about the tiers. They still run and still stop the step — what they establish is the material a person reads, not the verdict — and a verb saying `no checks` or `skips the gate` would be false of both halves. `a person`, not `you`: the same Job may be answered by whoever is at the machine, and the rest of this file addresses nobody. Neither glyph nor token, for `auto`'s reason."
+
+[verbs.advance_gate."manifest_rule:auto_merge"]
+verb = "the repository's auto-merge policy decides"
+icon = ""
+status_token = ""
+vocabulary = "Advance gate"
+in_code = ""
+notes = "Quoted, because a colon is outside TOML's bare-key set and the key is the wire value verbatim — `xtask/src/rules_enums.rs` strips the quotes on both sides of its comparison rather than letting two spellings exist. The verb names the policy rather than what it resolved to, and that is the row's whole point: a reader on job detail is looking at a step whose gate is not in the workflow file, and naming the answer here would state it in the one place that cannot know it. `auto-merge`, hyphenated, because the verb is prose and `auto_merge` is the key; the key is beside it in the label."
+
+[verbs.advance_gate."manifest_rule:review_gate"]
+verb = "the repository's review-gate policy decides"
+icon = ""
+status_token = ""
+vocabulary = "Advance gate"
+in_code = ""
+notes = "Its sibling's shape, asked of the other question: `auto_merge` says whether work lands without a person, this says whether a person signs off before it is offered. Both read `decides` rather than `says` because the resolution happens at the gate, against the Job's gating Manifests, and is a ruling rather than a lookup. Neither glyph nor token, for `auto`'s reason."
 
 [verbs.evidence_type.diff]
 verb = "a diff"

@@ -579,13 +579,16 @@ function youStage(step: StepDetail): PhaseStage {
     // **Three states, so three standings.** Two branches against three states
     // stood a just-approved step "not reached" — #320's claim, from the caller.
     stands: waiting ? "waiting on you" : step.state === "advanced" ? "answered" : NOT_REACHED,
-    // Where `advance_gate` is a manifest rule, the tier resolved at dispatch
-    // from the Manifest's own policy — so two Jobs on one workflow can show
-    // different gates. Naming the value is what says why.
+    // Where `advance_gate` is a manifest rule, the gate names a policy rather
+    // than an answer, and the record holds it that way: it is resolved at the
+    // gate, against the repository's `armada.yml`, so two Jobs on one workflow
+    // can be answered differently and the same Job can be answered differently
+    // twice. This line used to say "resolved when the Job was dispatched",
+    // which was the freeze reading and is what `#264` decided against.
     detail:
       gate === HUMAN
         ? undefined
-        : `This step's gate is ${gate}, resolved when the Job was dispatched.`,
+        : `This step's gate is ${gate}, resolved from the repository's own policy when the gate is read.`,
   };
 }
 

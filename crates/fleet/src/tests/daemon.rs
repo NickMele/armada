@@ -42,7 +42,8 @@ mod handed_in;
 mod workflows;
 
 pub use fleets::{
-    a_fleet, a_fleet_committing_through, a_fleet_delivering_nothing, a_fleet_gated_on_a_person,
+    a_fleet, a_fleet_committing_through, a_fleet_delivering_nothing,
+    a_fleet_gated_on_a_manifest_rule, a_fleet_gated_on_a_person,
     a_fleet_gated_on_a_person_delivering_nothing, a_fleet_holding, a_fleet_holding_all,
     a_fleet_judged_by, a_fleet_minting_from, a_fleet_proposing_through,
     a_fleet_whose_manifest_declares_a_base, fitted_with, fittings,

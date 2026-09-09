@@ -19,7 +19,8 @@ use store::Store;
 use testkit::{FakeHarness, FakeJudge, FakeLinkLookup, FakeVcs, FakeWorkProduct};
 
 use super::workflows::{
-    manifest, one, two_steps, two_steps_delivering_nothing, two_steps_gated_on_a_person,
+    manifest, one, two_steps, two_steps_delivering_nothing, two_steps_gated_on_a_manifest_rule,
+    two_steps_gated_on_a_person,
 };
 // Through the parent's re-exports, which are what every other module in the
 // suite reaches these four by.
@@ -198,6 +199,19 @@ pub fn a_fleet_gated_on_a_person(
         Some("summarise"),
     ));
     fittings.vcs = vcs;
+    Fleet::assembled(fittings)
+}
+
+/// The same, with the step's gate naming a Manifest policy rather than a
+/// person. **Delivering nothing**, for the sibling below's reason.
+pub fn a_fleet_gated_on_a_manifest_rule(
+    home: &TempDir,
+    work: FakeWorkProduct,
+    gate_on: &str,
+    key: &str,
+) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
+    let mut fittings = fittings(home, work);
+    fittings.workflows = one(two_steps_gated_on_a_manifest_rule(gate_on, key, None));
     Fleet::assembled(fittings)
 }
 

@@ -292,7 +292,14 @@ const glyphs = new Set();
 for (const [header, table] of verbs) {
   const parts = header.split(".");
   if (parts[0] !== "verbs" || parts.length !== 3) continue;
-  const [, vocabulary, variant] = parts;
+  // `unquoted`, because a wire value TOML cannot spell bare is written quoted
+  // and is still the same value: `advance_gate`'s two policy forms carry a
+  // colon. Emitting the quotes would key the map by a string no wire value
+  // equals, so every such variant would render as its own raw spelling — the
+  // exact failure this generated map exists to end. A quoted key holding a dot
+  // would be split into four parts and dropped by the guard above; none does,
+  // and one would fail `xtask`'s pairing rule loudly rather than silently.
+  const [, vocabulary, variant] = [parts[0], parts[1], unquoted(parts[2])];
   const rows = vocabularies.get(vocabulary);
   if (rows === undefined) continue;
 

@@ -126,8 +126,31 @@ pub fn two_steps_gated_on_a_person(
     question: Option<&str>,
     delivers: Option<&str>,
 ) -> config::ResolvedWorkflow {
+    two_steps_gated(gate_on, "human_always", question, delivers)
+}
+
+/// The same, with the gate word spelled by the caller.
+///
+/// **What it buys is the `manifest_rule:` pair**, which reaches the same place
+/// by resolution rather than by declaration. A case that asserted the two lead
+/// to one ruling would prove nothing if it built the workflow by hand, so the
+/// word goes through the parser exactly as `human_always` does.
+pub fn two_steps_gated_on_a_manifest_rule(
+    gate_on: &str,
+    key: &str,
+    delivers: Option<&str>,
+) -> config::ResolvedWorkflow {
+    two_steps_gated(gate_on, &format!("manifest_rule:{key}"), None, delivers)
+}
+
+fn two_steps_gated(
+    gate_on: &str,
+    gate_word: &str,
+    question: Option<&str>,
+    delivers: Option<&str>,
+) -> config::ResolvedWorkflow {
     let gate = |step: &str| match step == gate_on {
-        true => "human_always",
+        true => gate_word,
         false => "auto",
     };
     let judge = match question {
