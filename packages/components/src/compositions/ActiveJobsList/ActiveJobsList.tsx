@@ -56,6 +56,35 @@ export type ActiveJobsListProps = {
   selectable?: boolean;
   /** The listbox's name, where it is one. */
   label?: string;
+  /**
+   * Which arrangement every row is drawn in. `card` stacks each row's headline
+   * over its facts; `table` puts them on one line beneath `columns`.
+   *
+   * **The list decides, never the row.** A list holding rows in two
+   * arrangements is not a thing anybody wants and the tracks could not be
+   * shared across it, so the view is set once here and the rows read it off
+   * the frame.
+   */
+  view?: "card" | "table";
+  /**
+   * What each column is called, in order, drawn once above the rows. Table
+   * view only; a card labels its facts by where they sit in a run.
+   *
+   * **The header is what makes the table shorter than the card**: a fact named
+   * once at the top costs 32px for the whole Board where naming it on each row
+   * costs a line on every one of them.
+   *
+   * The badge and the action columns are not named — a status needs no header
+   * to be read as one, and a column of buttons is not a fact about the Job. So
+   * this is the four in between, and the frame places them.
+   *
+   * **Read by both arrangements, though only one draws it.** The table places
+   * its header cells by this; the card draws no header and still sizes its
+   * tracks by how many facts were named, because a track reserved for a fact
+   * the rows do not carry is a floor nothing fills. Passing it is a caller
+   * naming its facts either way.
+   */
+  columns?: ReactNode[];
 };
 
 /** Which key moves the cursor where. Nothing else in the list is bound. */
@@ -70,6 +99,8 @@ export function ActiveJobsList({
   empty,
   selectable = false,
   label,
+  view = "card",
+  columns,
 }: ActiveJobsListProps) {
   const rows = Array.isArray(children) ? children.filter(Boolean) : children;
   const isEmpty = rows === undefined || rows === null || (Array.isArray(rows) && rows.length === 0);
@@ -141,11 +172,28 @@ export function ActiveJobsList({
       <div
         ref={frame}
         className={`armada-active-jobs__frame ${JOB_ROW_LIST}`}
+        data-view={view === "table" ? "table" : undefined}
+        data-columns={columns?.length}
         role={roving ? "listbox" : "list"}
         aria-label={label}
         onKeyDown={roving ? rove : undefined}
         onFocus={roving ? followed : undefined}
       >
+        {/* `presentation`, because a listbox's children are its options and a
+            row of column names is not one — `:scope > [role="option"]` is what
+            the arrow keys walk, and this must not appear in it. It is hidden
+            from the reading order too: a screen reader gets each fact's name
+            from the row's own field label, which stays in the markup and is
+            only taken off the screen. */}
+        {view === "table" && columns !== undefined && !isEmpty ? (
+          <div className="armada-active-jobs__columns" role="presentation" aria-hidden="true">
+            {columns.map((column, at) => (
+              <span className="armada-active-jobs__column" key={at}>
+                {column}
+              </span>
+            ))}
+          </div>
+        ) : null}
         {isEmpty
           ? empty
           : roving

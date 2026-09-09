@@ -833,14 +833,28 @@ The one non-shadcn primitive. Used in palette rows, dropdown-menu items,
 and tooltips.
 
 ```
-surface  --bg-sunken · --border-subtle · --radius-sm
+surface  --bg-raised · --border-default · --radius-sm
+lip      bottom edge at twice --border-width
 type     --text-2xs mono · --fg-muted
-size     20px height · 4px horizontal padding
+size     20px height, border included · 4px horizontal padding
 ```
 
 Never `--fg-default` — a shortcut hint is reference material sitting
 beside the thing it describes, and rendering it at full contrast makes
 it compete with the label.
+
+**Raised, and edged like a card rather than ruled like a table.** This
+was `--bg-sunken` behind `--border-subtle`, and on any hovered or
+focused row the edge was not visible: `--border-subtle` is `#232B35`
+and `--bg-hover` is `#212A34`. A key drawn on a row appears only while
+that row is focused, so the one ground it was guaranteed to sit on was
+the one it disappeared against, leaving a letter loose beside a button.
+`--border-subtle` rules a table; an edge is `--border-default`.
+
+The fill follows the same argument. A key is pressed, so it stands off
+its surface; `--bg-sunken` is a well you type into, which is the
+opposite claim. The doubled bottom edge is the lip, and it is what
+makes the box read as a key rather than as a small chip.
 
 ### Consequences elsewhere in this document
 

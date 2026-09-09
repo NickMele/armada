@@ -55,17 +55,35 @@
      once. The drawn width is each track's FLOOR and `auto` is its ceiling, so
      a track never reads narrower than the drawing and never truncates while
      the row has room. The 1fr before the action is what the slack goes into,
-     so the field values keep their measure instead of drifting apart. */
-  --armada-job-row-tracks:
+     so the field values keep their measure instead of drifting apart.
+
+     **One track per fact, where this was one track per value.** The list was
+     six tracks for a run of six single values — the bar had its own 72px and
+     the step's name the 108px beside it. A fact carries its name and its value
+     together now, and Progress is one fact holding both the bar and the word:
+     given the bar's track it overflowed into the step's, where Run time was
+     sitting, and the two ran together with nothing between them. A track sized
+     for half a cell is the whole of that bug.
+
+     Three tracks and four, for the reason the table has both — a floor a
+     column never fills reads as a value that failed to load, and Origin has
+     words but no carriage to Bridge yet. */
+  --armada-job-row-tracks-3:
     minmax(var(--armada-track-badge), max-content)
     minmax(var(--armada-track-origin), auto)
-    minmax(var(--armada-track-bar), auto)
-    minmax(var(--armada-track-step), auto)
+    minmax(var(--armada-track-progress), auto)
     minmax(var(--armada-track-time), auto)
-    minmax(var(--armada-track-spend), auto)
+    minmax(0, 1fr)
+    max-content;
+  --armada-job-row-tracks-4:
+    minmax(var(--armada-track-badge), max-content)
+    minmax(var(--armada-track-origin), auto)
+    minmax(var(--armada-track-progress), auto)
+    minmax(var(--armada-track-time), auto)
     minmax(var(--armada-track-provenance), auto)
     minmax(0, 1fr)
     max-content;
+  --armada-job-row-tracks: var(--armada-job-row-tracks-4);
 }
 
 .armada-job-row {
@@ -164,9 +182,13 @@
 .armada-job-row__body {
   display: flex;
   flex-direction: column;
-  /* 2px: the headline and its field run are one block, so the gap between them
-     is smaller than the base unit. No token spells it. Reported. */
-  gap: calc(var(--space-1) / 2);
+  /* **--space-2, where this was 2px.** The two were one block while the run was
+     a single line of values: a headline over a row of tags reads as one thing,
+     and 2px was what kept it one thing. Each fact carries its own name above
+     its value now, so the run is a block in its own right — the title needs
+     separating from it rather than joining to it, and at 2px the headline read
+     as a fourth label in the group under it. */
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -231,6 +253,57 @@
 .armada-job-row__field-label {
   flex: none;
   color: var(--fg-muted);
+}
+
+/* Icon and value, together, so a label can sit above the pair rather than
+   between the glyph and the word it belongs to. */
+.armada-job-row__field-body {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* **A labelled field in the card view stacks: the name above the value.**
+   Two channels rather than one — the name is --text-2xs small caps in
+   --fg-subtle and the value a step up in --fg-default — and that contrast is
+   the hierarchy a run of same-sized tags could not give. Every tag reading
+   equally loud is what made the old row impossible to rank.
+
+   Only where there is a label. A field with none is a value on its own line,
+   which is the row as it always was. */
+.armada-job-row__field[data-labelled] {
+  flex-direction: column;
+  align-items: flex-start;
+  /* 2px. The pair is one block, so the gap is under the base unit — the same
+     value and the same argument `__body` uses for the headline and its run. */
+  gap: calc(var(--space-1) / 2);
+  overflow: visible;
+}
+
+.armada-job-row__field[data-labelled] > .armada-job-row__field-label {
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+
+.armada-job-row__field[data-labelled] > .armada-job-row__field-body {
+  color: var(--fg-default);
+  max-width: 100%;
+}
+
+/* The table takes the name off the screen and lets the header say it once, so
+   the field is a single line again. `visibility` is not enough and
+   `display: none` would take it out of the accessibility tree with it — the
+   list's stylesheet hides it the way an accessible name is hidden. */
+.armada-job-row[data-view="table"] .armada-job-row__field[data-labelled],
+.armada-job-row-list[data-view="table"] .armada-job-row__field[data-labelled] {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-1);
+  overflow: hidden;
 }
 
 .armada-job-row__field-value {
@@ -328,9 +401,10 @@
     display: grid;
     grid-template-columns: subgrid;
     /* Spelled out, not inherited: a subgrid takes its parent's gutters, and the
-       headline sits one 2px step above its field run rather than a --space-3. */
+       headline sits a --space-2 above its field run rather than a --space-3.
+       The same value the flex fallback above uses, and for the same reason. */
     column-gap: var(--space-3);
-    row-gap: calc(var(--space-1) / 2);
+    row-gap: var(--space-2);
     align-content: center;
   }
 
@@ -346,4 +420,151 @@
   .armada-job-row-list > .armada-job-row > .armada-job-row__action {
     grid-column: -2 / -1;
   }
+}
+
+/* ---- the table view -----------------------------------------------------
+
+   The same row, on one line, under a header that names each column once.
+
+   **Nothing about the row's markup changes.** The card view stacks the
+   headline over its field run inside `__body`; the table view drops `__body`
+   and `__fields` out of the layout with `display: contents`, so the headline
+   and every field become items of the row's own grid, each landing in a column
+   the header has already labelled. Two arrangements, one DOM, one set of
+   props — which is what makes this a view rather than a second component.
+
+   **The labels move from the row to the header.** A card labels a fact by its
+   position in a run a person learns; a table labels it once at the top for the
+   whole Board. That is what lets this view be shorter than the card and still
+   say more, and it is the whole argument for having it. */
+.armada-job-row,
+.armada-job-row-list {
+  /* 188px: the progress cell — the 72px bar, a --space-2, and the step's name.
+     Composed from the two tracks it holds rather than restated, so a change to
+     either reaches this. */
+  --armada-track-progress: calc(var(--armada-track-bar) + var(--space-2) + var(--armada-track-step));
+  /* The table's tracks. The headline is the 1fr here, where in the card view
+     the slack sits before the action: on one line the title is what should
+     take the room, and the facts keep their measure beside it.
+     
+     **Two lists, because a reserved column that is always empty is the bug
+     the row's own comments keep naming.** Every drawn track has a floor, and a
+     floor a column never fills reads as a value that failed to load. So the
+     count of fact columns picks the list rather than one list carrying a track
+     for a fact the caller may not have: three today on the Board, where origin
+     has words but no carriage to Bridge, and four wherever it does. */
+  --armada-job-table-tracks-3:
+    minmax(var(--armada-track-badge), max-content)
+    minmax(0, 1fr)
+    minmax(var(--armada-track-origin), auto)
+    minmax(var(--armada-track-progress), auto)
+    minmax(var(--armada-track-time), auto)
+    max-content;
+  --armada-job-table-tracks-4:
+    minmax(var(--armada-track-badge), max-content)
+    minmax(0, 1fr)
+    minmax(var(--armada-track-origin), auto)
+    minmax(var(--armada-track-progress), auto)
+    minmax(var(--armada-track-time), auto)
+    minmax(var(--armada-track-provenance), auto)
+    max-content;
+  --armada-job-table-tracks: var(--armada-job-table-tracks-4);
+}
+
+/* **Both selectors, always.** `data-view` is on the row when it stands alone
+   and on the frame when it is in a list, and the two are never both true — a
+   row inside a list takes the list's view, which is what stops a list holding
+   two arrangements. Written as one selector list rather than two blocks so the
+   pair cannot drift, which is the bug that shipped first: the height and the
+   padding were on the row's own attribute only, so a table inside a list drew
+   its cells in the right columns at the card's height. */
+/* The height and the padding are the arrangement's and belong to both cases.
+   **The track list is not**: a row standing alone declares the columns, and a
+   row in a list borrows the list's so its cells land under the header's names.
+   Declaring them here for both was the second bug — it overrode the `subgrid`
+   below, and every cell sat in a column of its own row's making while the
+   header sat in the list's. */
+.armada-job-row[data-view="table"],
+.armada-job-row-list[data-view="table"] > .armada-job-row {
+  min-height: var(--h-row-table);
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+
+.armada-job-row[data-view="table"] {
+  grid-template-columns: var(--armada-job-table-tracks);
+}
+
+.armada-job-row[data-view="table"] > .armada-job-row__body,
+.armada-job-row[data-view="table"] .armada-job-row__fields,
+.armada-job-row-list[data-view="table"] > .armada-job-row > .armada-job-row__body,
+.armada-job-row-list[data-view="table"] > .armada-job-row .armada-job-row__fields {
+  display: contents;
+}
+
+/* A cell on one line is a value and never a stack, so a bar and its words sit
+   beside each other. Started at the top of the track rather than centred: a
+   column reads down its first character, and centring a short value against a
+   tall one puts them on different lines. */
+.armada-job-row[data-view="table"] .armada-job-row__field,
+.armada-job-row-list[data-view="table"] .armada-job-row__field {
+  align-items: center;
+  justify-content: flex-start;
+}
+
+/* A figure a person compares rather than reads sits against the column it is
+   compared down, which for a duration is its right edge. */
+.armada-job-row[data-view="table"] .armada-job-row__field[data-mono="true"],
+.armada-job-row-list[data-view="table"] .armada-job-row__field[data-mono="true"] {
+  justify-content: flex-end;
+}
+
+@supports (grid-template-columns: subgrid) {
+  .armada-job-row-list[data-view="table"] > .armada-job-row {
+    grid-template-columns: subgrid;
+  }
+
+  .armada-job-row-list[data-view="table"] > .armada-job-row > .armada-job-row__body,
+  .armada-job-row-list[data-view="table"] > .armada-job-row .armada-job-row__fields {
+    display: contents;
+  }
+
+  .armada-job-row-list[data-view="table"] > .armada-job-row .armada-job-row__headline {
+    grid-column: 2;
+  }
+
+  /* Placed rather than left to flow. Auto-placement holds until one row
+     carries a field the row below it does not, and then a column means two
+     things — which is exactly the failure a header row makes visible. */
+  .armada-job-row-list[data-view="table"] > .armada-job-row .armada-job-row__field:nth-child(1) {
+    grid-column: 3;
+  }
+
+  .armada-job-row-list[data-view="table"] > .armada-job-row .armada-job-row__field:nth-child(2) {
+    grid-column: 4;
+  }
+
+  .armada-job-row-list[data-view="table"] > .armada-job-row .armada-job-row__field:nth-child(3) {
+    grid-column: 5;
+  }
+
+  .armada-job-row-list[data-view="table"] > .armada-job-row .armada-job-row__field:nth-child(4) {
+    grid-column: 6;
+  }
+
+  .armada-job-row-list[data-view="table"] > .armada-job-row > .armada-job-row__action {
+    grid-column: -2 / -1;
+  }
+}
+
+/* The step's name inside a Progress cell, beside its bar rather than under it.
+   Emphasis without a second colour: the cell's other half is a graphic, and a
+   step's id is the one word in the run that says what is happening now. */
+.armada-row-step {
+  margin-left: var(--space-2);
+  color: var(--fg-default);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  white-space: nowrap;
 }

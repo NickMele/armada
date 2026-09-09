@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { Button } from "../../primitives/Button/Button";
-import { Kbd } from "../../primitives/Kbd/Kbd";
 import { Sheet } from "../../primitives/Sheet/Sheet";
 import { Tabs } from "../../primitives/Tabs/Tabs";
 
@@ -36,9 +35,15 @@ import { Tabs } from "../../primitives/Tabs/Tabs";
  *
  * **An escalation states itself in a notice inside the sheet and does not grow
  * the act.** Pilot keeps the accent in the Job header, behind the layer — one
- * primary per view, and this view is the log. *Show me* closes the sheet,
- * which is what `Esc` already does, so it is a labelled second face of one act
- * rather than a second binding.
+ * primary per view, and this view is the log.
+ *
+ * **The notice's control carries no key**, though it did. *Show me* falls back
+ * to closing the sheet, which is what `Esc` does, and it was captioned `Esc` on
+ * that reasoning — one act with two faces. On screen it reads as two controls
+ * bound to one key, next to a *Close* captioned `Esc` and under a *Back to the
+ * list* captioned `Esc`: three of them, and a person cannot tell which one the
+ * key will reach. A caption is a promise about what a key does, so the key is
+ * captioned once, on the control whose whole job it is.
  */
 
 /** One filter over the stream. The set is closed by who can write into a log. */
@@ -185,7 +190,6 @@ export function ActivityLogSheet({
                 onClick={escalation.onShowMe ?? onClose}
               >
                 Show me
-                <Kbd>Esc</Kbd>
               </Button>
             </div>
           )}

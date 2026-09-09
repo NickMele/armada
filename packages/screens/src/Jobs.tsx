@@ -77,6 +77,7 @@ import { JOB_LIFECYCLE } from "@armada/components";
 import type { JobSummary } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
 import {
+  BOARD_COLUMNS,
   BOARD_SORTS,
   BOARD_TABS,
   countSentence,
@@ -184,6 +185,10 @@ export function Jobs({
   const [tab, setTab] = useState<BoardTab>(FIRST_TAB);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<BoardSort>(DEFAULT_SORT);
+  // Which arrangement the rows take. **Held here rather than remembered**, for
+  // now: where a person left the Board is a preference and preferences belong
+  // in settings, not in a hook that quietly becomes the place they live.
+  const [view, setView] = useState<"card" | "table">("card");
   // Where the cursor is, as a job id. It is set from DOM focus rather than kept
   // beside it, so `j`, the arrows, Tab and the mouse all move one cursor.
   const [cursor, setCursor] = useState<string | null>(null);
@@ -393,6 +398,8 @@ export function Jobs({
         })}
         selectable
         label="Job Board"
+        view={view}
+        columns={BOARD_COLUMNS}
         controls={
           <BoardControls
             query={query}
@@ -407,6 +414,8 @@ export function Jobs({
             tab={tab}
             onTab={(next) => chooseTab(next as BoardTab)}
             suspended={suspended}
+            view={view}
+            onView={setView}
           />
         }
         empty={

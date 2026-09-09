@@ -171,6 +171,14 @@
   min-height: 0;
   min-width: 0;
   overflow: auto;
+  /* **The scroll stops here.** A sheet is a layer over the screen, and without
+     this, reaching the end of a long reading hands the rest of the gesture to
+     whatever is behind it: the log runs out, the page underneath starts moving,
+     and the layer a person is reading slides off with it. `ScrollArea` has
+     carried this since it was written and this scroller did not, which is why
+     it only happened on the sheets — the log and the patch, the two readings
+     long enough to reach an end while somebody is still scrolling. */
+  overscroll-behavior: contain;
   padding: var(--pad-card);
   font-size: var(--text-sm);
   line-height: var(--leading-sm);

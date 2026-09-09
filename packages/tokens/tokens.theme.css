@@ -110,6 +110,7 @@
   --spacing-row-header: var(--h-row-header);
   --spacing-row-action: var(--h-row-action);
   --spacing-row-stacked: var(--h-row-stacked);
+  --spacing-row-table: var(--h-row-table);
   --spacing-control: var(--h-control);
   --spacing-control-sm: var(--h-control-sm);
   --spacing-badge: var(--h-badge);
