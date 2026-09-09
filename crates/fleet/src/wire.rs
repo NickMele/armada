@@ -54,6 +54,38 @@ pub(crate) fn declared_check(check: &core_model::ResolvedCheck) -> DeclaredCheck
     }
 }
 
+/// Every Check a step declares, as a reader sees them.
+///
+/// **One function and two call sites**, because a preview of what a workflow
+/// would freeze and a Job's account of what it did freeze have to draw the same
+/// declaration. Two copies of the prepend below would agree until one changed.
+///
+/// **`every_manifest_check` leads the list where the step said it**, ahead of
+/// the Checks it expanded to, because it is what those rows came from rather
+/// than a Check beside them. It carries no name, no command and no paths — the
+/// row is the declaration and the rows under it are the answer.
+///
+/// The case that makes it load-bearing rather than decorative is a repository
+/// declaring no Checks, which `docs/concepts/manifest.md` sanctions: the
+/// expansion is empty, and without this row a step that asked to be gated on
+/// everything and got nothing is drawn exactly like a step that asked for
+/// nothing. Those need opposite readings — one verified nothing while asking
+/// to — and this is the row that says which happened, on the Job's own record
+/// and without a transcript.
+pub(crate) fn declared_checks(step: &core_model::ResolvedStep) -> Vec<DeclaredCheck> {
+    let sweeping = step.gates_on_every_check().then(|| DeclaredCheck {
+        kind: core_model::EVERY_MANIFEST_CHECK.to_string(),
+        name: None,
+        run: None,
+        expect_exit_code: None,
+        when: None,
+    });
+    sweeping
+        .into_iter()
+        .chain(step.checks().iter().map(declared_check))
+        .collect()
+}
+
 /// The word a step is drawn as, with its id standing in where there is none.
 ///
 /// A blank label is a definition that declared the key and left it empty, and a
@@ -81,7 +113,7 @@ pub(crate) fn declared(workflow: &config::ResolvedWorkflow) -> Vec<WorkflowStep>
         .map(|step| WorkflowStep {
             step_id: StepId::from(step.id()),
             label: reads_as(step.label(), step.id().as_str()),
-            checks: step.checks().iter().map(declared_check).collect(),
+            checks: declared_checks(step),
             // The rail's own narrowing, called rather than restated: an entry
             // that asks nothing and looks for nothing is not a Judge call, and
             // a preview that counted one would promise a call nothing makes.
@@ -376,10 +408,7 @@ pub(crate) fn step_facts(
                     .workflow()
                     .step(step.step_id())
                     .map(|declared| declared.label().to_string()),
-                declares: job
-                    .workflow()
-                    .step(step.step_id())
-                    .map(|declared| declared.checks().iter().map(declared_check).collect()),
+                declares: job.workflow().step(step.step_id()).map(declared_checks),
                 ran: ran
                     .iter()
                     .filter(|group| &group.step_id == step.step_id())

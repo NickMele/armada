@@ -170,12 +170,18 @@ fn resolve_step(
             // is a map, so unlike `setup.requires` there is no sequence
             // somebody wrote; `check_names` hands back the `BTreeMap`'s order
             // and one machine reads it the same as the next.
+            // **An empty registry expands to nothing and is not refused.**
+            // `docs/concepts/manifest.md` sanctions a Manifest declaring no
+            // Checks — nearest-ancestor ownership makes an ungated workspace a
+            // state rather than a mistake — so refusing here would make that
+            // documented state unusable with any shipped workflow. And *run
+            // what this repository declares* reads literally: a repository
+            // declaring nothing runs nothing.
+            //
+            // What was wrong with it was the silence, not the expansion, so
+            // the declaration is frozen onto the step and the record says both
+            // halves. `ResolvedStep::gates_on_every_check` carries it.
             MechanicalCheck::EveryManifestCheck => {
-                if manifest.check_names().is_empty() {
-                    disagreements.push(Disagreement::NoChecksDeclared {
-                        step: step.id().clone(),
-                    });
-                }
                 for name in manifest.check_names() {
                     let declared = manifest
                         .check(&name)
@@ -247,6 +253,14 @@ fn resolve_step(
     // step: the file was required to say, and `config` already refused a
     // second step saying yes, so there is nothing left to decide here.
     .delivering(step.delivers())
+    // **What the expansion above cannot leave behind.** One entry per declared
+    // Check is what runs; that the step asked for all of them is a separate
+    // fact, and on a repository declaring none it is the only one left.
+    .gating_on_every_check(
+        step.mechanical_checks()
+            .iter()
+            .any(|check| matches!(check, MechanicalCheck::EveryManifestCheck)),
+    )
     // **Both keys through one builder**, which is the shape `dispatching` set
     // and the reason `frozen`'s ten positional arguments did not become
     // twelve. The cap is a count and never an `Option` on the record: absent

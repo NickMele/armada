@@ -89,5 +89,5 @@ pub use transition::{
 pub use verdict::GateVerdict;
 pub use workflow::{
     AdvanceGate, EvidenceType, FrozenWorkflow, ResolvedCheck, ResolvedStep, ARTIFACT_EXISTS,
-    DIFF_NONEMPTY, MANIFEST_CHECK,
+    DIFF_NONEMPTY, EVERY_MANIFEST_CHECK, MANIFEST_CHECK,
 };

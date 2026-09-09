@@ -633,6 +633,10 @@ pub struct UnknownCheck {
 /// are steps whose names all resolved and whose meaning still does not survive
 /// the meeting, so they are reported apart: the fix for a miss is a typo, and
 /// the fix for one of these is deciding which file is right.
+///
+/// **An enum with one variant, because the class is what it is.** A second key
+/// a step and a Manifest can both state arrives as a second variant rather than
+/// a second error type, and the report already loops.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Disagreement {
     /// **A step restating an `expect_exit_code` the Manifest does not agree
@@ -647,12 +651,6 @@ pub enum Disagreement {
         step_expects: i64,
         manifest_expects: i64,
     },
-    /// **A step gating on every declared Check, met with a Manifest that
-    /// declares none.** `every_manifest_check` resolving to nothing is a step
-    /// that reads as gated and is not — and unlike a `when` that matches
-    /// nothing, no run records a skip, because there is no Check to skip. The
-    /// repository declares one, or the step names what it wants.
-    NoChecksDeclared { step: StepId },
 }
 
 impl fmt::Display for Disagreement {
@@ -668,11 +666,6 @@ impl fmt::Display for Disagreement {
                 "step `{}` expects `{check}` to exit {step_expects}, and the \
                  Manifest declares {manifest_expects}. The code is the Check's \
                  own — delete it from the step",
-                step.as_str()
-            ),
-            Disagreement::NoChecksDeclared { step } => write!(
-                f,
-                "step `{}` gates on every declared Check and none is declared",
                 step.as_str()
             ),
         }

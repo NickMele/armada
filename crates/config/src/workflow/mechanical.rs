@@ -12,7 +12,7 @@
 //! answered against `armada.yml` one layer up, where the Checks exist. So this
 //! file gained a type and no lookup.
 
-use core_model::{ARTIFACT_EXISTS, DIFF_NONEMPTY, MANIFEST_CHECK};
+use core_model::{ARTIFACT_EXISTS, DIFF_NONEMPTY, EVERY_MANIFEST_CHECK, MANIFEST_CHECK};
 use serde_yaml_ng::Value;
 
 use crate::error::{BadTarget, Fault, Refusal};
@@ -64,25 +64,21 @@ pub enum MechanicalCheck {
     /// repository's Rust build.
     ///
     /// It resolves to one [`core_model::ResolvedCheck::ManifestCheck`] per
-    /// declared Check and never travels further than that, which is why there
-    /// is no variant for it on the record and nothing in `store` or on the wire
-    /// to teach: a Job still freezes the list of Checks it actually gated on,
-    /// and an `armada.yml` that gains one afterwards changes the next Job.
+    /// declared Check, which is why there is no variant for it on the record:
+    /// a Job freezes the list of Checks it actually gated on, and an
+    /// `armada.yml` that gains one afterwards changes the next Job.
+    ///
+    /// **What does survive is that the step said it**, as
+    /// [`core_model::ResolvedStep::gates_on_every_check`]. A repository may
+    /// legitimately declare no Checks, and the expansion is then empty — at
+    /// which point the list alone cannot tell a step that asked to be gated on
+    /// everything from a step that asked for nothing.
     EveryManifestCheck,
     /// The step produced a non-empty diff.
     DiffNonempty,
     /// The step wrote the file named by `target`.
     ArtifactExists { target: String },
 }
-
-/// The schema's `type` value for *every declared Check*.
-///
-/// **Spelled here and not in `core-model` beside the other three**, which is
-/// where a `type` value goes when the record can carry it. This one cannot
-/// reach a record: it is expanded against a Manifest during resolution, so
-/// `store` and the wire never see the word. A constant in `core-model` would
-/// advertise a variant of `ResolvedCheck` that does not exist.
-const EVERY_MANIFEST_CHECK: &str = "every_manifest_check";
 
 const CHECK_TYPE_LEGAL: &[&str] = &[
     MANIFEST_CHECK,

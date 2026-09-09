@@ -261,7 +261,9 @@ notes = """
 
 **It does not compose with a named Check on the same step**, in either order, and two of it on one step is refused too: it already covers every name, so the pair would run one Check twice. It does compose with `diff_nonempty`, which is what `implement` needs — a build passes cleanly on an empty diff.
 
-**A Manifest declaring no Checks refuses it**, before dispatch. Expanded to nothing it is a step that reads as gated and is not, and unlike a `when` that matches nothing there is no run to record a skip against.
+**A Manifest declaring no Checks expands it to nothing, and that is not refused.** `docs/concepts/manifest.md` sanctions an ungated workspace as a state rather than a mistake — nearest-ancestor ownership means a workspace declaring none is ungated — so refusing here would make a documented state unusable with any shipped workflow. And *run what this repository declares* reads literally: a repository declaring nothing runs nothing.
+
+**What is refused is the silence, and the fix is a record rather than a rejection.** Expanded to nothing, this step's frozen check list is empty — indistinguishable from a step that declared no gate at all, and the two need opposite readings: one verified nothing while asking to, the other never asked. So the declaration is frozen beside the expansion as `ResolvedStep::gates_on_every_check`, and `fleet::wire` draws it as a declared check of this kind ahead of whatever it came to. A Job read back a week later says *this step gated on every Check its repository declared*, with the empty list beside it saying the repository declared none.
 """
 
 [[fields.mechanical_checks.types]]
