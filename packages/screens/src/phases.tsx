@@ -35,7 +35,7 @@ import { Button } from "@armada/components";
 import type { PhaseLoop, PhaseStage, PhaseStageRow, PhaseStripProps } from "@armada/components";
 
 import { ADVANCE_GATE, CHECK_OUTCOME, CRITERION_VERDICT_JUDGE } from "@armada/components";
-import type { CheckRun, Criterion, Judged, StepDetail } from "@armada/protocol";
+import type { CheckRun, Criterion, Judged, StepDetail, Submitted } from "@armada/protocol";
 import type { Kept } from "@armada/protocol";
 import { commandOf } from "./declared";
 import { onlyCurrentAttempt } from "./facts";
@@ -152,6 +152,7 @@ export function phasesOf(
   criteria: Criterion[],
   opens: Opens,
   status: string,
+  claim?: Submitted,
 ): PhaseStripProps {
   const submitted = HAS_SUBMITTED.has(step.state);
   // **A step is only working while its Job is.** `running` on a step outlives
@@ -188,8 +189,8 @@ export function phasesOf(
       // declares no deliverable keeps none and this stays a marker, which is
       // the rule the phases already follow: a card with nothing to say is not
       // drawn as a control that opens an empty box.
-      opens: kept.length > 0 || undefined,
-      rows: kept,
+      opens: kept.length > 0 || claim !== undefined || undefined,
+      rows: [...claimRows(claim), ...kept],
       cardNote:
         kept.length === 0
           ? undefined
@@ -204,7 +205,7 @@ export function phasesOf(
   const checks = checksStage(step, opens);
   if (checks !== undefined) stages.push(checks);
 
-  const judge = judgeStage(step, criteria, opens);
+  const judge = judgeStage(step, criteria, opens, claim !== undefined);
   if (judge !== undefined) stages.push(judge);
 
   // **`You` closes the strip, always.** It is the last thing that can hold a
@@ -319,6 +320,7 @@ function judgeStage(
   step: StepDetail,
   criteria: Criterion[],
   opens: Opens,
+  claimed: boolean,
 ): PhaseStage | undefined {
   const declared = step.judge_checks;
   if (declared === undefined || declared.length === 0) return undefined;
@@ -375,6 +377,19 @@ function judgeStage(
     state: refused === 0 ? "cleared" : "failed",
     stands: refused === 0 ? `${met} of ${rows.length} met` : `${refused} refused`,
     rows,
+    // **A refusal is one side of a dispute, and this card drew only that side.**
+    // The Judge never sees the Drone's transcript, which is what makes it
+    // unarguable-with — and what makes a refusal on its own an account with the
+    // other party missing. Where the Drone submitted a claim, this says where
+    // it is rather than restating it here: `claimRows` says why it belongs to
+    // Submitted. Only on a refusal, because a criterion nobody objected to has
+    // nothing being disputed.
+    cardNote:
+      refused === 0 || !claimed
+        ? undefined
+        : "The Drone's own account of this step is on Submitted. It gated nothing — the Judge " +
+          "never saw it — so where it disagrees with a refusal, the disagreement is the thing " +
+          "to read.",
   };
 }
 
@@ -480,6 +495,38 @@ export function keptOf(step: StepDetail, opens: Opens): KeptRead[] {
     opening: <Opening path={kept.path} what="deliverable" opens={opens} />,
     attempt: `attempt ${kept.attempt}`,
   }));
+}
+
+/**
+ * What the Drone said it did, as rows on the Submitted tier.
+ *
+ * **The tier drew only the documents, and the claim itself was in a chapter
+ * below the fold.** A Job escalated on a Judge refusal opened to two criterion
+ * ids, two verdicts and nothing the Drone had said — and on 9 Sep 2026 the
+ * sentence that closed the Job was in `not_claimed` the whole time: the work
+ * had already landed under a concurrent Job, and the Drone had said so.
+ *
+ * **Here rather than on the Judge tier**, which is the same rule the kept
+ * documents follow: this is what the Drone handed over, and hanging it off the
+ * tier that read it would make one party's account look like a property of the
+ * other. `judgeStage` points at it instead.
+ *
+ * Not mono, and no state. These are sentences somebody wrote, and none of them
+ * passed or failed anything — **what a Drone claims is a signal, and everything
+ * that gates is computed on Fleet's side.**
+ */
+function claimRows(claim: Submitted | undefined): PhaseStageRow[] {
+  if (claim === undefined) return [];
+  const rows: PhaseStageRow[] = [
+    { label: "Claimed", cited: claim.claimed },
+    { label: "Shown by", cited: claim.shown_by },
+  ];
+  // Absent is a submission that drew no boundary. The trail below renders
+  // "Nothing" for it; a tier with room for three rows draws two instead.
+  if (claim.not_claimed !== undefined) {
+    rows.push({ label: "Not claimed", cited: claim.not_claimed });
+  }
+  return rows;
 }
 
 /** The kept documents as rows on the Submitted tier. A path is machine-derived. */
