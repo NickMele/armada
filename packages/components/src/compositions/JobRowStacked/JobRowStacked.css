@@ -164,9 +164,13 @@
 .armada-job-row__body {
   display: flex;
   flex-direction: column;
-  /* 2px: the headline and its field run are one block, so the gap between them
-     is smaller than the base unit. No token spells it. Reported. */
-  gap: calc(var(--space-1) / 2);
+  /* **--space-2, where this was 2px.** The two were one block while the run was
+     a single line of values: a headline over a row of tags reads as one thing,
+     and 2px was what kept it one thing. Each fact carries its own name above
+     its value now, so the run is a block in its own right — the title needs
+     separating from it rather than joining to it, and at 2px the headline read
+     as a fourth label in the group under it. */
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -379,9 +383,10 @@
     display: grid;
     grid-template-columns: subgrid;
     /* Spelled out, not inherited: a subgrid takes its parent's gutters, and the
-       headline sits one 2px step above its field run rather than a --space-3. */
+       headline sits a --space-2 above its field run rather than a --space-3.
+       The same value the flex fallback above uses, and for the same reason. */
     column-gap: var(--space-3);
-    row-gap: calc(var(--space-1) / 2);
+    row-gap: var(--space-2);
     align-content: center;
   }
 

@@ -60,13 +60,22 @@
   --h-menu-item: 32px;
   --h-status-bar: 32px;
   --pad-card: 20px;       /* not 24 */
-  /* The Job row is padding-driven, amended 2026-08-23. It was a fixed 60px, which left
-     9px of clearance above a 43px content block and read as compacted at desk distance.
-     Vertical padding now matches --pad-card, and --h-row-stacked is a floor rather than
-     a cap: 43px of content plus 40px of padding lands the row at 84px, and the floor is
-     what keeps rows aligned down a column across the Board, Alerts, Reviews and Active
-     jobs. A row whose title wraps grows past it rather than clipping. */
-  --pad-row-stacked: 20px;
+  /* The Job row is padding-driven, amended 2026-08-23 and again 2026-09-08.
+     It was a fixed 60px, which left 9px of clearance above a 43px content block and
+     read as compacted at desk distance; vertical padding then matched --pad-card at
+     20px, and 43px of content plus 40px of padding landed the row at 84px.
+     
+     **The content block is not 43px any more.** Each fact now carries its name above
+     its value, so the run is two lines rather than one and the block is about 70px.
+     Padding chosen against the shorter block inflated the row to 125px, which is a
+     card's worth of air around a list row. 12px is what the block needs at desk
+     distance now that the block itself carries the breathing room.
+     
+     --h-row-stacked stays a floor rather than a cap, and it stops binding here — the
+     content clears it on its own. It still keeps rows aligned down a column across the
+     Board, Alerts, Reviews and Active jobs, and a row whose title wraps grows past it
+     rather than clipping. */
+  --pad-row-stacked: 12px;
   --gap-section: 24px;    /* not 48 */
 
   /* Window and layout model */
