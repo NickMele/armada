@@ -166,10 +166,78 @@ export type KeptDeliverable = {
  * flag says the evidence is suspect, not that the step failed. `pattern` is a
  * string because no registry declares the set: it comes from what a workflow's
  * `flag_if` names.
+ *
+ * **A spelling and a quoted line are not a reason, and for six of the patterns
+ * a reason was bought and thrown away.** Those six are decided by a model
+ * against a question written to be argued with. Without the question and the
+ * brief, a person reading `assertion_weakened` over a rustdoc sentence has to
+ * re-derive the whole argument off the diff to find the flag was wrong — which
+ * is the work the flag had already been paid for. `asked` and `brief_path` are
+ * what it rests on.
  */
 export type Flagged = {
   /** The pattern, spelled as `flag_if` spells it. */
   pattern: string;
   /** The file, line or assertion the flag is about. An uncited flag is unactionable. */
   cited: string;
+  /**
+   * Where in the change `cited` is, where Fleet established that from the
+   * patch rather than asserting it. Since 6.2.
+   *
+   * **Absent is a real answer and never a gap to be filled.** A finding about
+   * an absence has nothing to point at, and a citation quoting a line the
+   * change removed has no post-image number. Absent draws no location rather
+   * than a plausible one, which would send a person to the wrong file
+   * believing it.
+   */
+  at?: CitedAt;
+  /**
+   * The narrow question this flag answers, word for word as the pattern put
+   * it. Since 9.3.
+   *
+   * **What separates a real finding from a wrong one.** The spelling says what
+   * shape of gaming was looked for and the citation says what was seen;
+   * neither says what was claimed, and the claim is where the clauses that
+   * decide it live — *and is that assertion made nowhere else in this change*
+   * is the half nobody can reconstruct from the word `assertion_weakened`.
+   *
+   * **Absent is an answer about the check and not a gap.** `test_skipped`,
+   * `test_deleted` and `check_config_edited` are decided by reading the diff,
+   * so nothing was asked and there is no question to quote. A flag recorded
+   * before Fleet kept this has none either.
+   */
+  asked?: string;
+  /**
+   * Where the whole brief this flag answers was written, relative to the
+   * repository root. Since 9.3.
+   *
+   * **The path, never the question** — `Judged.brief_path`'s rule, and the
+   * same opening: a brief is the request and the whole change, and no answer
+   * on this seam carries one. It is kept under `.armada/briefs/` beside the
+   * criteria briefs from the same step and attempt, so a flag and a verdict
+   * from one run are read against each other.
+   *
+   * Absent wherever `asked` is, and additionally where the write itself
+   * failed — a flag is not lost because a disk was.
+   */
+  brief_path?: string;
+};
+
+/**
+ * Where in the change a flag points. `crates/ipc/src/judged.rs`.
+ *
+ * **`line` is a post-image coordinate**, numbered as this change leaves the
+ * file. So a citation quoting a line the change removed carries the file and
+ * no line: those words are not in that file any more, and where they used to
+ * be now holds something else.
+ *
+ * **Not `Citation`, which is the same question about the brief.** That one is
+ * a coordinate into what a Judge was shown; this is a coordinate into the
+ * change, and drawing one as the other sends a reader to the wrong document.
+ */
+export type CitedAt = {
+  /** Repository-relative, as the patch's post-image side spells it. */
+  file: string;
+  /** Absent where there is no post-image line, which is ordinary. */
+  line?: number;
 };
