@@ -34,29 +34,37 @@ import { chapterAct } from "./fixtures";
  * act that leaves — the shape `StepChapter` already names for a chapter whose
  * content has no end.
  *
+ * **Both chapters are on the real screen now.** `screens/evidence.tsx` builds
+ * them from `StepDetail` and `chaptersOf` returns them, so a real judged Job
+ * draws a Checks chapter and a Verdicts chapter in these positions. What is
+ * drawn there is the served subset of what is drawn here, and
+ * `screens/evidence.test.tsx` mounts the real builder's output rather than
+ * these fixtures — which is what stops the two from drifting again.
+ *
  * **What the wire serves, and what it does not.** Checked against
- * `packages/protocol` on 2026-09-08, because a fixture file that says nothing
+ * `packages/protocol` on 2026-09-09, because a fixture file that says nothing
  * is served is worse than one that says nothing at all: it stops anyone
  * looking.
  *
- * | Drawn here | On the wire |
- * |---|---|
- * | A Check's output | `CheckRun.output_path`. Served, and `phases.tsx` has been opening it for a while |
- * | A refusal's finding | `Judged.expected`, `produced`, `consequence` — the three `agent-copy.md` specifies |
- * | The brief a verdict answers | `Judged.brief_path` |
- * | The hand-back edge | `StepDetail.attempts[].outcome`, read by `phasesOf` |
- * | A panel of judges — the `j1`/`j2`/`j3` columns, per-judge citations, the input digest | **Nothing.** `Judged` is one row per criterion with a single `verdict`; there is no panel on the wire at all |
- * | The assertion set, and any comparison against `HEAD~1` | **Nothing** |
- * | An artifact `kind` | **Nothing.** `output_path` is enough for console output and not for the rest |
+ * | Drawn here | On the wire | On the real screen |
+ * |---|---|---|
+ * | A Check's output | `CheckRun.output_path` | Yes — the row opens it |
+ * | A refusal's finding | `Judged.expected`, `produced`, `consequence` — the three `agent-copy.md` specifies | Yes |
+ * | The brief a verdict answers | `Judged.brief_path` | Yes — cited under the refusal |
+ * | The `j1`/`j2`/`j3` columns and the split | `Judged.member`, since protocol 7.7 | Yes |
+ * | The hand-back edge | `StepDetail.attempts[].outcome`, read by `phasesOf` | Yes, on the strip |
+ * | What each judge *cited* — the overlap | **Nothing.** `Judged` records a verdict, not a reading | No |
+ * | The input digest the panel was handed | **Nothing** | No |
+ * | The assertion set, and any comparison against `HEAD~1` | **Nothing** | No |
+ * | An artifact `kind`, and the viewer that switches on it | **Nothing.** `output_path` is enough for console output and not for the rest | No |
  *
- * **The unserved half is one piece of work, not five.** Everything in it treats
- * the Judge as a panel rather than as one verdict, and that is a change to
- * `Judged` before it is a change to any screen.
+ * **The unserved half is one piece of work, not four.** Everything left in it
+ * is a record of what a judge or a Check *read* rather than what it answered,
+ * and that is a change to Fleet before it is a change to any screen.
  *
- * These fixtures are here so the arrangement can be argued before the field
- * exists, which is the order the rest of this screen was built in — and none of
- * them is wired into `JobDetail`, so nothing on a real screen claims to have
- * what the wire has not got.
+ * The fixtures stay because the arrangement is argued here — the viewer, the
+ * strip, the assertion set and the citations have no producer yet, and this is
+ * where they are drawn until one exists.
  */
 
 /** The four Checks the refactor Job ran, and what each came to. */

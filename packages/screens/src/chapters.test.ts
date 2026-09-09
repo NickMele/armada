@@ -14,7 +14,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import type { Diff, Footprint, JobSummary, StepDetail, Turn } from "@armada/protocol";
+import type { Criterion, Diff, Footprint, JobSummary, StepDetail, Turn } from "@armada/protocol";
 
 // The grouping lives with the component that draws it, so the two cannot
 // disagree about where a block stops. Tested here because this is the node
@@ -133,10 +133,18 @@ const OPENS: Opens = {
 };
 
 /** The chapters, with everything the panel owns stubbed to a no-op. */
-function chapters(over: { rows?: Turn[]; step?: StepDetail; transcript?: string } = {}) {
+function chapters(
+  over: {
+    rows?: Turn[];
+    step?: StepDetail;
+    transcript?: string;
+    criteria?: Criterion[];
+  } = {},
+) {
   return chaptersOf({
     job: job(),
     step: over.step ?? step(),
+    criteria: over.criteria ?? [],
     render: "reviewing",
     watching: { rows: over.rows ?? [], skipped: 0 },
     footprint: { state: "none" } as Footprint,

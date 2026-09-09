@@ -95,6 +95,9 @@ import { headingOf, Unrenderable } from "./heading";
 import { Log } from "./Log";
 import { detailOf, holdingOf, logOf, lookOf, turnsOf } from "./mine";
 import { phasesOf } from "./phases";
+// Which Check's output `o` opens. **The same call the Checks chapter's own act
+// makes**, so the key and the control cannot open different files.
+import { outputOf } from "./gates";
 import { renderFor } from "./render";
 import { runOf } from "./run";
 import { askingOf, fieldsOf, noticeOf, questionOf } from "./step";
@@ -241,21 +244,6 @@ export type JobDetailProps = {
    */
   onSaid: (sentence: string) => void;
 };
-
-/**
- * Which Check's output `o` opens on the open step.
- *
- * **The failed one first.** A person reaching for an output on a step that
- * stopped wants the Check that says why; on a step where nothing failed there
- * is still a reading worth opening, so the first output there is answers
- * instead of nothing. Absent where no Check on the step kept one, and the press
- * is left unswallowed.
- */
-function outputOf(step: StepDetail | undefined): string | undefined {
-  const runs = step?.check_runs ?? [];
-  const failed = runs.find((run) => run.outcome !== "passed" && run.output_path !== undefined);
-  return (failed ?? runs.find((run) => run.output_path !== undefined))?.output_path;
-}
 
 export function JobDetail({
   onReadDiff,
@@ -477,6 +465,9 @@ export function JobDetail({
       : chaptersOf({
           job,
           step: open,
+          // The Job's frozen criteria, for the Verdicts chapter. The same list
+          // the phase strip's Judge tier joins against, from the same reading.
+          criteria: whole?.acceptance_criteria ?? [],
           render,
           watching,
           footprint: recorded.footprint,

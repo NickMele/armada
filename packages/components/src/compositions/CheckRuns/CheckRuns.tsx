@@ -104,13 +104,29 @@ export type CheckRunsProps = {
   label?: ReactNode;
   /** Where the output is read from, said once — `tailed from the run log`. */
   note?: ReactNode;
+  /**
+   * What pressing an output does, on hover.
+   *
+   * **A prop because where it opens is the surface's answer, not this
+   * component's.** The default names the viewer, which is what a surface that
+   * has one shows; Bridge has none — it hands the path to the OS — so a fixed
+   * sentence here would have the app promise a panel nobody built.
+   */
+  openSaid?: ReactNode;
 };
 
 /** Row marks are 12px at strokeWidth 2, like every mark below Job level. */
 const ROW_ICON = 12;
 const ROW_STROKE = 2;
 
-export function CheckRuns({ rows, openId = null, onOpen, label, note }: CheckRunsProps) {
+export function CheckRuns({
+  rows,
+  openId = null,
+  onOpen,
+  label,
+  note,
+  openSaid = "Click to read this output in the viewer",
+}: CheckRunsProps) {
   // The list's own name is the vocabulary's word, so what a Check is comes from
   // where that is written and not from here.
   const named = label === undefined ? undefined : conceptSaid(label);
@@ -160,7 +176,7 @@ export function CheckRuns({ rows, openId = null, onOpen, label, note }: CheckRun
                 // `aria-pressed` is what carries the selection. It used to live
                 // only in the stylesheet, which told nobody who was not looking
                 // at it which output the viewer was showing.
-                <Tooltip asChild label="Click to read this output in the viewer">
+                <Tooltip asChild label={openSaid}>
                   <button
                     type="button"
                     className="armada-check-runs__output"

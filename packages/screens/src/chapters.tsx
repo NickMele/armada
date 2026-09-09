@@ -11,6 +11,14 @@
 // chapters two and three carry an act on their header line rather than a body,
 // and what the act opens is a trailing sheet — #286, and `Sheets.tsx`.
 //
+// **Chapters four and five are the evidence, and they are in `evidence.tsx`.**
+// What the Checks found and what the panel made of it are the same story in the
+// same order — the Drone was instructed, it worked, it produced, the Checks ran,
+// the panel read them — so they are chapters here rather than a region
+// somewhere else. They are conditional where these three are not: a step that
+// declares no Check and asks no Judge draws neither, because an empty labelled
+// region reads as a value that failed to load.
+//
 // **A deliverable sits beside the diff and never inside it.** The Produced
 // chapter counts files in the patch, and `.armada/` is ignored by this
 // repository's own deliberate choice, so a step whose whole product is a
@@ -31,12 +39,13 @@ import {
   type StepChapter,
 } from "@armada/components";
 
-import type { Diff, Footprint, Turn } from "@armada/protocol";
+import type { Criterion, Diff, Footprint, Turn } from "@armada/protocol";
 import type { JobSummary, StepDetail } from "@armada/protocol";
 import type { JobFootprint } from "@armada/protocol";
 import type { Calls } from "./calls";
 import { DecidedDiff } from "./Decide";
 import { DIFF_CHAPTER, LOG_CHAPTER, namesChapter, type DetailKeys } from "./detail-keys";
+import { evidenceChaptersOf } from "./evidence";
 import { readingFor, whyNoFootprint } from "./files";
 import { Log } from "./Log";
 import { keptOf, type KeptRead, type Opens } from "./phases";
@@ -52,6 +61,7 @@ import { entriesOf, NOTHING_YET_ON_THIS_STEP } from "./story";
 export function chaptersOf({
   job,
   step,
+  criteria,
   render,
   watching,
   footprint,
@@ -67,6 +77,14 @@ export function chaptersOf({
 }: {
   job: JobSummary;
   step: StepDetail;
+  /**
+   * The Job's frozen acceptance criteria, for chapter five.
+   *
+   * **The Job's and not the step's**, which is what makes the join necessary:
+   * `Judged.criterion_id` names a row of `JobDetail.acceptance_criteria`, and
+   * without it a verdict grid draws an id where the criterion's own words go.
+   */
+  criteria: readonly Criterion[];
   render: string;
   watching: { rows: readonly Turn[]; skipped: number } | null;
   footprint: Footprint;
@@ -278,6 +296,10 @@ export function chaptersOf({
             ),
           }),
     },
+    // Chapters four and five, where the step has them. `evidence.tsx` decides
+    // whether either is drawn and what its ordinal is — a step that gates on
+    // nothing has neither, and one that gates on a Judge alone has one.
+    ...evidenceChaptersOf({ step, criteria, opens }),
   ];
 }
 

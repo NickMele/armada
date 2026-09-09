@@ -34,20 +34,24 @@ import type { ReactNode } from "react";
 import { Button } from "@armada/components";
 import type { PhaseLoop, PhaseStage, PhaseStageRow, PhaseStripProps } from "@armada/components";
 
-import { ADVANCE_GATE, CHECK_ADVANCES, CHECK_OUTCOME, CRITERION_VERDICT_CHECK, CRITERION_VERDICT_JUDGE } from "@armada/components";
+import { ADVANCE_GATE, CHECK_OUTCOME, CRITERION_VERDICT_JUDGE } from "@armada/components";
 import type { CheckRun, Criterion, Judged, StepDetail } from "@armada/protocol";
 import type { Kept } from "@armada/protocol";
-import { commandOf, nameOf } from "./declared";
+import { commandOf } from "./declared";
 import { onlyCurrentAttempt } from "./facts";
+// The one reading of `check_runs` and `judged`. The Checks and Verdicts
+// chapters draw from the same call, which is what stops the strip and the story
+// from answering "was this criterion refused" two ways. `gates.ts` says why.
+import {
+  askedOf,
+  checksOf,
+  checksStand,
+  didNotPass,
+  howTheChecksWent,
+  NOT_REACHED,
+  panelsOf,
+} from "./gates";
 import { openArtifact, type OpenArtifact } from "./opening";
-
-/**
- * What a tier the run has not got to stands at. **The registry's word, and
- * `criterion_verdict_check` owns it**: `check_outcome`'s five are what a Check
- * that *ran* did, and `icons.toml` already calls "not reached" a Check state.
- * Once here for the four tiers that say it, rather than typed at each.
- */
-const NOT_REACHED = CRITERION_VERDICT_CHECK.not_reached?.verb ?? "not_reached";
 
 /**
  * How a record is opened, and where a refusal is said.
@@ -93,9 +97,7 @@ export function Opening({ path, what, opens }: { path: string; what: Kept["what"
         // The row sits inside a card the strip pins on a click. Without this
         // the open would also be a press on the stage behind it.
         event.stopPropagation();
-        void openArtifact(opens.open, opens.jobId, kept).then((because) => {
-          if (because !== null) opens.onSaid(because);
-        });
+        openKept(opens, kept);
       }}
     >
       {basename(path)}
@@ -103,8 +105,23 @@ export function Opening({ path, what, opens }: { path: string; what: Kept["what"
   );
 }
 
+/**
+ * Ask the host for one kept record, and say the sentence where it did not open.
+ *
+ * **One call, because two surfaces open the same three files now.** The strip
+ * draws a control per record and a refusal in the Verdicts chapter cites the
+ * brief it answers; a second `.then` written beside the second control is a
+ * second answer to "what does a failed open say", which is exactly what
+ * `opening.ts` exists to hold at one.
+ */
+export function openKept(opens: Opens, kept: Kept): void {
+  void openArtifact(opens.open, opens.jobId, kept).then((because) => {
+    if (because !== null) opens.onSaid(because);
+  });
+}
+
 /** The last segment of a repository-relative path. The informative half. */
-function basename(path: string): string {
+export function basename(path: string): string {
   return path.slice(path.lastIndexOf("/") + 1);
 }
 
@@ -256,45 +273,34 @@ const HAS_SUBMITTED: ReadonlySet<string> = new Set([
  * attempt's result the moment a step has been worked more than once.
  */
 function checksStage(step: StepDetail, opens: Opens): PhaseStage | undefined {
-  const declared = step.checks;
-  if (declared === undefined || declared.length === 0) return undefined;
+  const reads = checksOf(step);
+  if (reads.length === 0) return undefined;
 
-  const runs = onlyCurrentAttempt(step, step.check_runs);
-  const rows: PhaseStageRow[] = declared.map((check) => {
-    const run = runs.find((ran) => ran.name === nameOf(check));
-    return {
-      label: commandOf(check),
-      mono: true,
-      result: run === undefined ? NOT_REACHED : resultOf(run),
-      named: run === undefined ? undefined : didNotPass(run) ? "failed" : "passed",
-      // **The output opens from the row of the Check that wrote it.** An exit
-      // code is the whole of what a failed Check said here, and the sentence
-      // that says why is in the file — which was a path on this screen that
-      // nothing opened.
-      cited:
-        run?.output_path === undefined ? undefined : (
-          <Opening path={run.output_path} what="check" opens={opens} />
-        ),
-    };
-  });
+  const rows: PhaseStageRow[] = reads.map(({ check, run }) => ({
+    label: commandOf(check),
+    mono: true,
+    result: run === undefined ? NOT_REACHED : resultOf(run),
+    named: run === undefined ? undefined : didNotPass(run) ? "failed" : "passed",
+    // **The output opens from the row of the Check that wrote it.** An exit
+    // code is the whole of what a failed Check said here, and the sentence
+    // that says why is in the file — which was a path on this screen that
+    // nothing opened.
+    cited:
+      run?.output_path === undefined ? undefined : (
+        <Opening path={run.output_path} what="check" opens={opens} />
+      ),
+  }));
 
-  const failed = runs.filter(didNotPass);
+  const { ran, failed } = howTheChecksWent(reads);
   const label =
-    declared.length > 2
-      ? `${declared.length} Checks`
-      : declared.map((check) => nameOf(check)).join(", ");
+    reads.length > 2 ? `${reads.length} Checks` : reads.map((read) => read.name).join(", ");
 
   return {
     id: "checks",
     label,
     kind: "checks",
-    state: failed.length > 0 ? "failed" : runs.length === declared.length ? "cleared" : runs.length > 0 ? "current" : "ahead",
-    stands:
-      runs.length === 0
-        ? NOT_REACHED
-        : failed.length > 0
-          ? `${failed.length} of ${declared.length} did not pass`
-          : `${runs.length} of ${declared.length} passed`,
+    state: failed.length > 0 ? "failed" : ran.length === reads.length ? "cleared" : ran.length > 0 ? "current" : "ahead",
+    stands: checksStand(reads),
     rows,
   };
 }
@@ -317,38 +323,32 @@ function judgeStage(
   const declared = step.judge_checks;
   if (declared === undefined || declared.length === 0) return undefined;
 
-  const judged = onlyCurrentAttempt(step, step.judged);
-  const asked = declared.reduce((sum, judge) => sum + judge.criteria, 0);
-  const panels = byCriterion(judged);
-  const rows: PhaseStageRow[] = panels.map(([criterion_id, members]) => {
-    const criterion = criteria.find((held) => held.criterion_id === criterion_id);
-    // Unanimity, from `docs/concepts/judge.md`: any single refusal refuses the
-    // criterion, so a row is `not_met` where one member of three objected.
-    const refused = members.filter((one) => one.verdict !== "met");
-    const verdict = refused.length === 0 ? "met" : "not_met";
-    return {
-      // The criterion's own text where the Job carries it, and its id where it
-      // does not. A criterion is a sentence somebody wrote, so it is not mono;
-      // an id that could not be joined is machine-derived, so it is.
-      label: criterion?.text ?? criterion_id,
-      mono: criterion === undefined || undefined,
-      // The registry's verb: `no objection`, `refused`. `not_met` is the wire's
-      // key and reads as a field name rather than as a ruling.
-      result: howThePanelWent(verdict, refused.length, members.length),
-      named: verdict,
-      // What a refusal rests on comes from the members that refused. Where none
-      // did there is nothing disputed, and the first member's row carries the
-      // brief every member of the panel answered.
-      cited: (refused.length === 0 ? members.slice(0, 1) : refused).map((one, at) => (
+  const asked = askedOf(step);
+  const panels = panelsOf(step, criteria);
+  const rows: PhaseStageRow[] = panels.map((panel) => ({
+    // The criterion's own text where the Job carries it, and its id where it
+    // does not. A criterion is a sentence somebody wrote, so it is not mono;
+    // an id that could not be joined is machine-derived, so it is.
+    label: panel.criterion?.text ?? panel.criterionId,
+    mono: panel.criterion === undefined || undefined,
+    // The registry's verb: `no objection`, `refused`. `not_met` is the wire's
+    // key and reads as a field name rather than as a ruling.
+    result: howThePanelWent(panel.verdict, panel.refused.length, panel.members.length),
+    named: panel.verdict,
+    // What a refusal rests on comes from the members that refused. Where none
+    // did there is nothing disputed, and the first member's row carries the
+    // brief every member of the panel answered.
+    cited: (panel.refused.length === 0 ? panel.members.slice(0, 1) : panel.refused).map(
+      (one, at) => (
         <Fragment key={one.member ?? at}>
           {at === 0 ? null : " · "}
           {citedOf(one, opens)}
         </Fragment>
-      )),
-    };
-  });
+      ),
+    ),
+  }));
 
-  if (judged.length === 0) {
+  if (panels.length === 0) {
     return {
       id: "judge",
       label: asked === 0 ? "Judge" : `Judge · ${asked} ${asked === 1 ? "criterion" : "criteria"}`,
@@ -379,37 +379,17 @@ function judgeStage(
 }
 
 /**
- * A step's verdicts grouped into one entry per criterion, in the order asked.
- *
- * **A panel sends one row per member and a person reads one row per criterion.**
- * At `panel_size: 3` three rows arrive carrying the same `criterion_id` and
- * differing only in `member`; drawn straight they are the same sentence three
- * times, and before `member` existed they were not even distinguishable enough
- * to be deduplicated safely.
- *
- * **First-appearance order, never sorted.** The order is the order the criteria
- * were asked, which is the order they were written, and a criterion may be
- * appended but never reordered — so position is stable and is what a citation
- * to `02` means.
- */
-function byCriterion(judged: Judged[]): [string, Judged[]][] {
-  const held = new Map<string, Judged[]>();
-  for (const one of judged) {
-    const already = held.get(one.criterion_id);
-    if (already === undefined) held.set(one.criterion_id, [one]);
-    else already.push(one);
-  }
-  return [...held];
-}
-
-/**
  * What a criterion's row says the panel came to.
  *
  * **Silent about the panel at one**, the convention `Judged.member` keeps: a
  * lone judge reads exactly as it did before panels were recorded, so no step
  * grows a count it did not have.
+ *
+ * **Exported, because the Verdicts grid says the same thing on the same row.**
+ * The split on a closed criterion is this sentence's second half, and two
+ * spellings of *refused by 2 of 3* on one screen is the drift `gates.ts` names.
  */
-function howThePanelWent(verdict: string, refused: number, members: number): string {
+export function howThePanelWent(verdict: string, refused: number, members: number): string {
   const verb = CRITERION_VERDICT_JUDGE[verdict]?.verb ?? verdict;
   if (members < 2) return verb;
   // A refusal from one of three is a close call and a refusal from all three is
@@ -620,9 +600,4 @@ function resultOf(run: CheckRun): string {
   const outcome = CHECK_OUTCOME[run.outcome]?.verb ?? run.outcome;
   const measured = [run.expected, run.produced].filter((part) => part !== undefined);
   return measured.length === 0 ? outcome : `${outcome} · ${measured.join(" → ")}`;
-}
-
-/** A Check that did not pass, read off the registry's own `advances`. */
-function didNotPass(run: CheckRun): boolean {
-  return CHECK_ADVANCES[run.outcome] === false;
 }
