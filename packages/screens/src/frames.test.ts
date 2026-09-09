@@ -86,4 +86,63 @@ describe("what a collapsed chapter says about them", () => {
       "2 frames · 2 runs",
     );
   });
+
+  /**
+   * Whether there is a before is the fact that decides what a collapsed
+   * chapter is worth opening for: with both sides it answers what the change
+   * did to the screen, with one it answers only what the screen is.
+   */
+  it("says whether there is a before, where there is one", () => {
+    expect(
+      framesSummary([
+        frame({ kept: "show.1.base/home.png", side: "base" }),
+        frame({ kept: "show.1.branch/home.png", side: "branch" }),
+      ]),
+    ).toBe("2 frames · before and after");
+    expect(framesSummary([frame({ side: "branch" })])).toBe("1 frame");
+  });
+});
+
+describe("which side a frame is a photograph of", () => {
+  /**
+   * **`before` and `after`, not `base` and `branch`.** The wire's words name
+   * the two checkouts Fleet had to serve; what a reviewer wants to know is
+   * which of these is how the screen was, and the translation happens once so
+   * no component learns what a base branch is.
+   */
+  it("says the reader's word for each side where there are two", () => {
+    const shown = shownFrames(
+      [
+        frame({ kept: "show.1.base/home.png", side: "base" }),
+        frame({ kept: "show.1.branch/home.png", side: "branch" }),
+      ],
+      NO_FRAMES,
+    );
+    expect(shown.map((one) => one.side)).toEqual(["before", "after"]);
+  });
+
+  /**
+   * A step with one side is a repository with no base, a base run that would
+   * not start, or a Fleet older than 9.5. `after` written on every frame of a
+   * set with no before is a word that says nothing and implies a missing half.
+   */
+  it("labels nothing where there is only one side to be on", () => {
+    const shown = shownFrames(
+      [
+        frame({ kept: "show.1.branch/home.png", side: "branch" }),
+        frame({ kept: "show.1.branch/settings.png", side: "branch" }),
+      ],
+      NO_FRAMES,
+    );
+    expect(shown.map((one) => one.side)).toEqual([undefined, undefined]);
+  });
+
+  /** A Fleet older than 9.5 sends no side at all, and those rows are branch. */
+  it("reads a row with no side as the branch, which is what it is", () => {
+    const shown = shownFrames(
+      [frame({ kept: "show.1.base/home.png", side: "base" }), frame({ side: undefined })],
+      NO_FRAMES,
+    );
+    expect(shown.map((one) => one.side)).toEqual(["before", "after"]);
+  });
 });
