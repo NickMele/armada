@@ -1,0 +1,120 @@
+/* The frames a step's harness produced. A well, like the file rail and the
+   transcript, because it is a record being read — and unlike either of those,
+   the record is pictures. */
+.armada-frames {
+  display: grid;
+  /* Two-up where there is room and one-up where there is not, without a
+     breakpoint: a frame narrower than this is a screenshot of a screen at a
+     size nobody can read, so the floor is what decides the count. */
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--bg-sunken);
+  list-style: none;
+}
+
+.armada-frames__frame {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* The image's box, sized before the bytes arrive.
+   `aspect-ratio` rather than a height, so the space a frame will take is
+   reserved from the first paint and the chapter does not jump as three of them
+   land — the reflow that makes a person lose the frame they were reading. 16/10
+   is a screen's shape and this is a picture of a screen. */
+.armada-frames__plate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  min-width: 0;
+  padding: 0;
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-sm);
+  /* Not `--bg-sunken`: the well behind it already is, and a plate the colour of
+     its own background loses its edge on the one surface whose whole point is
+     that you can see where the picture stops. */
+  background: var(--bg-base);
+  color: inherit;
+  font: inherit;
+  text-align: center;
+}
+
+/* Pressable where a caller passed a handler. `button` resets are above; this is
+   only what says it can be pressed. */
+button.armada-frames__plate {
+  cursor: pointer;
+}
+
+button.armada-frames__plate:hover {
+  border-color: var(--accent);
+}
+
+button.armada-frames__plate:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Contained, never cropped. A frame cropped to fill its plate is a frame with
+   the part that mattered outside the box, and the one thing a reviewer is doing
+   here is looking at the whole screen. */
+.armada-frames__image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.armada-frames__plate[data-empty] {
+  border-style: dashed;
+  border-color: var(--border-subtle);
+}
+
+.armada-frames__why {
+  padding: var(--space-2);
+  color: var(--fg-muted);
+  font-size: var(--text-2xs);
+  /* A reason can be a sentence and a plate is not wide. `anywhere` rather than
+     `break-word`, which does not reduce the min-content size and so lets a long
+     unbroken path push the grid track open. */
+  overflow-wrap: anywhere;
+}
+
+.armada-frames__said {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+  margin: 0;
+}
+
+/* The spec's own words for this frame. Mono, because it is a file name the
+   repository chose and not prose anybody wrote for this screen. */
+.armada-frames__name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--fg-default);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+/* Which run, and what it weighs. Muted: provenance labels the frame rather than
+   being part of it. */
+.armada-frames__from {
+  color: var(--fg-muted);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+}
+
+.armada-frames__empty {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-2xs);
+}

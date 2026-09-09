@@ -394,6 +394,9 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.readCall, (_event, jobId: string, callId: string) =>
     connection?.readCall(jobId, callId),
   );
+  ipcMain.handle(CHANNELS.readFrame, (_event, jobId: string, kept: string) =>
+    connection?.readFrame(jobId, kept),
+  );
   ipcMain.handle(CHANNELS.readCheckOutput, (_event, jobId: string, kept: string) =>
     connection?.readCheckOutput(jobId, kept),
   );

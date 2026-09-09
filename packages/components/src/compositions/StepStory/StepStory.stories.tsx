@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 import { ActivityLog } from "../ActivityLog/ActivityLog";
 import { ChangedFiles } from "../ChangedFiles/ChangedFiles";
+import { FramesShown } from "../FramesShown/FramesShown";
 import { StepStory, type StepChapter } from "./StepStory";
 
 /**
@@ -214,5 +215,103 @@ export const AChapterWithOnlyAPreviewStillOpens: Story = {
     // Nothing past the preview, so no `Close` at the foot of it. The log has
     // one and this must not gain one by being pressable.
     await expect(canvas.queryByRole("button", { name: "Close" })).toBeNull();
+  },
+};
+
+/**
+ * A stand-in screenshot, at a screen's shape.
+ *
+ * **Named colours, and they are not design values.** What is inside a frame is
+ * a repository's own screenshot: Armada never authored it, and no token of this
+ * design system applies to a picture of somebody else's app.
+ */
+function shot(fill: string, said: string): string {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400">` +
+    `<rect width="640" height="400" fill="${fill}"/>` +
+    `<text x="24" y="52" fill="gainsboro" font-family="monospace" font-size="24">` +
+    `${said}</text>` +
+    `</svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+/**
+ * **The story leads with what it looks like, and the diff is one level down.**
+ *
+ * The inverse of every story above, and the one arrangement the panel departs
+ * for. On a change whose point is not the code — a panel that should collapse,
+ * a screen that should render differently — the diff is the least useful thing
+ * on screen and it was the only thing offered: reviewing meant reading a patch
+ * to infer an outcome you could have been shown. `#209`.
+ *
+ * **The frames are in the preview, not behind an act.** Opening a chapter to
+ * find out that there are pictures is the gesture this removes. Every other
+ * long chapter here opens; this one is already open by being drawn.
+ *
+ * **The numbers move with it.** Produced reads `4` here and `3` in every story
+ * above. An ordinal is the position in the story a reader navigates by, so it
+ * is counted over what was actually drawn — a fixed number per chapter was
+ * right until a chapter could appear before Produced.
+ *
+ * **No caption under any frame, and no field for one.** A screenshot of the
+ * wrong state looks exactly like one of the right state; what makes a frame
+ * checkable is the spec that produced it, which is code in the diff beside the
+ * change. What each frame carries instead is the name its spec chose, the run
+ * it came from, and what it weighs.
+ */
+export const ShowingTheOutcome: Story = {
+  args: {
+    chapters: [
+      { ...CHAPTERS[0]!, ordinal: 1 },
+      { ...CHAPTERS[1]!, ordinal: 2 },
+      {
+        id: "shown",
+        ordinal: 3,
+        title: "Shown",
+        says: "Click to see what the step produced",
+        // Two runs, because that is the case a summary has to distinguish: two
+        // frames from one run and two from two are different things to be
+        // looking at.
+        summary: "2 frames · 2 runs",
+        preview: (
+          <FramesShown
+            frames={[
+              {
+                kept: "show.1/job-detail-refused.png",
+                name: "job-detail-refused.png",
+                attempt: 1,
+                weight: "41.0 KB",
+                src: shot("darkslategray", "attempt 1 — still wrong"),
+              },
+              {
+                kept: "show.2/job-detail-refused.png",
+                name: "job-detail-refused.png",
+                attempt: 2,
+                weight: "40.2 KB",
+                src: shot("midnightblue", "attempt 2 — collapsed"),
+              },
+            ]}
+          />
+        ),
+      },
+      { ...CHAPTERS[2]!, ordinal: 4 },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    // **The order is the claim**, so it is read off the story in one go.
+    const named = (selector: string) =>
+      Array.from(canvasElement.querySelectorAll(selector)).map((at) => at.textContent);
+
+    expect(named(".armada-chapter__name")).toEqual([
+      "Drone instructions",
+      "Activity log",
+      "Shown",
+      "Produced",
+    ]);
+    expect(named(".armada-chapter__n")).toEqual(["1", "2", "3", "4"]);
+
+    // On screen without anything being pressed. That is the whole of leading
+    // with the evidence.
+    expect(canvasElement.querySelectorAll(".armada-frames__image")).toHaveLength(2);
   },
 };

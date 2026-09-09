@@ -9,6 +9,7 @@ import type {
   BridgeIdentity,
   CallRead,
   CheckOutputRead,
+  FrameRead,
   ClearOutcome,
   Connection,
   Diff,
@@ -566,6 +567,7 @@ export type BridgeApi = {
    * Read-only, like the reads above it.
    */
   readCheckOutput: (jobId: string, kept: string) => Promise<CheckOutputRead>;
+  readFrame: (jobId: string, kept: string) => Promise<FrameRead>;
   /**
    * Read every filed report and the counts beside them, or `false` to drop it.
    *
@@ -758,6 +760,7 @@ export const CHANNELS = {
   readRemarks: "bridge:read-remarks",
   readCall: "bridge:read-call",
   readCheckOutput: "bridge:read-check-output",
+  readFrame: "bridge:read-frame",
   readReports: "bridge:read-reports",
   readHeld: "bridge:read-held",
   approveReview: "bridge:approve-review",

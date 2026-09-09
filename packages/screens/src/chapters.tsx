@@ -33,19 +33,28 @@ import {
   ChangedFiles,
   DroneBrief,
   Clamped,
+  FramesShown,
   Kbd,
   changedFilesSummary,
   keyFor,
+  type ShownFrame,
   type StepChapter,
 } from "@armada/components";
 
-import type { Criterion, Diff, Footprint, Turn } from "@armada/protocol";
+import type { Criterion, Diff, Footprint, KeptFrame, Turn } from "@armada/protocol";
 import type { JobSummary, StepDetail } from "@armada/protocol";
 import type { JobFootprint } from "@armada/protocol";
 import type { Calls } from "./calls";
 import { DecidedDiff } from "./Decide";
-import { DIFF_CHAPTER, LOG_CHAPTER, namesChapter, type DetailKeys } from "./detail-keys";
-import { evidenceChaptersOf } from "./evidence";
+import {
+  DIFF_CHAPTER,
+  FRAMES_CHAPTER,
+  LOG_CHAPTER,
+  namesChapter,
+  type DetailKeys,
+} from "./detail-keys";
+import { evidenceChaptersOf, type Unnumbered } from "./evidence";
+import { framesSummary, shownFrames, type Frames } from "./frames";
 import { readingFor, whyNoFootprint } from "./files";
 import { Log } from "./Log";
 import type { Outputs } from "./outputs";
@@ -73,6 +82,7 @@ export function chaptersOf({
   log,
   calls,
   outputs,
+  frames,
   sheet,
   opens,
   onOpenSheet,
@@ -133,6 +143,18 @@ export function chaptersOf({
    */
   outputs: Outputs;
   /**
+   * The frames this Job's steps have produced, as this window has them, and how
+   * to ask for a step's worth.
+   *
+   * **Asked for without anybody pressing**, which is the one place this departs
+   * from `outputs`. The whole claim of #209 is that a change whose point is not
+   * the code is reviewed by looking at it, and a panel that leads with a button
+   * saying there are pictures has not led with anything. What bounds it is the
+   * shape of the thing: one step is open at a time and a spec captures a
+   * handful of screens.
+   */
+  frames: Frames;
+  /**
    * Which sheet is open, so the chapter behind it says so and stops offering.
    *
    * **`holds` is one of them and no chapter answers it.** It opens from the run
@@ -163,10 +185,15 @@ export function chaptersOf({
   // tier's rows on the phase strip. Two readings is how the two surfaces
   // came to state one ordering separately. #321.
   const documents = keptOf(step, opens);
-  return [
+  const shown = shownFrames(step.frames ?? [], frames);
+  // **Numbered over what is drawn.** Every chapter below is built without an
+  // ordinal and counted once, at the end — because which chapters exist
+  // depends on the step. One that gates on nothing has no evidence chapter,
+  // and one that shows its work has a chapter before Produced. Fixed numbers
+  // were right until the second of those existed.
+  const story: Unnumbered[] = [
     {
       id: "instructions",
-      ordinal: 1,
       title: "Drone instructions",
       // The turn the step opened with, in the words the Drone was given.
       // Armada's own turns are on the transcript beside the Drone's, so this
@@ -206,7 +233,6 @@ export function chaptersOf({
     },
     {
       id: "log",
-      ordinal: 2,
       title: "Activity log",
       // The dot, not the word. `StepStory` composes `Chapter` now, so the
       // running mark has its own channel and the summary carries only counts.
@@ -254,9 +280,19 @@ export function chaptersOf({
         </>
       ),
     },
+    // **What it looks like, above what changed** — the inverse of every other
+    // step, and the whole of #209. On a change whose point is not the code the
+    // diff is the least useful thing on the screen, and it was the only thing
+    // offered: reviewing meant reading a patch to infer an outcome you could
+    // have been shown. So a step that captured frames leads with them, and
+    // Produced is the chapter underneath.
+    //
+    // **Only where there are frames.** A chapter saying a step declared no
+    // visual evidence would be on almost every step of almost every Job,
+    // reporting the absence of a thing nobody asked for.
+    ...(shown.length === 0 ? [] : [framesChapter(shown, step.frames ?? [])]),
     {
       id: DIFF_CHAPTER,
-      ordinal: 3,
       title: "Produced",
       // The header carries the summary, so a collapsed chapter still says what
       // the step produced. `changedFilesSummary` is the one reading of it —
@@ -313,12 +349,50 @@ export function chaptersOf({
             ),
           }),
     },
-    // Chapters four and five, where the step has them. `evidence.tsx` decides
-    // whether either is drawn and what its ordinal is — a step that gates on
-    // nothing has neither, and one that gates on a Judge alone has one.
+    // The last chapters, where the step has them. `evidence.tsx` decides
+    // whether either is drawn — a step that gates on nothing has neither, and
+    // one that gates on a Judge alone has one.
     ...evidenceChaptersOf({ step, criteria, opens, outputs }),
   ];
+  return story.map((chapter, at) => ({ ...chapter, ordinal: at + 1 }));
 }
+
+/**
+ * What the step's harness produced, drawn.
+ *
+ * **A preview and no content, and that is not an oversight.** Every other long
+ * chapter here has a body a person opens; this one has the frames in its
+ * preview, because opening a chapter to find out that there are pictures is the
+ * gesture #209 exists to remove. What a person opens is one frame, not the
+ * chapter — and that is the sheet, which is the next slice.
+ *
+ * **No `act` either.** There is nowhere to send a reader that this does not
+ * already show, and a control that opens what is already on screen is a second
+ * answer to a question nobody asked.
+ */
+function framesChapter(shown: ShownFrame[], rows: KeptFrame[]): Unnumbered {
+  return {
+    id: FRAMES_CHAPTER,
+    title: "Shown",
+    // The count, and the runs it spans where it spans more than one — a
+    // collapsed chapter that read `3 frames` over three attempts would hide
+    // the fact that decides whether what is about to be opened is current.
+    summary: framesSummary(rows),
+    says: "Click to see what the step produced",
+    preview: (
+      <FramesShown
+        frames={shown}
+        // Unreachable — the chapter is not built where the list is empty — and
+        // stated anyway, because a component that silently draws nothing is
+        // how a surface goes quiet when a caller's condition drifts.
+        emptyNote={NOTHING_SHOWN}
+      />
+    ),
+  };
+}
+
+/** A step whose harness ran and captured nothing. */
+const NOTHING_SHOWN = "This step's harness ran and captured nothing to look at.";
 
 /**
  * The documents this step wrote, each one a control that opens it.

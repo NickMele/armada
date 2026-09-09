@@ -5,6 +5,7 @@ import type { BridgeApi, BridgeState, Summons } from "../shared/bridge";
 import type {
   CallRead,
   CheckOutputRead,
+  FrameRead,
   ClearOutcome,
   Draft,
   Outcome,
@@ -204,6 +205,8 @@ const api: BridgeApi = {
     ipcRenderer.invoke(CHANNELS.readCall, jobId, callId),
   readCheckOutput: (jobId: string, kept: string): Promise<CheckOutputRead> =>
     ipcRenderer.invoke(CHANNELS.readCheckOutput, jobId, kept),
+  readFrame: (jobId: string, kept: string): Promise<FrameRead> =>
+    ipcRenderer.invoke(CHANNELS.readFrame, jobId, kept),
 
   // Every report filed, with the counts. Read-only, and **the one read here
   // that carries no Job id**: a report survives the Job being forgotten, so
