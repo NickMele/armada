@@ -79,7 +79,7 @@ function holding(): BridgeState {
         {
           id: MANIFEST,
           repository: "armada",
-          path: "/Users/someone/code/armada/armada.yml",
+          path: "/Users/user/code/armada/armada.yml",
           version: 1,
           checks: [],
         },
@@ -107,7 +107,7 @@ describe("the records a stopped Job names", () => {
     // this the press answers "not on the reading of this job Bridge is
     // holding" — a dead control on the one surface that explains the stop.
     await expect(openArtifact(holding(), JOB_ID, { kept: BRIEF, what: "brief" })).resolves.toEqual(
-      { ok: false, why: "not_there", path: `/Users/someone/code/armada/${BRIEF}` },
+      { ok: false, why: "not_there", path: `/Users/user/code/armada/${BRIEF}` },
     );
     expect(openPath).not.toHaveBeenCalled();
   });
@@ -119,7 +119,7 @@ describe("the records a stopped Job names", () => {
     ).resolves.toEqual({
       ok: false,
       why: "not_named",
-      path: `/Users/someone/code/armada/${other}`,
+      path: `/Users/user/code/armada/${other}`,
     });
     expect(openPath).not.toHaveBeenCalled();
   });
