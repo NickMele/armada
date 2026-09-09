@@ -11,6 +11,7 @@
 
 use core_model::{AutoMerge, ReviewGate};
 
+use super::Manifest;
 use crate::error::Refusal;
 use crate::yaml::{self, Table};
 
@@ -71,4 +72,35 @@ pub(super) fn read(top: &mut Table<'_>, out: &mut Vec<Refusal>) -> (AutoMerge, R
         })
         .unwrap_or_default();
     (auto_merge, review_gate)
+}
+
+/// The two accessors, **here rather than beside the file's other getters**: a
+/// child module sees its parent's private fields, so the key, its values, its
+/// refusal and the answer a caller gets are one file rather than four hundred
+/// lines apart.
+impl Manifest {
+    /// Whether a machine may land this repository's work, and on what evidence.
+    /// **`never` where the file says nothing**, which is [`read`]'s rule — the
+    /// policy's own default rather than a deferral.
+    ///
+    /// **Read through the live cell**, for `Manifest::cost_cap_micros`' reason
+    /// and one more: the question is asked at a gate and again on every sweep
+    /// over an open pull request, so somebody turning it off is answered at the
+    /// next sweep rather than at the next restart.
+    ///
+    /// **Not the resolution.** This is one file's answer, and a Job may be
+    /// gated by several — `core_model::AutoMerge::across` folds them
+    /// most-restrictive-wins. A caller acting on this alone would let the least
+    /// cautious gating Manifest decide.
+    pub fn auto_merge(&self) -> AutoMerge {
+        self.live.read().auto_merge
+    }
+
+    /// Whether a person signs off on a workflow's review step here.
+    /// **`human_always` where the file says nothing**, and not the resolution
+    /// either — `core_model::ReviewGate::across`. Both for
+    /// [`auto_merge`](Manifest::auto_merge)'s reasons.
+    pub fn review_gate(&self) -> ReviewGate {
+        self.live.read().review_gate
+    }
 }

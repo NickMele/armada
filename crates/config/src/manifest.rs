@@ -31,8 +31,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use core_model::{
-    AutoMerge, Covers, ManifestId, Narrowing, PathPattern, Prerequisite, RepoPath, ResolvedCheck,
-    ReviewGate, Ulid,
+    Covers, ManifestId, Narrowing, PathPattern, Prerequisite, RepoPath, ResolvedCheck, Ulid,
 };
 use serde_yaml_ng::Value;
 
@@ -53,11 +52,8 @@ const TOP_LEVEL: &[&str] = &[
     "setup",
     "drone",
     "after_merge",
-    // **Undotted and top level, because that is what the gate names.** A step
-    // declares `manifest_rule:auto_merge` and this is the key it resolves
-    // against; nesting either under a `policy:` section would put a second
-    // spelling between the two, and `crates/config/src/workflow/step.rs`
-    // refuses `manifest_rule:<key>` for any key but these two by name.
+    // Undotted and top level, because that is what the gate names. [`policies`]
+    // carries the reasoning and the values.
     "auto_merge",
     "review_gate",
 ];
@@ -348,34 +344,6 @@ impl Manifest {
     /// admission until the number moves.
     pub fn cost_cap_micros(&self) -> Option<u32> {
         self.live.read().dials.cost_cap_micros
-    }
-
-    /// Whether a machine may land this repository's work, and on what
-    /// evidence. **`never` where the file says nothing**, which is the
-    /// policy's own default rather than a deferral — `crates/config/settings.toml`
-    /// scopes it `Manifest only`, so there is no tier above to defer to.
-    ///
-    /// **Read through the live cell**, for
-    /// [`quiet_after_seconds`](Manifest::quiet_after_seconds)'s reason and one
-    /// stronger: the question is asked at a gate and again on every sweep over
-    /// an open pull request, so a person turning it off is answered at the next
-    /// sweep rather than at the next restart.
-    ///
-    /// **Not the resolution.** This is one file's answer; a Job may be gated by
-    /// several, and `core_model::AutoMerge::across` is what folds them
-    /// most-restrictive-wins. A caller that read this and acted on it would be
-    /// letting the least cautious gating Manifest decide.
-    pub fn auto_merge(&self) -> AutoMerge {
-        self.live.read().auto_merge
-    }
-
-    /// Whether a person signs off on a workflow's review step here.
-    /// **`human_always` where the file says nothing**, and read through the
-    /// live cell, for [`auto_merge`](Manifest::auto_merge)'s reasons.
-    ///
-    /// **Not the resolution either** — `core_model::ReviewGate::across`.
-    pub fn review_gate(&self) -> ReviewGate {
-        self.live.read().review_gate
     }
 
     /// Every live key at once, for the one caller that adopts them together.
