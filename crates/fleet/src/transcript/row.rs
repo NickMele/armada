@@ -147,7 +147,7 @@ pub(crate) fn missed(at: &Timestamp, step: &StepId, rows: u64) -> TranscriptRow 
     }
 }
 
-/// One line of `.armada/logs/<job-id>.jsonl`, in the contract's field order.
+/// One line of `.armada/logs/<handle>.jsonl`, in the contract's field order.
 ///
 /// **A key is present with a value or absent, never present and null**, which
 /// is why every conditional field is skipped rather than written. `target` and

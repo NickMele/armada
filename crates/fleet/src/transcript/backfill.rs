@@ -4,7 +4,7 @@
 //!
 //! A transcript is named by a `drone_id` that is minted at dispatch and stored
 //! on no record — `assigned_drone` has no event that sets it — so the
-//! `drone transcript opened` line in `.armada/logs/<job-id>.jsonl` is the only
+//! `drone transcript opened` line in `.armada/logs/<handle>.jsonl` is the only
 //! thing joining a Job to its rows. A retry is a second `drone_id` under the
 //! one `job_id`, so a Job may name several, and they are read in the order the
 //! log names them.
