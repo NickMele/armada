@@ -2,11 +2,17 @@
 // panel.
 //
 // Four reads were the same twenty lines: hold the id a surface asked for, GET
-// the route under it, **drop the answer if the id moved while it was in
-// flight**, publish read-or-failed. That third clause is a correctness rule —
-// it is what stops a read for one Job painting the Job that replaced it — and
-// four copies of it meant a fifth read would be written by copying one of them.
+// the route under it, **drop the answer if it is not the one to publish**,
+// publish read-or-failed. That third clause is a correctness rule and four
+// copies of it meant a fifth read would be written by copying one of them.
 // Written once here, it is the one place to look for it.
+//
+// **It is two rules and was one.** An answer is dropped where the id moved
+// under it, which stops one Job's read painting another; and where a newer read
+// of the same Job was begun after it, which stops the slower of two answers
+// being the one a surface keeps. The second was missing, and the events that
+// collide are ordinary — a step boundary publishes two about twenty
+// milliseconds apart.
 //
 // Beside `connection.ts` rather than inside it, for the reason `command.ts`,
 // `request.ts` and `review.ts` are: the connection is a socket, a runtime file
@@ -50,6 +56,18 @@ export class JobReader<Read> {
   private open: string | null = null;
   /** The last state published, which is what a kept answer is kept from. */
   private last: JobRead<Read> = { state: "none" };
+  /**
+   * How many reads this reader has begun. **The newest is the only one whose
+   * answer may be published.**
+   *
+   * A counter and not a flag, because the question is not whether a read is in
+   * flight — it is which of the ones in flight was asked for last. Two reads of
+   * one Job overlap freely and their answers may land in either order, so
+   * without this the screen keeps whichever was slowest rather than whichever
+   * was newest. It never resets: a reader that wrapped would let an old answer
+   * match a new number, and this counts events on one window.
+   */
+  private asked = 0;
 
   constructor(reads: Reads<Read>) {
     this.reads = reads;
@@ -88,14 +106,35 @@ export class JobReader<Read> {
     await this.again(port);
   }
 
-  /** Read again, for whatever Job is held. Nothing held is no read. */
+  /**
+   * Read again, for whatever Job is held. Nothing held is no read.
+   *
+   * **Two answers to two questions that look like one.** The id moving is one
+   * failure and a second read of the same Job overtaking the first is another,
+   * and the id check alone catches only the first — which is what let an
+   * eighteen-minute-old spend survive the event that should have corrected it,
+   * on Job `01M21BKVPW002DC0ATD1X9T0VF`.
+   *
+   * **Every caller is `void`-ed and there are seven of them.** A step boundary
+   * publishes a Drone exiting and a step advancing about twenty milliseconds
+   * apart, so the two overlap by construction rather than under load — and
+   * nothing here can await the other's answer, because they are separate
+   * events arriving on a socket.
+   */
   async again(port: number): Promise<void> {
     const jobId = this.open;
     if (jobId === null) return;
+    this.asked += 1;
+    const asked = this.asked;
     const answer = await ask(port, "GET", this.reads.route(jobId));
     // **The id moved while the request was in flight.** Nobody has this
     // answer's Job open, so publishing it would paint the Job that replaced it.
     if (this.open !== jobId) return;
+    // **A newer read was begun while this one was in flight.** Its answer is
+    // the one a surface should keep, whichever of the two the network returns
+    // first — so this one is dropped rather than raced, including its failure:
+    // a stale timeout must not blank a panel the newer read is about to fill.
+    if (this.asked !== asked) return;
     if (answer.ok !== true) {
       const held = this.last;
       if (this.reads.keepsLastGood === true && held.state === "read" && held.jobId === jobId) {
