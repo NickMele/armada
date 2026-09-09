@@ -309,14 +309,11 @@ export function App() {
         showing={clearing ? SURFACE.worktrees : SURFACE.board}
         onSurface={goTo}
       >
-        {/* **`min-h-0` and the column growing, so the screen below can be
-            bounded.** `InsideAJob` is `height: 100%` and that resolves against
-            this: with an auto-height wrapper it resolved against nothing, the
-            screen grew to its content, and the mount scrolled instead of the
-            two columns — which took the Job's own header off the top of the
-            window with it. The rule is the one the mount and the screen both
-            already carry, and this was the link missing between them. */}
-        <div className="flex flex-col gap-6 min-h-0 flex-1">
+        {/* Real CSS, not utilities: nothing Tailwind spells emits a rule in
+            this app, so the class that bounds this box lives in the app's own
+            stylesheet where it can be read, and in the components' one so a
+            story can check it. `.armada-screen__mounted` says why. */}
+        <div className="armada-screen__mounted">
           <Standing
             fleet={fleet}
             manifestReading={state.manifestReading}
