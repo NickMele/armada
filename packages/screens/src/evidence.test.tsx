@@ -197,6 +197,13 @@ function screen(showing: StepDetail, criteria = CRITERIA): void {
     onOpenPullRequest: async () => ({ ok: true }),
     onCopied: () => {},
     onSaid: () => {},
+    // The cost cap's three, which `Heading` gained in #553 while this file was
+    // in flight in #554. **Both merged clean and `tsc` did not** — a textual
+    // merge cannot see that a fixture stopped matching the shape it fills, and
+    // `main` was red between the two.
+    onRaiseCap: () => {},
+    raising: false,
+    onRaising: () => {},
   });
   if (heading === null) throw new Error("this Job draws no heading, so there is no screen");
   mount(
