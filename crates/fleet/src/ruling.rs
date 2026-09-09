@@ -15,6 +15,7 @@ use core_model::{EscalationTrigger, Judgment, StepCheck, StepLevelTrigger};
 use verification::{CheckFailed, Flagged, NotWhatTheStepAsked, OutcomeTurn, Refusals};
 
 use crate::gate::CheckOutput;
+use crate::policy::HeldBecause;
 
 /// What Fleet decided, and what follows from it.
 ///
@@ -92,10 +93,19 @@ pub enum Ruling {
     /// **The step holds at `awaiting_human` and no longer at `running`**
     /// (`#522`), so the commonest halt in the fleet stops being recorded as a
     /// Drone at work on a step this ruling had just stood one down on.
+    ///
+    /// **It carries why it held**, because two of the three reasons are not
+    /// the workflow file's. `human_always` is a declaration anybody can read
+    /// off the step; a `manifest_rule:review_gate` step holds because the
+    /// repository said so, or because the repository said otherwise and the
+    /// step had no Judge for it to say it about — and that last one is a file
+    /// somebody has to fix. `crate::policy::HeldBecause` carries the sentence and
+    /// `crate::dispatch` is what writes it into the Job's log.
     HeldForReview {
         checks: Vec<StepCheck>,
         output: Vec<CheckOutput>,
         judged: Vec<Judgment>,
+        held: HeldBecause,
     },
     /// A Check did not pass, the step's retry budget has room, and the failure
     /// goes back to the Drone that produced it.

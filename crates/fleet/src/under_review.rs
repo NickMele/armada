@@ -8,9 +8,13 @@
 //! settled between them. What it costs, and how stale a reading can be, is in
 //! `docs/concepts/fleet.md`, *What Fleet knows after the merge*.
 //!
-//! **Nothing here decides anything.** No Job transitions, no step advances and
-//! no gate is touched: the Job is at `awaiting_review` when this runs and when
-//! it returns, whatever the forge said. Acting on the reading is `#525`.
+//! **Nothing here decides anything, and one thing here acts on the decision.**
+//! No Job transitions and no gate is touched by the reading itself. What the
+//! reading is *for*, beyond the line, is `auto_merge: tests-pass`: the answer
+//! to "have the forge's checks passed" is exactly this call's, and
+//! `crate::merging` is where it meets the policy and where the merge happens.
+//! Everything about whether that is allowed — the step's own gate, the resolved
+//! policy, the once-per-process rule — is there and none of it is here.
 //!
 //! **A line in the Job's log when the reading changes, and not on every ask.**
 //! The rotation returns to the same open pull request for as long as it stays
@@ -91,6 +95,14 @@ where
         if !read.was_answered() {
             return;
         }
+        // **Before the line, and outside the comparison below.** What the
+        // policy may do about this reading is not "is it news" — a Job whose
+        // repository turned `auto_merge` on since the last sweep has the same
+        // reading and a different answer, and a merge that waited for the forge
+        // to change its mind would never happen. `crate::merging` is what keeps
+        // it from being attempted twice.
+        self.merged_if_the_policy_says_so(job, url, &read.checks)
+            .await;
         let stood = AsItStood::of(&read);
         {
             let mut sweeping = self.sweeping().lock().await;

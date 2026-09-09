@@ -19,6 +19,7 @@ use verification::{Lifted, Request};
 
 use crate::at_step::AtStep;
 use crate::gate::{rule_on, CheckBudget};
+use crate::policy::Policies;
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_fleet, a_proposal, worktree_directory};
 use crate::tests::detail::get;
@@ -56,6 +57,7 @@ async fn a_check_that_passes_is_written_down_as_a_pass() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -93,6 +95,7 @@ async fn a_check_that_fails_records_the_code_it_returned() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -128,6 +131,7 @@ async fn a_hanging_check_is_recorded_as_timed_out_and_not_as_failed() {
         CheckBudget::of(Duration::from_millis(300)),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -161,6 +165,7 @@ async fn a_check_whose_command_does_not_exist_is_recorded_as_never_ran() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -208,6 +213,7 @@ async fn a_step_that_added_nothing_to_what_it_inherited_fails_its_diff_check() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -255,6 +261,7 @@ async fn a_step_that_moved_work_it_inherited_advances() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -282,6 +289,7 @@ async fn a_step_whose_start_was_never_read_does_not_advance_on_the_doubt() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -311,6 +319,7 @@ async fn an_ungated_step_records_nothing_because_there_was_nothing_to_run() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 

@@ -27,6 +27,7 @@ use verification::{Lifted, Request};
 
 use crate::at_step::AtStep;
 use crate::gate::{rule_on, CheckBudget, Ruling};
+use crate::policy::Policies;
 use crate::tests::gate::{diff_evidence, judging};
 use crate::tests::keeping::keeping_nowhere;
 use crate::tests::tmp::TempDir;
@@ -82,6 +83,7 @@ async fn ruled(
         CheckBudget::of(Duration::from_secs(20)),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await
 }

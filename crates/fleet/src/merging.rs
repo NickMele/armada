@@ -1,13 +1,20 @@
 //! The one act that writes into a repository Fleet did not make.
 //!
-//! # Why it exists at all, under a policy that merges nothing
+//! # Two roads to one act, and the policy is what tells them apart
 //!
 //! `auto_merge: never` says no machine decides whether work lands. It does not
 //! say a person has to leave Bridge to do it — and merging on the forge skips
 //! the Checks Armada would have run against the merged tree, whose one other
 //! path is a sweep asking about a pull request a minute. The policy governs
-//! whether a *machine* decides; this is a person, and Fleet performing it is
-//! what runs those Checks. `#523`.
+//! whether a *machine* decides; [`Fleet::merge_pull_request`] is a person, and
+//! Fleet performing it is what runs those Checks. `#523`.
+//!
+//! `tests-pass` and `always` are the other road, and it lands in the same act:
+//! [`Fleet::merged_if_the_policy_says_so`] is the sweep pressing the button
+//! nobody pressed. **The same merge, the same record, the same Checks over what
+//! merged, and a different actor** — the record says `fleet`, because a Job
+//! that read as approved by a person nobody asked would be the one lie the
+//! actor field exists to prevent. `#525`.
 //!
 //! # A fourth answer at the human gate, and not a recourse
 //!
@@ -24,8 +31,10 @@
 //! retry would be the machine deciding after all, and a quiet failure is worse
 //! than no button — so each kind the forge names carries its own wire code.
 
-use adapter_traits::{AgentHarness, Delivery, Merged, NotMerged, Vcs, WhatBecameOfIt, WorkProduct};
-use core_model::{Component, Envelope, FieldValue, Job, JobId, Level};
+use adapter_traits::{
+    AgentHarness, Delivery, Merged, NotMerged, Vcs, WhatBecameOfIt, WhatTheForgeRan, WorkProduct,
+};
+use core_model::{Actor, AdvanceGate, Component, Envelope, FieldValue, Job, JobId, Level};
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
@@ -57,6 +66,22 @@ where
     /// the way through. Holding one across a process that talks to a forge
     /// would put a network round trip inside a lock the turn wants.
     pub async fn merge_pull_request(&self, job_id: &JobId) -> Result<Job, Adrift> {
+        self.merged(
+            job_id,
+            Actor::Human,
+            "merging a pull request into a repository Fleet does not own, \
+             because a person pressed for it",
+        )
+        .await
+    }
+
+    /// The same act, with who asked for it and why named.
+    ///
+    /// **One body, because a second would drift.** What separates a press from
+    /// an auto-merge is the actor on the record and the sentence in the log;
+    /// everything between — the gate check, the address, the write, the reading
+    /// back, the Checks over what merged — is the same and is done once.
+    async fn merged(&self, job_id: &JobId, by: Actor, why: &'static str) -> Result<Job, Adrift> {
         let job = self.load(job_id).await?;
         // Before the forge is touched, so a Job that is not at a gate is
         // refused without anything having been written anywhere. The same
@@ -68,14 +93,7 @@ where
         // Every other act Fleet takes is confined to a worktree Fleet made; a
         // line written afterwards would be missing on exactly the run where
         // somebody most wants to know what was attempted.
-        self.said_about_the_merge(
-            &job,
-            Level::Warn,
-            "merging a pull request into a repository Fleet does not own, \
-             because a person pressed for it",
-            &url,
-            None,
-        );
+        self.said_about_the_merge(&job, Level::Warn, why, &url, None);
         match self.vcs().merge(&self.host().repo_root, &url) {
             Ok(Merged::Taken) => self.said_about_the_merge(
                 &job,
@@ -131,8 +149,101 @@ where
             let _ = why;
         }
         // The two machines move exactly as an approval moves them, because that
-        // is what a person merging has done: taken the work.
-        self.approve_review(job_id).await
+        // is what merging has done: taken the work. The actor is carried
+        // through, so the road this arrived by is on the record.
+        self.approved(job_id, by).await
+    }
+
+    /// Merge this Job's pull request where the repository's `auto_merge` policy
+    /// says a machine may, and where the forge's own reading satisfies it.
+    ///
+    /// # Only a step that asked for it
+    ///
+    /// **The step's gate is the first question and it is not negotiable.** A
+    /// Job holding at a `human_always` step is holding for a person whatever
+    /// the repository set `auto_merge` to — the policy answers a
+    /// `manifest_rule:auto_merge` gate and nothing else, and a Fleet that read
+    /// the policy without reading the gate would merge work off a step whose
+    /// own workflow file says a person signs it.
+    ///
+    /// # What `tests-pass` reads, and what it does not
+    ///
+    /// [`WhatTheForgeRan`] and nothing else. It is the forge's own automation
+    /// against the branch under review, which is what a person means by "tests
+    /// pass" on a pull request; Armada's Checks already ran at the gate this
+    /// Job is holding at, and totalling the two would claim a gate had held
+    /// that never ran. `AllPassed` alone is a pass — `NothingRan` is a
+    /// repository that has proved nothing, `StillWaiting` has not finished, and
+    /// a check that ended in a word this build has no name for is `SomeFailed`
+    /// by `#524`'s decision, so an unknown conclusion cannot merge.
+    ///
+    /// # What is deliberately not read
+    ///
+    /// **[`WhatPeopleSaid`](adapter_traits::WhatPeopleSaid).** `auto_merge`'s
+    /// three values are all about machines and none of them names a person's
+    /// approval; whether an approval becomes a fourth value or a policy of its
+    /// own is undecided, and reading it here would settle that by accident. So
+    /// `always` means always, including over an outstanding request for
+    /// changes.
+    ///
+    /// That is not as sharp as it sounds: a forge that requires a review
+    /// refuses the merge, and the refusal comes back through
+    /// [`NotMerged`](adapter_traits::NotMerged) and into the Job's log. Branch
+    /// protection is the backstop and it is the forge's, not Armada's.
+    ///
+    /// # Once per pull request per process
+    ///
+    /// The shape `nudged` already has in [`crate::noticing`], and for its
+    /// reason: a merge the forge will never accept — a protected base, a
+    /// required review nobody gave — must not spawn a `gh` process and a log
+    /// line every sweep for the life of the daemon. A person can still press.
+    /// It is in memory, so a restart tries once more.
+    ///
+    /// **Nothing raises and nothing is returned.** The Job is at its gate when
+    /// this runs and, if anything at all goes wrong, at its gate when it
+    /// returns. This is a sweep.
+    pub(crate) async fn merged_if_the_policy_says_so(
+        &self,
+        job_id: &JobId,
+        url: &str,
+        forge: &WhatTheForgeRan,
+    ) {
+        let Ok(job) = self.load(job_id).await else {
+            return;
+        };
+        // `awaiting_review` and the step the cursor names, which is the same
+        // question a press asks and is asked here first for the same reason:
+        // nothing is attempted against a Job that is not at a gate.
+        let Ok(step) = self.at_the_gate(&job) else {
+            return;
+        };
+        let asked_for_it = job
+            .workflow()
+            .step(&step)
+            .is_some_and(|step| step.advance_gate() == AdvanceGate::ManifestRuleAutoMerge);
+        if !asked_for_it {
+            return;
+        }
+        if !self.gating_policies().a_machine_may_merge(forge) {
+            return;
+        }
+        {
+            let mut sweeping = self.sweeping().lock().await;
+            if !sweeping.merged_by_policy.insert(url.to_string()) {
+                return;
+            }
+        }
+        // **Held, never raised**, for `settled_landing`'s reason one call up:
+        // the refusal is already in the Job's own log, written by `merged`
+        // before it returned, and a sweep has nobody to hand an error to.
+        let _ = self
+            .merged(
+                job.id(),
+                Actor::Fleet,
+                "merging a pull request into a repository Fleet does not own, \
+                 because this repository's auto_merge policy says a machine may",
+            )
+            .await;
     }
 
     /// The address the record kept for this Job's pull request.

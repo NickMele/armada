@@ -143,6 +143,26 @@ pub fn two_steps_gated_on_a_manifest_rule(
     two_steps_gated(gate_on, &format!("manifest_rule:{key}"), None, delivers)
 }
 
+/// The same, with a Judge criterion on the gated step.
+///
+/// **The pair the judgeless rule is about.** `manifest_rule:review_gate` is
+/// legal with a Judge and legal without one — `config`'s parser says so in as
+/// many words — and which of the two a step is decides what
+/// `auto_if_judge_passes` may do with it. Both shapes go through the parser so
+/// that neither is a workflow a real file could not produce.
+pub fn two_steps_gated_on_a_manifest_rule_judged(
+    gate_on: &str,
+    key: &str,
+    question: &str,
+) -> config::ResolvedWorkflow {
+    two_steps_gated(
+        gate_on,
+        &format!("manifest_rule:{key}"),
+        Some(question),
+        None,
+    )
+}
+
 fn two_steps_gated(
     gate_on: &str,
     gate_word: &str,

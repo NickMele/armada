@@ -31,6 +31,7 @@ use crate::clock::Clock;
 use crate::evidence::{Call, EvidenceInbox, EvidenceTool};
 use crate::gate::{apply, rule_on, CheckBudget, Ruling};
 use crate::judging::{Aloft, JudgeBudget, Judging, Marking};
+use crate::policy::Policies;
 use crate::tests::keeping::keeping_nowhere;
 
 const NOW: &str = "2026-08-26T09:00:00.000Z";
@@ -316,6 +317,7 @@ async fn evidence_and_every_check_passing_advances_the_step() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -347,6 +349,7 @@ async fn evidence_with_every_check_failing_advances_nothing() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -390,6 +393,7 @@ async fn a_step_with_no_checks_advances_on_evidence_alone() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -422,6 +426,7 @@ async fn a_hanging_check_fails_rather_than_hanging() {
         CheckBudget::of(Duration::from_millis(300)),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
     let took = started.elapsed();
@@ -462,6 +467,7 @@ async fn a_check_whose_command_does_not_exist_fails_rather_than_passing() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -499,6 +505,7 @@ async fn the_check_output_comes_back_for_a_person_to_read() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -529,6 +536,7 @@ async fn evidence_of_the_wrong_kind_runs_no_checks_and_moves_nothing() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -567,6 +575,7 @@ async fn a_diff_that_cannot_be_read_decides_nothing_and_stops_the_job() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -610,6 +619,7 @@ async fn the_diff_fleet_reads_is_of_the_job_s_own_worktree() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -641,6 +651,7 @@ async fn a_failed_check_holds_the_job_and_fleet_is_the_actor() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
     let moved = apply(&running_job(), &ruling, at(NOW))
@@ -679,6 +690,7 @@ async fn an_advancing_step_does_not_move_the_job() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
     assert!(apply(&running_job(), &ruling, at(NOW)).is_none());
@@ -704,6 +716,7 @@ async fn the_last_step_advancing_completes_the_job() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
     let moved = apply(&job_with_every_step_advanced(), &ruling, at(NOW))

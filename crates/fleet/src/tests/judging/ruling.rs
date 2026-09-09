@@ -26,6 +26,7 @@ use crate::asked::Asked;
 use crate::at_step::AtStep;
 use crate::gate::{apply, rule_on, Ruling};
 use crate::judging::{JudgeBudget, Judging, Marking};
+use crate::policy::Policies;
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_fleet_judged_by, a_proposal, worktree_directory};
 use crate::tests::detail::get;
@@ -62,6 +63,7 @@ async fn ruled(judge: FakeJudge, worktree: &Worktree) -> Ruling {
         budget(),
         &judged_by(judge),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await
 }
@@ -163,6 +165,7 @@ async fn a_failed_check_holds_the_job_somewhere_else_than_a_refusal() {
         budget(),
         &judged_by(FakeJudge::with_no_objection()),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -373,6 +376,7 @@ async fn a_step_that_declares_no_criterion_never_asks() {
         budget(),
         &judging,
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -425,6 +429,7 @@ async fn a_failing_check_never_reaches_the_judge() {
         budget(),
         &judging,
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 

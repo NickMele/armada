@@ -22,6 +22,7 @@ use verification::{Lifted, Request};
 use crate::at_step::AtStep;
 use crate::gate::{rule_on, Ruling};
 use crate::keeping::{deliverables_dir, kept_deliverables, Keeping};
+use crate::policy::Policies;
 use crate::tests::gate::{budget, judged_by_shared, note_evidence};
 use crate::tests::tmp::TempDir;
 
@@ -166,6 +167,7 @@ impl Repo {
             budget(),
             &judged_by_shared(judge),
             &Keeping::of(&self.root().to_string_lossy(), HANDLE),
+            Policies::unstated(),
         )
         .await
     }

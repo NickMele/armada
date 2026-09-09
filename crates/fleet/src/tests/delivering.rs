@@ -21,6 +21,7 @@ use verification::{Lifted, Request};
 
 use crate::at_step::AtStep;
 use crate::gate::{rule_on, Ruling};
+use crate::policy::Policies;
 use crate::tests::gate::{budget, judged_by_shared, note_evidence};
 use crate::tests::keeping::keeping_nowhere;
 use crate::tests::tmp::TempDir;
@@ -67,6 +68,7 @@ async fn ruled_on_a_deliverable(judge: Arc<FakeJudge>, contents: Option<&str>) -
         budget(),
         &judged_by_shared(judge),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await
 }
@@ -180,6 +182,7 @@ async fn a_deliverable_that_is_not_text_decides_neither_way() {
         budget(),
         &judged_by_shared(Arc::clone(&judge)),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
