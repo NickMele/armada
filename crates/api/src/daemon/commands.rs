@@ -276,6 +276,31 @@ pub trait Commands: Send + Sync + 'static {
         job_id: JobId,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
+    /// `merge_pull_request` — a person merges the pull request their Job
+    /// opened, and Fleet runs what the merge implies.
+    ///
+    /// **[`Commands::approve_review`] with a write to the forge in front of
+    /// it.** What it adds is the merge, the record of it and the repository's
+    /// `after_merge` Checks against the tree the merge left; what it does to
+    /// the Job is that act's, so the same statuses come back for the same
+    /// reasons.
+    ///
+    /// **The only act on this trait that writes into a repository Fleet did
+    /// not make**, which is why it exists under `auto_merge: never`: the policy
+    /// says no machine decides that work lands, and a person merging on the
+    /// forge instead skips the Checks Armada would have run.
+    ///
+    /// **Refused with a 409 anywhere but `awaiting_review`**, sharing that with
+    /// the three acts beside it, and with a 409 where the record holds no pull
+    /// request — a workflow declaring no delivering step opened none. A forge
+    /// that would not merge answers with the kind it refused on: a protected
+    /// base, a conflict and a required check are 409s the person acts on, and a
+    /// missing tool or an unreadable refusal are 500s. **Nothing retries.**
+    fn merge_pull_request(
+        &self,
+        job_id: JobId,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
     /// `request_changes` — the work is not right yet, and here is what to fix.
     ///
     /// **It keeps everything**: the worktree, the branch and every step so far.

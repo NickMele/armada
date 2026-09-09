@@ -505,7 +505,7 @@ where
     /// **The status is the whole test.** A Job at `awaiting_review` is at a
     /// human gate by definition — the status carries no reason and there is
     /// nothing else to read — and the step is the one the Job's cursor names.
-    fn at_the_gate(&self, job: &Job) -> Result<StepId, Adrift> {
+    pub(crate) fn at_the_gate(&self, job: &Job) -> Result<StepId, Adrift> {
         if job.status() != JobStatus::AwaitingReview {
             return Err(Adrift::NotUnderReview {
                 job: job.id().clone(),

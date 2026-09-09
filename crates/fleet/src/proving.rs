@@ -105,7 +105,15 @@ where
         }
         {
             let mut proving = self.proving().lock().await;
-            if proving.running.is_some() {
+            // **Both halves, and the second closes a window.** `running` is
+            // enough while a run is out; a run that has come back and has not
+            // reached the turn that writes it down is in `done` and in neither
+            // — so `already_proved` above said no and this said no, and one
+            // commit was proved twice. Narrow, and reachable from two
+            // directions now that a press merges as well as a sweep.
+            let out = proving.running.is_some()
+                || proving.done.iter().any(|one| one.at_commit == at_commit);
+            if out {
                 return;
             }
             proving.running = Some(at_commit.to_string());

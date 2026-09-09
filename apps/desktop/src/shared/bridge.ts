@@ -535,6 +535,19 @@ export type BridgeApi = {
    */
   approveReview: (jobId: string) => Promise<Outcome>;
   /**
+   * Merge the pull request this Job's branch went out on, then take the work.
+   *
+   * **The only entry on this surface that writes into a repository Armada does
+   * not own**, and the reason it exists under `auto_merge: never`: the policy
+   * says no machine decides that work lands, and a person who merges on the
+   * forge instead skips the checks Armada would have run against what landed.
+   *
+   * Its own entry rather than a flag on `approveReview`, for the reason the
+   * three below are three: they differ in what happens to the world, and one
+   * entry taking which would read as one act and perform four.
+   */
+  mergePullRequest: (jobId: string) => Promise<Outcome>;
+  /**
    * Send the work back with a note. **The Job comes back `running`**, same step,
    * same Drone — nothing is spawned and nothing done is thrown away.
    */
@@ -656,6 +669,7 @@ export const CHANNELS = {
   readReports: "bridge:read-reports",
   readHeld: "bridge:read-held",
   approveReview: "bridge:approve-review",
+  mergePullRequest: "bridge:merge-pull-request",
   requestChanges: "bridge:request-changes",
   rejectWork: "bridge:reject-work",
   openArtifact: "bridge:open-artifact",

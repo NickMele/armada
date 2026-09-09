@@ -26,6 +26,16 @@ impl FakeDaemon {
     pub(super) async fn fake_approve_review(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
         self.move_to(&job_id, "awaiting_review", "queued", "human")
     }
+    /// The person merges, and then takes the work. **The same two statuses as
+    /// an approval**, because that is what the act does to the Job — the merge
+    /// itself is a write to a forge, which is Fleet's and not the transport's
+    /// to see.
+    pub(super) async fn fake_merge_pull_request(
+        &self,
+        job_id: JobId,
+    ) -> Result<JobSummary, Refusal> {
+        self.move_to(&job_id, "awaiting_review", "queued", "human")
+    }
     /// The work goes back with a note. **A different act** from an approval —
     /// what separates them here is the note, and in Fleet it is the step that
     /// does or does not advance.

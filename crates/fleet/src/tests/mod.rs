@@ -60,6 +60,7 @@ mod keeping;
 mod landing;
 mod linking;
 mod looping;
+mod merging;
 mod modelling;
 mod noticing;
 mod out_of_bounds;

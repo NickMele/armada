@@ -402,7 +402,7 @@ flowchart LR
   classDef flat fill:#e4e4e7,stroke:#52525b,stroke-width:1.5px,color:#27272a
 
   R["running"] -->|last step advanced| CS["completed_success"]
-  AR["awaiting_review"] -->|approve on final gate| CS
+  AR["awaiting_review"] -->|approve or merge on final gate| CS
   AT["awaiting_attestation"] -->|attested| CS
   P["piloted"] -->|attest complete| CS
 

@@ -372,6 +372,7 @@ export function App() {
                 onRerun={(jobId) => void commands.rerun(jobId)}
                 onReport={commands.report}
                 onApprove={(jobId) => void commands.approve(jobId)}
+                onMergePullRequest={(jobId) => void commands.decide(jobId, "merge")}
                 onApproveReview={(jobId) => void commands.decide(jobId, "approve")}
                 onRequestChanges={(jobId, note) => void commands.decide(jobId, "changes", note)}
                 onReject={(jobId) => void commands.decide(jobId, "reject")}

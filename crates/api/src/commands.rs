@@ -106,6 +106,28 @@ pub(crate) async fn approve_review<D: Commands>(
     }
 }
 
+/// The person merges the pull request their Job opened, and Fleet runs what
+/// follows. **`approve_review` with a write to somebody else's repository in
+/// front of it** — and the write is what makes the after-merge Checks run.
+///
+/// 409 anywhere but `awaiting_review`, and 409 where the record holds no pull
+/// request. A forge that would not merge answers with the kind it refused on,
+/// each its own code: a protected base, a conflict and a required check are
+/// 409s, and a missing tool or an unreadable refusal are 500s. Nothing retries.
+pub(crate) async fn merge_pull_request<D: Commands>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+) -> Response {
+    match served
+        .daemon()
+        .merge_pull_request(JobId::carried(job_id))
+        .await
+    {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// Send the work back with a note. **The Job comes back `running`**, at the
 /// same step, with the same Drone — nothing was thrown away and nothing was
 /// spawned.

@@ -487,6 +487,18 @@ export class JobCommands {
     return this.settleWork(jobId, "approve_review");
   }
 
+  /**
+   * Merge the pull request and take the work. **`approveReview` with a write to
+   * the forge in front of it**, and the write is what makes Armada run the
+   * repository's after-merge checks against what landed.
+   *
+   * Refused where the Job's record holds no pull request, which is a workflow
+   * that declares no delivering step — the surface does not offer it there.
+   */
+  async mergePullRequest(jobId: string): Promise<Outcome> {
+    return this.settleWork(jobId, "merge");
+  }
+
   /** Send it back. **`running` again**, same step, same Drone. Blank refused. */
   async requestChanges(jobId: string, note: string): Promise<Outcome> {
     if (note.trim() === "") return { ok: false, why: "empty_note" };
@@ -499,11 +511,13 @@ export class JobCommands {
   }
 
   /**
-   * One decision, sent once. **One in flight per Job covers all three**: a
+   * One decision, sent once. **One in flight per Job covers all four**: a
    * second press aims at a Job that has already left `awaiting_review`, the
-   * only status any of the three is legal on.
+   * only status any of the four is legal on — and on the merge that guard is
+   * doing more than tidiness, since the act writes into somebody else's
+   * repository.
    *
-   * The route is `review.ts`'s to build, because which of the three it is is
+   * The route is `review.ts`'s to build, because which of the four it is is
    * the whole of the difference between them.
    */
   private settleWork(jobId: string, what: Decision, note?: string): Promise<Outcome> {

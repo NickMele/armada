@@ -27,7 +27,7 @@
 use std::error::Error;
 use std::io;
 
-use adapter_traits::{NotDelivered, SpawnConfigRefused, WorktreeSpecRefused};
+use adapter_traits::{NotDelivered, NotMerged, SpawnConfigRefused, WorktreeSpecRefused};
 use adapters::RepoUnreadable;
 use core_model::{
     EscalationTrigger, IllegalDroneMove, IllegalStepTransition, IllegalTransition, JobId,
@@ -138,6 +138,28 @@ pub enum Adrift {
         doing: &'static str,
         said: String,
     },
+    /// A merge was asked for on a Job whose record holds no pull request.
+    ///
+    /// **Not [`Adrift::NotMerged`]**, and the difference is whose fault it is:
+    /// nothing was ever opened, so there is nothing for a forge to refuse. A
+    /// workflow that declares no delivering step is the ordinary way to get
+    /// here, and the act a person wants on one of those is an approval.
+    NothingToMerge { job: JobId },
+    /// The forge would not merge the pull request, and which kind of would-not
+    /// it was.
+    ///
+    /// **One variant carrying the typed kind, and one wire code per kind.**
+    /// The kinds send a person to different places — an administrator, the
+    /// branch, a failing check — so nothing about them is collapsed; what is
+    /// not duplicated is this enum, because no arm in this crate does anything
+    /// different about them. `crate::refusing` is where the kind becomes a code
+    /// a client dispatches on, which is where every other refusal's kind
+    /// becomes one.
+    ///
+    /// **Nothing retries.** A merge Fleet retried on its own would be a machine
+    /// deciding the thing `auto_merge: never` reserves for a person, and the
+    /// Job is left exactly where the press found it.
+    NotMerged { job: JobId, why: NotMerged },
     /// The frozen workflow has no step by this name. A Job dispatched against a
     /// workflow that has since been edited, or a workflow with no steps at all.
     NoSuchStep { job: JobId, step: Option<StepId> },

@@ -7,24 +7,26 @@
 //! That module runs inside a Job's last turn, in the Job's own worktree, with
 //! the work in hand. Everything here runs minutes or days later, from the
 //! repository every worktree was cut from, about a pull request nobody on this
-//! machine is holding — because Armada opens one and a person merges it.
-//!
-//! # One ask of the forge, answering two questions
-//!
-//! `#337` asked whether anybody merged it. `#427` asked whether the forge is
-//! still comparing it against the right commit. Both are one `gh pr view`, and
-//! `#427` says so itself: building them apart would be two processes where one
-//! does.
+//! machine is holding. `#337` asked whether anybody merged it and `#427`
+//! whether the forge is still comparing it against the right commit; both are
+//! one `gh pr view`, because building them apart would be two processes where
+//! one does.
 //!
 //! # Reading is free and writing is not
 //!
 //! [`read`] and [`caught_up`] are cheap and repeatable. [`rendered_afresh`]
-//! closes and reopens a person's pull request, which is visible on the forge
-//! and mails everybody watching it — so it is called once per pull request,
-//! only for a base that is provably superseded, and never on a reading this
-//! could not make.
+//! closes and reopens a person's pull request, which everybody watching it is
+//! mailed about — so it is called once per pull request, only for a base that
+//! is provably superseded, and never on a reading this could not make.
+//! [`merge`] is louder still and is the one act here nothing decides: a person
+//! presses for it, and a refusal is classified from `mergeStateStatus` rather
+//! than from the prose `gh` printed. A sentence [`why_not`] has no word for is
+//! [`NotMerged::Refused`] carrying it verbatim, never a guess — the kinds exist
+//! to send a person somewhere, and the wrong place is worse than the sentence.
 
-use adapter_traits::{Landing, Rendering, Renewed, RepositoryStanding, WhatBecameOfIt};
+use adapter_traits::{
+    Landing, Merged, NotMerged, Rendering, Renewed, RepositoryStanding, WhatBecameOfIt,
+};
 use git2::Repository;
 
 use crate::delivery::{asked, last_line, run_in, said, FORGE};
@@ -86,6 +88,81 @@ pub(crate) fn rendered_afresh(in_repo: &str, pull_request: &str) -> Renewed {
     }
     Renewed::LeftClosed {
         why: format!("`{FORGE} pr reopen` would not reopen {pull_request}"),
+    }
+}
+
+/// Merge a pull request Armada opened.
+///
+/// **Read, then write, and the read is what makes the refusal nameable.** `gh
+/// pr merge` prints prose; `gh pr view` answers with the forge's own words for
+/// the two states and one flag that decide most of it. So the state is asked
+/// first — a pull request somebody already merged is not a failed press, and a
+/// closed one is a different sentence from a conflicted one.
+///
+/// **`--merge`, and no other strategy.** A squash or a rebase rewrites what the
+/// Job's Checks passed against, and `crate::proving` runs the repository's
+/// after-merge Checks against the commit the base is left on: proving a tree
+/// nobody produced is worse than not proving one.
+pub(crate) fn merge(in_repo: &str, pull_request: &str) -> Result<Merged, NotMerged> {
+    let Some(standing) = asked(
+        in_repo,
+        pull_request,
+        "state,mergeable,mergeStateStatus",
+        "[.state, .mergeable, .mergeStateStatus] | @tsv",
+    ) else {
+        return Err(NotMerged::NoTool {
+            said: format!("`{FORGE} pr view {pull_request}` would not answer"),
+        });
+    };
+    let Some([state, mergeable, status]) = fields::<3>(&standing) else {
+        return Err(NotMerged::Refused {
+            said: format!("`{FORGE}` answered `{standing}`, which has no reading here"),
+        });
+    };
+    match state {
+        // **Not a refusal.** The work is where the press was trying to put it.
+        "MERGED" => return Ok(Merged::AlreadyMerged),
+        "OPEN" => {}
+        other => {
+            return Err(NotMerged::NotOpen {
+                said: format!("the forge says it is {other}"),
+            })
+        }
+    }
+    // Asked before the write, because a conflict is the one refusal the forge
+    // will not phrase as one: `gh pr merge` on a conflicting branch fails with
+    // a sentence about the merge method.
+    if mergeable == "CONFLICTING" {
+        return Err(NotMerged::Conflicted {
+            said: String::from("the forge cannot merge this branch into its base as it stands"),
+        });
+    }
+    let run = match run_in(in_repo, FORGE, &["pr", "merge", pull_request, "--merge"]) {
+        Ok(run) => run,
+        Err(why) => {
+            return Err(NotMerged::NoTool {
+                said: format!("`{FORGE}` would not run: {why}"),
+            })
+        }
+    };
+    match run.status.success() {
+        true => Ok(Merged::Taken),
+        false => Err(why_not(status, said(&run))),
+    }
+}
+
+/// Which kind of refusal a failed merge was, from the forge's own state word.
+///
+/// **Three words have a reading and everything else is the sentence.** The
+/// forge computes `mergeStateStatus` and names it, so a caller acting on one of
+/// these three is acting on what the forge decided rather than on how `gh`
+/// worded it that release.
+fn why_not(status: &str, printed: String) -> NotMerged {
+    match status {
+        "DIRTY" => NotMerged::Conflicted { said: printed },
+        "BLOCKED" => NotMerged::Protected { said: printed },
+        "UNSTABLE" => NotMerged::ChecksNotPassed { said: printed },
+        _ => NotMerged::Refused { said: printed },
     }
 }
 
@@ -197,15 +274,25 @@ pub(crate) fn rendering(in_repo: &str, base: &str, pinned: &str, head: &str) -> 
     }
 }
 
-/// The four fields of one tab-separated line, or `None` where it is not four.
+/// The `N` fields of one tab-separated line, or `None` where it is not `N`.
 ///
 /// **A split and not a parse.** `--jq` did the reading on the forge's side, so
 /// what arrives is one line of text and `store` and `ipc` stay the only two
 /// crates that deserialise anything. A field the forge left blank makes the
 /// whole reading `None`, because a pull request with no base branch is not a
 /// thing this could act on.
-pub(crate) fn four(said: &str) -> Option<[&str; 4]> {
-    let fields: Vec<&str> = said.split('\t').map(str::trim).collect();
-    let read: [&str; 4] = fields.try_into().ok()?;
+pub(crate) fn fields<const N: usize>(said: &str) -> Option<[&str; N]> {
+    let read: [&str; N] = said
+        .split('\t')
+        .map(str::trim)
+        .collect::<Vec<&str>>()
+        .try_into()
+        .ok()?;
     read.iter().all(|field| !field.is_empty()).then_some(read)
+}
+
+/// The four-field shape [`read`] asks for. Named, because its callers read
+/// better naming the count than turbofishing it.
+pub(crate) fn four(said: &str) -> Option<[&str; 4]> {
+    fields(said)
 }

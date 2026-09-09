@@ -29,9 +29,9 @@ use std::sync::Arc;
 
 use crate::commands::{
     answer_question, approve_dispatch, approve_review, examine_job, file_report, forget_job,
-    kill_drone, kill_job, override_verdict, propose_from_request, propose_job, reclaim_worktree,
-    redirect_drone, redispatch_job, reject_job, request_changes, rerun_gate, restart_step,
-    stop_proposal,
+    kill_drone, kill_job, merge_pull_request, override_verdict, propose_from_request, propose_job,
+    reclaim_worktree, redirect_drone, redispatch_job, reject_job, request_changes, rerun_gate,
+    restart_step, stop_proposal,
 };
 use crate::daemon::Daemon;
 use crate::journal::Journal;
@@ -208,6 +208,15 @@ pub const SERVED: &[Route] = &[
         operation: "reject_job",
         method: "POST",
         path: "/jobs/:job_id/reject",
+    },
+    // The fourth answer, and the only route on this table that writes into a
+    // repository Fleet did not make. Its own route for the reason the three
+    // above have three: it does something different to the world, and one route
+    // taking a decision in the body would be a body that means four things.
+    Route {
+        operation: "merge_pull_request",
+        method: "POST",
+        path: "/jobs/:job_id/merge",
     },
     // The answer at a gate that refused, which is a different place from the
     // three above: those answer `awaiting_review` and this answers `escalated`.
@@ -498,6 +507,7 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/:job_id/examine", post(examine_job::<D>))
         .route("/jobs/:job_id/calls/:call_id", get(get_call::<D>))
         .route("/jobs/:job_id/approve_review", post(approve_review::<D>))
+        .route("/jobs/:job_id/merge", post(merge_pull_request::<D>))
         .route("/jobs/:job_id/request_changes", post(request_changes::<D>))
         .route("/jobs/:job_id/reject", post(reject_job::<D>))
         .route(

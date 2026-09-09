@@ -187,6 +187,7 @@ pub fn requiring(
         &[],
         &[],
         Sends::TheLastStep,
+        Held::NoStep,
     )
 }
 
@@ -194,7 +195,17 @@ pub fn requiring(
 /// quiet, and how often it is nudged. A step absent from `patience` declares
 /// neither, which is every other fixture in the workspace.
 pub fn patient(steps: &[Sketch<'_>], patience: &[Patience<'_>]) -> ResolvedWorkflow {
-    assembled(steps, 0, &[], &[], &[], patience, &[], Sends::TheLastStep)
+    assembled(
+        steps,
+        0,
+        &[],
+        &[],
+        &[],
+        patience,
+        &[],
+        Sends::TheLastStep,
+        Held::NoStep,
+    )
 }
 
 /// How a named Check is run against a subset of the tree, as the fixture's
@@ -223,7 +234,17 @@ pub struct Narrows<'a> {
 
 /// The same fixture with some of its Checks declaring how they narrow.
 pub fn narrowing(steps: &[Sketch<'_>], narrows: &[Narrows<'_>]) -> ResolvedWorkflow {
-    assembled(steps, 0, &[], &[], &[], &[], narrows, Sends::TheLastStep)
+    assembled(
+        steps,
+        0,
+        &[],
+        &[],
+        &[],
+        &[],
+        narrows,
+        Sends::TheLastStep,
+        Held::NoStep,
+    )
 }
 
 fn built(steps: &[Sketch<'_>], retry_limit: u32, models: &[(&str, &str)]) -> ResolvedWorkflow {
@@ -236,6 +257,7 @@ fn built(steps: &[Sketch<'_>], retry_limit: u32, models: &[(&str, &str)]) -> Res
         &[],
         &[],
         Sends::TheLastStep,
+        Held::NoStep,
     )
 }
 
@@ -266,10 +288,66 @@ impl Sends<'_> {
     }
 }
 
+/// Which step of a fixture holds for a person rather than advancing itself.
+///
+/// **A whole-fixture argument rather than a field on [`Sketch`]**, for
+/// [`Sends`]'s reason: `NoStep` is what every fixture in the workspace was
+/// written under, and a field would make ninety-odd literals state a gate they
+/// do not use.
+///
+/// **Separate from [`Sends`] even though every shipped `handoff` step declares
+/// both.** They are two declarations: `delivers` says where the work goes out
+/// and `advance_gate` says who answers for it, and a fixture that spelled them
+/// as one could not produce a workflow that delivers and advances on its own —
+/// which the schema allows and nothing forbids.
+#[derive(Debug, Clone, Copy)]
+enum Held<'a> {
+    NoStep,
+    Named(&'a str),
+}
+
+impl Held<'_> {
+    fn is(self, step: &Sketch<'_>) -> bool {
+        matches!(self, Held::Named(at) if at == step.id)
+    }
+}
+
+/// The same fixture with the named step sending the work out **and holding for
+/// a person** — the pair every shipped workflow's `handoff` step declares.
+///
+/// **Two declarations written together because one step carries both**, not
+/// because either implies the other: [`delivering`] says where the work goes
+/// out on its own, and this is the shape a Job a person merges actually has.
+/// The gate is `human_always`, which the parser accepts beside judge checks and
+/// beside none.
+pub fn handing_off(steps: &[Sketch<'_>], at: &str) -> ResolvedWorkflow {
+    assembled(
+        steps,
+        0,
+        &[],
+        &[],
+        &[],
+        &[],
+        &[],
+        Sends::Named(Some(at)),
+        Held::Named(at),
+    )
+}
+
 /// The same fixture with the named step sending the work out, and no other step
 /// doing so. `None` is a workflow that delivers nothing at all.
 pub fn delivering(steps: &[Sketch<'_>], at: Option<&str>) -> ResolvedWorkflow {
-    assembled(steps, 0, &[], &[], &[], &[], &[], Sends::Named(at))
+    assembled(
+        steps,
+        0,
+        &[],
+        &[],
+        &[],
+        &[],
+        &[],
+        Sends::Named(at),
+        Held::NoStep,
+    )
 }
 
 fn assembled(
@@ -281,11 +359,12 @@ fn assembled(
     patience: &[Patience<'_>],
     narrows: &[Narrows<'_>],
     delivers: Sends<'_>,
+    held: Held<'_>,
 ) -> ResolvedWorkflow {
     let roster = Roster::of(models.iter().map(|(_, model)| *model));
     let def = WorkflowDef::parse(
         Path::new("fixture-workflow.yml"),
-        &workflow_text(steps, retry_limit, models, patience, delivers),
+        &workflow_text(steps, retry_limit, models, patience, delivers, held),
         &roster,
     )
     .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
@@ -312,14 +391,19 @@ fn workflow_text(
     models: &[(&str, &str)],
     patience: &[Patience<'_>],
     delivers: Sends<'_>,
+    held: Held<'_>,
 ) -> String {
     let mut text = String::from(
         "version: 1\nworkflow_id: fixture-workflow\nname: fixture\nstructure: linear\nsteps:\n",
     );
     for (n, step) in steps.iter().enumerate() {
-        let gate = match step.judged_on.is_empty() {
-            true => "auto",
-            false => "auto_if_judge_passes",
+        // A person's gate outranks both, because it names an actor rather
+        // than a tier: `config`'s own parser accepts `human_always` beside
+        // judge checks and beside none.
+        let gate = match (held.is(step), step.judged_on.is_empty()) {
+            (true, _) => "human_always",
+            (false, true) => "auto",
+            (false, false) => "auto_if_judge_passes",
         };
         // Every step has to say, and [`Sends`] is what says it.
         let delivers = delivers.is(steps, n);

@@ -98,6 +98,18 @@ where
         self.summarised(&job).await
     }
 
+    /// The person merges the work, and then takes it.
+    ///
+    /// **The merge is Fleet's to perform and never Fleet's to decide.** What
+    /// arrives here is a press, and what it buys over merging on the forge is
+    /// the Checks that run against the tree the merge left.
+    async fn merge_pull_request(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+        let job = Fleet::merge_pull_request(self, &job_id.to_domain())
+            .await
+            .map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
+    }
+
     /// The work goes back with a note, to the Drone that is standing at the
     /// gate.
     ///

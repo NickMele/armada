@@ -19,6 +19,21 @@
 // two presses for the common case is a gate in the wrong place. Rejecting ends
 // the Job and the Drone, so it takes a dialog, and the dialog's words name the
 // drone and name the milder act rather than asking whether you are sure.
+//
+// # Merging is offered where there is a pull request, and nowhere else
+//
+// `pullRequest` is a value off the Job's own detail, and its presence is the
+// whole of what decides the control. A workflow that declares no delivering
+// step opened none — `design-plan`, `code-review`, `epic` and `prototype` are
+// that shape — and so did a Job whose push failed; on either, Fleet answers
+// `fleet.nothing_to_merge`, and an act a person can press to be refused is a
+// worse surface than one that is not drawn.
+//
+// **It does not confirm.** Merging is a write to a repository Armada does not
+// own, which is why it is the loudest line in the Job's log — but it is also
+// the ordinary ending of a Job whose branch went out, and a confirm on the
+// common case is the gate in the wrong place again. What stops a second press
+// is `deciding`, which is the same guard the other three have.
 
 import { useEffect, useState } from "react";
 import { Dialog, ReviewDecision, UnifiedDiff, type UnifiedDiffProps } from "@armada/components";
@@ -58,6 +73,14 @@ export type DecideProps = {
   stale: boolean;
   /** A decision on this Job already in flight. */
   deciding: boolean;
+  /**
+   * The address of the pull request this Job's branch went out on, where it
+   * has one. **Absent is a Job with nothing to merge**, and it is what decides
+   * whether the merge control is drawn at all.
+   */
+  pullRequest?: string;
+  /** Merge that pull request, then take the work. */
+  onMerge: (jobId: string) => void;
   onApprove: (jobId: string) => void;
   onRequestChanges: (jobId: string, note: string) => void;
   onReject: (jobId: string) => void;
@@ -85,6 +108,8 @@ export function Decide({
   diff,
   stale,
   deciding,
+  pullRequest,
+  onMerge,
   onApprove,
   onRequestChanges,
   onReject,
@@ -111,6 +136,7 @@ export function Decide({
       <ReviewDecision
         note={note}
         onNote={setNote}
+        {...(pullRequest === undefined ? {} : { onMerge: () => onMerge(job.id) })}
         onApprove={() => onApprove(job.id)}
         onRequestChanges={() => onRequestChanges(job.id, note)}
         onReject={() => setConfirming(true)}

@@ -198,6 +198,9 @@ const api: BridgeApi = {
   approveReview: (jobId: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.approveReview, jobId),
 
+  mergePullRequest: (jobId: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.mergePullRequest, jobId),
+
   requestChanges: (jobId: string, note: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.requestChanges, jobId, note),
 

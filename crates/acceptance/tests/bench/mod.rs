@@ -26,6 +26,9 @@ pub mod board;
 /// Focus's own apparatus, which reaches this module's private seams rather
 /// than making a second copy of them. See its own header.
 pub mod focus;
+/// Landing's own apparatus: the workflow that names a delivering step, and the
+/// run that reaches the gate on it. See its own header.
+pub mod landing;
 /// Recovery's own apparatus: the two moves a person makes on a Job, and a
 /// detail assembled against a standing the caller names. See its own header.
 pub mod recovery;
@@ -464,6 +467,13 @@ impl Bench {
         if let Ruling::Advanced { .. } = ruling {
             let next = self.step_after(step).expect("a step follows an advance");
             self.step_moved(run, &next, StepTarget::Running);
+        }
+        // **The step leaves for the gate before the Job does**, which is
+        // `crate::dispatch`'s own ordering and for its reason: a client
+        // watching would otherwise see a Job at `awaiting_review` whose
+        // current step still said a Drone was working it. `#522`.
+        if let Ruling::HeldForReview { .. } = ruling {
+            self.step_moved(run, step, StepTarget::HeldForReview);
         }
         if let Some(why) = stopping(ruling) {
             self.step_moved(run, step, StepTarget::Stopped(why));

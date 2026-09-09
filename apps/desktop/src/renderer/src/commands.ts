@@ -258,22 +258,29 @@ export function useCommands(sending: Sending) {
   }
 
   /**
-   * Answer the review gate. **Three preload calls, not one with a
-   * discriminator** — approving takes the work, requesting changes sends the
-   * drone back to the same step with the note, and rejecting is terminal and
-   * ends the drone. **Nothing confirms here**: approving is the ordinary path,
-   * and rejecting is confirmed by the review render's own dialog, where the
-   * diff being decided on is still on screen.
+   * Answer the review gate. **Four preload calls, not one with a
+   * discriminator** — merging lands the branch and then takes the work,
+   * approving takes it and leaves the pull request where it is, requesting
+   * changes sends the drone back to the same step with the note, and rejecting
+   * is terminal and ends the drone. **Nothing confirms here**: approving and
+   * merging are the ordinary paths, and rejecting is confirmed by the review
+   * render's own dialog, where the diff being decided on is still on screen.
    */
-  async function decide(jobId: string, what: "approve" | "changes" | "reject", note = ""): Promise<void> {
+  async function decide(
+    jobId: string,
+    what: "approve" | "changes" | "reject" | "merge",
+    note = "",
+  ): Promise<void> {
     setDeciding(jobId);
     try {
       setOutcome(
-        what === "approve"
-          ? await window.armada.approveReview(jobId)
-          : what === "changes"
-            ? await window.armada.requestChanges(jobId, note)
-            : await window.armada.rejectWork(jobId),
+        what === "merge"
+          ? await window.armada.mergePullRequest(jobId)
+          : what === "approve"
+            ? await window.armada.approveReview(jobId)
+            : what === "changes"
+              ? await window.armada.requestChanges(jobId, note)
+              : await window.armada.rejectWork(jobId),
       );
     } finally {
       setDeciding(null);

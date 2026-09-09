@@ -70,9 +70,14 @@ pub mod journal;
 pub mod judging;
 pub mod keeping;
 mod landing;
+/// The one act that writes into a repository Fleet did not make: a person
+/// presses, and Fleet merges the pull request their Job opened.
+mod merging;
 pub mod mint;
 /// Noticing that somebody merged a Job's pull request. **Armada opens one and
-/// a person merges it** — nothing here merges anything.
+/// a person merges it** — and since `#523` a person may press for it from
+/// Bridge, which is `crate::merging` and reaches the same four things this
+/// module does about a merge it noticed.
 pub mod noticing;
 /// Where two Jobs claim the same paths, worked out at read time. **A
 /// warning and nothing else** — no dispatch path reaches it.

@@ -14,7 +14,7 @@
 //! that raises them: the set is closed by collection, and a central list would
 //! put every code far from the failure it names.
 
-use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
+use adapter_traits::{AgentHarness, Delivery, NotMerged, Vcs, WorkProduct};
 use api::Refusal;
 use ipc::{RunId, WireError, WireValue};
 use store::{LoadJobError, WriteError};
@@ -85,6 +85,36 @@ const NOT_RECLAIMABLE: &str = "fleet.not_reclaimable";
 /// 200 with both halves absent** — a client reading "nothing to reclaim" would
 /// draw a Job whose disk is back when the disk is still there.
 const NOT_RECLAIMED: &str = "fleet.not_reclaimed";
+/// A merge asked for on a Job whose record holds no pull request. A 409 like
+/// the status conflicts above: nothing was ever opened, so the act a person
+/// wants is an approval and the message says so.
+const NOTHING_TO_MERGE: &str = "fleet.nothing_to_merge";
+/// The base branch is protected. **Its own code, and the whole reason the
+/// refusal kinds are not one**: what answers this is an administrator or a
+/// rule, and nothing a person does to the Job changes it.
+const MERGE_BRANCH_PROTECTED: &str = "fleet.merge_branch_protected";
+/// The branch and its base disagree. Its own code because the answer is on the
+/// branch — a `request_changes` that asks for a rebase, or a person resolving
+/// it — and never on the forge.
+const MERGE_CONFLICTED: &str = "fleet.merge_conflicted";
+/// A check the **forge** requires has not passed. Its own code because the
+/// answer is to wait or to fix that check, and because a client reading
+/// `CHECK_DID_NOT_PASS` would go looking at Armada's own Checks, which all
+/// passed or the Job would not be at a gate.
+const MERGE_CHECKS_NOT_PASSED: &str = "fleet.merge_checks_not_passed";
+/// The pull request is closed, gone, or was never there. Its own code because
+/// the Job is answerable and the pull request is not: what is left is an
+/// approval or a redispatch.
+const MERGE_NOT_OPEN: &str = "fleet.merge_not_open";
+/// Nothing on this machine could ask the forge. **A 500**, unlike the four
+/// above: nothing about the request is wrong and asking again is reasonable
+/// once whoever runs Fleet has signed in.
+const MERGE_NO_TOOL: &str = "fleet.merge_no_tool";
+/// The forge refused and said something this vocabulary has no name for. A 500
+/// for [`MERGE_NO_TOOL`]'s reason, and the sentence the forge printed is in the
+/// message — which is the honest answer where a guess would send a person to
+/// fix the wrong thing.
+const MERGE_REFUSED: &str = "fleet.merge_refused";
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -222,6 +252,40 @@ where
                 WireError::raised(PROPOSER_UNREACHABLE, said, self.run_id())
                     .with_field("request", WireValue::Str(request.clone())),
             ),
+            // Nothing was ever opened, so there is no forge answer to name.
+            Adrift::NothingToMerge { job } => Refusal::IllegalMove(
+                WireError::raised(NOTHING_TO_MERGE, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
+            ),
+            // **One code per kind, decided from the typed kind and never from
+            // the sentence.** This is the arm the decision "a refused merge
+            // says which of the reasons it was" lands on: `Adrift` carries one
+            // variant because no arm in this crate does anything different
+            // about them, and here is where they stop being one thing —
+            // because a client does.
+            //
+            // The four that are the person's to answer are 409s; the two that
+            // are this machine's are 500s, for `NOT_RECLAIMED`'s reason.
+            Adrift::NotMerged { job, why } => {
+                let job = ipc::JobId::from(job);
+                let raised = |code: &'static str| {
+                    WireError::raised(code, said.clone(), self.run_id())
+                        .about_job(job.clone())
+                        .with_field("refused", WireValue::Str(why.kind().to_string()))
+                };
+                match why {
+                    NotMerged::Protected { .. } => {
+                        Refusal::IllegalMove(raised(MERGE_BRANCH_PROTECTED))
+                    }
+                    NotMerged::Conflicted { .. } => Refusal::IllegalMove(raised(MERGE_CONFLICTED)),
+                    NotMerged::ChecksNotPassed { .. } => {
+                        Refusal::IllegalMove(raised(MERGE_CHECKS_NOT_PASSED))
+                    }
+                    NotMerged::NotOpen { .. } => Refusal::IllegalMove(raised(MERGE_NOT_OPEN)),
+                    NotMerged::NoTool { .. } => Refusal::Fault(raised(MERGE_NO_TOOL)),
+                    NotMerged::Refused { .. } => Refusal::Fault(raised(MERGE_REFUSED)),
+                }
+            }
             _ => Refusal::Fault(WireError::raised(FAULT, said, self.run_id())),
         }
     }

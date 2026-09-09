@@ -244,6 +244,101 @@ pub enum Rendering {
     Unreadable,
 }
 
+/// What came of asking the forge to merge a pull request.
+///
+/// **Two ways it is merged and only one of them is this call's doing.** A
+/// person who pressed the button on a pull request somebody else had already
+/// merged is not looking at a failure — the work is where the press was trying
+/// to put it — and every caller does the same thing afterwards either way.
+///
+/// **It carries nothing.** What it merged into, what the base is on now and
+/// whether the forge agrees are read with [`Delivery::landed`], which is the
+/// same question a sweep asks about a pull request nobody pressed anything
+/// for. A merge that answered them here would be a second reading of one fact,
+/// and the two would come to disagree about a Job that was both noticed and
+/// pressed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Merged {
+    /// The forge took it.
+    Taken,
+    /// Somebody had already merged it. **Not a refusal.**
+    AlreadyMerged,
+}
+
+/// Why the forge would not merge, in the kinds a person does something
+/// different about.
+///
+/// **Not one shape with a sentence in it**, which is the arrangement
+/// [`NotDelivered`] has and the reason it has it: there, no caller matches on
+/// what went wrong. Here every kind sends a person somewhere else — an
+/// administrator, the branch, the failing check — and a button that answered
+/// all of them with one line would be a button that failed silently in five
+/// different ways.
+///
+/// Every variant carries what the forge said, verbatim, because the kind is
+/// what to do next and the sentence is why.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NotMerged {
+    /// The base branch is protected, and merging it needs something this
+    /// operator cannot supply from a command line — a review, an
+    /// administrator, a rule.
+    Protected { said: String },
+    /// The branch and its base disagree. Nothing merges until somebody
+    /// resolves it, and resolving one needs judgement about the code.
+    Conflicted { said: String },
+    /// A check the forge requires has not passed. **Not one of Armada's** —
+    /// those already passed, or the Job would not be at a gate.
+    ChecksNotPassed { said: String },
+    /// It is closed, already gone, or there is no such pull request. The
+    /// record names an address the forge will not act on.
+    NotOpen { said: String },
+    /// Nothing on this machine could ask: no tool, or nobody signed in.
+    NoTool { said: String },
+    /// The forge refused and said something this vocabulary has no name for.
+    ///
+    /// **Never folded into the five above.** A guess about which kind a
+    /// sentence is would send a person to fix the wrong thing, and the honest
+    /// answer is the sentence itself.
+    Refused { said: String },
+}
+
+impl NotMerged {
+    /// A sentence for a person, built beside the value rather than by whichever
+    /// crate caught it — the shape [`NotDelivered::said`] takes.
+    pub fn said(&self) -> String {
+        let (why, said) = match self {
+            NotMerged::Protected { said } => ("the base branch is protected", said),
+            NotMerged::Conflicted { said } => ("the branch conflicts with its base", said),
+            NotMerged::ChecksNotPassed { said } => {
+                ("a check the forge requires has not passed", said)
+            }
+            NotMerged::NotOpen { said } => ("the pull request is not open", said),
+            NotMerged::NoTool { said } => ("nothing on this machine could ask the forge", said),
+            NotMerged::Refused { said } => ("the forge refused", said),
+        };
+        let mut out = String::from("the merge did not happen — ");
+        out.push_str(why);
+        out.push_str(": ");
+        out.push_str(said);
+        out
+    }
+
+    /// The kind, as one word, for a wire code and a log field.
+    ///
+    /// **Spelled once**, so the code a client dispatches on and the field a
+    /// person reads in the log cannot come to name the same refusal two ways.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            NotMerged::Protected { .. } => "branch_protected",
+            NotMerged::Conflicted { .. } => "conflicted",
+            NotMerged::ChecksNotPassed { .. } => "checks_not_passed",
+            NotMerged::NotOpen { .. } => "not_open",
+            NotMerged::NoTool { .. } => "no_tool",
+            NotMerged::Refused { .. } => "refused",
+        }
+    }
+}
+
 /// What came of asking the forge to compare a pull request afresh.
 ///
 /// **No `Result`**, for [`Delivery::landed`]'s reason: a caller does nothing
@@ -448,6 +543,26 @@ pub trait Delivery {
     /// long before anybody merges its work, so the caller passes the repository
     /// every worktree was cut from, which is not one.
     fn landed(&self, in_repo: &str, pull_request: &str) -> WhatBecameOfIt;
+
+    /// Merge a pull request Armada opened.
+    ///
+    /// **The one method on this trait that writes into a repository nobody on
+    /// this machine holds.** Every other act Fleet takes is confined to a
+    /// worktree Fleet made; a push puts a branch somewhere nobody merges from,
+    /// and this changes what everybody else builds on. A caller logs it before
+    /// it happens.
+    ///
+    /// **Nothing here decides whether it should be merged.** That is a
+    /// person's, at a human gate, and this is the act they pressed for.
+    ///
+    /// **What it merged into is not returned**, for [`Merged`]'s reason: the
+    /// caller reads it with [`landed`](Delivery::landed), which is the same
+    /// question a sweep asks about a pull request nobody pressed anything for.
+    ///
+    /// `in_repo` is the repository every worktree was cut from, for
+    /// [`landed`](Delivery::landed)'s reason — a Job's own worktree is
+    /// reclaimed long before anybody merges its work.
+    fn merge(&self, in_repo: &str, pull_request: &str) -> Result<Merged, NotMerged>;
 
     /// Make the forge compare a pull request against the commit its branch
     /// actually sits on.
