@@ -17,16 +17,11 @@
 //! Step three is the one a person will actually hit, and
 //! [`clear_a_stale_registration`] holds why and how narrowly it is done.
 //!
-//! **What is not here: no removal, no sweep, no retention.** [`Vcs`] has no
-//! method for it, so this file could not offer one anyway — a worktree survives
-//! every terminal state because nothing Fleet hands a Drone can delete one.
-//! Removal is a person's act, at `armada clean`, through
-//! [`reclaim`](crate::reclaim()).
-//!
-//! **The base checkout is not here.** It is shared between Jobs rather than
-//! made per Job, it carries no branch, and its policy on an existing directory
-//! is the opposite of this one's — see `crate::basing`. The [`Vcs`] impl below
-//! forwards to it so the trait has one implementor.
+//! **What is not here: no removal, no sweep, no retention.** A worktree
+//! survives every terminal state because nothing Fleet hands a Drone can delete
+//! one; removal is a person's act, at `armada clean`, through
+//! [`reclaim`](crate::reclaim()). **Nor the base checkout** — shared, no
+//! branch, and the opposite view of an existing directory: `crate::basing`.
 
 use std::fs;
 use std::path::Path;

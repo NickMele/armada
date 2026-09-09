@@ -562,6 +562,7 @@ where
                 path: held.frame.path.clone(),
                 bytes: held.frame.bytes,
                 kept: crate::showing::tail(&held.frame.path),
+                side: held.frame.side.into(),
             },
             bytes,
         ))

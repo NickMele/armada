@@ -157,6 +157,17 @@ const NOT_ON_DISK = "This frame is on the record and no longer on disk.";
 const NOT_ANSWERED = "Fleet did not answer for this frame.";
 
 /**
+ * What the two sides are called on the screen.
+ *
+ * **The reader's words and not the wire's.** `base` and `branch` name the two
+ * checkouts Fleet had to serve; what a person reading a step wants to know is
+ * which of these is how the screen was. The translation happens once, here, so
+ * no component learns what a base branch is.
+ */
+const asBefore = "before";
+const asAfter = "after";
+
+/**
  * The rows the record holds, married to what this window has fetched.
  *
  * **Wire order, and no sort.** Fleet answers oldest run first and that ordering
@@ -169,6 +180,12 @@ const NOT_ANSWERED = "Fleet did not answer for this frame.";
  * the same wait.
  */
 export function shownFrames(frames: KeptFrame[], held: Frames): ShownFrame[] {
+  // **Labelled only where there is something to compare against.** A step with
+  // frames from one side is a repository with no base, a base run that would
+  // not start, or a Fleet older than 9.5 — and `after` written on every frame
+  // of a set with no before is a word that says nothing and implies a missing
+  // half.
+  const both = new Set(frames.map((frame) => frame.side ?? "branch")).size > 1;
   return frames.map((frame) => {
     const state = held.of(frame.kept);
     return {
@@ -176,6 +193,7 @@ export function shownFrames(frames: KeptFrame[], held: Frames): ShownFrame[] {
       name: frame.name,
       attempt: frame.attempt,
       weight: weighs(frame.bytes),
+      ...(both ? { side: (frame.side ?? "branch") === "base" ? asBefore : asAfter } : {}),
       ...(state?.state === "got" ? { src: state.src } : {}),
       ...(state?.state === "absent" ? { why: state.note } : {}),
     };
@@ -195,7 +213,13 @@ export function framesSummary(frames: KeptFrame[]): string | undefined {
   if (frames.length === 0) return undefined;
   const runs = new Set(frames.map((frame) => frame.attempt));
   const counted = frames.length === 1 ? "1 frame" : `${frames.length} frames`;
-  return runs.size <= 1 ? counted : `${counted} · ${runs.size} runs`;
+  const said = runs.size <= 1 ? counted : `${counted} · ${runs.size} runs`;
+  // **And whether there is a before, which is the fact that decides what a
+  // collapsed chapter is worth opening for.** A set with both sides answers
+  // what the change did to the screen; one with only the branch answers what
+  // the screen is, which is the reading #209 was written against.
+  const both = new Set(frames.map((frame) => frame.side ?? "branch")).size > 1;
+  return both ? `${said} · ${asBefore} and ${asAfter}` : said;
 }
 
 /**

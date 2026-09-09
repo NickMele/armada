@@ -107,7 +107,7 @@ fn frame(row: &Row<'_>) -> Result<StepFrame, RowError> {
         // it is refused here rather than read as the branch. Calling an unknown
         // photograph the *after* is exactly what would put it beside a real one
         // and label the two a pair.
-        side: Side::of(&string(row, "side")?)
+        side: Side::from_wire(&string(row, "side")?)
             .ok_or_else(|| column("job_step_frames", "side")(rusqlite::Error::InvalidQuery))?,
     })
 }
@@ -163,7 +163,7 @@ impl Store {
                     frame.path.as_str(),
                     frame.bytes as i64,
                     at.as_str(),
-                    frame.side.as_str(),
+                    frame.side.as_wire(),
                 ],
             )
             .map_err(fault("writing a frame"))

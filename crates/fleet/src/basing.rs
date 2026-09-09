@@ -7,24 +7,21 @@
 //! twice or take it away under each other. **The turn loop is what stops
 //! that**, not a mutex added here: `crate::turning` is one task walking the
 //! roster in order and awaiting each Job, so no two Jobs' settling overlaps,
-//! and the sweep below runs on the same turn as everything else. A lock would
-//! be a second answer to a question already answered, and the kind that reads
-//! as protecting something.
+//! and the sweep below runs on that same turn. A lock would be a second answer
+//! to a question already answered, and the kind that reads as protecting
+//! something.
 //!
 //! Across processes the guard is git's own: two Fleets on one repository is
 //! already refused, and `armada clean` refuses while a Fleet runs.
-//! [`Vcs::base_checkout`] is idempotent besides, so the worst a race could do
-//! is make a directory twice.
+//! [`Vcs::base_checkout`] is idempotent besides.
 //!
 //! # Preparation is paid once and marked on the disk
 //!
-//! `setup.requires` in a base checkout costs what it costs in a Job's worktree
-//! — the span `crate::preparing` calls the minutes with no Drone on them — and
-//! paying it per Job for an identical tree was the thing this design exists to
-//! avoid. It is paid on the first Job to need the base and the checkout is
-//! marked; every later Job finds the mark. The mark is a file **inside** the
-//! checkout, so a record and a directory cannot disagree about it, and a Fleet
-//! killed halfway leaves no mark and the next one prepares again.
+//! It is paid by the first Job to need the base, and every later Job finds the
+//! mark. The mark is a file **inside** the checkout, so a record and a
+//! directory cannot disagree about it — and a Fleet killed halfway leaves no
+//! mark, so the next one prepares again rather than serving a tree with no
+//! dependencies in it.
 
 use std::collections::BTreeMap;
 use std::path::Path;

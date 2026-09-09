@@ -25,6 +25,20 @@ export type ShownFrame = {
   name: string;
   /** Which run of the step produced it, counted from one. */
   attempt: number;
+  /**
+   * Which checkout it is a photograph of, in the words a reviewer thinks in.
+   *
+   * **`before` and `after`, not `base` and `branch`.** The wire's words name
+   * the two checkouts, which is what Fleet had to know; what a person reading
+   * a step wants is which of these is the screen as it was. The mapping is the
+   * caller's, one layer up, so this component never learns what a base branch
+   * is.
+   *
+   * **Absent is a step with one set of frames**, which is a repository with no
+   * base, a base run that would not start, or a Fleet older than 9.5. A label
+   * on a frame with nothing to compare it to would be noise.
+   */
+  side?: "before" | "after";
   /** What the file weighs. Drawn as read, so a slow one says why it is slow. */
   weight: string;
   /**
@@ -95,13 +109,28 @@ export function FramesShown({ frames, emptyNote, onOpen }: FramesShownProps) {
           <p className="armada-frames__said">
             <span className="armada-frames__name">{frame.name}</span>
             <span className="armada-frames__from">
-              {`attempt ${frame.attempt} · ${frame.weight}`}
+              {said(frame)}
             </span>
           </p>
         </li>
       ))}
     </ul>
   );
+}
+
+/**
+ * The line under a frame: which run, which side, what it weighs.
+ *
+ * **The side sits between the run and the weight** because that is the order a
+ * reader asks in — is this current, is this the before, how long will it take
+ * to open. Absent where a step has only one set, for `ShownFrame.side`'s
+ * reason.
+ */
+function said(frame: ShownFrame): string {
+  const parts = [`attempt ${frame.attempt}`];
+  if (frame.side !== undefined) parts.push(frame.side);
+  parts.push(frame.weight);
+  return parts.join(" · ");
 }
 
 /**

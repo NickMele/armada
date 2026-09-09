@@ -369,10 +369,13 @@ pub enum Side {
 impl Side {
     /// The word the record and the wire both use.
     ///
-    /// **One spelling, here**, because the column, the JSON and any sentence a
-    /// surface writes are the same fact, and a second `match` somewhere would
-    /// be the one that drifts.
-    pub fn as_str(&self) -> &'static str {
+    /// **One spelling, here**, because the column, the JSON, the run directory
+    /// a frame is kept in and any sentence a surface writes are the same fact,
+    /// and a second `match` somewhere would be the one that drifts. Named as
+    /// the registry-backed enums name it, so `ipc::wire_enum!` can take this
+    /// type without a shim — the set is not in `domain/` because it is not a
+    /// state a Job can be in, it is which of two checkouts was photographed.
+    pub fn as_wire(&self) -> &'static str {
         match self {
             Side::Base => "base",
             Side::Branch => "branch",
@@ -385,7 +388,7 @@ impl Side {
     /// spells its side some third way is a row nothing wrote, and reading it as
     /// the after would put an unknown photograph beside a real one and call
     /// them a pair.
-    pub fn of(said: &str) -> Option<Side> {
+    pub fn from_wire(said: &str) -> Option<Side> {
         match said {
             "base" => Some(Side::Base),
             "branch" => Some(Side::Branch),

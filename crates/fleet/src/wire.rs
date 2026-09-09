@@ -463,6 +463,7 @@ pub(crate) fn step_facts(
                         path: held.frame.path.clone(),
                         bytes: held.frame.bytes,
                         kept: crate::showing::tail(&held.frame.path),
+                        side: held.frame.side.into(),
                     })
                     .collect(),
                 // Derived from `attempts` rather than read again: the mapping

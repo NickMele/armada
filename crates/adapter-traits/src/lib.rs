@@ -131,12 +131,9 @@ pub trait AgentHarness {
 /// state because nothing in the workspace can delete one, not because everybody
 /// remembered not to. A person removes them through `armada clean`, which
 /// reaches `adapters::reclaim` and not this trait.
-///
-/// [`drop_base_checkout`](Vcs::drop_base_checkout) is not an exception to that.
-/// A base checkout holds no work: it is a detached photograph of a commit that
-/// is still in the repository, plus whatever a package manager wrote, and
-/// making it again is the whole of undoing the delete. The rule is about work
-/// nobody has taken, and there is none here to take.
+/// [`drop_base_checkout`](Vcs::drop_base_checkout) is not an exception: a base
+/// checkout holds no work, and making it again is the whole of undoing the
+/// delete.
 ///
 /// **No "does it already exist" query.** Creation answers that itself, by
 /// refusing; a separate probe would be a check-then-act that two Jobs can

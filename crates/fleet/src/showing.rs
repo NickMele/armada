@@ -11,17 +11,18 @@
 //! **Four command lines and a directory, and not one is Armada's.** Nothing
 //! here knows what a browser is or which framework wrote the frames, the same
 //! way nothing in `checks-runner` knows cargo from pnpm. What is here is the
-//! order the repository's own commands run in, and the reaping that has to
-//! happen whichever way the run ends.
+//! order those commands run in, and the reaping that has to happen whichever
+//! way a run ends.
 //!
 //! **The Drone never hands over a file.** A screenshot of the wrong state looks
 //! exactly like one of the right state, and what makes a frame checkable is the
-//! spec — code, in the diff, that somebody can read. It names a spec, Fleet
-//! runs it, and Fleet owns the frames.
+//! spec — code, in the diff. It names one, Fleet runs it, Fleet owns the frames.
 //!
-//! **The run against `base` is not here.** `#209` asks for both; this is the
-//! branch and the second is the next slice. The seam is where [`Shown`] is
-//! built — a second [`show`] against a second worktree, paired by frame name.
+//! **Two runs, and the spec never moves.** `#209` asks for the base as well as
+//! the branch, so [`show`] takes an [`Aimed`]: the base checkout serves and the
+//! branch's own spec shoots, because that spec is code in the patch and does
+//! not exist at base. `crate::basing` holds where the base checkout comes from
+//! and how the two sets read as pairs.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -469,7 +470,7 @@ fn run_dir(handle: &str, step: &StepId, attempt: Attempt, side: Side) -> Option<
     if !crate::check_output::one_component(handle) || !crate::check_output::one_component(id) {
         return None;
     }
-    let side = side.as_str();
+    let side = side.as_wire();
     Some(format!(".armada/frames/{handle}/{id}.{attempt}.{side}"))
 }
 
@@ -547,32 +548,24 @@ where
     /// here rather than at the caller so there is one place that says when a
     /// harness runs: the step declares `visual`, the repository declares a
     /// harness, and the submission named a spec. The third cannot fail —
-    /// `shown_by` is refused when empty — and it is checked anyway, because the
-    /// consequence of a blank one is a command with a hole where its argument
-    /// goes.
+    /// `shown_by` is refused when empty — and is checked anyway, because the
+    /// consequence of a blank one is a command with a hole in it.
     ///
     /// **It runs before the gate and gates nothing.** A harness that will not
     /// run has established nothing about the work, so the ruling is unaffected
     /// either way; what a failed run costs is the thing a reviewer was going to
-    /// look at, which is why it goes in the Job's log rather than into a
-    /// verdict.
+    /// look at, which is why it goes in the Job's log rather than a verdict.
     ///
     /// **Nothing is published.** A frame is hundreds of kilobytes and `/events`
-    /// is one drop-oldest channel carrying every Job — the same measurement
-    /// `get_check_output` was split on. The row rides the record and the bytes
-    /// are fetched by whoever opens one.
+    /// is one drop-oldest channel carrying every Job — the split
+    /// `get_check_output` was made on, and `ipc::showing` holds the argument.
     ///
-    /// **Two runs, base first.** The base run photographs what the screen
-    /// looked like before this Job and the branch run photographs it now, and
-    /// the order is not arbitrary: both write into the one directory
-    /// `evidence.frames` names, so the earlier run has to be kept and reaped
-    /// before the later one is listed. Base first is also the order a person
-    /// reads them in.
-    ///
-    /// **The base run is skipped and never faked.** A repository with no base,
-    /// a checkout that would not be made, requirements that would not run — each
-    /// is said in the Job's log by [`NoBase::said`], and the branch frames stand
-    /// alone. A pair with an invented half would be worse than no pair.
+    /// **Two runs, base first**, and the order is not arbitrary: both write
+    /// into the one directory `evidence.frames` names, so the earlier run has
+    /// to be kept and reaped before the later one is listed. The base run is
+    /// skipped and never faked — each way it can be missing is said in the
+    /// Job's log by `WhyNoPair::said`, and a pair with an invented half would
+    /// be worse than no pair.
     pub(crate) async fn showed(
         &self,
         job_id: &JobId,

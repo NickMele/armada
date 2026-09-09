@@ -4,32 +4,25 @@
 //! # One checkout per commit, shared by every Job on it
 //!
 //! A Job's worktree is per Job because a Job writes in it. Nothing writes in a
-//! base checkout: it is served, read, and served again. So the thing that makes
-//! two of them different is not the Job, it is **which commit is checked out**
-//! — and paying `setup.requires` per Job for an identical tree is minutes a
-//! Drone is not working, which `fleet::preparing` names as the one span in a
-//! Job where nothing moves.
+//! base checkout: it is served, read, and served again. So what makes two of
+//! them different is not the Job, it is **which commit is checked out** — and
+//! paying `setup.requires` per Job for an identical tree is minutes a Drone is
+//! not working, which `fleet::preparing` names as the one span in a Job where
+//! nothing moves.
 //!
 //! # The commit is the key, and that is the whole invalidation story
 //!
-//! The path is derived from the commit and from nothing else, so a base branch
-//! that moves derives a different path and the next Job checks out the new
-//! commit. **A stale base checkout is not detected, it is unreachable** — there
-//! is no freshness field to get wrong and no cache to invalidate, which is the
-//! defect a keyed-by-branch-name checkout would have: it would photograph the
-//! wrong *before* and say nothing.
+//! The path is derived from the commit and nothing else, so a base that moves
+//! derives a different path. **A stale checkout is not detected, it is
+//! unreachable** — no freshness field to get wrong and no cache to invalidate,
+//! which is the defect a keyed-by-branch-name checkout would have. The ref name
+//! is deliberately not in the path: two refs at one commit are one tree, and a
+//! branch name is not a path component (`release/2.0`), so it would have to be
+//! mangled — and a mangling is a second vocabulary.
 //!
-//! The ref name is deliberately not in the path. Two refs at one commit are one
-//! tree, and a name in the path would make two checkouts of it — plus a branch
-//! name is not a path component (`release/2.0`), so it would have to be
-//! mangled, and a mangling is a second vocabulary.
-//!
-//! # Detached, and never a branch
-//!
-//! [`BaseSpec`] derives no branch, unlike [`WorktreeSpec`](crate::WorktreeSpec).
-//! A base checkout is a photograph of a commit and not a line of history —
-//! nothing commits in it — and a branch would be a ref `armada clean` derives
-//! from no record, which is the litter that file refuses to create.
+//! [`BaseSpec`] therefore derives no branch, unlike
+//! [`WorktreeSpec`](crate::WorktreeSpec). Nothing commits here, and a branch
+//! would be a ref `armada clean` derives from no record.
 
 use alloc::string::String;
 

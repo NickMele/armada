@@ -18,6 +18,24 @@
  */
 
 /**
+ * Which checkout a frame is a photograph of. Since 9.5.
+ *
+ * **What makes a set of frames a before and an after.** #209 asks for the
+ * branch *and* the base so a reviewer sees what changed rather than what is,
+ * and two frames the spec called `home.png` are only a pair if something says
+ * which is which. Nothing else on `KeptFrame` could: the name is the harness's
+ * own, and both runs belong to one attempt of one step.
+ *
+ * **Pair them by `name`, and read the leftovers as answers rather than as
+ * gaps.** A name on both sides is a before and an after; a name only on the
+ * branch is a screen the change *added*, which has no before; a name only at
+ * base is one it *removed*, which has no after. None of the three is a fault,
+ * and drawing a missing half as an error would draw the commonest case #209
+ * exists for — a brand-new screen — as the feature being broken.
+ */
+export type Side = "base" | "branch";
+
+/**
  * One frame a step's harness produced, as Fleet kept it.
  *
  * **A reference, never the image**, the way `KeptDeliverable` and
@@ -72,4 +90,12 @@ export type KeptFrame = {
    * time either side changed how a frame is stored.
    */
   kept: string;
+  /**
+   * Which checkout this one is a photograph of. Since 9.5.
+   *
+   * **Optional, and absent means `branch`.** Every row written before 9.5 was
+   * taken on the Job's own worktree, because that was the only place a harness
+   * ran; a Bridge talking to an older Fleet reads the absence, not a gap.
+   */
+  side?: Side;
 };
