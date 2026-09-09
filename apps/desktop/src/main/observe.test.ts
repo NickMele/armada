@@ -122,4 +122,20 @@ describe("a transcript socket that stops", () => {
     // next event about this Job the thing that resumes it — `connection.ts`.
     expect(turns.attached()).toBe(false);
   });
+
+  // **The handshake is the case that crashed.** A pane closed before Fleet
+  // answers leaves ws no connection to close, so it aborts and reports the
+  // abort as an `error` a tick later. With every listener already gone, Node
+  // threw it, and the main process went down with it.
+  it("closes while the handshake is still in flight, and nothing is thrown", async () => {
+    const fleet = await serving();
+    const turns = new ObserveSocket(() => {});
+    opened.push(() => turns.close());
+
+    turns.open(fleet.port, A_JOB);
+    turns.close();
+
+    await new Promise((settle) => setTimeout(settle, 20));
+    expect(turns.attached()).toBe(false);
+  });
 });
