@@ -15,11 +15,11 @@
 
 use ipc::mcp::{CheckRan, CheckReport};
 use ipc::{
-    Actor, Asked, CallArguments, EvidenceType, Finding, FleetCapacity, Held, Instant, JobDetail,
-    JobDiff, JobEvidence, JobExamined, JobHistory, JobId, JobProcess, JobRemarks, JobResources,
-    JobStatus, JobSummary, Look, ManifestId, ManifestSummary, ModelChoices, Movement, NotedField,
-    Origin, ReclaimedBranch, ReclaimedWorktree, Recorded, RunId, StatusMoved, StepId, Submitted,
-    Urgency, Work, WorkflowId, WorkflowSummary, WorktreeReclaimed,
+    Actor, Asked, CallArguments, CheckOutput, EvidenceType, Finding, FleetCapacity, Held, Instant,
+    JobDetail, JobDiff, JobEvidence, JobExamined, JobHistory, JobId, JobProcess, JobRemarks,
+    JobResources, JobStatus, JobSummary, Look, ManifestId, ManifestSummary, ModelChoices, Movement,
+    NotedField, Origin, ReclaimedBranch, ReclaimedWorktree, Recorded, RunId, StatusMoved, StepId,
+    Submitted, Urgency, Work, WorkflowId, WorkflowSummary, WorktreeReclaimed,
 };
 
 /// A spelling the registry has. Panics in a test rather than returning an
@@ -39,6 +39,12 @@ pub const THE_CALL: &str = "toolu_01Haa";
 /// An argument longer than a row carries, so a test can prove the whole of it
 /// comes back rather than the line the socket sent.
 pub const THE_ARGUMENT: &str = "cat <<'EOF' > notes.md\n  one\n  two\n  three\nEOF";
+
+/// The one kept Check output this fake's record holds, spelled as
+/// `fleet::check_output` names a file: step, attempt, ordinal. Anything else is
+/// an output no row of the Job carries, which is a different answer from a
+/// missing Job.
+pub const THE_OUTPUT: &str = "implement.1.0.log";
 
 /// A proposal body, as Bridge would send it.
 pub const A_PROPOSAL: &str = r#"{
@@ -387,6 +393,36 @@ pub fn call(call_id: String) -> CallArguments {
         length: Some(THE_ARGUMENT.chars().count()),
     }
 }
+
+/// One Check's output, as a window onto a file longer than the window.
+///
+/// **The fake holds exactly one**, keyed by [`THE_OUTPUT`]. What the route has
+/// to prove is that the lines come back verbatim and that the numbers describe
+/// the file rather than the window — `from_line` past one and `whole` false on
+/// a reading that starts partway in.
+pub fn check_output(kept: String) -> CheckOutput {
+    CheckOutput {
+        attempt: 1,
+        name: "test_suite".to_string(),
+        path: format!(".armada/checks/01RUNNING/{kept}"),
+        lines: THE_OUTPUT_LINES
+            .iter()
+            .map(|line| line.to_string())
+            .collect(),
+        from_line: 1_939,
+        total_lines: 2_180,
+        bytes: 61_204,
+        whole: false,
+    }
+}
+
+/// The lines the fake's window holds. Leading whitespace on purpose: a reader
+/// that trimmed would make an indented failure unreadable.
+pub const THE_OUTPUT_LINES: &[&str] = &[
+    "--- stdout ---",
+    "test parses_rfc3339_offset ... ok",
+    "    left:  1970-01-01T00:00:00Z",
+];
 
 /// The one workflow the fake holds. A list, because the operation is one.
 pub fn workflows() -> Vec<WorkflowSummary> {

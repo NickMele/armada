@@ -253,6 +253,7 @@ where
             | Adrift::NoSuchWorkflow { .. }
             | Adrift::NoSuchManifest { .. }
             | Adrift::NoSuchCall { .. }
+            | Adrift::NoSuchCheckOutput { .. }
             | Adrift::Modelless
             | Adrift::NothingToPropose
             | Adrift::AttachmentUnreadable { .. } => {

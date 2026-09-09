@@ -453,6 +453,39 @@ where
             .ok_or_else(|| self.refusal(Adrift::NoSuchCall { named: call_id }))
     }
 
+    /// One Check's own output, read back out of the file its row points at.
+    ///
+    /// **The other end of a path that opened nothing in Armada.** A row has
+    /// carried `output_path` since the record kept it, and Bridge could only
+    /// hand that path to the operating system — so the audit the Checks chapter
+    /// exists for happened outside the app. This is the read that brings it in.
+    ///
+    /// The Job is loaded first, so an id naming nothing is a 404 before any
+    /// file is opened. A name no row of the Job kept is a different answer and
+    /// says so: [`Adrift::NoSuchCheckOutput`], a 422 — the Job is there, and
+    /// the id names nothing in its record.
+    ///
+    /// **The rows are the allowlist**, which is why they are read before the
+    /// file: `kept` is a row's own file name and `check_output::kept_output`
+    /// resolves it against them, so a caller cannot name a file Fleet did not
+    /// write for this Job.
+    async fn get_check_output(
+        &self,
+        job_id: JobId,
+        kept: String,
+    ) -> Result<ipc::CheckOutput, Refusal> {
+        let id = job_id.to_domain();
+        self.load(&id).await.map_err(|why| self.refusal(why))?;
+        let ran = {
+            let store = self.store().lock().await;
+            store
+                .step_checks_every_attempt(&id)
+                .map_err(|why| self.refusal(Adrift::Reading(why)))?
+        };
+        crate::check_output::kept_output(&self.host().repo_root, &kept, &ran)
+            .ok_or_else(|| self.refusal(Adrift::NoSuchCheckOutput { named: kept }))
+    }
+
     /// Every workflow this Fleet holds, so a caller can name one that will not
     /// be refused.
     async fn list_workflows(&self) -> Result<Vec<WorkflowSummary>, Refusal> {

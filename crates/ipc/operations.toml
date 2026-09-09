@@ -74,6 +74,23 @@ A member read, so the path is `/jobs/:job_id/calls/:call_id` and names no act �
 `helm_access` is `No` for the reason `observe_job` and `get_diff` have it: an argument the size of a file pulled into a Helm session stays in that session for its remainder, and the viewer this exists for is a person who clicked a row.
 """
 
+[operations.get_check_output]
+kind = "query"
+transport = "HTTP"
+helm_access = "No"
+description = "One Check's own output, read back into the app"
+notes = """
+**The other end of a path that opened nothing in Armada.** `CheckRun.output_path` has said where a Check's stdout and stderr were written since the record kept them, and Bridge hands that path to the operating system — so the one surface built to audit a suite that went green for the wrong reason could only send a person out of the app to do it. This is what a reader asks for, once, about the one Check they opened.
+
+The split is `get_call`'s, made against the same measurement. A Check's output is up to two 64 KiB streams; `get_job` is re-read on every event naming the open Job and `/events` is one drop-oldest channel carrying every Job, so a payload that size on either would evict what the Board is drawn from. The cheap fact — that there *is* an output, and where — rides the row, and the bytes are fetched.
+
+**The id is the file's own name and never a path the caller composed.** `:kept` is the last component of `output_path`, which `fleet::check_output` builds out of the row's key — step, attempt, ordinal — so it identifies exactly one recorded run of one Check inside one Job. Fleet resolves it against the rows it holds for that Job before it opens anything, which is what makes a caller-supplied value safe to read a file with: an id naming no row of this Job reaches no file at all, whatever it spells.
+
+**A window, and it says it is one.** The tail is served, for the reason `checks_runner` captures the tail: a test runner prints its failures last. `from_line` is the file's own numbering, `total_lines` is exact because the file is counted as it is read, and `whole` is stated rather than left to be inferred.
+
+`helm_access` is `No` for the reason `get_diff` and `observe_job` have it: a test runner's output pulled into a Helm session stays in that session for the rest of it, and the reader this exists for is a person who pressed a row.
+"""
+
 [operations.get_diff]
 kind = "query"
 transport = "HTTP"

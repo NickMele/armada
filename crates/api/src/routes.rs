@@ -36,9 +36,9 @@ use crate::commands::{
 use crate::daemon::Daemon;
 use crate::journal::Journal;
 use crate::queries::{
-    get_call, get_capacity, get_diff, get_evidence, get_job, get_job_events, get_job_resources,
-    get_manifest_reading, get_remarks, list_jobs, list_manifests, list_models, list_reports,
-    list_workflows, list_worktrees,
+    get_call, get_capacity, get_check_output, get_diff, get_evidence, get_job, get_job_events,
+    get_job_resources, get_manifest_reading, get_remarks, list_jobs, list_manifests, list_models,
+    list_reports, list_workflows, list_worktrees,
 };
 use crate::sockets::{events, job_log, observe_job};
 use crate::stream::Broadcaster;
@@ -148,6 +148,15 @@ pub const SERVED: &[Route] = &[
         operation: "get_call",
         method: "GET",
         path: "/jobs/:job_id/calls/:call_id",
+    },
+    // One Check's output, read into the app rather than handed to the operating
+    // system. `:kept` is a row's own file name — the last component of
+    // `output_path` — and never a path the caller composed: Fleet resolves it
+    // against the rows it holds for the Job before it opens anything.
+    Route {
+        operation: "get_check_output",
+        method: "GET",
+        path: "/jobs/:job_id/checks/:kept/output",
     },
     Route {
         operation: "list_workflows",
@@ -535,6 +544,10 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/:job_id/resources", get(get_job_resources::<D>))
         .route("/jobs/:job_id/examine", post(examine_job::<D>))
         .route("/jobs/:job_id/calls/:call_id", get(get_call::<D>))
+        .route(
+            "/jobs/:job_id/checks/:kept/output",
+            get(get_check_output::<D>),
+        )
         .route("/jobs/:job_id/approve_review", post(approve_review::<D>))
         .route("/jobs/:job_id/merge", post(merge_pull_request::<D>))
         .route("/jobs/:job_id/request_changes", post(request_changes::<D>))

@@ -13,14 +13,27 @@
 // **The reading is `gates.ts`'s** — which attempt's runs count, and which
 // output a press opens. This file decides only what a row looks like.
 
-import { Button, CheckRuns, Kbd, keyFor, type CheckRun as CheckRunRow } from "@armada/components";
+import { useEffect } from "react";
+import type { ReactNode } from "react";
+
+import {
+  AssertionSet,
+  Button,
+  CheckRuns,
+  ConsoleOutput,
+  Kbd,
+  keyFor,
+  type CheckRun as CheckRunRow,
+} from "@armada/components";
 import type { StepChapter } from "@armada/components";
 import { CHECK_OUTCOME, CRITERION_VERDICT_CHECK, CRITERION_VERDICT_JUDGE } from "@armada/components";
 import type { CheckRun, StepDetail } from "@armada/protocol";
 
+import { assertedIn, WHAT_THE_SUITE_ASSERTED } from "./asserted";
 import { judgeOf } from "./declared";
 import { namesChapter } from "./detail-keys";
-import { checksOf, checksStand, didNotPass, outputOf, type CheckRead, type Panel } from "./gates";
+import { checksOf, checksStand, didNotPass, outputRunOf, type CheckRead, type Panel } from "./gates";
+import { noteFor, regionOf, rowsOf, type Outputs } from "./outputs";
 import { basename, openKept, type Opens } from "./phases";
 import { countedIn } from "./verdicts";
 
@@ -39,6 +52,7 @@ export function checksChapter(
   step: StepDetail,
   panels: Panel[],
   opens: Opens,
+  outputs: Outputs,
 ): Omit<StepChapter, "ordinal"> | undefined {
   const reads = checksOf(step);
   if (reads.length === 0) return undefined;
@@ -49,14 +63,16 @@ export function checksChapter(
 
   // What each Check wrote, by the row that wrote it, so a press opens that
   // Check's own file rather than the one the header act opens.
-  const outputs = new Map<string, string>();
+  const wrote = new Map<string, string>();
   for (const read of reads) {
-    if (read.run?.output_path !== undefined) outputs.set(read.name, read.run.output_path);
+    if (read.run?.output_path !== undefined) wrote.set(read.name, read.run.output_path);
   }
-  // The header act and `o` open the same file, because both come through one
-  // reading. Absent where no Check on this attempt kept an output — a control
-  // that opens nothing is the defect `#246` was about with a click added to it.
-  const output = outputOf(step);
+  // The header act, `o` and the reader below all open the same file, because
+  // all three come through one reading. Absent where no Check on this attempt
+  // kept an output — a control that opens nothing is the defect `#246` was
+  // about with a click added to it.
+  const reading = outputRunOf(step);
+  const output = reading?.output_path;
 
   return {
     id: CHECKS_CHAPTER,
@@ -73,11 +89,12 @@ export function checksChapter(
         // built is the surface describing a screen that does not exist.
         openSaid={OPENS_WHERE}
         onOpen={(checkId) => {
-          const kept = outputs.get(checkId);
+          const kept = wrote.get(checkId);
           if (kept !== undefined) openKept(opens, { kept, what: "check" });
         }}
       />
     ),
+    ...contentOf(step, reading, outputs),
     ...(output === undefined
       ? {}
       : {
@@ -94,6 +111,76 @@ export function checksChapter(
           ),
         }),
   };
+}
+
+/**
+ * What the chapter shows while it is the open one, or nothing.
+ *
+ * **Two readings, and each draws only where it has something to say.** What the
+ * suite asserted is one row per Check the gate decided, which every step that
+ * has run its gate has; what a Check printed is a file, which only a Check that
+ * ran a command has. A step with neither carries no `content` at all, which is
+ * what makes the chapter un-openable rather than openable onto an empty frame.
+ *
+ * **The reader is one Check's and it says whose.** The step's Checks may have
+ * written several files, and `outputRunOf` picks the one the header act already
+ * opens — the failed one first. A pane drawing all of them concatenated would
+ * be a transcript nobody could attribute, and one drawing a different Check
+ * from the button above it would be two answers to one question.
+ */
+function contentOf(
+  step: StepDetail,
+  reading: CheckRun | undefined,
+  outputs: Outputs,
+): { content?: ReactNode; openLabel?: ReactNode } {
+  const asserted = assertedIn(step);
+  const kept = reading?.output_path === undefined ? undefined : basename(reading.output_path);
+  if (asserted.length === 0 && kept === undefined) return {};
+  return {
+    // A fragment and no wrapper, which is `verdictsChapter`'s shape:
+    // `.armada-chapter__body` is already a column with a gap, and a div here
+    // would be a second answer to the spacing question the chapter settled.
+    content: (
+      <>
+        {asserted.length === 0 ? null : (
+          <AssertionSet rows={asserted} label={WHAT_THE_SUITE_ASSERTED} />
+        )}
+        {kept === undefined ? null : <ChecksOutput kept={kept} outputs={outputs} />}
+      </>
+    ),
+    openLabel: OPENS_THE_READING,
+  };
+}
+
+/**
+ * One Check's output, read where the Check is.
+ *
+ * **The fetch is the open, and it happens once.** Output is the payload the
+ * event stream is bounded to keep off itself, so nothing asks for it until a
+ * person opens the chapter; `outputs.fetch` drops a second ask for a name it
+ * already holds.
+ *
+ * Every state that is not lines draws the same component with a sentence in it
+ * rather than a different surface, because a reading that has not arrived and a
+ * reading that is empty are both readings — and `emptyNote` is where this
+ * component already says so.
+ */
+function ChecksOutput({ kept, outputs }: { kept: string; outputs: Outputs }) {
+  useEffect(() => outputs.fetch(kept), [outputs, kept]);
+  const held = outputs.of(kept);
+  const output = held?.state === "got" ? held.output : undefined;
+  return (
+    <ConsoleOutput
+      rows={output === undefined ? [] : rowsOf(output)}
+      // **Whose output it is comes off the answer, not off the row that was
+      // pressed.** `CheckOutput.name` is the row Fleet resolved the file to,
+      // and taking the name from there is what makes a pane saying `test_suite`
+      // a claim about the file in front of it rather than about what was asked
+      // for. `regionOf` puts it on the region line, beside the path.
+      {...(output === undefined ? {} : { region: regionOf(output) })}
+      emptyNote={noteFor(held)}
+    />
+  );
 }
 
 /**
@@ -206,3 +293,13 @@ const ASKING_NOW = "The panel is answering now.";
 
 /** Where an output goes when it is pressed. Bridge has no viewer of its own. */
 const OPENS_WHERE = "Click to open this output in your editor";
+
+/**
+ * What opening the chapter offers.
+ *
+ * **It names the reading, not the file.** The act on the header line opens the
+ * output in an editor and says so; this opens it here, and a control that said
+ * "open the output" twice on one line would be two words for two different
+ * places.
+ */
+const OPENS_THE_READING = "Read what the Checks asserted and printed";

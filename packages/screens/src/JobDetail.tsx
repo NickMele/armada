@@ -82,6 +82,7 @@ import type { FileReport, JobSummary, StepDetail } from "@armada/protocol";
 import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
 import { heldForMoney, type ConfirmableAct } from "./Acts";
 import { useCallArguments, type ReadCall } from "./calls";
+import { useCheckOutputs, type ReadCheckOutput } from "./outputs";
 import { openArtifact } from "./opening";
 import type { OpenArtifact, OpenPullRequest } from "./opening";
 import { DIFF_CHAPTER, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-keys";
@@ -176,6 +177,12 @@ export type JobDetailProps = {
    */
   onOpenPullRequest: OpenPullRequest;
   onReadCall: ReadCall;
+  /**
+   * Read one Check's own output. **`onReadCall`'s shape one record over**, and
+   * its own prop for the same reason: it is a round trip to the process that
+   * has the file, and the screen does the reading rather than the fetching.
+   */
+  onReadCheckOutput: ReadCheckOutput;
   /** Stable, like `onReadDiff` — an effect in the decision block depends on it. */
   onNeedMaterial: (jobId: string | null) => void;
   /**
@@ -250,6 +257,7 @@ export function JobDetail({
   onOpenArtifact,
   onOpenPullRequest,
   onReadCall,
+  onReadCheckOutput,
   onNeedMaterial,
   onNeedRemarks,
   job,
@@ -440,6 +448,12 @@ export function JobDetail({
   // fetch made in one is the same argument in the other.
   const calls = useCallArguments(onReadCall, job.id);
 
+  // What each Check printed, for as long as this Job is open. **Held for the
+  // Job rather than for a step**, because a Job's steps each have their own
+  // Checks and a reader moving between them should not re-fetch a file it
+  // already has.
+  const outputs = useCheckOutputs(onReadCheckOutput, job.id);
+
   const rows = watching === null || open === undefined ? [] : entriesOf(watching.rows, open.step_id);
 
   /**
@@ -490,6 +504,7 @@ export function JobDetail({
           transcript,
           log: keys.inLog,
           calls,
+          outputs,
           sheet,
           // The Produced chapter opens the step's deliverable, which the phase
           // strip's Submitted tier was the only route to. Same handler, because

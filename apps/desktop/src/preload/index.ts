@@ -2,7 +2,14 @@ import { contextBridge, ipcRenderer } from "electron";
 
 import { CHANNELS } from "../shared/bridge";
 import type { BridgeApi, BridgeState, Summons } from "../shared/bridge";
-import type { CallRead, ClearOutcome, Draft, Outcome, Proposed } from "@armada/protocol";
+import type {
+  CallRead,
+  CheckOutputRead,
+  ClearOutcome,
+  Draft,
+  Outcome,
+  Proposed,
+} from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
 import type { Artifact, Followed, Opened } from "@armada/protocol";
 import type { ProtocolVersion } from "@armada/protocol";
@@ -186,6 +193,8 @@ const api: BridgeApi = {
   // there or reach the Drone that sent it.
   readCall: (jobId: string, callId: string): Promise<CallRead> =>
     ipcRenderer.invoke(CHANNELS.readCall, jobId, callId),
+  readCheckOutput: (jobId: string, kept: string): Promise<CheckOutputRead> =>
+    ipcRenderer.invoke(CHANNELS.readCheckOutput, jobId, kept),
 
   // Every report filed, with the counts. Read-only, and **the one read here
   // that carries no Job id**: a report survives the Job being forgotten, so

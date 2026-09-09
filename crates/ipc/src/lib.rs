@@ -85,7 +85,7 @@ mod tests;
 
 pub use attempt::{Move, StepAttempt};
 pub use capacity::{AdmissionHold, FleetCapacity};
-pub use checks::{CheckRun, DeclaredCheck, DeclaredJudge};
+pub use checks::{CheckOutput, CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
 pub use detail::{
     Criterion, Dependency, JobDelivery, JobDetail, JobSpend, JudgeInFlight, Refusal, Settled,

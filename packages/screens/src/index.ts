@@ -27,6 +27,7 @@ export * from "./Sheets";
 export * from "./Worktrees";
 export * from "./board";
 export * from "./calls";
+export * from "./outputs";
 export * from "./chapters";
 export * from "./checks";
 export * from "./copy";

@@ -1,12 +1,14 @@
-//! A step's Checks: what it declares, and what each one did.
+//! A step's Checks: what it declares, what each did, and what it printed.
 //!
-//! # Two shapes, because they are two different sentences
+//! # Three shapes, because they are three different sentences
 //!
 //! A step that declares two Checks with no results yet, a step that declares
-//! none, and a step whose Checks have run are three states a reader has to tell
-//! apart. [`DeclaredCheck`] answers the first and [`CheckRun`] the second,
-//! neither inferable from the other — which is why [`DeclaredCheck::when`] is
-//! on the first: the paths a Check covers are only useful before it runs.
+//! none, and a step whose Checks have run are three states a reader has to
+//! tell apart. [`DeclaredCheck`] answers the first and [`CheckRun`] the
+//! second, neither inferable from the other — which is why
+//! [`DeclaredCheck::when`] is on the first: the paths a Check covers are only
+//! useful before it runs. [`CheckOutput`] is the third, fetched rather than
+//! carried: a row says where a Check's output went, never what is in it.
 //!
 //! # The command crosses, and it comes off the workflow
 //!
@@ -20,9 +22,6 @@
 //! reading the Manifest again would show a command, or a scope, that is not the
 //! one this Job runs under the moment somebody edits `armada.yml`.
 //! `ManifestSummary::checks` stays names only for that reason.
-//!
-//! The semantic tier crosses as counts: [`DeclaredJudge`] carries no question,
-//! because a question is a prompt in a screenshot.
 
 use serde::{Deserialize, Serialize};
 
@@ -62,6 +61,9 @@ pub struct DeclaredCheck {
 }
 
 /// One `judge_checks[]` entry a step declares, counted rather than quoted.
+///
+/// **The semantic tier crosses as counts.** This carries no question, because a
+/// question is a prompt in a screenshot.
 ///
 /// **The declaration, never the answer.** What the Judge said is
 /// [`Judged`](crate::Judged), one row per criterion, and the pair is what gives
@@ -184,4 +186,59 @@ impl CheckRun {
             output_path: check.output_path.clone(),
         }
     }
+}
+
+/// A Check's own output, read back into the app.
+///
+/// **The other half of [`CheckRun::output_path`], and the reason a kept log is
+/// not a dead end.** The row carries where the output was written and Bridge
+/// hands that path to the operating system; nothing read a byte of it into a
+/// surface, so a person auditing a suite that went green had to leave the app
+/// to do it. This is what a reader asks for, once, about the one Check they
+/// opened — [`CallArguments`](crate::CallArguments)'s split, made against the
+/// same measurement: the cheap fact rides the record and the bytes are fetched.
+///
+/// **Never on the event stream.** A Check's output is up to two 64 KiB streams,
+/// and `/events` is one drop-oldest channel carrying every Job — a payload that
+/// size would evict the state changes the Board is drawn from. Nothing here is
+/// published, and no event kind carries it.
+///
+/// **The tail, for the reason `checks_runner` keeps the tail.** A test runner
+/// prints its failures last, so a window onto the end of the file is the window
+/// worth having. [`from_line`](CheckOutput::from_line) is where it starts and
+/// [`whole`](CheckOutput::whole) is whether there is anything before it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CheckOutput {
+    /// Which run of the step wrote it, counted from one. The same ordinal
+    /// [`CheckRun::attempt`] carries, so the answer joins back to the row that
+    /// was pressed rather than being trusted to be the one asked for.
+    pub attempt: u32,
+    /// The Check whose output this is, spelled as [`CheckRun::name`] spells it.
+    pub name: String,
+    /// Where it was read from, relative to the repository root. **What
+    /// [`CheckRun::output_path`] already said**, echoed so a reader drawing the
+    /// path beside the reading takes it off the answer rather than composing it
+    /// from the row and hoping the two agree.
+    pub path: String,
+    /// The window, oldest line first, verbatim. **Never rewritten**: the marker
+    /// lines `fleet::check_output` writes between the two streams are lines of
+    /// the file like any other, and a reader that stripped them would be
+    /// showing stdout and stderr interleaved with nothing saying which is which.
+    pub lines: Vec<String>,
+    /// The number of [`lines`](CheckOutput::lines)`[0]` in the whole file,
+    /// counted from one. **The file's own numbering and never the window's**,
+    /// because a citation names the file.
+    pub from_line: u32,
+    /// How many lines the file has. Counted by reading it, so it is exact even
+    /// where the window is not the whole.
+    pub total_lines: u32,
+    /// What the file weighs, in bytes.
+    pub bytes: u64,
+    /// Whether [`lines`](CheckOutput::lines) is all of it.
+    ///
+    /// **Stated rather than inferred from `from_line == 1`**, which is
+    /// [`CallArguments::whole`](crate::CallArguments)'s reason: a surface that
+    /// derived completeness from another field would call a partial answer
+    /// whole the first time that field's meaning moved.
+    pub whole: bool,
 }

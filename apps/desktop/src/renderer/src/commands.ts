@@ -50,6 +50,8 @@ export const reclaimOne = (jobId: string) => window.armada.reclaimWorktree(jobId
 export const readEvidence = (jobId: string | null): void => void window.armada.readEvidence(jobId);
 export const readRemarks = (jobId: string | null): void => void window.armada.readRemarks(jobId);
 export const readCall = (jobId: string, callId: string) => window.armada.readCall(jobId, callId);
+export const readCheckOutput = (jobId: string, kept: string) =>
+  window.armada.readCheckOutput(jobId, kept);
 export const openArtifact = (jobId: string, what: Artifact) => window.armada.openArtifact(jobId, what);
 export const openPullRequest = (jobId: string) => window.armada.openPullRequest(jobId);
 export const examine = (jobId: string): void => void window.armada.examineJob(jobId);

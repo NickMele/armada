@@ -206,6 +206,51 @@ export type CheckRun = {
   output_path?: string;
 };
 
+/**
+ * A Check's own output, as `GET /jobs/:job_id/checks/:kept/output` answered.
+ *
+ * **The other half of `CheckRun.output_path`.** The row says where the output
+ * was written and `main/open.ts` hands that path to the operating system; this
+ * is the read that brings the lines into the app, asked for once by the person
+ * who opened one Check. The split is `CallArguments`', made against the same
+ * measurement: output is up to two 64 KiB streams, so the cheap fact rides the
+ * row and the bytes are fetched. **Never on the event stream.**
+ *
+ * **A window, and every number on it describes the file.** `from_line` is the
+ * file's own numbering, not the window's, so a reader citing line 1,940 means
+ * the file's 1,940th line. Since protocol 9.1.
+ */
+export type CheckOutput = {
+  /** Which run of the step wrote it, counted from one. Joins to `CheckRun.attempt`. */
+  attempt: number;
+  /** The Check whose output this is. The same word `CheckRun.name` carries. */
+  name: string;
+  /**
+   * Where it was read from, relative to the repository root. **What
+   * `CheckRun.output_path` already said**, echoed so a surface drawing the path
+   * beside the reading takes it off the answer rather than composing it.
+   */
+  path: string;
+  /**
+   * The window, oldest line first, verbatim. **Never rewritten** — the marker
+   * lines Fleet writes between the two streams are lines of the file like any
+   * other, and a reader that stripped them would show stdout and stderr with
+   * nothing saying which is which.
+   */
+  lines: string[];
+  /** The number of `lines[0]` in the whole file, counted from one. */
+  from_line: number;
+  /** How many lines the file has. Exact, because the file is counted as it is read. */
+  total_lines: number;
+  /** What the file weighs, in bytes. */
+  bytes: number;
+  /**
+   * Whether `lines` is all of it. **Stated rather than inferred from
+   * `from_line === 1`**, which is `CallArguments.whole`'s reason.
+   */
+  whole: boolean;
+};
+
 // What the gates said about a step, re-exported so `protocol.ts` stays the one
 // import for the wire vocabulary. They live in `judged.ts` because this file
 // reached the 900 lines the gate refuses again; the cut is the one
