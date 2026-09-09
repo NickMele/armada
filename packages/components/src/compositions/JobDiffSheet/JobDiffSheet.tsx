@@ -87,6 +87,12 @@ export type JobDiffSheetProps = {
    * state over. Which silence it is belongs to `children` and to `note`.
    */
   files: JobDiffFile[] | null;
+  /**
+   * Why there is no reading, where there is none — `the worktree was given
+   * back`. Drawn in place of the flat `no reading`, which is the same phrase a
+   * Job Fleet never answered for gets.
+   */
+  whyNoReading?: ReactNode;
   /** The ref the patch was measured against. Absent draws the neutral phrase. */
   measuredFrom?: string;
   /**
@@ -189,6 +195,7 @@ export function JobDiffSheet({
   open,
   branch,
   files,
+  whyNoReading,
   measuredFrom,
   measuredWhole,
   selected,
@@ -210,7 +217,10 @@ export function JobDiffSheet({
         <>
           <span className="armada-diff-sheet__mono">{branch}</span>
           {files === null ? (
-            ` · ${NO_READING}`
+            <>
+              {" · "}
+              {whyNoReading ?? NO_READING}
+            </>
           ) : (
             <Counted files={files} measuredFrom={measuredFrom} measuredWhole={measuredWhole} />
           )}

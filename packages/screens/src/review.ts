@@ -269,6 +269,18 @@ export const CHANGED_NOTHING =
   "That is what a diff_nonempty check refuses, and it is not the same as a job that never " +
   "had a worktree.";
 
+/**
+ * The same fact as `NO_WORKTREE`, short enough for a header line.
+ *
+ * **A header says which silence this is, or it says nothing useful.** It read
+ * `no reading`, which is true of a Job Fleet never answered for, a Job being
+ * read right now, and a Job whose worktree was given back — three different
+ * things wearing one phrase, above a body that names them apart. The Produced
+ * chapter beside it still lists what the Job wrote, so a person reading both
+ * had a count against a blank and no way to tell which was lying.
+ */
+export const WORKTREE_GIVEN_BACK = "the worktree was given back";
+
 /** What a reading with no worktree behind it says. A different fact entirely. */
 export const NO_WORKTREE =
   "This job has no worktree, so there is nothing to read. Absent is not empty — a drone that " +
