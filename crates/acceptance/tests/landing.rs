@@ -1,30 +1,27 @@
 //! Landing's claim: **a Job's work reaches the thing it was for.**
 //!
 //! Two halves, and the second is half of what the milestone is for. A workflow
-//! whose step declares `delivers: true` sends its branch out **when that step is
-//! entered**, holds while a person reads what went out, and ends when that
-//! person merges. A workflow where **no** step declares it finishes with nothing
-//! pushed and no pull request — which is `design-plan`, `code-review`, `epic`
-//! and `prototype`, four of the eight this repository ships.
-//!
-//! The apparatus is [`bench::landing`], over [`bench::board`]'s round trip: every
-//! assertion about what somebody is shown is made against a value that has been
-//! through [`ipc::encode`] and back.
+//! whose step declares `delivers: true` sends its branch out **when that step
+//! is entered**, holds while a person reads what went out, and ends when that
+//! person merges. A workflow where **no** step declares it finishes with
+//! nothing pushed and no pull request — `design-plan`, `code-review`, `epic`
+//! and `prototype`, four of the eight this repository ships. The apparatus is
+//! [`bench::landing`], over [`bench::board`]'s round trip, so every assertion
+//! about what somebody is shown is made against a value that has been through
+//! [`ipc::encode`] and back.
 //!
 //! **The press itself is not asserted, for `recovery.rs`'s reason.** Merging is
-//! a `Fleet` method over a store, a repository and a forge that is a process.
-//! What stands in for it is the pair either side — that the record reaches the
-//! state the act is taken from, and that Fleet serves a route for it.
+//! a `Fleet` method over a store, a repository and a forge that is a process,
+//! so what stands in for it is the pair either side — that the record reaches
+//! the state the act is taken from, and that Fleet serves a route for it.
 //!
 //! | Proved | Not proved |
 //! |---|---|
 //! | Which step of a frozen workflow sends the work out, and that at most one does | That Fleet *sends* it. `Fleet::sent_out_on_entry` commits, pushes and opens; none of the three is reachable without a repository |
-//! | That the send is declared and never inferred — a workflow may name no step, and one that names none still finishes | That the four shipped workflows are among those. `config::tests::shipped` asks that of the real files, against the model roster the adapter resolves |
-//! | That the delivering step is entered while the Job is still `running`, so the branch is out before anybody is asked about it — #520 | The order inside the entry: the rebase, then the commit, then the push. That is one method on `Fleet` and `fleet`'s own tests drive it through fakes |
-//! | That the Job holds at `awaiting_review` with that step at `awaiting_human`, and that a Board is served both | That a person is *shown* the pull request. Nothing here renders |
-//! | That a Job at the gate carries no `Stuck`, so the merge is not a recourse and cannot be drawn as one | That Bridge draws it anywhere else |
-//! | That merging is what takes the Job to `completed_success`, recorded as a person's act | That the press does it. `Fleet::merge_pull_request` writes to somebody else's repository |
-//! | That every answer at the gate is an operation Fleet serves | That pressing one lands |
+//! | That the send is declared and never inferred — a workflow may name no step, and one that names none still finishes | That the four shipped workflows are among those. `config::tests::shipped` asks that of the real files, against the roster the adapter resolves |
+//! | That the delivering step is entered while the Job is still `running`, so the branch goes out before anybody is asked about it — #520 | The order inside the entry: the rebase, the commit, then the push. That is one `Fleet` method, and `fleet`'s own tests drive it through fakes |
+//! | That the Job holds at `awaiting_review` with that step at `awaiting_human`, that a Board is served both, and that it carries no `Stuck` — so the merge is not a recourse and cannot be drawn as one | That a person is *shown* the pull request, or that Bridge draws the act anywhere. Nothing here renders |
+//! | That merging is what takes the Job to `completed_success`, recorded as a person's act, and that every answer at the gate is an operation Fleet serves | That the press does it, or that pressing one lands. `Fleet::merge_pull_request` writes to somebody else's repository |
 //! | That a run of the after-merge Checks cannot start against a tree nobody committed — #474 | That it runs **once** for one commit. The dedupe is `store::already_proved`, keyed by the commit, and `store` has no in-memory constructor |
 
 // The bench is shared with the other milestones' tests and none of them uses
@@ -121,6 +118,12 @@ async fn the_branch_goes_out_while_the_step_that_sends_it_is_still_being_worked(
 /// **`landed` is absent beside a present `pull_request`**, which is the wire
 /// saying the question is still open — `Settled` has no variant for "nobody has
 /// merged it yet", because that is the absence of news rather than a state.
+///
+/// **The three delivery values are this test's own**, as `board.rs`'s are: the
+/// commit, the push and the address are written by `Fleet::land_and_deliver`
+/// over a repository and a remote, so what is asserted about them is that they
+/// survive the wire beside a Job the machines really moved — never that Fleet
+/// produced them. The step states below are the machines' own.
 #[tokio::test]
 async fn the_job_holds_at_the_gate_with_its_pull_request_open() {
     let (run, _, reason) = a_job_at_the_handoff_gate().await;

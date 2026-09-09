@@ -30,8 +30,8 @@ use std::sync::Mutex;
 
 use adapter_traits::{
     Base, BaseOnTheRemote, BroughtUpToDate, Change, CommitTime, Committed, Delivery, Landing,
-    NotDelivered, Opened, Pushed, Renewed, RepositoryStanding, Review, Standing, Vcs,
-    WhatBecameOfIt, Worktree, WorktreeSpec,
+    Merged, NotDelivered, NotMerged, Opened, Pushed, Renewed, RepositoryStanding, Review, Standing,
+    Vcs, WhatBecameOfIt, Worktree, WorktreeSpec,
 };
 
 use crate::work_product::Holding;
@@ -105,6 +105,29 @@ pub struct FakeVcs {
     /// what keeps this fake's `Default` and the domain type's lack of one both
     /// intact.
     base_on_the_remote: Mutex<Option<BaseOnTheRemote>>,
+    /// What the forge answers a merge with. **Its own field rather than a tenth
+    /// on [`Delivering`]**, for [`base_on_the_remote`](FakeVcs::base_on_the_remote)'s
+    /// reason and with a second: a merge only ever happens after the Fleet
+    /// holding this fake exists, so it is scripted through `&self` and a
+    /// consuming builder could not express the case at all.
+    merging: Mutex<Merging>,
+}
+
+/// What this fake's forge does when asked to merge.
+///
+/// **A refusal is a value a test writes out**, not a string it matches on: the
+/// kinds are what a caller acts on differently, and a fake that answered them
+/// all with one sentence could not exercise that at all.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum Merging {
+    /// The forge takes it. **The default**, because a test about the press is
+    /// about what follows a merge.
+    #[default]
+    Takes,
+    /// Somebody had already merged it.
+    AlreadyMerged,
+    /// It would not, and which kind of would-not it was.
+    Refuses(NotMerged),
 }
 
 /// One thing this fake was asked to do to a Job's branch, in order.
@@ -128,6 +151,10 @@ pub enum Delivered {
     AskedToRenderAfresh { pull_request: String },
     /// The repository every worktree is cut from was asked to catch up.
     CaughtTheRepositoryUp { base: String },
+    /// The forge was asked to merge a pull request. **The one write to a
+    /// repository Fleet did not make**, so a test that could not see it could
+    /// not tell a press that merged from one that only moved a Job.
+    Merged { pull_request: String },
 }
 
 /// What the fake's version control looks like from the delivery side.
@@ -273,6 +300,22 @@ impl FakeVcs {
     /// consuming builder could not express the case at all.
     pub fn now_landed(&self, landed: Landing) {
         self.delivery.lock().expect("not poisoned").landed = landed;
+    }
+
+    /// Say what the forge does when it is asked to merge.
+    ///
+    /// `&self` for [`now_landed`](FakeVcs::now_landed)'s reason: nothing merges
+    /// a pull request until the Job that opened it is at its gate, by which
+    /// time the fake is inside a Fleet.
+    pub fn merging(&self, merging: Merging) {
+        *self.merging.lock().expect("not poisoned") = merging;
+    }
+
+    /// How many times the forge has been asked to merge. **The write this fake
+    /// exists to make visible**, so a test asserting that a refused press
+    /// merged nothing is asserting on the whole run rather than on a status.
+    pub fn times_asked_to_merge(&self) -> usize {
+        self.counted(|it| matches!(it, Delivered::Merged { .. }))
     }
 
     /// Say that closing and reopening the pull request will leave it closed.
@@ -480,6 +523,23 @@ impl Delivery for FakeVcs {
         WhatBecameOfIt {
             landing: delivery.landed.clone(),
             base: delivery.base_on_the_forge.clone(),
+        }
+    }
+
+    fn merge(&self, _in_repo: &str, pull_request: &str) -> Result<Merged, NotMerged> {
+        // Recorded before the answer, because the forge is reached either way:
+        // a refused merge is a call that happened and a test asserting nothing
+        // was merged is asserting about the Job, not about the process.
+        self.delivered
+            .lock()
+            .expect("not poisoned")
+            .push(Delivered::Merged {
+                pull_request: pull_request.to_string(),
+            });
+        match self.merging.lock().expect("not poisoned").clone() {
+            Merging::Takes => Ok(Merged::Taken),
+            Merging::AlreadyMerged => Ok(Merged::AlreadyMerged),
+            Merging::Refuses(why) => Err(why),
         }
     }
 

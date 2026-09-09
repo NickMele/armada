@@ -380,12 +380,16 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.readHeld, (_event, want: boolean) =>
     connection?.readHeld(want),
   );
-  // The three decisions on the work, and they stay three channels. Approving
-  // takes it, requesting changes sends the drone back to the same step, and
+  // The four decisions on the work, and they stay four channels. Merging lands
+  // the branch and then takes the work, approving takes it and leaves the pull
+  // request open, requesting changes sends the drone back to the same step, and
   // rejecting is terminal and ends the drone — a single channel taking which
   // one as an argument would make that difference a flag.
   ipcMain.handle(CHANNELS.approveReview, (_event, jobId: string) =>
     connection?.commands.approveReview(jobId),
+  );
+  ipcMain.handle(CHANNELS.mergePullRequest, (_event, jobId: string) =>
+    connection?.commands.mergePullRequest(jobId),
   );
   ipcMain.handle(CHANNELS.requestChanges, (_event, jobId: string, note: string) =>
     connection?.commands.requestChanges(jobId, note),

@@ -28,8 +28,16 @@ import type { JobDiff, JobEvidence, Submitted, Work } from "@armada/protocol";
 import { JobReader } from "./reader";
 import { ask, type Answer } from "./request";
 
-/** What each act is called on the route table. `crates/api/src/routes.rs`. */
-export type Decision = "approve_review" | "request_changes" | "reject";
+/**
+ * What each act is called on the route table. `crates/api/src/routes.rs`.
+ *
+ * **`merge` is the fourth, and the only one that writes into a repository
+ * Armada does not own.** It is `approve_review` with that write in front of it,
+ * and Fleet performing it is what makes the repository's after-merge checks
+ * run — a person who merges on the forge instead waits for a sweep that asks
+ * about one pull request at a time.
+ */
+export type Decision = "approve_review" | "request_changes" | "reject" | "merge";
 
 /**
  * One Job's claims and one Job's diff, each read when a surface asks for it.
@@ -113,10 +121,10 @@ export class ReviewMaterial {
 
 /**
  * Send one decision on the work. **The route is the whole of the difference** —
- * two of the three carry no body, and the third carries the reviewer's own
+ * three of the four carry no body, and the other carries the reviewer's own
  * words, which is the one string on this seam Fleet does not assemble.
  *
- * All three answer with the Job as it now stands, so the caller folds one row
+ * All four answer with the Job as it now stands, so the caller folds one row
  * rather than re-reading the board.
  */
 export function decide(

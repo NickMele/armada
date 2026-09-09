@@ -171,7 +171,15 @@ export type JobDetailProps = {
   onReport: (jobId: string, filing: FileReport) => Promise<Outcome>;
   /** Let this Job run. Sent on the press, with no confirmation. */
   onApprove: (jobId: string) => void;
-  /** The three answers to a Job at `awaiting_review`. Three props, not one. */
+  /**
+   * The four answers to a Job at `awaiting_review`. Four props, not one — each
+   * does something different to the Job, and one prop taking which would read
+   * as one act and perform four.
+   *
+   * `onMergePullRequest` is drawn only where the Job's record holds a pull
+   * request, which `Decide` decides from the detail rather than from a flag.
+   */
+  onMergePullRequest: (jobId: string) => void;
   onApproveReview: (jobId: string) => void;
   onRequestChanges: (jobId: string, note: string) => void;
   onReject: (jobId: string) => void;
@@ -241,6 +249,7 @@ export function JobDetail({
   onRerun,
   onReport,
   onApprove,
+  onMergePullRequest,
   onApproveReview,
   onRequestChanges,
   onReject,
@@ -542,6 +551,10 @@ export function JobDetail({
                     diff={recorded.diff}
                     stale={stale}
                     deciding={deciding}
+                    {...(whole?.delivery?.pull_request === undefined
+                      ? {}
+                      : { pullRequest: whole.delivery.pull_request })}
+                    onMerge={onMergePullRequest}
                     onApprove={onApproveReview}
                     onRequestChanges={onRequestChanges}
                     onReject={onReject}

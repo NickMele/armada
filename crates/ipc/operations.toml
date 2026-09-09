@@ -418,6 +418,29 @@ The counterpart to `approve_dispatch`, at the other end: that one is the gate be
 Refused with a 409 on a Job that is not at `awaiting_review`. The three review acts share that refusal, and it is what keeps this from quietly becoming `approve_dispatch`: `awaiting_approval -> rejected` is a legal edge too, and it belongs to `deny_dispatch`.
 """
 
+[operations.merge_pull_request]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "A person merges the pull request their Job opened, and Fleet runs what follows"
+notes = """
+**The fourth answer at a human gate, and the only act in Armada that writes into a repository Fleet did not make.** Every other act is confined to a worktree Fleet cut; this changes what everybody else builds on, so it is the loudest thing in the Job's log and it is written there before the write happens rather than after.
+
+**It exists under `auto_merge: never`, and that is not a contradiction.** The policy governs whether a *machine* decides that work lands. This is a person deciding — and Fleet performing it is what makes the after-merge Checks run at all, because the only other path is Fleet noticing the merge on a rotation that asks about one pull request per sweep. A person who merges on the forge instead skips them. `#523`.
+
+**It is `approve_review` with a write to the forge in front of it.** What it adds is the merge, the record of it and the Checks over what merged; what it does to the two machines is that route's, called rather than restated — the step advances beneath the gate and the Job is `queued` at the next step, or `completed_success` where the step that passed was the workflow's last.
+
+**Not a `recourse`.** `core_model::Stuck` classifies a Job that *stopped*, and `awaiting_review` is not one of the five statuses it is asked of: nothing went wrong, and what the Job needs is in the status itself. A surface draws this where it draws the other three answers, off `status`.
+
+**Everything after the merge is `noticing`'s, reached rather than repeated.** The record, the fast-forward of the base branch, the run of `after_merge.checks` and the `job.landed` event are one path whether Fleet noticed a merge or a person pressed for one. So the Checks cannot run twice for one commit — the dedupe is keyed by the commit, not by the Job, because two Jobs merging within a minute are two merges into one commit.
+
+**A refused merge says which of the reasons it was, and nothing retries.** A protected base, a conflict, a check the forge requires that has not passed, a pull request that is not open, no tool on the machine, and a refusal this vocabulary has no word for are six codes rather than one — each sends a person somewhere different, and a button that failed silently on a protected branch would be worse than no button. The Job is left exactly where the press found it, answerable by the three acts it was answerable by a moment earlier.
+
+Refused with a 409 on a Job that is not at `awaiting_review`, sharing that refusal with the three acts beside it, and with a 409 where the Job's record holds no pull request — a workflow that declares no delivering step opened none, and the act a person wants on one of those is `approve_review`.
+
+`helm_access` is `No`, like every other act at this gate. Deciding that work lands is the owner's, and this one lands it in somebody else's repository.
+"""
+
 [operations.answer_question]
 kind = "command"
 transport = "HTTP"

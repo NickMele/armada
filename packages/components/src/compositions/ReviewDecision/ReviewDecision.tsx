@@ -4,8 +4,8 @@ import { Separator } from "../../primitives/Separator/Separator";
 import { Textarea } from "../../primitives/Textarea/Textarea";
 
 /**
- * Review decision — the three answers to a Job waiting at a human gate, and the
- * note one of them carries.
+ * Review decision — the answers to a Job waiting at a human gate, and the note
+ * one of them carries.
  *
  * **The note is on this surface, never behind a control.**
  * `docs/practices/bridge.md`: reviewing a Drone's output and replying to it is
@@ -14,15 +14,23 @@ import { Textarea } from "../../primitives/Textarea/Textarea";
  * the field sits where the diff is, already open, with nothing to press to
  * reach it.
  *
- * **Three acts, and two of them are recoverable.** That difference is the whole
- * job of this component's arrangement, and it is carried by position and by a
- * sentence rather than by a shade of red:
+ * **Four acts, and three of them are recoverable.** That difference is the
+ * whole job of this component's arrangement, and it is carried by position and
+ * by a sentence rather than by a shade of red:
  *
  * | Act | Where it sits | What survives |
  * |---|---|---|
- * | Approve | the group, primary | the work is taken; on the last step Fleet commits and delivers |
+ * | Merge | the group, primary, **only where there is a pull request** | the work lands, and Fleet runs the repository's after-merge checks |
+ * | Approve | the group | the work is taken and the pull request is left open |
  * | Request changes | the group, secondary | the drone, the worktree and the step — it goes back to work |
  * | Reject | below a rule, alone | **nothing. Terminal, and it ends the drone** |
+ *
+ * **Merge takes the primary fill from Approve when it is offered, and that is
+ * the point of it.** A job holding an open pull request has one ordinary
+ * ending, and it is not "record this done and leave the branch on the forge" —
+ * that is the state the button exists to stop. Where there is no pull request
+ * to merge the prop is absent, the control is not drawn, and Approve is the
+ * primary act again.
  *
  * **Reject is not in the group and is not behind a caret.** A split button
  * would make it a variant of the act on its face, which is exactly the reading
@@ -39,17 +47,26 @@ import { Textarea } from "../../primitives/Textarea/Textarea";
  * the 422 Fleet gives it. A round trip to learn the field was empty is a
  * refusal a person reads as a failure.
  *
- * **No glyph on any of the three.** Primary and secondary are label-only by
+ * **No glyph on any of them.** Primary and secondary are label-only by
  * contract, and a mark on the destructive one alone would make the difference
- * between the three a picture rather than a sentence — which is the reading
- * that lets a person press the terminal one thinking it is the loud version of
- * the mild one. The labels say what each does; the sentences say what survives.
+ * between them a picture rather than a sentence — which is the reading that
+ * lets a person press the terminal one thinking it is the loud version of the
+ * mild one. The labels say what each does; the sentences say what survives.
  */
 export type ReviewDecisionProps = {
   /** The reviewer's own words. Controlled — the caller holds the draft. */
   note: string;
   onNote: (note: string) => void;
-  /** Take the work. Sent on the press. */
+  /**
+   * Merge the pull request and take the work. Sent on the press.
+   *
+   * **Absent is a job with no pull request to merge** — a workflow that
+   * declares no delivering step opened none, and so did one whose push failed.
+   * Presence is the whole of what decides this control, because a merge Fleet
+   * would refuse must not be a button a person can reach.
+   */
+  onMerge?: () => void;
+  /** Take the work, leaving the pull request where it is. Sent on the press. */
   onApprove: () => void;
   /** Send it back with the note. Refused while the note is blank. */
   onRequestChanges: () => void;
@@ -65,10 +82,13 @@ export type ReviewDecisionProps = {
   disabledNote?: ReactNode;
   /** The label over the note field. Sentence case, no Wh- opener. */
   noteLabel?: string;
-  /** What the two recoverable acts do, said once beneath them. */
+  /** What the recoverable acts do, said once beneath them. */
   keptNote?: ReactNode;
+  /** What merging does. Drawn only where merging is offered. */
+  mergeNote?: ReactNode;
   /** What rejecting costs. Its own sentence, beneath its own rule. */
   rejectNote?: ReactNode;
+  mergeLabel?: string;
   approveLabel?: string;
   requestChangesLabel?: string;
   rejectLabel?: string;
@@ -77,6 +97,7 @@ export type ReviewDecisionProps = {
 export function ReviewDecision({
   note,
   onNote,
+  onMerge,
   onApprove,
   onRequestChanges,
   onReject,
@@ -84,12 +105,18 @@ export function ReviewDecision({
   disabledNote,
   noteLabel = "What should change",
   keptNote = "Approving takes the work. Requesting changes sends this note to the drone as a turn — it keeps the worktree and the step, and comes back running.",
+  mergeNote = "Merging sends the pull request to the forge and then takes the work, and Armada runs the repository's after-merge checks against what landed. Merging on the forge instead skips them.",
   rejectNote = "Rejecting is a verdict on the work and the job ends there. The drone is stopped and nothing resumes it. Its branch stays where the drone left it.",
+  mergeLabel = "Merge and take the work",
   approveLabel = "Approve the work",
   requestChangesLabel = "Request changes",
   rejectLabel = "Reject the work",
 }: ReviewDecisionProps) {
   const blank = note.trim() === "";
+  // Presence and never a flag: the caller has the pull request or it has not,
+  // and a boolean beside a handler would let a surface offer an act with
+  // nothing behind it.
+  const merging = onMerge !== undefined;
 
   return (
     <div className="armada-decision">
@@ -104,10 +131,19 @@ export function ReviewDecision({
       />
 
       <div className="armada-decision__kept">
-        {/* The one accent fill on this surface. Approving is the act the gate
-            exists for, and the distance from the red below is what keeps the
-            two from reading as a pair. */}
-        <Button variant="primary" disabled={disabled} onClick={onApprove}>
+        {/* The one accent fill on this surface, and it moves. A job with a pull
+            request open has one ordinary ending and it is this one; a job with
+            none never draws this control at all. */}
+        {merging ? (
+          <Button variant="primary" disabled={disabled} onClick={onMerge}>
+            {mergeLabel}
+          </Button>
+        ) : null}
+        <Button
+          variant={merging ? "secondary" : "primary"}
+          disabled={disabled}
+          onClick={onApprove}
+        >
           {approveLabel}
         </Button>
         {/* Off while the note is blank, which is what Fleet would answer. */}
@@ -119,6 +155,7 @@ export function ReviewDecision({
           {requestChangesLabel}
         </Button>
       </div>
+      {merging ? <p className="armada-decision__said">{mergeNote}</p> : null}
       <p className="armada-decision__said">{keptNote}</p>
 
       {/* The rule is load-bearing, not decoration: it is what says the control

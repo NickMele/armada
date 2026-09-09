@@ -86,6 +86,17 @@ impl fmt::Display for Adrift {
                  the change and every Check passed",
                 job.as_str()
             ),
+            Adrift::NothingToMerge { job } => write!(
+                out,
+                "{} opened no pull request, so approving it is the act",
+                job.as_str()
+            ),
+            Adrift::NotMerged { job, why } => write!(
+                out,
+                "{}'s pull request was not merged and nothing retries — {}",
+                job.as_str(),
+                why.said()
+            ),
             Adrift::NotCommitted { job, cause } => write!(
                 out,
                 "{} finished and its work would not commit: {cause}. The Job succeeded and the \
@@ -366,6 +377,8 @@ impl Adrift {
             | Adrift::NotTold { job, .. }
             | Adrift::NotCommitted { job, .. }
             | Adrift::NotDelivered { job, .. }
+            | Adrift::NothingToMerge { job }
+            | Adrift::NotMerged { job, .. }
             | Adrift::NoSuchStep { job, .. }
             | Adrift::NotReaped { job, .. }
             | Adrift::NotForgettable { job, .. }
@@ -481,6 +494,9 @@ impl Error for Adrift {
             | Adrift::NotFileable { .. }
             | Adrift::DroneStillThere { .. }
             | Adrift::WorktreeGone { .. }
+            // The two a merge makes. `NotMerged` is not an `Error` either.
+            | Adrift::NothingToMerge { .. }
+            | Adrift::NotMerged { .. }
             | Adrift::NothingToPropose
             | Adrift::NoReadingWorktree(_)
             | Adrift::NoWorkflowFits { .. }

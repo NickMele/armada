@@ -210,6 +210,10 @@ The remedy needs no new state: `depends_on` already sequences Jobs and already p
 
 Fleet asks about **one** pull request per sweep and rotates, because the turn interval is 250ms and asking the forge is a process — an open pull request needs asking rarely and a merged one never again.
 
+**A person presses to merge, and Fleet performs it.** That is the fourth answer at a human gate, beside approving, requesting changes and rejecting, and it is the one act Armada takes that writes into a repository Fleet did not make — so it is the loudest line in the Job's log, written before the write happens. It is not a machine deciding: `auto_merge: never` reserves that, and the press is a person. What it buys over merging on the forge is everything in the table below, at once instead of on a rotation.
+
+**A refused merge says which of the reasons it was, and nothing retries.** A protected base, a conflict, a check the forge requires that has not passed, a pull request that is not open, no tool on the machine, and a refusal Armada has no word for are six answers rather than one, because they send a person to six different places. The Job is left exactly where the press found it.
+
 | What one ask answers | What follows |
 |---|---|
 | Somebody merged it | The Job's record says so, the row says so, and the repository every worktree is cut from is brought up to what merged |

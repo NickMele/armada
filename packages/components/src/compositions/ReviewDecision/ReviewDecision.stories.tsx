@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { ReviewDecision } from "./ReviewDecision";
 
 /**
- * The three answers to a job waiting at a human gate, and the note one of them
+ * The answers to a job waiting at a human gate, and the note one of them
  * carries.
  *
  * The reply field is on the surface rather than behind a control, because
@@ -10,9 +10,13 @@ import { ReviewDecision } from "./ReviewDecision";
  * separate route, tab or modal from the diff is the thing `bridge.md` says to
  * push back on before it is built.
  *
- * **Reject sits below a rule and never in the group.** Two of the three are
- * recoverable and one ends both the job and the drone, and a person has to be
- * able to tell which before pressing.
+ * **Reject sits below a rule and never in the group.** The others are
+ * recoverable and this one ends both the job and the drone, and a person has to
+ * be able to tell which before pressing.
+ *
+ * **Merge is drawn only where there is a pull request**, and it takes the
+ * primary fill when it is. A job holding one has a single ordinary ending, and
+ * it is not "record this done and leave the branch on the forge".
  */
 const meta: Meta<typeof ReviewDecision> = {
   title: "Compositions/Review decision",
@@ -45,6 +49,37 @@ export const ANoteWritten: Story = {
       "The gate change is right, but AdvanceGate::HumanAlways is handled in gate.rs and not in " +
       "config's loader, so a workflow declaring it is still refused at load. Add the arm there " +
       "and a test that loads one.",
+  },
+};
+
+/**
+ * A job whose branch went out, so there is a pull request to merge. **Merge is
+ * the primary act and Approve steps back to secondary**: approving here records
+ * the job done and leaves the branch open on the forge, which is the ending the
+ * merge control exists to stop being the easy one.
+ *
+ * Approving is still on the surface, because a person may want the job closed
+ * without landing the branch — a change somebody else will carry, or one that
+ * is merging by another route.
+ */
+export const APullRequestToMerge: Story = {
+  args: {
+    note: "",
+    onMerge: () => {},
+  },
+};
+
+/**
+ * The same, with a decision already in flight. Every control is off, including
+ * the merge — the one act here that writes into a repository Armada does not
+ * own, and the last one that should be pressable twice.
+ */
+export const AMergeAlreadySent: Story = {
+  args: {
+    note: "",
+    onMerge: () => {},
+    disabled: true,
+    disabledNote: "A decision on this job is already in flight. It was not sent twice.",
   },
 };
 

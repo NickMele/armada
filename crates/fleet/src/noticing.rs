@@ -28,7 +28,8 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use adapter_traits::{
-    AgentHarness, Delivery, Landing, Rendering, Renewed, RepositoryStanding, Vcs, WorkProduct,
+    AgentHarness, Delivery, Landing, Rendering, Renewed, RepositoryStanding, Vcs, WhatBecameOfIt,
+    WorkProduct,
 };
 use core_model::{Component, Envelope, FieldValue, JobId, Level, Timestamp};
 
@@ -166,29 +167,55 @@ where
             }
             Landing::Merged { .. } | Landing::ClosedUnmerged { .. } => {}
         }
+        self.settled_landing(&asking.job_id, read).await
+    }
+
+    /// What a settled pull request comes to: the record, the repository every
+    /// worktree is cut from, the Checks over what merged, and the row.
+    ///
+    /// **One path, whether Fleet noticed the merge or a person pressed for
+    /// it.** `crate::merging` is the second way into it, and it reaches here
+    /// rather than doing the four again — a press with its own record would be
+    /// a second place the same commit is caught up to and proved, and the
+    /// dedupe `crate::proving` keys by the commit would be asked from two
+    /// directions.
+    ///
+    /// **`None` on anything that has not settled**, which no caller reaches:
+    /// the sweep answers the three unsettled readings above and a press reads
+    /// the forge straight after merging. It is a `let else` rather than an
+    /// assumption for `published_landing`'s reason — a variant added to
+    /// [`Landing`] later must not quietly record the absence of news.
+    pub(crate) async fn settled_landing(
+        &self,
+        job: &JobId,
+        read: WhatBecameOfIt,
+    ) -> Result<Option<Noticed>, Adrift> {
+        if !read.landing.is_settled() {
+            return Ok(None);
+        }
         let landed = read.landing;
         self.store()
             .lock()
             .await
-            .record_landed(&asking.job_id, &landed)
+            .record_landed(job, &landed)
             .map_err(Adrift::Writing)?;
         let repository = match (&landed, read.base.as_deref()) {
             // **Only a merge, and only where the forge named the branch.**
             // What merged is now what everything else builds on — `#337` — and
             // a pull request that was closed put nothing on the base at all.
             (Landing::Merged { .. }, Some(base)) => {
-                let standing = self.caught_the_repository_up(&asking.job_id, base).await;
+                let standing = self.caught_the_repository_up(job, base).await;
                 // **After the fast-forward and never instead of it**, because
                 // what is proved is the tree the fast-forward left: a standing
                 // that declined has no commit to hand over and cannot start a
                 // run. `#474`, and `crate::proving` for why nothing waits on it.
-                self.began_proving(&asking.job_id, &standing).await;
+                self.began_proving(job, &standing).await;
                 Some(standing)
             }
             _ => None,
         };
         let noticed = Noticed {
-            job: asking.job_id.clone(),
+            job: job.clone(),
             landed,
             repository,
         };
