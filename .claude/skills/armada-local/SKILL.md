@@ -53,6 +53,36 @@ stopped verifying screens at all.
   yours is broad enough to catch the owner's.
 - **Never leave a dialog up.** Dismiss it, or quit the app.
 
+## Anything you background, you kill in the same breath
+
+**A Bash call gets a fresh shell.** Whatever you put in the background and do
+not kill before that call returns is reparented to init, and it keeps running
+long after the session that started it has gone. Nothing reaps it. The owner
+finds it on his own machine.
+
+Confirmed 9 Sep 2026, from one flaky-test hunt: a session and its subagent left
+250 `yes`, twenty shell spin loops and six forking scripts running for three
+hours at load average 433. Every one of them was CPU load raised on purpose, to
+reproduce a flake that only appeared under contention — the load was the right
+idea. Not one of them was killed. An earlier call in the same session had done
+it correctly, capturing the job PIDs and killing them at the end; the next call
+dropped that line and detached twenty more.
+
+- **Prefer `run_in_background`** over `nohup`, `disown`, `setsid` or `(cmd &)`.
+  The harness tracks what it starts and reaps it when the session ends. A shell
+  you detached by hand has left the harness's sight for good.
+- **If it must be a plain background job, kill it in the same call.** Keep the
+  PIDs — `HOGS=$(jobs -p)` — and `kill $HOGS` before the command returns, or
+  `trap 'kill 0' EXIT`. A `wait` inside a `while true` loop is not cleanup; it
+  never reaches the end.
+- **Bound the load.** `timeout 60` around a load generator makes the worst case
+  a minute, not a weekend.
+- **Say what you started and that you stopped it**, the same as a window.
+
+The rule is the one two sections up, applied to something with no window: quit
+what you launched, and quit it by the handle you kept rather than by what it is
+called.
+
 **`scripts/dev` and `pnpm dev` are not yours.** Not because they start Bridge,
 but because they reinstall `armada` and kill the Fleet the owner is using. Start
 Bridge alone against a Fleet already up:
@@ -93,4 +123,6 @@ measured by.
 | Discard what `armada clean` printed | The commit each deleted branch pointed at is the only thing that makes it recoverable |
 | `git branch -D` over the `armada/` namespace | `armada clean` derives what it deletes. A glob does not, and one destroyed nine unmerged branches belonging to no Job |
 | `rm -rf` an Armada worktree | Git keeps a record that outlives the directory and refuses the branch delete afterwards. `armada clean` does it in the order git needs |
+| Detach a process with `nohup`, `setsid` or `(cmd &)` | It outlives the session and nothing reaps it. Use `run_in_background`, or kill it in the call that started it |
+| Raise CPU load and not kill it | One flaky-test hunt left 276 processes at load average 433 for three hours. Keep the PIDs, `trap 'kill 0' EXIT`, and bound it with `timeout` |
 | Reinstall the binary from a hook | v1's cold build was four minutes because a hook ran `cargo install` on every merge. `docs/practices/rust.md` section 8 |
