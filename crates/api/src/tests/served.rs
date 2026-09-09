@@ -14,7 +14,7 @@ use tower::ServiceExt;
 
 use crate::tests::fake::{at, running, FakeDaemon};
 use crate::tests::shapes;
-use crate::tests::shapes::{run_id, A_PROPOSAL, THE_ARGUMENT, THE_CALL, THE_OUTPUT};
+use crate::tests::shapes::{run_id, A_PROPOSAL, THE_ARGUMENT, THE_CALL, THE_FRAME, THE_OUTPUT};
 use crate::{router, Broadcaster, Next, Served, Subscription, SERVED};
 
 fn wired(daemon: FakeDaemon, events: Broadcaster) -> Router {
@@ -68,7 +68,8 @@ async fn every_operation_the_table_names_is_routed() {
             .path
             .replace(":job_id", "01JOB0")
             .replace(":call_id", THE_CALL)
-            .replace(":kept", THE_OUTPUT);
+            .replace(":kept", THE_OUTPUT)
+            .replace(":run/:name", THE_FRAME);
         let (status, _) = call(&app, route.method, &uri, A_PROPOSAL).await;
         assert_ne!(
             status,
@@ -482,6 +483,97 @@ async fn a_check_output_the_record_does_not_hold_is_not_a_missing_job() {
 
     let (status, _) = call(&app, "GET", "/jobs/01NOTHERE/checks/never.0.log/output", "").await;
     assert_eq!(status, StatusCode::NOT_FOUND, "and a missing Job still is");
+}
+
+/// **A frame comes back as the file**, which is the one answer on this router
+/// that is not JSON. What is asserted is the whole of what makes it usable: the
+/// bytes are the file's own and unwrapped, the media type is read off the
+/// name rather than stored beside the path, and `nosniff` rides with it so a
+/// file that is not what its name says is refused rather than guessed at.
+///
+/// It uses the router directly instead of [`call`] because the headers are the
+/// subject here and that helper keeps only the status and the body.
+#[tokio::test]
+async fn a_frame_comes_back_as_the_file_and_says_what_it_is() {
+    let events = Broadcaster::new();
+    let daemon = FakeDaemon::new(events.clone());
+    running(&daemon, "01RUNNING");
+    let app = wired(daemon, events);
+
+    let request = Request::builder()
+        .method("GET")
+        .uri(format!("/jobs/01RUNNING/frames/{THE_FRAME}"))
+        .body(Body::empty())
+        .expect("a well-formed request");
+    let response = app.oneshot(request).await.expect("the router answers");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("content-type")
+            .and_then(|said| said.to_str().ok()),
+        Some("image/png"),
+        "read off the name, and never stored beside the path"
+    );
+    assert_eq!(
+        response
+            .headers()
+            .get("x-content-type-options")
+            .and_then(|said| said.to_str().ok()),
+        Some("nosniff"),
+        "sniffing is how a file that is not an image comes to be executed"
+    );
+
+    let body = response
+        .into_body()
+        .collect()
+        .await
+        .expect("a body that reads")
+        .to_bytes()
+        .to_vec();
+    assert_eq!(
+        body,
+        shapes::THE_FRAME_BYTES,
+        "the file itself, and not a base64 of it inside an envelope"
+    );
+}
+
+/// A frame the record does not hold is **not** the Job being absent — the same
+/// distinction a Check's output draws one record over.
+///
+/// **The record is the allowlist**, and the second half of this is what that
+/// buys: a name spelling its way upward reaches no file, because nothing but
+/// the rows decides what may be opened. It is refused for naming no row, which
+/// is the same refusal any other invented name gets.
+#[tokio::test]
+async fn a_frame_the_record_does_not_hold_is_not_a_missing_job() {
+    let events = Broadcaster::new();
+    let daemon = FakeDaemon::new(events.clone());
+    running(&daemon, "01RUNNING");
+    let app = wired(daemon, events);
+
+    let (status, _) = call(&app, "GET", "/jobs/01RUNNING/frames/never.1/gone.png", "").await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    let (status, _) = call(&app, "GET", "/jobs/01NOTHERE/frames/never.1/gone.png", "").await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "and a missing Job still is");
+
+    // The rows are the only thing that resolves a name to a file, so a name
+    // built to climb out of the frames directory resolves to no row and is
+    // refused for that — never opened and then judged.
+    let (status, _) = call(
+        &app,
+        "GET",
+        "/jobs/01RUNNING/frames/..%2F..%2Fetc/passwd",
+        "",
+    )
+    .await;
+    assert_ne!(
+        status,
+        StatusCode::OK,
+        "a name no row holds reaches no file, whatever it spells"
+    );
 }
 
 #[tokio::test]

@@ -50,6 +50,14 @@ use crate::job::verdict::GateVerdict;
 /// `review_findings` is deliberately absent: the registry records it as not
 /// among the legal values, and until that is decided it is refused by name
 /// where a definition is parsed.
+///
+/// **[`Visual`](EvidenceType::Visual) is the seventh, and the first that needs
+/// something outside this enum to mean anything.** The other six are satisfied
+/// by whatever the step's work product already is; this one is satisfied by a
+/// harness the repository declares, so a step declaring it against an
+/// `armada.yml` with no `evidence:` section is refused where a workflow is
+/// resolved — before a Drone is spawned, rather than at the step that could
+/// capture nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EvidenceType {
     Diff,
@@ -58,6 +66,15 @@ pub enum EvidenceType {
     TestSuiteRun,
     Bundle,
     Document,
+    /// What the work looks like, captured by running the repository's own
+    /// harness against a spec the Drone wrote.
+    ///
+    /// **Reaching a state is what an end-to-end test already does**, which is
+    /// why the repository's existing harness is the mechanism and Armada grows
+    /// no browser: Armada's own job detail needs a Job created, dispatched,
+    /// approved and run before there is a screen to photograph, and nothing
+    /// short of the app's own test framework gets there.
+    Visual,
 }
 
 /// What it takes to advance past a step. **Five variants, of the schema's four
@@ -812,6 +829,7 @@ impl EvidenceType {
         EvidenceType::TestSuiteRun,
         EvidenceType::Bundle,
         EvidenceType::Document,
+        EvidenceType::Visual,
     ];
 
     /// The wire value, which is also the WorkflowDef schema's spelling.
@@ -823,10 +841,11 @@ impl EvidenceType {
             EvidenceType::TestSuiteRun => "test_suite_run",
             EvidenceType::Bundle => "bundle",
             EvidenceType::Document => "document",
+            EvidenceType::Visual => "visual",
         }
     }
 
-    /// Read a stored value back. `None` where it is not one of the six.
+    /// Read a stored value back. `None` where it is not one of the set.
     pub fn from_wire(value: &str) -> Option<EvidenceType> {
         EvidenceType::ALL
             .iter()

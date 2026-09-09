@@ -187,6 +187,27 @@ where
         // yardstick the Judge is shown is the requester's frozen text and there
         // is no arrangement of this call that could substitute the Drone's.
         let request = Request::of(&job);
+        // **Before the gate, and it gates nothing.** A step whose evidence is
+        // what it looks like is reviewed by looking at it, and the frames have
+        // to exist by the time the panel is opened whatever the verdict was —
+        // so the harness runs here rather than after a ruling that may hand the
+        // step back. It costs the turn what a Check already costs it; nothing
+        // else about the ruling changes, and a harness that would not run is
+        // said in the Job's log rather than folded into a verdict.
+        if let Some(why) = self
+            .showed(
+                &job_id,
+                &job.handle(),
+                &step,
+                at.step(),
+                attempt,
+                &landed.submission,
+                std::path::Path::new(worktree.path()),
+            )
+            .await?
+        {
+            self.noted_not_shown(&job_id, &step, &why);
+        }
         let ruling = rule_on(
             at.on_attempt(attempt, spent),
             request,
@@ -416,6 +437,34 @@ where
         .at_step(step.as_str())
         .with_field("artifact", FieldValue::Str(artifact.to_string()))
         .with_field("said", FieldValue::Str(cause.to_string()));
+        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+    }
+
+    /// Write down that there is nothing to look at, and why.
+    ///
+    /// **A line and not an escalation.** A harness that would not run has
+    /// established nothing about the work — the Checks and the Judge ruled on
+    /// it either way — so what is lost is the thing a reviewer was going to
+    /// look at, which is a fact to read beside the verdict rather than a
+    /// fourth thing that can stop a step.
+    ///
+    /// **`Warn` and not `Info`**, because it names a repository whose declared
+    /// harness does not work, which is an edit somebody has to make.
+    /// [`NotShown::said`] is the sentence, and it lives on the type so this and
+    /// any later surface say the same thing.
+    ///
+    /// [`NotShown::said`]: crate::NotShown::said
+    fn noted_not_shown(&self, job: &JobId, step: &StepId, why: &crate::NotShown) {
+        let envelope = Envelope::new(
+            self.now(),
+            Level::Warn,
+            Component::Fleet,
+            self.run().clone(),
+            "the step's harness produced nothing to look at",
+        )
+        .in_job(job.as_ulid().clone())
+        .at_step(step.as_str())
+        .with_field("said", FieldValue::Str(why.said()));
         let _ = transcript::note(&self.host().repo_root, job, &envelope);
     }
 

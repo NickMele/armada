@@ -22,6 +22,7 @@ use crate::checks::{CheckRun, DeclaredCheck, DeclaredJudge};
 use crate::enums::{AdvanceGate, StepState};
 use crate::ids::{CriterionId, Instant, StepId};
 use crate::judged::{Flagged, Judged, KeptDeliverable};
+use crate::showing::KeptFrame;
 
 /// What Fleet knows about one step beyond its `job_steps` row.
 ///
@@ -69,6 +70,11 @@ pub struct StepFacts {
     /// each name from the step, the run and the target the frozen workflow
     /// declares, and answers only the names that are there.
     pub deliverables: Vec<KeptDeliverable>,
+    /// The frames this step's harness produced, oldest run first. Read off the
+    /// record rather than off the filesystem, unlike `deliverables`: a frame's
+    /// name is the harness's own and no arithmetic here could rebuild it, so
+    /// the rows are the only list there is.
+    pub frames: Vec<KeptFrame>,
     /// Every run of this step, oldest first, folded from the Job's own log.
     ///
     /// **Not a row and not the workflow's** — the other facts here are one or
@@ -192,6 +198,21 @@ pub struct StepDetail {
     /// [`CheckRun::output_path`]: crate::CheckRun::output_path
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deliverables: Vec<KeptDeliverable>,
+    /// The frames this step's harness produced, oldest run first.
+    ///
+    /// **The fourth record a step's work is read from**, beside the three
+    /// above — and the first that is not an argument about a verdict. Nothing
+    /// gates on a frame: it is what a person looks at on a step whose evidence
+    /// is what it looks like, which is the whole of what `evidence_type:
+    /// visual` means.
+    ///
+    /// **Empty is the ordinary case and it is not a gap.** Every step of every
+    /// other type captures nothing, and so does a `visual` step whose harness
+    /// would not run — what happened there is a line in the Job's own log,
+    /// because a client cannot tell a repository with a broken harness from one
+    /// with a spec that photographed nothing, and neither can this field.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub frames: Vec<KeptFrame>,
     /// Every run of this step, oldest first. **`Attempt 1 refused`, `Attempt 2
     /// advanced`** — the rows a rail draws under a step that was worked more
     /// than once.
@@ -347,6 +368,7 @@ impl StepDetail {
             deliverables: facts
                 .map(|facts| facts.deliverables.clone())
                 .unwrap_or_default(),
+            frames: facts.map(|facts| facts.frames.clone()).unwrap_or_default(),
             attempts: facts
                 .map(|facts| facts.attempts.clone())
                 .unwrap_or_default(),

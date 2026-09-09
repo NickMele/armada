@@ -24,15 +24,18 @@
 //! values this file produces live in [`declared`].
 
 mod declared;
+mod harness;
+mod referring;
+
+use referring::{after_merge, preparation, required_by};
 
 pub use declared::{Check, Command, Preparation};
+pub use harness::Harness;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use core_model::{
-    Covers, ManifestId, Narrowing, PathPattern, Prerequisite, RepoPath, ResolvedCheck, Ulid,
-};
+use core_model::{Covers, ManifestId, Narrowing, PathPattern, RepoPath, ResolvedCheck, Ulid};
 use serde_yaml_ng::Value;
 
 mod drone;
@@ -49,6 +52,7 @@ const TOP_LEVEL: &[&str] = &[
     "base",
     "checks",
     "commands",
+    "evidence",
     "setup",
     "drone",
     "after_merge",
@@ -67,12 +71,12 @@ const NARROW_KEYS: &[&str] = &["run", "each", "from", "under", "except"];
 /// The keys M1 reads inside `commands.<name>`.
 const COMMAND_KEYS: &[&str] = &["run", "destructive"];
 /// The keys M1 reads inside `setup`.
-const SETUP_KEYS: &[&str] = &["requires"];
+pub(super) const SETUP_KEYS: &[&str] = &["requires"];
 
 /// The keys M1 reads inside `after_merge`. **`checks` and nothing else**, so
 /// the section says one thing: which of this repository's Checks are worth
 /// running against a tree a merge left behind.
-const AFTER_MERGE_KEYS: &[&str] = &["checks"];
+pub(super) const AFTER_MERGE_KEYS: &[&str] = &["checks"];
 
 /// One workspace's `armada.yml`, parsed and validated.
 ///
@@ -101,6 +105,10 @@ pub struct Manifest {
     checks_as_written: Vec<String>,
     commands: BTreeMap<String, Command>,
     prepared_by: Vec<Preparation>,
+    /// How this repository shows its work, where it says. **Not behind the
+    /// cell**, for `exclude_paths`' reason one field down: a workflow's
+    /// `visual` steps were resolved against its presence at daemon start.
+    harness: Option<Harness>,
     proved_after_a_merge: Vec<ResolvedCheck>,
     /// **Not behind the cell**, because it is not live: every workflow was
     /// resolved against it at daemon start, so a save that moves it is
@@ -397,6 +405,14 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         Some(value) => preparation(value, &declares, &commands, out),
         None => Vec::new(),
     };
+    // After the two registries and before the dials, which is where it reads:
+    // it is a third registry-shaped section rather than a knob, and it resolves
+    // against neither of the other two — a harness names commands of its own
+    // and never a declared Check or Command, because what it runs is scoped by
+    // a spec a Drone wrote rather than by anything `armada.yml` lists.
+    let harness = top
+        .optional("evidence")
+        .and_then(|value| harness::read(value, out));
     let drone = match top.optional("drone") {
         Some(value) => drone::read(value, out),
         None => drone::Drone::unstated(),
@@ -431,6 +447,7 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         checks_as_written,
         commands,
         prepared_by,
+        harness,
         proved_after_a_merge,
         exclude_paths: drone.exclude_paths,
         live: Cell::holding(InForce {
@@ -441,209 +458,6 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
     })
 }
 
-/// `setup.requires`, resolved against the Commands the same file declares.
-///
-/// **The refusal that had to come with the key.** `crates/config/tests/shipped.rs`
-/// asks the same question of a step naming an undeclared Check, and it exists
-/// because one such step passed every test and failed at dispatch with a Drone
-/// already spawned. A `setup.requires` naming nothing would fail later still:
-/// the worktree is never prepared, and what a person sees is whichever Check
-/// needed what was not installed.
-///
-/// Every entry is refused on its own and the walk continues, so a file with two
-/// bad names is one edit.
-fn preparation(
-    value: &Value,
-    declares: &BTreeSet<String>,
-    commands: &BTreeMap<String, Command>,
-    out: &mut Vec<Refusal>,
-) -> Vec<Preparation> {
-    let Some(mut table) = Table::open("setup", value, out) else {
-        return Vec::new();
-    };
-    // `requires` is required, because `setup:` with nothing under it says
-    // nothing and `close` would report no fault for it.
-    let items = table
-        .required("requires", out)
-        .and_then(|value| yaml::list(&table.at("requires"), value, out));
-    table.close(SETUP_KEYS, out);
-    let Some(items) = items else {
-        return Vec::new();
-    };
-    named_commands(texts(items, out), declares, commands, out)
-        .into_iter()
-        .map(|(name, run)| Preparation { name, run })
-        .collect()
-}
-
-/// `after_merge:`, the Checks this repository asks to be run against the tree a
-/// merge left behind.
-///
-/// **The one section here that spends a person's machine rather than a Job's.**
-/// A Job's Checks run in a worktree Armada cut; these run in the repository
-/// somebody is working in, minutes after a merge nobody is waiting on. That is
-/// why it is opt-in, why it names Checks one at a time rather than meaning *all
-/// of them*, and why a Check with prerequisites is refused. `#474`, and
-/// `docs/concepts/manifest.md` — *Proving what merged*.
-///
-/// **`checks` is required, for `setup.requires`' reason.** Every entry is
-/// refused on its own and the walk continues, so two bad names are one edit.
-fn after_merge(
-    value: &Value,
-    checks: &BTreeMap<String, Check>,
-    commands: &BTreeMap<String, Command>,
-    out: &mut Vec<Refusal>,
-) -> Vec<ResolvedCheck> {
-    let Some(mut table) = Table::open("after_merge", value, out) else {
-        return Vec::new();
-    };
-    let items = table
-        .required("checks", out)
-        .and_then(|value| yaml::list(&table.at("checks"), value, out));
-    table.close(AFTER_MERGE_KEYS, out);
-    let Some(items) = items else {
-        return Vec::new();
-    };
-    let mut built: Vec<ResolvedCheck> = Vec::new();
-    for (key, name) in texts(items, out) {
-        if let Some(first_at) = built.iter().position(|had| had.label() == name) {
-            out.push(Refusal::new(key, Fault::RequiredTwice { first_at }));
-            continue;
-        }
-        match checks.get(&name) {
-            Some(check) if !check.requires().is_empty() => out.push(Refusal::new(
-                key,
-                Fault::PreparesTheRepository {
-                    requires: check
-                        .requires()
-                        .iter()
-                        .map(|needed| needed.name().to_string())
-                        .collect::<Vec<String>>()
-                        .join(", "),
-                    value: name,
-                },
-            )),
-            // `when` dropped: it is a step's question — which of a change's
-            // paths this Check covers — and after a merge there is no step and
-            // no change to ask it of. `narrow` dropped for the same shape of
-            // reason one tier along: it is a Drone's question about its own
-            // work, and what merged is the whole tree.
-            //
-            // **`expect_exit_code` is kept, and used to be hard zero here.**
-            // It was a step's question while it was a step's key. It is the
-            // Check's own now, so a Check that legitimately exits non-zero
-            // says so once and every reader agrees — including this one, which
-            // would otherwise report the same Check as failing after every
-            // merge for the reason it was declared with.
-            Some(check) => built.push(ResolvedCheck::ManifestCheck {
-                name,
-                run: check.run().to_string(),
-                expect_exit_code: check.expect_exit_code(),
-                when: None,
-                requires: Vec::new(),
-                narrow: None,
-            }),
-            None => out.push(Refusal::new(
-                key,
-                Fault::NotADeclaredCheck {
-                    is_a_command: commands.contains_key(&name),
-                    value: name,
-                    declared: checks.keys().cloned().collect(),
-                },
-            )),
-        }
-    }
-    built
-}
-
-/// `checks.<name>.requires`, resolved for every Check in the file.
-///
-/// **A second pass, because a Check may name a Command declared below it.** The
-/// two registries are read independently and joined here, so a file's order is
-/// never something an author has to think about — the same reason
-/// `setup.requires` is resolved after `commands` rather than during it.
-///
-/// **A name that resolves to nothing fails the Manifest, not the Job.** That is
-/// the whole point of resolving here: a Check requiring a Command nobody
-/// declared would otherwise be found at a gate, by a Drone, with a worktree
-/// already checked out and a retry budget already being spent.
-fn required_by(
-    drafted: BTreeMap<String, DraftCheck>,
-    declares: &BTreeSet<String>,
-    commands: &BTreeMap<String, Command>,
-    out: &mut Vec<Refusal>,
-) -> BTreeMap<String, Check> {
-    let mut built = BTreeMap::new();
-    for (name, draft) in drafted {
-        let requires = draft
-            .requires
-            .map(|items| named_commands(items, declares, commands, out))
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(name, run)| Prerequisite::resolved(name, run))
-            .collect();
-        built.insert(
-            name,
-            Check {
-                run: draft.run,
-                expect_exit_code: draft.expect_exit_code,
-                when: draft.when,
-                requires,
-                narrow: draft.narrow,
-            },
-        );
-    }
-    built
-}
-
-/// A list of Command names, resolved against the Commands registry.
-///
-/// **One function for `setup.requires` and for `checks.<name>.requires`**,
-/// because the two ask the same question of the same registry and every refusal
-/// they can raise is the same refusal. Two copies would drift, and the one that
-/// drifted would be the one nobody ran.
-///
-/// Every entry is refused on its own and the walk continues, so a file with two
-/// bad names is one edit. The pairs come back in the order the file wrote them:
-/// `[migrate, seed]` is a sequence somebody wrote, and sorting it would run the
-/// second before what it depends on.
-fn named_commands(
-    items: Vec<(String, String)>,
-    declares: &BTreeSet<String>,
-    commands: &BTreeMap<String, Command>,
-    out: &mut Vec<Refusal>,
-) -> Vec<(String, String)> {
-    let mut built: Vec<(String, String)> = Vec::with_capacity(items.len());
-    for (key, name) in items {
-        if let Some(first_at) = built.iter().position(|(had, _)| *had == name) {
-            out.push(Refusal::new(key, Fault::RequiredTwice { first_at }));
-            continue;
-        }
-        match commands.get(&name) {
-            // A destructive Command is withheld from a Drone by
-            // `fleet::spawning`, for the reason that makes this a refusal: the
-            // flag means *somebody approves before this runs*, and neither
-            // reader of this key has anybody to ask — preparation runs before
-            // any Drone exists, and a prerequisite runs inside a gate the Drone
-            // is already waiting on.
-            Some(command) if command.is_destructive() => out.push(Refusal::new(
-                key,
-                Fault::RequiresSomethingDestructive { value: name },
-            )),
-            Some(command) => built.push((name, command.run().to_string())),
-            None => out.push(Refusal::new(
-                key,
-                Fault::NotADeclaredCommand {
-                    is_a_check: declares.contains(&name),
-                    value: name,
-                    declared: commands.keys().cloned().collect(),
-                },
-            )),
-        }
-    }
-    built
-}
-
 /// Every item of a list read as a string, keeping the key that names its
 /// position. An item that is not a string is refused and dropped, so one pass
 /// still reports the rest of the list.
@@ -651,7 +465,7 @@ fn named_commands(
 /// Separate from [`named_commands`] because a Check's `requires` is read while
 /// the Checks registry is being walked and resolved once the Commands registry
 /// exists, and the borrow of the document does not survive between the two.
-fn texts(items: Vec<(String, &Value)>, out: &mut Vec<Refusal>) -> Vec<(String, String)> {
+pub(super) fn texts(items: Vec<(String, &Value)>, out: &mut Vec<Refusal>) -> Vec<(String, String)> {
     items
         .into_iter()
         .filter_map(|(key, item)| yaml::text(&key, item, out).map(|name| (key, name)))
@@ -705,7 +519,7 @@ fn registry<T>(
 /// may declare `commands` after `checks`, and an author should never have to
 /// think about which. So each name is taken here with the key that locates it,
 /// and [`required_by`] resolves them once both registries are built.
-struct DraftCheck {
+pub(super) struct DraftCheck {
     run: String,
     expect_exit_code: i64,
     when: Option<Covers>,

@@ -27,7 +27,8 @@
 use std::path::PathBuf;
 
 use core_model::{
-    EvidenceScope, FrozenWorkflow, RepoPath, ResolvedCheck, ResolvedStep, WorkflowId,
+    EvidenceScope, EvidenceType, FrozenWorkflow, RepoPath, ResolvedCheck, ResolvedStep, StepId,
+    WorkflowId,
 };
 
 use crate::error::{Disagreement, ResolveError, UnknownCheck};
@@ -79,6 +80,24 @@ impl ResolvedWorkflow {
                 manifest: manifest.path().to_path_buf(),
                 unknown,
             });
+        }
+        // **Between the two, and this is the one place both files are in
+        // hand.** `evidence_type: visual` parses against no Manifest, and an
+        // `evidence:` section is declared with no workflow in sight; only here
+        // can a step asking to be shown be held to a repository that can show
+        // it. Refusing at dispatch is the whole argument — the alternative is a
+        // Job that reaches the step with a worktree cut and a Drone spawned and
+        // then captures nothing, which reads as a broken harness rather than a
+        // file that never had one.
+        if manifest.harness().is_none() {
+            let shows = shown_by_a_harness(def);
+            if !shows.is_empty() {
+                return Err(ResolveError::ShowsWithNoHarness {
+                    workflow: def.path().to_path_buf(),
+                    manifest: manifest.path().to_path_buf(),
+                    steps: shows,
+                });
+            }
         }
         if !disagreements.is_empty() {
             return Err(ResolveError::StepsDisagreeWithTheManifest {
@@ -134,6 +153,20 @@ impl ResolvedWorkflow {
     pub fn steps(&self) -> &[ResolvedStep] {
         self.frozen.steps()
     }
+}
+
+/// Every step whose evidence is what it looks like, in the order the workflow
+/// declares them.
+///
+/// **All of them and not the first**, which is [`UnknownCheck`]'s rule: a
+/// workflow with three such steps is one edit to the Manifest, and a refusal
+/// naming one would make it three attempts to find that out.
+fn shown_by_a_harness(def: &WorkflowDef) -> Vec<StepId> {
+    def.steps()
+        .iter()
+        .filter(|step| step.evidence_type() == Some(EvidenceType::Visual))
+        .map(|step| step.id().clone())
+        .collect()
 }
 
 /// A step's checks, resolved. A name that misses is recorded and the step is

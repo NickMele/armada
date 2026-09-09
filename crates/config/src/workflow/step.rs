@@ -71,6 +71,12 @@ const GATE_LEGAL: &[&str] = &[
     "manifest_rule:review_gate",
 ];
 
+/// **`visual` is carried here and still cannot be dispatched on its own.**
+/// Every other value is satisfied by whatever the step's work product is, and
+/// this one needs an `evidence:` section in the `armada.yml` the workflow is
+/// resolved against — a file this parser has never seen. So it parses here and
+/// is refused in `crate::resolve`, which is the one place both files are in
+/// hand.
 const EVIDENCE_CARRIED: &[(&str, EvidenceType)] = &[
     ("diff", EvidenceType::Diff),
     ("failing_test", EvidenceType::FailingTest),
@@ -78,6 +84,7 @@ const EVIDENCE_CARRIED: &[(&str, EvidenceType)] = &[
     ("test_suite_run", EvidenceType::TestSuiteRun),
     ("bundle", EvidenceType::Bundle),
     ("document", EvidenceType::Document),
+    ("visual", EvidenceType::Visual),
 ];
 const EVIDENCE_LEGAL: &[&str] = &[
     "diff",
@@ -86,6 +93,7 @@ const EVIDENCE_LEGAL: &[&str] = &[
     "test_suite_run",
     "bundle",
     "document",
+    "visual",
 ];
 
 /// One step of a workflow.
