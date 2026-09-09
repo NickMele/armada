@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
-import { expect, within } from "storybook/test";
+import { expect } from "storybook/test";
 import { Button } from "../../primitives/Button/Button";
 import { ActivityLog } from "../../compositions/ActivityLog/ActivityLog";
 import { JobHoldsSheet } from "../../compositions/JobHoldsSheet/JobHoldsSheet";
@@ -37,9 +37,6 @@ import {
   WHERE,
 } from "./fixtures";
 import {
-  CONSOLE_SHEET,
-  EVIDENCE_CHAPTERS,
-  INPUTS_SHEET,
   QUEUED_EVIDENCE_CHAPTERS,
   aRefusedJob,
   REFUSED_DECISION,
@@ -49,7 +46,6 @@ import {
 // prettier-ignore
 import { PHASES_AT_THE_GATE, PHASES_BLOCKED, PHASES_CHECK_FAILED, PHASES_ENDED, PHASES_RETRIES_SPENT, PHASES_WORKING } from "./strips";
 import { WHAT_IT_TRIED } from "./tried";
-import { PlayableJob } from "./playable";
 
 /**
  * **One Job, six moments.** Every story below is the same Bug workflow at a
@@ -625,17 +621,19 @@ export const NothingServesTheStep: Story = {
  *
  * **The whole state is the argument.** Every Check exited 0, and the Job is
  * refused — because the suite went green by deleting the assertion that was
- * failing. `exit 0 · 315 passed` cannot express that, and nothing else on this
- * screen could either until the output became reachable.
+ * failing. `exit 0` cannot express that, and nothing else on this screen could
+ * either until the refusal's own finding became reachable.
  *
  * **The Verdicts chapter opens in place and the output does not.** A refusal is
- * prose and fits the panel; 2,180 lines is not a longer preview, so the Checks
- * chapter carries an act that leaves. That is the split `StepChapter` already
- * names, applied to two new chapters rather than invented for them.
+ * prose and fits the panel; a run log is not a longer preview, so the Checks
+ * chapter carries an act that leaves and hands the file to the OS. That is the
+ * split `StepChapter` already names, applied to two chapters rather than
+ * invented for them.
  *
- * Nothing on the wire serves any of this. `evidence.tsx` says what would have
- * to — a `kind` and a `log_path` on a check result, and citations recorded by
- * the judges that met a criterion as well as the ones that refused.
+ * **The app draws this from `StepDetail`.** `screens/checks.tsx` and
+ * `screens/verdicts.tsx` build both chapters and `screens/evidence.test.tsx`
+ * mounts that builder's output; what is here is the same arrangement with
+ * fixture content, held to the same facts.
  */
 export const TheEvidenceSurface: Story = {
   render: () =>
@@ -650,7 +648,7 @@ export const TheEvidenceSurface: Story = {
         tone: "stopped",
         title: "All mechanical checks passed, but the panel of judges refused the work.",
         children:
-          "The suite is green because one of its cases stopped existing. 2 of the 3 judges refused criterion 02, and the assertion they both cite is in the check output below.",
+          "The suite is green because one of its cases stopped existing. 2 of the 3 judges refused criterion 02, on the same grounds, and the finding is in the Verdicts chapter below.",
       },
       // One set of acts for the whole step. They sat inside the refusal block
       // until 2026-09-08, which on the Job below would have offered to kill
@@ -691,79 +689,10 @@ export const TwoCriteriaRefused: Story = {
 };
 
 /**
- * **A Check's output, open in the viewer.** One layer, one artifact, and the
- * panel underneath exactly as it was — the log and the diff already work this
- * way, and a check's output is the third reading with no end.
- *
- * **The strip is a band on the sheet.** Every other artifact this step produced
- * stays one press away, so changing what you are looking at never means closing
- * the layer; and *Back to the default view* is what returns the page to the
- * artifact it was composed with.
- *
- * **Line 2,322 is the design.** A transcript ending `315 passed` is a fact with
- * no reference point. The same transcript with the parent commit's count under
- * it is an argument — and the check emitted both lines, so Bridge renders what
- * is already in the file rather than diffing two stored logs.
- */
-export const AChecksOutputOpen: Story = {
-  render: () => aRefusedJob({ sheet: CONSOLE_SHEET }),
-};
-
-/**
- * **The judgment's inputs — the view a log file could never give you.** A panel
- * is only a panel if the judges ran independently on identical inputs, and the
- * digest is the evidence for that guarantee. It is the first thing to doubt
- * when a unanimous verdict looks too easy.
- *
- * **The criteria stay on the screen behind the layer.** Nothing the viewer ever
- * shows covers the yardstick the work is being read against — which is the rule
- * that decided the sheet's width rather than a full-screen route.
- */
-export const TheJudgmentsInputs: Story = {
-  render: () => aRefusedJob({ sheet: INPUTS_SHEET }),
-};
-
-/**
- * **The same refused Job, with every selector wired.** A check row, a chip, a
- * citation, a run-tree fact and a phase-card row resolve their artifact id
- * against one registry, in `playable.tsx`; the log keeps its own sheet and
- * shares the slot, being a stream and no artifact. **Only this story holds
- * state** — the rest are the record of a moment.
- */
-export const Playable: Story = {
-  render: () => <PlayableJob />,
-  /**
-   * A selector opens the artifact it names rather than the composed one, the
-   * way back returns to that one, and the log replaces the viewer rather than
-   * stacking. A resolver answering every id alike fails on assertion two.
-   */
-  play: async ({ canvas, userEvent }) => {
-    await expect(canvas.queryByRole("dialog")).toBeNull();
-    await userEvent.click(canvas.getByRole("button", { name: "output · 96 lines" }));
-    await expect(await canvas.findByText("check:bench — output")).toBeVisible();
-
-    await userEvent.click(canvas.getByRole("tab", { name: "Measurement" }));
-    await expect(canvas.getByText("check:bench — measured")).toBeVisible();
-
-    // The way back is the composed artifact's own chip, in the strip.
-    const strip = within(canvas.getByRole("dialog"));
-    await userEvent.click(strip.getByRole("button", { name: /check:test_suite/ }));
-    await expect(canvas.getByText("check:test_suite — output")).toBeVisible();
-    // One slot: the log takes the layer the viewer was on rather than stacking.
-    await userEvent.click(canvas.getByRole("button", { name: /Open the log/ }));
-    await expect(canvas.getAllByRole("dialog")).toHaveLength(1);
-    await expect(canvas.getByRole("dialog", { name: "Activity log" })).toBeVisible();
-
-    await userEvent.keyboard("{Escape}");
-    await expect(canvas.queryByRole("dialog")).toBeNull();
-  },
-};
-
-/**
- * **A running Job, and the same two chapters.** The Checks chapter draws the
- * one Check in flight and the two behind it as queued rows — the shape of what
- * is coming is part of reading a running Job, and a list that grew as Checks
- * started would make a Job look like it had fewer gates than it has.
+ * **A running Job, and the same two chapters.** The Checks chapter draws every
+ * Check the step declares, including the ones nothing has reached — the shape
+ * of what is coming is part of reading a running Job, and a list that grew as
+ * Checks started would make a Job look like it had fewer gates than it has.
  *
  * **The Verdicts chapter says `not reached` in words.** An empty region under a
  * running step reads as a region that failed to load.

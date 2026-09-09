@@ -191,16 +191,6 @@ export * from "./compositions/ManifestNotice/ManifestNotice";
 // evidence for `blocked_by_policy`, which named a policy and nothing it stopped.
 export * from "./compositions/Refusals/Refusals";
 
-// What a Check's suite actually asserted. `exit 0 · 315 passed` cannot be
-// audited: a suite can go green by deleting the assertion that was failing,
-// and the list of what ran is the only place that is visible.
-export * from "./compositions/AssertionSet/AssertionSet";
-
-// A Check's own stdout, read where the Check is. Bridge reads the run log and
-// keeps nothing — no new store, no retention policy, and it goes when the Job
-// is cleaned up.
-export * from "./compositions/ConsoleOutput/ConsoleOutput";
-
 // What each Check came to, and the output behind it. A Check result is an
 // evidence record: it has a kind and a file, and the only difference from a
 // Drone's evidence is who produced it.
@@ -215,24 +205,6 @@ export * from "./compositions/JudgeVerdicts/JudgeVerdicts";
 // means two opposite things, and comparing what each judge cited is what tells
 // them apart.
 export * from "./compositions/JudgeRefusal/JudgeRefusal";
-
-// Every pointer the panel made. A judgment is mostly a set of pointers into
-// other artifacts, which makes this the densest navigation surface on the
-// screen.
-export * from "./compositions/JudgeCitations/JudgeCitations";
-
-// What the panel was shown. A panel is only a panel if the judges ran
-// independently on identical inputs, and the digest is the evidence for it.
-export * from "./compositions/JudgeInputs/JudgeInputs";
-
-// Everything else the step produced, as selectors into the viewer. Not
-// FactChip: a fact chip is a value being read, and these are controls.
-export * from "./compositions/EvidenceStrip/EvidenceStrip";
-
-// One artifact at full size, on the layer that can hold it. A check's output,
-// a patch, a judgment: one viewer, and everything on the screen points into
-// it. The sheet for the reason the activity log is one.
-export * from "./compositions/EvidenceSheet/EvidenceSheet";
 
 // A passage held to a few lines. The control exists only where the text
 // actually overflows — measured, because the same words clamp at one width and

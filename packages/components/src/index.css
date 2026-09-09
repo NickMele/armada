@@ -151,13 +151,6 @@
 /* What a job reached for and was refused. Appended, per the rule at the head of
    this file. */
 @import "./compositions/Refusals/Refusals.css";
-/* What a Check's suite actually asserted, one row each. Appended, per the rule
-   at the head of this file. */
-@import "./compositions/AssertionSet/AssertionSet.css";
-
-/* A Check's own stdout, read where the Check is. */
-@import "./compositions/ConsoleOutput/ConsoleOutput.css";
-
 /* What each Check came to, and the output behind it. */
 @import "./compositions/CheckRuns/CheckRuns.css";
 
@@ -166,20 +159,6 @@
 
 /* A refusal, whole — the grounds, the lines they rest on, and what to do. */
 @import "./compositions/JudgeRefusal/JudgeRefusal.css";
-
-/* Every pointer the panel made, as selectors. */
-@import "./compositions/JudgeCitations/JudgeCitations.css";
-
-/* What the panel was shown, and the evidence that it was one panel. */
-@import "./compositions/JudgeInputs/JudgeInputs.css";
-
-/* Everything else the step produced, one chip each — and every chip a
-   selector into the viewer. */
-@import "./compositions/EvidenceStrip/EvidenceStrip.css";
-
-/* One artifact at full size, on the layer that can hold it. Every selector on
-   job detail lands here. */
-@import "./compositions/EvidenceSheet/EvidenceSheet.css";
 
 /* A passage held to a few lines, with the rest one press away. The brief and
    the Drone's instructions are why: both run to whatever length the work

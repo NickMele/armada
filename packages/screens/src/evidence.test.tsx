@@ -194,6 +194,11 @@ function screen(showing: StepDetail, criteria = CRITERIA): void {
     onAct: () => {},
     onApprove: () => {},
     onReport: async () => ({ ok: true }),
+    // The header's cost-cap dialog, which no assertion here reaches. Required
+    // by `Heading` and so supplied, rather than left for the compiler to find.
+    onRaiseCap: () => {},
+    raising: false,
+    onRaising: () => {},
     onOpenPullRequest: async () => ({ ok: true }),
     onCopied: () => {},
     onSaid: () => {},
