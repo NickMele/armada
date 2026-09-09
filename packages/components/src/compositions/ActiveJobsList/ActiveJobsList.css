@@ -1,7 +1,9 @@
-/* Active jobs list — a header, then the framed run of rows.
+/* Active jobs list — a header, then the run of rows.
 
-   Elevation is surface, not shadow: --bg-raised with a --border-default edge
-   and no blur. */
+   **The rows are the pane, not a card on it.** This drew a --bg-raised frame
+   with a --border-default edge, which is how a card is drawn everywhere else
+   in Armada; a list that fills the panel is not a card, it is the panel's
+   middle. See the frame's own rule below. */
 .armada-active-jobs {
   display: flex;
   flex-direction: column;
@@ -61,12 +63,26 @@
 /* Where the surface's filter set sits: under the heading, over the frame. It
    draws no edge of its own — the frame beneath it is the boundary, and a
    second box around the controls would read as a second list. */
+/* Inset, because the mount is not any more. The rows below run to the pane's
+   edges and these do not: a control is a thing you aim at and wants room
+   around it, where a row is a band across the region. */
 .armada-active-jobs__controls {
   min-width: 0;
+  padding: var(--space-3) var(--space-4) 0;
 }
 
-/* The frame owns the edge and the radius, so a row inside it draws neither.
-   The rows' own rules separate them, and the last row's is suppressed. */
+/* The frame is the pane's middle, not a card in it.
+   
+   **It had an edge, a radius and a raised ground, and all three are gone.** A
+   card inside a pane is a box inside a box: the pane already ends where the
+   rail and the status bar begin, so a second boundary a few pixels inside the
+   first restates it and takes width from the rows to do it. An empty list
+   inside a card reads as an empty card; an empty list that *is* the region
+   reads as an empty region, which is the true thing.
+   
+   What separates a row from a row is the rule each one draws, which was always
+   the case. What separates this from the head above it is that head's own
+   edge. */
 .armada-active-jobs__frame {
   display: flex;
   flex-direction: column;
@@ -82,9 +98,6 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border-radius: var(--radius-md);
-  border: var(--border-width) solid var(--border-default);
-  background: var(--bg-raised);
 }
 
 /* The frame is the grid the rows borrow their field tracks from, so a column

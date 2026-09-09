@@ -11,7 +11,14 @@
   min-width: var(--sidebar-rail);
   max-width: var(--sidebar-max);
   padding: var(--space-3);
-  background: var(--bg-raised);
+  /* **Sunken, where this was raised.** The rail is chrome: it frames the
+     working area rather than sitting on it, and chrome reads as chrome by
+     being *behind* the work rather than in front of it. Raised put it a step
+     above the panel it borders, so the window read as a list of links floating
+     beside a page instead of a frame around one. `--bg-sunken` is the same
+     ground the status bar takes, which is what makes the two read as one
+     frame around the middle. */
+  background: var(--bg-sunken);
   border-right: var(--border-width) solid var(--border-subtle);
 }
 
