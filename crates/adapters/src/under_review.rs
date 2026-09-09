@@ -49,15 +49,22 @@ const FIELDS: &str = "reviewDecision,statusCheckRollup,comments,reviews";
 /// A review with no body is not a remark: its state is already counted in
 /// `reviewDecision`, and an empty line in a conversation is not something to
 /// hand anybody.
+///
+/// **`.id` leads every remark record**, because a person picks comments off
+/// this reading and the pull request is read again when they press. The forge
+/// mints it and it is the only handle that survives an edit between the two
+/// reads.
 const REDUCTION: &str = "\
     ([\"said\", (.reviewDecision // \"\")]), \
     (.statusCheckRollup // [] | .[] | \
         [\"check\", (.name // .context // \"\"), (.status // \"\"), \
          (.conclusion // .state // \"\")]), \
     (.comments // [] | .[] | \
-        [\"remark\", (.author.login // \"\"), (.createdAt // \"\"), (.body // \"\")]), \
+        [\"remark\", (.id // \"\"), (.author.login // \"\"), (.createdAt // \"\"), \
+         (.body // \"\")]), \
     (.reviews // [] | .[] | select((.body // \"\") != \"\") | \
-        [\"remark\", (.author.login // \"\"), (.submittedAt // \"\"), (.body // \"\")]) \
+        [\"remark\", (.id // \"\"), (.author.login // \"\"), (.submittedAt // \"\"), \
+         (.body // \"\")]) \
     | @tsv";
 
 /// Ask the forge who has looked at one pull request, what ran against it, and
@@ -90,11 +97,25 @@ pub(crate) fn folded(lines: &[String]) -> UnderReview {
                 field.next().unwrap_or_default(),
                 field.next().unwrap_or_default(),
             ),
-            Some("remark") => remarks.push(Remark::written(
-                as_written(field.next().unwrap_or_default()),
-                as_written(field.next().unwrap_or_default()),
-                as_written(field.next().unwrap_or_default()),
-            )),
+            Some("remark") => {
+                let id = field.next().unwrap_or_default();
+                let by = field.next().unwrap_or_default();
+                let at = field.next().unwrap_or_default();
+                let said = field.next().unwrap_or_default();
+                // **A comment the forge named nothing is dropped.** The whole
+                // road this reading feeds is a person picking comments and
+                // pressing, and a comment with no handle cannot be picked
+                // without the press meaning some other one. Counting it would
+                // put a row on a screen that no act could reach.
+                if !id.is_empty() {
+                    remarks.push(Remark::written(
+                        as_written(id),
+                        as_written(by),
+                        as_written(at),
+                        as_written(said),
+                    ));
+                }
+            }
             // A notice `gh` printed, or a record a later version of this
             // reduction emits and this build has no word for. Dropped rather
             // than guessed at, which is what the tag is for.

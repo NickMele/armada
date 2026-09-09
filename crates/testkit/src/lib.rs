@@ -36,7 +36,7 @@ pub use harness::{FakeHarness, FakeHarnessRefused, REPLAYED};
 pub use job::{asked_for, asking};
 pub use judge::{refusal, FakeJudge};
 pub use link_lookup::FakeLinkLookup;
-pub use vcs::{Delivered, Delivering, FakeCommit, FakeVcs, FakeVcsError, Merging};
+pub use vcs::{Delivered, Delivering, FakeCommit, FakeVcs, FakeVcsError, Merging, Replying};
 pub use work_product::{FakeDiffRefused, FakeWorkProduct, Holding, Written};
 pub use workflow::{
     delivering, frozen, handing_off, modelled, narrowing, patient, requiring, resolved, retried,

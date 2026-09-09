@@ -30,7 +30,8 @@ use std::sync::Mutex;
 
 use adapter_traits::{
     Base, BaseOnTheRemote, BroughtUpToDate, Change, CommitTime, Committed, Delivery, Landing,
-    Merged, NotDelivered, NotMerged, Opened, Pushed, Renewed, RepositoryStanding, Review, Standing,
+    Merged, NotDelivered, NotMerged, Opened, Pushed, Renewed, Replied, RepositoryStanding, Review,
+    Standing,
     UnderReview, Vcs, WhatBecameOfIt, Worktree, WorktreeSpec,
 };
 
@@ -111,6 +112,10 @@ pub struct FakeVcs {
     /// holding this fake exists, so it is scripted through `&self` and a
     /// consuming builder could not express the case at all.
     merging: Mutex<Merging>,
+    /// What the forge answers a reply with. **Its own field beside
+    /// [`merging`](FakeVcs::merging)**, for that field's reason: a reply is only
+    /// ever written after the Fleet holding this fake exists.
+    replying: Mutex<Replying>,
 }
 
 /// What this fake's forge does when asked to merge.
@@ -128,6 +133,21 @@ pub enum Merging {
     AlreadyMerged,
     /// It would not, and which kind of would-not it was.
     Refuses(NotMerged),
+}
+
+/// What this fake's forge does when it is asked to write a comment.
+///
+/// **A refusal is a sentence and not a kind**, unlike [`Merging`]'s, because
+/// `Replied` has one refusal: nothing a caller does turns on why the comment
+/// did not post, and the sentence is what reaches the Job's log.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum Replying {
+    /// The forge takes it. **The default**, because a test about the press is
+    /// about what the reply said.
+    #[default]
+    Takes,
+    /// It would not, and this is what it said.
+    Refuses(String),
 }
 
 /// One thing this fake was asked to do to a Job's branch, in order.
@@ -158,10 +178,18 @@ pub enum Delivered {
     AskedToRenderAfresh { pull_request: String },
     /// The repository every worktree is cut from was asked to catch up.
     CaughtTheRepositoryUp { base: String },
-    /// The forge was asked to merge a pull request. **The one write to a
-    /// repository Fleet did not make**, so a test that could not see it could
+    /// The forge was asked to merge a pull request. **One of the two writes to
+    /// a repository Fleet did not make**, so a test that could not see it could
     /// not tell a press that merged from one that only moved a Job.
     Merged { pull_request: String },
+    /// One comment was written onto a pull request. **The second of those two
+    /// writes, and it carries what was said** — the rule it is under is that
+    /// there is exactly one of these per press, which is a claim about the
+    /// count, and the words are what proves the reply named what it took up.
+    Replied {
+        pull_request: String,
+        saying: String,
+    },
 }
 
 /// What the fake's version control looks like from the delivery side.
@@ -340,6 +368,29 @@ impl FakeVcs {
     /// time the fake is inside a Fleet.
     pub fn merging(&self, merging: Merging) {
         *self.merging.lock().expect("not poisoned") = merging;
+    }
+
+    /// Say what the forge does when it is asked to write a comment.
+    ///
+    /// `&self` for [`merging`](FakeVcs::merging)'s reason.
+    pub fn replying(&self, replying: Replying) {
+        *self.replying.lock().expect("not poisoned") = replying;
+    }
+
+    /// Every comment this fake was asked to write, in order. **The words and
+    /// not the count**, because the rule the caller is under is one reply per
+    /// press saying what was taken up, and a count alone proves only the first
+    /// half of it.
+    pub fn replies(&self) -> Vec<String> {
+        self.delivered
+            .lock()
+            .expect("not poisoned")
+            .iter()
+            .filter_map(|it| match it {
+                Delivered::Replied { saying, .. } => Some(saying.clone()),
+                _ => None,
+            })
+            .collect()
     }
 
     /// How many times the forge has been asked to merge. **The write this fake
@@ -585,6 +636,23 @@ impl Delivery for FakeVcs {
             Merging::Takes => Ok(Merged::Taken),
             Merging::AlreadyMerged => Ok(Merged::AlreadyMerged),
             Merging::Refuses(why) => Err(why),
+        }
+    }
+
+    fn replied(&self, _in_repo: &str, pull_request: &str, saying: &str) -> Replied {
+        // Recorded before the answer, for `merge`'s reason: the forge is
+        // reached either way, and a reply the forge would not take is still a
+        // call that happened.
+        self.delivered
+            .lock()
+            .expect("not poisoned")
+            .push(Delivered::Replied {
+                pull_request: pull_request.to_string(),
+                saying: saying.to_string(),
+            });
+        match self.replying.lock().expect("not poisoned").clone() {
+            Replying::Takes => Replied::Posted,
+            Replying::Refuses(why) => Replied::NotPosted { why },
         }
     }
 
