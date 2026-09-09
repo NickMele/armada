@@ -17,8 +17,8 @@ use crate::daemon::Refusal;
 use crate::observing::Observed;
 use ipc::{
     CallArguments, FleetCapacity, JobDetail, JobDiff, JobEvidence, JobHistory, JobId, JobList,
-    JobResources, ManifestReading, ManifestSummary, ModelChoices, ReportList, WorkflowSummary,
-    WorktreesHeld,
+    JobRemarks, JobResources, ManifestReading, ManifestSummary, ModelChoices, ReportList,
+    WorkflowSummary, WorktreesHeld,
 };
 
 /// Everything a client reads.
@@ -116,6 +116,26 @@ pub trait Queries: Send + Sync + 'static {
         &self,
         job_id: JobId,
     ) -> impl Future<Output = Result<JobEvidence, Refusal>> + Send;
+
+    /// `get_remarks` — everything anybody has written on one Job's open pull
+    /// request, and which of it has already reached a Drone.
+    ///
+    /// **The one read on this trait that talks to a forge.** Every other query
+    /// here reads a record, a worktree or this machine; this one costs a
+    /// process and a network, which is the whole reason it is a route somebody
+    /// asks for rather than a field on [`Queries::get_job`].
+    ///
+    /// **A forge that would not answer is a refusal and never an empty list.**
+    /// A pull request nobody has commented on is a real answer with no comments
+    /// in it, and a person shown one as the other would conclude their review
+    /// had vanished.
+    ///
+    /// Refused where the Job is not at `awaiting_review` and where its record
+    /// holds no pull request: neither has anything to choose from.
+    fn get_remarks(
+        &self,
+        job_id: JobId,
+    ) -> impl Future<Output = Result<JobRemarks, Refusal>> + Send;
 
     /// `get_diff` — one Job's whole patch, with the file list beside it.
     ///

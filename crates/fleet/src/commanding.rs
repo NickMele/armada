@@ -17,7 +17,7 @@ use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Commands, Refusal};
 use ipc::{
     ChangesRequested, JobExamined, JobForgotten, JobId, JobSummary, Overruled, ProposeJob,
-    Redirection, Redispatched, WorktreeReclaimed,
+    Redirection, Redispatched, RemarksTakenUp, WorktreeReclaimed,
 };
 
 use crate::adrift::Adrift;
@@ -125,6 +125,24 @@ where
         let said =
             Instruction::saying(&note.note).ok_or_else(|| self.refusal(Adrift::Unnameable))?;
         let job = Fleet::request_changes(self, &job_id.to_domain(), &said)
+            .await
+            .map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
+    }
+
+    /// The comments a person picked off the pull request reach a Drone, and one
+    /// reply on the pull request says which.
+    ///
+    /// **Nothing is decoded into a note here**, unlike `request_changes`: the
+    /// body carries handles and the words come off the forge inside the act. An
+    /// empty list is refused there rather than here, because it is a fact about
+    /// the Job's pull request and not about the request's shape.
+    async fn take_up_remarks(
+        &self,
+        job_id: JobId,
+        picked: RemarksTakenUp,
+    ) -> Result<JobSummary, Refusal> {
+        let job = Fleet::take_up_remarks(self, &job_id.to_domain(), &picked.remarks)
             .await
             .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await

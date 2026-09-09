@@ -26,7 +26,7 @@ import { FileCheck } from "lucide-react";
 import { EVIDENCE_TYPE } from "@armada/components";
 import type { DiffFile, DiffLine, EvidenceTrailEntry } from "@armada/components";
 
-import type { Diff, Evidence } from "@armada/protocol";
+import type { Diff, Evidence, Remarks } from "@armada/protocol";
 import type { JobDetail as JobWhole } from "@armada/protocol";
 import type { Submitted, Work } from "@armada/protocol";
 
@@ -366,6 +366,26 @@ export function whyNoClaims(evidence: Evidence, jobId: string): string {
 export const CLAIMED_NOTHING =
   "No step on this job has submitted evidence. The work is here to read, and nothing states " +
   "what it was meant to do.";
+
+/**
+ * Why there is no conversation on screen, which is never the same sentence
+ * twice — and the failure here says more than the other two.
+ *
+ * **A forge that would not answer is not a pull request nobody commented on.**
+ * Every other read on this surface reaches the machine Fleet is on; this one
+ * reaches a network and an account, and a person shown a silence as an empty
+ * review would conclude their comments had vanished. So the sentence says
+ * outright which of the two this is.
+ */
+export function whyNoRemarks(remarks: Remarks, jobId: string): string {
+  if (remarks.state === "failed" && remarks.jobId === jobId) {
+    return (
+      "Fleet could not read this pull request, so what anybody wrote on it is unknown. " +
+      "That is not the same as a pull request with no comments on it."
+    );
+  }
+  return "Reading what people wrote on this pull request.";
+}
 
 /**
  * What the confirmation for a rejection says. **What happens and what

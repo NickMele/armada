@@ -189,17 +189,24 @@ impl Redirected {
     ///
     /// **The words are quoted and never paraphrased**, for the reason
     /// `fleet::resume::redirect` gives about the Judge's citation: the person
-    /// read the work and wrote this from it, and Fleet summarising it would be
+    /// read the work and left this from it, and Fleet summarising it would be
     /// Fleet deciding what they meant.
     ///
     /// **It is framed as work and not as context**, which is the whole of the
     /// difference between it and [`Produced`]'s `not_claimed` block. That one
     /// says outright that it is not work this part owes; this one is the
     /// reason this part is being worked at all.
+    ///
+    /// **"left this" and not "wrote this", since `#526`.** A person typing a
+    /// note wrote the words; a person picking comments off a pull request
+    /// picked somebody else's, and `fleet::remarks` is the second act that
+    /// writes this column. The frame has to be true of both, and the note
+    /// itself is what says which kind it is — the assembled one opens by saying
+    /// whose words follow.
     pub(crate) fn text(&self) -> String {
         let said = &self.0;
         format!(
-            "WHAT A PERSON ASKED FOR\n\nA person read this work and wrote this before you \
+            "WHAT A PERSON ASKED FOR\n\nA person read this work and left this before you \
              started. It is not part of the step's definition and it is not something an \
              earlier part claimed — it is an instruction, and it is why this part is being \
              worked:\n\n  \"{said}\"\n\nDo what it asks. Where it and the step below disagree \

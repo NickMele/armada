@@ -55,6 +55,7 @@
 @import "./compositions/JobOutcome/JobOutcome.css";
 @import "./compositions/JobRecord/JobRecord.css";
 @import "./compositions/UnifiedDiff/UnifiedDiff.css";
+@import "./compositions/ReviewComments/ReviewComments.css";
 @import "./compositions/ReviewDecision/ReviewDecision.css";
 @import "./primitives/Prose/Prose.css";
 @import "./compositions/GamingFlags/GamingFlags.css";

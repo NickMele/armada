@@ -21,7 +21,7 @@ import type { ProposalInFlight, Proposed } from "@armada/protocol";
 import { ask, isJobSummary, MODEL_CALL_MS, route, type Answer } from "./request";
 import { Clearing } from "./clearing";
 import { proposeFromRequest as propose } from "./proposing";
-import { decide, type Decision } from "./review";
+import { decide, takeUp, type Decision } from "./review";
 
 /**
  * What an act needs of the connection, and nothing more.
@@ -508,6 +508,25 @@ export class JobCommands {
   /** A verdict on the work. **Terminal, and it ends the Drone.** */
   async rejectWork(jobId: string): Promise<Outcome> {
     return this.settleWork(jobId, "reject");
+  }
+
+  /**
+   * Hand the comments a person picked off the pull request to a Drone.
+   *
+   * **Under the same one-in-flight-per-Job guard as the four decisions**, and
+   * it belongs there rather than beside them: this leaves `awaiting_review` the
+   * way `requestChanges` does, so a second press aims at a Job that is no
+   * longer at the gate any of the five is legal on.
+   *
+   * A press naming nothing is refused here rather than sent, for the reason a
+   * blank note is: an act that reaches Fleet to be told what a client could
+   * have seen for itself is a round trip spent on nothing.
+   */
+  async takeUpRemarks(jobId: string, remarks: string[]): Promise<Outcome> {
+    if (remarks.length === 0) return { ok: false, why: "no_remarks_chosen" };
+    return this.act(jobId, this.deciding, "already_deciding", (port) =>
+      takeUp(port, jobId, remarks),
+    );
   }
 
   /**

@@ -185,12 +185,13 @@ impl WhatTheForgeRan {
 
 /// Something somebody wrote on a pull request.
 ///
-/// **Every field is [`FromOutside`], including the author and the time.** A
-/// login is chosen by the person who holds it and a timestamp is a string a
-/// remote wrote; neither has been anywhere this machine controls. The time in
-/// particular is deliberately not a `Timestamp` — parsing it would mint one of
-/// this machine's clock values out of a remote's text, and nothing here orders
-/// remarks or measures anything from one.
+/// **Every field is [`FromOutside`], including the author, the time and the
+/// handle.** A login is chosen by the person who holds it, a timestamp is a
+/// string a remote wrote, and the handle is a forge's own identifier; none has
+/// been anywhere this machine controls. The time in particular is deliberately
+/// not a `Timestamp` — parsing it would mint one of this machine's clock values
+/// out of a remote's text, and nothing here orders remarks or measures anything
+/// from one.
 ///
 /// **Comments left on individual lines of the diff are not here.** What a
 /// forge answers in one read of a pull request is the conversation on the pull
@@ -199,6 +200,18 @@ impl WhatTheForgeRan {
 /// being the one call this sweep can afford.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Remark {
+    /// What the forge calls this one comment.
+    ///
+    /// **The only field anything compares**, and the reason it exists: a person
+    /// picks comments to act on and the pull request is read again when they
+    /// press, so the picking and the acting have to be talking about the same
+    /// comment. Author and time cannot do it — one person leaves two comments in
+    /// the same minute — and the text cannot either, because a comment edited
+    /// between the two reads would stop being itself.
+    ///
+    /// **Never rendered and never in a prompt.** It crosses the seam so a
+    /// choice can name what it chose, and comes back on the press.
+    pub id: FromOutside,
     pub by: FromOutside,
     pub at: FromOutside,
     pub said: FromOutside,
@@ -206,11 +219,13 @@ pub struct Remark {
 
 impl Remark {
     pub fn written(
+        id: impl Into<String>,
         by: impl Into<String>,
         at: impl Into<String>,
         said: impl Into<String>,
     ) -> Remark {
         Remark {
+            id: FromOutside::verbatim(id),
             by: FromOutside::verbatim(by),
             at: FromOutside::verbatim(at),
             said: FromOutside::verbatim(said),

@@ -703,9 +703,9 @@ export class FleetConnection {
   }
 
   // ------------------------------------------------- one Job's work, reviewed
-  // The two reads. What each one is and why it is its own entry is in
+  // The three reads. What each one is and why it is its own entry is in
   // `review.ts`; these hold the port the reads are made over, which is the only
-  // part that belongs to the connection. The three decisions are `command.ts`'s.
+  // part that belongs to the connection. The decisions are `command.ts`'s.
 
   /** What one Job's Drones claimed. The cheap half of the pair. */
   async readEvidence(jobId: string | null): Promise<void> {
@@ -720,6 +720,15 @@ export class FleetConnection {
    */
   async readDiff(jobId: string | null): Promise<void> {
     await this.material.diff(this.connected()?.port ?? null, jobId);
+  }
+
+  /**
+   * What people wrote on one Job's pull request. **The one read here that costs
+   * a process on the machine Fleet is on and a network beyond it**, which is
+   * why it is opened by the surface a person decides on and by nothing else.
+   */
+  async readRemarks(jobId: string | null): Promise<void> {
+    await this.material.remarks(this.connected()?.port ?? null, jobId);
   }
 
   /**

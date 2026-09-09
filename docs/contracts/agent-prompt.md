@@ -330,6 +330,7 @@ which is an assembled prompt and therefore governed here.
 | **The gate's outcome** | A step passed its gate and its Drone is still there | Drafted, not sanctioned |
 | **The part-before block** | The same fact, where the Drone that would have read it has ended | Drafted, not sanctioned |
 | **The waiting-instruction block** | `redirect_drone` or `request_changes` arrived where no Drone was there to take it | The person writes the words; the frame around them is drafted |
+| **The picked-comments block** | A person picked comments off the Job's pull request and pressed. The same block, assembled from somebody else's words rather than typed | Whoever commented writes the words; Armada writes the frame and the fence, and neither is sanctioned |
 
 **Every turn Fleet authors now has wording.** `redirect_drone` carries a
 person's words rather than Fleet's, so it has none of its own to specify.
@@ -337,6 +338,21 @@ Its waiting form carries the same words and adds a frame, which is Fleet's and
 is drafted: an opening brief has to say who wrote the instruction and that it
 is not part of the step's definition, where an injected turn arrives in the
 middle of a conversation and does not.
+
+**The last row is the one place a prompt carries text somebody outside this
+machine wrote**, and it is why the frame says *left this* rather than *wrote
+this*: a person typing a note wrote the words, and a person picking comments off
+a pull request picked somebody else's. The block itself opens by saying which of
+the two it is.
+
+> **Rule.** Text from outside this machine is fenced by a prefix on every line,
+> never by a delimiter around the whole.
+> Why: a delimiter is something the text can write for itself and therefore
+> close. A prefix cannot be removed from inside — a comment may write a line
+> that *starts* with the marker and may not write one that lacks it — so where
+> the quoted text begins and ends stays Armada's to state. `fleet::remarks` is
+> the fence, and it is deliberately not an escaper: what authorises the words is
+> that a person picked them.
 The gate's outcome was the one exception — the mechanism was decided and the
 wording never written — and its last two rows close that.
 

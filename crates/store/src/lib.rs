@@ -48,6 +48,8 @@ mod process;
 /// here that is not keyed by a Job.**
 mod proving;
 mod read;
+/// Which comments on a Job's pull request have already reached a Drone.
+mod remarks;
 /// What a person says went wrong, kept after the Job it is about is gone.
 mod report;
 mod revision;

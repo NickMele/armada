@@ -23,8 +23,8 @@
 // that made the surface reachable. Re-reading a megabyte on every event would
 // spend the bytes the split exists to save.
 
-import type { Diff, Evidence } from "@armada/protocol";
-import type { JobDiff, JobEvidence, Submitted, Work } from "@armada/protocol";
+import type { Diff, Evidence, Remarks } from "@armada/protocol";
+import type { JobDiff, JobEvidence, JobRemarks, Submitted, Work } from "@armada/protocol";
 import { JobReader } from "./reader";
 import { ask, type Answer } from "./request";
 
@@ -65,8 +65,23 @@ export class ReviewMaterial {
    * reading here would erase the difference before any surface saw it.
    */
   private readonly patch: JobReader<{ work?: Work }>;
+  /**
+   * `GET /jobs/:job_id/remarks`, published whole.
+   *
+   * **The one read on this class that costs a forge**, which is why it is here
+   * and not on the reads an event refreshes: nothing takes it on a timer, and
+   * what re-takes it is a person pressing Refresh or a connection coming back
+   * to a reading that failed.
+   *
+   * **An empty list on `read` is a pull request nobody has commented on.** A
+   * forge that would not answer is a refusal, so it lands as `failed` — the two
+   * are different sentences and this shape keeps them apart.
+   */
+  private readonly conversation: JobReader<{ review: JobRemarks }>;
 
-  constructor(publish: (change: { evidence?: Evidence; diff?: Diff }) => void) {
+  constructor(
+    publish: (change: { evidence?: Evidence; diff?: Diff; remarks?: Remarks }) => void,
+  ) {
     this.claims = new JobReader<{ steps: Submitted[] }>({
       route: (jobId) => `/jobs/${encodeURIComponent(jobId)}/evidence`,
       keeps: (body) => ({ steps: (body as JobEvidence).steps }),
@@ -77,12 +92,18 @@ export class ReviewMaterial {
       keeps: (body) => ({ work: (body as JobDiff).work }),
       publish: (diff) => publish({ diff }),
     });
+    this.conversation = new JobReader<{ review: JobRemarks }>({
+      route: (jobId) => `/jobs/${encodeURIComponent(jobId)}/remarks`,
+      keeps: (body) => ({ review: body as JobRemarks }),
+      publish: (remarks) => publish({ remarks }),
+    });
   }
 
   /** Both reads end with the window. Neither is written onto the Job. */
   close(): void {
     this.claims.close();
     this.patch.close();
+    this.conversation.close();
   }
 
   /** Read what one Job's Drones claimed, or `null` to stop. */
@@ -95,9 +116,25 @@ export class ReviewMaterial {
     await this.patch.want(port, jobId);
   }
 
-  /** Both again, for whichever is open. The bar's Refresh reaches this. */
+  /** What people wrote on one Job's pull request, or `null` to stop. */
+  async remarks(port: number | null, jobId: string | null): Promise<void> {
+    await this.conversation.want(port, jobId);
+  }
+
+  /**
+   * All three again, for whichever is open. The bar's Refresh reaches this.
+   *
+   * **The conversation is in it, and it is the one that costs a process.** A
+   * person pressing Refresh on a pull request they are deciding about is asking
+   * exactly this question — has anybody said anything since — and nothing else
+   * in Bridge will ever ask it again.
+   */
   async reread(port: number): Promise<void> {
-    await Promise.all([this.claims.again(port), this.patch.again(port)]);
+    await Promise.all([
+      this.claims.again(port),
+      this.patch.again(port),
+      this.conversation.again(port),
+    ]);
   }
 
   /**
@@ -115,8 +152,24 @@ export class ReviewMaterial {
     await Promise.all([
       this.claims.failing ? this.claims.again(port) : undefined,
       this.patch.failing ? this.patch.again(port) : undefined,
+      this.conversation.failing ? this.conversation.again(port) : undefined,
     ]);
   }
+}
+
+/**
+ * Hand the comments a person picked to a Drone.
+ *
+ * **A fifth act at the same gate, and not a fifth `Decision`.** The four above
+ * differ in what happens to the Job and each carries at most a note; this one
+ * carries a set of handles off a forge, and folding it into `decide` would make
+ * that function's body mean two shapes.
+ *
+ * It answers with the Job as it now stands, like the four, so the caller folds
+ * one row rather than re-reading the board.
+ */
+export function takeUp(port: number, jobId: string, remarks: string[]): Promise<Answer> {
+  return ask(port, "POST", `/jobs/${encodeURIComponent(jobId)}/take_up_remarks`, { remarks });
 }
 
 /**

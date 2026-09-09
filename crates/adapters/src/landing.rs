@@ -25,7 +25,7 @@
 //! to send a person somewhere, and the wrong place is worse than the sentence.
 
 use adapter_traits::{
-    Landing, Merged, NotMerged, Rendering, Renewed, RepositoryStanding, WhatBecameOfIt,
+    Landing, Merged, NotMerged, Rendering, Renewed, Replied, RepositoryStanding, WhatBecameOfIt,
 };
 use git2::Repository;
 
@@ -148,6 +148,39 @@ pub(crate) fn merge(in_repo: &str, pull_request: &str) -> Result<Merged, NotMerg
     match run.status.success() {
         true => Ok(Merged::Taken),
         false => Err(why_not(status, said(&run))),
+    }
+}
+
+/// Write one comment onto a pull request.
+///
+/// **The quieter of the two writes here, and still a write.** It changes
+/// nothing anybody builds on, unlike [`merge`], and everybody watching the pull
+/// request is mailed about it — so the caller sends one per press and this
+/// makes no attempt to batch, dedupe or retry.
+///
+/// **The body is passed as one argument and never through a shell.** `run_in`
+/// spawns the program directly, so a body carrying backticks, `$(` or a newline
+/// reaches the forge as the characters it is made of.
+///
+/// **No retry.** A reopen is retried because a pull request left closed is
+/// worse than it was found; a comment that did not post leaves the pull request
+/// exactly as it was, and the caller writes a line saying so.
+pub(crate) fn replied(in_repo: &str, pull_request: &str, saying: &str) -> Replied {
+    let run = match run_in(
+        in_repo,
+        FORGE,
+        &["pr", "comment", pull_request, "--body", saying],
+    ) {
+        Ok(run) => run,
+        Err(why) => {
+            return Replied::NotPosted {
+                why: format!("`{FORGE}` would not run: {why}"),
+            }
+        }
+    };
+    match run.status.success() {
+        true => Replied::Posted,
+        false => Replied::NotPosted { why: said(&run) },
     }
 }
 

@@ -28,8 +28,8 @@ use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Observed, Queries, Refusal};
 use ipc::{
     CallArguments, FleetCapacity, JobDelivery, JobDetail, JobDiff, JobEvidence, JobHistory, JobId,
-    JobList, JobResources, JobSpend, ManifestReading, ManifestSummary, ModelChoices, Work,
-    WorkflowSummary, WorktreesHeld,
+    JobList, JobRemarks, JobResources, JobSpend, ManifestReading, ManifestSummary, ModelChoices,
+    Work, WorkflowSummary, WorktreesHeld,
 };
 use store::LoadJobError;
 
@@ -333,6 +333,41 @@ where
         Ok(JobEvidence {
             job_id,
             steps: recorded.iter().map(submitted).collect(),
+        })
+    }
+
+    /// What anybody has written on one Job's open pull request.
+    ///
+    /// **The redaction is that a `Remark` becomes five plain strings.**
+    /// `adapter_traits::FromOutside` is what keeps text somebody outside this
+    /// machine wrote from being swept into a sentence by accident, and JSON has
+    /// no shape for it — so [`as_written`](adapter_traits::FromOutside::as_written)
+    /// is called four times here, by hand, which is exactly the visible step
+    /// this file exists to make people take. What crosses is what was written,
+    /// uncleaned; `crates/ipc/src/remarks.rs` says where the guard is on the
+    /// far side.
+    ///
+    /// `taken_up` is the one field a forge did not write, and it is the reason
+    /// the record is read beside the reading.
+    async fn get_remarks(&self, job_id: JobId) -> Result<JobRemarks, Refusal> {
+        let said = self
+            .what_was_said(&job_id.to_domain())
+            .await
+            .map_err(|why| self.refusal(why))?;
+        Ok(JobRemarks {
+            job_id,
+            pull_request: said.pull_request,
+            remarks: said
+                .remarks
+                .iter()
+                .map(|remark| ipc::Remark {
+                    id: remark.id.as_written().to_string(),
+                    by: remark.by.as_written().to_string(),
+                    at: remark.at.as_written().to_string(),
+                    said: remark.said.as_written().to_string(),
+                    taken_up: said.taken_up.contains(remark.id.as_written()),
+                })
+                .collect(),
         })
     }
 

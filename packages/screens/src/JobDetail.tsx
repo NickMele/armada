@@ -75,6 +75,7 @@ import type {
   Journalled,
   Observed,
   Outcome,
+  Remarks,
   Watched,
 } from "@armada/protocol";
 import type { FileReport, JobSummary, StepDetail } from "@armada/protocol";
@@ -168,6 +169,12 @@ export type JobDetailProps = {
   onReadCall: ReadCall;
   /** Stable, like `onReadDiff` — an effect in the decision block depends on it. */
   onNeedMaterial: (jobId: string | null) => void;
+  /**
+   * Open or close the read of the pull request's comments. Stable for
+   * `onNeedMaterial`'s reason, and its own prop because it is its own read: one
+   * reaches a record and this one reaches a forge.
+   */
+  onNeedRemarks: (jobId: string | null) => void;
   /** Say this job failed in error, with the record attached. */
   onReport: (jobId: string, filing: FileReport) => Promise<Outcome>;
   /** Let this Job run. Sent on the press, with no confirmation. */
@@ -184,6 +191,13 @@ export type JobDetailProps = {
   onApproveReview: (jobId: string) => void;
   onRequestChanges: (jobId: string, note: string) => void;
   onReject: (jobId: string) => void;
+  /**
+   * The fifth answer at the same gate: the comments a person picked off the
+   * pull request reach a Drone. **Handles and never words** — Fleet reads the
+   * pull request again on the press, so nothing here decides what a Drone is
+   * told.
+   */
+  onTakeUpRemarks: (jobId: string, remarks: string[]) => void;
   /**
    * What the second socket has said. **Opened for every Job that is open**, not
    * on a press: the activity log is a chapter of the step's story and a chapter
@@ -243,6 +257,7 @@ export function JobDetail({
   onOpenPullRequest,
   onReadCall,
   onNeedMaterial,
+  onNeedRemarks,
   job,
   watched,
   workflows,
@@ -269,6 +284,7 @@ export function JobDetail({
   onApproveReview,
   onRequestChanges,
   onReject,
+  onTakeUpRemarks,
   onCopied,
   onSaid,
 }: JobDetailProps) {
@@ -581,8 +597,10 @@ export function JobDetail({
                   <Decide
                     job={job}
                     onNeedMaterial={onNeedMaterial}
+                    onNeedRemarks={onNeedRemarks}
                     evidence={recorded.evidence}
                     diff={recorded.diff}
+                    remarks={recorded.remarks}
                     stale={stale}
                     deciding={deciding}
                     {...(whole?.delivery?.pull_request === undefined
@@ -592,6 +610,7 @@ export function JobDetail({
                     onApprove={onApproveReview}
                     onRequestChanges={onRequestChanges}
                     onReject={onReject}
+                    onTakeUpRemarks={onTakeUpRemarks}
                   />
                 ) : undefined,
             }
@@ -673,6 +692,12 @@ export type FoldedReads = {
   footprint: Footprint;
   evidence: Evidence;
   diff: Diff;
+  /**
+   * What people wrote on the Job's pull request, where the decision block asked
+   * for it. **The one read in this set that costs a forge**, so nothing takes
+   * it on a timer and no event refreshes it.
+   */
+  remarks: Remarks;
 };
 
 /** Why the run has no rows, which is never the same sentence twice. */

@@ -145,7 +145,11 @@ where
     /// declares no delivering step opens no pull request, and neither does one
     /// whose push failed. Both are Jobs a person may approve and neither is one
     /// they can merge.
-    async fn pull_request_of(&self, job_id: &JobId) -> Result<String, Adrift> {
+    ///
+    /// **`crate::remarks` reads it too**, and refuses on the same absence for
+    /// the same reason: a Job with no pull request has no comments to choose
+    /// from and nowhere to write a reply.
+    pub(crate) async fn pull_request_of(&self, job_id: &JobId) -> Result<String, Adrift> {
         self.store()
             .lock()
             .await

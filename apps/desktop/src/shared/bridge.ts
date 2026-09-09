@@ -24,6 +24,7 @@ import type {
   Outcome,
   Proposed,
   ProtocolVersion,
+  Remarks,
   Reports,
   Skew,
   Watched,
@@ -203,6 +204,13 @@ export type BridgeState = {
    * re-read every time an event names the open Job.
    */
   diff: Diff;
+  /**
+   * What people wrote on one Job's open pull request, where the surface a
+   * person decides on asked for it. **The one read in this state that costs a
+   * forge** — nothing takes it on a timer and no event refreshes it, so it is
+   * opened by that surface and dropped when it closes.
+   */
+  remarks: Remarks;
   /**
    * Every report filed, and the calibration counts, where a surface asked.
    *
@@ -561,6 +569,25 @@ export type BridgeApi = {
    */
   rejectWork: (jobId: string) => Promise<Outcome>;
   /**
+   * What people wrote on one Job's open pull request, or `null` to stop.
+   *
+   * **Read-only, and the one read on this surface that reaches a forge.** It is
+   * its own entry beside `readEvidence` and `readDiff` for their reason: three
+   * operations, opened by the surfaces that draw them, and this one costs a
+   * process and a network rather than a record or a worktree.
+   */
+  readRemarks: (jobId: string | null) => Promise<void>;
+  /**
+   * Hand the comments a person picked off the pull request to a Drone, and let
+   * one reply on the pull request say which.
+   *
+   * **A fifth entry rather than a flag on `requestChanges`.** What reaches
+   * Fleet is a set of handles off a forge, not a person's words — the words are
+   * read from the forge on the press, so nothing here decides what a Drone is
+   * told. What it does to the Job is what `requestChanges` does.
+   */
+  takeUpRemarks: (jobId: string, remarks: string[]) => Promise<Outcome>;
+  /**
    * Open one of a Job's artifacts in whatever the OS opens it with.
    *
    * **One entry taking which, where the kills and the decisions are three.**
@@ -632,6 +659,7 @@ export const NOTHING_YET: BridgeState = {
   history: { state: "none" },
   evidence: { state: "none" },
   diff: { state: "none" },
+  remarks: { state: "none" },
   reports: { state: "none" },
   resources: { state: "none" },
   examination: { state: "none" },
@@ -665,6 +693,7 @@ export const CHANNELS = {
   readResources: "bridge:read-resources",
   examineJob: "bridge:examine-job",
   readDiff: "bridge:read-diff",
+  readRemarks: "bridge:read-remarks",
   readCall: "bridge:read-call",
   readReports: "bridge:read-reports",
   readHeld: "bridge:read-held",
@@ -672,6 +701,7 @@ export const CHANNELS = {
   mergePullRequest: "bridge:merge-pull-request",
   requestChanges: "bridge:request-changes",
   rejectWork: "bridge:reject-work",
+  takeUpRemarks: "bridge:take-up-remarks",
   openArtifact: "bridge:open-artifact",
   openPullRequest: "bridge:open-pull-request",
   summoned: "bridge:summoned",

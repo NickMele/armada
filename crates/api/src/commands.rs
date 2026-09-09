@@ -15,7 +15,7 @@ use axum::http::StatusCode;
 use axum::response::Response;
 use ipc::{
     ChangesRequested, ChosenAnswer, FileReport, JobId, JobRequest, Overruled, ProposeJob,
-    Redirection, RestartRequested, StopProposal,
+    Redirection, RemarksTakenUp, RestartRequested, StopProposal,
 };
 
 use crate::answers::{answer, refused, undecodable};
@@ -145,6 +145,34 @@ pub(crate) async fn request_changes<D: Commands>(
     match served
         .daemon()
         .request_changes(JobId::carried(job_id), note)
+        .await
+    {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// The comments a person picked off the pull request reach a Drone.
+///
+/// **The same answer `request_changes` gives**, because that is what it calls:
+/// the Job comes back `queued` with the words waiting for the Drone
+/// re-admission puts on it.
+///
+/// 409 where a comment named is one a Drone on this Job has already been
+/// handed, or one the pull request no longer has. 422 where the press named no
+/// comment at all.
+pub(crate) async fn take_up_remarks<D: Commands>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+    body: Bytes,
+) -> Response {
+    let picked: RemarksTakenUp = match ipc::decode("the comments picked", &body) {
+        Ok(picked) => picked,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served
+        .daemon()
+        .take_up_remarks(JobId::carried(job_id), picked)
         .await
     {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),

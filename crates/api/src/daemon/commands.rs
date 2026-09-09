@@ -20,7 +20,8 @@ use std::future::Future;
 use crate::daemon::Refusal;
 use ipc::{
     ChangesRequested, ChosenAnswer, FileReport, JobExamined, JobForgotten, JobId, JobSummary,
-    ProposeJob, Redirection, Redispatched, Report, RestartRequested, WorktreeReclaimed,
+    ProposeJob, Redirection, Redispatched, RemarksTakenUp, Report, RestartRequested,
+    WorktreeReclaimed,
 };
 
 /// Everything a client asks Fleet to do.
@@ -323,6 +324,32 @@ pub trait Commands: Send + Sync + 'static {
         &self,
         job_id: JobId,
         note: ChangesRequested,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `take_up_remarks` — the comments a person picked off the pull request
+    /// reach a Drone, and one reply on the pull request says which.
+    ///
+    /// **A second entrance onto [`Commands::request_changes`]'s road, not a
+    /// second road.** What it does to the Job is that act, called rather than
+    /// restated, so what comes back is the same `queued` and the fresh Drone
+    /// opens with the same block. What is different is where the words came
+    /// from: the forge, read again on the press, rather than a person's
+    /// keyboard.
+    ///
+    /// **The body carries handles and never words.** A client names the
+    /// comments it picked and Fleet takes the text from the forge, so nothing
+    /// on the far side of this seam decides what a Drone is told.
+    ///
+    /// **Refused, by name, on a comment already handed to a Drone on this Job**
+    /// — a comment reads the same on a forge forever, and only Armada's own
+    /// record can tell one that was worked from one that was not. Refused too
+    /// on a comment the pull request no longer has, on a press naming none, and
+    /// on everything `request_changes` refuses, a note already waiting
+    /// included.
+    fn take_up_remarks(
+        &self,
+        job_id: JobId,
+        picked: RemarksTakenUp,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `override_verdict` — the Judge refused, a person disagrees, and the step

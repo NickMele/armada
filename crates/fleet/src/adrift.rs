@@ -138,6 +138,39 @@ pub enum Adrift {
         doing: &'static str,
         said: String,
     },
+    /// The forge would not say what is on a pull request.
+    ///
+    /// **A refusal and never an empty list.** A pull request nobody has
+    /// commented on and a forge nobody could reach are opposite answers —
+    /// `adapter_traits::UnderReview` keeps them apart and this is where the
+    /// second one stops. A person shown it as the first would conclude their
+    /// review had vanished.
+    ///
+    /// **Not the sweep's answer to the same silence.** `crate::under_review`
+    /// reads this on a rotation and says nothing, because there is another
+    /// sweep coming; here somebody is standing in front of it waiting.
+    ReviewUnreadable { job: JobId, pull_request: String },
+    /// A press arrived naming no comments at all.
+    ///
+    /// **Refused rather than taken as a Drone with nothing to do**, for
+    /// `redirect_drone`'s reason about a blank note: an act that appears to
+    /// work and changes nothing is worse than one that says what was missing.
+    NoRemarksChosen { job: JobId },
+    /// A press named comments the pull request no longer has.
+    ///
+    /// **The whole press, not the part that survived.** A person picked a set,
+    /// and acting on what was left of it without saying so is the silent
+    /// divergence choosing exists to prevent. What comes back is which handles
+    /// are gone, so the answer is a re-read and another choice.
+    RemarksGone { job: JobId, gone: Vec<String> },
+    /// A press named comments a Drone on this Job has already been handed.
+    ///
+    /// **`RedirectAlreadyWaiting`'s rule one scope wider.** That one refuses a
+    /// second note over an undelivered first; this refuses a second delivery of
+    /// the same words. A Drone that ran and did not fully satisfy a comment
+    /// must not meet it again as if it were new — the comment reads the same
+    /// on the forge forever, and only Armada's own record can tell them apart.
+    RemarksAlreadyTakenUp { job: JobId, already: Vec<String> },
     /// A merge was asked for on a Job whose record holds no pull request.
     ///
     /// **Not [`Adrift::NotMerged`]**, and the difference is whose fault it is:

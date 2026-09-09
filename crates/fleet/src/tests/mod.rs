@@ -82,6 +82,7 @@ mod redirect;
 mod redispatch;
 mod refused;
 mod regating;
+mod remarks;
 mod reporting;
 mod resources;
 mod restarting;

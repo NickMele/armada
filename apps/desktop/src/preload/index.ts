@@ -163,6 +163,13 @@ const api: BridgeApi = {
   readDiff: (jobId: string | null): Promise<void> =>
     ipcRenderer.invoke(CHANNELS.readDiff, jobId),
 
+  // What people wrote on a Job's open pull request. **The one read here that
+  // reaches a forge**, so it is its own entry beside the two above rather than
+  // riding one of them: a surface wanting the claims must not spend a process
+  // and a network to get them, and nothing takes this on a timer.
+  readRemarks: (jobId: string | null): Promise<void> =>
+    ipcRenderer.invoke(CHANNELS.readRemarks, jobId),
+
   // The rest of one cut call argument. **A separate entry from `observeJob`,
   // and the narrowest read here**: it names a call id off a row this window was
   // already streamed rather than opening anything, and it answers once instead
@@ -206,6 +213,13 @@ const api: BridgeApi = {
 
   rejectWork: (jobId: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.rejectWork, jobId),
+
+  // The fifth act at the same gate, and a fifth entry for the reason the four
+  // above are four. **Handles, never words**: what crosses is what the forge
+  // calls each comment, and fleet reads the pull request again to find out what
+  // they say — so nothing on this side decides what a drone is told.
+  takeUpRemarks: (jobId: string, remarks: string[]): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.takeUpRemarks, jobId, remarks),
 
   // The one entry that reaches outside the app, and the narrowest it can be:
   // a Job id and one of three words. **No path crosses here.** Main derives

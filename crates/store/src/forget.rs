@@ -61,6 +61,10 @@ pub struct Forgotten {
     pub step_plan_paths: usize,
     /// What each Drone of the Job spent, one row per Drone.
     pub drone_spend: usize,
+    /// The comments on the Job's pull request that have already reached a
+    /// Drone, one row each. A Job whose pull request nobody commented on, and
+    /// one nobody chose a comment off, both count zero.
+    pub remarks_taken_up: usize,
     /// The process the Job's Drone is running as. One row while a Drone is on
     /// it, none otherwise — so a Job forgotten from a terminal status counts
     /// zero here, and one that counts a row is a departure that never
@@ -101,6 +105,7 @@ impl Forgotten {
             "job_step_plan_paths" => &mut self.step_plan_paths,
             "job_drone_process" => &mut self.drone_process,
             "job_drone_spend" => &mut self.drone_spend,
+            "job_remarks_taken_up" => &mut self.remarks_taken_up,
             _ => return None,
         })
     }
