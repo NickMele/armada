@@ -73,7 +73,8 @@ __screenshots__/
 # is this repository declaring its own workflows and is checked in; everything
 # else under `.armada/` is a record of one run on one machine — a Job's log, its
 # Checks' output, its worktree, its Drones' transcripts, the files attached to
-# its brief, and `.armada/<job-id>/`, where a Drone puts anything it writes for
+# its brief, its frames, the shared base checkout every Job is photographed
+# against, and `.armada/<job-id>/`, where a Drone puts anything it writes for
 # itself.
 #
 # Listed as an allowlist rather than one line per directory. The list form left

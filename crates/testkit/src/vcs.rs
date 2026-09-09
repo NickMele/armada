@@ -771,15 +771,26 @@ impl Vcs for FakeVcs {
         Ok(made)
     }
 
-    fn commit_at(&self, _repo_root: &str, r#ref: &str) -> Result<String, Self::Error> {
-        self.refs
-            .lock()
-            .expect("not poisoned")
-            .get(r#ref)
-            .cloned()
-            .ok_or_else(|| FakeVcsError::NoSuchRef {
-                r#ref: r#ref.to_string(),
-            })
+    /// **`None` where no ref was scripted at all**, which is a repository that
+    /// names no base — the same silence the real one answers with, and not the
+    /// error a declared-but-missing branch raises.
+    fn base_commit(
+        &self,
+        _repo_root: &str,
+        declared: Option<&str>,
+    ) -> Result<Option<String>, Self::Error> {
+        let refs = self.refs.lock().expect("not poisoned");
+        match declared {
+            Some(name) => {
+                refs.get(name)
+                    .cloned()
+                    .map(Some)
+                    .ok_or_else(|| FakeVcsError::NoSuchRef {
+                        r#ref: name.to_string(),
+                    })
+            }
+            None => Ok(refs.values().next().cloned()),
+        }
     }
 
     /// **Answers the same checkout every time it is asked for one commit**,

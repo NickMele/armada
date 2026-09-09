@@ -42,20 +42,33 @@ fn scaffold_branch(spec: &BaseSpec) -> String {
     format!("armada/base/{}", spec.commit())
 }
 
-/// What commit a ref is at.
+/// What commit the base branch is at.
 ///
-/// **A branch name, resolved as a branch.** A caller could pass anything git
-/// would revparse, and the base is always a local branch name — so the narrow
-/// lookup is the one that says *this branch is not here* rather than *that was
-/// not a revision*.
-pub fn commit_at(repo_root: &str, r#ref: &str) -> Result<String, CreateWorktreeError> {
+/// **[`crate::base::resolve`] and never a second resolution**, which is that
+/// module's own rule: a clean, a rebase and a photograph asking three times
+/// which branch the base is would disagree the first time one of them changed,
+/// and the disagreement here would be a *before* taken against a branch nobody
+/// is merging into.
+pub fn base_commit(
+    repo_root: &str,
+    declared: Option<&str>,
+) -> Result<Option<String>, CreateWorktreeError> {
     let repo = open(repo_root)?;
+    let resolved =
+        crate::base::resolve(&repo, declared).map_err(|_| CreateWorktreeError::RefNotFound {
+            repo: repo_root.to_string(),
+            r#ref: declared.unwrap_or_default().to_string(),
+        })?;
+    let Some(base) = resolved else {
+        return Ok(None);
+    };
+    let name = base.name();
     let branch = repo
-        .find_branch(r#ref, BranchType::Local)
+        .find_branch(name, BranchType::Local)
         .map_err(|cause| match cause.code() {
             ErrorCode::NotFound => CreateWorktreeError::RefNotFound {
                 repo: repo_root.to_string(),
-                r#ref: r#ref.to_string(),
+                r#ref: name.to_string(),
             },
             _ => CreateWorktreeError::RepoUnreadable {
                 repo: repo_root.to_string(),
@@ -68,7 +81,7 @@ pub fn commit_at(repo_root: &str, r#ref: &str) -> Result<String, CreateWorktreeE
             cause,
         }
     })?;
-    Ok(commit.id().to_string())
+    Ok(Some(commit.id().to_string()))
 }
 
 /// The checkout at this commit, made if it is not there.

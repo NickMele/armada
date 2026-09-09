@@ -10,6 +10,7 @@
 //! captured — so the whole confinement posture is asserted without a
 //! credential, a network, or an agent.
 
+mod basing;
 mod commit;
 mod delivery;
 mod harness;

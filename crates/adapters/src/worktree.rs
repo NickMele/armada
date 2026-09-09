@@ -79,8 +79,12 @@ impl Vcs for GitVcs {
         add(&repo, spec, &branch_name, &path)
     }
 
-    fn commit_at(&self, repo_root: &str, r#ref: &str) -> Result<String, Self::Error> {
-        crate::basing::commit_at(repo_root, r#ref)
+    fn base_commit(
+        &self,
+        repo_root: &str,
+        declared: Option<&str>,
+    ) -> Result<Option<String>, Self::Error> {
+        crate::basing::base_commit(repo_root, declared)
     }
 
     fn base_checkout(&self, spec: &BaseSpec) -> Result<BaseCheckout, Self::Error> {

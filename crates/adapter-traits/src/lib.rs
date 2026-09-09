@@ -166,7 +166,7 @@ pub trait Vcs {
     /// reason.
     fn create_worktree(&self, spec: &WorktreeSpec) -> Result<Worktree, Self::Error>;
 
-    /// What commit a ref is at, right now.
+    /// What commit this repository's base branch is at, right now.
     ///
     /// **A reading and not a checkout**, and it is separate from
     /// [`base_checkout`](Vcs::base_checkout) because the answer is what derives
@@ -175,12 +175,17 @@ pub trait Vcs {
     /// that has moved reach a different directory rather than an out-of-date
     /// one; `basing` carries the argument.
     ///
-    /// `r#ref` is a local branch name as `Base` carries it. A name that
-    /// resolves to nothing is an error rather than `None`: something declared
-    /// or inferred it, and a silent absence would be read as a repository with
-    /// no history.
-    fn commit_at(&self, repo_root: &str, r#ref: &str)
-        -> Result<alloc::string::String, Self::Error>;
+    /// `declared` is `base:` from the Manifest, and the resolution is the
+    /// implementation's — the same one [`Delivery`] uses, so a rebase and a
+    /// photograph cannot disagree about which branch the base is. `None` back
+    /// is a repository that names no base and has no `main` or `master` to
+    /// infer one from: there is nothing to be *before*, which is a fact to
+    /// report and not a failure.
+    fn base_commit(
+        &self,
+        repo_root: &str,
+        declared: Option<&str>,
+    ) -> Result<Option<alloc::string::String>, Self::Error>;
 
     /// Check the repository out at one commit, detached, for every Job on that
     /// commit to share.
