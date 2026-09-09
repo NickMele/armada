@@ -190,6 +190,11 @@ function DiffSheet({
       floor={floor}
       branch={job.branch ?? job.id}
       files={files}
+      // What the counts are counted against. Absent on a peer built before
+      // 7.9, where `measured_whole` defaults to true and the header falls back
+      // to the neutral phrase rather than claiming a base nothing named.
+      measuredFrom={diff.state === "read" ? diff.work?.measured_from : undefined}
+      measuredWhole={diff.state === "read" ? diff.work?.measured_whole : undefined}
       note={WHICH_STEP_WROTE_IT}
       onClose={onClose}
     >

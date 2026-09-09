@@ -87,6 +87,13 @@ export type JobDiffSheetProps = {
    * state over. Which silence it is belongs to `children` and to `note`.
    */
   files: JobDiffFile[] | null;
+  /** The ref the patch was measured against. Absent draws the neutral phrase. */
+  measuredFrom?: string;
+  /**
+   * Whether the patch covers the branch. **False makes the header say so** —
+   * a partial patch presented as the Job's is the failure this exists to stop.
+   */
+  measuredWhole?: boolean;
   /** Which file the rail has selected, by path. */
   selected?: string;
   onSelect?: (path: string) => void;
@@ -139,7 +146,15 @@ const NO_READING = "no reading";
  * before knowing whether there is a reading is what produced `+0 −0` under a
  * `null`.
  */
-function Counted({ files }: { files: JobDiffFile[] }) {
+function Counted({
+  files,
+  measuredFrom,
+  measuredWhole = true,
+}: {
+  files: JobDiffFile[];
+  measuredFrom?: string;
+  measuredWhole?: boolean;
+}) {
   const added = files.reduce((sum, file) => sum + file.added, 0);
   const removed = files.reduce((sum, file) => sum + file.removed, 0);
   return (
@@ -147,7 +162,25 @@ function Counted({ files }: { files: JobDiffFile[] }) {
       {` · ${files.length} ${files.length === 1 ? "file" : "files"} · `}
       <span className="armada-diff-sheet__added">{`+${added}`}</span>{" "}
       <span className="armada-diff-sheet__removed">{`−${removed}`}</span>
-      {" · uncommitted, in the worktree"}
+      {/* **What this was measured against, because it decides what the counts
+          mean.** It read `uncommitted, in the worktree` on every patch, which
+          was a guess that held while nothing committed mid-Job and became a
+          false claim the day something did: a Job whose steps had committed
+          seven files showed two under that same sentence. */}
+      {measuredWhole ? (
+        measuredFrom === undefined ? (
+          " · since the branch was cut"
+        ) : (
+          <>
+            {" · since "}
+            <span className="armada-diff-sheet__base">{measuredFrom}</span>
+          </>
+        )
+      ) : (
+        <span className="armada-diff-sheet__partial">
+          {" · uncommitted only — anything already committed on this branch is not here"}
+        </span>
+      )}
     </>
   );
 }
@@ -156,6 +189,8 @@ export function JobDiffSheet({
   open,
   branch,
   files,
+  measuredFrom,
+  measuredWhole,
   selected,
   onSelect,
   openedAt,
@@ -174,7 +209,11 @@ export function JobDiffSheet({
       subtitle={
         <>
           <span className="armada-diff-sheet__mono">{branch}</span>
-          {files === null ? ` · ${NO_READING}` : <Counted files={files} />}
+          {files === null ? (
+            ` · ${NO_READING}`
+          ) : (
+            <Counted files={files} measuredFrom={measuredFrom} measuredWhole={measuredWhole} />
+          )}
         </>
       }
       closeLabel="Close"

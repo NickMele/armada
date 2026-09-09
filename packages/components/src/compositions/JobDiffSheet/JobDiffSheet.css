@@ -152,3 +152,16 @@
   color: var(--diff-del-fg);
   font-variant-numeric: tabular-nums;
 }
+
+/* The ref the patch was measured against — a branch name, so mono. */
+.armada-diff-sheet__base {
+  font-family: var(--font-mono);
+}
+
+/* A patch that is not the Job's whole work says so in the one channel a
+   subtitle has. `--status-escalated` rather than a failure hue: the reading
+   worked and is smaller than it claims to be, which is a thing to notice
+   rather than a thing that broke. */
+.armada-diff-sheet__partial {
+  color: var(--status-escalated);
+}

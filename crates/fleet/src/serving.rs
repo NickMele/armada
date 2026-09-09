@@ -409,10 +409,17 @@ where
             .work()
             .patch(&worktree)
             .map_err(|cause| self.unreadable(job.id(), cause))?;
+        // Which ref the two readings above were taken against. **Carried rather
+        // than assumed**: a patch measured from the branch's own tip is the
+        // uncommitted remainder and not the Job's work, and until this field
+        // existed the sheet said "the Job's patch" over either one.
+        let measured = self.work().measured(&worktree);
         Ok(JobDiff {
             job_id,
             work: Some(Work {
                 files: crate::footprint::seen(&changed, plan.as_ref()),
+                measured_from: measured.from,
+                measured_whole: measured.whole,
                 plan_declared: plan.is_some(),
                 // Absent where there is nothing in it. An empty string reads as
                 // a reading that broke, and a reading that broke is the refusal

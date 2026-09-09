@@ -26,8 +26,8 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
 use adapter_traits::{
-    Change, Changed, ChangedFile, Counted, CountedFile, Footprint, LineCount, Patch, WorkProduct,
-    Worktree,
+    Change, Changed, ChangedFile, Counted, CountedFile, Footprint, LineCount, Measured, Patch,
+    WorkProduct, Worktree,
 };
 use git2::{Delta, Diff, DiffOptions, Oid, Repository};
 
@@ -60,6 +60,21 @@ impl WorkProduct for GitVcs {
         Ok(Footprint::of(entries))
     }
 
+    fn measured(&self, worktree: &Worktree) -> Measured {
+        let Ok((_repo, base)) = opened(worktree) else {
+            return Measured::uncommitted_only();
+        };
+        match base.named() {
+            Named::Declared => Measured::whole(worktree.base().map(String::from)),
+            // The checkout's HEAD does cover the branch — it is a merge base
+            // like the declared one — but it names a moving reference, so the
+            // name is left off rather than reported as though a Manifest had
+            // chosen it.
+            Named::CheckoutHead => Measured::whole(None),
+            Named::Tip => Measured::uncommitted_only(),
+        }
+    }
+
     fn patch(&self, worktree: &Worktree) -> Result<Patch, Self::Error> {
         let (repo, base) = opened(worktree)?;
         let diff = diff_of(&repo, base, worktree)?;
@@ -87,16 +102,16 @@ impl WorkProduct for GitVcs {
 /// from, untracked files included.
 fn diff_of<'r>(
     repo: &'r Repository,
-    base: Oid,
+    base: Base,
     worktree: &Worktree,
 ) -> Result<Diff<'r>, ReadWorkProductError> {
     let path = worktree.path();
     let tree = repo
-        .find_commit(base)
+        .find_commit(base.commit())
         .and_then(|commit| commit.tree())
         .map_err(|cause| ReadWorkProductError::BaseUnreadable {
             worktree: path.to_string(),
-            base: base.to_string(),
+            base: base.commit().to_string(),
             cause,
         })?;
 
@@ -156,7 +171,7 @@ fn held(root: &Path, named: &str, worktree: &str) -> Result<String, ReadWorkProd
 
 /// The worktree's repository and the commit its branch was cut from — what
 /// every reading above starts from.
-fn opened(worktree: &Worktree) -> Result<(Repository, Oid), ReadWorkProductError> {
+fn opened(worktree: &Worktree) -> Result<(Repository, Base), ReadWorkProductError> {
     let path = worktree.path();
     let repo =
         Repository::open(path).map_err(|cause| ReadWorkProductError::WorktreeUnreadable {
@@ -169,11 +184,22 @@ fn opened(worktree: &Worktree) -> Result<(Repository, Oid), ReadWorkProductError
 
 /// The commit the Job's branch was cut from.
 ///
+/// **Measured against the branch the Manifest declared, where it declared
+/// one.** It used to be measured against whatever the main checkout's HEAD
+/// happened to be — a floating reference that says where a person was
+/// standing, not what the Job branched from. Worse, `merge_base` failing fell
+/// through to the branch tip without a word, and a patch measured from the tip
+/// is only what is uncommitted: a Job whose step had committed seven files
+/// showed two, and the sheet still called it the Job's patch.
+///
+/// So the order is the declared base, then the checkout's HEAD, then the tip,
+/// and [`Base::named`] says which of the three answered so the sheet can too.
+///
 /// The repository's own HEAD is read through the common directory, which is
 /// where a linked worktree's shared administrative state lives — a worktree has
 /// a HEAD of its own, and reading that one would compare the branch against
 /// itself.
-fn base_of(worktree_repo: &Repository, worktree: &Worktree) -> Result<Oid, ReadWorkProductError> {
+fn base_of(worktree_repo: &Repository, worktree: &Worktree) -> Result<Base, ReadWorkProductError> {
     let path = worktree.path();
     let tip = worktree_repo
         .head()
@@ -191,23 +217,93 @@ fn base_of(worktree_repo: &Repository, worktree: &Worktree) -> Result<Oid, ReadW
             cause,
         }
     })?;
+    // **The declared base first.** `refs/heads/<base>` in the shared repository
+    // is a fixed point: it is what the Manifest says a Job's work is measured
+    // against, and it does not move because somebody checked out a branch.
+    if let Some(named) = worktree.base() {
+        if let Some(found) = commit_of(&common, named) {
+            if let Ok(base) = common.merge_base(tip, found) {
+                return Ok(Base::at(base, Named::Declared));
+            }
+        }
+    }
+
     let Ok(main) = common.head().and_then(|head| head.peel_to_commit()) else {
         // The repository has no HEAD to compare against — nothing has been
         // committed on the main line since this branch was made, or the main
         // checkout is on an unborn branch. The branch tip is then the base a
         // worktree diff should be taken against, which is the honest answer
         // rather than a failure.
-        return Ok(tip);
+        return Ok(Base::at(tip, Named::Tip));
     };
 
-    common
-        .merge_base(tip, main.id())
-        .or(Ok(tip))
-        .map_err(|cause: git2::Error| ReadWorkProductError::BaseUnreadable {
-            worktree: path.to_string(),
-            base: tip.to_string(),
-            cause,
-        })
+    // **Not `or(Ok(tip))`.** Falling through to the tip silently is what turned
+    // a Job's patch into its uncommitted remainder with nothing saying so. It
+    // is still the last resort, and now it is a value the wire carries.
+    match common.merge_base(tip, main.id()) {
+        Ok(base) => Ok(Base::at(base, Named::CheckoutHead)),
+        Err(_) => Ok(Base::at(tip, Named::Tip)),
+    }
+}
+
+/// The commit a ref name points at, in the shared repository.
+///
+/// A local branch first, then a remote-tracking one: a checkout that has never
+/// created `main` locally still has `origin/main`, and a Job branched from a
+/// fetched base is the ordinary case on a machine that only ever pulls.
+fn commit_of(repo: &Repository, name: &str) -> Option<Oid> {
+    let local = repo
+        .find_branch(name, git2::BranchType::Local)
+        .ok()
+        .and_then(|branch| branch.get().peel_to_commit().ok());
+    let found = match local {
+        Some(commit) => Some(commit),
+        None => repo
+            .find_branch(&format!("origin/{name}"), git2::BranchType::Remote)
+            .ok()
+            .and_then(|branch| branch.get().peel_to_commit().ok()),
+    };
+    found.map(|commit| commit.id())
+}
+
+/// Which reference a patch was measured against.
+///
+/// **On the wire, because a patch that measured against the wrong thing is
+/// indistinguishable from a Job that did less work.** That is the reading this
+/// whole module exists to serve, and it was wrong for a Job whose steps commit
+/// as they go with nothing on the screen able to say so.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Named {
+    /// The branch the Manifest declared. What a patch should be measured from.
+    Declared,
+    /// The main checkout's current HEAD, because no base was declared.
+    CheckoutHead,
+    /// The branch's own tip: nothing else resolved. **The patch is then only
+    /// what is uncommitted**, which is a smaller claim than the Job's work.
+    Tip,
+}
+
+/// A base commit and how it was arrived at.
+#[derive(Clone, Copy, Debug)]
+pub struct Base {
+    commit: Oid,
+    named: Named,
+}
+
+impl Base {
+    fn at(commit: Oid, named: Named) -> Base {
+        Base { commit, named }
+    }
+
+    /// The commit itself.
+    pub fn commit(&self) -> Oid {
+        self.commit
+    }
+
+    /// Which of the three answered.
+    pub fn named(&self) -> Named {
+        self.named
+    }
 }
 
 /// The git directory the repository and all its worktrees share.
