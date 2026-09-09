@@ -55,17 +55,35 @@
      once. The drawn width is each track's FLOOR and `auto` is its ceiling, so
      a track never reads narrower than the drawing and never truncates while
      the row has room. The 1fr before the action is what the slack goes into,
-     so the field values keep their measure instead of drifting apart. */
-  --armada-job-row-tracks:
+     so the field values keep their measure instead of drifting apart.
+
+     **One track per fact, where this was one track per value.** The list was
+     six tracks for a run of six single values — the bar had its own 72px and
+     the step's name the 108px beside it. A fact carries its name and its value
+     together now, and Progress is one fact holding both the bar and the word:
+     given the bar's track it overflowed into the step's, where Run time was
+     sitting, and the two ran together with nothing between them. A track sized
+     for half a cell is the whole of that bug.
+
+     Three tracks and four, for the reason the table has both — a floor a
+     column never fills reads as a value that failed to load, and Origin has
+     words but no carriage to Bridge yet. */
+  --armada-job-row-tracks-3:
     minmax(var(--armada-track-badge), max-content)
     minmax(var(--armada-track-origin), auto)
-    minmax(var(--armada-track-bar), auto)
-    minmax(var(--armada-track-step), auto)
+    minmax(var(--armada-track-progress), auto)
     minmax(var(--armada-track-time), auto)
-    minmax(var(--armada-track-spend), auto)
+    minmax(0, 1fr)
+    max-content;
+  --armada-job-row-tracks-4:
+    minmax(var(--armada-track-badge), max-content)
+    minmax(var(--armada-track-origin), auto)
+    minmax(var(--armada-track-progress), auto)
+    minmax(var(--armada-track-time), auto)
     minmax(var(--armada-track-provenance), auto)
     minmax(0, 1fr)
     max-content;
+  --armada-job-row-tracks: var(--armada-job-row-tracks-4);
 }
 
 .armada-job-row {

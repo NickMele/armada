@@ -126,7 +126,6 @@ export function Row({
   onOpen,
   onKill,
   onCopied,
-  view = "card",
 }: {
   job: JobSummary;
   /** The title, plus which dispatch of the work this is where there is more than one. */
@@ -140,15 +139,6 @@ export function Row({
   onOpen: (jobId: string) => void;
   onKill: (jobId: string) => void;
   onCopied: (value: string) => void;
-  /**
-   * Which arrangement the list is drawing. **The field set differs, and that
-   * is the point of naming it here.** A card's run is a sentence a person
-   * reads left to right and may be five facts long; a table's row is a set of
-   * cells under named columns and must be exactly as many as there are names,
-   * in their order. So the table folds the bar and the step's name into one
-   * Progress cell and leaves out what has no column.
-   */
-  view?: "card" | "table";
 }) {
   const reading = readingOf(job);
   // Every row reaching here is renderable — the list filtered the rest out and
@@ -191,17 +181,20 @@ export function Row({
   const elapsedNow = elapsedOf(job, now);
   const createdAt = absoluteOf(job.created_at) ?? undefined;
 
-  // **The table's cells, in the order `BOARD_COLUMNS` names them.** Three, and
-  // exactly three: a column with no header is a cell nobody can read, and a
-  // header with no cell is a track reserved for nothing.
+  // **The row's facts, in the order `BOARD_COLUMNS` names them, and both views
+  // read them.** Three, and exactly three: a column with no header is a cell
+  // nobody can read, and a header with no cell is a track reserved for nothing.
   //
-  // Progress is one cell where the card spends two tracks on it, because a
-  // column called Progress that answered in two places would need two names.
-  // The branch is not here: on a card it shares track one with the workflow and
-  // the row draws whichever it has, which a named column cannot do — so the
-  // column says Workflow and carries the workflow, and the branch stays a fact
+  // **One track per fact, not per value.** Progress holds the bar and the step
+  // together because a column called Progress answering in two places would
+  // need two names — and a card that spent the bar's track on the pair
+  // overflowed into the one Run time was sitting in.
+  //
+  // The branch is not here. On a card it used to share track one with the
+  // workflow and the row drew whichever it had, which a named column cannot do,
+  // so the column says Workflow and carries the workflow. The branch is a fact
   // the detail holds.
-  const cells: JobRowField[] = [
+  const facts: JobRowField[] = [
     {
       label: "Workflow",
       icon: Layers,
@@ -228,89 +221,12 @@ export function Row({
     },
   ];
 
-  const fields: JobRowField[] = [
-    // Track one, the drawing's switch: the branch the moment a worktree exists,
-    // and the workflow until then. Two glyphs because they are two different
-    // facts — a branch is where the work is and a workflow is what it will do —
-    // and the row never draws both, so the track stays one column wide.
-    job.branch === undefined
-      ? {
-          // The workflow's name where Fleet holds it, the id where it does not,
-          // which after the refusal at creation means a Job older than the check.
-          icon: Layers,
-          value:
-            workflow === undefined ? job.workflow_id : `${workflow.name}, ${steps.length} steps`,
-          mono: workflow === undefined,
-          copyValue: job.workflow_id,
-        }
-      : { icon: GitBranch, value: job.branch, mono: true, copyValue: job.branch },
-    {
-      // An empty bar, never no bar. A Job at the gate has its ordinals and no
-      // progress, and a row that dropped the bar there would read as a workflow
-      // with no steps rather than as one that has not started.
-      value: (
-        <StepBar
-          total={Math.max(steps.length, 1)}
-          current={at + 1}
-          // The Job's status, one level down. The rail reads the same mapping
-          // for a terminal Job — a row and a rail saying different things about
-          // one step is the drift keeping it in two files would produce.
-          // Anything the mapping does not name leaves the bar unhued, which is
-          // what the component does for `killed` and `retrying` everywhere else.
-          activity={activityFor(job.status)}
-          label={
-            job.current_step_id === undefined
-              ? `Not started, ${steps.length} steps`
-              : `Step ${at + 1} of ${steps.length}`
-          }
-        />
-      ),
-    },
-    // The step's id, because nothing serves its name (#109). `Not started` is
-    // the same sentence at the gate and in the queue: the queued row's reason
-    // is already the badge's verb, and the status grammar puts it there rather
-    // than in the run — so repeating it here would say one thing twice.
-    job.current_step_id === undefined
-      ? { value: "Not started", quiet: true }
-      : { value: job.current_step_id, mono: true, emphasis: true },
-  ];
-
-  // **Did this land**, appended rather than always drawn, for track four's
-  // reason. It is absent on every Job that has not opened a pull request and
-  // on every one nobody has merged yet — which are one absence on the wire,
-  // because neither is news. Drawing "not merged yet" on every finished row
-  // would put a label on the state a pull request is in from the moment it
-  // exists.
-  //
-  // `git-pull-request` for exactly what the icon registry reserves it for.
-  // The word carries the fact and the glyph says which fact it is about; the
-  // address is on the detail, where a click can reach it.
-  const landed = LANDED[job.landed ?? ""];
-  if (landed !== undefined) {
-    fields.push({ icon: GitPullRequest, value: leading(landed) });
-  }
-
-  // Track four, appended rather than always drawn: a Job with neither an
-  // elapsed reading nor a readable `created_at` loses the field, for the
-  // reason spend is not on the row at all. An empty slot in a shared column
-  // reads as a value that failed to load.
-  //
-  // While working, the track keeps answering "is this stuck" — elapsed stays
-  // the value — with the Job's actual creation time on hover, since that is
-  // the one instant elapsed cannot show. Once terminal there is no more
-  // elapsed to climb, and the slot that left blank now carries the same
-  // creation time outright rather than nothing.
-  const elapsed = elapsedOf(job, now);
-  const created = absoluteOf(job.created_at) ?? undefined;
-  if (elapsed !== undefined) {
-    fields.push({
-      value: <span title={created ? `Created ${created}` : undefined}>{elapsed}</span>,
-      mono: true,
-      quiet: true,
-    });
-  } else if (created !== undefined) {
-    fields.push({ value: created, mono: true, quiet: true });
-  }
+  // **`landed` leaves the row with the old field run.** It said whether a Job's
+  // pull request had been merged, appended rather than always drawn. The Board
+  // carries four named facts now and this is not one of them: an unnamed fifth
+  // chip is the thing the labels exist to stop, and the pull request is not
+  // served on `JobOutcome` well enough to make a column of. It is a fact the
+  // detail holds. Say so and it comes back as a fifth name.
 
   return (
     <JobRowStacked
@@ -322,7 +238,7 @@ export function Row({
       statusLabel={reading.verb}
       headline={headline}
       jobId={job.id}
-      fields={view === "table" ? cells : fields}
+      fields={facts}
       // **Every running row, and the row applies the ceiling.** Two Jobs run
       // at once now, so this alone would breathe twice on one board — which
       // Motion forbids and then names: the pulse rides the focused row. The

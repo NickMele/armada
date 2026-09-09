@@ -97,9 +97,14 @@
 }
 
 /* The track list follows how many facts the caller named, so no column is
-   reserved for one nothing fills. */
+   reserved for one nothing fills. Both arrangements, and each has its own
+   pair — a table gives the headline a column of its own and a card does not. */
 .armada-active-jobs__frame[data-view="table"][data-columns="3"] {
   grid-template-columns: var(--armada-job-table-tracks-3);
+}
+
+.armada-active-jobs__frame[data-columns="3"]:not([data-view="table"]) {
+  grid-template-columns: var(--armada-job-row-tracks-3);
 }
 
 /* The column names, once, above the rows. `--bg-sunken` rather than the row's

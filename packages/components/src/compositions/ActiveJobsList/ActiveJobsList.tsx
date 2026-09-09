@@ -77,6 +77,12 @@ export type ActiveJobsListProps = {
    * The badge and the action columns are not named — a status needs no header
    * to be read as one, and a column of buttons is not a fact about the Job. So
    * this is the four in between, and the frame places them.
+   *
+   * **Read by both arrangements, though only one draws it.** The table places
+   * its header cells by this; the card draws no header and still sizes its
+   * tracks by how many facts were named, because a track reserved for a fact
+   * the rows do not carry is a floor nothing fills. Passing it is a caller
+   * naming its facts either way.
    */
   columns?: ReactNode[];
 };
@@ -167,7 +173,7 @@ export function ActiveJobsList({
         ref={frame}
         className={`armada-active-jobs__frame ${JOB_ROW_LIST}`}
         data-view={view === "table" ? "table" : undefined}
-        data-columns={view === "table" ? columns?.length : undefined}
+        data-columns={columns?.length}
         role={roving ? "listbox" : "list"}
         aria-label={label}
         onKeyDown={roving ? rove : undefined}

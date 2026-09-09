@@ -457,7 +457,6 @@ export function Jobs({
           <Row
             key={job.id}
             job={job}
-            view={view}
             headline={headlineOf(job, board.dispatch.get(job.id))}
             stale={stale}
             now={now}

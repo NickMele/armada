@@ -99,6 +99,14 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* **The window is not a scroller, and this is what says so.** This is the one
+     region that scrolls, so a gesture that runs past its end has nowhere left
+     to go — without this the rest of it chains to the document, and the whole
+     app slides under a header that is supposed to be fixed. It is the same
+     declaration `ScrollArea` carries and for the same reason; what made it a
+     defect here is that the readings long enough to reach an end — a log, a
+     patch — are the ones a person keeps scrolling through. */
+  overscroll-behavior: contain;
   padding: 0 var(--space-4) var(--space-4);
 }
 
