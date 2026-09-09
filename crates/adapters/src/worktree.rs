@@ -17,16 +17,16 @@
 //! Step three is the one a person will actually hit, and
 //! [`clear_a_stale_registration`] holds why and how narrowly it is done.
 //!
-//! **What is not here: no removal, no sweep, no retention.** [`Vcs`] has no
-//! method for it, so this file could not offer one anyway — a worktree survives
-//! every terminal state because nothing Fleet hands a Drone can delete one.
-//! Removal is a person's act, at `armada clean`, through
-//! [`reclaim`](crate::reclaim()).
+//! **What is not here: no removal, no sweep, no retention.** A worktree
+//! survives every terminal state because nothing Fleet hands a Drone can delete
+//! one; removal is a person's act, at `armada clean`, through
+//! [`reclaim`](crate::reclaim()). **Nor the base checkout** — shared, no
+//! branch, and the opposite view of an existing directory: `crate::basing`.
 
 use std::fs;
 use std::path::Path;
 
-use adapter_traits::{CommitTime, Committed, Vcs, Worktree, WorktreeSpec};
+use adapter_traits::{BaseCheckout, BaseSpec, CommitTime, Committed, Vcs, Worktree, WorktreeSpec};
 use git2::{BranchType, ErrorCode, Repository, WorktreeAddOptions};
 
 use crate::error::{CommitWorkError, CreateWorktreeError};
@@ -72,6 +72,22 @@ impl Vcs for GitVcs {
         })?;
 
         add(&repo, spec, &branch_name, &path)
+    }
+
+    fn base_commit(
+        &self,
+        repo_root: &str,
+        declared: Option<&str>,
+    ) -> Result<Option<String>, Self::Error> {
+        crate::basing::base_commit(repo_root, declared)
+    }
+
+    fn base_checkout(&self, spec: &BaseSpec) -> Result<BaseCheckout, Self::Error> {
+        crate::basing::base_checkout(spec)
+    }
+
+    fn drop_base_checkout(&self, spec: &BaseSpec) -> Result<(), Self::Error> {
+        crate::basing::drop_base_checkout(spec)
     }
 
     fn commit_all(

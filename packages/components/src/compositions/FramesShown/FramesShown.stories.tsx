@@ -205,3 +205,54 @@ export const NoneAtAll: Story = {
     emptyNote: "This step declares no visual evidence, so its harness never ran.",
   },
 };
+
+/**
+ * **The reading #209 was written for: what changed, not what is.**
+ *
+ * The harness ran twice — the base checkout serving with the branch's own spec
+ * shooting, then the branch serving and shooting — and each plate says which
+ * side it is. `home.png` is on both, so it is a before and an after.
+ * `settings.png` is on the branch only, which is a screen the change *added*
+ * and has no before; drawing that as a gap would make the commonest case here
+ * read as the feature being broken.
+ *
+ * **`before` and `after`, not `base` and `branch`.** The wire's words name the
+ * two checkouts Fleet had to serve; these are the ones a reviewer thinks in,
+ * and the caller does the translation once.
+ */
+export const BeforeAndAfter: Story = {
+  args: {
+    frames: [
+      {
+        kept: "show.1.base/home.png",
+        name: "home.png",
+        attempt: 1,
+        side: "before",
+        weight: "37.2 KB",
+        src: shot("dimgray", "Home — as it was"),
+      },
+      {
+        kept: "show.1.branch/home.png",
+        name: "home.png",
+        attempt: 1,
+        side: "after",
+        weight: "41.0 KB",
+        src: shot("darkslategray", "Home — with the change"),
+      },
+      {
+        kept: "show.1.branch/settings.png",
+        name: "settings.png",
+        attempt: 1,
+        side: "after",
+        weight: "38.8 KB",
+        src: shot("darkslateblue", "Settings — new screen"),
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("attempt 1 · before · 37.2 KB")).toBeInTheDocument();
+    // The added screen still says which side it is, so a reader counting halves
+    // can see that this one has none.
+    await expect(canvas.getByText("attempt 1 · after · 38.8 KB")).toBeInTheDocument();
+  },
+};

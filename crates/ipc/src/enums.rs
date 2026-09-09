@@ -73,6 +73,29 @@ macro_rules! wire_enum {
 }
 
 wire_enum! {
+    /// Which checkout a frame is a photograph of.
+    ///
+    /// **What makes a set of frames a before and an after.** `#209` asks for
+    /// the branch *and* the base so a reviewer sees what changed rather than
+    /// what is, and two frames the spec called `home.png` are only a pair if
+    /// something says which is which. Nothing else on [`KeptFrame`] could: the
+    /// name is the harness's own, and both runs belong to one attempt of one
+    /// step.
+    ///
+    /// **Pair them by `name` and read the leftovers as answers.** A name on
+    /// both sides is a before and an after; a name only on the branch is a
+    /// screen the change added, which has no before; a name only at base is one
+    /// it removed, which has no after. None of the three is a fault, and a
+    /// client that drew a missing half as an error would draw the commonest
+    /// case `#209` is for — a brand-new screen — as the feature being broken.
+    ///
+    /// **Strict, like every other closed set here and unlike
+    /// `FleetCapacity.held_by`.** A third spelling would mean this seam had
+    /// grown a third kind of checkout, which is a change every reader has to be
+    /// told about — `docs/practices/protocol.md` holds the test.
+    Side, core_model::Side, "a side"
+}
+wire_enum! {
     /// Where a Job is. Twelve, from `domain/job-statuses.toml`.
     JobStatus, core_model::JobStatus, "a Job status"
 }

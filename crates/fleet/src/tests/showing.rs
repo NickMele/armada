@@ -13,9 +13,9 @@ use std::path::Path;
 use std::time::Duration;
 
 use config::Manifest;
-use core_model::{Attempt, StepFrame, StepId};
+use core_model::{Attempt, Side, StepFrame, StepId};
 
-use crate::showing::{frame_bytes, kept, named, show, tail, ComingUp, NotShown, Shown};
+use crate::showing::{frame_bytes, kept, named, show, tail, Aimed, ComingUp, NotShown, Shown};
 use crate::tests::tmp::TempDir;
 
 const JOB: &str = "01J0000000000000000000JOB0";
@@ -66,6 +66,7 @@ fn a_name_no_row_holds_resolves_to_no_file_whatever_it_spells() {
             name: "home.png".to_string(),
             path: format!(".armada/frames/{HANDLE}/implement.1/home.png"),
             bytes: 8,
+            side: Side::Branch,
         },
     }];
 
@@ -108,6 +109,7 @@ fn a_row_whose_file_is_gone_is_the_same_answer_as_a_name_that_was_never_one() {
                 name: "home.png".to_string(),
                 path: format!("{at}/home.png"),
                 bytes: 8,
+                side: Side::Branch,
             },
         },
         store::KeptFrame {
@@ -117,6 +119,7 @@ fn a_row_whose_file_is_gone_is_the_same_answer_as_a_name_that_was_never_one() {
                 name: "reclaimed.png".to_string(),
                 path: format!("{at}/reclaimed.png"),
                 bytes: 8,
+                side: Side::Branch,
             },
         },
     ];
@@ -159,15 +162,18 @@ fn what_is_kept_outlives_the_worktree_and_a_frame_that_would_not_copy_is_dropped
                 name: "home.png".to_string(),
                 path: String::new(),
                 bytes: 8,
+                side: Side::Branch,
             },
             StepFrame {
                 name: "never-written.png".to_string(),
                 path: String::new(),
                 bytes: 0,
+                side: Side::Branch,
             },
         ],
         &worktree,
         ".playwright/frames",
+        Side::Branch,
     );
 
     assert_eq!(
@@ -177,8 +183,8 @@ fn what_is_kept_outlives_the_worktree_and_a_frame_that_would_not_copy_is_dropped
     );
     assert_eq!(
         found[0].path,
-        format!(".armada/frames/{HANDLE}/implement.1/home.png"),
-        "under .armada, keyed by the run"
+        format!(".armada/frames/{HANDLE}/implement.1.branch/home.png"),
+        "under .armada, keyed by the run and the side it was taken on"
     );
 
     // The worktree really goes, which is the whole subject: the copy is not
@@ -216,7 +222,8 @@ evidence:
     let shown = show(
         &declared,
         "e2e/home.spec.ts",
-        &worktree,
+        Aimed::at(&worktree),
+        Side::Branch,
         ComingUp::of(Duration::from_secs(5)),
         Duration::from_secs(30),
     )
@@ -261,7 +268,8 @@ evidence:
 "#,
         ),
         "e2e/home.spec.ts",
-        &worktree,
+        Aimed::at(&worktree),
+        Side::Branch,
         ComingUp::of(Duration::from_secs(5)),
         Duration::from_secs(30),
     )
@@ -292,7 +300,8 @@ evidence:
 "#,
         ),
         "e2e/home.spec.ts",
-        &worktree,
+        Aimed::at(&worktree),
+        Side::Branch,
         ComingUp::of(Duration::from_secs(5)),
         Duration::from_secs(30),
     )
@@ -326,7 +335,8 @@ evidence:
 "#,
         ),
         "e2e/home.spec.ts",
-        &worktree,
+        Aimed::at(&worktree),
+        Side::Branch,
         ComingUp::of(Duration::from_secs(2)),
         Duration::from_secs(30),
     )
@@ -371,9 +381,11 @@ fn the_handle_is_what_the_run_directory_is_named_after() {
                 name: "home.png".to_string(),
                 path: String::new(),
                 bytes: 8,
+                side: Side::Branch,
             }],
             Path::new("/nonexistent"),
             "shots",
+            Side::Branch,
         )
         .is_empty(),
         "a handle that is not a single path component keeps nothing"

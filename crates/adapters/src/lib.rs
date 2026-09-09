@@ -37,6 +37,7 @@
 //! it with.
 
 mod base;
+mod basing;
 mod commit;
 mod delivery;
 mod error;

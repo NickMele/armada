@@ -99,10 +99,23 @@ pub fn cleaned(cleaned: &Cleaned) {
         }
     }
 
+    // **Counted, not listed.** Each name is a forty-character commit id and a
+    // person cannot do anything with one; what they want to know is that the
+    // disk came back, and how many checkouts it was.
+    if !cleaned.bases.is_empty() {
+        let count = cleaned.bases.len();
+        let plural = if count == 1 { "checkout" } else { "checkouts" };
+        println!(
+            "\n{count} base {plural} given back — the next Job that needs a \
+             `before` makes one again"
+        );
+    }
+
     if cleaned.jobs.is_empty()
         && cleaned.unclaimed.is_empty()
         && cleaned.unreadable.is_empty()
         && cleaned.uncommitted.is_empty()
+        && cleaned.bases.is_empty()
     {
         println!("\nno Jobs and no worktrees — there was nothing to give back");
     }

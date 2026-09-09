@@ -449,6 +449,7 @@ pub fn frame(kept: String) -> KeptFrame {
         path: format!(".armada/frames/01RUNNING/{kept}"),
         bytes: THE_FRAME_BYTES.len() as u64,
         kept,
+        side: ipc::Side::from_wire("branch").expect("a side"),
     }
 }
 

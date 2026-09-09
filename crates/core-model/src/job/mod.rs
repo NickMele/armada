@@ -82,7 +82,7 @@ pub use prerequisite::Prerequisite;
 pub use record::{Job, NewJob, StepTransitioned, Transitioned};
 pub use scope::{under, ContextSource, DeclarePlanAt, DeclaredPaths, EvidenceScope};
 pub use status::{JobStatus, StepState};
-pub use step::{JobStep, StepEvidence, StepFrame, StepSeed, StepVerdict};
+pub use step::{JobStep, Side, StepEvidence, StepFrame, StepSeed, StepVerdict};
 pub use step_machine::{
     IllegalStepTransition, StepEdge, StepTarget, ADVANCING_STATUSES, STEP_EDGES,
 };

@@ -19,8 +19,8 @@
 
 use core_model::{
     Actor, CheckOutcome, CriterionId, EscalationTrigger, EvidenceType, GamingFlag, GamingPattern,
-    Job, JudgeVerdict, Judgment, StepCheck, StepEvidence, StepFrame, StepId, StepLevelTrigger,
-    StepTarget, Target,
+    Job, JudgeVerdict, Judgment, Side, StepCheck, StepEvidence, StepFrame, StepId,
+    StepLevelTrigger, StepTarget, Target,
 };
 
 use crate::tests::{at, created_at, job_id, open, top_level, TempDir};
@@ -152,6 +152,7 @@ pub(super) fn record_a_whole_run(store: &mut Store, id: &str, saying: &str, when
                 name: "job-detail-refused.png".to_string(),
                 path: format!(".armada/frames/{id}/fix.1/job-detail-refused.png"),
                 bytes: 41_002,
+                side: Side::Branch,
             }],
             &at(when),
         )

@@ -15,6 +15,11 @@
 //! `Held::None` is the honest answer during those spans, and it is a stated
 //! answer rather than an empty list.
 //!
+//! **The base checkout is not this Job's disk**, by that same rule. One
+//! checkout serves every Job on a commit, so charging it to whichever Job was
+//! asked about would report a figure four Jobs each claim in full — and killing
+//! that Job would free none of it. `crate::basing` gives it back.
+//!
 //! **Both readings are bounded and both shell out**, which is
 //! [`crate::headroom`]'s precedent and its argument: `ps` and `du` are one
 //! spelling on darwin and Linux, need no `unsafe` and no platform crate.

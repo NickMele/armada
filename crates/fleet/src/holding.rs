@@ -156,6 +156,20 @@ pub struct GaveBack {
     pub reclaimed: Reclaimed,
 }
 
+/// What one sweep took, over the two kinds of disk Fleet holds.
+///
+/// **The base checkouts are not Jobs and cannot be reported as ones.** A base
+/// checkout belongs to a commit, is shared by every Job on it, and passes none
+/// of the five tests below — none of them is a question about it. So it is a
+/// second list rather than a sixth reason, and `crate::basing` holds the one
+/// test it does have: the base has moved past this commit.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Swept {
+    pub jobs: Vec<GaveBack>,
+    /// The commits whose shared base checkouts were removed.
+    pub bases: Vec<String>,
+}
+
 impl<H, V, W> Fleet<H, V, W>
 where
     H: AgentHarness + Send + Sync + 'static,
@@ -206,9 +220,9 @@ where
     /// A fault reclaiming one Job does not stop the next: the answer is per
     /// Job, and one repository refusing to open is the only thing that would
     /// make every one of them fail the same way.
-    pub(crate) async fn reclaim_what_is_safe(&self) -> Result<Vec<GaveBack>, Adrift> {
+    pub(crate) async fn reclaim_what_is_safe(&self) -> Result<Swept, Adrift> {
         if !self.due_to_sweep().await {
-            return Ok(Vec::new());
+            return Ok(Swept::default());
         }
         let held = self.worktrees_held().await?;
         let mut gave_back = Vec::new();
@@ -217,7 +231,15 @@ where
                 gave_back.push(taken);
             }
         }
-        Ok(gave_back)
+        // **On this sweep rather than a second one.** Two things walking
+        // `.armada/` on two clocks is how a directory comes to be taken by
+        // whichever one nobody was thinking about, and the one test a base
+        // checkout has — that the base has moved past its commit — needs no
+        // Job and no store read.
+        Ok(Swept {
+            jobs: gave_back,
+            bases: self.bases_gone_by(),
+        })
     }
 
     /// Whether enough time has passed, stamping the sweep either way.

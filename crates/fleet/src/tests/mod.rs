@@ -23,6 +23,7 @@ mod asked;
 mod attachments;
 mod attribution;
 mod auto_merging;
+mod basing;
 mod boundary;
 mod bounding;
 mod briefing;

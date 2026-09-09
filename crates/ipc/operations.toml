@@ -105,6 +105,8 @@ The split is `get_check_output`'s and made against the same measurement. `KeptFr
 
 **The record is the allowlist**, which is what makes a caller-supplied value safe to open a file with. Fleet resolves the name against the frames it holds for that Job before anything is opened, so a name no row of this Job carries reaches no file at all, whatever it spells. A row whose file will not open answers the same refusal as a name that was never one — a frame's whole content is the image, so a row without it is nothing a caller can use, and a reclaimed `.armada/frames` is exactly that case.
 
+**Since 9.5 the run directory carries the side as well as the run.** A step's harness now runs twice — the base checkout serving with the branch's own spec shooting, then the branch serving and shooting — and both write into the one directory `evidence.frames` names, under whatever names the spec chose. So `implement.1/home.png` became `implement.1.base/home.png` and `implement.1.branch/home.png`, which keeps the id two segments and keeps a frame's own name the spec's word. Rows written before 9.5 carry the two-part directory and go on resolving to it; nothing rewrites a path.
+
 `helm_access` is `No` for the reason `get_diff`, `get_call` and `get_check_output` have it: a file this size pulled into a Helm session stays in that session for its remainder, and the viewer this exists for is a person who opened a frame.
 """
 

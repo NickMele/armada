@@ -82,6 +82,17 @@ pub enum CreateWorktreeError {
         branch: String,
         cause: git2::Error,
     },
+    /// The base names no branch in this repository, so there is no commit to
+    /// photograph *before* against.
+    ///
+    /// **Not folded into [`RepoUnreadable`](CreateWorktreeError::RepoUnreadable).**
+    /// A repository that will not open is a machine to fix and a `base:` that
+    /// resolves to nothing is a key to fix, which is the distinction
+    /// `crate::base` already makes one file along.
+    RefNotFound { repo: String, r#ref: String },
+    /// A base checkout would not delete. It is left where it is, and the sweep
+    /// that asked will ask again.
+    BaseNotRemoved { path: String, cause: std::io::Error },
 }
 
 impl CreateWorktreeError {
@@ -154,6 +165,15 @@ impl fmt::Display for CreateWorktreeError {
                  `{branch}` was created and is left in place — `git branch -D \
                  {branch}` before retrying"
             ),
+            CreateWorktreeError::RefNotFound { repo, r#ref } => write!(
+                f,
+                "{repo} has no branch `{ref}`, so there is no commit to check the \
+                 base out at",
+                ref = r#ref
+            ),
+            CreateWorktreeError::BaseNotRemoved { path, cause } => {
+                write!(f, "the base checkout at {path} was not removed: {cause}")
+            }
         }
     }
 }
@@ -164,10 +184,12 @@ impl Error for CreateWorktreeError {
             CreateWorktreeError::RepoUnreadable { cause, .. }
             | CreateWorktreeError::StaleRegistrationNotCleared { cause, .. }
             | CreateWorktreeError::WorktreeNotCreated { cause, .. } => Some(cause),
-            CreateWorktreeError::ParentNotCreated { cause, .. } => Some(cause),
+            CreateWorktreeError::ParentNotCreated { cause, .. }
+            | CreateWorktreeError::BaseNotRemoved { cause, .. } => Some(cause),
             CreateWorktreeError::NoCommitToBranchFrom { .. }
             | CreateWorktreeError::BranchExists { .. }
             | CreateWorktreeError::WorktreeAlreadyLive { .. }
+            | CreateWorktreeError::RefNotFound { .. }
             | CreateWorktreeError::PathOccupied { .. } => None,
         }
     }

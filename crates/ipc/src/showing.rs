@@ -25,6 +25,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::enums::Side;
+
 /// One frame a step's harness produced, as Fleet kept it.
 ///
 /// **A reference, never the image**, the way [`KeptDeliverable`] and
@@ -75,4 +77,18 @@ pub struct KeptFrame {
     /// given rather than deriving a name from a path — the same rule
     /// `main/open.ts` follows one layer along.
     pub kept: String,
+    /// Which checkout this one is a photograph of. **Since 9.5.**
+    ///
+    /// **Absent is `branch`**, which is what every row written before 9.5 is:
+    /// until the base run existed, the Job's own worktree was the only place a
+    /// harness ran. A default here rather than an `Option` because there is no
+    /// third state to represent — a frame was taken somewhere — and an
+    /// `Option` would make every reader spell that out again.
+    #[serde(default = "on_the_branch")]
+    pub side: Side,
+}
+
+/// What a row with no `side` is. See [`KeptFrame::side`].
+fn on_the_branch() -> Side {
+    Side::from(core_model::Side::Branch)
 }

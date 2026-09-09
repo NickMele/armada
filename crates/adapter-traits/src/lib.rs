@@ -31,6 +31,7 @@
 
 extern crate alloc;
 
+mod basing;
 mod commit;
 mod delivery;
 mod event;
@@ -42,6 +43,7 @@ mod under_review;
 mod work_product;
 mod worktree;
 
+pub use basing::{BaseCheckout, BaseSpec, BaseSpecRefused};
 pub use commit::{CommitTime, Committed};
 pub use delivery::{
     how_the_base_was_found, Base, BaseOnTheRemote, BroughtUpToDate, Delivery, Landing, Merged,
@@ -122,14 +124,16 @@ pub trait AgentHarness {
 /// is handed is a narrower type again, which is neither trait — and it carries
 /// no `git` at all, which is why the commit below is here.
 ///
-/// **No removal, and no way to ask for one.** Removal is driven by Job
-/// retention, never by a process ending — so the caller that would decide is
-/// the retention pass, and there is no retention in M1. Rather than shipping a
-/// method nothing may call yet, the method does not exist: a worktree survives
-/// every terminal state because nothing in the workspace can delete one, not
-/// because everybody remembered not to. Worktrees accumulate and a person
-/// removes them by hand, which is the evidence M1 is collecting. The method
-/// arrives with the pass that is allowed to call it.
+/// **No removal of a Job's worktree, and no way to ask for one.** Removal is
+/// driven by Job retention, never by a process ending — so the caller that
+/// would decide is the retention pass. Rather than shipping a method nothing
+/// may call, the method does not exist: a worktree survives every terminal
+/// state because nothing in the workspace can delete one, not because everybody
+/// remembered not to. A person removes them through `armada clean`, which
+/// reaches `adapters::reclaim` and not this trait.
+/// [`drop_base_checkout`](Vcs::drop_base_checkout) is not an exception: a base
+/// checkout holds no work, and making it again is the whole of undoing the
+/// delete.
 ///
 /// **No "does it already exist" query.** Creation answers that itself, by
 /// refusing; a separate probe would be a check-then-act that two Jobs can
@@ -158,6 +162,61 @@ pub trait Vcs {
     /// commits, and git's own refusal names the operation rather than the
     /// reason.
     fn create_worktree(&self, spec: &WorktreeSpec) -> Result<Worktree, Self::Error>;
+
+    /// What commit this repository's base branch is at, right now.
+    ///
+    /// **A reading and not a checkout**, and it is separate from
+    /// [`base_checkout`](Vcs::base_checkout) because the answer is what derives
+    /// the [`BaseSpec`] — a caller cannot ask for the checkout without first
+    /// being told which one it wants. That ordering is what makes a base branch
+    /// that has moved reach a different directory rather than an out-of-date
+    /// one; `basing` carries the argument.
+    ///
+    /// `declared` is `base:` from the Manifest, and the resolution is the
+    /// implementation's — the same one [`Delivery`] uses, so a rebase and a
+    /// photograph cannot disagree about which branch the base is. `None` back
+    /// is a repository that names no base and has no `main` or `master` to
+    /// infer one from: there is nothing to be *before*, which is a fact to
+    /// report and not a failure.
+    fn base_commit(
+        &self,
+        repo_root: &str,
+        declared: Option<&str>,
+    ) -> Result<Option<alloc::string::String>, Self::Error>;
+
+    /// Check the repository out at one commit, detached, for every Job on that
+    /// commit to share.
+    ///
+    /// **Idempotent, and that is the whole concurrency argument.** A checkout
+    /// already at the spec's path and registered is answered as it stands
+    /// rather than refused, so a second caller finds the first one's work
+    /// instead of colliding with it. That is the opposite of
+    /// [`create_worktree`](Vcs::create_worktree), which refuses an existing
+    /// branch — a Job's worktree is a line of history two Jobs must never share
+    /// and a base checkout is a photograph every Job may.
+    ///
+    /// **Detached, so no branch is derived and none is left behind.** Nothing
+    /// commits here.
+    ///
+    /// **A [`BaseCheckout`] and never a [`Worktree`]**, so nothing that takes a
+    /// Job's worktree can be handed this one by accident: `commit_all` and
+    /// every `Delivery` method would each do something wrong with it, and a
+    /// type they cannot accept is a stronger statement than a comment saying
+    /// not to.
+    fn base_checkout(&self, spec: &BaseSpec) -> Result<BaseCheckout, Self::Error>;
+
+    /// Remove a base checkout and its administrative record.
+    ///
+    /// **The one removal on this trait, and it is here because nothing but
+    /// Armada ever wrote in the directory.** The paragraph above about there
+    /// being no removal is about a *Job's* worktree, which holds work a person
+    /// may want; a base checkout holds a commit that is still in the
+    /// repository and files a package manager wrote. Deleting one loses
+    /// nothing that is not reproducible by making it again.
+    ///
+    /// A path that is not there is not an error — the reclaim that calls this
+    /// walks a directory and races nothing but itself.
+    fn drop_base_checkout(&self, spec: &BaseSpec) -> Result<(), Self::Error>;
 
     /// Commit everything in a Job's worktree onto the branch checked out in it.
     ///

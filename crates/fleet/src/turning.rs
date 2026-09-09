@@ -150,6 +150,13 @@ pub struct Turned {
     /// board once rather than once per working Job. Empty on nearly every turn:
     /// the sweep is on its own interval, and most turns are not one.
     pub reclaimed: Vec<GaveBack>,
+    /// The shared base checkouts the sweep took, by commit, because the base
+    /// has moved past them.
+    ///
+    /// **Beside `reclaimed` and not inside it.** These belong to no Job — one
+    /// checkout serves every Job on a base — so a `GaveBack` naming one would
+    /// have to invent a Job id for it.
+    pub bases_taken: Vec<String>,
 }
 
 impl Turned {
@@ -270,7 +277,9 @@ where
         // **After the notice**, because a merge read this turn is what makes a
         // branch reachable from the base — so a Job whose pull request just
         // landed is provably safe on this turn rather than on the next sweep.
-        turned.reclaimed = self.reclaim_what_is_safe().await?;
+        let swept = self.reclaim_what_is_safe().await?;
+        turned.reclaimed = swept.jobs;
+        turned.bases_taken = swept.bases;
         // Beside the dependent walk and for its reason — it touches no slot and
         // reads the whole board — and **before admission**, because a Job
         // nothing is working on is a Job that should be off the Board before
