@@ -16,11 +16,10 @@
 use ipc::mcp::{CheckRan, CheckReport};
 use ipc::{
     Actor, Asked, CallArguments, EvidenceType, Finding, FleetCapacity, Held, Instant, JobDetail,
-    JobDiff, JobEvidence, JobExamined, JobHistory, JobId, JobProcess, JobResources, JobStatus,
-    JobRemarks, JobSummary, Look, ManifestId, ManifestSummary, ModelChoices, Movement, NotedField,
-    Origin,
-    ReclaimedBranch, ReclaimedWorktree, Recorded, RunId, StatusMoved, StepId, Submitted, Urgency,
-    Work, WorkflowId, WorkflowSummary, WorktreeReclaimed,
+    JobDiff, JobEvidence, JobExamined, JobHistory, JobId, JobProcess, JobRemarks, JobResources,
+    JobStatus, JobSummary, Look, ManifestId, ManifestSummary, ModelChoices, Movement, NotedField,
+    Origin, ReclaimedBranch, ReclaimedWorktree, Recorded, RunId, StatusMoved, StepId, Submitted,
+    Urgency, Work, WorkflowId, WorkflowSummary, WorktreeReclaimed,
 };
 
 /// A spelling the registry has. Panics in a test rather than returning an

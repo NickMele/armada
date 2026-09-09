@@ -45,9 +45,15 @@
 // made. The dialog is what stands between the press and the write. #533.
 
 import { useEffect, useState } from "react";
-import { Dialog, ReviewDecision, UnifiedDiff, type UnifiedDiffProps } from "@armada/components";
+import {
+  Dialog,
+  ReviewComments,
+  ReviewDecision,
+  UnifiedDiff,
+  type UnifiedDiffProps,
+} from "@armada/components";
 
-import type { Diff, Evidence } from "@armada/protocol";
+import type { Diff, Evidence, Remarks } from "@armada/protocol";
 import type { JobSummary } from "@armada/protocol";
 import type { Work } from "@armada/protocol";
 import {
@@ -58,6 +64,7 @@ import {
   drawn,
   NO_WORKTREE,
   whyNoDiff,
+  whyNoRemarks,
 } from "./review";
 
 /**
@@ -79,6 +86,15 @@ export type DecideProps = {
   job: JobSummary;
   evidence: Evidence;
   diff: Diff;
+  /**
+   * Ask the host to open or close the read of the pull request's comments, or
+   * for none.
+   *
+   * **Its own prop beside `onNeedMaterial`**, because it is its own read: that
+   * one reaches a record on the machine Fleet is on and this one reaches a
+   * forge. It has to be stable for that prop's reason.
+   */
+  onNeedRemarks: (jobId: string | null) => void;
   /** True while what is shown is not live. Every control is refused. */
   stale: boolean;
   /** A decision on this Job already in flight. */
@@ -94,6 +110,10 @@ export type DecideProps = {
   onApprove: (jobId: string) => void;
   onRequestChanges: (jobId: string, note: string) => void;
   onReject: (jobId: string) => void;
+  /** What people wrote on the pull request, where this surface asked for it. */
+  remarks: Remarks;
+  /** Hand the comments picked to a drone. The handles, never the words. */
+  onTakeUpRemarks: (jobId: string, remarks: string[]) => void;
 };
 
 /**
@@ -113,9 +133,11 @@ export function DecidedDiff({ diff, jobId }: { diff: Diff; jobId: string }) {
 
 export function Decide({
   onNeedMaterial,
+  onNeedRemarks,
   job,
   evidence,
   diff,
+  remarks,
   stale,
   deciding,
   pullRequest,
@@ -123,6 +145,7 @@ export function Decide({
   onApprove,
   onRequestChanges,
   onReject,
+  onTakeUpRemarks,
 }: DecideProps) {
   // The reviewer's own words, held here: it is a draft until it is sent, and
   // nothing outside this region knows or cares that one is being written.
@@ -136,6 +159,16 @@ export function Decide({
     onNeedMaterial(job.id);
     return () => onNeedMaterial(null);
   }, [job.id]);
+
+  // **Only where there is a pull request to read**, which is the same fact the
+  // merge control is drawn from. A workflow that declares no delivering step
+  // opened none, and asking Fleet about one would spend a refusal to learn what
+  // this side already knows.
+  useEffect(() => {
+    if (pullRequest === undefined) return;
+    onNeedRemarks(job.id);
+    return () => onNeedRemarks(null);
+  }, [job.id, pullRequest]);
 
   // A draft belongs to the Job it was written about. Carrying one into the next
   // Job opened would put one drone's feedback in front of another's work.
@@ -205,6 +238,25 @@ export function Decide({
         {CONFIRM_REJECT.body}
       </Dialog>
 
+      {/* What other people said about this work, under the decision made from
+          it. **One block and one scroll**, for the reason the diff and the
+          decision are one: a reviewer's comment and the answer to it are the
+          same loop, and a second surface for the comments would be a place to
+          forget they exist.
+
+          Drawn only where there is a pull request, which is what the read
+          above is opened on. */}
+      {pullRequest === undefined ? null : mineRemarks(remarks, job.id) === null ? (
+        <p className="text-fg-muted">{whyNoRemarks(remarks, job.id)}</p>
+      ) : (
+        <ReviewComments
+          comments={mineRemarks(remarks, job.id) ?? []}
+          onTakeUp={(ids) => onTakeUpRemarks(job.id, ids)}
+          disabled={off}
+          {...(why === undefined ? {} : { disabledNote: why })}
+        />
+      )}
+
       {/* Named, not read: the evidence is what the claims section of the record
           draws, and a second reading of it beside the decision would be the
           same value in two places. */}
@@ -215,6 +267,29 @@ export function Decide({
       ) : null}
     </>
   );
+}
+
+/**
+ * The comments this Job's own pull request carries, or `null` where the reading
+ * is not one to draw.
+ *
+ * **An empty array is not `null`.** A pull request nobody has commented on is a
+ * real answer and the surface has its own sentence for it; `null` is a reading
+ * that has not arrived or did not come back, which is a different sentence and
+ * a different fact.
+ *
+ * **The id is checked**, for `DecidedDiff`'s reason: an answer for the Job that
+ * was open a moment ago must not be drawn under the one that is.
+ */
+function mineRemarks(remarks: Remarks, jobId: string) {
+  if (remarks.state !== "read" || remarks.jobId !== jobId) return null;
+  return remarks.review.remarks.map((remark) => ({
+    id: remark.id,
+    by: remark.by,
+    at: remark.at,
+    said: remark.said,
+    takenUp: remark.taken_up,
+  }));
 }
 
 /**

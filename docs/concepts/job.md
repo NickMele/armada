@@ -287,6 +287,14 @@ losing it. `redirect_drone` itself still asks for a live session, because every
 Job it is offered on has one — a step that stopped with its Drone gone is
 Restart Step's, which is the row above.
 
+**The words need not be the person's own.** `take_up_remarks` is the same road
+entered from the same gate, carrying the comments a person picked off the Job's
+pull request instead of a sentence they typed: the record holds them, the Job
+re-queues, the fresh Drone opens with them, and they are cleared on delivery.
+What it adds is where they came from — the forge, read again on the press — and
+one reply on the pull request saying which were picked up. [Fleet](fleet.md),
+*What Fleet knows after the merge*, has the rest.
+
 The override is the exception and says so: the person is disagreeing with a
 verdict, which is the same act wherever the Job stands.
 

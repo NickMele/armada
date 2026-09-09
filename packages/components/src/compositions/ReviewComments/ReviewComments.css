@@ -1,0 +1,109 @@
+/* Review comments — what people wrote on the pull request, and the ones a
+ * drone should act on.
+ *
+ * **No border and no fill.** It sits inside the decision block, which is
+ * already the framed region on that surface; a second frame under it would make
+ * one loop read as two. The rule on the left is the tie, which is what the
+ * drone's question does one surface over.
+ *
+ * The tone is `--step-waiting` for that surface's reason: a job holding at a
+ * human gate needs somebody, and nothing mechanical failed. */
+.armada-remarks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-inline-start: var(--space-3);
+  border-inline-start: var(--border-width) solid var(--step-waiting);
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+.armada-remarks__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-remarks__label {
+  flex: 1;
+  min-width: 0;
+  font-weight: var(--weight-medium);
+}
+
+/* What is true about the surface rather than about one comment. */
+.armada-remarks__said {
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+.armada-remarks__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+/* One comment: who and when, then the words, then the one control. */
+.armada-remarks__one {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-remarks__who {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+/* The login, as the forge spells it. Mono, because it is a machine reading and
+   not a name this app knows. */
+.armada-remarks__by {
+  flex: none;
+  min-width: 0;
+  color: var(--fg-default);
+}
+
+.armada-remarks__at {
+  flex: none;
+  min-width: 0;
+  color: var(--fg-muted);
+}
+
+/* Somebody else's words.
+ *
+ * **`pre-wrap`, so the paragraphs they wrote survive**, and `break-word` so a
+ * comment with a long unbroken run in it cannot widen the panel it is drawn in.
+ * Nothing here renders markup: the string arrives as a text node and stays one,
+ * which is where the guard on text from outside this machine lives on this
+ * side of the wire. */
+.armada-remarks__body {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  color: var(--fg-default);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+}
+
+/* A comment a drone has already been handed. Drawn rather than hidden — a list
+   with holes in it leaves a person wondering what happened to the rest — and
+   set back, because there is nothing to do about it. */
+.armada-remarks__sent {
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}

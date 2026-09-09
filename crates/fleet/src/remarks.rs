@@ -1,69 +1,30 @@
 //! A person picks comments off a pull request, they reach a Drone, and one
 //! reply on the pull request says which.
 //!
-//! # The read exists; what is new is what happens next
-//!
-//! `crate::under_review` already asks the forge who has looked at an open pull
-//! request, what ran against it and what anybody wrote on it, on `noticing`'s
-//! rotation. It keeps nothing and it decides nothing. **A remark's body was
-//! read and reached nothing**, and this is where it goes.
-//!
 //! # Three things, and the middle one is a road that already exists
 //!
 //! **A person chooses.** Not every comment is a change request, and a Drone
-//! handed all of them will try to satisfy all of them. So the comments are
-//! served, somebody picks, and the press names what they picked.
+//! handed all of them will try to satisfy all of them. `crate::under_review`
+//! already reads them on `noticing`'s rotation and keeps nothing; this is where
+//! a remark's body finally goes.
 //!
-//! **The chosen ones become a note.** `crate::reviewing::request_changes` is
-//! called rather than restated: the words go onto the record as
-//! `redirect_waiting`, the Job takes `awaiting_review -> queued`, and
-//! `crate::spawning` builds the next Drone's opening brief from them and clears
-//! them there. This is a second entrance onto that road, not a second road, and
-//! everything the road already refuses it still refuses — a note already
-//! waiting most of all.
+//! **The chosen ones become a note.** `reviewing::request_changes` is called
+//! rather than restated, so the words go onto the record as `redirect_waiting`,
+//! the Job takes `awaiting_review -> queued`, and `crossing::Redirected` is the
+//! block either way. Everything that road refuses, this refuses.
 //!
-//! **One reply on the pull request.** So a reviewer looking at the forge can
-//! see the comment was picked up. It is written after the Job has moved, so it
+//! **One reply on the pull request**, written after the Job has moved, so it
 //! says what happened rather than what was about to.
 //!
-//! # Escaping is done here, at the point of use, and this is where it is
-//! written down
+//! # Escaping is at the point of use, and there are two of them
 //!
-//! `adapter_traits::FromOutside` is deliberately not cleaned at the boundary —
-//! a value quietly repaired on the way in is one nobody downstream knows was
-//! repaired. This module is the first caller that puts it anywhere, and it puts
-//! it in two places that need different things.
-//!
-//! **Into a prompt: every line is prefixed.** [`quoted`] writes `"> "` in front
-//! of every line of a comment, including blank ones. A prefix cannot be undone
-//! from inside the text — a comment can write a line that *starts* with the
-//! marker, and cannot write one that lacks it — so where a comment begins and
-//! ends is Fleet's to state and not the comment's to decide. That is the whole
-//! of the guard, and it is deliberately not an escaper: the person picking is
-//! what authorises the words, and a comment that argues persuasively inside its
-//! own fence is a comment a person chose to send.
-//!
-//! **Into the forge: one line, bounded.** [`named`] is used on a login and a
-//! timestamp for the reply, and it drops the characters that would end a line
-//! or open a code span and takes at most [`ENOUGH_OF_A_NAME`] characters. No
-//! comment's *body* reaches the forge at all: a reviewer can already read what
-//! they wrote, and echoing it back would put somebody else's words through a
-//! second write into a repository nobody here holds.
-//!
-//! # The words do reach the Job's own log, and that is not the sweep's rule
-//! turned off
-//!
-//! `crate::under_review` writes no remark's text into a log, because that line
-//! is written on a timer about comments nobody chose. The note road writes its
-//! note down — `reviewing::noted_waiting` — because the record of a note is
-//! *what a Drone was told*, and a line saying only that something was said
-//! sends a reader to a column to find out what. A person pressed for these.
-
+//! `adapter_traits::FromOutside` is deliberately not cleaned at the boundary.
+//! [`quoted`] fences a comment for a prompt and [`named`] makes a login safe to
+//! render on a forge; `docs/contracts/agent-prompt.md` carries the rule the
+//! first one keeps, and each function says what it does and does not do.
 use std::collections::BTreeSet;
 
-use adapter_traits::{
-    AgentHarness, Delivery, FromOutside, Remark, Replied, Vcs, WorkProduct,
-};
+use adapter_traits::{AgentHarness, Delivery, FromOutside, Remark, Replied, Vcs, WorkProduct};
 use core_model::{Component, Envelope, FieldValue, Job, JobId, JobStatus, Level};
 
 use crate::adrift::Adrift;
@@ -83,6 +44,11 @@ const ENOUGH_OF_A_NAME: usize = 80;
 ///
 /// **Three things and not a rendered answer.** The DTO is `crate::serving`'s to
 /// build, which is where every other redaction decision on this seam is made.
+///
+/// **`Debug` prints the comments**, for `FromOutside`'s own reason: the guard
+/// is against a sentence built by accident, and a test asserting on what a
+/// press refused is not one.
+#[derive(Debug)]
 pub struct WhatWasSaid {
     /// The address the comments were read off.
     pub pull_request: String,
@@ -121,7 +87,9 @@ where
         // being asked about.
         self.at_the_gate(&job)?;
         let pull_request = self.pull_request_of(job_id).await?;
-        let read = self.vcs().under_review(&self.host().repo_root, &pull_request);
+        let read = self
+            .vcs()
+            .under_review(&self.host().repo_root, &pull_request);
         if !read.was_answered() {
             return Err(Adrift::ReviewUnreadable {
                 job: job_id.clone(),
@@ -406,9 +374,7 @@ fn reply(said: &WhatWasSaid, picked: &[&Remark]) -> String {
             out.push_str(&line_for(remark));
         }
     }
-    out.push_str(
-        "\nThe work goes on the same branch, so this pull request updates in place.\n",
-    );
+    out.push_str("\nThe work goes on the same branch, so this pull request updates in place.\n");
     out
 }
 
@@ -447,7 +413,6 @@ fn named(from_outside: &FromOutside) -> String {
         .trim()
         .to_string()
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;

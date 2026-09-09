@@ -55,6 +55,8 @@ export function said(outcome: Outcome): string {
       return "A redirect needs an instruction. Nothing was sent.";
     case "empty_reason":
       return "An override needs a reason. Nothing was sent, and the judge's verdict stands.";
+    case "no_remarks_chosen":
+      return "Pick at least one comment. Nothing was sent, and the pull request is where it was.";
     case "already_deciding":
       return "A decision on that job's work is already in flight. It was not sent twice.";
     case "already_answering":

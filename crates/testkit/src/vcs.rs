@@ -31,8 +31,7 @@ use std::sync::Mutex;
 use adapter_traits::{
     Base, BaseOnTheRemote, BroughtUpToDate, Change, CommitTime, Committed, Delivery, Landing,
     Merged, NotDelivered, NotMerged, Opened, Pushed, Renewed, Replied, RepositoryStanding, Review,
-    Standing,
-    UnderReview, Vcs, WhatBecameOfIt, Worktree, WorktreeSpec,
+    Standing, UnderReview, Vcs, WhatBecameOfIt, Worktree, WorktreeSpec,
 };
 
 use crate::work_product::Holding;

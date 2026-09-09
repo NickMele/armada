@@ -350,14 +350,17 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.examineJob, (_event, jobId: string) =>
     connection?.examineJob(jobId),
   );
-  // The two reads a review is made of. Two channels because they are two
-  // operations: the claims are four lines a step and the diff is the patch,
-  // and the patch is read only where somebody is looking at one.
+  // The three reads a review is made of. Three channels because they are three
+  // operations: the claims are four lines a step, the diff is the patch, and
+  // the conversation is a forge. Each is read only where somebody is looking.
   ipcMain.handle(CHANNELS.readEvidence, (_event, jobId: string | null) =>
     connection?.readEvidence(jobId),
   );
   ipcMain.handle(CHANNELS.readDiff, (_event, jobId: string | null) =>
     connection?.readDiff(jobId),
+  );
+  ipcMain.handle(CHANNELS.readRemarks, (_event, jobId: string | null) =>
+    connection?.readRemarks(jobId),
   );
   // The rest of one cut row, fetched by the person who opened it. Its own
   // channel and not part of `observeJob`: the socket is bounded on purpose, and
@@ -396,6 +399,12 @@ void app.whenReady().then(() => {
   );
   ipcMain.handle(CHANNELS.rejectWork, (_event, jobId: string) =>
     connection?.commands.rejectWork(jobId),
+  );
+  // The fifth act at the same gate, and a channel of its own for the four
+  // above's reason: it carries a set of handles off a forge rather than a note,
+  // and what it does to the Job is what `requestChanges` does.
+  ipcMain.handle(CHANNELS.takeUpRemarks, (_event, jobId: string, remarks: string[]) =>
+    connection?.commands.takeUpRemarks(jobId, remarks),
   );
   // The one channel that reaches the OS, and the only one carrying no Fleet
   // request at all. **The path is built here** from the Job and the repository

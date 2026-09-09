@@ -48,6 +48,7 @@ export const readReports = (want: boolean): void => void window.armada.readRepor
 export const readHeld = (want: boolean): void => void window.armada.readHeld(want);
 export const reclaimOne = (jobId: string) => window.armada.reclaimWorktree(jobId);
 export const readEvidence = (jobId: string | null): void => void window.armada.readEvidence(jobId);
+export const readRemarks = (jobId: string | null): void => void window.armada.readRemarks(jobId);
 export const readCall = (jobId: string, callId: string) => window.armada.readCall(jobId, callId);
 export const openArtifact = (jobId: string, what: Artifact) => window.armada.openArtifact(jobId, what);
 export const openPullRequest = (jobId: string) => window.armada.openPullRequest(jobId);
@@ -288,6 +289,26 @@ export function useCommands(sending: Sending) {
   }
 
   /**
+   * Hand the comments a person picked off the pull request to a drone.
+   *
+   * **Under `deciding`, with the four answers at the same gate.** It leaves
+   * `awaiting_review` the way requesting changes does, so a second press aims
+   * at a job that is no longer at the gate any of the five is legal on.
+   *
+   * **Nothing confirms.** What it commits to is on screen above the control —
+   * a drone on the same branch and one reply on the pull request — and the act
+   * keeps the worktree and every step so far, like `changes` beside it.
+   */
+  async function takeUpRemarks(jobId: string, remarks: string[]): Promise<void> {
+    setDeciding(jobId);
+    try {
+      setOutcome(await window.armada.takeUpRemarks(jobId, remarks));
+    } finally {
+      setDeciding(null);
+    }
+  }
+
+  /**
    * Ask Fleet for current state over the connection Bridge already holds.
    *
    * **It re-reads; it does not reconnect.** The stream keeps the board current
@@ -309,6 +330,7 @@ export function useCommands(sending: Sending) {
     setOutcome,
     acting,
     deciding,
+    takeUpRemarks,
     givenBack,
     setGivenBack,
     refreshing,

@@ -13,6 +13,7 @@ import type {
   JobDetail,
   JobExamined,
   JobFilesChanged,
+  JobRemarks,
   JobResources,
   JobSummary,
   LogNote,
@@ -103,6 +104,20 @@ export type History = JobRead<{ moves: Recorded[] }>;
  * the read.
  */
 export type Evidence = JobRead<{ steps: Submitted[] }>;
+
+/**
+ * `GET /jobs/:job_id/remarks` for one Job.
+ *
+ * **The one read here that costs a forge.** Every other per-Job read reaches a
+ * record or a worktree on the machine Fleet is on; this one is a process and a
+ * network, which is why nothing takes it on a timer and no event refreshes it.
+ *
+ * **Empty on `read` is a pull request nobody has commented on**, which is a
+ * real answer. A forge that would not answer is `failed`, and the two are not
+ * the same thing to draw: one says nobody has said anything, and the other says
+ * nothing could be asked.
+ */
+export type Remarks = JobRead<{ review: JobRemarks }>;
 
 /**
  * `GET /jobs/:job_id/diff` for one Job.
@@ -299,6 +314,13 @@ export type Outcome =
   | { ok: false; why: "already_deciding" }
   | { ok: false; why: "already_answering" }
   | { ok: false; why: "empty_note" }
+  /**
+   * A press at the review gate that picked no comment off the pull request.
+   * **Refused before it is sent**, for `empty_note`'s reason: an act that
+   * reaches Fleet to be told what a client could see for itself is a round trip
+   * spent on nothing.
+   */
+  | { ok: false; why: "no_remarks_chosen" }
   | { ok: false; why: "refused"; error: WireError }
   | { ok: false; why: "transport"; detail: string; fault: TransportFault };
 

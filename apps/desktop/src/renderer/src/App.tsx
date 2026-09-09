@@ -45,6 +45,7 @@ import {
   readCall,
   readDiff,
   readEvidence,
+  readRemarks,
   readHeld,
   readReports,
   reclaimOne,
@@ -345,6 +346,7 @@ export function App() {
                 onOpenPullRequest={openPullRequest}
                 onReadCall={readCall}
                 onNeedMaterial={readEvidence}
+                onNeedRemarks={readRemarks}
                 watched={state.watched}
                 workflows={state.holds.workflows}
                 manifests={state.holds.manifests}
@@ -366,6 +368,7 @@ export function App() {
                   footprint: state.footprint,
                   evidence: state.evidence,
                   diff: state.diff,
+                  remarks: state.remarks,
                 }}
                 onAct={(what, jobId) => setConfirming({ act: what, jobId })}
                 onRedirect={(jobId, instruction) => void commands.redirect(jobId, instruction)}
@@ -380,6 +383,7 @@ export function App() {
                 onApproveReview={(jobId) => void commands.decide(jobId, "approve")}
                 onRequestChanges={(jobId, note) => void commands.decide(jobId, "changes", note)}
                 onReject={(jobId) => void commands.decide(jobId, "reject")}
+                onTakeUpRemarks={(jobId, remarks) => void commands.takeUpRemarks(jobId, remarks)}
                 onCopied={setCopied}
                 onSaid={setTelling}
               />

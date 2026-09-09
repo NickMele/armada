@@ -2,31 +2,24 @@
 //!
 //! # A record, because the forge has no memory of what Armada did
 //!
-//! A comment stays on a pull request forever and reads the same on every sweep.
-//! So a Job whose Drone ran against three comments and satisfied two of them
-//! meets all three again the next time somebody opens the choice — and the two
-//! that were already worked look exactly like the one that was not. Handing
-//! them over a second time is a Drone told to do work that is done, on a
-//! reviewer's words that have not changed.
+//! A comment stays on a pull request and reads the same on every sweep. So a
+//! Job whose Drone ran against three of them and satisfied two meets all three
+//! again the next time somebody opens the choice, and the two already worked
+//! look exactly like the one that was not.
 //!
 //! **The forge's own handle is the key**, `adapter_traits::Remark::id`. An
-//! author and a time cannot identify a comment and neither can the text: a
-//! comment edited between the reading and the press would stop being itself,
-//! which is precisely the case this table has to survive.
+//! author and a time cannot identify a comment and neither can the text: one
+//! edited between the reading and the press stops being itself, which is
+//! precisely the case this has to survive.
 //!
-//! # What is stored, and what deliberately is not
+//! **The handle and nothing else is stored.** No author, no time and above all
+//! no body — `fleet::under_review` is explicit that a remark's text travels the
+//! road ending at a Drone's prompt and does not go through a record to get
+//! there.
 //!
-//! **The handle and nothing else.** No author, no time and above all no body:
-//! `fleet::under_review` is explicit that a remark's text travels the road that
-//! ends at a Drone's prompt and does not go through a record to get there, and
-//! a column holding it would be a second copy of somebody else's words in a
-//! file nothing prunes.
-//!
-//! **It points at `jobs`, so `forget_job` sweeps it.** A forgotten Job's
-//! pull request is nobody's, and the opposite rule — `commit_checks`, which
-//! deliberately has no foreign key — applies to a record two Jobs share. This
-//! one belongs to exactly one.
-
+//! **It points at `jobs`, so `forget_job` sweeps it.** The opposite rule —
+//! `commit_checks`, which deliberately has no foreign key — is for a record two
+//! Jobs share, and this belongs to exactly one.
 use std::collections::BTreeSet;
 
 use core_model::{JobId, Timestamp};
