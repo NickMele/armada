@@ -29,7 +29,7 @@ use std::process::{Command, Output};
 
 use adapter_traits::{
     Base, BaseOnTheRemote, BroughtUpToDate, Delivery, Merged, NotDelivered, NotMerged, Opened,
-    Pushed, Renewed, RepositoryStanding, Review, WhatBecameOfIt,
+    Pushed, Renewed, RepositoryStanding, Review, UnderReview, WhatBecameOfIt,
 };
 use adapter_traits::{Standing, Worktree};
 use git2::{BranchType, Repository};
@@ -192,6 +192,10 @@ impl Delivery for GitVcs {
         crate::landing::read(in_repo, pull_request)
     }
 
+    fn under_review(&self, in_repo: &str, pull_request: &str) -> UnderReview {
+        crate::under_review::read(in_repo, pull_request)
+    }
+
     fn rendered_afresh(&self, in_repo: &str, pull_request: &str) -> Renewed {
         crate::landing::rendered_afresh(in_repo, pull_request)
     }
@@ -218,16 +222,54 @@ impl Delivery for GitVcs {
 /// process as one line of text and `store` and `ipc` stay the only two places
 /// that deserialise anything.
 pub(crate) fn asked(in_dir: &str, named: &str, fields: &str, jq: &str) -> Option<String> {
-    let run = run_in(
-        in_dir,
-        FORGE,
-        &["pr", "view", named, "--json", fields, "--jq", jq],
-    )
-    .ok()?;
+    let run = viewed(in_dir, named, fields, jq)?;
     run.status
         .success()
         .then(|| last_line(&run))
         .filter(|said| !said.is_empty())
+}
+
+/// The same ask, keeping every line it answers with.
+///
+/// **[`asked`]'s sibling rather than its replacement.** That one wants the
+/// single value a scalar `--jq` prints and takes the last line, because `gh`
+/// writes its notices to stdout above the answer. A `--jq` that prints a record
+/// per line has no single line to take, so the notices come back with it — and
+/// the one caller of this reads by a leading tag and drops every line it has no
+/// tag for, which is that guard kept a different way.
+///
+/// **Every failure is `None`**, for [`asked`]'s reason exactly.
+pub(crate) fn asked_lines(
+    in_dir: &str,
+    named: &str,
+    fields: &str,
+    jq: &str,
+) -> Option<Vec<String>> {
+    let run = viewed(in_dir, named, fields, jq)?;
+    if !run.status.success() {
+        return None;
+    }
+    // **Not trimmed.** `lines` already drops the separator and a trailing `\r`,
+    // and what is left at the end of a record is a field — a comment ending in
+    // a space is a comment ending in a space, and this is the one reader whose
+    // payload was typed by somebody who is not here to be asked about it.
+    let lines: Vec<String> = String::from_utf8_lossy(&run.stdout)
+        .lines()
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect();
+    (!lines.is_empty()).then_some(lines)
+}
+
+/// One `pr view`, built in one place so the two readers above cannot come to
+/// spell the same command two ways.
+fn viewed(in_dir: &str, named: &str, fields: &str, jq: &str) -> Option<Output> {
+    run_in(
+        in_dir,
+        FORGE,
+        &["pr", "view", named, "--json", fields, "--jq", jq],
+    )
+    .ok()
 }
 
 /// The pull request already open for this branch, if there is one.

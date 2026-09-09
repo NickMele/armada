@@ -21,5 +21,6 @@ mod reclaim;
 pub mod repo;
 mod standing;
 mod transcript;
+mod under_review;
 mod work_product;
 mod worktree;

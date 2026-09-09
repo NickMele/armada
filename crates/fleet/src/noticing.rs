@@ -1,20 +1,20 @@
-//! Noticing that somebody merged a Job's pull request, and what follows.
+//! Noticing what became of a Job's pull request, and what follows.
 //!
-//! # Noticing, not merging
+//! # Noticing, not deciding
 //!
-//! Armada opens a pull request and a person merges it — `docs/scope.md`, and
-//! the `human_always` gate on every shipped workflow's last step. Nothing here
-//! merges, and no method could: [`Delivery::landed`] reads, and what is written
-//! is the Job's own record and a fast-forward of the branch it merged into.
+//! **Fleet may merge, and the decision is what stays a person's** — a press at
+//! a `human_always` gate, `crate::merging`. This module is the other way one
+//! settles: somebody merged it on the forge, only knowable by asking. Nothing
+//! reached from here writes to a pull request; both methods it calls read.
 //!
 //! # One pull request per sweep, and never on the turn interval
 //!
 //! The loop ticks four times a second and asking the forge is a process. An
 //! open pull request needs asking rarely and a merged one never again, so this
-//! asks about **one** Job every [`Noticing`] interval and rotates: ten open at
-//! a minute apiece is each asked every ten minutes, and a merge recorded leaves
-//! the rotation for good. The cost is one blocking call on the interval, which
-//! is the shape `caught_up_onto` has for a far longer rebase.
+//! asks about **one** Job every [`Noticing`] interval and rotates: ten open at a
+//! minute apiece is each asked every ten minutes, and a merge leaves for good.
+//! The cost is one blocking call on the interval — `caught_up_onto`'s shape —
+//! and a second on the turns that find one open, in `crate::under_review`.
 //!
 //! # What a merge moves, and what it does not
 //!
@@ -97,6 +97,10 @@ pub(crate) struct Sweep {
     /// this sweep's own leavings, and the next sweep tries the reopen again
     /// rather than recording it.
     pub(crate) nudged: BTreeMap<String, Renewed>,
+    /// What the forge last said about each open pull request, so a line is
+    /// written when it changes rather than on every rotation. See
+    /// [`crate::under_review`], which owns the comparison and the reasoning.
+    pub(crate) reviewed: crate::under_review::Standings,
 }
 
 /// What the record's state says on the wire, where it says anything.
@@ -154,6 +158,10 @@ where
             // Job's work.
             Landing::Open { url, rendering } => {
                 self.nudged(&asking.job_id, url, rendering).await;
+                // **The one state in which the second question means
+                // anything**, on the turn the rotation had already reached this
+                // Job — never a loop of its own. `crate::under_review`.
+                self.read_what_is_under_review(&asking.job_id, url).await;
                 return Ok(None);
             }
             Landing::Unknown => return Ok(None),
@@ -382,7 +390,10 @@ where
     /// A line in the Job's own log. **A log line that will not write does not
     /// stop anything**, for `converging::noted`'s reason — and here there is
     /// not even a step left to stop: the Job finished before any of this ran.
-    fn logged(&self, job: &JobId, envelope: Envelope) {
+    ///
+    /// `pub(crate)` for its second caller, `crate::under_review`, which runs on
+    /// this sweep and writes into the same Job's log for the same reason.
+    pub(crate) fn logged(&self, job: &JobId, envelope: Envelope) {
         let _ = transcript::note(&self.host().repo_root, job, &envelope);
     }
 

@@ -513,9 +513,9 @@ pub struct JobDelivery {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pull_request: Option<String>,
     /// What became of that pull request. **Absent is unasked or still open**,
-    /// which is one absence because neither is news: Armada opens a pull
-    /// request and a person merges it, so a client that saw "still open" as a
-    /// value would be drawing the fact that nothing has happened.
+    /// which is one absence because neither is news: a pull request sits open
+    /// until somebody decides, so a client that saw "still open" as a value
+    /// would be drawing the fact that nothing has happened.
     ///
     /// Present only beside [`pull_request`](JobDelivery::pull_request) — there
     /// is nothing to have settled without one.

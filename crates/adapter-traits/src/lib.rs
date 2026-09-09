@@ -38,6 +38,7 @@ mod harness;
 mod judge;
 mod link_lookup;
 mod secret;
+mod under_review;
 mod work_product;
 mod worktree;
 
@@ -55,6 +56,7 @@ pub use harness::{
 pub use judge::{Ask, CallProgress, Heard, JudgeCall, ModelClient};
 pub use link_lookup::{LinkLookup, LookupCall};
 pub use secret::Secret;
+pub use under_review::{FromOutside, Remark, UnderReview, WhatPeopleSaid, WhatTheForgeRan};
 pub use work_product::{
     Change, Changed, ChangedFile, Counted, CountedFile, Footprint, LineCount, Patch, WorkProduct,
 };
