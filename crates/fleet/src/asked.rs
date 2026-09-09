@@ -28,11 +28,16 @@ use crate::check_output::one_component;
 /// every artifact under `.armada/` — transcripts, logs, Check output and now
 /// briefs — and one sweep that knows all four is the only kind that can be
 /// reasoned about. A rule invented here would be a fifth answer nobody could
-/// find. What this owes `#69` is the bound: one file per criterion per attempt
-/// per step, a panel sharing one, each roughly the branch diff plus the
-/// deliverable (`verification::A_DELIVERABLE`, 16 KiB) plus the Check tails. So
-/// a Job's briefs grow with its criteria times its re-runs, with the diff in
-/// every one.
+/// find. What this owes `#69` is the bound: one file per criterion **and one
+/// per judged gaming pattern** per attempt per step, a panel sharing one, each
+/// roughly the branch diff plus the deliverable
+/// (`verification::A_DELIVERABLE`, 16 KiB) plus the Check tails. So a Job's
+/// briefs grow with its criteria and its declared patterns times its re-runs,
+/// with the diff in every one.
+///
+/// The gaming half is the cheaper one and only by a little: its brief carries
+/// the diff and the baseline and none of the Check output. It is also the rarer
+/// one — the second look runs only where a step would otherwise advance.
 ///
 /// Until `#69` lands, `armada clean --all` and deleting this directory by hand
 /// are the only prunes, and both are a person's act.
