@@ -56,6 +56,25 @@
      weight, the style and the variant in one, so nothing a future trigger sets
      leaks in through a property this rule forgot to name. */
   font: var(--weight-body) var(--text-xs) / var(--leading-xs) var(--font-sans);
+  /* **`font` does not reach these two, and they inherit like everything else.**
+     The shorthand resets the family, size, weight, style and variant, and it
+     says nothing about case or tracking — so a tooltip on a small-caps label
+     came out shouting six lines of prose in capitals, the same defect the mono
+     one had before the shorthand landed and for the same reason: a bubble
+     cloned inside its trigger inherits whatever that trigger sets.
+     
+     Named rather than folded into the shorthand, because they cannot be. Every
+     inherited text property this surface refuses belongs in this block, and
+     the block is the list. */
+  text-transform: none;
+  letter-spacing: normal;
+  font-variant: normal;
+  text-align: left;
+  /* A bubble cloned inside a mono cell or a preformatted block would keep that
+     block's whitespace handling and stop wrapping. It has a prose width cap;
+     it needs prose whitespace to use it. */
+  white-space: normal;
+  word-break: normal;
   text-wrap: pretty;
   pointer-events: none;
 }
