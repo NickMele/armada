@@ -230,15 +230,39 @@ Armada runs commands and reads exit codes; it never parses tool output. The Mani
 
 A mechanical check answers whether the command succeeded. Anything requiring the output to be understood — which tests ran, how many, whether they were weakened — is a Judge question, answered by reading the files, which is what `evidence_scope.context_paths` is for. A `git diff` already carries the before and the after, so no baseline needs capturing or parsing.
 
-The sanctioned `mechanical_check.type` values are listed below; there are no others, and a type naming a shape rather than a named Check — "the full suite" — is deliberately unsanctioned, since it invites the parsing this rule forbids. Bug's `regression_verify` is `manifest_check` for the suite plus a Judge asking whether the diff changes behaviour beyond the stated root cause — the same shape Refactor uses, so one rule covers both.
+The sanctioned `mechanical_check.type` values are listed below; there are no others, and a type naming a *shape of work* rather than something `armada.yml` declares — "the full suite" — is deliberately unsanctioned, since it invites the parsing this rule forbids. Bug's `regression_verify` is `manifest_check` for the suite plus a Judge asking whether the diff changes behaviour beyond the stated root cause — the same shape Refactor uses, so one rule covers both.
+
+That sentence read "a shape rather than a named Check" and was narrowed when `every_manifest_check` was added, because it had come to refuse something it was never about. What it forbids is a type Armada would have to interpret — "the full suite" names a kind of testing and nothing in an `armada.yml` answers to it, so honouring it would mean knowing what a suite is. `every_manifest_check` names the Checks registry, resolves against it before dispatch, and freezes onto the Job as one `manifest_check` per declared Check. Nothing is parsed and nothing is interpreted: it is a quantifier over the same commands and exit codes, not a new kind of assertion.
 """
 why = "Maintaining parsers for cargo test, pytest, jest, go test, JUnit XML, TAP and the rest is an unbounded surface with no end, and every new tool would become a change to Armada rather than a line in an `armada.yml`."
 
 [[fields.mechanical_checks.types]]
 type = "manifest_check"
-asserts = "A named Check in the repo's `armada.yml` ran and exited 0. Carries `check` and `expect_exit_code`"
+asserts = "A named Check in the repo's `armada.yml` ran and exited as that Check declares. Carries `check`"
 used_by = ["Bug", "Refactor"]
-notes = "The general case, and the one to reach for"
+notes = """
+The general case where a step wants some of a repository's Checks and not all of them.
+
+**`expect_exit_code` moved to `checks.<name>` in `armada.yml` and defaults to 0.** A Check that legitimately exits non-zero — Bug's deliberately failing reproduction, a linter whose clean state is `1` — knows that about itself, and the repository that wrote the command is the only place that knows it. On the step it was restated in every workflow naming the Check, and went stale one file at a time the day the command changed. The key still parses here so that workflows written before the move go on loading; where a step writes it, it must say what the Manifest says, and a pair that disagrees is refused before dispatch rather than resolved by picking one.
+"""
+
+[[fields.mechanical_checks.types]]
+type = "every_manifest_check"
+asserts = "Every Check the repo's `armada.yml` declares ran and each exited as it declares. Carries nothing"
+used_by = []
+notes = """
+**Nothing uses it yet, and the empty list is the honest reading.** The parser carries it and the shipped definitions under `.armada/workflows/` still enumerate; they are switched over in their own change, which is what keeps a Job in flight from meeting a form neither file agreed on.
+
+**What a shipped workflow says instead of a list of names.** A `feature` whose `implement` step spelled seven Check names fitted exactly one repository and went stale the moment that repository declared an eighth — a gate that quietly stopped covering something, which is the failure `checks.<name>.when` exists one file along to prevent. This says *run what this repository declares*, whatever that is.
+
+**A step says this; a step never omits its way into meaning it.** An empty `mechanical_checks` is an ungated step and stays one. Half the shipped workflows have steps producing a document nothing compiles, and reading absence as *all* would gate every one of them on the repository's build.
+
+**It resolves before dispatch and never reaches the record.** `config::ResolvedWorkflow` expands it against the Manifest in hand, so a Job freezes one `manifest_check` per declared Check and the word never appears in `store` or on the wire. A Check added to `armada.yml` afterwards is gated on by the next Job, not this one, which is the same freezing rule `run`, `when`, `requires` and `narrow` follow.
+
+**It does not compose with a named Check on the same step**, in either order, and two of it on one step is refused too: it already covers every name, so the pair would run one Check twice. It does compose with `diff_nonempty`, which is what `implement` needs — a build passes cleanly on an empty diff.
+
+**A Manifest declaring no Checks refuses it**, before dispatch. Expanded to nothing it is a step that reads as gated and is not, and unlike a `when` that matches nothing there is no run to record a skip against.
+"""
 
 [[fields.mechanical_checks.types]]
 type = "diff_nonempty"

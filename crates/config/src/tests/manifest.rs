@@ -151,6 +151,50 @@ fn a_check_with_no_command_is_refused() {
     assert_eq!(fault_at(&refused, "checks.test.run"), &Fault::Missing);
 }
 
+/// **A Check states its own expected code, and zero is the default.** The key
+/// moved here from the workflow step because a Check that legitimately exits
+/// non-zero — a deliberately failing reproduction — knows that about itself,
+/// and the step that names it does not.
+#[test]
+fn a_check_states_the_code_it_passes_with_and_zero_is_the_default() {
+    let manifest = parse(
+        "version: 1\nid: armada\nchecks:\n  build:\n    run: cargo build\n  repro:\n    run: cargo test repro\n    expect_exit_code: 1\n",
+    )
+    .expect("a Check may declare its own code");
+    assert_eq!(
+        manifest.check("build").expect("build").expect_exit_code(),
+        0
+    );
+    assert_eq!(
+        manifest.check("repro").expect("repro").expect_exit_code(),
+        1
+    );
+}
+
+/// **Signed, and it stays signed.** A shell reports 128 + N for a signal and
+/// nothing here normalises that, so the reader is the crate's one signed one.
+#[test]
+fn a_checks_expected_code_may_be_negative_and_may_not_be_prose() {
+    let manifest = parse(
+        "version: 1\nid: armada\nchecks:\n  killed:\n    run: ./flaky\n    expect_exit_code: -1\n",
+    )
+    .expect("a whole number of either sign");
+    assert_eq!(
+        manifest.check("killed").expect("killed").expect_exit_code(),
+        -1
+    );
+    // A file that writes prose meant to declare a Check that legitimately
+    // fails, and quietly giving it zero would leave that Check unpassable
+    // while reading as declared.
+    let refused = refusals(parse(
+        "version: 1\nid: armada\nchecks:\n  repro:\n    run: ./flaky\n    expect_exit_code: one\n",
+    ));
+    assert!(matches!(
+        fault_at(&refused, "checks.repro.expect_exit_code"),
+        Fault::WrongType { .. }
+    ));
+}
+
 #[test]
 fn an_empty_command_is_a_different_fault_from_a_missing_one() {
     let refused = refusals(parse(

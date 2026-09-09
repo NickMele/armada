@@ -25,12 +25,17 @@ use core_model::FrozenWorkflow;
 /// One mechanical check on a fixture step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Gate<'a> {
-    /// A named Check, its command, and the code the step expects. The name is
-    /// declared in the fixture's Manifest automatically, so the resolve cannot
-    /// fail on a name the test forgot to declare.
+    /// A named Check, its command, and the code a passing run of it exits
+    /// with. The name is declared in the fixture's Manifest automatically, so
+    /// the resolve cannot fail on a name the test forgot to declare.
     Check {
         name: &'a str,
         run: &'a str,
+        /// **Written onto the Manifest's Check, not onto the step that names
+        /// it.** One field here because a fixture states one fact; where that
+        /// fact is written is what moved, and the tests that expect a non-zero
+        /// code — a signalled run, a deliberately failing reproduction — were
+        /// what proved the two spellings could not both stand.
         expect_exit_code: i64,
         /// Which paths the fixture's Manifest says this Check covers. **Empty
         /// writes no `when:` key at all**, which is the Check that always runs
@@ -475,13 +480,12 @@ fn workflow_text(
         text.push_str("    mechanical_checks:\n");
         for gate in step.gates {
             match gate {
-                Gate::Check {
-                    name,
-                    expect_exit_code,
-                    ..
-                } => text.push_str(&format!(
-                    "      - type: manifest_check\n        check: {name}\n        \
-                     expect_exit_code: {expect_exit_code}\n"
+                // **The step names the Check and says nothing else about it.**
+                // `expect_exit_code` is written on the Manifest's Check below,
+                // which is where it lives now — and a fixture writing it in
+                // both places would be the one shape the real parser refuses.
+                Gate::Check { name, .. } => text.push_str(&format!(
+                    "      - type: manifest_check\n        check: {name}\n"
                 )),
                 Gate::DiffNonempty => text.push_str("      - type: diff_nonempty\n"),
                 Gate::ArtifactExists { target } => text.push_str(&format!(
@@ -502,14 +506,17 @@ fn manifest_text(
     requires: &[(&str, &[&str])],
     narrows: &[Narrows<'_>],
 ) -> String {
-    let mut declared: BTreeMap<&str, (&str, &[&str])> = BTreeMap::new();
+    let mut declared: BTreeMap<&str, (&str, i64, &[&str])> = BTreeMap::new();
     for step in steps {
         for gate in step.gates {
             if let Gate::Check {
-                name, run, when, ..
+                name,
+                run,
+                expect_exit_code,
+                when,
             } = gate
             {
-                declared.insert(name, (run, when));
+                declared.insert(name, (run, *expect_exit_code, when));
             }
         }
     }
@@ -520,8 +527,15 @@ fn manifest_text(
     if !declared.is_empty() {
         text.push_str("checks:\n");
     }
-    for (name, (run, when)) in declared {
+    for (name, (run, expect_exit_code, when)) in declared {
         text.push_str(&format!("  {name}:\n    run: \"{run}\"\n"));
+        // Absent rather than zero, for the reason every other key here is
+        // absent rather than empty: zero is what an `armada.yml` saying nothing
+        // already means, and writing it would put a line in every fixture to
+        // state what silence states.
+        if expect_exit_code != 0 {
+            text.push_str(&format!("    expect_exit_code: {expect_exit_code}\n"));
+        }
         // No key at all where the fixture declares no path, because that is
         // what an `armada.yml` without a `when` looks like — and an empty list
         // is refused by the parser this fixture runs through.

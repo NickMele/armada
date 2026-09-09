@@ -1,9 +1,16 @@
 //! `mechanical_checks` on a step: the deterministic tier, read off a file.
 //!
 //! **Nothing here knows what a step is.** An entry is read from one list item,
-//! and the single rule needing the whole list — a step delivers one file — is
-//! [`checks`]'s. Whether a `check` name resolves is not asked here either: it
-//! is asked once, against a Manifest, by [`crate::ResolvedWorkflow`].
+//! and the two rules needing the whole list — a step delivers one file, and a
+//! step names Checks or gates on all of them — are [`checks`]'s. Whether a
+//! `check` name resolves is not asked here either: it is asked once, against a
+//! Manifest, by [`crate::ResolvedWorkflow`].
+//!
+//! **Nothing here has a Manifest, which is what fixes where each half lands.**
+//! `every_manifest_check` parses to a variant that names no Check, and
+//! `expect_exit_code` parses to what the step wrote or to nothing; both are
+//! answered against `armada.yml` one layer up, where the Checks exist. So this
+//! file gained a type and no lookup.
 
 use core_model::{ARTIFACT_EXISTS, DIFF_NONEMPTY, MANIFEST_CHECK};
 use serde_yaml_ng::Value;
@@ -11,11 +18,11 @@ use serde_yaml_ng::Value;
 use crate::error::{BadTarget, Fault, Refusal};
 use crate::yaml::{self, Table};
 
-/// A deterministic assertion. **Three types, of five sanctioned.**
+/// A deterministic assertion. **Four types, of six sanctioned.**
 ///
-/// `test_run` and `pr_merged` are the other two, and each needs machinery M1
-/// has not built — a per-step test invocation distinct from a named Check, and
-/// a merged pull request.
+/// `test_run` and `pr_merged` are the two not carried, and each needs machinery
+/// M1 has not built — a per-step test invocation distinct from a named Check,
+/// and a merged pull request.
 ///
 /// **`artifact_exists` is carried now, and it carries a path rather than a
 /// name.** The schema's samples name a registry entry — `root_cause_note` —
@@ -33,23 +40,69 @@ pub enum MechanicalCheck {
     /// type's question — see [`crate::ResolvedWorkflow`].
     ManifestCheck {
         check: String,
-        expect_exit_code: i64,
+        /// **`None` on a step that leaves the key out, which is the shape to
+        /// write.** The expectation is the Check's own and lives in
+        /// `armada.yml`; this survives only because seven shipped workflows
+        /// spell it and a change that stopped parsing them would stop every
+        /// Job in flight. Where a step does write it, it must say what the
+        /// Manifest says — [`crate::ResolvedWorkflow`] refuses the pair that
+        /// disagrees, so this is never a second answer.
+        expect_exit_code: Option<i64>,
     },
+    /// Every Check the repo's `armada.yml` declares, whichever those are.
+    ///
+    /// **The point is that a shipped workflow stops enumerating.** A step
+    /// listing `build`, `format`, `typecheck` and four more is a step that fits
+    /// one repository and goes stale the moment that repository declares an
+    /// eighth Check — which is a gate that quietly stopped covering something,
+    /// the failure `when` exists one file along to prevent.
+    ///
+    /// **A step says this; a step never omits it into meaning.** An empty
+    /// `mechanical_checks` is an ungated step and stays one: half the shipped
+    /// workflows have steps that produce a document nothing compiles, and
+    /// reading absence as *all* would gate every one of them on this
+    /// repository's Rust build.
+    ///
+    /// It resolves to one [`core_model::ResolvedCheck::ManifestCheck`] per
+    /// declared Check and never travels further than that, which is why there
+    /// is no variant for it on the record and nothing in `store` or on the wire
+    /// to teach: a Job still freezes the list of Checks it actually gated on,
+    /// and an `armada.yml` that gains one afterwards changes the next Job.
+    EveryManifestCheck,
     /// The step produced a non-empty diff.
     DiffNonempty,
     /// The step wrote the file named by `target`.
     ArtifactExists { target: String },
 }
 
+/// The schema's `type` value for *every declared Check*.
+///
+/// **Spelled here and not in `core-model` beside the other three**, which is
+/// where a `type` value goes when the record can carry it. This one cannot
+/// reach a record: it is expanded against a Manifest during resolution, so
+/// `store` and the wire never see the word. A constant in `core-model` would
+/// advertise a variant of `ResolvedCheck` that does not exist.
+const EVERY_MANIFEST_CHECK: &str = "every_manifest_check";
+
 const CHECK_TYPE_LEGAL: &[&str] = &[
     MANIFEST_CHECK,
+    EVERY_MANIFEST_CHECK,
     DIFF_NONEMPTY,
     ARTIFACT_EXISTS,
     "test_run",
     "pr_merged",
 ];
-const CHECK_TYPE_M1: &[&str] = &[MANIFEST_CHECK, DIFF_NONEMPTY, ARTIFACT_EXISTS];
+const CHECK_TYPE_M1: &[&str] = &[
+    MANIFEST_CHECK,
+    EVERY_MANIFEST_CHECK,
+    DIFF_NONEMPTY,
+    ARTIFACT_EXISTS,
+];
 const MANIFEST_CHECK_KEYS: &[&str] = &["type", "check", "expect_exit_code"];
+/// **`type` and nothing else**, which is the whole of the spelling: the set is
+/// the Manifest's to state and there is no key here to trim it with. A step
+/// that wants fewer names them one at a time, as every step did before.
+const EVERY_MANIFEST_CHECK_KEYS: &[&str] = &["type"];
 const DIFF_NONEMPTY_KEYS: &[&str] = &["type"];
 const ARTIFACT_EXISTS_KEYS: &[&str] = &["type", "target"];
 
@@ -67,8 +120,14 @@ pub(crate) fn checks(table: &mut Table<'_>, out: &mut Vec<Refusal>) -> Vec<Mecha
             // the document the step produced — so two would be a choice made by
             // whichever the reader happened to reach first.
             let mut delivers: Option<String> = None;
+            // Where the step first said something about the Manifest's Checks,
+            // by each spelling. A step names Checks or gates on all of them,
+            // never both — `Fault::EveryCheckAndByName` says why, and the
+            // second half of the pair is refused where it is written.
+            let mut every_at: Option<usize> = None;
+            let mut named_at: Option<usize> = None;
             let mut checks = Vec::with_capacity(items.len());
-            for (at, item) in items.iter() {
+            for (n, (at, item)) in items.iter().enumerate() {
                 let Some(check) = check(at, item, out) else {
                     continue;
                 };
@@ -85,6 +144,29 @@ pub(crate) fn checks(table: &mut Table<'_>, out: &mut Vec<Refusal>) -> Vec<Mecha
                             continue;
                         }
                     }
+                }
+                // A second, third and fourth `manifest_check` is ordinary — a
+                // step may gate on `build` and on `test`. What cannot stand is
+                // a pair with `every_manifest_check` on either side of it, or
+                // two of those.
+                let clash = match &check {
+                    MechanicalCheck::EveryManifestCheck => every_at.or(named_at),
+                    MechanicalCheck::ManifestCheck { .. } => every_at,
+                    _ => None,
+                };
+                match (clash, &check) {
+                    (Some(first_at), _) => {
+                        out.push(Refusal::new(
+                            format!("{at}.type"),
+                            Fault::EveryCheckAndByName { first_at },
+                        ));
+                        continue;
+                    }
+                    (None, MechanicalCheck::EveryManifestCheck) => every_at = Some(n),
+                    (None, MechanicalCheck::ManifestCheck { .. }) => {
+                        named_at.get_or_insert(n);
+                    }
+                    (None, _) => {}
                 }
                 checks.push(check);
             }
@@ -142,14 +224,24 @@ fn check(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<MechanicalCh
             let check = table
                 .required("check", out)
                 .and_then(|value| yaml::text(&table.at("check"), value, out));
+            // **Optional now, and absent is not zero — it is *the Manifest
+            // says*.** The two readings are opposite where a Check declares
+            // its own non-zero code, so absence is carried as absence all the
+            // way to resolution rather than filled in here. A step that does
+            // write it is held to agreeing with `armada.yml`, which is a
+            // question this parser has no Manifest to ask.
             let expect_exit_code = table
-                .required("expect_exit_code", out)
+                .optional("expect_exit_code")
                 .and_then(|value| yaml::integer(&table.at("expect_exit_code"), value, out));
             table.close(MANIFEST_CHECK_KEYS, out);
             Some(MechanicalCheck::ManifestCheck {
                 check: check?,
-                expect_exit_code: expect_exit_code?,
+                expect_exit_code,
             })
+        }
+        EVERY_MANIFEST_CHECK => {
+            table.close(EVERY_MANIFEST_CHECK_KEYS, out);
+            Some(MechanicalCheck::EveryManifestCheck)
         }
         DIFF_NONEMPTY => {
             table.close(DIFF_NONEMPTY_KEYS, out);
