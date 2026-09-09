@@ -89,6 +89,7 @@ fn job() -> Job {
             write_targets: None,
             subject: None,
             redispatched_from: None,
+            proposal_id: None,
             facts: Facts::new("a secret nobody outside Fleet needs"),
             scope_revisions: Vec::new(),
             attachments: Vec::new(),

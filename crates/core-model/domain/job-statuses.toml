@@ -223,7 +223,7 @@ step_states = ["advanced", "awaiting_human", "not_started", "retrying", "running
 reason_storage = "Derived"
 reason_vocabulary = "blocked_by_dependency / over_budget / waiting_on_resources / none"
 transitions_in = ["awaiting_approval -> queued", "awaiting_review -> queued", "awaiting_repair -> queued", "escalated -> queued", "running -> queued"]
-transitions_out = ["queued -> running", "queued -> awaiting_approval", "queued -> escalated", "queued -> killed"]
+transitions_out = ["queued -> running", "queued -> awaiting_approval", "queued -> escalated", "queued -> killed", "queued -> superseded"]
 in_code = "Not yet"
 notes = "Approved, waiting for a Drone — on headroom, on a dependency, or on what the Job has already spent. The reason is computed from `dependencies`, from the Job's recorded spend and from live headroom at read time rather than stored: CPU, memory and disk all free without anything moving the Job, so a stored value would be wrong from the moment it was written. This is the one status where the recomputed-label rule is applied literally. `fleet::admitting::Room` is the predicate both admission and the label read for headroom, and `fleet::allowance::Fleet::overspent` is the one they share for the budget. `over_budget` is the only one of the three that does not clear on its own: it clears when a person raises the cap, which is why the Job waits here rather than escalating — nothing has gone wrong with the work."
 
@@ -263,10 +263,12 @@ step_machine = "Frozen, and no longer describes the work"
 step_states = ["advanced", "awaiting_human", "not_started", "retrying", "running", "stopped"]
 reason_storage = "None"
 reason_vocabulary = "None"
-transitions_in = ["piloted -> superseded"]
-in_code = "Not yet"
+transitions_in = ["piloted -> superseded", "queued -> superseded"]
+in_code = "Partly"
 notes = """
 The work landed outside the Job; the record has nothing left to say. A Job depending on it unblocks and surfaces, with the dependency marked unsatisfied — neither satisfied like `completed_success` nor blocking like the failures. Fleet's scheduler branches on this third case, making it a status rather than a reason.
+
+**One proposal splitting into Jobs that overlap is where this is reached today.** Two Jobs read off one request can each land the same change, and the second one to be dispatched finds the work already in its base. It did not fail and it was not rejected: there was nothing left for it to do, which is exactly what this status says. Fleet takes that reading before dispatch and never after a Drone has started.
 
 See Pilot.
 """

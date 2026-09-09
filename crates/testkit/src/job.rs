@@ -69,6 +69,7 @@ pub fn asking(title: &str, facts: &str, criteria: &[&str]) -> Job {
             write_targets: None,
             subject: None,
             redispatched_from: None,
+            proposal_id: None,
             facts: Facts::new(facts),
             scope_revisions: Vec::new(),
             attachments: Vec::new(),

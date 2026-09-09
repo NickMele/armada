@@ -102,6 +102,7 @@ fn gated_job() -> Job {
             write_targets: None,
             subject: None,
             redispatched_from: None,
+            proposal_id: None,
             facts: Facts::new(""),
             scope_revisions: Vec::new(),
             attachments: Vec::new(),

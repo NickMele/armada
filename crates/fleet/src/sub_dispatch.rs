@@ -189,6 +189,11 @@ where
                 parent: caller.clone(),
             },
             &at,
+            // **A sub-dispatch is not a proposal.** Nothing read one request
+            // into several here: a step of a running Job asked for this one,
+            // and `dispatched_by` is the link that says so. A shared reading
+            // is a different relation and this Job is in none.
+            None,
         )?;
         let child = Job::create_sub_dispatched(new, dispatching.origin(), at.clone());
         self.store()

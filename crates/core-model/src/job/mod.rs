@@ -68,8 +68,8 @@ pub use fields::{
 pub use gaming::{CitedAt, DecidedBy, EvidenceRef, GamingCheck, GamingFlag, GamingPattern};
 pub use guard::Guard;
 pub use ids::{
-    BlankModel, BlankTitle, CriterionId, DroneId, JobId, ManifestId, ModelName, RepoPath, StepId,
-    Title, WorkflowId,
+    BlankModel, BlankTitle, CriterionId, DroneId, JobId, ManifestId, ModelName, ProposalId,
+    RepoPath, StepId, Title, WorkflowId,
 };
 pub use judge::{JudgeCheck, JudgeCriterion, JudgeVerdict, Judgment};
 pub use narrowing::Narrowing;

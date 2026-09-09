@@ -44,6 +44,7 @@ mod open;
 mod plan;
 /// Which operating-system process is working a Job, so a restart can ask.
 mod process;
+mod proposing;
 /// What a repository's Checks said about a commit — **the one per-Check record
 /// here that is not keyed by a Job.**
 mod proving;

@@ -279,6 +279,17 @@ open_questions = ["Does a Job record write scope and gate scope separately, and 
 notes = "A Manifest's row outlives its `armada.yml`, so a historical Job keeps showing what it ran against. Work with no Manifest is not a Job: a dispatched Scan carries no worktree and no resolved toolset."
 why = "A single `manifest_id` / `manifest_ids` field is rejected: it answered ownership, gating, config resolution and Board scoping at once, and its entry count doubled as the shape discriminator. Ownership is this field; gating is `gate_manifest_ids[]`; shape is derived from `atomic` and `write_targets`."
 
+[fields.proposal_id]
+type = "id"
+table = "jobs"
+storage = "Column"
+nullable = "Yes"
+frozen_at = "Creation"
+purpose = "The reading this Job was minted by, where a proposer read one request into one Job or several."
+in_code = "Yes"
+notes = "**The only thing on the record that says two Jobs are the same request.** A proposal that splits writes no edge between the Jobs it mints — they may run in any order, so there is nothing for `dependencies` to sequence — and until this column the split survived in the titles alone. Null on a Job nobody proposed: `manual` origin, and a sub-dispatch, which carries `dispatched_by` and is a different relation. A redispatch carries it forward, since replacing which Job does the work does not change which request it came out of."
+why = "Fleet dispatched a Job into a base that already held its work, because the Job that landed it forty seconds earlier was its sibling and nothing said so. Reusing `dependencies` was rejected: an edge is an ordering claim, and two Jobs from one reading are unordered by construction — writing one to record kinship would make every such pair serial and would be read by `coupling` as a gate."
+
 [fields.redispatched_from]
 type = "id"
 table = "jobs"

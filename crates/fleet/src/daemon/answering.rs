@@ -18,7 +18,7 @@
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
-    Actor, IllegalTransition, Job, JobId, JobStatus, StepId, Target, TransitionReason,
+    Actor, IllegalTransition, Job, JobId, JobStatus, ProposalId, StepId, Target, TransitionReason,
 };
 use store::{LoadAllError, LoadJobError, Loaded, Moved};
 
@@ -124,23 +124,30 @@ where
         // Hand entry, which is the override rather than the path. Entry zero
         // records that a person stated this scope and not the call, which is
         // what makes the call evaluable against the decisions people made.
-        self.proposed_job(proposal, StatedBy::APerson).await
+        // A person drafting a Job by hand read nothing and split nothing.
+        self.proposed_job(proposal, StatedBy::APerson, None).await
     }
 
     /// The same creation, with who stated the scope carried through to entry
     /// zero. **The only difference between the two dispatch paths**, which is
     /// why they share everything below it.
+    /// `minted_by` is the reading this Job came out of, where a proposer read
+    /// one request. **A parameter and not a field of `ProposeJob`**: the wire
+    /// shape is what a caller drafts, and a caller claiming membership of a
+    /// reading it did not make would be claiming a sibling it does not have.
+    /// Fleet mints the id and Fleet is the only thing that may write it.
     pub(crate) async fn proposed_job(
         &self,
         proposal: ipc::ProposeJob,
         stated: StatedBy,
+        minted_by: Option<ProposalId>,
     ) -> Result<Job, Adrift> {
         let at = self.now();
         // Before `drafted`, which is sync and cannot read the board: an edge is
         // a pointer, and a peer that does not exist is the one shape a cycle
         // needs. `coupling::peers_held` carries why.
         self.peers_held(&proposal.dependencies).await?;
-        let (new, origin) = self.drafted(proposal, stated, &at)?;
+        let (new, origin) = self.drafted(proposal, stated, &at, minted_by)?;
         let job = Job::create_top_level(new, origin, at.clone());
         self.store
             .lock()

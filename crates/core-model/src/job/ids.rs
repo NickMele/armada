@@ -63,6 +63,20 @@ id_newtype! {
     ManifestId
 }
 id_newtype! {
+    /// The reading a Job was minted by, where a proposer read one request.
+    ///
+    /// **The only thing that says two Jobs are the same request.** A proposal
+    /// that splits writes no edge between the Jobs it mints — they may run in
+    /// any order, so there is nothing to sequence — and before this the split
+    /// survived only in two titles. A request naming a bug and an addition
+    /// became two Jobs on 9 Sep 2026, the first landed both, and nothing on the
+    /// record could have told the second that its work was already in its base.
+    ///
+    /// Null on a Job nobody proposed: `manual` origin, and a redispatch, which
+    /// carries [`JobId`] instead and is a different question.
+    ProposalId
+}
+id_newtype! {
     /// The WorkflowDef a Job follows. Not `task_type`: `task` is a banned
     /// synonym for Job, and this is a pointer to a row rather than a closed set.
     WorkflowId

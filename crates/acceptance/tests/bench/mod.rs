@@ -349,6 +349,7 @@ impl Bench {
             write_targets: None,
             subject: None,
             redispatched_from: None,
+            proposal_id: None,
             facts: Facts::new("the store's cursor reads one row past the end"),
             scope_revisions: Vec::new(),
             attachments: Vec::new(),

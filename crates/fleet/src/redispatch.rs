@@ -148,6 +148,11 @@ where
             write_targets: failed.write_targets().cloned(),
             subject: failed.subject().cloned(),
             redispatched_from: Some(failed.id().clone()),
+            // **The replacement is still one of the proposal's Jobs.** A
+            // redispatch changes which Job does the work and not which request
+            // it came out of, so a sibling that lands while the replacement
+            // waits is the same fact about the same reading.
+            proposal_id: failed.proposal_id().cloned(),
             facts,
             scope_revisions: failed.scope_revisions().to_vec(),
             attachments: failed.attachments().to_vec(),

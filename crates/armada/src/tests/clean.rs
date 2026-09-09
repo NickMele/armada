@@ -119,6 +119,7 @@ fn a_job(id: &str, manifest: &str) -> Job {
             write_targets: None,
             subject: None,
             redispatched_from: None,
+            proposal_id: None,
             facts: Facts::new("what was observed"),
             scope_revisions: Vec::new(),
             attachments: Vec::new(),
