@@ -19,13 +19,16 @@
 # `review`, `merge` and `close` folded into one `handoff`, and the designed
 # `verify` folded into `implement`, since a step no Drone can advance past until
 # build and test pass needs no second step to say so. The questions below are
-# ported from the designed file; none of its shape is. It does not load here --
-# its `review` gate is `manifest_rule:review_gate`, which the parser defers --
-# so do not reconcile the two and do not copy either over the other.
+# ported from the designed file; none of its shape is. The shape is why the two
+# stay apart, not the parser -- its `review` gate is `manifest_rule:review_gate`
+# and that has been carried since #264, so what still separates them is seven
+# steps in a loop against five in a line. Do not reconcile the two and do not
+# copy either over the other.
 #
 # **`handoff` is gated `human_always`: every workflow that produces code stops
-# before it lands.** The owner's decision, Aug 28 2026. Not ported -- the
-# designed file reaches its human gate through the deferred Manifest rule.
+# before it lands.** The owner's decision, Aug 28 2026, and it is why this file
+# says the word outright where the designed one reads the same answer off a
+# Manifest rule. A repository may now say otherwise; this one does not.
 #
 # **`model: haiku` on the reporting step, and nowhere else.** Owner's call,
 # 31 Aug 2026: cheap by default, strong where the thinking is. `plan` and

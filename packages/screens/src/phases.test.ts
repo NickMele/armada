@@ -18,7 +18,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { CRITERION_VERDICT_CHECK } from "@armada/components";
+import { ADVANCE_GATE, CRITERION_VERDICT_CHECK } from "@armada/components";
 
 import { phasesOf, type Opens } from "./phases";
 
@@ -126,6 +126,23 @@ describe("the human tier", () => {
     expect(you({ advance_gate: "human_always", state: "not_started" })?.stands).toBe(
       CRITERION_VERDICT_CHECK.not_reached?.verb,
     );
+  });
+
+  // A `manifest_rule:` gate is a policy the repository owns, resolved at the
+  // gate rather than written into the workflow. It is not `auto` and not
+  // `human_always`, so it must not take either of their branches — the tier
+  // asks, the word is the registry's, and the sentence says where the answer
+  // came from. `#264`.
+  it("names the policy where the gate is one, rather than an answer", () => {
+    for (const gate of ["manifest_rule:review_gate", "manifest_rule:auto_merge"]) {
+      const tier = you({ advance_gate: gate, state: "awaiting_human" });
+      expect(tier?.state).toBe("waiting");
+      // Never a phrase written here: a copy in the assertion is what would let
+      // this pass over a tier that had stopped reading the generated map.
+      expect(tier?.label).toBe(`You · ${ADVANCE_GATE[gate]?.verb}`);
+      expect(tier?.detail).toContain(gate);
+      expect(tier?.detail).not.toContain("dispatched");
+    }
   });
 
   // An absent `advance_gate` means Fleet does not hold the workflow this Job

@@ -404,10 +404,28 @@ where
         // on the result. A gate read before the tiers would be a step whose
         // Checks a person waits on after deciding.
         //
-        // Matched exhaustively rather than through a helper, so a fourth gate
-        // is a compile error here rather than a step that quietly advances.
+        // Matched exhaustively rather than through a helper, so a fifth gate is
+        // a compile error here rather than a step that quietly advances. That
+        // is also why the two `manifest_rule:` forms resolve in this arm rather
+        // than in a resolver of their own: one read site, and it is this one.
         Verdict::Advance => match step.advance_gate() {
-            AdvanceGate::HumanAlways => Ruling::HeldForReview {
+            // **`human_always` by declaration; the other two by policy, and
+            // both policies default to asking.** `review_gate`'s default is
+            // `human_always` outright. `auto_merge`'s is `never`, which says no
+            // machine decides that work lands — the same answer reached from
+            // the other side, and `crates/fleet/src/merging.rs` is where a
+            // person's press then carries it out.
+            //
+            // **No Manifest can say otherwise yet**, because `config::Manifest`
+            // refuses both sections by name rather than reading a value nothing
+            // consumes. `#525` is what puts them in the file and resolves them
+            // most-restrictive-wins across the Job's gating Manifests, which
+            // `docs/concepts/convoy.md` already settles; until then the default
+            // is the whole resolution and it is stated here rather than
+            // inferred from a missing key.
+            AdvanceGate::HumanAlways
+            | AdvanceGate::ManifestRuleAutoMerge
+            | AdvanceGate::ManifestRuleReviewGate => Ruling::HeldForReview {
                 checks,
                 output,
                 judged,

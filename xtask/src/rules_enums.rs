@@ -368,16 +368,18 @@ fn compare(
     for (key, line) in keys {
         if !spelled.contains_key(key.as_str()) {
             report.fail(format!(
-                "{path}:{line} — `[{prefix}{key}]` is a key no `{name}` variant spells. \
-                 A row storing `{key}` reads back as `None`"
+                "{path}:{line} — `[{prefix}{}]` is a key no `{name}` variant spells. \
+                 A row storing `{key}` reads back as `None`",
+                quoted(key)
             ));
         }
     }
     for (variant, wire) in variants {
         if !keys.contains_key(wire) {
             report.fail(format!(
-                "`{name}::{variant}` spells `{wire}`, which {path} has no `[{prefix}{wire}]` \
-                 table for. The registry is the authority on the set"
+                "`{name}::{variant}` spells `{wire}`, which {path} has no `[{prefix}{}]` \
+                 table for. The registry is the authority on the set",
+                quoted(wire)
             ));
         }
     }
@@ -483,6 +485,13 @@ fn wire_arms(text: &str, name: &str) -> Vec<(String, String)> {
 /// Every table key under `prefix`, with the line it is on. A key declared twice
 /// is a failure: the second table overwrites the first, so one of the two rows
 /// is read by nobody.
+///
+/// **A quoted key is the same key.** `advance_gate`'s two policy forms spell
+/// `manifest_rule:auto_merge`, and a colon is outside TOML's bare-key set, so
+/// the row can only be written `["manifest_rule:auto_merge"]`. Comparing the
+/// quotes along with the spelling would fail every such row against a wire
+/// value that has none. [`quoted`] is the same strip applied to what a failure
+/// message asks for, so the two cannot disagree about what to write.
 fn keys_under(
     text: &str,
     prefix: &str,
@@ -497,14 +506,33 @@ fn keys_under(
         if key.is_empty() || key.contains('.') {
             continue;
         }
+        let key = key
+            .strip_prefix('"')
+            .and_then(|k| k.strip_suffix('"'))
+            .unwrap_or(key);
         if let Some(first) = found.insert(key.to_string(), line) {
             report.fail(format!(
-                "{path}:{line} — `[{prefix}{key}]` already has a table at line {first}. \
-                 The second overwrites the first"
+                "{path}:{line} — `[{prefix}{}]` already has a table at line {first}. \
+                 The second overwrites the first",
+                quoted(key)
             ));
         }
     }
     found
+}
+
+/// One key as TOML requires it be written. Bare where every character is one a
+/// bare key may hold, quoted otherwise — so a message naming a missing table
+/// names one that can be pasted into the file.
+fn quoted(key: &str) -> String {
+    if key
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        key.to_string()
+    } else {
+        format!("\"{key}\"")
+    }
 }
 
 /// Every `[table.header]` in a file, as (path, line). Comments are skipped, and

@@ -111,15 +111,16 @@ wire_enum! {
     StepState, core_model::StepState, "a step state"
 }
 wire_enum! {
-    /// What it takes to advance past one step. Three, from
+    /// What it takes to advance past one step. Five, from
     /// `domain/workflowdef-fields.toml`.
     ///
-    /// **Two name a tier and the third names an actor.** `auto` and
-    /// `auto_if_judge_passes` say which of Fleet's tiers is the whole gate;
+    /// **Two name a tier, one names an actor, and two name a policy.** `auto`
+    /// and `auto_if_judge_passes` say which of Fleet's tiers is the whole gate;
     /// `human_always` says the tiers do not decide at all and the step holds at
-    /// `awaiting_review` for a person. The schema's fourth form,
-    /// `manifest_rule:<key>`, is refused where a definition is parsed and so
-    /// cannot arrive here.
+    /// `awaiting_review` for a person. The two `manifest_rule:` forms cross
+    /// **unresolved**, which is what the record holds — Bridge draws the
+    /// policy's name rather than an answer, because what it resolves to is the
+    /// repository's and is settled at the gate, not at freeze.
     AdvanceGate, core_model::AdvanceGate, "an advance gate"
 }
 wire_enum! {

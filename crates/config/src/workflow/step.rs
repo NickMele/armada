@@ -52,13 +52,24 @@ const STEP_KEYS: &[&str] = &[
     "poke_limit",
 ];
 
+/// **The schema's whole set, spelled out rather than sketched.** This held
+/// `manifest_rule:<key>` while the form was deferred, which was the only honest
+/// thing to print about a value no key was carried for. Now that both keys the
+/// registry names are carried, a refusal at this key can say what may be
+/// written — and `manifest_rule:nonsense` is refused as the typo it is rather
+/// than as a feature that has not landed.
+///
+/// **The carried set has converged on it**, so [`Fault::NotYetCarried`] is
+/// unreachable at this key and the second list is gone — `structure` kept its
+/// pair because [`yaml::word`] takes both as arguments, and this reader takes
+/// neither.
 const GATE_LEGAL: &[&str] = &[
     "auto",
     "auto_if_judge_passes",
     "human_always",
-    "manifest_rule:<key>",
+    "manifest_rule:auto_merge",
+    "manifest_rule:review_gate",
 ];
-const GATE_CARRIED: &[&str] = &["auto", "auto_if_judge_passes", "human_always"];
 
 const EVIDENCE_CARRIED: &[(&str, EvidenceType)] = &[
     ("diff", EvidenceType::Diff),
@@ -145,8 +156,9 @@ impl Step {
 
     /// **`auto` does not mean unverified.** It means the mechanical tier is the
     /// whole gate. `human_always` means the tiers still run and a person
-    /// decides; the gate reader says why the fourth value is still refused, and
-    /// the step reader why the agreement rule does not reach a human gate.
+    /// decides; the gate reader says why a `manifest_rule:` value is carried
+    /// unresolved, and the step reader why the agreement rule reaches neither
+    /// it nor a human gate.
     pub fn advance_gate(&self) -> AdvanceGate {
         self.advance_gate
     }
@@ -367,6 +379,14 @@ pub(super) fn read(
         ));
     }
 
+    // **A `manifest_rule:` gate is outside the rule too, and not for
+    // `human_always`'s reason.** That one names an actor, so neither failure
+    // can arise; this one names a policy whose value is not in this file, so
+    // neither failure can be *established* from it. The designed Code Review
+    // declares `manifest_rule:review_gate` on a step carrying no Judge, which
+    // is legal and which a repository setting `auto_if_judge_passes` turns
+    // into the first failure. Refusing it here would refuse a shape the design
+    // sanctions; `#525` is where a resolved policy meets a step's declaration.
     let disagrees = matches!(
         (advance_gate, judged),
         (Some(AdvanceGate::AutoIfJudgePasses), false) | (Some(AdvanceGate::Auto), true)
@@ -407,19 +427,39 @@ pub(super) fn read(
     })
 }
 
-/// `advance_gate` has its own reader because one of the schema's four values is
-/// a prefix form — `manifest_rule:<key>` — and a closed word list cannot match
-/// it. Getting this wrong would refuse `manifest_rule:auto_merge` as a typo
-/// when it is a real value M1 has not reached.
+/// `advance_gate` has its own reader because one of the schema's four forms is
+/// a prefix form — `manifest_rule:<key>` — and the key is what the value means.
+/// A closed word list over the whole spelling would still work, and this is not
+/// one: the prefix is matched first so a key nothing defines names *itself* in
+/// the refusal rather than reading as an unrecognised gate.
 ///
-/// **That prefix form is the only one still refused.** It names a key resolved
-/// against a Manifest-level policy and then across a Convoy's gating Manifests,
-/// and neither is built — so reading it as the value the settings row happens to
-/// default it to would be this parser answering a repository's question for it.
-/// `human_always` needs none of that machinery: it names a person, and the acts
-/// a person takes at the gate are `fleet::reviewing`'s and exist.
+/// **Nothing here resolves the key**, and `AdvanceGate` carries it through to
+/// the record for that reason. What a `manifest_rule:` gate settles on is the
+/// repository's, read where the gate is read — resolving it at parse time would
+/// be this file answering a repository's question, and answering it once for
+/// every Job at daemon start, when the settings row calls the policy `Live`.
 fn gate(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<AdvanceGate> {
     let found = yaml::text(at, value, out)?;
+    // **A key the registry does not name is refused by name.** `auto_merge` and
+    // `review_gate` are the two `workflowdef-fields.toml` declares, and a third
+    // is a row there before it is a variant — so `manifest_rule:nonsense` is a
+    // typo with a spelling to correct, not a policy waiting to be built.
+    if let Some(key) = found.strip_prefix("manifest_rule:") {
+        return match key {
+            "auto_merge" => Some(AdvanceGate::ManifestRuleAutoMerge),
+            "review_gate" => Some(AdvanceGate::ManifestRuleReviewGate),
+            _ => {
+                out.push(Refusal::new(
+                    at,
+                    Fault::NotInTheSchema {
+                        value: found,
+                        legal: GATE_LEGAL,
+                    },
+                ));
+                None
+            }
+        };
+    }
     if found == "auto" {
         return Some(AdvanceGate::Auto);
     }
@@ -429,22 +469,12 @@ fn gate(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Option<AdvanceGate> 
     if found == "human_always" {
         return Some(AdvanceGate::HumanAlways);
     }
-    // The prefix form and nothing else. A `manifest_rule:<key>` names a policy
-    // that resolves per repository and across a Convoy's gating Manifests, and
-    // reading it as the value that policy would most often produce would be
-    // this parser deciding a repository's question for it.
-    let deferred = found.starts_with("manifest_rule:");
-    let fault = if deferred {
-        Fault::NotYetCarried {
-            value: found,
-            carried: GATE_CARRIED,
-        }
-    } else {
+    out.push(Refusal::new(
+        at,
         Fault::NotInTheSchema {
             value: found,
             legal: GATE_LEGAL,
-        }
-    };
-    out.push(Refusal::new(at, fault));
+        },
+    ));
     None
 }

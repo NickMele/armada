@@ -13,12 +13,13 @@
 //! [`mechanical`] needs one list entry and never sees a step. So the file rules
 //! cannot be written a layer down, and neither layer down can reach up.
 //!
-//! **Three closed sets, each narrowed.** [`Structure`], `AdvanceGate` and
-//! [`MechanicalCheck`] carry fewer variants than the schema has, and each is an
-//! enum rather than a `String` so that widening one is a compile error at every
-//! `match` reading it. A `String` would widen silently. The two a Job freezes —
-//! `AdvanceGate` and `EvidenceType` — are `core-model`'s, because the record
-//! carries them.
+//! **Three closed sets, and only two are still narrowed.** [`Structure`] and
+//! [`MechanicalCheck`] carry fewer variants than the schema has; `AdvanceGate`
+//! now carries every form of it, the `manifest_rule:` pair included and
+//! unresolved. Each is an enum rather than a `String` so that widening one is a
+//! compile error at every `match` reading it. A `String` would widen silently.
+//! The two a Job freezes — `AdvanceGate` and `EvidenceType` — are
+//! `core-model`'s, because the record carries them.
 
 mod mechanical;
 mod step;
