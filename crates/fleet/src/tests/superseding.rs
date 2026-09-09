@@ -208,3 +208,96 @@ async fn a_queued_job_whose_sibling_landed_its_work_is_superseded_rather_than_di
         "and it never took a slot: the reading is before the roster, not after it"
     );
 }
+
+/// The gap #555 named and did not close: a sibling that lands while a Drone is
+/// already working.
+///
+/// **The Job is not stopped — the next Drone is told.** Before dispatch there
+/// is nothing to lose and `superseding` closes the Job; once a Drone has
+/// written commits, closing it throws away work nobody has read. So the next
+/// step's brief carries what landed and the Drone decides.
+mod overtaken_mid_flight {
+    use super::*;
+
+    async fn brief_after_a_sibling_lands(with_a_sibling: bool) -> String {
+        let home = TempDir::new();
+        let fleet = a_fleet_proposing_through(
+            &home,
+            FakeWorkProduct::changed(&["packages/shell/src/Shell.tsx"]),
+            a_catalogue(),
+            FakeJudge::answering(&[
+                ("deciding what a piece of work is", UNORDERED),
+                // Never `already_landed`: this case is about the Job that is
+                // allowed to keep going, so the pre-dispatch reading must not
+                // close it.
+                (
+                    "still left to do",
+                    "verdict: needed\nbecause: the second item is untouched",
+                ),
+            ]),
+        );
+        let made = fleet.propose_from(TWO_ITEMS, None).await.expect("a plan");
+        worktree_directory(&home, &made[0]);
+        worktree_directory(&home, &made[1]);
+        dispatched(&fleet, made[0].id())
+            .await
+            .expect("the first runs");
+        dispatched(&fleet, made[1].id())
+            .await
+            .expect("the second waits");
+
+        if with_a_sibling {
+            // The first Job lands, which is what the second is about to be
+            // overtaken by.
+            submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
+        }
+        fleet.turn().await.expect("the loop turns");
+
+        let configured = fleet.harness().configured();
+        configured
+            .last()
+            .map(|one| one.prompt().as_str().to_string())
+            .unwrap_or_default()
+    }
+
+    #[tokio::test]
+    async fn the_next_drone_is_told_what_landed_and_whose_it_was() {
+        let brief = brief_after_a_sibling_lands(true).await;
+
+        assert!(
+            brief.contains("WHAT LANDED WHILE YOU WERE WORKING"),
+            "the boundary says so, in a block of its own: {brief}"
+        );
+        assert!(
+            brief.contains("The drone count is wrong"),
+            "and names the Job it was read off the same request as: {brief}"
+        );
+        assert!(
+            brief.contains("Read before you write"),
+            "and says what to do about it: {brief}"
+        );
+    }
+
+    /// **A Drone that finds nothing left has found something.** The block says
+    /// so outright, because the failure it exists to stop is a Drone writing a
+    /// doc about work already done and a Judge refusing it for not doing it.
+    #[tokio::test]
+    async fn it_says_that_finding_nothing_left_is_a_finding() {
+        let brief = brief_after_a_sibling_lands(true).await;
+
+        assert!(
+            brief.contains("that is a finding and not a failure"),
+            "{brief}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_job_no_sibling_has_overtaken_is_told_nothing() {
+        let brief = brief_after_a_sibling_lands(false).await;
+
+        assert!(
+            !brief.contains("WHAT LANDED WHILE YOU WERE WORKING"),
+            "the block is drawn only where something landed: {brief}"
+        );
+    }
+}
