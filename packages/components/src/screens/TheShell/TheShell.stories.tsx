@@ -1,7 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { ComponentProps } from "react";
-import { ClipboardList, HardDrive } from "lucide-react";
+import { ClipboardList, HardDrive, Megaphone } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
+import { ActiveJobsList } from "../../compositions/ActiveJobsList/ActiveJobsList";
+import { JobRowStacked } from "../../compositions/JobRowStacked/JobRowStacked";
 import { Select } from "../../primitives/Select/Select";
 import { TheShell } from "./TheShell";
 
@@ -127,6 +129,46 @@ export const AScreenTallerThanTheWindow: Story = {
           </div>
         ))}
       </div>
+      </div>
+    ),
+  },
+  render: Shell.render,
+};
+
+/**
+ * **One Job on the Board, in a window with room for twenty.**
+ *
+ * A row is a row whether there is one of them or forty. The frame fills the
+ * pane — that is what lets it scroll — and a grid stretches its rows into the
+ * space it is given unless told not to, so a Board holding one Job drew that
+ * Job a window tall with its content floating in the middle of it.
+ *
+ * What the pane does with the room left over is nothing, which is the correct
+ * answer and the one a person expects.
+ */
+export const OneRowInATallWindow: Story = {
+  args: {
+    ...shell,
+    summary: "1 job needs you. 1 on the Board.",
+    children: (
+      <div className="armada-screen__mounted">
+        <div className="armada-screen__stack">
+          <ActiveJobsList selectable label="Job Board">
+            <JobRowStacked
+              status="escalated"
+              statusIcon={Megaphone}
+              statusLabel="went quiet"
+              headline="Preserve job metadata during resource cleanup"
+              jobId="01M21BKVPW002DC0ATD1X9T0VF"
+              fields={[
+                { label: "Workflow", value: "feature, 4 steps" },
+                { label: "Progress", value: "scope" },
+                { label: "Run time", value: "5h 40m", mono: true },
+              ]}
+              action={<Button variant="secondary" size="sm">Open</Button>}
+            />
+          </ActiveJobsList>
+        </div>
       </div>
     ),
   },
