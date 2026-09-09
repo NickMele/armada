@@ -55,9 +55,9 @@ function cap(micros: number): string {
  * cap is the one number on this screen that means nothing without the other
  * two.
  *
- * **It says what it does not change.** The machine's setting stays where it is
- * and so does the turn cap: a raise read as loosening the installation would be
- * the opposite of the reason this act is per job.
+ * **It says what it does not change.** The tiers above this job stay where they
+ * are and so does the turn cap: a raise read as loosening the repository would
+ * be the opposite of the reason this act is per job.
  */
 export function RaiseCapControl({
   jobId,
@@ -156,9 +156,8 @@ export function RaiseCapControl({
             need to, and somebody who thought it lifted the turn cap would raise
             it again when a job going round and round did not move. */}
         <p>
-          This job only. The machine-wide cap every other job is held to does not move, and neither
-          does the turn cap — a job going round and round needs a better brief rather than a bigger
-          number.
+          This job only. The cap every other job is held to does not move, and neither does the turn
+          cap — a job over that one is going in circles, and a bigger number buys more circles.
         </p>
       </Dialog>
     </>

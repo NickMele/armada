@@ -268,13 +268,15 @@ const PROVISIONAL_MERGE_NOTICE: Noticing = Noticing::every(Duration::from_secs(6
 /// up on its own until now.
 const PROVISIONAL_RECLAIM_SWEEP: Reclaiming = Reclaiming::every(Duration::from_secs(300));
 
-/// What one Job may spend before Fleet stops starting Drones on it.
+/// What one Job may spend before Fleet stops starting Drones on it, **where
+/// nothing below this says otherwise**: `armada.yml` and a Job's own column
+/// each override the dollars, and `fleet::Allowance::at` writes that order and
+/// carries why the turns do not. Changing this one still needs a rebuild; what
+/// the two under it buy is that nobody has to wait for one.
 ///
-/// **Two `settings.toml` rows in one value**: `budget-cost-cap-per-job` for the
-/// dollars and `budget-turn-cap-per-job` for the turns, resolved here like
-/// every other dial on this page. They are two rows because one number cannot
-/// carry both — see `fleet::allowance`, and spike 5, which is why there are two
-/// signals at all.
+/// **Two `settings.toml` rows in one value**: `budget-cost-cap-per-job` and
+/// `budget-turn-cap-per-job`. Two rows because one number cannot carry both —
+/// see `fleet::allowance`, and spike 5, which is why there are two signals.
 ///
 /// | Cap | Value | Why there |
 /// |---|---|---|

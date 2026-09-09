@@ -223,7 +223,7 @@ where
         // person who raised this Job's cap reads the figure they set beside the
         // spend, and a detail still drawing the machine-wide number would say
         // the Job was over budget on a Job admission is about to start.
-        let allowance = self.held_to(&job);
+        let allowance = self.allowance_for(&job);
         let spent = self
             .spend_of(job.id())
             .await

@@ -36,7 +36,7 @@ use serde_yaml_ng::Value;
 mod drone;
 
 use crate::error::{Fault, LoadError, Refusal};
-use crate::live::{Cell, Patience, Reloads};
+use crate::live::{Cell, Dials, Reloads};
 use crate::yaml::{self, Table};
 
 /// The keys M1 reads at the top level of an `armada.yml`.
@@ -304,7 +304,7 @@ impl Manifest {
     /// default that file carries. The argument for the order, and for why an
     /// inherited list replaces rather than joins the one above it, is there.
     ///
-    /// **Read off the value, not through the live cell**, unlike the two keys
+    /// **Read off the value, not through the live cell**, unlike the three keys
     /// beside it in the same section: this one is frozen at daemon start
     /// because a `ResolvedWorkflow` was built from it there, and a Job's own
     /// record carries the resolved list it ran under.
@@ -312,8 +312,34 @@ impl Manifest {
         &self.exclude_paths
     }
 
-    /// Both live keys at once, for the one caller that adopts them together.
-    pub(crate) fn patience(&self) -> Patience {
+    /// What one Job of this repository may spend, in millionths of a dollar.
+    /// **`None` where the file declares no `drone.cost_cap_micros_per_job`**,
+    /// which is the repository deferring to what Fleet is running with.
+    ///
+    /// **The middle of three tiers and never the answer on its own**, exactly
+    /// as [`quiet_after_seconds`](Manifest::quiet_after_seconds) is: a Job's
+    /// own cap beats this, and this beats the composition root's constant.
+    /// `fleet::Allowance::at` is where the order is written and it is written
+    /// nowhere else.
+    ///
+    /// **`0` is a value and not an absence**, by [`yaml::counted`], and it says
+    /// no Job here starts anything. That reading is the same at the Job tier,
+    /// which is what makes one key rather than two.
+    ///
+    /// **Per Job and not per Drone**, which is why the key says so. A Job is
+    /// as many Drones as its workflow has steps, and the Job is what a person
+    /// approved.
+    ///
+    /// Read through the live cell, for
+    /// [`quiet_after_seconds`](Manifest::quiet_after_seconds)'s reason — and
+    /// with more at stake, since the Job this refuses is refused again at every
+    /// admission until the number moves.
+    pub fn cost_cap_micros(&self) -> Option<u32> {
+        self.live.read().cost_cap_micros
+    }
+
+    /// Every live key at once, for the one caller that adopts them together.
+    pub(crate) fn dials(&self) -> Dials {
         self.live.read()
     }
 }
@@ -398,7 +424,7 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         prepared_by,
         proved_after_a_merge,
         exclude_paths: drone.exclude_paths,
-        live: Cell::holding(drone.patience),
+        live: Cell::holding(drone.dials),
     })
 }
 

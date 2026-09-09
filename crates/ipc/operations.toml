@@ -734,7 +734,7 @@ transport = "HTTP"
 helm_access = "Yes"
 description = "Give one Job a higher cost ceiling than the tier above it allows"
 notes = """
-**The act the `over_budget` label has always pointed at and nothing performed.** `docs/concepts/machine.md` says a Job past its cost cap waits at `queued` until somebody raises the cap, and `job-statuses.toml` says the same thing one file over — it is the one reason a `queued` Job carries that does not clear on its own. Until this there was no key, no route and no control: the remedy was a machine-wide setting, so raising it for the Job in front of you raised it for every Job and needed Fleet restarted to take.
+**The act the `over_budget` label has always pointed at and nothing performed.** `docs/concepts/machine.md` says a Job past its cost cap waits at `queued` until somebody raises the cap, and `job-statuses.toml` says the same thing one file over — it is the one reason a `queued` Job carries that does not clear on its own. Until this there was no key, no route and no control: the tiers above the Job govern every Job in the installation or in the repository, so the Job in front of you could only be helped by moving a number for all of them.
 
 **It moves a number and never the Job.** No status changes, no step advances and no Drone is asked for — admission was already going to start one and was refused for money. What comes back is the summary, and the fact a caller is reading it for is `queued_reason`: `over_budget` before the raise, absent or `waiting_on_resources` after it. That is the whole answer to *did this unblock it*, and it is answered by the same predicate admission asks rather than by a second reading here.
 

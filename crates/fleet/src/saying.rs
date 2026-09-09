@@ -176,7 +176,9 @@ impl fmt::Display for Adrift {
                 ceiling,
             } => write!(
                 out,
-                "Helm may raise {}'s cost cap as far as {} and asked for {}. A Job needing more                  than double what this installation allows every Job is one for a person to look                  at rather than a bigger number",
+                "Helm may raise {}'s cost cap as far as {} and asked for {}. A Job needing \
+                 more than double what it would otherwise be allowed is one for a person to \
+                 look at rather than a bigger number",
                 job.as_str(),
                 dollars(*ceiling),
                 dollars(*asked)

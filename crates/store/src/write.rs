@@ -56,10 +56,11 @@ impl Store {
                      atomic, model, acceptance_criteria, current_step_id,
                      dependencies, dispatched_by_job_id, dispatched_by_step_id,
                      redispatched_from, subject_kind, subject_ref, facts, scope_revisions,
-                     write_targets_known, created_at, branch, workflow, redirect_waiting
+                     write_targets_known, created_at, branch, workflow, redirect_waiting,
+                     cost_cap_micros
                  ) VALUES (
                      ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
-                     ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24
+                     ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25
                  )",
                 rusqlite::params![
                     job.id().as_str(),
@@ -98,6 +99,11 @@ impl Store {
                     // Bound anyway, so a Job rebuilt and reinserted does not
                     // lose a note that was still waiting.
                     job.redirect_waiting().map(|note| note.text()),
+                    // Ordinarily null, and for `branch`'s reason: a Job takes
+                    // the repository's ceiling until somebody gives it one of
+                    // its own. Bound anyway, so a Job rebuilt and reinserted
+                    // does not lose a cap a person raised.
+                    job.cost_cap_micros().map(|micros| micros as i64),
                 ],
             )
             .map_err(fault("writing the job row"))

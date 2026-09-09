@@ -15,8 +15,12 @@
 //!
 //! **Quota is not a fourth.** Spike 5 settled it: the rate-limit event carries
 //! a window and a status and no quantity.
+//!
+//! **The dollars tier and the turns do not**, which is the one place the pair
+//! comes apart. [`Allowance::at`] carries the argument.
 
 use adapter_traits::{AgentHarness, Delivery, DroneEvent, Vcs, WorkProduct};
+use config::Manifest;
 use core_model::{DroneId, Job, JobId, JobStatus};
 use store::{DroneSpend, Spend};
 
@@ -63,8 +67,9 @@ impl Micros {
 /// allowed and the figure that is over is visible in the pair.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Overspent {
-    /// Past `settings.budget-cost-cap-per-job`. The remedy is a number: raise
-    /// the cap, or accept that this Job costs what it costs.
+    /// Past `settings.budget-cost-cap-per-job`, as [`Allowance::at`] resolved
+    /// it for this Job. The remedy is a number: raise the cap on this Job, on
+    /// the repository, or accept that this Job costs what it costs.
     Cost,
     /// Past `settings.budget-turn-cap-per-job`. The remedy is usually the
     /// brief: a Job that turns and turns was not askable as written.
@@ -103,6 +108,45 @@ impl Allowance {
 
     pub const fn turns(&self) -> u64 {
         self.turns
+    }
+
+    /// What this one Job may spend, given what Fleet is running with.
+    ///
+    /// # Three tiers, and this is the only place their order is written
+    ///
+    /// The composition root's constant — `self` — then `armada.yml`'s
+    /// `drone.cost_cap_micros_per_job`, then the Job's own column, each
+    /// deferring upward where it states nothing. **`Some(0)` is a cap and
+    /// `None` is an absence**: capped at zero a Job starts nothing, which holds
+    /// one Job, or one repository, without stopping the Fleet.
+    ///
+    /// # The turns do not tier, and that is a decision
+    ///
+    /// Spike 5 priced three identical successful runs of one Job at $0.063,
+    /// $0.087 and $0.146 — 2.31x on cache warmth — while their turns held at 7,
+    /// 7 and 4. So a Job over the dollar cap often just started cold and the
+    /// remedy is the number; over the turn cap it is going in circles, and
+    /// raising the number buys more circles. **A lever exists for the reading
+    /// whose remedy is a number.** The two stay one type and one
+    /// `exceeded_by` — what tiers is the value, not the pair.
+    ///
+    /// # Live at every tier, and frozen at none
+    ///
+    /// A Job past its cap is refused at every admission until a number moves,
+    /// so a cap frozen at creation — as a step's `quiet_after_seconds` is —
+    /// would reach every Job but the one that needs it.
+    pub fn at(self, manifest: &Manifest, job: &Job) -> Allowance {
+        let repository = match manifest.cost_cap_micros() {
+            Some(micros) => Micros(u64::from(micros)),
+            None => self.cost,
+        };
+        Allowance {
+            cost: match job.cost_cap_micros() {
+                Some(micros) => Micros(micros),
+                None => repository,
+            },
+            turns: self.turns,
+        }
     }
 
     /// Which ceiling this spend is past, or `None` where it is inside both.
@@ -237,30 +281,15 @@ where
     /// it and this cannot stop that Drone; a terminal Job is not going to start
     /// another. The read costs one query and there is no reason to pay it for a
     /// row that could not act on the answer.
+    ///
+    /// **The cap is resolved here and not held anywhere**, which is what makes
+    /// raising one on a Job that is already over it take effect at the next
+    /// turn of the loop rather than at the next restart.
     pub(crate) async fn overspent(&self, job: &Job) -> Result<Option<Overspent>, Adrift> {
         if job.status() != JobStatus::Queued {
             return Ok(None);
         }
         let spent = self.spend_of(job.id()).await?;
-        Ok(self.held_to(job).exceeded_by(&spent))
-    }
-
-    /// The allowance this Job is actually held to.
-    ///
-    /// **A stub, and the shape of the thing that replaces it.** The Job's own
-    /// figure where somebody raised one for this Job alone, and the
-    /// installation's otherwise — which is two of the three tiers
-    /// `Liveness::at` resolves, missing the Manifest in the middle. The full
-    /// resolution belongs here and is not written here yet.
-    ///
-    /// **The turn cap has no per-Job tier at all** and takes the installation's
-    /// unchanged: `raise_cost_cap` moves the dollars and deliberately not the
-    /// turns, because a Job that turns and turns takes the opposite remedy.
-    pub(crate) fn held_to(&self, job: &Job) -> Allowance {
-        let installation = self.allowance();
-        match job.cost_cap_micros() {
-            None => installation,
-            Some(micros) => Allowance::of(Micros::of(micros), installation.turns()),
-        }
+        Ok(self.allowance_for(job).exceeded_by(&spent))
     }
 }

@@ -3,8 +3,9 @@
 //! **The act `over_budget` has always pointed at.** `docs/concepts/machine.md`
 //! says a Job past its cost cap waits at `queued` until somebody raises the
 //! cap, and `job-statuses.toml` calls it the one reason a `queued` Job carries
-//! that does not clear on its own. Nothing performed it, so the remedy was a
-//! setting governing every Job on the machine.
+//! that does not clear on its own. Nothing performed it: the two tiers above the
+//! Job govern every Job in the installation or in the repository, so the Job in
+//! front of you could only be helped by moving a number for all of them.
 //!
 //! This file owns the act: whether a Job may be given more, whether the figure
 //! is a raise, and whether the surface asking may ask for that much. It owns no
@@ -26,11 +27,10 @@ use crate::transcript;
 
 /// How much more than the tier it would inherit Helm may raise a Job to.
 ///
-/// **Two, and the argument is the tier below it.** `budget-cost-cap-per-job` is
-/// already deliberately wide — spike 5 priced three identical, identically
-/// successful runs of one Job at a 2.31x spread on cache warmth alone, and the
-/// setting is set wide against exactly that. A Job needing more than double what
-/// this installation allows every Job is not a Job that needs a bigger number.
+/// **Two, and the argument is the tier below it.** The cost cap is already set
+/// deliberately wide against the spread [`Allowance::at`] cites, so a Job
+/// needing more than double what the repository or the installation allows every
+/// Job is not a Job that needs a bigger number.
 const HELM_MULTIPLE: u64 = 2;
 
 /// The most this raise may ask for, or that it may ask for anything.
@@ -45,7 +45,7 @@ const HELM_MULTIPLE: u64 = 2;
 /// on the same absolute figure as the first, so nothing counts raises and no
 /// column holds a tally. Computed from the cap in force it would double every
 /// time it was called, which is not a bound. An absolute figure was rejected as
-/// a second budget nobody set, drifting from the machine's the moment that
+/// a second budget nobody set, drifting from `armada.yml`'s the moment that
 /// moves.
 ///
 /// **There is no constructor but [`Ceiling::on`]** and the field is private, so
@@ -157,7 +157,7 @@ where
                 ceiling: ceiling.most().unwrap_or(inherited).count(),
             });
         }
-        let raised = job.cost_capped_at(asked.count());
+        let raised = job.cost_capped(Some(asked.count()));
         self.store()
             .lock()
             .await
@@ -167,20 +167,18 @@ where
         Ok(raised)
     }
 
-    /// What this Job would be held to if nobody had raised anything.
+    /// What this Job would be held to if nobody had raised anything for it.
     ///
-    /// **The one call site the tier resolution repoints**, and it is a function
-    /// so that it is one expression rather than a reading taken twice — the
-    /// figure the ceiling is computed from and the figure a Job with no cap of
-    /// its own is compared against have to be the same number or the refusal
-    /// message names a ceiling nothing enforces.
+    /// **[`Allowance::at`]'s answer with the Job's own tier taken away**, which
+    /// is `cost_capped(None)` and not a second resolution: the order of the
+    /// tiers is written in exactly one place and this asks that place a question
+    /// rather than re-deriving it. The clone is thrown away and nothing is
+    /// written.
     ///
     /// It is the tiers *above* the Job's own, deliberately, which is what makes
-    /// Helm's ceiling non-ratcheting: see the module note. Today that is the
-    /// installation's figure and nothing else, because that is the only tier
-    /// `Fleet::allowance` resolves.
-    fn inherited_cost_cap(&self, _job: &Job) -> Micros {
-        self.allowance().cost()
+    /// Helm's ceiling non-ratcheting — see [`Ceiling`].
+    fn inherited_cost_cap(&self, job: &Job) -> Micros {
+        self.allowance_for(&job.cost_capped(None)).cost()
     }
 
     /// Write into the Job's own log that somebody gave it more.

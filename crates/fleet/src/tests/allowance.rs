@@ -9,6 +9,10 @@
 //! is not there: a ceiling that reads as "spending stops here" and means
 //! "nothing new starts after here" is worse than no ceiling.
 
+/// Which tier said what the cap is, which is a different question from whether
+/// a Job is past it. See that module's header.
+mod tiers;
+
 use std::time::Duration;
 
 use adapter_traits::{DroneEvent, Speaker};

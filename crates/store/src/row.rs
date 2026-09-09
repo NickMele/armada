@@ -33,26 +33,21 @@ pub(crate) fn maybe_number(row: &Row<'_>, name: &'static str) -> Result<Option<u
     row.get(name).map_err(column("jobs", name))
 }
 
-/// A nullable `INTEGER` column too wide for [`maybe_number`], read unsigned.
+/// A nullable `INTEGER` column too wide for [`maybe_number`], refused where it
+/// is negative rather than widened into one.
 ///
-/// Its own function rather than a widening of that one: money is millionths of
-/// a dollar and a turn count is a count, and reading both through one signature
-/// would let a caller take a figure at the wrong scale without saying so.
-///
-/// **A negative is refused rather than wrapped.** SQLite stores signed, nothing
-/// in this workspace writes a negative here, and one in the column came from
-/// outside this crate.
-pub(crate) fn maybe_large_number(
-    row: &Row<'_>,
-    name: &'static str,
-) -> Result<Option<u64>, RowError> {
+/// `INTEGER` is signed and `u64` is not, so `as u64` turns a `-1` into
+/// eighteen quintillion — which for `jobs.cost_cap_micros` is a ceiling no Job
+/// could reach, arriving with nothing said. The triggers in
+/// [`V32`](crate::spend::V32) mean nothing writes one; this is what happens if
+/// something did.
+pub(crate) fn maybe_wide(row: &Row<'_>, name: &'static str) -> Result<Option<u64>, RowError> {
     let held: Option<i64> = row.get(name).map_err(column("jobs", name))?;
-    held.map(|value| {
-        u64::try_from(value).map_err(|_| RowError::MalformedColumn {
+    held.map(|number| {
+        u64::try_from(number).map_err(|_| RowError::MalformedColumn {
             table: "jobs",
             column: name,
-            detail: "the column holds a negative where nothing may be less than nothing"
-                .to_string(),
+            detail: format!("{number} is below zero"),
         })
     })
     .transpose()
