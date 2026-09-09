@@ -300,16 +300,23 @@ export function App() {
         onScope={setScope}
         jobs={state.jobs}
         capacity={state.capacity}
-        title={head.title}
-        summary={head.summary}
-        actions={head.actions}
+        title={head?.title}
+        summary={head?.summary}
+        actions={head?.actions}
         // Which row the rail marks. The held worktrees are the one surface
         // other than the Board that draws, so everything else — a Job, the
         // composer, the reports — is the Board with something over it.
         showing={clearing ? SURFACE.worktrees : SURFACE.board}
         onSurface={goTo}
       >
-        <div className="flex flex-col gap-6">
+        {/* **`min-h-0` and the column growing, so the screen below can be
+            bounded.** `InsideAJob` is `height: 100%` and that resolves against
+            this: with an auto-height wrapper it resolved against nothing, the
+            screen grew to its content, and the mount scrolled instead of the
+            two columns — which took the Job's own header off the top of the
+            window with it. The rule is the one the mount and the screen both
+            already carry, and this was the link missing between them. */}
+        <div className="flex flex-col gap-6 min-h-0 flex-1">
           <Standing
             fleet={fleet}
             manifestReading={state.manifestReading}
