@@ -103,6 +103,7 @@ mod silence;
 mod starting;
 mod stuck;
 mod sub_dispatch;
+mod superseding;
 mod terms;
 mod tmp;
 mod tools;

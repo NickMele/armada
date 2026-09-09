@@ -75,6 +75,7 @@ pub(super) fn running_job() -> Job {
             write_targets: None,
             subject: None::<Subject>,
             redispatched_from: None,
+            proposal_id: None,
             facts: Facts::empty(),
             scope_revisions: Vec::new(),
             attachments: Vec::new(),

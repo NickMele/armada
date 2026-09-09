@@ -25,8 +25,8 @@
 use core_model::{
     Attachment, Branch, CheckOutcome, CriterionId, DispatchOrigin, EvidenceType, Facts,
     GateManifest, GateOutcome, Job, JobId, JobStatus, JudgeVerdict, Judgment, ManifestId,
-    ModelName, NewJob, Origin, RedirectWaiting, RepoPath, StepCheck, StepEvidence, StepId,
-    StepSeed, StepState, Subject, Timestamp, Title, Ulid, Urgency, WriteTargets,
+    ModelName, NewJob, Origin, ProposalId, RedirectWaiting, RepoPath, StepCheck, StepEvidence,
+    StepId, StepSeed, StepState, Subject, Timestamp, Title, Ulid, Urgency, WriteTargets,
 };
 use rusqlite::Row;
 
@@ -235,6 +235,8 @@ impl Store {
             subject: subject(row)?,
             redispatched_from: maybe(row, "redispatched_from")?
                 .map(|id| JobId::carried(Ulid::carried(id))),
+            proposal_id: maybe(row, "proposal_id")?
+                .map(|id| ProposalId::carried(Ulid::carried(id))),
             facts: Facts::new(string(row, "facts")?),
             scope_revisions: columns::read_scope_revisions(&string(row, "scope_revisions")?)
                 .map_err(malformed("scope_revisions"))?,

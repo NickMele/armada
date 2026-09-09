@@ -95,6 +95,7 @@ pub static EDGES: &[Edge] = &[
     triggered(Queued, Escalated, EscalationTrigger::DependencyFailed),
     edge(Queued, Killed),
     edge(Queued, Running),
+    edge(Queued, Superseded),
     edge(Running, AwaitingApproval),
     edge(Running, AwaitingAttestation),
     edge(Running, AwaitingReview),

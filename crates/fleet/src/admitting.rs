@@ -27,7 +27,9 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
-use core_model::{AdmissionHold, Job, JobId, JobStatus};
+use core_model::{
+    Actor, AdmissionHold, Component, Envelope, FieldValue, Job, JobId, JobStatus, Level, Target,
+};
 use store::Moved;
 
 use crate::adrift::Adrift;
@@ -37,6 +39,8 @@ use crate::daemon::Fleet;
 use crate::headroom::{Reading, Short};
 use crate::slots::Slots;
 use crate::sub_dispatch::{children_standing, waiting_on_children};
+use crate::superseding::{siblings_of, still_needed, Landed, StillNeeded};
+use crate::transcript;
 
 /// Whether Fleet may start another Drone, and what stops it where it may not.
 ///
@@ -204,6 +208,15 @@ where
                 break;
             };
             let job_id = job.id().clone();
+            // **Before the slot, not after.** A Job with nothing left to do
+            // should never hold a place in the roster, and the reading is what
+            // decides whether it has anything left. It is also the last moment
+            // this can be asked: the next line commits a slot and the one after
+            // it starts a Drone, and `crate::superseding` says why a Drone that
+            // finds the work already done is not a source anybody may act on.
+            if self.superseded_by_a_sibling(&job).await? {
+                continue;
+            }
             let slot = slots.opened_for(&job_id);
             // The slot exists and counts against the bound before the dispatch
             // that fills it runs, so a `next_queued` inside this same loop
@@ -285,6 +298,80 @@ where
         }
         waiting.sort_by_key(|(seq, _)| *seq);
         Ok(waiting.into_iter().next().map(|(_, job)| job))
+    }
+
+    /// Whether a Job from the same reading landed this one's work while it
+    /// waited, and the Job was closed for it.
+    ///
+    /// **Answers `false` for almost every Job, and costs nothing to do so.** A
+    /// Job with no `proposal_id`, or none whose siblings have landed, never
+    /// reaches the call — which is every hand-entered Job, every sub-dispatch,
+    /// and every proposal that stayed one Job. `crate::superseding` holds the
+    /// reading itself and the rule that silence runs the Job.
+    async fn superseded_by_a_sibling(&self, job: &Job) -> Result<bool, Adrift> {
+        if job.proposal_id().is_none() {
+            return Ok(false);
+        }
+        let (loaded, _) = self.every_job().await?;
+        let landed: Vec<Landed> = {
+            let store = self.store().lock().await;
+            let mut found = Vec::new();
+            for peer in siblings_of(job, loaded.jobs.iter()) {
+                // **The sibling's own Evidence, and nothing derived.** What a
+                // step claimed the work now does is written for exactly this
+                // reader, one Job earlier than anybody expected it to be read.
+                // A sibling that landed without submitting any is not evidence
+                // of anything and is left out rather than guessed about.
+                let Ok(evidence) = store.step_evidence(peer.id()) else {
+                    continue;
+                };
+                let Some((_, latest)) = evidence.last() else {
+                    continue;
+                };
+                found.push(Landed {
+                    job_id: peer.id().clone(),
+                    title: peer.title().as_str().to_string(),
+                    claimed: latest.claimed.clone(),
+                });
+            }
+            found
+        };
+        let asking = match self.proposing() {
+            Ok(asking) => asking,
+            // No proposer configured is no reading, and no reading runs the
+            // Job. It is not a fault: a Fleet with no model is one where every
+            // Job was hand-entered and none of them has a sibling.
+            Err(_) => return Ok(false),
+        };
+        let StillNeeded::AlreadyLanded { by, because } = still_needed(job, &landed, &asking).await
+        else {
+            return Ok(false);
+        };
+        // **`Actor::Fleet`, and no reason column.** `job-statuses.toml` gives
+        // `superseded` no reason storage — the status is the whole of what
+        // happened — so what was read is put where a person will look for it,
+        // which is the Job's own log.
+        self.noted_superseded(job.id(), &by, &because);
+        self.move_job(job, Target::Superseded, Actor::Fleet).await?;
+        Ok(true)
+    }
+
+    /// Where a superseding says which Job landed the work, and why the reading
+    /// thought so. **The only durable trace the call ever ran**, for the reason
+    /// the status carries no reason of its own.
+    fn noted_superseded(&self, job: &JobId, by: &JobId, because: &str) {
+        let envelope = Envelope::new(
+            self.now(),
+            Level::Info,
+            Component::Fleet,
+            self.run().clone(),
+            "a Job from the same request had already landed this one's work, \
+             and it was closed rather than dispatched",
+        )
+        .in_job(job.as_ulid().clone())
+        .with_field("landed_by", FieldValue::Str(by.as_str().to_string()))
+        .with_field("because", FieldValue::Str(because.to_string()));
+        let _ = transcript::note(&self.host().repo_root, job, &envelope);
     }
 
     /// When the Job was released to run, as the log's own sequence.

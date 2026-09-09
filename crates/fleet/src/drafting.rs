@@ -27,8 +27,8 @@
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
     AcceptanceCriterion, Actor, Attachment, CriterionId, DependencyEdge, Facts, JobId, ModelName,
-    NewJob, RepoPath, ScopeRevision, ScopeRevisionOutcome, StepSeed, Subject, Timestamp, Title,
-    TopLevelOrigin, WriteTargets,
+    NewJob, ProposalId, RepoPath, ScopeRevision, ScopeRevisionOutcome, StepSeed, Subject,
+    Timestamp, Title, TopLevelOrigin, WriteTargets,
 };
 
 use crate::adrift::Adrift;
@@ -98,6 +98,7 @@ where
         mut proposal: ipc::ProposeJob,
         stated: StatedBy,
         at: &Timestamp,
+        minted_by: Option<ProposalId>,
     ) -> Result<(NewJob, TopLevelOrigin), Adrift> {
         let title = Title::new(&proposal.title).map_err(|_| Adrift::Unnameable)?;
         let atomic = proposal.atomic;
@@ -162,6 +163,7 @@ where
                 reference: subject.reference,
             }),
             redispatched_from: None,
+            proposal_id: minted_by,
             facts: Facts::new(proposal.facts),
             scope_revisions: vec![entry_zero(write_targets.as_ref(), atomic, stated, at)],
             attachments,

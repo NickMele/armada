@@ -89,6 +89,7 @@ fn the_summary_of_a_sub_dispatched_job_says_so() {
             write_targets: None,
             subject: None,
             redispatched_from: None,
+            proposal_id: None,
             facts: Facts::empty(),
             scope_revisions: Vec::new(),
             attachments: Vec::new(),

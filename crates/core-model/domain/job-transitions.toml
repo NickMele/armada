@@ -202,6 +202,13 @@ in_code = "Not yet"
 
 [[transitions]]
 from = "queued"
+to = "superseded"
+on = "A Job from the same proposal landed the work while this one waited"
+in_code = "Yes"
+notes = "Fleet's own reading, taken before the Job is dispatched and never after a Drone has started: what a Drone would find is what this asks about, and asking once it is already working is asking too late. The reading is a model call Fleet makes and not a claim anything else supplies — `crates/fleet/src/gate.rs` says why a Drone may not answer a question that gates its own step, and this is the same rule one level up."
+
+[[transitions]]
+from = "queued"
 to = "awaiting_approval"
 on = "A widening declared before dispatch"
 in_code = "Not yet"

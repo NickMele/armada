@@ -39,9 +39,9 @@ use core_model::{
     CriterionSource, DeclarePlanAt, DependencyDirection, DependencyEdge, DispatchOrigin,
     EvidenceRef, EvidenceScope, EvidenceType, Facts, FrozenWorkflow, GamingCheck, GamingPattern,
     GateManifest, GateOutcome, GateVerdict, Job, JobId, JudgeCheck, JudgeCriterion, ManifestId,
-    ModelName, Narrowing, NewJob, NotRunReason, PathPattern, Prerequisite, RepoPath, ResolvedCheck,
-    ResolvedStep, ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, Subject, Timestamp, Title,
-    TopLevelOrigin, Ulid, Urgency, WorkflowId, WriteTargets,
+    ModelName, Narrowing, NewJob, NotRunReason, PathPattern, Prerequisite, ProposalId, RepoPath,
+    ResolvedCheck, ResolvedStep, ScopeRevision, ScopeRevisionOutcome, StepId, StepSeed, Subject,
+    Timestamp, Title, TopLevelOrigin, Ulid, Urgency, WorkflowId, WriteTargets,
 };
 
 use crate::Store;
@@ -262,6 +262,7 @@ pub fn full_new_job(id: &str) -> NewJob {
             reference: "13".to_string(),
         }),
         redispatched_from: Some(job_id("01REPLACED")),
+        proposal_id: Some(ProposalId::carried(ulid("01PROPOSALREAD"))),
         facts: Facts::new("the daemon writes its own log line\nand reads it back"),
         scope_revisions: vec![ScopeRevision {
             at_step: Some(StepId::new("fix")),

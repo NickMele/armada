@@ -34,7 +34,9 @@ use crate::job::fields::{
     AcceptanceCriterion, Attachment, Branch, DependencyEdge, DispatchOrigin, Facts, GateManifest,
     Origin, ScopeRevision, Subject, TopLevelOrigin, Urgency, WriteTargets,
 };
-use crate::job::ids::{DroneId, JobId, ManifestId, ModelName, StepId, Title, WorkflowId};
+use crate::job::ids::{
+    DroneId, JobId, ManifestId, ModelName, ProposalId, StepId, Title, WorkflowId,
+};
 use crate::job::note::{RedirectAlreadyWaiting, RedirectWaiting};
 use crate::job::status::{JobStatus, StepState};
 use crate::job::step::{rows_at_creation, JobStep, StepSeed, StepVerdict};
@@ -80,6 +82,9 @@ pub struct NewJob {
     pub write_targets: Option<WriteTargets>,
     pub subject: Option<Subject>,
     pub redispatched_from: Option<JobId>,
+    /// The reading this Job was minted by, where a proposer read one request.
+    /// `None` on a Job nobody proposed. See [`ProposalId`].
+    pub proposal_id: Option<ProposalId>,
     pub facts: Facts,
     /// Entry zero is the initial scope.
     pub scope_revisions: Vec<ScopeRevision>,
@@ -138,6 +143,9 @@ pub struct Job {
     dependencies: Vec<DependencyEdge>,
     dispatched_by: Option<DispatchOrigin>,
     redispatched_from: Option<JobId>,
+    /// The reading this Job was minted by. Frozen at creation, and `None` on
+    /// every Job nobody proposed. See [`ProposalId`].
+    proposal_id: Option<ProposalId>,
     /// Written when the worktree is made, not at creation. `None` is a Job that
     /// has never been dispatched, and is absent rather than a name it does not
     /// yet have.
@@ -215,6 +223,7 @@ impl Job {
             dependencies: new.dependencies,
             dispatched_by,
             redispatched_from: new.redispatched_from,
+            proposal_id: new.proposal_id,
             // No worktree exists yet. `on_branch` is what fills this in.
             branch: None,
             // Nothing has been said to a Job that does not exist yet.
@@ -619,6 +628,12 @@ impl Job {
     }
     pub fn redispatched_from(&self) -> Option<&JobId> {
         self.redispatched_from.as_ref()
+    }
+
+    /// The reading this Job was minted by. Two Jobs answering it are the same
+    /// request, which is the only thing that says so.
+    pub fn proposal_id(&self) -> Option<&ProposalId> {
+        self.proposal_id.as_ref()
     }
     /// The branch the Job's worktree is on. `None` until one is made.
     pub fn branch(&self) -> Option<&Branch> {

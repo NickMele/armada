@@ -72,6 +72,7 @@ pub(super) fn a_job() -> Job {
             write_targets: None,
             subject: None,
             redispatched_from: None,
+            proposal_id: None,
             facts: Facts::new("the reader is off by one"),
             scope_revisions: Vec::new(),
             attachments: Vec::new(),

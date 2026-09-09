@@ -72,6 +72,20 @@ Why: naming paths credibly needs the repository, and a guess would be a second s
 
 **Shape is therefore not among them either.** A Job's shape follows from `write_targets` and `atomic`, and this call settles neither. [Convoy](convoy.md) — Three shapes, not two carries what the three are.
 
+### A sibling may land the work first
+
+**Two Jobs from one reading are unordered by construction.** A split is not a sequence, so the proposer writes no edge between them and [Fleet](fleet.md) never weighs one against the other — either may reach a Drone first, and either may land work the other was also asked for.
+
+On 9 Sep 2026 one did. A request naming a bug and an addition became two Jobs; the first landed both and merged; the second was dispatched ninety seconds later into a base that already held its work. Its Drone found nothing to write and said so, and the [Judge](judge.md) — which reads the diff and never the transcript — refused it for not implementing a feature that was by then on `main`.
+
+**So Fleet reads once before dispatching a queued Job whose sibling has landed.** It is shown that Job's brief and what the landed sibling's own Evidence claimed, and it answers whether anything asked for is still left to do. A Job with nothing left reaches `superseded` — *the work landed outside the Job; the record has nothing left to say* — and never takes a slot.
+
+**The reading is Fleet's own and a Drone may not supply it.** `crates/fleet/src/gate.rs` holds the rule and why: a Drone reporting that its own work is unnecessary is prose, and reading prose catches an honest Drone and believes a dishonest one. This asks before a Drone exists, which is the only place the question can be answered by something with nothing at stake.
+
+**Every failure runs the Job.** An unreadable answer, a call that could not be made, a sibling that submitted no evidence — each answers *needed*. Of the two answers only *supersede it* cannot be taken back: a Job wrongly run repeats work and is caught at review; a Job wrongly superseded is work nobody notices is missing.
+
+`proposal_id` is what makes a sibling findable, and it is the only thing on the record that says two Jobs are the same request.
+
 ### When it cannot resolve a workflow
 
 **The request is refused at dispatch and returned unchanged.** No workflow is assigned by default. What the person gets back is the request they wrote, to retry or to hand-enter.

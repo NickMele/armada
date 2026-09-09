@@ -30,7 +30,7 @@ use adapter_traits::{
     WorkProduct,
 };
 use config::ResolvedWorkflow;
-use core_model::{Component, Envelope, FieldValue, Job, Level, WorkflowId};
+use core_model::{Component, Envelope, FieldValue, Job, Level, ProposalId, Ulid, WorkflowId};
 use tokio::process::Command;
 use tokio::time::timeout;
 
@@ -71,7 +71,7 @@ pub async fn proposed(
     proposing: &Proposing,
     making: Watching,
     client_ref: Option<String>,
-) -> Result<Proposal, NotProposed> {
+) -> Result<(ProposalId, Proposal), NotProposed> {
     let brief = Brief::about(request, workflows);
     let ask = Ask::put(
         proposing.model.clone(),
@@ -91,10 +91,15 @@ pub async fn proposed(
     )
     .await
     .map_err(NotProposed::Call)?;
+    // **The id outlives the call, which is what makes a sibling findable.**
+    // Every Job this becomes carries it, and two Jobs carrying one id are the
+    // same request — the only thing on the record that says so, since a split
+    // writes no edge between Jobs that may run in any order.
+    let minted_by = ProposalId::carried(Ulid::carried(making.proposal().as_str()));
     // Held to here and no further: dropping it publishes the coming-back
     // message, and the Jobs this becomes arrive as `job.created` after it.
     drop(making);
-    brief.read(&answer, workflows)
+    brief.read(&answer, workflows).map(|read| (minted_by, read))
 }
 
 /// How long a request's own link may take to resolve before the request goes
@@ -200,7 +205,7 @@ where
         };
         let request = enriched.as_str();
         let proposing = self.proposing().map_err(Adrift::NotProposable)?;
-        let proposal = proposed(
+        let (minted_by, proposal) = proposed(
             request,
             self.workflows(),
             &proposing,
@@ -244,7 +249,11 @@ where
                 )
             }));
             let minted = self
-                .proposed_job(self.as_proposal(job, waits_on), stated)
+                .proposed_job(
+                    self.as_proposal(job, waits_on),
+                    stated,
+                    Some(minted_by.clone()),
+                )
                 .await?;
             if let Enriched::Failed(cause) = &outcome {
                 self.noted_lookup_failed(minted.id(), cause);

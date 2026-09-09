@@ -132,6 +132,7 @@ pub mod spawning;
 mod stuck;
 pub mod sub_dispatch;
 mod summarising;
+mod superseding;
 pub mod terms;
 mod tooling;
 pub mod transcript;
