@@ -7,7 +7,7 @@
 //
 // `ActivityLog` opens by saying it is one stream carrying the Drone's turns,
 // Armada's injected turns and Fleet's own events. Two of the three travelled
-// the Observe socket. The third was written to `.armada/logs/<job-id>.jsonl`
+// the Observe socket. The third was written to `.armada/logs/<handle>.jsonl`
 // and read by nothing — so a Job with no Drone on it, which is a Job having a
 // worktree cut and its dependencies installed, drew a blank panel for however
 // long that took.

@@ -20,13 +20,9 @@
 //! mints one — the count is a fact about a table, so `store` is the authority
 //! and this only carries what it allocated.
 //!
-//! # Both directions, because one of them was the whole defect
-//!
-//! [`handle_of`] writes a handle and [`JobReference`] reads one back. For a
-//! while only the first existed: Bridge showed a handle as the id to copy and
-//! nothing anywhere turned one into a Job, so the one id a person could say was
-//! the one id nothing accepted. The two live in one file so that a change to
-//! what a handle looks like cannot land without the reader beside it.
+//! **Both directions, in one file.** Only [`handle_of`] existed for a while, so
+//! what a person could say was what nothing accepted. [`JobReference`] is
+//! beside it so a change to a handle cannot land without the reader.
 
 use alloc::format;
 use alloc::string::{String, ToString};

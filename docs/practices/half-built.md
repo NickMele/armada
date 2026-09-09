@@ -16,7 +16,7 @@ these, none of which looked like each other at the time:
 | The Judge's citation, written to `job_step_judgments` | No caller outside its own tests. `get_job` served nothing, so the reason a step was refused sat in the database with no path to a person |
 | Gaming flags naming which pattern tripped | Only the trigger was persisted. A person saw that evidence was suspect and not why — the whole content of the finding |
 | `TriggerLevel`, declared and mapped | Read by a test and nothing else |
-| `.armada/logs/<job-id>.jsonl`, specified in the log envelope | Written by nothing |
+| `.armada/logs/<handle>.jsonl`, specified in the log envelope | Written by nothing |
 | `stopped`, `retrying`, `awaiting_human` — three of six declared step states | No `StepTarget` reached them, so a refused step stayed `running` for ever |
 | `steps[].judged[]`, served on the wire | Zero references in Bridge. The most useful thing Armada produces, drawn nowhere |
 | `--allowedTools`, passed to every Drone | Measured: it removed none of the built-in tools. A fence that was a floor |

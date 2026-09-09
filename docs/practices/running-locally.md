@@ -189,14 +189,22 @@ the record is what Fleet verified.
 ## Asking what happened to a Job
 
 ```sh
-./scripts/job <job-id>
+./scripts/job 1-board-s-clear-button-should-reclaim-worktr
+./scripts/job 1
+./scripts/job 01M22TYSAE0023MADDP5ZQEYGW
 ```
 
 **One command that prints the whole story of one Job**: what it is and which
 step it is on, every transition with times, each step's verdict with the
 Judge's findings and what the Checks did, **what its Drone was refused and the
 argument it was refused on**, what the run cost, and the tail of the Job's own
-log. It needs nothing built and no arguments but the id.
+log. It needs nothing built and no arguments but the Job.
+
+**All three name the same Job, and the first is the one Bridge shows.** A Job
+answers to its handle, to the number that handle starts with, or to its id —
+on this command and on every route under `/jobs/:job_id`. The number is the
+shortest thing there is to type and counts within one repository, so it means
+nothing without one and is refused rather than guessed at.
 
 **The refusal is the reason it exists.** A refused call is written down as a
 tool name and a tool-use id and never the argument, which sits on the `called`
@@ -215,6 +223,10 @@ holds the Drone transcripts and the Job's log, which no route serves.
 | Running, and holds the Job | Everything |
 | Running, and does not hold it — `armada clean` took it, or it was forgotten | The transitions from the Job's log, the refusals, what the run cost. It says which of these two happened |
 | Not running | The same, and the header says Fleet could not be reached |
+
+**With Fleet down, all three forms still resolve**, off `.armada/logs/` — which
+is named by the handle, like every other directory under `.armada/`. A number
+matching more than one is refused there too.
 
 So a post-mortem works with Fleet down, which is usually when one is done.
 

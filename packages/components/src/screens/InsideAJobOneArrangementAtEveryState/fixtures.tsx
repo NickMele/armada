@@ -82,8 +82,8 @@ export const WHERE: JobLogReferenceRow[] = [
   },
   {
     iconLabel: "Transcript",
-    value: ".armada/transcripts/01M10B1V2A.jsonl",
-    copyValue: ".armada/transcripts/01M10B1V2A.jsonl",
+    value: `.armada/transcripts/${JOB}/01M10B1V2A.jsonl`,
+    copyValue: `.armada/transcripts/${JOB}/01M10B1V2A.jsonl`,
   },
   { iconLabel: "Drone", value: DRONE, copyValue: DRONE },
 ];

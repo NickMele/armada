@@ -300,8 +300,10 @@ export function jobFailure(row: UnreadableJob, bridge: BridgeIdentity): Failure 
         { key: "source", value: "job_list.unreadable" },
         // Relative to the Job's repository, which Fleet does not send. Named
         // as it is written on screen rather than resolved to something Bridge
-        // cannot know.
-        ...(named ? [{ key: "job_log", value: `.armada/logs/${row.job_id}.jsonl` }] : []),
+        // cannot know — and the directory rather than the file, because a
+        // job's log is named by its handle and a row that would not rebuild
+        // cannot say what its handle is.
+        ...(named ? [{ key: "job_log", value: ".armada/logs/" }] : []),
         ...logField(bridge),
       ],
       ...versions(bridge),
@@ -319,9 +321,9 @@ export function jobFailure(row: UnreadableJob, bridge: BridgeIdentity): Failure 
         ? [
             {
               icon: File,
-              iconLabel: "Log",
-              value: `.armada/logs/${row.job_id}.jsonl`,
-              copyValue: `.armada/logs/${row.job_id}.jsonl`,
+              iconLabel: "Logs",
+              value: ".armada/logs/",
+              copyValue: ".armada/logs/",
             },
           ]
         : []),
@@ -330,7 +332,7 @@ export function jobFailure(row: UnreadableJob, bridge: BridgeIdentity): Failure 
       ...machineLog(bridge).map((value) => ({ ...value, separated: named })),
     ],
     note: named
-      ? "The log path is relative to the job's repository. Fleet does not send which one, and it does not send a run id for the read that refused this row."
+      ? "The log path is relative to the job's repository. Fleet does not send which one. A job's log is named by its handle, which this row could not be rebuilt far enough to say, so what is named is the directory it is in. Fleet does not send a run id for the read that refused this row either."
       : "Fleet does not send a run id for the read that refused this row.",
   };
 }

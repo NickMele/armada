@@ -80,7 +80,7 @@ export const TheWholeRegion: Story = {
       />
       <WhereRow
         label="Job log"
-        value=".armada/logs/job_2d90bb.jsonl"
+        value=".armada/logs/12-the-drone-count-is-wrong.jsonl"
         act="open"
         onAct={() => {}}
       />
@@ -104,7 +104,7 @@ export const WiderThanTheColumn: Story = {
     <div style={{ width: "calc(var(--space-12) * 5)" }}>
       <WhereRow
         label="Transcript"
-        value=".armada/transcripts/01M10B1V2A0011VRS6RA2SKPQ7.jsonl"
+        value=".armada/transcripts/12-the-drone-count-is-wrong/01M10B1V2A0011VRS6RA2SKPQ7.jsonl"
         act="open"
         onAct={() => {}}
       />
