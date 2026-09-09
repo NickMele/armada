@@ -3,8 +3,11 @@
 # Check reasoning live.
 #
 # The designed `code-review.json` is already linear and already three steps, so
-# nothing here is folded. What is dropped is `deliver`'s
-# `manifest_rule:review_gate`, which the parser defers. `assess`'s
+# nothing here is folded. `deliver`'s `manifest_rule:review_gate` was dropped
+# while the parser deferred it; #264 carries it now, and `deliver` still says
+# `auto` -- Code Review lands no code, so the rule that stops every producing
+# workflow before it merges has nothing here to stop. Turning it back on is a
+# one-word edit and a decision, not a repair. `assess`'s
 # `evidence_type` is `facts_note` rather than the designed `review_findings`,
 # which is not a value the schema has -- `[review-findings-evidence-type]` in
 # `docs/OPEN.md`.

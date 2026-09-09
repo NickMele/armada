@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use adapter_traits::{AgentHarness, Delivery, LinkLookup, SpawnConfigRefused, Vcs, WorkProduct};
 use config::{Manifest, ResolvedWorkflow};
-use core_model::{JobId, Timestamp, Ulid, WorkflowId};
+use core_model::{Job, JobId, Timestamp, Ulid, WorkflowId};
 use store::Store;
 use tokio::sync::Mutex;
 
@@ -79,11 +79,21 @@ where
     pub(crate) fn budget(&self) -> CheckBudget {
         self.budget
     }
-    /// What one Job may spend. **Not [`Fleet::budget`]**, which is how long one
-    /// Check may take — the two words collided before either shipped and the
-    /// names are kept apart on purpose.
+    /// **The machine tier alone**, and the answer for no particular Job. What
+    /// a Job may actually spend is [`Fleet::allowance_for`], which resolves the
+    /// repository's cap and the Job's own over this one.
+    ///
+    /// **Not [`Fleet::budget`]**, which is how long one Check may take — the
+    /// two words collided before either shipped and the names are kept apart on
+    /// purpose.
     pub(crate) fn allowance(&self) -> Allowance {
         self.allowance
+    }
+    /// What this Job may spend: the constant above, then `armada.yml`'s
+    /// `drone.cost_cap_micros_per_job`, then the Job's own column.
+    /// `Allowance::at` is where the order is written.
+    pub(crate) fn allowance_for(&self, job: &Job) -> Allowance {
+        self.allowance.at(self.manifest(), job)
     }
     pub(crate) fn norms(&self) -> StepNorms {
         self.norms

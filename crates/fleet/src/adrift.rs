@@ -214,6 +214,37 @@ pub enum Adrift {
     /// — forgetting takes the record and this takes the disk — and a message
     /// naming the wrong one sends a person to the wrong button.
     NotReclaimable { job: JobId, status: JobStatus },
+    /// A raise was asked for on a Job that has reached a terminal status.
+    ///
+    /// **Its own variant beside the two above, for the reason the second is
+    /// beside the first**: all three refuse on a status and each names a
+    /// different act, and this one refuses on the opposite half of the same
+    /// predicate — a forget and a reclaim need a Job that is over, and money
+    /// only means something on one that is not.
+    NotCappable { job: JobId, status: JobStatus },
+    /// A raise carried a figure at or under the ceiling already in force.
+    ///
+    /// **The act is a raise, and this is not pedantry about the word.** It
+    /// exists because work is stopped for money, so a call that answers 200 and
+    /// leaves the Job exactly as stopped is the failure the route was built
+    /// against. Both figures are carried because the answer is the pair: a
+    /// caller that typed the cap back is told what it already was.
+    CapNotRaised {
+        job: JobId,
+        asked: u64,
+        in_force: u64,
+    },
+    /// Helm asked for more than Helm may ask for.
+    ///
+    /// **Unreachable by a person**, whose raise is unbounded — the budget is
+    /// theirs. `crate::raising` carries the ceiling's shape and why it is
+    /// computed from the tier this Job would inherit rather than from the cap
+    /// in force.
+    CapAboveCeiling {
+        job: JobId,
+        asked: u64,
+        ceiling: u64,
+    },
     /// The repository a Job's worktree is in would not open, so neither half
     /// of the reclaim was attempted.
     ///

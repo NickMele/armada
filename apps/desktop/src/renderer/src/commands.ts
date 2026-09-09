@@ -242,6 +242,21 @@ export function useCommands(sending: Sending) {
   }
 
   /**
+   * Give one job a higher cost ceiling. **Not through `act`**, for `redirect`'s
+   * reason: the dialog that collected the figure was the confirmation. It moves
+   * no part of the job — what it changes is that the next dispatch is not
+   * refused for money.
+   */
+  async function raiseCap(jobId: string, costCapMicros: number): Promise<void> {
+    setActing(jobId);
+    try {
+      setOutcome(await window.armada.raiseCostCap(jobId, costCapMicros));
+    } finally {
+      setActing(null);
+    }
+  }
+
+  /**
    * File a report on a job that failed in error.
    *
    * **Not through `act`, and not like the others at all**: nothing about the
@@ -344,6 +359,7 @@ export function useCommands(sending: Sending) {
     answer,
     overrule,
     rerun,
+    raiseCap,
     report,
     decide,
     refresh,

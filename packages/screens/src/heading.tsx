@@ -49,6 +49,11 @@ export type Heading = {
   onAct: (act: ConfirmableAct, jobId: string) => void;
   onApprove: (jobId: string) => void;
   onReport: (jobId: string, filing: FileReport) => Promise<Outcome>;
+  /** Give this job a higher cost ceiling, in millionths of a dollar. */
+  onRaiseCap: (jobId: string, costCapMicros: number) => void;
+  /** Whether the raise dialog is up. Held by the screen; `B` opens it too. */
+  raising: boolean;
+  onRaising: (raising: boolean) => void;
   onOpenPullRequest: OpenPullRequest;
   onCopied: (value: string) => void;
   /** Say a sentence to the person. Only ever a failure — see `opening.ts`. */
@@ -74,6 +79,9 @@ export function headingOf({
   onAct,
   onApprove,
   onReport,
+  onRaiseCap,
+  raising,
+  onRaising,
   onOpenPullRequest,
   onCopied,
   onSaid,
@@ -105,6 +113,9 @@ export function headingOf({
         onReport={onReport}
         reporting={reporting}
         onReporting={onReporting}
+        onRaiseCap={onRaiseCap}
+        raising={raising}
+        onRaising={onRaising}
         onCopied={onCopied}
       />
     ),

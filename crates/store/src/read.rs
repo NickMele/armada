@@ -34,7 +34,7 @@ use crate::columns;
 use crate::error::{fault, LoadAllError, LoadJobError, RowError};
 use crate::fold::replay;
 use crate::open::Store;
-use crate::row::{column, enum_value, malformed, maybe, maybe_number, string};
+use crate::row::{column, enum_value, malformed, maybe, maybe_number, maybe_wide, string};
 
 /// What the boot read produced.
 #[derive(Debug, Default)]
@@ -301,6 +301,12 @@ impl Store {
             }
             None => created,
         };
+
+        // Read back for `branch`'s reason, and null on every row written
+        // before version 32 — which is this Job taking the repository's
+        // ceiling, not a gap. `Some(0)` reads as a Job that starts nothing and
+        // stays distinct from the null.
+        let created = created.cost_capped(maybe_wide(row, "cost_cap_micros")?);
 
         let events = self.events_for(&job_id)?;
         Ok((replay(created, &events)?, cached))

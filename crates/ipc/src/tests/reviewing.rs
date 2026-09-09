@@ -32,6 +32,8 @@ fn the_reviewing_reads_are_absent_rather_than_empty() {
     let read_and_empty = JobDiff {
         job_id: crate::JobId::carried("01JOB"),
         work: Some(Work {
+            measured_from: Some(String::from("main")),
+            measured_whole: true,
             files: Vec::new(),
             plan_declared: false,
             patch: None,

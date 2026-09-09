@@ -317,6 +317,12 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.rerunGate, (_event, jobId: string) =>
     connection?.commands.rerunGate(jobId),
   );
+  // More money for one job, on a channel of its own because nothing else here
+  // sets a value on a job. It moves no status and asks for no drone: what it
+  // stops is the next dispatch being refused for money.
+  ipcMain.handle(CHANNELS.raiseCostCap, (_event, jobId: string, costCapMicros: number) =>
+    connection?.commands.raiseCostCap(jobId, costCapMicros),
+  );
   // Saying a job failed in error. Its own channel beside the override rather
   // than a flag on it: the override moves the job past a verdict and this moves
   // nothing, and the two would otherwise be one press meaning either.

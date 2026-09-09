@@ -4,7 +4,14 @@
 //! The gate and the Judge are the pair worth reading together — one is a
 //! statement about which tier decides and the other is that tier's
 //! declaration, so every arrangement of the two is asserted here, including the
-//! two where the rule does not apply.
+//! three where the rule does not apply.
+//!
+//! **Over 500 lines, and left as one file.** The subject is `step`'s parser and
+//! it is one parser: every case here is a key of one step, or the two refusals
+//! that need every key of it at once. Splitting by key would put the gate's
+//! cases in one file and the Judge's in another, which is the one split this
+//! file's own second paragraph says not to make — the pair is read together
+//! because neither refusal can be stated without both.
 
 use core_model::{AdvanceGate, EvidenceRef, GamingPattern};
 
@@ -87,25 +94,74 @@ fn a_delivery_declaration_that_is_not_a_boolean_is_refused() {
     );
 }
 
-/// The prefix form, and it is the only gate still outside the milestone. It
-/// names a key resolved against a Manifest-level policy and across a Convoy's
-/// gating Manifests, and neither is built — so it is refused rather than read
-/// as the value that policy would most often produce.
+/// The prefix form, carried and **not resolved**. A `manifest_rule:` gate names
+/// a policy the repository owns, so what it settles on is `fleet::gate`'s to
+/// decide against the Job in hand — reading it here would answer a repository's
+/// question once, at daemon start, for every Job that ever runs the workflow.
 #[test]
-fn a_gate_needing_a_manifest_policy_is_refused() {
-    for key in ["review_gate", "auto_merge"] {
-        let gate = format!("manifest_rule:{key}");
-        let refused = refusals(bug_with(&format!(
-            "  - id: review\n    label: Review\n    delivers: false\n    advance_gate: {gate}\n"
-        )));
+fn a_gate_naming_a_manifest_policy_loads_and_keeps_the_key() {
+    for (key, expected) in [
+        ("review_gate", AdvanceGate::ManifestRuleReviewGate),
+        ("auto_merge", AdvanceGate::ManifestRuleAutoMerge),
+    ] {
+        let def = bug_with(&format!(
+            "  - id: review\n    label: Review\n    delivers: false\n    advance_gate: manifest_rule:{key}\n"
+        ))
+        .expect("a gate the repository answers");
+        assert_eq!(def.steps()[3].advance_gate(), expected);
+        // The record keeps the key, which is the whole point of freezing it
+        // unresolved: the wire value a Job stores says which policy answers.
         assert_eq!(
-            fault_at(&refused, "steps[3].advance_gate"),
-            &Fault::NotYetCarried {
-                value: gate,
-                carried: &["auto", "auto_if_judge_passes", "human_always"],
-            }
+            def.steps()[3].advance_gate().as_wire(),
+            format!("manifest_rule:{key}")
         );
     }
+}
+
+/// **A key nothing defines is a typo, not a feature waiting to land.** The two
+/// the registry names are carried, so the refusal is `NotInTheSchema` and it
+/// prints what may be written — which is what `NotYetCarried` could not, back
+/// when the whole prefix form was deferred and `manifest_rule:<key>` was the
+/// only honest thing to print.
+#[test]
+fn a_manifest_rule_naming_no_declared_key_is_refused_by_name() {
+    let refused = refusals(bug_with(
+        "  - id: review\n    label: Review\n    delivers: false\n    advance_gate: manifest_rule:nonsense\n",
+    ));
+    assert_eq!(
+        fault_at(&refused, "steps[3].advance_gate"),
+        &Fault::NotInTheSchema {
+            value: "manifest_rule:nonsense".to_string(),
+            legal: &[
+                "auto",
+                "auto_if_judge_passes",
+                "human_always",
+                "manifest_rule:auto_merge",
+                "manifest_rule:review_gate",
+            ],
+        }
+    );
+}
+
+/// **The gate-and-judge agreement rule does not reach a `manifest_rule:` gate
+/// either**, and for a different reason than `human_always`: the value is not
+/// in this file, so neither half of the disagreement can be established from
+/// it. The designed Code Review declares exactly this shape — a
+/// `manifest_rule:review_gate` step carrying no Judge — and it is legal.
+#[test]
+fn a_manifest_rule_gate_takes_a_judge_and_takes_none() {
+    let asks =
+        bug_with(&judged("manifest_rule:review_gate", 1, true)).expect("with a Judge behind it");
+    assert_eq!(
+        asks.steps()[3].advance_gate(),
+        AdvanceGate::ManifestRuleReviewGate
+    );
+
+    let bare = bug_with(
+        "  - id: review\n    label: Review\n    delivers: false\n    advance_gate: manifest_rule:review_gate\n",
+    )
+    .expect("and with none");
+    assert!(bare.steps()[3].judge_checks().is_empty());
 }
 
 /// The gate that makes `awaiting_review` reachable. It carries with no Judge,

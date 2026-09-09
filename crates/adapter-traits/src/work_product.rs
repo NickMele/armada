@@ -424,4 +424,44 @@ pub trait WorkProduct {
     /// [`changed_files`](WorkProduct::changed_files) gives — the Judge must
     /// never be handed a reading that did not happen and told it is the work.
     fn patch(&self, worktree: &Worktree) -> Result<Patch, Self::Error>;
+
+    /// Which ref the two readings above were measured against.
+    ///
+    /// **A patch measured against the wrong thing is indistinguishable from a
+    /// Job that did less work.** A reading taken from the branch's own tip is
+    /// only what is uncommitted, and on a Job whose steps commit as they go
+    /// that is a fraction of the work with nothing on it saying so.
+    ///
+    /// The default is the honest answer for an implementation with one base
+    /// that cannot get it wrong — a fake, a fixture, a directory of files.
+    /// Only the git one has three answers to choose between.
+    fn measured(&self, _worktree: &Worktree) -> Measured {
+        Measured::whole(None)
+    }
+}
+
+/// What a reading was measured against, and whether that covers the branch.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Measured {
+    /// The ref's name, where one was resolved. `main`, usually.
+    pub from: Option<String>,
+    /// Whether the reading covers the Job's whole branch. **False means the
+    /// patch is only the uncommitted remainder**, which a surface has to say
+    /// rather than present as the Job's work.
+    pub whole: bool,
+}
+
+impl Measured {
+    /// A reading that covers the branch, from the named ref.
+    pub fn whole(from: Option<String>) -> Measured {
+        Measured { from, whole: true }
+    }
+
+    /// A reading that does not: nothing resolved but the branch's own tip.
+    pub fn uncommitted_only() -> Measured {
+        Measured {
+            from: None,
+            whole: false,
+        }
+    }
 }

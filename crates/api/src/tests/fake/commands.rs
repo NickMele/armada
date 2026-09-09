@@ -81,6 +81,13 @@ impl Commands for FakeDaemon {
     async fn rerun_gate(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
         self.fake_rerun_gate(job_id).await
     }
+    async fn raise_cost_cap(
+        &self,
+        job_id: JobId,
+        raise: ipc::CapRaise,
+    ) -> Result<JobSummary, Refusal> {
+        self.fake_raise_cost_cap(job_id, raise).await
+    }
     async fn file_report(
         &self,
         job_id: JobId,

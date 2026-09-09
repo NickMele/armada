@@ -40,6 +40,34 @@ impl FakeDaemon {
         job.assigned_drone = None;
         Ok(job.clone())
     }
+    /// A higher ceiling on what one Job may spend, faked on the two things the
+    /// transport can see: the Job has to exist, and **a Job that is over has
+    /// nothing left to spend.** Which figure is in force, and what a surface's
+    /// ceiling is, are Fleet's to resolve across tiers a `JobSummary` does not
+    /// carry — so the fake does not pretend to know either, and a raise it
+    /// admits changes nothing on the row it hands back. Terminality is read
+    /// through the DTO from the domain for this module's reason.
+    pub(super) async fn fake_raise_cost_cap(
+        &self,
+        job_id: JobId,
+        _raise: ipc::CapRaise,
+    ) -> Result<JobSummary, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
+            return Err(self.no_such_job(&job_id));
+        };
+        if job.status.domain().is_terminal() {
+            return Err(Refusal::IllegalMove(ipc::WireError::raised(
+                "fake.not_cappable",
+                format!(
+                    "a Job at {} has nothing left to spend",
+                    job.status.as_wire()
+                ),
+                run_id(),
+            )));
+        }
+        Ok(job.clone())
+    }
     /// The unit of work, not the process. Legal from wherever the Job is, so
     /// long as it is not already over — including the statuses `kill_drone`
     /// refuses, which is the whole reason the two are separate operations.

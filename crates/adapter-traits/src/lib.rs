@@ -58,7 +58,8 @@ pub use link_lookup::{LinkLookup, LookupCall};
 pub use secret::Secret;
 pub use under_review::{FromOutside, Remark, UnderReview, WhatPeopleSaid, WhatTheForgeRan};
 pub use work_product::{
-    Change, Changed, ChangedFile, Counted, CountedFile, Footprint, LineCount, Patch, WorkProduct,
+    Change, Changed, ChangedFile, Counted, CountedFile, Footprint, LineCount, Measured, Patch,
+    WorkProduct,
 };
 pub use worktree::{derived, Worktree, WorktreeSpec, WorktreeSpecRefused};
 

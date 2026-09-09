@@ -14,7 +14,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::Response;
 use ipc::{
-    ChangesRequested, ChosenAnswer, FileReport, JobId, JobRequest, Overruled, ProposeJob,
+    CapRaise, ChangesRequested, ChosenAnswer, FileReport, JobId, JobRequest, Overruled, ProposeJob,
     Redirection, RemarksTakenUp, RestartRequested, StopProposal,
 };
 
@@ -234,6 +234,33 @@ pub(crate) async fn rerun_gate<D: Commands>(
     Path(job_id): Path<String>,
 ) -> Response {
     match served.daemon().rerun_gate(JobId::carried(job_id)).await {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// Give this Job a higher cost ceiling than the tier above it allows. **The
+/// Job comes back exactly where it was** — the raise moves a number and nothing
+/// else, and the field a caller reads it for is `queued_reason`: `over_budget`
+/// before, absent or `waiting_on_resources` after.
+///
+/// 409 on a terminal Job, where nothing is left to spend. 422 on a figure at or
+/// under the cap in force — the act only ever raises — and 422 again where the
+/// surface asked past its own ceiling, which a person never meets.
+pub(crate) async fn raise_cost_cap<D: Commands>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+    body: Bytes,
+) -> Response {
+    let raise: CapRaise = match ipc::decode("a cost cap", &body) {
+        Ok(raise) => raise,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served
+        .daemon()
+        .raise_cost_cap(JobId::carried(job_id), raise)
+        .await
+    {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }

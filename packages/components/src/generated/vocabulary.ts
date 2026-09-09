@@ -136,6 +136,8 @@ export const ADVANCE_GATE: Readonly<Record<string, Rendering | undefined>> = {
   "auto": { verb: "the checks decide", icon: null, badgeStatus: null, statusToken: null, hint: null },
   "auto_if_judge_passes": { verb: "the checks decide, unless the Judge objects", icon: null, badgeStatus: null, statusToken: null, hint: null },
   "human_always": { verb: "a person answers", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "manifest_rule:auto_merge": { verb: "the repository's auto-merge policy decides", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "manifest_rule:review_gate": { verb: "the repository's review-gate policy decides", icon: null, badgeStatus: null, statusToken: null, hint: null },
 };
 
 /** `gaming_pattern`, keyed by the wire value. */
@@ -297,6 +299,8 @@ export const GAPS: readonly Gap[] = [
   { vocabulary: "advance_gate", variant: "auto", missing: ["icon", "token"] },
   { vocabulary: "advance_gate", variant: "auto_if_judge_passes", missing: ["icon", "token"] },
   { vocabulary: "advance_gate", variant: "human_always", missing: ["icon", "token"] },
+  { vocabulary: "advance_gate", variant: "manifest_rule:auto_merge", missing: ["icon", "token"] },
+  { vocabulary: "advance_gate", variant: "manifest_rule:review_gate", missing: ["icon", "token"] },
   { vocabulary: "evidence_type", variant: "diff", missing: ["icon", "token"] },
   { vocabulary: "evidence_type", variant: "failing_test", missing: ["icon", "token"] },
   { vocabulary: "evidence_type", variant: "facts_note", missing: ["icon", "token"] },

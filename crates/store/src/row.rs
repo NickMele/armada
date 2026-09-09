@@ -33,6 +33,26 @@ pub(crate) fn maybe_number(row: &Row<'_>, name: &'static str) -> Result<Option<u
     row.get(name).map_err(column("jobs", name))
 }
 
+/// A nullable `INTEGER` column too wide for [`maybe_number`], refused where it
+/// is negative rather than widened into one.
+///
+/// `INTEGER` is signed and `u64` is not, so `as u64` turns a `-1` into
+/// eighteen quintillion — which for `jobs.cost_cap_micros` is a ceiling no Job
+/// could reach, arriving with nothing said. The triggers in
+/// [`V32`](crate::spend::V32) mean nothing writes one; this is what happens if
+/// something did.
+pub(crate) fn maybe_wide(row: &Row<'_>, name: &'static str) -> Result<Option<u64>, RowError> {
+    let held: Option<i64> = row.get(name).map_err(column("jobs", name))?;
+    held.map(|number| {
+        u64::try_from(number).map_err(|_| RowError::MalformedColumn {
+            table: "jobs",
+            column: name,
+            detail: format!("{number} is below zero"),
+        })
+    })
+    .transpose()
+}
+
 pub(crate) fn column(
     table: &'static str,
     name: &'static str,

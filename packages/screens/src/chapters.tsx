@@ -24,6 +24,7 @@ import {
   Button,
   ChangedFiles,
   DroneBrief,
+  Clamped,
   Kbd,
   changedFilesSummary,
   keyFor,
@@ -156,7 +157,16 @@ export function chaptersOf({
           // the only thing marking it, which is #318 — nothing downstream can
           // recover it, because deciding by position or by capitals is the
           // guess the marker exists to replace.
-          <DroneBrief lines={opened.payload} />
+          // **Held to a few lines, like every other long passage on this
+          // screen.** A step's opening turn is the whole brief plus the
+          // standing instructions plus the branch note — on a real Job that is
+          // a screen and a half, and it is chapter one, so it pushed the
+          // Checks, the Verdicts and everything a person opened the panel for
+          // off the bottom. The Job's own brief above it has been clamped
+          // since it was drawn; this is the same passage in the same column.
+          <Clamped lines={INSTRUCTIONS_LINES} moreLabel="Read the whole instruction">
+            <DroneBrief lines={opened.payload} />
+          </Clamped>
         ),
       ...(told.length <= 1
         ? {}
@@ -323,6 +333,17 @@ function summaryOf(
 const PREVIEWED = 5;
 
 /** What chapter one says before Armada has opened the step. */
+/**
+ * How much of a step's opening turn is drawn before it is held back.
+ *
+ * **Twelve, which is the brief and not the standing instructions.** A step is
+ * opened with the whole of what a Drone is told — how to report, what it may
+ * write, what its branch is standing on — and the Job's brief is a few lines
+ * inside that. A person opening chapter one wants the brief; the rest is the
+ * same on every step of every Job and is one press away.
+ */
+const INSTRUCTIONS_LINES = 12;
+
 const NOT_OPENED_YET = "Armada has not opened this step yet.";
 
 /** The sub-label over the documents, so the block says what it holds. */

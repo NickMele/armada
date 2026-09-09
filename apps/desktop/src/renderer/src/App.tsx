@@ -376,6 +376,7 @@ export function App() {
                   void commands.answer(jobId, questionId, chose)
                 }
                 onOverrule={(jobId, reason) => void commands.overrule(jobId, reason)}
+                onRaiseCap={(jobId, micros) => void commands.raiseCap(jobId, micros)}
                 onRerun={(jobId) => void commands.rerun(jobId)}
                 onReport={commands.report}
                 onApprove={(jobId) => void commands.approve(jobId)}

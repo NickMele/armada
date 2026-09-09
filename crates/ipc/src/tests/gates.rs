@@ -215,3 +215,38 @@ fn a_step_the_workflow_does_not_declare_carries_neither_key() {
         detail
     );
 }
+
+/// **The policy crosses, and the answer does not.** A `manifest_rule:` gate is
+/// the one thing a step declares that is not yet an answer, and Bridge draws
+/// the policy's name — so a value resolved on the way out would be Fleet
+/// deciding what a repository's `armada.yml` says, in the one place a person
+/// reads what the workflow declared.
+#[test]
+fn a_gate_that_names_a_policy_crosses_as_the_policy() {
+    let mut detail = detail_of(&gated_job(), &[]);
+    detail.steps[3].advance_gate = Some(AdvanceGate::ManifestRuleReviewGate.into());
+    let json = encode(&detail).expect("a detail is plain data");
+    assert!(
+        json.contains("\"advance_gate\":\"manifest_rule:review_gate\""),
+        "the key crosses verbatim: {json}"
+    );
+    assert_eq!(
+        decode::<JobDetail>("a Job in full", json.as_bytes()).expect("it round-trips"),
+        detail
+    );
+}
+
+/// A spelling the registry does not have is refused rather than defaulted, for
+/// every other closed set's reason: guessing which of five was meant is how a
+/// step renders as one that never stops for anybody.
+#[test]
+fn a_manifest_rule_key_nothing_declares_is_refused_on_the_way_in() {
+    let mut detail = detail_of(&gated_job(), &[]);
+    detail.steps[3].advance_gate = Some(AdvanceGate::ManifestRuleReviewGate.into());
+    let json = encode(&detail)
+        .expect("a detail is plain data")
+        .replace("manifest_rule:review_gate", "manifest_rule:nonsense");
+    let refused =
+        decode::<JobDetail>("a Job in full", json.as_bytes()).expect_err("a key nothing declares");
+    assert!(format!("{refused:?}").contains("manifest_rule:nonsense"));
+}

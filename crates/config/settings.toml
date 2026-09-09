@@ -102,12 +102,12 @@ It has no value here for the reason none of Fleet's other dials does — `crates
 
 [settings.budget-cost-cap-per-job]
 name = "Budget: $ cost cap per Job"
-scope = "Machine"
+scope = "Kit → Manifest"
 lifetime = "Live"
-merge_strategy = "n/a — single layer"
-peer_polarity = "n/a — single layer"
+merge_strategy = "REPLACE"
+peer_polarity = "Lower is stricter"
 owner = "Fleet"
-read_by = "fleet"
+read_by = "config, fleet"
 notes = """
 **Enforced, and it refuses the next dispatch rather than stopping a Drone that is spending.** That is the whole of what it does and it has to be read that way: `cost_micros` reaches Armada on the final result line of a Drone's session and nowhere else, so there is no mid-session figure to interrupt on. A ceiling that reads as "spending stops here" and means "nothing new starts after here" is worse than no ceiling, because it is believed. The case it does catch is the one that matters — a runaway is a sequence of Jobs rather than a single Drone, and the sequence is what admission sees.
 
@@ -117,9 +117,13 @@ notes = """
 
 **Notional dollars.** Spike 5 established that `total_cost_usd` is what a run would have cost at API list price, and a subscription account is not billed per token. The figure is arithmetically exact and denominated in a currency nothing here spends, which makes it a runaway detector rather than an invoice.
 
-**A Manifest has no budget cap.** Budget is Machine-level and that is what the Kit/Machine split is for; the Manifest row that used to sit beside this one declared `scope = "Manifest only"` for a setting that is not a Manifest's to hold, and it is gone. There is no precedence question because there is only one cap. Verification does not read this row either — a budget refusal is a Job state, decided by Fleet at admission, and never a gate verdict.
+**Three tiers, and the precedence is machine, then repository, then the Job's own.** This row said the opposite until Sept 2026 — that a Manifest has no budget cap, that budget is what the Kit/Machine split is for, and that there is no precedence question because there is only one cap. What falsified it was one Job: `01M21BKVPW002DC0ATD1X9T0VF` reached $5.28 against the $5 constant and was refused its last step, a cheap `handoff` over work three gates had already passed, and there was no lever anywhere — no key, no route, no action. A ceiling nobody can move is not a policy, it is a rebuild. So `armada.yml` now carries `drone.cost_cap_micros_per_job`, a Job carries `jobs.cost_cap_micros`, and `fleet::Allowance::at` is the only place the order is written. **There are three tiers rather than the two this row's `scope` names**: there is no Kit, nothing in this workspace parses one, and the third is a Job's own record rather than a file — which is also why it has no merge strategy. A repository or Job stating nothing defers to the tier above; `Some(0)` is a cap of zero and starts nothing, and is deliberately a different value from stating nothing at all.
 
-It has no value here for the reason none of Fleet's other dials does — `crates/armada/src/serve.rs` resolves it, as part of `PROVISIONAL_ALLOWANCE`, and carries the argument for the number. It ships at five dollars, which is roughly fifty of the dearest Job spike 5 measured: not a Job going slightly over, but one that has stopped making progress and kept paying.
+**Live at every tier, and this is the row where that word earns its keep.** A Job past its cap is refused again at every admission until a number moves, so a cap adopted only at restart would reach every Job except the one that needs it. `config::live` moves the repository's key under a running Fleet and the Job's column is read off the record at each admission. Nothing about a cap is frozen into a Job the way a workflow step is — `config::live::Frozen::DroneExcludePaths` is the counter-example in the same `drone:` block, and it is frozen because a `ResolvedWorkflow` was built from it at boot.
+
+Verification does not read this row — a budget refusal is a Job state, decided by Fleet at admission, and never a gate verdict.
+
+It has no value here for the reason none of Fleet's other dials does — `crates/armada/src/serve.rs` resolves the machine tier, as part of `PROVISIONAL_ALLOWANCE`, and carries the argument for the number. That tier is still a constant and still needs a rebuild to change; what the two tiers under it buy is that nobody has to. It ships at five dollars, which is roughly fifty of the dearest Job spike 5 measured: not a Job going slightly over, but one that has stopped making progress and kept paying.
 """
 
 [settings.budget-turn-cap-per-job]
@@ -138,6 +142,8 @@ notes = """
 Turns are summed across every terminating line of every Drone of the Job. A stream carries one such line per invocation rather than one per process, and `num_turns` on each is that invocation's — which is why turns are added and the cost is not. Measured: `docs/spikes/004-transcript-idle-session.ndjson`.
 
 **A new row, added with the Throughput milestone.** The registry had no turn ceiling; the only nearby rows are `loop_cap`, which bounds a step deliberately redone, and the thrashing norms, which bound one step against `StepNorms`. Neither counts across a whole Job.
+
+**It stays `Machine`, where the row above became `Kit → Manifest`, and the paragraph above is the reason.** Over the dollar cap a person raises the cap or accepts the spend, so a lever is the remedy and Sept 2026 built one; over this one the Drone is going in circles, and a lever would only buy more circles. A repository that could raise its own turn ceiling could opt out of the one signal that reads steadily across cache warmth. The two still resolve into one `fleet::Allowance` and one `exceeded_by` — what tiers is the value, not the pair.
 
 It has no value here for the reason the row above does not — `crates/armada/src/serve.rs` resolves it, as part of `PROVISIONAL_ALLOWANCE`. It ships at three hundred: a four-step Job at a generous thirty turns a step is 120, so three hundred leaves room for a workflow twice that long and still stops a Drone that has been going round for hours.
 """
@@ -770,7 +776,7 @@ STAYS OPEN 28 Aug 2026, and the reason is now written rather than absent. It was
 
 Nothing can read what a Judge call cost. A Judge is rendered with --output-format text and --max-turns 1, so the call answers in prose and emits no result envelope. The cost figure this cap would be compared against — total_cost_usd, read as cost_micros — reaches Armada only on a Drone's stream-json transcript, which a Judge call deliberately is not. So a dollar written into this row today would be enforced by nothing while reading, to anyone who found it, as a limit that was set. That is the failure this row is more dangerous than useful in: an unenforced cap is worse than an absent one, because only one of the two is visible as missing.
 
-What is actually open has therefore changed, and is no longer 'what is the number'. It is: does a Judge call get a cost readout at all — which means an output format that carries a result line, and a reader for it, in adapters and fleet — and if it does, is a per-check dollar cap the right shape, given that the two bounds that exist today are both shaped differently. judge-call-count-ceiling bounds criteria x panel_size per step and needs no price to enforce; budget-cost-cap-per-job bounds the Job, enforced at admission. The Manifest budget cap this used to name is gone: a Manifest has no budget. Between them the product is already bounded, and v1's measurement of a judgment at roughly 4k input / 300 output tokens puts a fully fanned-out step in cents.
+What is actually open has therefore changed, and is no longer 'what is the number'. It is: does a Judge call get a cost readout at all — which means an output format that carries a result line, and a reader for it, in adapters and fleet — and if it does, is a per-check dollar cap the right shape, given that the two bounds that exist today are both shaped differently. judge-call-count-ceiling bounds criteria x panel_size per step and needs no price to enforce; budget-cost-cap-per-job bounds the Job, enforced at admission, and since Sept 2026 a repository and a Job may each state their own — which changes who can move that bound but not its shape, and adds no sub-limit here. Between them the product is already bounded, and v1's measurement of a judgment at roughly 4k input / 300 output tokens puts a fully fanned-out step in cents.
 
 Judge is also not where verification's spend risk concentrates. Cost is not the driver on this tier and the Judge concept says so outright — latency is, because the calls queue at a gate a person is waiting behind. That bound is real and is enforced today, provisionally and by wall clock, in the composition root.
 """

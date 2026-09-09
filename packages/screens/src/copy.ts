@@ -47,6 +47,10 @@ export function said(outcome: Outcome): string {
       return "That override is already in flight. It was not sent twice.";
     case "already_rereading":
       return "That gate is already being re-run. It was not asked twice.";
+    case "already_raising":
+      return "That cost cap is already being raised. It was not sent twice.";
+    case "cap_not_raised":
+      return "A new cost cap has to be higher than the one in force. Nothing was sent, and the job is still held.";
     case "empty_report":
       return "A report needs what you know went wrong. The record on its own says nothing that was not already on the job.";
     case "already_reporting":
@@ -216,6 +220,19 @@ export const RESTART_NOTE = {
  * it to `b`.
  */
 export const REPORT_LABEL = "Report this job";
+
+/**
+ * Give this job a higher cost ceiling. **Not a `JobAct`** for `REPORT_LABEL`'s
+ * reason: it moves no status, no step and no drone, so it is outside the record
+ * every other label here is keyed by. `actions.toml` calls it `raise_cost_cap`
+ * and binds it to `B`.
+ *
+ * **"Cost cap", never "budget".** The lexicon gives budget to Machine — the
+ * whole installation's resources, timing and money — and this act reaches one
+ * job. A control called `Raise the budget` would read as loosening the setting
+ * every other job is held to, which is the opposite of what it does.
+ */
+export const RAISE_CAP_LABEL = "Raise the cost cap";
 
 export const ACT_LABEL: Record<JobAct, string> = {
   kill_drone: "Kill drone",

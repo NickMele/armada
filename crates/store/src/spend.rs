@@ -21,7 +21,10 @@
 //! `modelUsage` holds the sum of both and its `total_cost_usd` reconstructs
 //! from that sum exactly. So the cost is the session's running total and the
 //! turns are per invocation. `fleet::allowance::spent` does the fold: last
-//! cost, summed turns.
+//! cost, summed turns. What a Job *may* spend is here too, as [`V32`]'s
+//! column.
+
+use core_model::Job;
 
 use crate::error::{fault, LoadJobError, RowError, WriteError};
 use crate::open::Store;
@@ -55,7 +58,46 @@ CREATE TABLE job_drone_spend (
 ) STRICT;
 "#;
 
-/// A price that was never named.
+/// Version 32 — what this one Job may spend.
+///
+/// **A column on `jobs` and not a table**, which is [`V23`]'s call inverted for
+/// [`crate::delivery`]'s reason: at most one ceiling per Job, written when
+/// somebody sets one and read on every admission.
+///
+/// **Null on every existing row, and that is the answer rather than a gap.** A
+/// Job that ran before this had no cap of its own and took the machine's, which
+/// is exactly what null says. There is nothing to backfill and nothing to
+/// guess — [`crate::schema::V5`]'s rule.
+///
+/// **Null and zero are different sentences and the schema keeps them apart.**
+/// Null defers to `armada.yml` and then to the composition root; zero is a Job
+/// that starts nothing. A column with a `NOT NULL DEFAULT 0` would have made
+/// the two one value and the second unreachable.
+///
+/// The trigger refuses a negative on both writes. `INTEGER` is signed, the
+/// reader widens to `u64`, and a `-1` that reached the row would come back as
+/// eighteen quintillion dollars — a cap that cannot be exceeded, arriving
+/// silently. Nothing in this crate can write one; the trigger is for whatever
+/// opens the file that is not this crate.
+pub(crate) const V32: &str = r#"
+ALTER TABLE jobs ADD COLUMN cost_cap_micros INTEGER;
+
+CREATE TRIGGER jobs_are_never_given_a_negative_cost_cap_on_insert
+BEFORE INSERT ON jobs
+WHEN NEW.cost_cap_micros IS NOT NULL AND NEW.cost_cap_micros < 0
+BEGIN
+    SELECT RAISE(ABORT, 'a cost cap is what a Job may spend, and below nothing is not a number it may spend');
+END;
+
+CREATE TRIGGER jobs_are_never_given_a_negative_cost_cap_on_update
+BEFORE UPDATE ON jobs
+WHEN NEW.cost_cap_micros IS NOT NULL AND NEW.cost_cap_micros < 0
+BEGIN
+    SELECT RAISE(ABORT, 'a cost cap is what a Job may spend, and below nothing is not a number it may spend');
+END;
+"#;
+
+/// Version 33 — a price that was never named.
 ///
 /// **`NULL`, and it is not a cost of zero.** `total_cost_usd` reaches Armada on
 /// one line — the terminating line of a session — so a Drone signalled before
@@ -69,7 +111,7 @@ CREATE TABLE job_drone_spend (
 /// already on disk may be either, and a migration that guessed would relabel a
 /// Drone that genuinely cost nothing. Rows written from here on can be told
 /// apart; rows written before cannot, and no surface pretends otherwise.
-pub(crate) const V32: &str = r#"
+pub(crate) const V33: &str = r#"
 ALTER TABLE job_drone_spend RENAME TO job_drone_spend_priced;
 CREATE TABLE job_drone_spend (
     job_id      TEXT    NOT NULL REFERENCES jobs(job_id),
@@ -181,6 +223,34 @@ impl Store {
                 }
                 other => WriteError::Database(fault("recording what a Drone spent")(other)),
             })?;
+        Ok(())
+    }
+
+    /// Record what this Job may spend, including that it may spend whatever
+    /// the tier above allows.
+    ///
+    /// **It writes `None` where [`Store::record_branch`] returns early on
+    /// one**, and that is the difference between the two columns rather than an
+    /// inconsistency: a Job cannot un-have a worktree, and a person clearing a
+    /// cap is asking for the repository's number back. A method that could only
+    /// set would be a lever that does not return.
+    pub fn record_cost_cap(&mut self, job: &Job) -> Result<(), WriteError> {
+        let updated = self
+            .conn
+            .execute(
+                "UPDATE jobs SET cost_cap_micros = ?2 WHERE job_id = ?1",
+                (
+                    job.id().as_str(),
+                    job.cost_cap_micros().map(|micros| micros as i64),
+                ),
+            )
+            .map_err(fault("recording what a Job may spend"))
+            .map_err(WriteError::Database)?;
+        if updated == 0 {
+            return Err(WriteError::NoSuchJob {
+                job_id: job.id().clone(),
+            });
+        }
         Ok(())
     }
 

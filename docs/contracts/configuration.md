@@ -25,6 +25,8 @@ carries no settings table. Two sources is how the second one goes stale, and a h
 
 **Config tiering rule.** Revised 22 Aug 2026 with the Guild split. A setting belongs to **Machine** or to **Kit**, and the test is one question: *does a project-level version of this setting make sense?* A project adds a Skill — ordinary, so Skills are Kit. There is no project-level version of how loudly Armada notifies you, so routing is Machine. **Only a Kit setting has a Manifest tier.** A Machine setting has one value, no merge and no second tier.
 
+**The test is asked again when a setting is measured, and one answer has changed.** `budget-cost-cap-per-job` was Machine on the reading that how much an installation will spend is the installation's business. What moved it to `Kit → Manifest` on 8 Sept 2026 is that repositories cost different amounts and a machine-wide dollar figure is therefore always wrong for some of them — and that the number was reachable only by rebuilding. That is a tier move under this rule rather than an exception to it; the section on unknown keys below is what makes such a move safe, and this is the first one to happen.
+
 **Kit sets defaults, not ceilings.** Kit holds a default; a Manifest declares its own value; they merge. A Manifest may **extend or restrict** — nothing above the Manifest constrains anything. The **config direction rule** that used to sit here, which held that config narrows inside a rule and never inverts one, was **withdrawn 22 Aug 2026**. It was invented to police a merge, so it only ever made sense for Kit, and it was applied to everything.
 
 **Merge strategies are the whole mechanism.** A merge strategy governs how two lists or two scalars combine. With the direction half withdrawn there is no second, legality-shaped question layered on top of it: a merge that combines correctly is applied. What survives of polarity is a *description* — see the section below.
@@ -66,7 +68,7 @@ This is also what makes *"why did this Job behave that way"* answerable after th
 
 The decisive argument is tier moves. If unknown keys were ignored, a key written today for a `Machine` setting would do nothing — and the day that setting moves to `Kit → Manifest`, it would wake up and change behaviour on a repo nobody had touched. Under hard fail that key could never have been written, so the tier move is safe by construction.
 
-**The example this argument was worked through no longer describes anything, and the argument survives without it.** It was budget moving from `Machine` to `Kit → Manifest`. Budget is Machine and stays there — a Manifest has no budget cap, which is what the Kit/Machine split is for — so that particular move cannot happen. Any Machine row that could move serves as well; what the argument rests on is that a tier move is possible at all, not on which row makes it.
+**The example this argument was worked through then happened.** It was budget moving from `Machine` to `Kit → Manifest`, and this paragraph said the move could not happen because a Manifest has no budget cap. It did happen, on 8 Sept 2026, and the argument is what made it cheap: because an unknown key hard-fails, no `armada.yml` in existence could already contain a `drone.cost_cap_micros_per_job` written speculatively against a Machine setting, so no repository woke up capped by a number nobody had reviewed. The tier move was safe by construction, which is exactly the claim.
 
 The cost is the collision this project has already paid once: a file written by one module and parsed by another with `deny_unknown_fields`. That is precisely why the answer is namespacing per owner rather than handing the file a single parser.
 
@@ -146,6 +148,35 @@ answers for Fleet's last read and `manifest.reread` pushes it, so a Bridge opene
 a minute after the save still learns that the file was refused — and every fault
 crosses, not the first, because a person correcting a file from a message naming
 one fault meets the next one on the following save.
+
+### The fourth key, whose third tier is a Job rather than a step
+
+Added 8 September 2026: `drone.cost_cap_micros_per_job`, the middle tier of
+`budget-cost-cap-per-job`. Three things about it are not the pattern above, and
+each is deliberate.
+
+**The bottom tier is a record, not a file.** A step is not what a person
+approved and is not what a cap is set against, so the third tier is
+`jobs.cost_cap_micros` — a nullable column, null meaning *defer*, distinct from
+a cap of zero, which means *start nothing*. `fleet::Allowance::at` is the only
+place that order is written, exactly as `Liveness::at` is for the pair above.
+
+**Nothing about it is frozen for the Job.** A step's override rides a WorkflowDef
+frozen at Job creation, so `Liveness::at` has to say which of live and frozen
+wins. This key has no such tier and needs no such rule: the whole point is
+raising a cap on a Job that already exists and is already over it, and a value
+frozen at creation would reach every Job except that one.
+
+**The key names its own unit and its own subject**, where the three beside it
+inherit both from the section. `micros` because a float cap answers differently
+on two machines and `fleet::Micros` is an integer everywhere else; `per_job`
+because a four-step Job is four Drones, and a key read as per-Drone under a
+`drone:` section would be four times the ceiling anybody thought they set.
+
+The turn cap does not tier. `budget-turn-cap-per-job` stays `Machine`, and that
+row carries the reason: a Job over the dollar cap often just started cold and
+the remedy is the number, while a Job over the turn cap is going in circles and
+raising the number buys more circles.
 
 ## How much of the tree a Check reads
 
@@ -479,10 +510,11 @@ That day also closes the one gap it cannot close now. A setting nothing reads is
   overridden — whether `machine` is a fourth source value or a
   non-participant that never appears in the record is the crux. The
   tier-moves argument for hard-failing unknown keys was worked through
-  Budget moving from one tier to a two-tier scope; Budget is Machine, and
-  Machine has no second tier, so that move is not possible. The example has
-  since been replaced, and the argument survives without it — see "An
-  unknown key in `armada.yml` hard-fails" above. The registry-key golden test checks keys against the serde field
+  Budget moving from one tier to a two-tier scope, and that move happened on
+  8 Sept 2026: the dollar cap is `Kit → Manifest` now, with a third tier on
+  the Job's own record. So a Job's resolved config has at least one key whose
+  source can be `manifest` or a fourth thing this question has no word for —
+  see "An unknown key in `armada.yml` hard-fails" above. The registry-key golden test checks keys against the serde field
   names of `KitConfig` and `ManifestConfig` under `deny_unknown_fields`; a
   Machine setting has no corresponding half, so an orphan on the Machine
   side goes uncaught.

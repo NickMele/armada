@@ -263,3 +263,45 @@ fn a_changed_fence_is_reported_as_a_key_and_the_patience_beside_it_still_moves()
         "the key a person would search the file for, not the section it sits in"
     );
 }
+
+/// **The lever the whole tier exists for.** A Job refused for money is refused
+/// again at every admission, so the number has to be movable while the Fleet
+/// that is refusing it is running. A cap adopted only at restart would reach
+/// every Job except the one that needs it.
+#[test]
+fn a_repositorys_cost_cap_moves_under_a_running_fleet() {
+    let repository = Repository::holding(&format!("{PATIENT}  cost_cap_micros_per_job: 5000000\n"));
+    let (manifest, reloads) = reloadable(&repository.manifest());
+    assert_eq!(manifest.cost_cap_micros(), Some(5_000_000));
+
+    repository.save(&format!("{PATIENT}  cost_cap_micros_per_job: 20000000\n"));
+    let adopted = reloads.reread().expect("it reads");
+
+    assert_eq!(manifest.cost_cap_micros(), Some(20_000_000));
+    assert_eq!(
+        adopted.moved().iter().map(|m| m.key).collect::<Vec<_>>(),
+        [LiveKey::CostCapMicrosPerJob],
+        "the two keys beside it did not move and are not reported as having"
+    );
+    assert_eq!(
+        adopted.moved()[0].to_string(),
+        "drone.cost_cap_micros_per_job 5000000 -> 20000000"
+    );
+}
+
+/// A cap deleted is a repository handing its Jobs back to the machine's number,
+/// which reads differently from any number — so the message spells it.
+#[test]
+fn a_cost_cap_deleted_from_the_file_is_reported_as_unset() {
+    let repository = Repository::holding(&format!("{PATIENT}  cost_cap_micros_per_job: 5000000\n"));
+    let (manifest, reloads) = reloadable(&repository.manifest());
+
+    repository.save(PATIENT);
+    let adopted = reloads.reread().expect("it reads");
+
+    assert_eq!(manifest.cost_cap_micros(), None);
+    assert_eq!(
+        adopted.moved()[0].to_string(),
+        "drone.cost_cap_micros_per_job 5000000 -> unset"
+    );
+}

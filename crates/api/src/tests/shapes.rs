@@ -276,6 +276,8 @@ pub fn diff(job_id: JobId) -> JobDiff {
     JobDiff {
         job_id,
         work: Some(Work {
+            measured_from: Some(String::from("main")),
+            measured_whole: true,
             files: vec![ipc::ChangedFile {
                 path: "crates/store/src/read.rs".to_string(),
                 change: ipc::ChangeKind::Modified,
