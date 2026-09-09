@@ -74,11 +74,13 @@
   white-space: nowrap;
 }
 
-/* Where the flag is. Mono, because it is a path, and it is the one thing on the
-   row that goes anywhere — so it says so with the affordance token on hover and
-   no glyph, the way every openable path on this screen does. Trailing and
-   never shrinking: `report.ts:41` truncated is a location nobody can use. */
-.armada-gaming-flags__at {
+/* Where the flag is, and the brief it was answered in. Mono, because both are
+   paths, and they are the things on the row that go anywhere — so they say so
+   with the affordance token on hover and no glyph, the way every openable path
+   on this screen does. Trailing and never shrinking: `report.ts:41` truncated
+   is a location nobody can use. */
+.armada-gaming-flags__at,
+.armada-gaming-flags__brief {
   flex: none;
   padding: 0;
   border: 0;
@@ -91,18 +93,33 @@
   text-align: inherit;
 }
 
-.armada-gaming-flags__at[data-opens] {
+.armada-gaming-flags__at[data-opens],
+.armada-gaming-flags__brief[data-opens] {
   cursor: pointer;
   transition: color var(--duration-fast) var(--ease);
 }
 
-.armada-gaming-flags__at[data-opens]:hover {
+.armada-gaming-flags__at[data-opens]:hover,
+.armada-gaming-flags__brief[data-opens]:hover {
   color: var(--accent);
 }
 
-.armada-gaming-flags__at[data-opens]:focus-visible {
+.armada-gaming-flags__at[data-opens]:focus-visible,
+.armada-gaming-flags__brief[data-opens]:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
+}
+
+/* The word that says which path this is. Sans, because it is a word and the
+   thing after it is a value — and it is here at all because the location above
+   it is a path too, and nothing else on the row says which of the two opens
+   the change and which opens the exchange.
+
+   The space between it and the path is a text space rather than a margin, so
+   the accessible name reads as two words — a control named
+   `the briefimplement.1.gaming.txt` is one nothing can be asked for by name. */
+.armada-gaming-flags__brief-of {
+  font-family: var(--font-sans);
 }
 
 /* Where the flag points — a file, a line, an assertion. Mono and flat, like the
@@ -160,11 +177,33 @@
   text-wrap: pretty;
 }
 
-/* The location under the finding rather than beside it, for the reason the
-   citation is: the row is a column here, and a path pinned to the trailing
-   edge of a wrapped sentence has no edge to pin to. */
-.armada-gaming-flags[data-citation="whole"] .armada-gaming-flags__at {
+/* The location and the brief under the finding rather than beside it, for the
+   reason the citation is: the row is a column here, and a path pinned to the
+   trailing edge of a wrapped sentence has no edge to pin to. */
+.armada-gaming-flags[data-citation="whole"] .armada-gaming-flags__at,
+.armada-gaming-flags[data-citation="whole"] .armada-gaming-flags__brief {
   align-self: flex-start;
+}
+
+/* The question, between the finding and what answers it.
+
+   Ruled and indented rather than hued or labelled: it is the check's own
+   wording quoted back, and a rule is what this app already uses to say a block
+   came from somewhere else. Hue would have had to come out of the status set,
+   which a flag has no claim on — it is not a verdict.
+
+   --fg-muted and never --fg-subtle, for the citation's reason. A person reads
+   the finding against this sentence, and a test set at metadata contrast is
+   one the surface is telling them not to apply. */
+.armada-gaming-flags__asked {
+  margin: 0;
+  padding-left: var(--space-2);
+  border-left: var(--border-width) solid var(--border-default);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
 }
 
 /* Sans, and this is the split the whole change turns on. A pattern is a value

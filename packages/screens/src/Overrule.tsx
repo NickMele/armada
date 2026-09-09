@@ -11,8 +11,9 @@
 // partitioned.
 
 import { useState } from "react";
-import { Button, Dialog, GamingFlags, Textarea } from "@armada/components";
+import { Button, Dialog, GAMING_PATTERN, GamingFlags, Textarea } from "@armada/components";
 
+import { openKept, type Opens } from "./phases";
 import { onwards, OVERRULING, type Overrule } from "./recovery";
 
 /**
@@ -49,19 +50,28 @@ const WHAT_IT_FLAGGED = "What it flagged";
  * machines saying different things, so every word here comes from `OVERRULING`
  * keyed by the trigger rather than being written once for the refusal and
  * reused. The flag's case carries one thing the refusal's does not: what was
- * flagged, and where — a person taking responsibility for evidence a machine
- * distrusted must not have to leave the dialog to find out what it distrusted.
+ * flagged, where, and the question the check was asked about it — a person
+ * taking responsibility for evidence a machine distrusted must not have to
+ * leave the dialog to find out what it distrusted, or on what test. #580.
  * The same weight either way: the dialog and the required reason are what make
  * this a decision taken rather than a button pressed.
  */
 export function OverruleControl({
   jobId,
   overrule,
+  opens,
   disabled,
   onOverrule,
 }: {
   jobId: string;
   overrule: Overrule;
+  /**
+   * How the flag's brief opens. **Threaded in rather than reached for**, the
+   * way every other record on this screen is: the exchange behind a flag is
+   * kept beside the criteria briefs and opened by the same call, and this is
+   * the surface where a person signs for the finding it holds.
+   */
+  opens: Opens;
   disabled: boolean;
   onOverrule: (jobId: string, reason: string) => void;
 }) {
@@ -129,7 +139,19 @@ export function OverruleControl({
             A flagged step that carries none is a Fleet that flagged without
             citing, and drawing nothing is the honest render of that. */}
         {flagged.length === 0 ? null : (
-          <GamingFlags flags={flagged} said={WHAT_IT_FLAGGED} citation="whole" />
+          <GamingFlags
+            // The verb, as the band behind this dialog already reads it. The
+            // wire spelling reached a person here and a sentence there, on the
+            // one surface where they are signing for the finding.
+            flags={flagged.map((flag) => ({
+              ...flag,
+              brief: flag.brief_path,
+              verb: GAMING_PATTERN[flag.pattern]?.verb ?? undefined,
+            }))}
+            said={WHAT_IT_FLAGGED}
+            citation="whole"
+            onOpenBrief={(brief) => openKept(opens, { kept: brief, what: "brief" })}
+          />
         )}
         {/* What happens next, and what it costs. `onwards` is the same sentence
             the screen behind this one already said, so the two cannot differ

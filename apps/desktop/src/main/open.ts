@@ -7,13 +7,14 @@
 // capability the CSP and the sandbox hold back reachable through one row.
 //
 // **The three per-step records are the exception, and they are checked rather
-// than derived.** A Check's output, a Judge's brief and a step's deliverable
-// are keyed by things only Fleet holds, so `get_job` carries each as a path.
-// The property above survives as set membership: `named` collects every path
-// the detail main is holding names for that Job, and a string that is not one
-// of them is refused before anything is joined to it. So the renderer still
-// cannot reach a file Fleet did not put on the wire — it can only ask for one
-// that is already on this screen.
+// than derived.** A Check's output, a brief — the Judge's, and the gaming
+// check's beside it — and a step's deliverable are keyed by things only Fleet
+// holds, so `get_job` carries each as a path. The property above survives as
+// set membership: `named` collects every path the detail main is holding names
+// for that Job, and a string that is not one of them is refused before
+// anything is joined to it. So the renderer still cannot reach a file Fleet
+// did not put on the wire — it can only ask for one that is already on this
+// screen.
 //
 // Fleet is not involved. Nothing here is a Job act, which is why it is beside
 // `command.ts` rather than in it: those are POSTs to routes under a Job, and
@@ -70,6 +71,11 @@ function named(state: BridgeState, jobId: string): ReadonlySet<string> {
   const paths = watched.detail.steps.flatMap((step) => [
     ...step.check_runs.map((run) => run.output_path),
     ...step.judged.map((judged) => judged.brief_path),
+    // A gaming flag's brief is a fourth path on the same rule and not a fourth
+    // kind of thing: it is kept under `.armada/briefs/` beside the criteria
+    // briefs from the same step, and it opens as `brief`. Left out of this set
+    // the control on a stopped step draws and opens nothing.
+    ...step.flagged.map((flag) => flag.brief_path),
     ...(step.deliverables ?? []).map((kept) => kept.path),
   ]);
   return new Set(paths.filter((path): path is string => path !== undefined));

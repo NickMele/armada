@@ -369,6 +369,12 @@ where
                     flag.pattern.as_wire(),
                     flag.cited
                 ));
+                // The question and then where the call is, on the judgment
+                // section's rule above: the answer is a word and the argument
+                // about whether it was the right one is the question it
+                // answered. Absent on the three patterns the patch decides.
+                out.detail("asked", flag.asked.as_deref());
+                out.detail("brief", flag.brief_path.as_deref());
             }
         }
         if flagged.is_empty() {

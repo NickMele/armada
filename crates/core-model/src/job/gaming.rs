@@ -326,4 +326,31 @@ pub struct GamingFlag {
     /// be worse than leaving it empty: an uncited flag is unactionable, and a
     /// wrongly cited one sends a person to the wrong file believing it.
     pub at: Option<CitedAt>,
+    /// The question this flag is the answer to, word for word, as
+    /// [`GamingPattern::question`] put it.
+    ///
+    /// **What separates a real finding from a wrong one.** A pattern spelling
+    /// and a quoted line say what was seen and not what was claimed about it,
+    /// and the claim is where the two questions' clauses live — so a person
+    /// reading `assertion_weakened` against a rustdoc sentence can see it is
+    /// wrong only once they are told the question was about an assertion.
+    ///
+    /// **Carried rather than derived from `pattern`.** Both questions are
+    /// worded to be argued with and the wording moves, so a record that looked
+    /// its question up at read time would answer a flag raised last month with
+    /// this month's question. **`None` where the diff decided it** — those
+    /// three patterns cost no call and were asked nothing.
+    pub asked: Option<String>,
+    /// Where the whole call was written down, under `.armada/briefs/`, as
+    /// `Judgment::brief_path` spells it.
+    ///
+    /// [`asked`](GamingFlag::asked) is the question and this is everything the
+    /// call was shown to answer it with — the step, the baseline and the diff.
+    /// A flag argued about is argued about against the material, and the
+    /// material is too large for a row.
+    ///
+    /// **`None` where nothing was kept**, which is the diff-decided patterns,
+    /// a Fleet with no repository beneath it, and a disk that refused the
+    /// write. See `fleet::asked`, which owns all three.
+    pub brief_path: Option<String>,
 }

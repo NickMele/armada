@@ -274,6 +274,17 @@ fn a_flag_carries_its_citation_and_a_clearance_carries_nothing() {
             // Unquoted, so there is nothing to look up and no location is
             // claimed. See `an_unquoted_citation_has_nowhere_to_point`.
             at: None,
+            // The narrow question, so a reader can hold the citation against
+            // what was actually claimed about it.
+            asked: Some(
+                GamingPattern::AssertionWeakened
+                    .question()
+                    .expect("a judged pattern is asked something")
+                    .to_string()
+            ),
+            // Whoever made the call knows where it was kept; this crate does
+            // not touch a filesystem.
+            brief_path: None,
         })
     );
     assert_eq!(
