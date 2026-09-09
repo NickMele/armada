@@ -307,3 +307,76 @@ describe("a panel's members", () => {
     expect(panel(["met"]).rows?.[0]?.result).toBe("no objection");
   });
 });
+
+describe("what the Drone said", () => {
+  const A_CLAIM = {
+    step_id: "plan",
+    evidence_type: "diff",
+    claimed: "the tooltip was already on main, landed by a concurrent Job",
+    shown_by: "git show 1ecf944c",
+    not_claimed: "did not write the tooltip code myself",
+  };
+
+  function strip(claim: typeof A_CLAIM | undefined, verdict: "met" | "not_met") {
+    return phasesOf(
+      step({
+        state: "advanced",
+        judge_checks: [{ criteria: 1, gaming_check: false }],
+        judged: [
+          {
+            attempt: 1,
+            criterion_id: "c1",
+            verdict,
+            ...(verdict === "not_met"
+              ? { expected: "the code", produced: "a doc", consequence: "nothing shipped" }
+              : {}),
+          },
+        ],
+        attempts: [{ attempt: 1, outcome: "advanced", started_at: AT }],
+      }),
+      [],
+      OPENS,
+      RUNNING,
+      claim,
+    ).stages;
+  }
+
+  // The defect: a Job escalated on a refusal opened to two criterion ids, two
+  // verdicts and nothing the Drone had said — while the sentence that closed
+  // the Job sat in `not_claimed`.
+  it("reaches the Submitted tier, which drew only the kept documents", () => {
+    const submitted = strip(A_CLAIM, "not_met").find((one) => one.id === "submitted");
+
+    expect(submitted?.opens).toBe(true);
+    expect(submitted?.rows?.map((row) => row.label)).toEqual([
+      "Claimed",
+      "Shown by",
+      "Not claimed",
+    ]);
+    expect(submitted?.rows?.[0]?.cited).toBe(A_CLAIM.claimed);
+  });
+
+  it("draws two rows where the submission drew no boundary", () => {
+    const { not_claimed: _drawn, ...bounded } = A_CLAIM;
+    const submitted = strip(bounded as typeof A_CLAIM, "not_met").find(
+      (one) => one.id === "submitted",
+    );
+
+    expect(submitted?.rows).toHaveLength(2);
+  });
+
+  it("is pointed at from a refusal, which is one side of a dispute", () => {
+    const judge = strip(A_CLAIM, "not_met").find((one) => one.id === "judge");
+
+    expect(judge?.cardNote).toContain("Submitted");
+    expect(judge?.cardNote).toContain("gated nothing");
+  });
+
+  it("is not pointed at where nothing was disputed", () => {
+    expect(strip(A_CLAIM, "met").find((one) => one.id === "judge")?.cardNote).toBeUndefined();
+  });
+
+  it("is not pointed at where the Drone submitted no claim", () => {
+    expect(strip(undefined, "not_met").find((one) => one.id === "judge")?.cardNote).toBeUndefined();
+  });
+});

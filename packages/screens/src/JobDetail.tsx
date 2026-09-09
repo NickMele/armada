@@ -373,10 +373,23 @@ export function JobDetail({
     () => ({ jobId: job.id, open: onOpenArtifact, onSaid }),
     [job.id, onSaid],
   );
+  // The open step's own submission, which the strip's Submitted tier draws and
+  // its Judge tier points at. Read off the same `evidence` the trail below is
+  // built from rather than fetched again — one call, drawn twice, which is the
+  // rule `chapters.tsx` already follows for the same records.
+  // `read` is the only state carrying rows, and a read that has not arrived is
+  // not a step that claimed nothing — the tier draws its documents either way.
+  const claimed = useMemo(
+    () =>
+      recorded.evidence.state === "read"
+        ? recorded.evidence.steps.find((one) => one.step_id === open?.step_id)
+        : undefined,
+    [recorded.evidence, open?.step_id],
+  );
   const phases =
     whole === null || open === undefined
       ? undefined
-      : phasesOf(open, whole.acceptance_criteria, opensRecords, job.status);
+      : phasesOf(open, whole.acceptance_criteria, opensRecords, job.status, claimed);
 
   // The detail's contextual tier, and the open state it moves. Bound while a
   // Job is open and not before, so nothing on the Board listens for a key that
