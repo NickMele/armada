@@ -131,6 +131,13 @@ impl Allowance {
 /// `ran` is Fleet's own clock and not the stream's: the harness reports a
 /// duration per terminating line and Armada does not carry it, and the wall
 /// clock is what a person means by how long a step took either way.
+///
+/// **A stream with no terminating line answers [`None`], never nought.** Cost
+/// is carried on that line alone, so a Drone that was signalled mid-run has no
+/// price rather than a price of nothing — and a Drone that ran for five minutes
+/// and cost `0` is a sentence nothing should be able to write. Job
+/// `01M21BKVPW002DC0ATD1X9T0VF` had two of them, and read as $5.28 against a $5
+/// cap while having spent more than it could say.
 pub(crate) fn spent(events: &[DroneEvent], ran: std::time::Duration) -> DroneSpend {
     let mut spend = DroneSpend {
         ran_ms: ran.as_millis() as u64,
@@ -141,7 +148,7 @@ pub(crate) fn spent(events: &[DroneEvent], ran: std::time::Duration) -> DroneSpe
             turns, cost_micros, ..
         } = event
         {
-            spend.cost_micros = *cost_micros;
+            spend.cost_micros = Some(*cost_micros);
             spend.turns += *turns as u64;
         }
     }
@@ -208,7 +215,7 @@ where
             return Ok(());
         };
         let spent = at_work.spent(&self.now());
-        if spent.cost_micros == 0 && spent.turns == 0 {
+        if spent.cost_micros.is_none() && spent.turns == 0 {
             return Ok(());
         }
         let (job, _, drone) = at_work.drone();

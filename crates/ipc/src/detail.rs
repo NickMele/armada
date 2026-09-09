@@ -570,6 +570,20 @@ pub struct JobSpend {
     /// How long those Drones ran, in milliseconds. **No cap beside it** — see
     /// this type's note.
     pub ran_ms: u64,
+    /// How many of those named no price, and so are counted in `drones` and in
+    /// none of the figures above.
+    ///
+    /// **`cost_micros` is a floor while this is non-zero**, and a surface that
+    /// draws the total without it says a Job spent less than it did. Cost
+    /// reaches Armada on the terminating line of a session, so a Drone
+    /// signalled mid-run leaves none — Job `01M21BKVPW002DC0ATD1X9T0VF` had two
+    /// such Drones over 277 and 299 seconds and read as $5.28 against a $5 cap.
+    ///
+    /// **Absent on a row written before Fleet could tell the two apart.**
+    /// `serde(default)` reads that as nought, which is what such a row means:
+    /// nobody was counting, so nothing is claimed.
+    #[serde(default)]
+    pub unpriced: u64,
     /// How many Drones this is the sum of. **Zero is not the same as a cost of
     /// zero**: it is a Job nothing has run for yet, and a surface that folded
     /// the two would say a Job was free when nobody had tried it.

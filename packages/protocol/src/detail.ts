@@ -344,6 +344,19 @@ export type JobSpend = {
   ran_ms: number;
   /** How many drones this is the sum of. Zero is a job nothing has run for. */
   drones: number;
+  /**
+   * How many of those named no price, and so are counted in `drones` and in
+   * none of the figures above.
+   *
+   * **`cost_micros` is a floor while this is non-zero.** Cost reaches Armada on
+   * the terminating line of a session, so a drone signalled mid-run leaves
+   * none — and a total drawn without saying so reports a job as having spent
+   * less than it did.
+   *
+   * Absent on a Fleet built before it could tell the two apart, which reads as
+   * nought: nobody was counting, so nothing is claimed.
+   */
+  unpriced?: number;
 };
 
 export type JobDelivery = {

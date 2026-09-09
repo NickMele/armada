@@ -227,6 +227,7 @@ where
         let spend = Some(JobSpend {
             cost_micros: spent.cost_micros,
             cost_cap_micros: allowance.cost().count(),
+            unpriced: spent.unpriced,
             turns: spent.turns,
             turn_cap: allowance.turns(),
             ran_ms: spent.ran_ms,

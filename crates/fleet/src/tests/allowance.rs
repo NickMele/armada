@@ -76,7 +76,7 @@ async fn spend(fleet: &Fixture, job: &core_model::JobId, drone: &str, cost: u64,
             job,
             &core_model::DroneId::carried(core_model::Ulid::carried(drone)),
             &store::DroneSpend {
-                cost_micros: cost,
+                cost_micros: Some(cost),
                 turns,
                 ran_ms: 900_000,
             },
@@ -161,15 +161,25 @@ fn a_second_terminating_line_replaces_the_cost_and_adds_the_turns() {
         &[ended(3, 101_189), ended(2, 121_961)],
         Duration::from_millis(11_786),
     );
-    assert_eq!(folded.cost_micros, 121_961, "the session's running total");
+    assert_eq!(
+        folded.cost_micros,
+        Some(121_961),
+        "the session's running total"
+    );
     assert_eq!(folded.turns, 5, "3 + 2, because turns are per invocation");
     assert_eq!(folded.ran_ms, 11_786, "Fleet's clock, not the stream's");
 }
 
-/// A Drone that never reported still spent whatever it spent, and the fold says
-/// zero rather than refusing to answer. A `Vanished` run is not an absent one.
+/// A Drone that never reported still spent whatever it spent, and the fold
+/// declines to put a number on it.
+///
+/// **This asserted `0` until Job `01M21BKVPW002DC0ATD1X9T0VF`**, whose two
+/// killed Drones ran 277 and 299 seconds and were billed nothing each — so the
+/// Job read as $5.28 against a $5 cap while having spent more than it could
+/// say. A run with no terminating line carries no price, and nought is a price.
+/// The wall clock still answers, because that one is Fleet's own.
 #[test]
-fn a_drone_that_never_reported_folds_to_nothing_rather_than_to_nothing_at_all() {
+fn a_drone_that_never_reported_names_no_price_rather_than_a_price_of_nothing() {
     let folded = spent(
         &[DroneEvent::Said {
             text: "working on it".to_string(),
@@ -177,7 +187,7 @@ fn a_drone_that_never_reported_folds_to_nothing_rather_than_to_nothing_at_all() 
         }],
         Duration::from_millis(400),
     );
-    assert_eq!(folded.cost_micros, 0);
+    assert_eq!(folded.cost_micros, None);
     assert_eq!(folded.turns, 0);
     assert_eq!(
         folded.ran_ms, 400,

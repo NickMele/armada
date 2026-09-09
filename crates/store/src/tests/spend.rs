@@ -22,8 +22,17 @@ fn drone(value: &str) -> core_model::DroneId {
 
 fn spent(cost_micros: u64, turns: u64, ran_ms: u64) -> DroneSpend {
     DroneSpend {
-        cost_micros,
+        cost_micros: Some(cost_micros),
         turns,
+        ran_ms,
+    }
+}
+
+/// A Drone that was stopped before it could name a price.
+fn unpriced(ran_ms: u64) -> DroneSpend {
+    DroneSpend {
+        cost_micros: None,
+        turns: 0,
         ran_ms,
     }
 }
@@ -70,6 +79,7 @@ fn four_drones_of_one_job_add_up_to_the_job() {
             turns: 28,
             ran_ms: 88_000,
             drones: 4,
+            unpriced: 0,
         },
         "the Job's figure is every Drone's, added up"
     );
@@ -100,6 +110,7 @@ fn recording_one_drone_twice_does_not_bill_it_twice() {
             turns: 9,
             ran_ms: 40_000,
             drones: 1,
+            unpriced: 0,
         },
         "one Drone, recorded twice, is one Drone's spend"
     );
@@ -202,4 +213,69 @@ fn forgetting_a_job_forgets_what_it_spent() {
         vec!["job_drone_spend".to_string()],
         "the table points at jobs, so forget_job's catalog finds it"
     );
+}
+
+/// **A Drone nobody priced is counted and not added.**
+///
+/// Job `01M21BKVPW002DC0ATD1X9T0VF` is the instance: six Drones, two of them
+/// signalled mid-run after 277 and 299 seconds, and the two contributed
+/// `cost_micros = 0` each — so the Job read as $5.28 against a $5 cap while
+/// having spent more than it could say. Cost arrives on the terminating line of
+/// a session and those two never emitted one, so what they have is no price
+/// rather than a price of nothing.
+#[test]
+fn a_drone_that_named_no_price_is_counted_and_left_out_of_the_total() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job(&mut store, "01SPEND00000000000000007");
+    let job = job_id("01SPEND00000000000000007");
+
+    store
+        .record_drone_spend(
+            &job,
+            &drone("01DRONE0000000000000000A"),
+            &spent(171_532, 4, 21_122),
+        )
+        .expect("the priced Drone is recorded");
+    store
+        .record_drone_spend(&job, &drone("01DRONE0000000000000000B"), &unpriced(277_546))
+        .expect("the unpriced Drone is recorded");
+    store
+        .record_drone_spend(&job, &drone("01DRONE0000000000000000C"), &unpriced(299_901))
+        .expect("the second unpriced Drone is recorded");
+
+    let read = store.spend_for(&job).expect("the spend is read");
+    assert_eq!(
+        read.cost_micros, 171_532,
+        "the total is of the Drones that named a price"
+    );
+    assert_eq!(read.drones, 3, "all three held a slot");
+    assert_eq!(
+        read.unpriced, 2,
+        "and two of the three are missing from the figure above"
+    );
+    assert_eq!(
+        read.ran_ms, 598_569,
+        "the wall clock is Fleet's own, so every Drone answers it"
+    );
+}
+
+/// **The pair to it**: a Drone that reported a cost of nothing is priced.
+///
+/// Without this the case above passes against a store that treated any zero as
+/// unpriced, which is the relabelling `V32` refuses to do to history.
+#[test]
+fn a_drone_that_reported_a_cost_of_nothing_is_not_an_unpriced_one() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job(&mut store, "01SPEND00000000000000008");
+    let job = job_id("01SPEND00000000000000008");
+    store
+        .record_drone_spend(&job, &drone("01DRONE0000000000000000D"), &spent(0, 1, 900))
+        .expect("the free Drone is recorded");
+
+    let read = store.spend_for(&job).expect("the spend is read");
+    assert_eq!(read.cost_micros, 0);
+    assert_eq!(read.drones, 1);
+    assert_eq!(read.unpriced, 0, "it named a price, and the price was none");
 }
