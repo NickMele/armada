@@ -86,6 +86,32 @@ impl fmt::Display for Adrift {
                  the change and every Check passed",
                 job.as_str()
             ),
+            Adrift::ReviewUnreadable { job, pull_request } => write!(
+                out,
+                "nothing on this machine could say what is on {}'s pull request at \
+                 {pull_request}",
+                job.as_str()
+            ),
+            Adrift::NoRemarksChosen { job } => write!(
+                out,
+                "no comment on {}'s pull request was picked, so there is nothing to \
+                 hand a Drone",
+                job.as_str()
+            ),
+            Adrift::RemarksGone { job, gone } => write!(
+                out,
+                "{}'s pull request no longer has {} of the comments that were picked, \
+                 so none of them was sent",
+                job.as_str(),
+                gone.len()
+            ),
+            Adrift::RemarksAlreadyTakenUp { job, already } => write!(
+                out,
+                "{} of the comments picked off {}'s pull request have already reached a \
+                 Drone, so none of them was sent again",
+                already.len(),
+                job.as_str()
+            ),
             Adrift::NothingToMerge { job } => write!(
                 out,
                 "{} opened no pull request, so approving it is the act",
@@ -379,6 +405,10 @@ impl Adrift {
             | Adrift::NotDelivered { job, .. }
             | Adrift::NothingToMerge { job }
             | Adrift::NotMerged { job, .. }
+            | Adrift::ReviewUnreadable { job, .. }
+            | Adrift::NoRemarksChosen { job }
+            | Adrift::RemarksGone { job, .. }
+            | Adrift::RemarksAlreadyTakenUp { job, .. }
             | Adrift::NoSuchStep { job, .. }
             | Adrift::NotReaped { job, .. }
             | Adrift::NotForgettable { job, .. }
@@ -497,6 +527,12 @@ impl Error for Adrift {
             // The two a merge makes. `NotMerged` is not an `Error` either.
             | Adrift::NothingToMerge { .. }
             | Adrift::NotMerged { .. }
+            // The four a review's comments make. Each says what a press could
+            // not be, and none wraps a failure underneath it.
+            | Adrift::ReviewUnreadable { .. }
+            | Adrift::NoRemarksChosen { .. }
+            | Adrift::RemarksGone { .. }
+            | Adrift::RemarksAlreadyTakenUp { .. }
             | Adrift::NothingToPropose
             | Adrift::NoReadingWorktree(_)
             | Adrift::NoWorkflowFits { .. }

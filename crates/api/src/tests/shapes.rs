@@ -17,7 +17,8 @@ use ipc::mcp::{CheckRan, CheckReport};
 use ipc::{
     Actor, Asked, CallArguments, EvidenceType, Finding, FleetCapacity, Held, Instant, JobDetail,
     JobDiff, JobEvidence, JobExamined, JobHistory, JobId, JobProcess, JobResources, JobStatus,
-    JobSummary, Look, ManifestId, ManifestSummary, ModelChoices, Movement, NotedField, Origin,
+    JobRemarks, JobSummary, Look, ManifestId, ManifestSummary, ModelChoices, Movement, NotedField,
+    Origin,
     ReclaimedBranch, ReclaimedWorktree, Recorded, RunId, StatusMoved, StepId, Submitted, Urgency,
     Work, WorkflowId, WorkflowSummary, WorktreeReclaimed,
 };
@@ -238,6 +239,34 @@ pub fn evidence(job_id: JobId) -> JobEvidence {
             // Absent, not blank. The rule the whole DTO turns on.
             not_claimed: None,
         }],
+    }
+}
+
+/// What people wrote on a pull request, one comment already spent and one not.
+///
+/// **Both values of `taken_up`**, because that field is the whole of what stops
+/// a comment being handed to a Drone twice, and a fixture with one value proves
+/// only that it serialises.
+pub fn remarks(job_id: JobId) -> JobRemarks {
+    JobRemarks {
+        job_id,
+        pull_request: "https://forge.invalid/armada/pull/1".to_string(),
+        remarks: vec![
+            ipc::Remark {
+                id: "IC_kwDOfirst".to_string(),
+                by: "a-reviewer".to_string(),
+                at: "2026-09-08T10:00:00Z".to_string(),
+                said: "the log reader still stops one line early".to_string(),
+                taken_up: false,
+            },
+            ipc::Remark {
+                id: "IC_kwDOsecond".to_string(),
+                by: "a-reviewer".to_string(),
+                at: "2026-09-08T10:05:00Z".to_string(),
+                said: "and this one has already been sent".to_string(),
+                taken_up: true,
+            },
+        ],
     }
 }
 

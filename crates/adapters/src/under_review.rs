@@ -46,9 +46,9 @@ const FIELDS: &str = "reviewDecision,statusCheckRollup,comments,reviews";
 /// mid-stream and lose the records already built; a missing field arriving as
 /// empty is a record the reader drops on its own.
 ///
-/// A review with no body is not a remark: its state is already counted in
-/// `reviewDecision`, and an empty line in a conversation is not something to
-/// hand anybody.
+/// **A remark with no body is not a remark**, on either stream. A review's
+/// state is already counted in `reviewDecision`, and an empty comment is not
+/// something to offer a person to pick or to hand a Drone.
 ///
 /// **`.id` leads every remark record**, because a person picks comments off
 /// this reading and the pull request is read again when they press. The forge
@@ -59,7 +59,7 @@ const REDUCTION: &str = "\
     (.statusCheckRollup // [] | .[] | \
         [\"check\", (.name // .context // \"\"), (.status // \"\"), \
          (.conclusion // .state // \"\")]), \
-    (.comments // [] | .[] | \
+    (.comments // [] | .[] | select((.body // \"\") != \"\") | \
         [\"remark\", (.id // \"\"), (.author.login // \"\"), (.createdAt // \"\"), \
          (.body // \"\")]), \
     (.reviews // [] | .[] | select((.body // \"\") != \"\") | \

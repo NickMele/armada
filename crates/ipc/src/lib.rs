@@ -60,6 +60,9 @@ mod reading;
 /// What giving one Job's worktree and branch back did, half by half.
 /// **Two halves, because half of it happening is a real outcome.**
 mod reclaimed;
+/// What people wrote on a Job's pull request, and which of it a person picks.
+/// **The one place this seam carries text from outside this machine.**
+mod remarks;
 /// What a person says went wrong, with the Job's own record attached.
 mod report;
 /// What one Job holds on this machine, and what came of asking whether it is
@@ -119,6 +122,7 @@ pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, R
 pub use resources::{
     Asked, Finding, Held, JobExamined, JobProcess, JobResources, Look, WorktreeOnDisk,
 };
+pub use remarks::{JobRemarks, Remark, RemarksTakenUp};
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
 pub use turn::{
     CallArguments, Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage, Voice, Withheld,

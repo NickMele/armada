@@ -95,6 +95,21 @@ pub(crate) async fn get_evidence<D: Queries>(
     }
 }
 
+/// What anybody has written on one Job's open pull request.
+///
+/// **The one query on this router that talks to a forge**, which is why it is a
+/// route somebody asks for rather than a field on `get_job`. A forge that would
+/// not answer is a 500 and never an empty list.
+pub(crate) async fn get_remarks<D: Queries>(
+    State(served): State<Served<D>>,
+    Path(job_id): Path<String>,
+) -> Response {
+    match served.daemon().get_remarks(JobId::carried(job_id)).await {
+        Ok(remarks) => answer(StatusCode::OK, &remarks, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// One Job's whole patch. **The expensive read, on the one route that asks for
 /// it** — `get_job` is fetched on every open to draw a summary, and the bytes
 /// are what a person reading a diff needs and nothing else does.

@@ -225,6 +225,23 @@ Every fault crosses, not the first. `config::LoadError` finds them all, and a pe
 `helm_access` is `Yes` on `get_capacity`'s terms: it is one small answer about Fleet's own state, and a Helm whose dispatch is running against configuration the repository no longer describes should be able to find that out.
 """
 
+[operations.get_remarks]
+kind = "query"
+transport = "HTTP"
+helm_access = "No"
+description = "What anybody has written on a Job's open pull request, and which of it has already reached a Drone"
+notes = """
+**The read a person chooses from.** `fleet::under_review` already asks the forge this on `noticing`'s rotation, keeps nothing and writes a line when the count changes; this is the same ask, made when somebody is looking at the pull request and about to decide. It is not that sweep and does not ride it — the sweep answers *has anything changed*, and this answers *what does it say*.
+
+**Read when it is asked for and never on a timer.** It costs a process talking to a forge, so it is not a field on `get_job`, which is fetched on every open of a Job and again on every event naming it. It is `get_diff`'s rule one route over.
+
+Refused where the Job is not at `awaiting_review` and where its record holds no pull request, which are the two states in which there is nothing to choose from. A forge that would not answer is a 500 and never an empty list: a pull request nobody has commented on and a forge nobody could reach are opposite answers, and `adapter_traits::UnderReview` keeps them apart one crate down.
+
+`taken_up` is the one field on a comment that Armada wrote. Without it a comment already handed to a Drone reads exactly like one nobody has touched, and a person picks it again believing it new — the thing this whole road has to not do.
+
+`helm_access` is `No`, for the reason `get_diff` and `observe_job` have it: whatever anybody typed into a comment box, pulled into a Helm session, stays in that session for the rest of it. The reader this exists for is a person looking at a screen.
+"""
+
 [operations.get_usage]
 kind = "query"
 transport = "HTTP"
@@ -748,6 +765,27 @@ Reserved for hard stops only.
 **Terminal, and that is what makes it a hard stop.** `rejected` is a verdict on the work — the registry's own line is "approval denied, or `reject` at a human gate" — and no terminal has an outbound edge, so the Job is over and nothing further runs against its worktree. The act for work that is nearly right is `request_changes`, which keeps the Job and the worktree.
 
 Refused on a Job that is not at `awaiting_review`. `awaiting_approval -> rejected` is a legal edge and it belongs to `deny_dispatch`, which is a different act on a Job that has never run.
+"""
+
+[operations.take_up_remarks]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "The comments a person picked off the pull request reach a Drone, and one reply on the pull request says which"
+notes = """
+**A second entrance onto the note road, not a second road.** What it does to the Job is `request_changes`, called rather than restated: the words go onto the record as `redirect_waiting`, the Job takes `awaiting_review -> queued`, and the Drone re-admission puts back on the same step opens with them. The block a Drone reads is `crossing::Redirected` either way. What is different is only where the words came from.
+
+**Handles, and never the words.** The body carries `Remark::id` for each comment picked. Fleet reads the pull request again on the press and takes the text from the forge, so what a Drone is handed is the forge's and not a round trip through a client — and a comment edited between the choosing and the press is handed over as it now reads.
+
+**A comment that has already reached a Drone is refused, by name.** The forge has no memory of what Armada did, so a comment stays on the pull request reading the same forever; a Drone that ran and did not fully satisfy one must not meet it again as if it were new. `job_remarks_taken_up` is the record and `get_remarks` shows it, so a surface that offers one is offering a press that will be refused. That is `RedirectAlreadyWaiting`'s rule one scope wider, and a note already waiting refuses this too, quoted back the same way.
+
+**A comment the pull request no longer has refuses the whole press.** A person picked a set; acting on the part of it that survived, without saying so, is exactly the silent divergence the choice existed to prevent. What they get back is which handles are gone.
+
+**One reply on the pull request, and never one per comment.** A reply per comment turns a review thread into a conversation with a daemon. What a reviewer needs is one answer naming what was taken up and what was not, which is what this writes — after the Job has moved, so the reply says what happened rather than what was about to. It is the second thing Armada writes into a repository it does not own; the first is `merge_pull_request`.
+
+**Nothing about a comment's text reaches the forge.** The reply names logins and timestamps and quotes no body: a reviewer can already read what they wrote, and echoing it back would put somebody else's words through a second write. The two fields it does name are made safe to render at the point of use — `fleet::remarks`.
+
+`helm_access` is `No`, because Helm access on a command is the Intervention Ladder rung and this has none.
 """
 
 [operations.request_changes]

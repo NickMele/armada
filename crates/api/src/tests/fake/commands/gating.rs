@@ -6,7 +6,7 @@
 //! checks is the shape of the body — a blank note, a blank reason, an unsaid
 //! report — and it does not pretend to know the rest.
 
-use ipc::{ChangesRequested, Instant, JobId, JobSummary};
+use ipc::{ChangesRequested, Instant, JobId, JobSummary, RemarksTakenUp};
 
 use super::super::FakeDaemon;
 use crate::tests::shapes::run_id;
@@ -57,6 +57,30 @@ impl FakeDaemon {
             )));
         }
         self.move_to(&job_id, "awaiting_review", "running", "human")
+    }
+    /// The comments a person picked reach a Drone.
+    ///
+    /// **Faked on the one refusal the transport can see: a press naming no
+    /// comment.** Whether a handle is still on the pull request, and whether
+    /// one has already been handed over, are questions for a forge and a record
+    /// that this fake has neither of — and pretending to know them would be the
+    /// fake modelling Fleet rather than the route.
+    ///
+    /// It answers `queued`, because what the act does to the Job is
+    /// `request_changes`'s gate path and that is where that path stops.
+    pub(super) async fn fake_take_up_remarks(
+        &self,
+        job_id: JobId,
+        picked: RemarksTakenUp,
+    ) -> Result<JobSummary, Refusal> {
+        if picked.remarks.is_empty() {
+            return Err(Refusal::Unacceptable(ipc::WireError::raised(
+                "fake.no_remarks_chosen",
+                "no comment was picked, so there is nothing to hand a Drone",
+                run_id(),
+            )));
+        }
+        self.move_to(&job_id, "awaiting_review", "queued", "human")
     }
     /// A verdict on the work. Terminal, and from the review gate alone: the
     /// other edge into `rejected` is the dispatch gate's and belongs to

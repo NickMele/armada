@@ -61,6 +61,13 @@ impl Commands for FakeDaemon {
     ) -> Result<JobSummary, Refusal> {
         self.fake_request_changes(job_id, note).await
     }
+    async fn take_up_remarks(
+        &self,
+        job_id: JobId,
+        picked: ipc::RemarksTakenUp,
+    ) -> Result<JobSummary, Refusal> {
+        self.fake_take_up_remarks(job_id, picked).await
+    }
     async fn reject_job(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
         self.fake_reject_job(job_id).await
     }

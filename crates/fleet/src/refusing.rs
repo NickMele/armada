@@ -85,6 +85,23 @@ const NOT_RECLAIMABLE: &str = "fleet.not_reclaimable";
 /// 200 with both halves absent** — a client reading "nothing to reclaim" would
 /// draw a Job whose disk is back when the disk is still there.
 const NOT_RECLAIMED: &str = "fleet.not_reclaimed";
+/// Nothing on this machine could say what is on a pull request. **A 500**, for
+/// [`MERGE_NO_TOOL`]'s reason: nothing about the request is wrong and asking
+/// again is reasonable. It is never an empty list — a pull request nobody has
+/// commented on and a forge nobody could reach are opposite answers.
+const REVIEW_UNREADABLE: &str = "fleet.review_unreadable";
+/// A press that named no comment at all. **A 422**, like a blank note: the
+/// request decoded and names something that cannot work.
+const NO_REMARKS_CHOSEN: &str = "fleet.no_remarks_chosen";
+/// A press naming comments the pull request no longer has. A 409: the whole
+/// press is refused, and what a person does about it is read the pull request
+/// again and choose again.
+const REMARKS_GONE: &str = "fleet.remarks_gone";
+/// A press naming comments a Drone on this Job has already been handed. A 409
+/// beside [`NOTE_ALREADY_WAITING`] and its own code for that pair's reason: one
+/// is a note nothing has collected yet and this is one already delivered, and a
+/// client telling a person what to do next has to tell them apart.
+const REMARKS_ALREADY_TAKEN_UP: &str = "fleet.remarks_already_taken_up";
 /// A merge asked for on a Job whose record holds no pull request. A 409 like
 /// the status conflicts above: nothing was ever opened, so the act a person
 /// wants is an approval and the message says so.
@@ -251,6 +268,31 @@ where
             Adrift::NotProposed { request, .. } => Refusal::Fault(
                 WireError::raised(PROPOSER_UNREACHABLE, said, self.run_id())
                     .with_field("request", WireValue::Str(request.clone())),
+            ),
+            // The forge would not answer. A 500 and never an empty answer.
+            Adrift::ReviewUnreadable { job, pull_request } => Refusal::Fault(
+                WireError::raised(REVIEW_UNREADABLE, said, self.run_id())
+                    .about_job(ipc::JobId::from(job))
+                    .with_field("pull_request", WireValue::Str(pull_request.clone())),
+            ),
+            // A press that picked nothing. A 422, like a blank note.
+            Adrift::NoRemarksChosen { job } => Refusal::Unacceptable(
+                WireError::raised(NO_REMARKS_CHOSEN, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
+            ),
+            // **The handles come back on both of these**, for
+            // `NOTE_ALREADY_WAITING`'s reason: a refusal that named only a
+            // count would leave a person to work out which of the comments
+            // they picked was the problem.
+            Adrift::RemarksGone { job, gone } => Refusal::IllegalMove(
+                WireError::raised(REMARKS_GONE, said, self.run_id())
+                    .about_job(ipc::JobId::from(job))
+                    .with_field("remarks", WireValue::Str(gone.join(", "))),
+            ),
+            Adrift::RemarksAlreadyTakenUp { job, already } => Refusal::IllegalMove(
+                WireError::raised(REMARKS_ALREADY_TAKEN_UP, said, self.run_id())
+                    .about_job(ipc::JobId::from(job))
+                    .with_field("remarks", WireValue::Str(already.join(", "))),
             ),
             // Nothing was ever opened, so there is no forge answer to name.
             Adrift::NothingToMerge { job } => Refusal::IllegalMove(

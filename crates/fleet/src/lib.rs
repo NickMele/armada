@@ -105,6 +105,10 @@ pub mod redaction;
 pub mod redispatch;
 mod refusing;
 mod regating;
+/// A person picks comments off a pull request, they reach a Drone as its
+/// opening brief, and one reply on the pull request says which. **The one place
+/// text somebody outside this machine wrote enters a prompt.**
+pub mod remarks;
 pub mod reporting;
 /// What one Job holds on this machine — its processes, what they are burning,
 /// and the disk its worktree has taken. **Read on demand, never on the turn.**

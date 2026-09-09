@@ -86,17 +86,18 @@ fn a_conclusion_this_build_has_no_word_for_is_not_reported_as_a_pass() {
 
 /// Exactly what `jq` printed for a pull request with a change requested, a
 /// green check, one still running, a failing status context, a comment
-/// spanning lines and a review with a body — **copied from a run of the
-/// reduction against a forge payload**, tabs and escapes and all, rather than
-/// invented here.
+/// spanning lines, a review with a body and a comment the forge named nothing
+/// — **copied from a run of the reduction against a forge payload**, tabs and
+/// escapes and all, rather than invented here.
 fn what_the_reduction_printed() -> Vec<String> {
     [
         "said\tCHANGES_REQUESTED",
         "check\tbuild\tCOMPLETED\tSUCCESS",
         "check\tbridge_test\tIN_PROGRESS\t",
         "check\tci/legacy\t\tFAILURE",
-        "remark\tsomeone\t2026-09-08T10:00:00Z\tfirst line\\nsecond\\tline",
-        "remark\treviewer\t2026-09-08T11:00:00Z\tplease fix",
+        "remark\tIC_kwDOfirst\tsomeone\t2026-09-08T10:00:00Z\tfirst line\\nsecond\\tline",
+        "remark\tPRR_kwDOsecond\treviewer\t2026-09-08T11:00:00Z\tplease fix",
+        "remark\t\tnobody\t2026-09-08T12:00:00Z\ta comment the forge named nothing",
     ]
     .iter()
     .map(|line| line.to_string())
@@ -112,7 +113,13 @@ fn the_records_fold_into_one_reading() {
     };
     assert_eq!(failed[0].as_written(), "ci/legacy");
     assert_eq!(*checks, 3);
-    assert_eq!(read.remarks.len(), 2, "a comment and a review with a body");
+    assert_eq!(
+        read.remarks.len(),
+        2,
+        "a comment and a review with a body, and never the one with no handle: \
+         nothing could pick it, so a row for it would be one no act could reach"
+    );
+    assert_eq!(read.remarks[0].id.as_written(), "IC_kwDOfirst");
     assert_eq!(
         read.remarks[0].said.as_written(),
         "first line\nsecond\tline",

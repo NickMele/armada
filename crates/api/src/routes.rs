@@ -31,14 +31,14 @@ use crate::commands::{
     answer_question, approve_dispatch, approve_review, examine_job, file_report, forget_job,
     kill_drone, kill_job, merge_pull_request, override_verdict, propose_from_request, propose_job,
     reclaim_worktree, redirect_drone, redispatch_job, reject_job, request_changes, rerun_gate,
-    restart_step, stop_proposal,
+    restart_step, stop_proposal, take_up_remarks,
 };
 use crate::daemon::Daemon;
 use crate::journal::Journal;
 use crate::queries::{
     get_call, get_capacity, get_diff, get_evidence, get_job, get_job_events, get_job_resources,
-    get_manifest_reading, list_jobs, list_manifests, list_models, list_reports, list_workflows,
-    list_worktrees,
+    get_manifest_reading, get_remarks, list_jobs, list_manifests, list_models, list_reports,
+    list_workflows, list_worktrees,
 };
 use crate::sockets::{events, job_log, observe_job};
 use crate::stream::Broadcaster;
@@ -116,6 +116,15 @@ pub const SERVED: &[Route] = &[
         operation: "get_diff",
         method: "GET",
         path: "/jobs/:job_id/diff",
+    },
+    // What people wrote on the pull request, beside the two halves of the work
+    // product and for their reason: it is read by the surface where somebody is
+    // deciding and by nothing else. **The one query on this table that talks to
+    // a forge**, which is why it is not a field on `get_job`.
+    Route {
+        operation: "get_remarks",
+        method: "GET",
+        path: "/jobs/:job_id/remarks",
     },
     // The machine reading, and the act above it. Not fields on `get_job`,
     // which is re-read on every event naming the Job: these walk a process
@@ -208,6 +217,15 @@ pub const SERVED: &[Route] = &[
         operation: "reject_job",
         method: "POST",
         path: "/jobs/:job_id/reject",
+    },
+    // A fifth thing to do at the same gate, and its own route for the reason
+    // the three above have three: what it does to the Job is `request_changes`,
+    // and what it takes is a set of handles off a forge rather than a person's
+    // words. One route taking either would be a body that means two things.
+    Route {
+        operation: "take_up_remarks",
+        method: "POST",
+        path: "/jobs/:job_id/take_up_remarks",
     },
     // The fourth answer, and the only route on this table that writes into a
     // repository Fleet did not make. Its own route for the reason the three
@@ -503,6 +521,7 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/:job_id/events", get(get_job_events::<D>))
         .route("/jobs/:job_id/evidence", get(get_evidence::<D>))
         .route("/jobs/:job_id/diff", get(get_diff::<D>))
+        .route("/jobs/:job_id/remarks", get(get_remarks::<D>))
         .route("/jobs/:job_id/resources", get(get_job_resources::<D>))
         .route("/jobs/:job_id/examine", post(examine_job::<D>))
         .route("/jobs/:job_id/calls/:call_id", get(get_call::<D>))
@@ -510,6 +529,7 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/:job_id/merge", post(merge_pull_request::<D>))
         .route("/jobs/:job_id/request_changes", post(request_changes::<D>))
         .route("/jobs/:job_id/reject", post(reject_job::<D>))
+        .route("/jobs/:job_id/take_up_remarks", post(take_up_remarks::<D>))
         .route(
             "/jobs/:job_id/override_verdict",
             post(override_verdict::<D>),

@@ -10,7 +10,8 @@
 
 use ipc::{
     CallArguments, FleetCapacity, JobDetail, JobDiff, JobEvidence, JobHistory, JobId, JobList,
-    JobResources, ManifestReading, ManifestSummary, ModelChoices, WorkflowSummary, WorktreesHeld,
+    JobRemarks, JobResources, ManifestReading, ManifestSummary, ModelChoices, WorkflowSummary,
+    WorktreesHeld,
 };
 
 use super::FakeDaemon;
@@ -82,6 +83,17 @@ impl Queries for FakeDaemon {
             return Err(self.no_such_job(&job_id));
         }
         Ok(shapes::evidence(job_id))
+    }
+
+    /// **Two comments, one already spent.** The forge is not reached from here
+    /// — what a route test can see is the shape, and `taken_up` is the field
+    /// that decides whether a surface offers a comment at all.
+    async fn get_remarks(&self, job_id: JobId) -> Result<JobRemarks, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        if !jobs.iter().any(|job| job.id == job_id) {
+            return Err(self.no_such_job(&job_id));
+        }
+        Ok(shapes::remarks(job_id))
     }
 
     async fn get_diff(&self, job_id: JobId) -> Result<JobDiff, Refusal> {
