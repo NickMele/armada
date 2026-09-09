@@ -19,11 +19,21 @@
 //! shorter than anything that has to be unique across all of them. Nothing here
 //! mints one — the count is a fact about a table, so `store` is the authority
 //! and this only carries what it allocated.
+//!
+//! # Both directions, because one of them was the whole defect
+//!
+//! [`handle_of`] writes a handle and [`JobReference`] reads one back. For a
+//! while only the first existed: Bridge showed a handle as the id to copy and
+//! nothing anywhere turned one into a Job, so the one id a person could say was
+//! the one id nothing accepted. The two live in one file so that a change to
+//! what a handle looks like cannot land without the reader beside it.
 
 use alloc::format;
 use alloc::string::{String, ToString};
 
-use crate::job::ids::Title;
+use crate::envelope::Ulid;
+use crate::job::ids::{JobId, Title};
+use crate::job::record::Job;
 
 /// A Job's number within its Manifest. **Allocated by the store at insert**,
 /// monotonic per Manifest, and never reused — a killed Job keeps its number the
@@ -158,6 +168,108 @@ fn slug_of(title: &str) -> String {
     slug
 }
 
+/// A Job named by something a person can say: the record's key, a whole
+/// handle, or the number at the front of one.
+///
+/// **Reading is [`handle_of`] backwards, and the number is the only half that
+/// resolves.** A handle is a number and a slug, so its number is the run of
+/// digits before the first `-`; the slug is carried to be checked against the
+/// title it came from, never to be searched on. Which Job a number names stays
+/// outside this type — that is a fact about a Manifest's table, and
+/// `store::Store::resolve_job` is the authority for it.
+///
+/// **Three forms and no fourth.** A title is not one: two Jobs may share one,
+/// and a reference that sometimes names two Jobs is one a caller has to
+/// disambiguate rather than resolve.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum JobReference {
+    /// The `jobs` row's own key. Unique across every Manifest, so it names one
+    /// Job with nothing else supplied.
+    Id(JobId),
+    /// A whole handle, as Bridge shows it and a person pastes it.
+    Handle {
+        number: JobNumber,
+        /// The text as it was given, kept so the title behind it can be
+        /// checked. A number that matches under a slug that does not names no
+        /// Job — most often a handle pasted out of some other repository.
+        said: String,
+    },
+    /// The number alone — the shortest thing a person can type, and the one
+    /// form that means nothing without a Manifest to count it within.
+    Number(JobNumber),
+}
+
+impl JobReference {
+    /// What this text names, or `None` where it names nothing at all.
+    ///
+    /// The three cannot be confused: a handle always holds a `-` and a ULID
+    /// never does, and a number is digits to the end.
+    pub fn read(said: &str) -> Option<JobReference> {
+        let said = said.trim();
+        let digits: String = said.chars().take_while(char::is_ascii_digit).collect();
+        let rest = &said[digits.len()..];
+        match (digits.is_empty(), rest.chars().next()) {
+            (false, None) => number(&digits).map(JobReference::Number),
+            // The slug is held to what `slug_of` emits rather than merely to
+            // being present. A trailing `-` is the shape of a handle somebody
+            // cut short, and resolving it on its number alone would answer for
+            // a Job the text does not name.
+            (false, Some('-')) if is_a_slug(&rest[1..]) => {
+                number(&digits).map(|number| JobReference::Handle {
+                    number,
+                    said: said.to_string(),
+                })
+            }
+            // A ULID is Crockford base32 and holds no separator, so text that
+            // is neither of the two above is either an id or nothing.
+            _ => (!said.is_empty() && said.chars().all(|one| one.is_ascii_alphanumeric()))
+                .then(|| JobReference::Id(JobId::carried(Ulid::carried(said.to_string())))),
+        }
+    }
+
+    /// Whether this names that Job.
+    ///
+    /// **For a caller already holding the Jobs it is choosing between** — a
+    /// Drone naming a sibling, where the set is small, known and in memory. A
+    /// caller holding only a store asks the store, which is these same three
+    /// answers against an index.
+    pub fn names(&self, job: &Job) -> bool {
+        match self {
+            JobReference::Id(id) => job.id() == id,
+            JobReference::Number(number) => job.number() == *number,
+            JobReference::Handle { number, said } => {
+                job.number() == *number && &job.handle() == said
+            }
+        }
+    }
+}
+
+/// A number a `u32` can hold. A run of digits longer than that is a typo, and
+/// no Manifest has counted that far.
+fn number(digits: &str) -> Option<JobNumber> {
+    digits.parse().ok().map(JobNumber)
+}
+
+/// What [`slug_of`] emits, and nothing else.
+fn is_a_slug(said: &str) -> bool {
+    !said.is_empty()
+        && said
+            .chars()
+            .all(|one| one.is_ascii_lowercase() || one.is_ascii_digit() || one == '-')
+        && !said.ends_with('-')
+}
+
+impl core::fmt::Display for JobReference {
+    /// What was said, back as it was said. Every refusal downstream quotes it.
+    fn fmt(&self, out: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            JobReference::Id(id) => write!(out, "{}", id.as_str()),
+            JobReference::Handle { said, .. } => write!(out, "{said}"),
+            JobReference::Number(number) => write!(out, "{number}"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -262,5 +374,65 @@ mod tests {
     fn numbers_carry_and_read_back() {
         assert_eq!(JobNumber::carried(12).get(), 12);
         assert_eq!(JobNumber::carried(12).to_string(), "12");
+    }
+
+    // The defect this half exists for: what Bridge shows is what a person
+    // pastes, and until now nothing read it back.
+    #[test]
+    fn reads_back_the_handle_bridge_shows() {
+        assert_eq!(
+            JobReference::read("1-board-s-clear-button-should-reclaim-worktr"),
+            Some(JobReference::Handle {
+                number: JobNumber::carried(1),
+                said: "1-board-s-clear-button-should-reclaim-worktr".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn reads_a_bare_number_and_a_ulid_as_themselves() {
+        assert_eq!(
+            JobReference::read("12"),
+            Some(JobReference::Number(JobNumber::carried(12)))
+        );
+        assert_eq!(
+            JobReference::read("01M22TYSAE0023MADDP5ZQEYGW"),
+            Some(JobReference::Id(JobId::carried(Ulid::carried(
+                "01M22TYSAE0023MADDP5ZQEYGW".to_string()
+            ))))
+        );
+    }
+
+    // A title reducing to nothing makes a handle that is a number, so the two
+    // forms meet — and both resolve the same way, which is why this is not an
+    // ambiguity to break.
+    #[test]
+    fn reads_a_handle_of_nothing_but_a_number_as_a_number() {
+        assert_eq!(
+            JobReference::read(&handle(7, "— ⟨⟩ …")),
+            Some(JobReference::Number(JobNumber::carried(7)))
+        );
+    }
+
+    #[test]
+    fn names_nothing_where_the_text_could_be_no_form() {
+        for said in ["", "   ", "-3", "a b", "12-", "much/too/pathlike"] {
+            assert_eq!(JobReference::read(said), None, "{said:?}");
+        }
+    }
+
+    #[test]
+    fn says_back_what_was_said() {
+        for said in ["1-board-s-clear-button", "12", "01M22TYSAE0023MADDP5ZQEYGW"] {
+            assert_eq!(
+                JobReference::read(said).expect("a reference").to_string(),
+                said
+            );
+        }
+    }
+
+    #[test]
+    fn is_trimmed_because_a_paste_carries_what_surrounded_it() {
+        assert_eq!(JobReference::read("  12\n"), JobReference::read("12"));
     }
 }
