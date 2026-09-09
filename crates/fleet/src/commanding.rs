@@ -17,7 +17,7 @@ use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Commands, Refusal};
 use ipc::{
     CapRaise, ChangesRequested, JobExamined, JobForgotten, JobId, JobSummary, Overruled,
-    ProposeJob, Redirection, Redispatched, RemarksTakenUp, WorktreeReclaimed,
+    ProposeJob, Redirection, Redispatched, RemarksTakenUp, TurnRaise, WorktreeReclaimed,
 };
 
 use crate::adrift::Adrift;
@@ -195,6 +195,15 @@ where
     /// its own success would be a second answer to *is this Job still held*.
     async fn raise_cost_cap(&self, job_id: JobId, raise: CapRaise) -> Result<JobSummary, Refusal> {
         let job = Fleet::raise_cost_cap(self, &job_id.to_domain(), &raise)
+            .await
+            .map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
+    }
+
+    /// More turns for one Job, and nothing else changes. The method above's
+    /// shape and its reasons, on the other ceiling.
+    async fn raise_turn_cap(&self, job_id: JobId, raise: TurnRaise) -> Result<JobSummary, Refusal> {
+        let job = Fleet::raise_turn_cap(self, &job_id.to_domain(), &raise)
             .await
             .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await

@@ -129,6 +129,7 @@ pub fn job_at(id: &str, spelling: &str) -> JobSummary {
         branch: Some(format!("armada/{id}")),
         reason: None,
         queued_reason: None,
+        budget_hold: None,
         resumption: None,
         workflow_id: WorkflowId::carried("01WF"),
         owner_manifest_id: ManifestId::carried("01MF"),

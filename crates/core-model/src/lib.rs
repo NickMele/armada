@@ -36,8 +36,8 @@ pub use envelope::{
 pub use job::{collisions, under};
 pub use job::{
     handle_of, names_a_credential, AcceptanceCriterion, AdmissionHold, AdvanceGate, Attachment,
-    Attempt, AutoMerge, BadPattern, BlankBranch, BlankModel, BlankTitle, Branch, CheckOutcome,
-    Citation, CitedAt, Collision, ContextSource, Covers, CriteriaOwed, CriterionId,
+    Attempt, AutoMerge, BadPattern, BlankBranch, BlankModel, BlankTitle, Branch, BudgetHold,
+    CheckOutcome, Citation, CitedAt, Collision, ContextSource, Covers, CriteriaOwed, CriterionId,
     CriterionSource, DecidedBy, DeclarePlanAt, DeclaredPaths, DependencyDirection, DependencyEdge,
     DispatchOrigin, DroneAssigned, DroneId, DroneMoved, DronePresence, DroneStanding, Edge,
     EscalationTrigger, EvidenceRef, EvidenceScope, EvidenceType, Facts, FrozenWorkflow,

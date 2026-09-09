@@ -2,22 +2,22 @@
 //! handle that may change them.
 //!
 //! **Not the whole file, and not even the whole of one section.**
-//! `crates/config/settings.toml` files five of `armada.yml`'s keys as
-//! `lifetime = "Live"`: three under `drone:` — `quiet_after_seconds`,
-//! `poke_limit` and `cost_cap_micros_per_job` — and the two top-level policies,
-//! `auto_merge` and `review_gate`. The Checks and Commands registries and
-//! `drone.exclude_paths` are *Frozen for the Job*; the last sits in the same
-//! `drone:` block as three live ones, which is why [`Frozen`] names a key there
-//! and a section everywhere else. What decides is what was resolved against a
+//! `crates/config/settings.toml` files six of `armada.yml`'s keys as
+//! `lifetime = "Live"`: four under `drone:` — `quiet_after_seconds`,
+//! `poke_limit`, `cost_cap_micros_per_job` and `turn_cap_per_job` — and the two
+//! top-level policies, `auto_merge` and `review_gate`. The Checks and Commands
+//! registries and `drone.exclude_paths` are *Frozen for the Job*; the last sits
+//! in the same `drone:` block as four live ones, which is why [`Frozen`] names a
+//! key there and a section everywhere else. What decides is what was resolved against a
 //! value at boot: every [`ResolvedWorkflow`] took the Checks this file declared
 //! there, so swapping the whole Manifest would falsify a `Setup` silently.
 //!
 //! So the live keys sit behind a cell every clone of one Manifest shares, and
-//! the rest is what it was when the daemon read it. **Three of the five are
-//! read at a question rather than at a boot** — `auto_merge` and `review_gate`
-//! whenever a gate or a sweep asks, the cost cap at every admission of a Job
-//! over it — so somebody stopping a merge, or raising a cap under the Job it is
-//! refusing, is owed an answer sooner than a restart.
+//! the rest is what it was when the daemon read it. **Four of the six are read
+//! at a question rather than at a boot** — `auto_merge` and `review_gate`
+//! whenever a gate or a sweep asks, both caps at every admission of a Job over
+//! one of them — so somebody stopping a merge, or raising a ceiling under the
+//! Job it is refusing, is owed an answer sooner than a restart.
 //!
 //! **[`Reloads`] is the only thing that can write, and the live keys are all it
 //! can write.** Fleet is never handed one, so the crate holding the Manifest
@@ -36,9 +36,8 @@ use crate::manifest::Manifest;
 /// adopts all of it or none of it.
 ///
 /// **Named for the section and not for patience**, which is what it was called
-/// while it held two numbers about a quiet Drone. A cost cap is not patience,
-/// and a type whose name covers two of its three fields is one nobody can add
-/// a fourth to.
+/// while it held two numbers about a quiet Drone. A ceiling is not patience,
+/// and a type whose name covers half its fields is one nobody can add to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) struct Dials {
     pub(crate) quiet_after_seconds: Option<u32>,
@@ -51,6 +50,10 @@ pub(crate) struct Dials {
     /// the value as text for the two policies' sake, and the ceiling is the
     /// whole reason now.
     pub(crate) cost_cap_micros: Option<u32>,
+    /// How many turns one Job of this repository may take. **A `u32` for the
+    /// field above's reason and with more room to spare**: a per-Job ceiling of
+    /// four billion turns is not a ceiling.
+    pub(crate) turn_cap: Option<u32>,
 }
 
 /// Every live key's value at once: `drone:`'s [`Dials`] and the two top-level
@@ -60,7 +63,7 @@ pub(crate) struct Dials {
 /// none — [`Reloads::reread`] parses the whole file and adopts what it finds,
 /// so a second lock would be a second instant for one save.
 ///
-/// **Two types rather than five fields**, because the policies are not `drone:`
+/// **Two types rather than six fields**, because the policies are not `drone:`
 /// keys and [`Dials`] is named for that section. A flat struct would put
 /// `auto_merge` beside `poke_limit` as though the file did, and the file does
 /// not.
@@ -91,7 +94,7 @@ impl Cell {
     }
 
     /// **A poisoned lock is read through rather than unwrapped.** What it
-    /// guards is three `Option<u32>` and two `Copy` enums, so a panic elsewhere
+    /// guards is four `Option<u32>` and two `Copy` enums, so a panic elsewhere
     /// cannot have left it half-written — and a Fleet that goes down because a
     /// lock was poisoned by an unrelated panic is exactly the failure this
     /// whole module refuses.
@@ -125,6 +128,11 @@ pub enum LiveKey {
     /// happening. One Job was refused its last step at $5.28 against a $5
     /// compile-time constant, and there was no reachable number anywhere.
     CostCapMicrosPerJob,
+    /// **The other ceiling, and live for the same reason.** It shipped as a
+    /// compile-time constant with no tier under it at all, and Job
+    /// `01M22TYSAE0023MADDP5ZQEYGW` stranded at 393 turns against 300 with its
+    /// cheap final step never run.
+    TurnCapPerJob,
     /// The two below are the only live keys that are not `drone:`'s, and the
     /// only two whose value is a word rather than a number.
     AutoMerge,
@@ -138,6 +146,7 @@ impl LiveKey {
             LiveKey::QuietAfterSeconds => "drone.quiet_after_seconds",
             LiveKey::PokeLimit => "drone.poke_limit",
             LiveKey::CostCapMicrosPerJob => "drone.cost_cap_micros_per_job",
+            LiveKey::TurnCapPerJob => "drone.turn_cap_per_job",
             // Top-level and undotted, because that is where `armada.yml` writes
             // them and this string is what somebody searches the file for. It
             // is also the key a `manifest_rule:<key>` gate names, and one
@@ -162,8 +171,8 @@ pub enum Frozen {
     Checks,
     Commands,
     Setup,
-    /// **A key, where every other variant is a section.** Three of `drone:`'s
-    /// four keys are live and this one is not — every `ResolvedWorkflow` took
+    /// **A key, where every other variant is a section.** Four of `drone:`'s
+    /// five keys are live and this one is not — every `ResolvedWorkflow` took
     /// its copy of this list at boot — so naming the section would tell a
     /// person that a `quiet_after_seconds` they just changed needs a restart,
     /// which is the opposite of true.
@@ -407,6 +416,13 @@ fn moved(before: InForce, after: InForce) -> Vec<Moved> {
             key: LiveKey::CostCapMicrosPerJob,
             before: said(before.dials.cost_cap_micros),
             after: said(after.dials.cost_cap_micros),
+        });
+    }
+    if before.dials.turn_cap != after.dials.turn_cap {
+        changed.push(Moved {
+            key: LiveKey::TurnCapPerJob,
+            before: said(before.dials.turn_cap),
+            after: said(after.dials.turn_cap),
         });
     }
     // **Always `Some` on both ends**, unlike the three above: an absent policy

@@ -62,9 +62,9 @@ pub use drone::{DroneAssigned, DroneMoved, DronePresence, IllegalDroneMove};
 pub use escalation::{EscalationTrigger, StepLevelTrigger, TriggerKind, TriggerLevel};
 pub use event::{JobEvent, StepEvent};
 pub use fields::{
-    AcceptanceCriterion, AdmissionHold, Attachment, BlankBranch, Branch, CriterionSource,
-    DependencyDirection, DependencyEdge, DispatchOrigin, Facts, GateManifest, GateOutcome,
-    NotRunDisposition, NotRunReason, Origin, QueuedReason, Resumption, ScopeRevision,
+    AcceptanceCriterion, AdmissionHold, Attachment, BlankBranch, Branch, BudgetHold,
+    CriterionSource, DependencyDirection, DependencyEdge, DispatchOrigin, Facts, GateManifest,
+    GateOutcome, NotRunDisposition, NotRunReason, Origin, QueuedReason, Resumption, ScopeRevision,
     ScopeRevisionOutcome, Subject, TopLevelOrigin, Urgency, WriteTargets,
 };
 pub use gaming::{CitedAt, DecidedBy, EvidenceRef, GamingCheck, GamingFlag, GamingPattern};

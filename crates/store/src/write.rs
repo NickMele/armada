@@ -57,10 +57,10 @@ impl Store {
                      dependencies, dispatched_by_job_id, dispatched_by_step_id,
                      redispatched_from, subject_kind, subject_ref, facts, scope_revisions,
                      write_targets_known, created_at, branch, workflow, redirect_waiting,
-                     cost_cap_micros, proposal_id, number
+                     cost_cap_micros, turn_cap, proposal_id, number
                  ) VALUES (
                      ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
-                     ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27
+                     ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28
                  )",
                 rusqlite::params![
                     job.id().as_str(),
@@ -104,6 +104,9 @@ impl Store {
                     // its own. Bound anyway, so a Job rebuilt and reinserted
                     // does not lose a cap a person raised.
                     job.cost_cap_micros().map(|micros| micros as i64),
+                    // Ordinarily null, and bound anyway, for the line above's
+                    // reason.
+                    job.turn_cap().map(|turns| turns as i64),
                     // Frozen at creation and never written again. Bound here
                     // for `branch`'s reason: a Job rebuilt and reinserted keeps
                     // the reading it was minted by.

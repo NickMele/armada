@@ -354,6 +354,19 @@ impl Manifest {
         self.live.read().dials.cost_cap_micros
     }
 
+    /// How many turns one Job of this repository may take. **`None` where the
+    /// file declares no `drone.turn_cap_per_job`**, which is the repository
+    /// deferring to what Fleet is running with.
+    ///
+    /// **The middle of three tiers**, read live, `0` a value and not an
+    /// absence, per Job and not per Drone — every one of
+    /// [`cost_cap_micros`](Manifest::cost_cap_micros)' rules, for its reasons.
+    /// The two keys are read the same way and resolved in the same place;
+    /// what differs is only what a person does about being over one.
+    pub fn turn_cap(&self) -> Option<u32> {
+        self.live.read().dials.turn_cap
+    }
+
     /// Every live key at once, for the one caller that adopts them together.
     pub(crate) fn in_force(&self) -> InForce {
         self.live.read()

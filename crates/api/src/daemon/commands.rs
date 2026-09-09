@@ -21,7 +21,7 @@ use crate::daemon::Refusal;
 use ipc::{
     CapRaise, ChangesRequested, ChosenAnswer, FileReport, JobExamined, JobForgotten, JobId,
     JobSummary, ProposeJob, Redirection, Redispatched, RemarksTakenUp, Report, RestartRequested,
-    WorktreeReclaimed,
+    TurnRaise, WorktreeReclaimed,
 };
 
 /// Everything a client asks Fleet to do.
@@ -459,9 +459,9 @@ pub trait Commands: Send + Sync + 'static {
     /// **The act the `over_budget` label has always pointed at**, and the one
     /// thing here that changes what a Job may spend. Until it the remedy was a
     /// machine-wide setting, raised for every Job at once and taken only on a
-    /// restart. The dollar cap only: `budget-turn-cap-per-job` takes the
-    /// opposite remedy, and one signature moving either would be a body
-    /// meaning two things.
+    /// restart. The dollar cap only, and
+    /// [`raise_turn_cap`](Commands::raise_turn_cap) is the other: one signature
+    /// moving either would be a body meaning two things.
     ///
     /// **It moves nothing** — no status, no step, no Drone. Admission was going
     /// to start one and was refused for money, so the next turn starts it, and
@@ -476,6 +476,23 @@ pub trait Commands: Send + Sync + 'static {
         &self,
         job_id: JobId,
         raise: CapRaise,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `raise_turn_cap` — let this Job take more turns than the tier above it
+    /// allows.
+    ///
+    /// **The other half of the label `over_budget` folds.** A `queued` Job
+    /// carries that reason for either ceiling and `budget_hold` on the summary
+    /// says which; this is the act for the turns, and until it there was none —
+    /// no key, no route, and no number anywhere below a compile-time constant.
+    ///
+    /// **It moves nothing**, refuses in the same three ways as
+    /// [`raise_cost_cap`](Commands::raise_cost_cap) and for the same reasons,
+    /// and comes back as the summary a caller reads `queued_reason` off.
+    fn raise_turn_cap(
+        &self,
+        job_id: JobId,
+        raise: TurnRaise,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `answer_question` — a person picks one of the answers a waiting Drone

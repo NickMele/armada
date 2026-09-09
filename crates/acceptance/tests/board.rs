@@ -394,7 +394,7 @@ async fn a_pull_request_nobody_has_settled_says_nothing_rather_than_open() {
 }
 
 fn row(run: &Run, reason: &Option<core_model::TransitionReason>) -> JobSummary {
-    JobSummary::of(&run.job, reason.as_ref(), None, false, None)
+    JobSummary::of(&run.job, reason.as_ref(), None, None, false, None)
 }
 
 fn a_job_at_the_approval_gate() -> (Run, Option<core_model::TransitionReason>) {

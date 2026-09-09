@@ -16,8 +16,9 @@
 //! **Quota is not a fourth.** Spike 5 settled it: the rate-limit event carries
 //! a window and a status and no quantity.
 //!
-//! **The dollars tier and the turns do not**, which is the one place the pair
-//! comes apart. [`Allowance::at`] carries the argument.
+//! **Both halves tier the same way**, and [`Allowance::at`] is the only place
+//! that order is written. The turns did not until Sept 2026, and
+//! [`Overspent::Turns`] carries what that cost.
 
 use adapter_traits::{AgentHarness, Delivery, DroneEvent, Vcs, WorkProduct};
 use config::Manifest;
@@ -61,18 +62,29 @@ impl Micros {
 ///
 /// **Both fold to `QueuedReason::OverBudget` on the Board**, which is the only
 /// label `job-statuses.toml` gives a `queued` Job held back by what it has
-/// spent. The distinction between them is the operator's, exactly as
-/// [`Short`](crate::headroom::Short)'s is — and unlike that one it reaches a
-/// person, because the Job's detail carries what was spent beside what was
-/// allowed and the figure that is over is visible in the pair.
+/// spent. Which of the two it was travels beside that label as
+/// `core_model::BudgetHold`, exactly as [`Short`](crate::headroom::Short) does
+/// as `AdmissionHold` — and it travels because reading it off the figures alone
+/// asks a person to know there are two ceilings before they can see which one
+/// caught them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Overspent {
     /// Past `settings.budget-cost-cap-per-job`, as [`Allowance::at`] resolved
     /// it for this Job. The remedy is a number: raise the cap on this Job, on
     /// the repository, or accept that this Job costs what it costs.
     Cost,
-    /// Past `settings.budget-turn-cap-per-job`. The remedy is usually the
-    /// brief: a Job that turns and turns was not askable as written.
+    /// Past `settings.budget-turn-cap-per-job`, as [`Allowance::at`] resolved
+    /// it for this Job. **Two remedies and not one**, which is the correction
+    /// this variant carries: a Job that is turning and getting nowhere was not
+    /// askable as written and wants a redispatch, and a Job that has finished
+    /// its work and is held out of a cheap last step wants the number moved.
+    /// The type cannot tell those apart and does not try — what it says is
+    /// which ceiling, so that both acts are reachable.
+    ///
+    /// The reading that only the brief could fix shipped with this variant and
+    /// was falsified by Job `01M22TYSAE0023MADDP5ZQEYGW`: 393 turns against
+    /// 300, every Check passed, `summarise` never run, and a redispatch would
+    /// have thrown away the work rather than finished it.
     Turns,
 }
 
@@ -112,40 +124,46 @@ impl Allowance {
 
     /// What this one Job may spend, given what Fleet is running with.
     ///
-    /// # Three tiers, and this is the only place their order is written
+    /// # Three tiers each, and this is the only place their order is written
     ///
     /// The composition root's constant — `self` — then `armada.yml`'s
-    /// `drone.cost_cap_micros_per_job`, then the Job's own column, each
-    /// deferring upward where it states nothing. **`Some(0)` is a cap and
-    /// `None` is an absence**: capped at zero a Job starts nothing, which holds
-    /// one Job, or one repository, without stopping the Fleet.
+    /// `drone.cost_cap_micros_per_job` or `drone.turn_cap_per_job`, then the
+    /// Job's own column, each deferring upward where it states nothing.
+    /// **`Some(0)` is a cap and `None` is an absence**: capped at zero a Job
+    /// starts nothing, holding one Job or one repository.
     ///
-    /// # The turns do not tier, and that is a decision
+    /// # The turns tier too, and that reverses a decision
     ///
-    /// Spike 5 priced three identical successful runs of one Job at $0.063,
-    /// $0.087 and $0.146 — 2.31x on cache warmth — while their turns held at 7,
-    /// 7 and 4. So a Job over the dollar cap often just started cold and the
-    /// remedy is the number; over the turn cap it is going in circles, and
-    /// raising the number buys more circles. **A lever exists for the reading
-    /// whose remedy is a number.** The two stay one type and one
-    /// `exceeded_by` — what tiers is the value, not the pair.
+    /// They did not until Sept 2026, because spike 5's three runs of one Job
+    /// spread 2.31x on price while their turns held at 7, 7 and 4 — so a Job
+    /// over the turn cap was going in circles, where a bigger number buys more
+    /// circles. The conclusion did not survive the measurement: Job
+    /// `01M22TYSAE0023MADDP5ZQEYGW` finished, passed every Check, and stopped
+    /// at 393 turns against 300 with a cheap `summarise` unrun.
     ///
     /// # Live at every tier, and frozen at none
     ///
     /// A Job past its cap is refused at every admission until a number moves,
-    /// so a cap frozen at creation — as a step's `quiet_after_seconds` is —
-    /// would reach every Job but the one that needs it.
+    /// so a cap frozen at creation — as `quiet_after_seconds` is — would reach
+    /// every Job but the one that needs it.
     pub fn at(self, manifest: &Manifest, job: &Job) -> Allowance {
         let repository = match manifest.cost_cap_micros() {
             Some(micros) => Micros(u64::from(micros)),
             None => self.cost,
+        };
+        let turns = match manifest.turn_cap() {
+            Some(turns) => u64::from(turns),
+            None => self.turns,
         };
         Allowance {
             cost: match job.cost_cap_micros() {
                 Some(micros) => Micros(micros),
                 None => repository,
             },
-            turns: self.turns,
+            turns: match job.turn_cap() {
+                Some(capped) => capped,
+                None => turns,
+            },
         }
     }
 

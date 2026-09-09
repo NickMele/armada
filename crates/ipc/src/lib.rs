@@ -94,9 +94,9 @@ pub use detail::{
     StepDetail, StepFacts, Stuck, Verdict,
 };
 pub use enums::{
-    Actor, AdvanceGate, CheckOutcome, CriterionSource, DependencyDirection, DronePresence,
-    EvidenceType, JobStatus, JudgeVerdict, Origin, QueuedReason, Recourse, Resumption, StepState,
-    TopLevelOrigin, Urgency,
+    Actor, AdvanceGate, BudgetHold, CheckOutcome, CriterionSource, DependencyDirection,
+    DronePresence, EvidenceType, JobStatus, JudgeVerdict, Origin, QueuedReason, Recourse,
+    Resumption, StepState, TopLevelOrigin, Urgency,
 };
 pub use error::{RunId, WireError, WireValue};
 pub use event::{
@@ -120,7 +120,7 @@ pub use journal::{
 pub use judged::{Citation, CitedAt, Flagged, Given, Judged, KeptDeliverable};
 pub use overlap::{ScopeOverlap, SharedPath};
 pub use proposing::{ProposalInFlight, ProposalReach, ProposalStopped, StopProposal};
-pub use raising::{CapRaise, RaisedBy};
+pub use raising::{CapRaise, RaisedBy, TurnRaise};
 pub use reading::{ManifestFault, ManifestMoved, ManifestReading, ManifestRefused};
 pub use reclaimed::{ReclaimedBranch, ReclaimedWorktree, WorktreeReclaimed};
 pub use remarks::{JobRemarks, Remark, RemarksTakenUp};

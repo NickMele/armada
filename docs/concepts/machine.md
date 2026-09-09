@@ -82,9 +82,16 @@ own** — each stating nothing to defer to the one above it, and a cap of zero
 meaning *start nothing* rather than *nothing stated*. `fleet::Allowance::at` is
 where the order is written.
 
-**The turn cap did not move and stays Machine's alone.** Over the dollar cap a
-Job often just started cold and the remedy is the number; over the turn cap it
-is going in circles and raising the number buys more circles.
+**The turn cap took the same three tiers a day later**, through
+`drone.turn_cap_per_job` and the Job's own column, and for the same reason: Job
+`01M22TYSAE0023MADDP5ZQEYGW` finished its work, passed every Check, and stopped
+at 393 turns against a 300 constant with a cheap final step never run. It had
+stayed Machine's alone on the argument that a Job over the turn cap is going in
+circles, where a bigger number buys more circles. That is true of a Job turning
+and getting nowhere and false of one held out of its last step, and nothing
+told the two apart. **So there are two acts and not one** — raise the number, or
+redispatch — and which a Job wants is a person's reading of the Job in front of
+them.
 
 **A cap is live at every tier.** A Job past its cap is refused again at every
 admission until a number moves, so a ceiling that took a restart to change would
@@ -100,10 +107,11 @@ cache warmth alone, while their turn counts held at 7, 7 and 4.
 
 **It refuses the next dispatch. It does not stop a Drone that is spending.**
 What a run cost arrives on the final line of a Drone's session and nowhere else,
-so there is no mid-session figure to interrupt on. A Job over its budget waits
-at `queued`, reading `over_budget`, until somebody raises the cap. The case this
-catches is the one that matters: a runaway is a sequence of Jobs rather than one
-Drone.
+so there is no mid-session figure to interrupt on. A Job over either ceiling
+waits at `queued`, reading `over_budget`, until somebody raises that ceiling —
+and the row says which of the two through `budget_hold` beside the label, so a
+person acts on the one that is holding it. The case this catches is the one that
+matters: a runaway is a sequence of Jobs rather than one Drone.
 
 **Verification spend counts against it.** A Judge call bills against the same
 cap as the work it verifies — a cap that excluded it would understate what the

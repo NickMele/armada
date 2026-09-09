@@ -3,10 +3,11 @@
 //!
 //! **Beside [`super`] rather than in it**, because the two are different
 //! subjects: that file is about the predicate refusing a Job for what it has
-//! already spent, and this one is about where the number it compares against
-//! came from. The end-to-end case at the bottom is the incident that bought the
-//! tier — a Job refused its last step at $5.28 against a $5 constant, with no
-//! lever anywhere.
+//! already spent, and this one is about where the numbers it compares against
+//! came from. The end-to-end case is the incident that bought the tier — a Job
+//! refused its last step at $5.28 against a $5 constant, with no lever
+//! anywhere — and the turns got the same three tiers when the same thing
+//! happened to them.
 
 use config::Manifest;
 use store::Spend;
@@ -22,6 +23,19 @@ use crate::tests::tmp::TempDir;
 fn repository(cap: Option<u32>) -> Manifest {
     let stated = match cap {
         Some(micros) => format!("drone:\n  cost_cap_micros_per_job: {micros}\n"),
+        None => String::new(),
+    };
+    Manifest::parse(
+        std::path::Path::new("armada.yml"),
+        &format!("version: 1\nid: 01FIXTUREMANIFEST\n{stated}"),
+    )
+    .expect("a manifest that parses")
+}
+
+/// A repository that states a turn cap, or one that states nothing.
+fn turning(cap: Option<u32>) -> Manifest {
+    let stated = match cap {
+        Some(turns) => format!("drone:\n  turn_cap_per_job: {turns}\n"),
         None => String::new(),
     };
     Manifest::parse(
@@ -115,32 +129,74 @@ fn a_cap_of_zero_starts_nothing_and_is_not_an_absence() {
     );
 }
 
-/// **The turn cap does not tier, and that is a decision rather than an
-/// omission.** Spike 5 priced three identical successful runs of one Job at
-/// $0.063, $0.087 and $0.146 while their turn counts held at 7, 7 and 4: over
-/// the dollar cap a Job often just started cold and the remedy is the number,
-/// and over the turn cap it is going in circles and raising the number buys
-/// more circles. A lever exists for the reading whose remedy is a number.
+/// **The turn cap tiers the same way, and the two ceilings do not reach each
+/// other.** Two tiers that moved the dollars leave the turns where they were,
+/// and the same Job stretched on turns alone is still held to the machine's
+/// dollars. That independence is what makes two acts honest: a person raising
+/// one has not quietly widened the other.
+///
+/// The turns did not tier at all until Sept 2026 — `Allowance::at` carries the
+/// measurement that argued for that and the Job that falsified the conclusion.
 #[test]
-fn the_turn_cap_stays_the_machines_at_every_tier() {
-    let stretched = SHIPPED.at(
+fn each_ceiling_tiers_without_reaching_the_other() {
+    let dear = SHIPPED.at(
         &repository(Some(20_000_000)),
         &a_job().cost_capped(Some(50_000_000)),
     );
     assert_eq!(
-        stretched.turns(),
+        dear.turns(),
         SHIPPED.turns(),
-        "two tiers moved the dollars and neither can move the turns"
+        "two tiers moved the dollars and left the turns alone"
     );
-    let long = Spend {
+    let long = SHIPPED.at(&turning(Some(600)), &a_job().turn_capped(Some(900)));
+    assert_eq!(long.turns(), 900, "the Job's own turn cap beats both");
+    assert_eq!(
+        long.cost(),
+        SHIPPED.cost(),
+        "and two tiers moved the turns and left the dollars alone"
+    );
+    let went_round = Spend {
         cost_micros: 1_000,
-        turns: 300,
+        turns: 900,
         ..Spend::default()
     };
     assert_eq!(
-        stretched.exceeded_by(&long),
+        long.exceeded_by(&went_round),
         Some(Overspent::Turns),
-        "a Job with a fifty dollar ceiling is still stopped for going round"
+        "a raised ceiling is still a ceiling"
+    );
+}
+
+/// **The repository's turn cap reaches a Job that states none**, which is the
+/// middle tier doing the same job it does for the dollars.
+#[test]
+fn a_repositorys_turn_cap_beats_the_machines() {
+    assert_eq!(
+        SHIPPED.at(&turning(Some(600)), &a_job()).turns(),
+        600,
+        "the repository's number, where the Job states none"
+    );
+    assert_eq!(
+        SHIPPED.at(&turning(None), &a_job()).turns(),
+        SHIPPED.turns(),
+        "and the machine's, where neither does"
+    );
+}
+
+/// **Zero turns is a cap and not an absence**, the same pair the dollars draw.
+#[test]
+fn a_turn_cap_of_zero_starts_nothing_and_is_not_an_absence() {
+    assert_eq!(
+        SHIPPED.at(&turning(Some(0)), &a_job()).turns(),
+        0,
+        "the repository holds every Job it owns"
+    );
+    assert_eq!(
+        SHIPPED
+            .at(&turning(Some(0)), &a_job())
+            .exceeded_by(&Spend::default()),
+        Some(Overspent::Turns),
+        "a Job that has turned nothing has nothing left to turn"
     );
 }
 

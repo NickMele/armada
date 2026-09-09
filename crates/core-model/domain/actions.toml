@@ -415,7 +415,19 @@ shortcut = "B"
 scope = "detail"
 destructive = false
 confirms = true
-notes = "The first budget row in this registry, added 2026-09-09 with the act. A job past its cost cap waits at `queued` reading `over_budget` until somebody raises the cap — the one reason a queued job carries that does not clear on its own — and there was no key, no route and no control for it. Shifted `B`, on `open_log`'s precedent: the lowercase mnemonic is spent, `b` being `report_job`, and a budget is the one thing on this screen where the mnemonic is worth reaching for. Shifted rather than a spare letter for the reason `kill_and_redispatch` takes `X`: a letter chosen for convenience is what the destructive-key rule refuses, and this one changes what a job may spend. Not destructive — nothing is ended or overruled, and the job stays exactly where it was — and it confirms because `B` opens a dialog that collects the figure, which is the field-collecting exception the safety rules name. No glyph: `arrow-up-to-line` is the escalation reason `loop_cap`, a ceiling that stopped something, which is the opposite reading, and the registry has no coin, wallet or currency silhouette at all. Minting one is a decision for packages/icons/icons.toml."
+notes = "The first of two budget rows in this registry, added 2026-09-09 with the act; `raise_turn_cap` is the other ceiling. A job past its cost cap waits at `queued` reading `over_budget` until somebody raises the cap — the one reason a queued job carries that does not clear on its own — and there was no key, no route and no control for it. Shifted `B`, on `open_log`'s precedent: the lowercase mnemonic is spent, `b` being `report_job`, and a budget is the one thing on this screen where the mnemonic is worth reaching for. Shifted rather than a spare letter for the reason `kill_and_redispatch` takes `X`: a letter chosen for convenience is what the destructive-key rule refuses, and this one changes what a job may spend. Not destructive — nothing is ended or overruled, and the job stays exactly where it was — and it confirms because `B` opens a dialog that collects the figure, which is the field-collecting exception the safety rules name. No glyph: `arrow-up-to-line` is the escalation reason `loop_cap`, a ceiling that stopped something, which is the opposite reading, and the registry has no coin, wallet or currency silhouette at all. Minting one is a decision for packages/icons/icons.toml."
+
+[actions.raise_turn_cap]
+kind = "Action"
+tier = "Contextual"
+verb = "Raise the turn cap"
+icon = ""
+icon_absent = "undecided"
+shortcut = "T"
+scope = "detail"
+destructive = false
+confirms = true
+notes = "The second budget row, added 2026-09-09 with the act, and the ceiling the row above did not cover. A job past its turn cap waits at `queued` reading `over_budget` exactly as one past its cost cap does — and until this there was no key, no route and no number below a compile-time constant, so pressing `B` on such a job raised a ceiling that was not holding it. `T` for turns, uppercase on `raise_cost_cap`'s precedent: `t` is Attest, and a ceiling is worth reaching for a mnemonic rather than taking a spare letter. Not destructive, and it confirms because `T` opens a dialog that collects the figure. No glyph, for the row above's reason and one of its own: `arrow-up-to-line` is the escalation reason `loop_cap`, which is a ceiling that stopped something, and drawing it on the control that clears one inverts it."
 
 [actions.open_stage]
 kind = "Action"

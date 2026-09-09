@@ -31,7 +31,7 @@ use crate::event::Reason;
 use crate::ids::{DroneId, Instant, JobId, ManifestId, StepId, WorkflowId};
 
 use crate::enums::{
-    CriterionSource, DependencyDirection, JobStatus, Origin, QueuedReason, Resumption,
+    BudgetHold, CriterionSource, DependencyDirection, JobStatus, Origin, QueuedReason, Resumption,
     TopLevelOrigin, Urgency,
 };
 
@@ -99,6 +99,20 @@ pub struct JobSummary {
     /// absence of a value rather than as a variant nothing renders.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub queued_reason: Option<QueuedReason>,
+    /// Which of the two ceilings is holding it, where `queued_reason` is
+    /// `over_budget`.
+    ///
+    /// **Absent whenever that one is not `over_budget`**, and never present on
+    /// its own: it qualifies that label and says nothing without it.
+    ///
+    /// **It costs nothing to carry.** `Fleet::overspent` already answers which
+    /// ceiling it was, in the same read `queued_reason` is computed from — this
+    /// is that answer reaching the wire instead of being folded away. What it
+    /// buys is the difference between a Board that says a Job is over budget
+    /// and a Board a person can act on: the two ceilings take different acts,
+    /// and until Sept 2026 only one of them had an act at all.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub budget_hold: Option<BudgetHold>,
     /// Which act a person took to put this Job back in the queue.
     ///
     /// **The other axis over `queued`, and the one that says somebody is
@@ -212,6 +226,7 @@ impl JobSummary {
         job: &core_model::Job,
         reason: Option<&core_model::TransitionReason>,
         queued_reason: Option<core_model::QueuedReason>,
+        budget_hold: Option<core_model::BudgetHold>,
         asking: bool,
         resumption: Option<core_model::Resumption>,
     ) -> JobSummary {
@@ -224,6 +239,7 @@ impl JobSummary {
             branch: job.branch().map(|branch| branch.as_str().to_string()),
             reason: reason.and_then(Reason::of),
             queued_reason: queued_reason.map(QueuedReason::from),
+            budget_hold: budget_hold.map(BudgetHold::from),
             resumption: resumption.map(Resumption::from),
             workflow_id: job.workflow_id().into(),
             owner_manifest_id: job.owner_manifest_id().into(),
@@ -338,7 +354,11 @@ impl From<&core_model::Job> for JobSummary {
         // creation, a step advancing and a Drone arriving or leaving are none of
         // them a Job that has just asked something. The message that says a
         // question exists is `job.asking`, which carries the question itself.
-        JobSummary::of(job, None, None, false, None)
+        //
+        // `budget_hold` is `None` for the same reason `queued_reason` is: both
+        // are read off the board rather than off the record, and this
+        // conversion holds only the record.
+        JobSummary::of(job, None, None, None, false, None)
     }
 }
 

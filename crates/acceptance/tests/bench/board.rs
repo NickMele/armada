@@ -129,6 +129,7 @@ pub fn detail(job: &Job, reason: Option<&TransitionReason>, steps: &[StepFacts])
         reason,
         None,
         None,
+        None,
         steps,
         None,
         None,
@@ -156,6 +157,7 @@ pub fn delivered(
     JobDetail::of(
         job,
         reason,
+        None,
         None,
         None,
         steps,

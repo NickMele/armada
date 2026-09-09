@@ -404,17 +404,17 @@ Kit's global **Agent file** ("how I work" — personal, cross-project) has **no 
 
 ### What's frozen vs. live
 
-Skills/MCP/Agent-files/Commands are frozen into a Drone at spawn time, a process boot-time constraint. Allowlist and dispatch freeze are enforced live at every gated checkpoint. The budget cap is enforced live too, and since 8 Sept 2026 a Manifest states the dollar half of it — live at every tier, and frozen at none, because a Job past its cap is refused again at every admission until a number moves. See below.
+Skills/MCP/Agent-files/Commands are frozen into a Drone at spawn time, a process boot-time constraint. Allowlist and dispatch freeze are enforced live at every gated checkpoint. The budget cap is enforced live too, and since 8 Sept 2026 a Manifest states it — the dollar half then, both halves from 9 Sept — live at every tier, and frozen at none, because a Job past its cap is refused again at every admission until a number moves. See below.
 
 Checks split: a Check that existed at spawn is frozen for the life of the Job, while a Check added mid-Job gates immediately — additive-only, and for a different reason than the boot-time constraint above. Full detail on [Drone](drone.md) and [Fleet](fleet.md).
 
-## Budget — a Manifest states the dollar cap and not the turn cap
+## Budget — a Manifest states both caps
 
 **A Manifest may state `drone.cost_cap_micros_per_job`**, in millionths of a
-dollar, and it sits between [Machine](machine.md)'s number and the Job's own.
-Stating nothing defers upward; stating zero says no Job here starts anything,
-which is how a repository is held without stopping the Fleet the other
-repositories run under.
+dollar, **and `drone.turn_cap_per_job`**, in turns. Each sits between
+[Machine](machine.md)'s number and the Job's own. Stating nothing defers upward;
+stating zero says no Job here starts anything, which is how a repository is held
+without stopping the Fleet the other repositories run under.
 
 **This section said the opposite until 8 Sept 2026**, and the sentence it argued
 for was that there is one cap, so no precedence rule and no override. What
@@ -424,10 +424,14 @@ for good reasons that still hold — it declared a *full override* of the Machin
 cap with no stated precedence, which is two independent caps rather than a tier.
 What is here now is a tier: one order, written once, in `fleet::Allowance::at`.
 
-**The turn cap is still Machine's alone.** Over the dollar cap a Job often just
-started cold and the remedy is the number; over the turn cap it is going in
-circles, and a repository that could raise its own would be opting out of the
-one signal that reads steadily across cache warmth.
+**The turn cap took the same tier a day later, and for the same reason.** It
+stayed Machine's alone on the argument that a repository able to raise its own
+would be opting out of the one signal reading steadily across cache warmth. Job
+`01M22TYSAE0023MADDP5ZQEYGW` is what falsified that: it finished, passed every
+Check, and stopped at 393 turns against a 300 constant with a cheap final step
+unrun and its branch committed by hand. A ceiling nobody can move is not a
+policy. What keeps a repository from opting out is not the absence of a lever:
+it is that a ceiling somebody had to raise is a ceiling somebody read.
 
 **Two things the deleted row was carrying that are still true.** Verification
 spend counts against the cap, because a cap that excluded the Judge would

@@ -114,7 +114,7 @@ Both turn one thing into several Jobs, and the difference between them is the ap
 
 ### Budget gating (what the Job has spent)
 
-**Fleet reads what a Job's Drones have already cost before starting another one on it.** Over its cap, the Job stays `queued` and reads `over_budget`. It is the third reason a Job waits and it is asked through the same one-answer arrangement the other two are, so a Board cannot say a Job is over budget while Fleet is starting it.
+**Fleet reads what a Job's Drones have already cost and how often they have turned, before starting another one on it.** Over either ceiling, the Job stays `queued` and reads `over_budget`, with `budget_hold` saying which of the two. It is the third reason a Job waits and it is asked through the same one-answer arrangement the other two are, so a Board cannot say a Job is over budget while Fleet is starting it.
 
 **It reads before "waiting on resources" when both hold.** Headroom frees on its own and a spent budget does not; a person told their Job is waiting for the machine would go and watch something that is already on its way, while the thing actually holding it needs them.
 

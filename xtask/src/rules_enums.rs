@@ -68,6 +68,10 @@ const ENUMS: &[EnumSource] = &[
         path: "crates/core-model/src/job/fields.rs",
     },
     EnumSource {
+        name: "BudgetHold",
+        path: "crates/core-model/src/job/fields.rs",
+    },
+    EnumSource {
         name: "Resumption",
         path: "crates/core-model/src/job/fields.rs",
     },
@@ -171,6 +175,14 @@ const PAIRINGS: &[Pairing] = &[
         prefix: "verbs.admission_hold.",
         enum_name: "AdmissionHold",
     },
+    // The finer half of `over_budget`, and no registry file of its own: the set
+    // is the two ceilings `crates/config/settings.toml` gives rows to, and the
+    // verbs are the only place it is spelled key by key.
+    Pairing {
+        registry: "enum-verbs.toml",
+        prefix: "verbs.budget_hold.",
+        enum_name: "BudgetHold",
+    },
     // The other axis over `queued`, and it has no registry file of its own
     // either: the set is the shape `readmitting::Owed` partitions the inner
     // machine into, and the verbs are the only place it is spelled key by key.
@@ -250,6 +262,7 @@ const VOCABULARIES: &[&str] = &[
     "job_status",
     "queued_reason",
     "admission_hold",
+    "budget_hold",
     "resumption",
     "escalation_reason",
     "step_verdict",

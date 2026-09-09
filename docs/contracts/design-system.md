@@ -663,6 +663,7 @@ f              open the diff        (detail only)
 o              open the output      (detail only)
 g              open the stage       (detail only)
 B              raise the cost cap   (detail only) (confirms)
+T              raise the turn cap   (detail only) (confirms)
 ```
 
 **This is the map, not a pattern.** It was settled by drawing the Job
@@ -742,8 +743,8 @@ These are constraints on the map, not suggestions.
   **A dialog that collects a field is the exception**, and it is not a
   weakening of the rule: the field *is* the confirmation, nothing is
   destroyed by pressing it, and the kbd is drawn on the confirm because
-  that is where `Enter` fires there. Redirect, Overrule, Report and
-  Raise the cost cap are the four.
+  that is where `Enter` fires there. Redirect, Overrule, Report,
+  Raise the cost cap and Raise the turn cap are the five.
   This line read "**Cancel holds initial focus**, `Enter` confirms,
   `Esc` cancels" until 2026-09-02. Both halves were true of something
   and the sentence did not say which won, so the implementation guessed

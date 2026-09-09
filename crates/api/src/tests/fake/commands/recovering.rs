@@ -68,6 +68,27 @@ impl FakeDaemon {
         }
         Ok(job.clone())
     }
+    /// The other ceiling. **The same two checks and no more**, for the reason
+    /// above: which figure is in force is Fleet's across tiers a `JobSummary`
+    /// does not carry.
+    pub(super) async fn fake_raise_turn_cap(
+        &self,
+        job_id: JobId,
+        _raise: ipc::TurnRaise,
+    ) -> Result<JobSummary, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        let Some(job) = jobs.iter().find(|job| job.id == job_id) else {
+            return Err(self.no_such_job(&job_id));
+        };
+        if job.status.domain().is_terminal() {
+            return Err(Refusal::IllegalMove(ipc::WireError::raised(
+                "fake.not_turn_cappable",
+                format!("a Job at {} has nothing left to turn", job.status.as_wire()),
+                run_id(),
+            )));
+        }
+        Ok(job.clone())
+    }
     /// The unit of work, not the process. Legal from wherever the Job is, so
     /// long as it is not already over — including the statuses `kill_drone`
     /// refuses, which is the whole reason the two are separate operations.

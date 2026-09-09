@@ -209,10 +209,14 @@ where
             // A raise on a Job that is over — the same shape as the two above
             // and the opposite half of their predicate. A code of its own for
             // their reason: what a person does instead is a redispatch.
-            Adrift::NotCappable { job, .. } => Refusal::IllegalMove(
-                WireError::raised(NOT_CAPPABLE, said, self.run_id())
-                    .about_job(ipc::JobId::from(job)),
-            ),
+            // The turn raise's half of the same refusal, on the same code:
+            // which act was asked for is the route the caller called.
+            Adrift::NotCappable { job, .. } | Adrift::NotTurnCappable { job, .. } => {
+                Refusal::IllegalMove(
+                    WireError::raised(NOT_CAPPABLE, said, self.run_id())
+                        .about_job(ipc::JobId::from(job)),
+                )
+            }
             // The repository would not open, so neither half was attempted.
             // Fleet's own ground failed and nothing about the request is
             // wrong, which is the 500 this variant is for.
@@ -257,6 +261,8 @@ where
             Adrift::Unnameable
             | Adrift::CapNotRaised { .. }
             | Adrift::CapAboveCeiling { .. }
+            | Adrift::TurnCapNotRaised { .. }
+            | Adrift::TurnCapAboveCeiling { .. }
             | Adrift::Unreasoned { .. }
             | Adrift::NotFileable { .. }
             | Adrift::NoSuchWorkflow { .. }

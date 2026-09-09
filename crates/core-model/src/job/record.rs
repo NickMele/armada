@@ -18,11 +18,11 @@
 //! M1 reaches — so a step state M1 does not reach is not refused at runtime, it
 //! cannot be asked for.
 //!
-//! **The other mutators write one field and mint nothing** —
-//! [`Job::on_branch`], [`Job::on_reclaimed`], [`Job::redirect_waits`],
-//! [`Job::redirect_delivered`] and [`Job::cost_capped`] — because no event
-//! carries a worktree, a reclaim, a note or a ceiling. [`Job::drone_spawned`]
-//! and [`Job::drone_exited`] do mint one: presence has to fold.
+//! **The other mutators write one field and mint nothing** — [`Job::on_branch`],
+//! [`Job::on_reclaimed`], [`Job::redirect_waits`], [`Job::redirect_delivered`],
+//! [`Job::cost_capped`] and [`Job::turn_capped`] — because no event carries a
+//! worktree, a reclaim, a note or a ceiling. [`Job::drone_spawned`] and
+//! [`Job::drone_exited`] do mint one: presence has to fold.
 
 use alloc::vec::Vec;
 
@@ -184,6 +184,12 @@ pub struct Job {
     /// as a bare `u64` because `Micros` is Fleet's type and nothing under this
     /// crate may depend on Fleet.
     cost_cap_micros: Option<u64>,
+    /// How many turns this one Job may take. **The same three readings as
+    /// `cost_cap_micros` beside it**: `None` defers to the tier above,
+    /// `Some(0)` starts nothing. It is a second column rather than a second
+    /// meaning on the first because the two ceilings take opposite remedies —
+    /// `crates/config/settings.toml` argues that where the rows are.
+    turn_cap: Option<u64>,
     subject: Option<Subject>,
     facts: Facts,
     scope_revisions: Vec<ScopeRevision>,
@@ -253,6 +259,8 @@ impl Job {
             // machine say. A number here at creation would be a ceiling
             // nobody chose.
             cost_cap_micros: None,
+            // Unset, for the line above's reason.
+            turn_cap: None,
             subject: new.subject,
             facts: new.facts,
             scope_revisions: new.scope_revisions,
@@ -343,6 +351,18 @@ impl Job {
     pub fn cost_capped(&self, micros: Option<u64>) -> Job {
         let mut job = self.clone();
         job.cost_cap_micros = micros;
+        job
+    }
+
+    /// Set, raise, lower or clear how many turns this Job may take.
+    ///
+    /// **[`cost_capped`](Job::cost_capped)'s twin, and separate for the reason
+    /// the two columns are separate**: a Job held on turns and a Job held on
+    /// dollars are moved by different acts, and one mutator taking both would
+    /// let a caller clear a ceiling it never meant to name.
+    pub fn turn_capped(&self, turns: Option<u64>) -> Job {
+        let mut job = self.clone();
+        job.turn_cap = turns;
         job
     }
 
@@ -705,6 +725,12 @@ impl Job {
     /// is a Job that starts nothing and is a different answer from `None`.
     pub fn cost_cap_micros(&self) -> Option<u64> {
         self.cost_cap_micros
+    }
+    /// This Job's own turn ceiling, or `None` where it has none of its own and
+    /// takes the repository's or the machine's. `Some(0)` is a Job that starts
+    /// nothing and is a different answer from `None`.
+    pub fn turn_cap(&self) -> Option<u64> {
+        self.turn_cap
     }
     pub fn subject(&self) -> Option<&Subject> {
         self.subject.as_ref()

@@ -287,7 +287,8 @@ where
         Ok(JobDetail::of(
             &job,
             reason.as_ref(),
-            queued,
+            queued.reason,
+            queued.budget,
             self.resumption(&job),
             &step_facts(
                 self.aloft(),
