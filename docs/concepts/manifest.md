@@ -268,6 +268,16 @@ evidence:
 
 **`ready` is a command and not a duration.** A number would be a guess against a machine somebody else is using, and what it produces is a frame of a blank page that looks exactly like a frame of a broken one.
 
+### The harness runs twice, and the spec never moves
+
+A reviewer wants to see what *changed*, so Fleet photographs the base as well as the branch. `serve` and `ready` are run in a detached checkout of the base commit; `run` is run in the Job's own worktree, against that server. The spec is code that lands in the patch, so it does not exist at base — running it from the worktree is what makes a base run possible at all, and it means both sides are measured with one instrument.
+
+What a repository has to know about this is small but real. `serve` must be startable in a tree that has had `setup.requires` run in it and nothing else; `run` must be able to reach the served thing without assuming it is the same checkout. The base checkout is shared by every Job on that commit — `.armada/bases/<commit>/`, set up once, swept when the base moves past it — so `setup.requires` is paid for a base and not for a Job.
+
+Frames come back labelled `base` or `branch` and are paired by the name the spec gave them. A name on one side only is an answer: one the change *added* has no before, one it *removed* has no after. And a spec that fails at base while succeeding on the branch is the ordinary shape of a brand-new screen, not a broken harness — Fleet tells those apart by whether the branch run worked, and says which in the Job's log.
+
+A repository that names no `base:` and has no `main` or `master` gets branch frames alone, with a line saying why. Nothing is invented to fill the other half.
+
 **`never` is honest about being a comment.** Nothing here drives a browser, so there is no navigation to intercept. What reads it is the block a Drone writing the spec is given, and the reviewer reading the spec against it. That is weaker than an interception, and the alternative is a key that reads as a guarantee.
 
 **A section this repository does not declare is not a default.** A workflow with a `visual` step resolved against a Manifest with no harness is refused before anything is dispatched — so it reaches a person as a sentence rather than as a Job that cut a worktree, spawned a Drone and captured nothing.

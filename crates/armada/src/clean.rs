@@ -26,7 +26,7 @@
 
 use std::path::{Path, PathBuf};
 
-use adapter_traits::WorktreeSpec;
+use adapter_traits::{BaseSpec, Vcs, WorktreeSpec};
 use adapters::{BranchGone, Reclaimed, UnmergedWork, WorktreeStanding};
 use config::Manifest;
 use core_model::{JobId, Timestamp};
@@ -160,6 +160,14 @@ pub struct Cleaned {
     /// the repository that owns them, and counted so a person is not told
     /// nothing about rows they can see in Fleet's boot line.
     pub unreadable_elsewhere: usize,
+    /// The shared base checkouts this clean took, by commit.
+    ///
+    /// **Every one of them, and not only the ones the base has moved past.**
+    /// Fleet's sweep keeps the current base because a Job is about to want it;
+    /// a clean is a person saying give the disk back, and the checkout is
+    /// remade by the next Job that needs a *before*. Holding one here would be
+    /// `armada clean` leaving behind the largest directory under `.armada/`.
+    pub bases: Vec<String>,
     /// Things that went wrong and did not stop the rest.
     pub faults: Vec<String>,
 }
@@ -268,6 +276,7 @@ pub fn clean(
         forget_this_manifests_jobs(&mut store, &manifest, &root, unmerged, &now, &mut cleaned);
     }
     report_what_no_job_claims(&root, &mut cleaned);
+    cleaned.bases = give_back_the_base_checkouts(&root, &mut cleaned.faults);
 
     if scope == Scope::AndTheMachine {
         // After the Jobs, never before. Removing the store first would leave
@@ -588,6 +597,42 @@ fn report_what_no_job_claims(root: &Path, cleaned: &mut Cleaned) {
         }
     }
     cleaned.unclaimed.sort();
+}
+
+/// Take back every shared base checkout, whatever commit it is at.
+///
+/// **Not keyed to a Job, which is why it is its own walk.** A base checkout
+/// belongs to a commit and is shared by every Job on it, so none of the Job
+/// loops above would ever reach one — and the directory is a whole checkout
+/// plus whatever `setup.requires` installed, which on this repository is the
+/// largest thing under `.armada/`.
+///
+/// **Through a `BaseSpec` rather than by removing the path the walk read**,
+/// which is `fleet::holding`'s rule and the reason a hand-run glob destroyed
+/// nine branches: what gets deleted is what a derivation names. A directory
+/// here whose name is not a commit id is not something Armada made, so it is
+/// left — evidence, not litter, exactly as an unclaimed worktree is.
+fn give_back_the_base_checkouts(root: &Path, faults: &mut Vec<String>) -> Vec<String> {
+    let Some(at) = root.to_str() else {
+        return Vec::new();
+    };
+    let Ok(entries) = std::fs::read_dir(root.join(".armada").join("bases")) else {
+        return Vec::new();
+    };
+    let vcs = adapters::GitVcs::new();
+    let mut taken = Vec::new();
+    for entry in entries.flatten() {
+        let named = entry.file_name().to_string_lossy().into_owned();
+        let Ok(spec) = BaseSpec::at(at, &named) else {
+            continue;
+        };
+        match vcs.drop_base_checkout(&spec) {
+            Ok(()) => taken.push(named),
+            Err(why) => faults.push(format!("a base checkout was not removed: {why}")),
+        }
+    }
+    taken.sort();
+    taken
 }
 
 fn remove(machine: &Path, name: &str) -> FileGone {
