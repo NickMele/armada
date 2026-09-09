@@ -48,6 +48,9 @@ function working(summary: JobSummary): void {
     <StepActs
       job={summary}
       whole={null}
+      // Nothing on a working job opens a record; the override dialog is the
+      // one surface under here that does, and it is not drawn on this render.
+      opens={{ jobId: summary.id, open: async () => ({ ok: true }), onSaid: () => {} }}
       render="working"
       acting={false}
       stale={false}
