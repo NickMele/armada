@@ -1,4 +1,4 @@
-// What a restart puts on the wire, read off a real listener.
+// What a restart and a raise put on the wire, read off a real listener.
 //
 // **The subject is the body and nothing else.** `restart_step` took no body at
 // all until #396, and the whole promise of the change is that restarting with
@@ -9,6 +9,11 @@
 // A listener rather than a stubbed `fetch`, for `proposing.test.ts`'s reason:
 // what is under test is what crosses, and a fake that records its arguments
 // records what this side believed rather than what was sent.
+//
+// **The raise is here for the same reason at a different scale.** It carries a
+// figure rather than a sentence, in millionths of a dollar where a person typed
+// dollars, and neither side would notice a factor of a million: what it puts on
+// the wire is bytes, and bytes are what is asserted.
 
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -128,4 +133,53 @@ it("trims what it sends", async () => {
   await commands.restartStep(A_JOB.id, "  start from the failing case  ");
 
   expect(JSON.parse(asked[0]?.body ?? "null")).toEqual({ note: "start from the failing case" });
+});
+
+/**
+ * **The unit crosses as micros.** The renderer hands over millionths of a
+ * dollar because `JobSpend` reads in them, and the body carries that integer
+ * unchanged — a raise sent in dollars would be a cap below a hundredth of a
+ * cent, refused as no raise at all.
+ */
+it("sends the new cost cap in micros, with the surface that asked", async () => {
+  const asked: Asked[] = [];
+  const commands = new JobCommands(boardOn(await fleetRecording(asked)));
+
+  const answer = await commands.raiseCostCap(A_JOB.id, 20_000_000);
+
+  expect(answer.ok).toBe(true);
+  expect(asked[0]?.path).toBe(`/jobs/${A_JOB.id}/raise_cost_cap`);
+  expect(JSON.parse(asked[0]?.body ?? "null")).toEqual({
+    cost_cap_micros: 20_000_000,
+    raised_by: "person",
+  });
+});
+
+/**
+ * **Bridge never sends the other value.** `raised_by` is provenance rather than
+ * a credential, filled in by the surface that composed the request — and this
+ * app is the one a person presses, so nothing here chooses.
+ */
+it("never claims to be Helm", async () => {
+  const asked: Asked[] = [];
+  const commands = new JobCommands(boardOn(await fleetRecording(asked)));
+
+  await commands.raiseCostCap(A_JOB.id, 12_500_000);
+
+  expect(JSON.parse(asked[0]?.body ?? "null").raised_by).toBe("person");
+});
+
+/**
+ * A figure that cannot be a cap is refused before anything goes out. **Not the
+ * comparison against the cap in force** — that one is the dialog's, which has
+ * both numbers — this is the floor no ceiling can be under.
+ */
+it("sends nothing at all for a cap of nothing", async () => {
+  const asked: Asked[] = [];
+  const commands = new JobCommands(boardOn(await fleetRecording(asked)));
+
+  const answer = await commands.raiseCostCap(A_JOB.id, 0);
+
+  expect(answer).toEqual({ ok: false, why: "cap_not_raised" });
+  expect(asked).toHaveLength(0);
 });
