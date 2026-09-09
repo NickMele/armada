@@ -644,6 +644,31 @@ How long a Drone may say nothing before Fleet pokes it, and — once `poke_limit
 Documented on Drone; Fleet is what notices the silence. Distinct from Fleet health-check / resource-poll interval, and from the heartbeat interval, which is how often a Drone is expected to speak rather than how long Fleet waits before speaking to it.
 """
 
+[settings.drone-scope-exclusions-exclude-paths]
+name = "Drone scope exclusions (exclude_paths)"
+scope = "Kit → Manifest"
+default = "node_modules, target"
+lifetime = "Frozen for the Job"
+merge_strategy = "REPLACE"
+peer_polarity = "Union (deny-shaped)"
+owner = "Fleet"
+read_by = "config"
+notes = """
+What a step's work is meant to stay out of: the denylist a Drone's declared `context_paths` is answered against, and the tier a Judge may lift through `request_scope`. The tier nothing lifts is a different thing entirely, is compiled into `verification`, and has no key here — `docs/contracts/configuration.md` holds the split.
+
+**The third key in `armada.yml`'s `drone:` section, and the first there that is not a number.** It is spelled as a workflow step spells it, for the reason the two beside it are: one value under two words is a vocabulary split that shows up the day somebody moves a list from a workflow definition into this file and it stops working.
+
+**All three tiers are wired, and there are three rather than the two this row's `scope` names.** There is no Kit; nothing in the workspace parses one. What exists is `crates/config/src/resolve.rs`'s `WHERE_NO_REPOSITORY_AUTHORS`, `armada.yml`'s `drone.exclude_paths`, and a step's `evidence_scope.exclude_paths`. `config::resolve`'s `fenced` is where all three meet and is the only place the order is written.
+
+**The default is a guess about ecosystems and is deliberately short.** `target` is Cargo's and `node_modules` is npm's, and a repository that is neither inherits a fence naming nothing it has — which costs nothing, because a fence only bites a path a Drone declares. A wrong entry costs the opposite and the asymmetry is the whole argument: it refuses a Drone the file that holds the fix, which is the failure `#417` was filed about. Both words were already in every shipped workflow step before this row existed; what this row changed is that they are written once instead of in seven files.
+
+**`merge_strategy = "REPLACE"` on a list, which is unusual here and is the decision worth arguing.** The dialect has no negation — a leading `!` is refused by name — so under a union a repository could add a fence and never drop one, and Fleet's guess about ecosystems would be the one thing in the chain nobody could correct. `peer_polarity` is still deny-shaped, because that field is about several Manifests gating one Job and most-restrictive-wins is union there; the two answer different questions.
+
+**`Frozen for the Job`, unlike the two live keys in the same section.** Every `ResolvedWorkflow` takes its copy when a workflow is resolved against the Manifest at daemon start, and each Job freezes what it was resolved with — so a Job asked afterwards why a path was refused answers from its own record rather than from a file that has since been edited. A save that moves it is reported as needing a restart, by `config::live`, which names the key rather than the `drone:` section for exactly this reason.
+
+**Absence has one reading and the empty list is refused**, by `yaml::list`, everywhere it could be written. So a tier that says nothing is a tier deferring, never a tier fencing nothing — and the cost of that, named rather than hidden: there is no spelling for "this repository fences nothing". A repository that wants none states the narrowest path it can name.
+"""
+
 [settings.fleet-self-restart-attempt-limit-backoff]
 name = "Fleet self-restart attempt limit/backoff"
 scope = "Machine"

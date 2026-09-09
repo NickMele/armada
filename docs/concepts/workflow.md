@@ -69,6 +69,8 @@ Attached to every step that triggers a Judge or a human gate. Prevents the Judge
 
 **`exclude_paths` is the tier a Judge may lift.** It is where an author says what this kind of work should stay out of, written before anybody had read the code — so when a Drone finds the fix genuinely needs one of those paths, `request_scope` puts that to a Judge and a cleared path becomes declarable. The boundaries nothing lifts — secrets, CI configuration, the workflow definitions themselves — are stated in no definition and named in no key. [Configuration](../contracts/configuration.md) holds the split and why the second tier is compiled in rather than configured.
 
+**A step may state none, and it is fenced anyway.** What to exclude varies by repository rather than by kind of work, so the list falls back to `drone.exclude_paths` in the repository's `armada.yml` and then to a compiled-in default. A step that states one keeps it whole. The order is in [Configuration](../contracts/configuration.md) and in `config::resolve`, which is the only place it is written.
+
 The Drone supplies them at evidence-report time, Fleet validates them, and the **resolved** object handed to the Judge is the one on which `context_paths` is required. Where a field row says a field is required, it means required on the resolved object.
 
 **The diff is delivered, not fetched.** The resolved object carries the **actual patch** for the files in scope, pre-loaded into the Judge's context — not a list of filenames the Judge then has to go and read. The veto-only contract already says the Judge receives the task text, the **work product** and the deterministic facts; on a coding step the diff *is* the work product.

@@ -24,7 +24,9 @@
 
 use std::path::PathBuf;
 
-use core_model::{FrozenWorkflow, ResolvedCheck, ResolvedStep, WorkflowId};
+use core_model::{
+    EvidenceScope, FrozenWorkflow, RepoPath, ResolvedCheck, ResolvedStep, WorkflowId,
+};
 
 use crate::error::{ResolveError, UnknownCheck};
 use crate::manifest::Manifest;
@@ -172,7 +174,7 @@ fn resolve_step(step: &Step, manifest: &Manifest, unknown: &mut Vec<UnknownCheck
         checks,
         step.advance_gate(),
         step.judge_checks().to_vec(),
-        step.evidence_scope().cloned(),
+        step.evidence_scope().map(|scope| fenced(scope, manifest)),
         step.retry_limit(),
         step.model().cloned(),
     )
@@ -192,4 +194,74 @@ fn resolve_step(step: &Step, manifest: &Manifest, unknown: &mut Vec<UnknownCheck
     )
     .quiet_after(step.quiet_after_seconds())
     .poking(step.poke_limit())
+}
+
+/// What a step's work stays out of where nothing above it said.
+///
+/// **Generated output, and that is the whole of the class.** These decide
+/// nothing about what is checked or judged, no repository authors work into
+/// them, and `docs/contracts/configuration.md` already reduced the shipped
+/// workflows' lists to exactly these two once `.env` moved to the tier nothing
+/// lifts. What has changed is where the two words are written: seven workflow
+/// files each carrying them is seven places to correct a guess, and this is
+/// one.
+///
+/// **It is a guess about ecosystems and it is deliberately short.** `target`
+/// is Cargo's and `node_modules` is npm's, so a repository that is neither
+/// inherits a fence that names nothing it has — which costs nothing, because
+/// a fence only bites a path a Drone declares. What a longer list would cost
+/// is the opposite and is not symmetric: a wrong entry refuses a Drone the
+/// file that holds the fix, which is the failure `#417` was filed about. So
+/// the list stays at the two entries that were already shipped, and a
+/// repository that wants others writes them.
+///
+/// **Matched by [`core_model::under`], anchored at the repository root**, like
+/// every other entry in this list — so `target` fences `target/debug` and not
+/// `crates/x/target`. That is the existing reading of a workflow's own entries
+/// and this tier does not get a second one.
+const WHERE_NO_REPOSITORY_AUTHORS: &[&str] = &["node_modules", "target"];
+
+/// One step's `exclude_paths`, resolved across the three tiers that state it.
+///
+/// # The order, and this is the only place it is written
+///
+/// The step's own list, then the repository's `drone.exclude_paths`, then
+/// [`WHERE_NO_REPOSITORY_AUTHORS`]. `fleet::Liveness::at` is the worked example
+/// this follows; the difference is that patience is two numbers each falling
+/// back on its own, and this is one list falling back whole.
+///
+/// **A tier that states one states all of it.** The dialect has no negation —
+/// `docs/contracts/configuration.md` refuses a leading `!` by name — so under a
+/// union a repository could add a fence and never drop one, and the compiled-in
+/// guess would be the one thing nobody could correct — the objection this key
+/// answers.
+///
+/// **An empty list is unreachable, so absence has one reading.**
+/// [`crate::yaml::list`] refuses the empty list wherever it could be written,
+/// which is why this compares on `is_empty` and needs no `Option`.
+///
+/// **Frozen, and the Job's record says what it was.** This runs once, where a
+/// workflow is resolved at daemon start, and every Job freezes the answer — so
+/// a Job asked later why a path was refused answers from its own row rather
+/// than from a file since edited. A save that moves the key is reported as
+/// needing a restart, by [`crate::live`]. A step with no `evidence_scope` at
+/// all is untouched: nothing fences a step that asks for no declaration.
+fn fenced(scope: &EvidenceScope, manifest: &Manifest) -> EvidenceScope {
+    if !scope.exclude_paths().is_empty() {
+        return scope.clone();
+    }
+    let inherited: Vec<RepoPath> = match manifest.exclude_paths() {
+        [] => WHERE_NO_REPOSITORY_AUTHORS
+            .iter()
+            .map(|path| RepoPath::new(*path))
+            .collect(),
+        stated => stated.to_vec(),
+    };
+    EvidenceScope::declared(
+        scope.context_source(),
+        inherited,
+        scope.reference_docs().to_vec(),
+        scope.scope_diff_check(),
+        scope.declare_plan_at(),
+    )
 }

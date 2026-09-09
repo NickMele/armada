@@ -11,6 +11,7 @@
 //! its own repository is not a validator.
 
 mod after_merge;
+mod fences;
 mod live;
 mod loops;
 mod manifest;
