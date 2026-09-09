@@ -11,7 +11,7 @@
 // partitioned.
 
 import { useState } from "react";
-import { Button, Dialog, GamingFlags, Textarea } from "@armada/components";
+import { Button, Dialog, GAMING_PATTERN, GamingFlags, Textarea } from "@armada/components";
 
 import { openKept, type Opens } from "./phases";
 import { onwards, OVERRULING, type Overrule } from "./recovery";
@@ -140,7 +140,14 @@ export function OverruleControl({
             citing, and drawing nothing is the honest render of that. */}
         {flagged.length === 0 ? null : (
           <GamingFlags
-            flags={flagged.map((flag) => ({ ...flag, brief: flag.brief_path }))}
+            // The verb, as the band behind this dialog already reads it. The
+            // wire spelling reached a person here and a sentence there, on the
+            // one surface where they are signing for the finding.
+            flags={flagged.map((flag) => ({
+              ...flag,
+              brief: flag.brief_path,
+              verb: GAMING_PATTERN[flag.pattern]?.verb ?? undefined,
+            }))}
             said={WHAT_IT_FLAGGED}
             citation="whole"
             onOpenBrief={(brief) => openKept(opens, { kept: brief, what: "brief" })}
