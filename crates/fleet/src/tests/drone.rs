@@ -29,7 +29,10 @@ use core_model::{EscalationTrigger, Target};
 use testkit::FakeHarness;
 use tokio::io::AsyncReadExt;
 
-use crate::drone::{aftermath, environment, start, Aftermath, DroneNotStarted, Ending, HostPaths};
+use crate::drone::{
+    aftermath, awaiting_background, environment, start, Aftermath, DroneNotStarted, Ending,
+    HostPaths,
+};
 use core_model::JobStatus;
 
 use crate::tests::tmp::TempDir;
@@ -297,6 +300,44 @@ fn a_run_with_no_terminating_event_vanished() {
             by: Speaker::Drone
         }]),
         Ending::Vanished
+    );
+}
+
+/// **The last count wins, and there is no pairing.** `background_tasks_changed`
+/// is the harness re-stating its whole outstanding set, so a fold that tried to
+/// match starts against finishes would need every terminal spelling the harness
+/// has — and would answer wrongly the first time it grew another.
+#[test]
+fn what_is_outstanding_is_the_last_count_and_not_a_memory_of_one() {
+    let ended = DroneEvent::Ended {
+        turns: 4,
+        cost_micros: 171_532,
+        refusals: 0,
+    };
+
+    assert!(
+        !awaiting_background(&[ended.clone()]),
+        "a run that backgrounded nothing is not waiting on anything"
+    );
+    assert!(
+        awaiting_background(&[DroneEvent::BackgroundWork { outstanding: 1 }, ended.clone()]),
+        "it left one running and stopped talking"
+    );
+    assert!(
+        !awaiting_background(&[
+            DroneEvent::BackgroundWork { outstanding: 2 },
+            DroneEvent::BackgroundWork { outstanding: 0 },
+            ended.clone()
+        ]),
+        "both landed before it ended, so the ending is an ending"
+    );
+    assert!(
+        awaiting_background(&[
+            DroneEvent::BackgroundWork { outstanding: 2 },
+            DroneEvent::BackgroundWork { outstanding: 1 },
+            ended
+        ]),
+        "one landed and one did not"
     );
 }
 

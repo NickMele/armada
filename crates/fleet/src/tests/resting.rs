@@ -223,6 +223,49 @@ fn the_stray_tool_ended(marker: &std::path::Path) {
         .status();
 }
 
+/// The harness re-stating how much the Drone has running behind its turn.
+fn background_work(outstanding: usize) -> DroneEvent {
+    DroneEvent::BackgroundWork { outstanding }
+}
+
+/// A Drone that delegated, ended its turn on the delegation, and stayed.
+///
+/// **This is Job `01M21BKVPW002DC0ATD1X9T0VF`, in three echoes.** Its Drone
+/// called the built-in `Agent` tool, said "I'll wait for the exploration
+/// agent's findings before declaring scope", and ended its turn. The report
+/// reaches a session as a notification and a headless Drone between turns
+/// cannot be notified, so the wait could not end — and Fleet reaped it 21
+/// seconds in, having spent nothing.
+fn a_drone_that_ends_waiting_on_a_subagent() -> FakeHarness {
+    FakeHarness::running(
+        "/bin/sh",
+        &["-c", "echo CALLED; echo BACKGROUNDED; echo ENDED; sleep 30"],
+    )
+    .reading("CALLED", vec![called()])
+    .reading("BACKGROUNDED", vec![background_work(1)])
+    .reading("ENDED", vec![ended(0)])
+}
+
+/// The same, having seen its background work land before it ended.
+///
+/// **The control, and it is what makes the reading a level rather than a memory
+/// of one.** This Drone delegated exactly as the one above did; the difference
+/// is the harness's final count, and that difference alone has to be what
+/// decides between a turn back and a reap.
+fn a_drone_that_ends_with_its_background_work_done() -> FakeHarness {
+    FakeHarness::running(
+        "/bin/sh",
+        &[
+            "-c",
+            "echo CALLED; echo BACKGROUNDED; echo LANDED; echo ENDED; sleep 30",
+        ],
+    )
+    .reading("CALLED", vec![called()])
+    .reading("BACKGROUNDED", vec![background_work(1)])
+    .reading("LANDED", vec![background_work(0)])
+    .reading("ENDED", vec![ended(0)])
+}
+
 /// A Drone that talks and never comes to rest. **The other reading**, and the
 /// one the poke ladder is still for.
 fn a_drone_that_goes_quiet() -> FakeHarness {
@@ -235,6 +278,17 @@ fn a_drone_that_goes_quiet() -> FakeHarness {
 /// `crate::tests::silence` gives: a Judge that answered would let a regression
 /// into the free half pass unseen.
 fn a_watched_fleet(home: &TempDir, harness: FakeHarness, clock: Arc<Held>) -> Fixture {
+    watched_with(home, harness, clock, Liveness::of(QUIET_AFTER, 2))
+}
+
+/// The same, over a stated patience. **Only the budget varies**, so a case
+/// about a Drone with no turns left is measured against the same Drone.
+fn watched_with(
+    home: &TempDir,
+    harness: FakeHarness,
+    clock: Arc<Held>,
+    liveness: Liveness,
+) -> Fixture {
     let mut fittings = fitted_with(
         home,
         FakeWorkProduct::changed(&["src/parse.rs"]).showing("+    panic!();\n"),
@@ -242,7 +296,7 @@ fn a_watched_fleet(home: &TempDir, harness: FakeHarness, clock: Arc<Held>) -> Fi
     );
     fittings.workflows = one(one_step());
     fittings.clock = clock;
-    fittings.liveness = Liveness::of(QUIET_AFTER, 2);
+    fittings.liveness = liveness;
     fittings.judge = Arc::new(FakeJudge::that_fails("no model is asked about an ending"));
     Fleet::assembled(fittings)
 }
@@ -370,6 +424,149 @@ async fn a_run_that_ends_with_nothing_submitted_escalates_on_the_next_turn() {
         .await
         .expect("a reaped step is one a person can restart");
     assert_ne!(restarted.status(), JobStatus::Escalated);
+}
+
+/// **A run that ends waiting is not an ending, and it gets the turn back.**
+///
+/// The case above and this one differ by one echo. There the Drone worked and
+/// stopped, which is a Drone that is finished; here it left something running
+/// and stopped, which is a Drone that is waiting — for a report that reaches a
+/// session as a notification, and so can never reach one between turns.
+///
+/// **The clock never moves here either.** What fires is the same free reading,
+/// and what it does about it is the whole difference.
+#[tokio::test]
+async fn a_run_that_ends_waiting_on_background_work_is_given_a_turn_rather_than_reaped() {
+    let home = TempDir::new();
+    let clock = Arc::new(Held::started());
+    let fleet = a_watched_fleet(
+        &home,
+        a_drone_that_ends_waiting_on_a_subagent(),
+        Arc::clone(&clock),
+    );
+    let job = started(&fleet, &home).await;
+    assert!(spoke(&fleet, 3).await, "the run never ended");
+
+    let pid = fleet
+        .the_only_slot()
+        .await
+        .lock()
+        .await
+        .as_ref()
+        .expect("a Drone is working")
+        .session()
+        .pid();
+
+    let turned = fleet.turn().await.expect("a turn");
+    let quiet = turned
+        .quiet()
+        .expect("the vigil said nothing about the ending");
+    assert!(
+        matches!(quiet.said, Vigil::PokedAtRest { spent: 1 }),
+        "it ended holding background work, which is a turn back: {:?}",
+        quiet.said
+    );
+
+    // **The Job did not move**, which is the whole of what the fix buys. Every
+    // other road out of an ending escalates.
+    let record = fleet.load(&job).await.unwrap();
+    assert_eq!(record.status(), JobStatus::Running);
+    assert_eq!(
+        record
+            .step(&StepId::new("implement"))
+            .expect("the step")
+            .state(),
+        StepState::Running,
+    );
+
+    // **The process and the slot, read the way the case above reads them and
+    // asserted the other way.** A turn that landed on a reaped Drone would be
+    // a turn into a closed pipe, and a slot given back here is a step nothing
+    // can finish.
+    assert!(alive(pid), "the Drone was ended despite being spoken to");
+    assert!(
+        fleet.the_only_slot().await.lock().await.is_some(),
+        "the slot was given back over a Drone that is still working"
+    );
+}
+
+/// **The same Drone, once its background work has landed, is reaped.**
+///
+/// `background_tasks_changed` is the harness re-stating its whole outstanding
+/// set, so the last one in the stream is the answer. A reading that remembered
+/// only that something had once been backgrounded would hold this Drone open
+/// for a turn it does not need — and would do it to every Drone that ever
+/// delegated.
+#[tokio::test]
+async fn a_run_that_ends_after_its_background_work_landed_is_reaped_as_before() {
+    let home = TempDir::new();
+    let clock = Arc::new(Held::started());
+    let fleet = a_watched_fleet(
+        &home,
+        a_drone_that_ends_with_its_background_work_done(),
+        Arc::clone(&clock),
+    );
+    let job = started(&fleet, &home).await;
+    assert!(spoke(&fleet, 4).await, "the run never ended");
+
+    let turned = fleet.turn().await.expect("a turn");
+    let quiet = turned
+        .quiet()
+        .expect("the vigil said nothing about the ending");
+    assert!(
+        matches!(
+            quiet.said,
+            Vigil::AtRest {
+                found: EscalationTrigger::Stalled
+            }
+        ),
+        "nothing was left running, so this is the ordinary ending: {:?}",
+        quiet.said
+    );
+    assert_eq!(
+        fleet.load(&job).await.unwrap().status(),
+        JobStatus::Escalated
+    );
+}
+
+/// **The turn back is budgeted, and a Drone with none left is reaped.**
+///
+/// This is `#314`'s objection kept rather than argued away: a Drone that ends
+/// waiting, is told so, and ends waiting again is a Drone the turn is not
+/// reaching, and telling it a third time would be the two paid model runs that
+/// decision was about. A budget of nought is that state on the first ending, so
+/// the road is measured without spending anything to reach it.
+#[tokio::test]
+async fn a_run_that_ends_waiting_with_no_turns_left_is_reaped() {
+    let home = TempDir::new();
+    let clock = Arc::new(Held::started());
+    let fleet = watched_with(
+        &home,
+        a_drone_that_ends_waiting_on_a_subagent(),
+        Arc::clone(&clock),
+        Liveness::of(QUIET_AFTER, 0),
+    );
+    let job = started(&fleet, &home).await;
+    assert!(spoke(&fleet, 3).await, "the run never ended");
+
+    let turned = fleet.turn().await.expect("a turn");
+    let quiet = turned
+        .quiet()
+        .expect("the vigil said nothing about the ending");
+    assert!(
+        matches!(
+            quiet.said,
+            Vigil::AtRest {
+                found: EscalationTrigger::Stalled
+            }
+        ),
+        "the budget was spent, so the ending stands: {:?}",
+        quiet.said
+    );
+    assert_eq!(
+        fleet.load(&job).await.unwrap().status(),
+        JobStatus::Escalated
+    );
 }
 
 /// **The reap is bounded, and it says how much it heard.**

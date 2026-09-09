@@ -302,6 +302,22 @@ pub enum Saw {
     Produced {
         files: Vec<ChangedFile>,
     },
+    /// How much work the Drone has running behind its own turn, as the harness
+    /// last counted it.
+    ///
+    /// **A level, so the last one in a stream is the answer.** The harness
+    /// re-states the whole outstanding set every time it changes, which is what
+    /// lets `outstanding: 0` mean the set emptied rather than one task having
+    /// finished.
+    ///
+    /// **It is here because a run that ends on a non-zero one has not
+    /// finished.** A background report reaches a session as a notification, and
+    /// a headless Drone between turns cannot be notified — so the row is what
+    /// makes a Drone that died waiting readable as that, rather than as a
+    /// `stalled` nobody can account for.
+    BackgroundWork {
+        outstanding: usize,
+    },
     Unrecognised {
         kind: String,
     },
@@ -402,6 +418,7 @@ impl TryFrom<TranscriptRow> for Shown {
             | Saw::Instructed { .. }
             | Saw::Checked { .. }
             | Saw::Produced { .. }
+            | Saw::BackgroundWork { .. }
             | Saw::Unrecognised { .. }
             | Saw::Unreadable { .. } => Ok(Shown(row.for_a_viewer())),
         }

@@ -12,14 +12,14 @@
 //!
 //! | Reading | What | Then |
 //! |---|---|---|
-//! | At rest | the run Armada's last turn began has ended | the escalation, now |
+//! | At rest | the run Armada's last turn began has ended | the escalation, now — unless the stream says work is still running behind it, and then one turn back |
 //! | Quiet | nothing for `quiet_after`, and the run has not ended | a poke, then `stalled` once `poke_limit` is spent — or `unheard`, where the silence is Fleet's own and [`heard_at_all`] says which |
 //!
-//! **An ended run is not a gap, and poking one was `#314`.** A quiet Drone may
-//! be inside a long command, which is what the poke is for; one that has ended
-//! produces nothing further unless spoken to, and nothing is queued to. That
-//! cost 360 seconds and two paid model runs. What it is held for is
-//! `crate::aftermath`'s three answers, which this road flattened to `stalled`.
+//! **An ended run is not a gap, and poking one was `#314`.** One that has ended
+//! produces nothing further unless spoken to, and asking it costs 360 seconds
+//! and two paid model runs; what it is held for is `crate::aftermath`'s three
+//! answers. **The one exception is an ending that is not one** — a Drone holding
+//! background work is waiting, not finished, and gets [`Vigil::PokedAtRest`].
 //!
 //! **Two silences are declined outright**: evidence at the gate, and a question
 //! waiting on a person — see `crate::questioning`. **No model is asked.**
@@ -34,7 +34,7 @@ use core_model::{
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
-use crate::drone::{aftermath, Aftermath, Ending};
+use crate::drone::{aftermath, awaiting_background, Aftermath, Ending};
 use crate::session::{LiveSession, Occasion};
 use crate::transcript;
 use crate::watch::Drained;
@@ -178,6 +178,31 @@ impl Poke {
         ))
     }
 
+    /// What a Drone is told when it ended its turn waiting for work it put in
+    /// the background.
+    ///
+    /// **It names the elapsed time nowhere**, because no time has elapsed: this
+    /// Drone is not quiet, it is finished, and it finished about a second ago.
+    /// What it needs told is the one fact it cannot observe — that the report
+    /// it is waiting for reaches a session through a notification, and a
+    /// headless session that has ended its turn is not there to be notified.
+    ///
+    /// **It does not forbid the tool.** Delegating is legitimate and a Drone
+    /// exploring a large repository with a subagent is doing the right thing;
+    /// what is not legitimate is ending a turn on it. So the wording says where
+    /// to put the waiting rather than telling it not to have delegated.
+    pub fn waiting_on_background() -> Poke {
+        Poke(String::from(
+            "You ended your turn waiting for work you put in the background. \
+             Nothing will arrive while you are not in a turn, so waiting that \
+             way ends your run instead of pausing it.\n\n\
+             If you still need what it was finding, do that work in this turn \
+             yourself. If you delegate again, stay in the turn until the report \
+             is in your hands. Then submit — work you do not submit is work no \
+             one sees.",
+        ))
+    }
+
     pub fn text(&self) -> &str {
         &self.0
     }
@@ -235,6 +260,21 @@ pub enum Vigil {
     /// One Job carries both readings: what it stopped for, and what became of
     /// the step underneath. `crate::ending` writes the second.
     AtRest { found: EscalationTrigger },
+    /// The Drone's run ended while work it had put in the background was still
+    /// running, so it was given a turn back rather than reaped.
+    ///
+    /// **The one exception to `#314`, and it is narrow on purpose.** That
+    /// decision refused to poke an ended run because the poke would be asking a
+    /// process that has stopped whether it has stopped. This road is not that
+    /// question: the stream says the Drone left something running and then
+    /// stopped talking, which is a Drone that stopped *waiting for something
+    /// that will never arrive*. The turn is what tells it so. Read
+    /// [`crate::drone::awaiting_background`] for why nothing can arrive.
+    ///
+    /// **It spends from the same budget the quiet ladder does**, so a Drone
+    /// that answers this and does it again reaches [`Vigil::AtRest`] on the
+    /// next ending rather than being told the same thing forever.
+    PokedAtRest { spent: u32 },
 }
 
 impl<H, V, W> Fleet<H, V, W>
@@ -337,7 +377,8 @@ where
         // Drone that is about to carry on working.
         let mut refused = Refusals::none();
         let said = if spent < liveness.pokes() {
-            self.poke(working, after).await
+            self.poke(working, Poke::after(after), |spent| Vigil::Poked { spent })
+                .await
         } else {
             refused = working
                 .as_ref()
@@ -419,6 +460,38 @@ where
         // a second `heard()` for the second question would copy the run's whole
         // stream again.
         let heard = at_work.heard();
+        // **The one question asked before the fold, because it decides whether
+        // to fold at all.** Every other reading here asks what an ending
+        // *meant*; this one asks whether the ending is real. A Drone that left
+        // a subagent running and then stopped talking has not finished — it is
+        // waiting for a report that cannot reach a session between turns, and
+        // reaping it there throws away the step over a wait that was never
+        // going to end. See `crate::drone::awaiting_background`.
+        //
+        // **Budgeted against the same ladder the quiet road spends**, so this
+        // cannot become a loop: the turn moves `Working::at_rest`'s baseline,
+        // and a Drone that does it again on the next ending finds the budget
+        // gone and is reaped.
+        if awaiting_background(&heard) && at_work.pokes() < at_work.liveness().pokes() {
+            let after = working
+                .as_mut()
+                .map(|at_work| at_work.quiet_for(&self.now()))
+                .unwrap_or_default();
+            let said = self
+                .poke(working, Poke::waiting_on_background(), |spent| {
+                    Vigil::PokedAtRest { spent }
+                })
+                .await;
+            // Nothing was reaped and nothing was refused: this road holds its
+            // Drone, exactly as the quiet ladder's poke does.
+            self.noted_quiet(&job, &step, after, &said, None, &Refusals::none());
+            return Ok(Some(Quiet {
+                job,
+                step,
+                after,
+                said,
+            }));
+        }
         let Aftermath::JobMoves(target) =
             aftermath(record.status(), &Ending::of(&heard), self.left(&job))
         else {
@@ -460,7 +533,19 @@ where
     /// so a directive that would not send is worth abandoning a turn over; a
     /// poke is the first word of three, and losing the turn would take the
     /// reading that produced it with it.
-    async fn poke(&self, working: &mut Option<Working>, after: Duration) -> Vigil {
+    ///
+    /// **The nudge and the reading come in together, and neither is inferred.**
+    /// Two roads reach this — a Drone that has gone quiet and one that ended
+    /// waiting on background work — and they are different sentences to the
+    /// Drone and different lines in the log. Building either here from the
+    /// other's argument is how one of them ends up telling a Drone it has been
+    /// silent for a minute a second after it spoke.
+    async fn poke(
+        &self,
+        working: &mut Option<Working>,
+        nudge: Poke,
+        sent_as: fn(u32) -> Vigil,
+    ) -> Vigil {
         let Some(at_work) = working.as_ref() else {
             return Vigil::NotPoked {
                 spent: 0,
@@ -468,7 +553,6 @@ where
             };
         };
         let spent = at_work.pokes() + 1;
-        let nudge = Poke::after(after);
         at_work.instructed(Occasion::Poke, nudge.text());
         let sent = at_work.session().poke(&nudge).await;
         // **The clock restarts whether or not the write landed.** The next
@@ -479,7 +563,7 @@ where
             at_work.poked(self.now());
         }
         match sent {
-            Ok(()) => Vigil::Poked { spent },
+            Ok(()) => sent_as(spent),
             Err(cause) => Vigil::NotPoked { spent, cause },
         }
     }
@@ -533,6 +617,15 @@ where
                 Level::Warn,
                 "the Drone's run ended and nothing had been submitted",
             ),
+            // **Info and not warn**, and the wording says which of the two
+            // things a reader should look for. Nothing has gone wrong with the
+            // Job: a Drone delegated, ended its turn on the delegation, and was
+            // given the turn back. What is worth grepping for is the Drone that
+            // does it twice, and that one reaches the line above.
+            Vigil::PokedAtRest { .. } => (
+                Level::Info,
+                "the Drone's run ended waiting on work it had backgrounded, and it was given a turn back",
+            ),
         };
         let mut envelope = Envelope::new(
             self.now(),
@@ -547,7 +640,9 @@ where
         .with_field(
             "pokes_spent",
             FieldValue::Int(i64::from(match said {
-                Vigil::Poked { spent } | Vigil::NotPoked { spent, .. } => *spent,
+                Vigil::Poked { spent }
+                | Vigil::NotPoked { spent, .. }
+                | Vigil::PokedAtRest { spent } => *spent,
                 Vigil::Escalated { pokes, .. } => *pokes,
                 // **Zero, and it is the interesting number.** What this line
                 // says is that the escalation was reached without spending the
@@ -600,7 +695,7 @@ where
 fn escalated_as(said: &Vigil) -> Option<EscalationTrigger> {
     match said {
         Vigil::Escalated { found, .. } | Vigil::AtRest { found } => Some(found.clone()),
-        Vigil::Poked { .. } | Vigil::NotPoked { .. } => None,
+        Vigil::Poked { .. } | Vigil::NotPoked { .. } | Vigil::PokedAtRest { .. } => None,
     }
 }
 
