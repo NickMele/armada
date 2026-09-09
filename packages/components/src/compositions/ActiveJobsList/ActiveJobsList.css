@@ -74,12 +74,17 @@
      are the frame a person reads against, so they hold their place. */
   flex: 1;
   min-height: 0;
+  /* **`overflow-x` and `overflow-y` separately, because `overflow` is one
+     property.** The shorthand said `hidden` a few lines below the `auto` and
+     won, so the frame clipped its rows instead of scrolling them — the pane
+     was bounded and had no way to move. Horizontal stays hidden, which is what
+     kept a row's corners inside the frame's radius. */
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   border-radius: var(--radius-md);
   border: var(--border-width) solid var(--border-default);
   background: var(--bg-raised);
-  overflow: hidden;
 }
 
 /* The frame is the grid the rows borrow their field tracks from, so a column
@@ -93,6 +98,11 @@
     display: grid;
     grid-template-columns: var(--armada-job-row-tracks);
     column-gap: var(--space-3);
+    /* **Rows keep their own height and the leftover stays empty.** A grid's
+       `align-content` is `stretch` by default, so with the frame filling the
+       pane a Board holding one Job drew that Job a window tall — a row is a
+       row whether there is one of them or forty. */
+    align-content: start;
   }
 
   /* Anything that is not a row — the empty state — spans the whole width

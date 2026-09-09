@@ -118,7 +118,11 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 0 var(--space-4) var(--space-4);
+  /* **Even on all four sides.** The top was zero, which was right while the
+     head above always drew and set the spacing between them; a Job read whole
+     draws no head now, so the pane started hard against the window's chrome.
+     A pane is inset from its frame on every side or it is not a pane. */
+  padding: var(--space-4);
 }
 
 /* What the shell mounts a screen into: a column that fills the mount and lets
@@ -186,7 +190,7 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-4) var(--space-3);
+  padding: var(--space-4) var(--space-4) 0;
 }
 
 .armada-screen__titles {
