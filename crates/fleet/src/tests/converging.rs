@@ -18,13 +18,13 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use adapter_traits::{CallDetail, Change, DroneEvent};
+use adapter_traits::{CallDetail, Change, DroneEvent, WorktreeSpec};
 use config::ResolvedWorkflow;
 use core_model::{
     EscalationTrigger, JobStatus, StepCheck, StepLevelTrigger, StepState, StepVerdict,
     TransitionReason,
 };
-use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Scoped, Sketch};
+use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Gate, Scoped, Sketch};
 use verification::{Convergence, NotConverging};
 
 use crate::converging::{
@@ -65,6 +65,33 @@ fn one_step(scope: Option<Scoped<'static>>) -> ResolvedWorkflow {
         scope,
         gaming: None,
     }])
+}
+
+/// One step whose product is a written file rather than a change, gated on the
+/// artifact the frozen workflow names — which is the shape every `facts_note`
+/// step in the shipped workflows has.
+fn a_written_step() -> ResolvedWorkflow {
+    testkit::resolved(&[Sketch {
+        id: "scope",
+        label: "Scope the change",
+        evidence_type: Some("facts_note"),
+        gates: &[Gate::ArtifactExists { target: ARTIFACT }],
+        judged_on: &[],
+        scope: None,
+        gaming: None,
+    }])
+}
+
+const ARTIFACT: &str = ".armada/artifacts/scope.md";
+
+/// Write the step's deliverable where the Drone would have written it, which is
+/// under the worktree Fleet derives for the Job and nowhere else.
+fn deliverable_written(home: &TempDir, job: &core_model::JobId, held: &str) {
+    let spec =
+        WorktreeSpec::for_job(&home.path().to_string_lossy(), job.as_str()).expect("a legal spec");
+    let file = std::path::Path::new(&spec.worktree_path()).join(ARTIFACT);
+    std::fs::create_dir_all(file.parent().expect("a parent")).expect("a directory to write in");
+    std::fs::write(file, held).expect("the deliverable is written");
 }
 
 /// A Drone that prints one line and then never reads or says anything again.
@@ -404,6 +431,61 @@ async fn the_look_reads_what_was_produced_and_never_the_drones_turns() {
     assert!(question.contains("panic!()"), "the diff is the subject");
     assert!(!question.contains("90"), "the turn count reached the brief");
     assert!(!question.contains("turn"), "{question}");
+}
+
+/// **The look is shown the file, not only the diff.** A `facts_note` step's
+/// product is the file its `artifact_exists` check names, and `.armada/` is
+/// gitignored — `crate::keeping`, `#138` — so the diff of a step doing exactly
+/// what it was asked is empty. The look saw that emptiness and nothing else,
+/// and the only answer available to it was `thrashing`.
+#[tokio::test]
+async fn the_look_at_a_written_step_is_shown_the_file_it_was_asked_for() {
+    let home = TempDir::new();
+    let judge = Arc::new(FakeJudge::saying("state: converging"));
+    let fleet = a_watched_fleet(
+        &home,
+        a_drone_that_will_not_answer(90),
+        Arc::clone(&judge),
+        on_calls(5),
+        a_written_step(),
+    );
+    let job = started(&fleet, &home).await;
+    deliverable_written(&home, &job, "## Boundaries\n\nsrc/log.rs and no further.\n");
+    next_stage(&fleet, "looked at the step").await;
+
+    let asked = judge.asked();
+    let question = asked.first().expect("one question");
+    assert!(
+        question.contains("src/log.rs and no further."),
+        "{question}"
+    );
+    assert!(question.contains(ARTIFACT), "the file is named: {question}");
+}
+
+/// The deliverable is read at the look, so a step that has written nothing to
+/// it is told as an empty file rather than as a step that was asked for none.
+/// The two are opposite findings and only one of them can be cited.
+#[tokio::test]
+async fn a_written_step_with_nothing_in_its_file_is_looked_at_as_empty() {
+    let home = TempDir::new();
+    let judge = Arc::new(FakeJudge::saying("state: converging"));
+    let fleet = a_watched_fleet(
+        &home,
+        a_drone_that_will_not_answer(90),
+        Arc::clone(&judge),
+        on_calls(5),
+        a_written_step(),
+    );
+    started(&fleet, &home).await;
+    next_stage(&fleet, "looked at the step").await;
+
+    let asked = judge.asked();
+    let question = asked.first().expect("one question");
+    assert!(
+        question.contains("nothing has been written to it yet"),
+        "{question}"
+    );
+    assert!(question.contains(ARTIFACT), "the file is named: {question}");
 }
 
 /// A call that could not be made is not a finding. Escalating on one would make
