@@ -128,6 +128,16 @@ export type RunTreeFact = {
    * deep: a child carries none of its own.
    */
   children?: RunTreeFact[];
+  /**
+   * Whether the rows beneath this fact **start** folded. See
+   * `StepRowFact.folded`, which this is drawn from.
+   *
+   * **A default, not a capability** — every fact with children folds either
+   * way. Set on an attempt that is over and left off the one still open, so a
+   * step held after three tries opens on the attempt a person came to read
+   * rather than on fifteen rows with that attempt at the bottom.
+   */
+  folded?: boolean;
 };
 
 export type RunTreeStep = {
@@ -282,6 +292,7 @@ function drawFact(
       </>
     ),
     children: fact.children?.map((child) => drawFact(child, onCopied, onOpenArtifact)),
+    folded: fact.folded,
   };
 }
 

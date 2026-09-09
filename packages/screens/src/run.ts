@@ -106,7 +106,22 @@ function factsOfStep(
   // single `Attempt 1 advanced` beneath every row in the tree is a column of
   // noise saying what the mark already says, and there is no second attempt
   // to tell its gate rows apart from.
-  if (retried) facts.push(...step.attempts.map((attempt) => attemptFact(step, attempt)));
+  // **Every attempt folds; the last one starts open.** A step held after three
+  // tries draws fifteen rows, twelve of which are the gate saying the same
+  // thing about runs nobody can act on any more — and the attempt still open,
+  // the one a person came to read, is the one pushed off the bottom. Each
+  // attempt keeps its row and its outcome, which is what a reader scans; what
+  // folds is the working beneath it, and which of them are folded is the
+  // reader's after the first paint.
+  if (retried) {
+    const last = step.attempts.length - 1;
+    facts.push(
+      ...step.attempts.map((attempt, at) => ({
+        ...attemptFact(step, attempt),
+        folded: at !== last || undefined,
+      })),
+    );
+  }
 
   const produced = producedFact(wrote);
   if (produced !== undefined) facts.push(produced);
