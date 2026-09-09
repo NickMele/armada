@@ -20,7 +20,7 @@ use rusqlite::OptionalExtension;
 use crate::error::{fault, WriteError};
 use crate::open::Store;
 
-/// Version 37 — whether a Job's disk has been given back.
+/// Version 38 — whether a Job's disk has been given back.
 ///
 /// Beside the change it makes, like [`crate::numbering::V36`]: `schema.rs` is
 /// at the 900 lines the gate refuses at.
@@ -29,7 +29,7 @@ use crate::open::Store;
 /// existed, so every row predating it is a Job whose disk — as far as this
 /// column can say — still stands, which is the honest reading rather than a
 /// guess. `Store::retain_job` is the one writer.
-pub(crate) const V37: &str = r#"
+pub(crate) const V38: &str = r#"
 ALTER TABLE jobs ADD COLUMN reclaimed_at TEXT;
 "#;
 

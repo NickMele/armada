@@ -33,7 +33,7 @@ import { DecidedDiff } from "./Decide";
 import { clock } from "./duration";
 import { Log } from "./Log";
 import { recourseOf } from "./recovery";
-import { drawn } from "./review";
+import { drawn, WORKTREE_GIVEN_BACK } from "./review";
 import { NOTHING_YET_ON_THIS_STEP, whyNotWatching, type LogRow } from "./story";
 
 /**
@@ -155,7 +155,7 @@ export function DetailSheet({
     );
   }
   if (which === "diff") {
-    return <DiffSheet job={job} diff={diff} floor={floor} onClose={onClose} />;
+    return <DiffSheet job={job} whole={whole} diff={diff} floor={floor} onClose={onClose} />;
   }
   if (which === "holds") {
     return <JobHoldsSheet open floor={floor} onClose={onClose} {...holds} />;
@@ -174,11 +174,14 @@ export function DetailSheet({
  */
 function DiffSheet({
   job,
+  whole,
   diff,
   floor,
   onClose,
 }: {
   job: JobSummary;
+  /** Only for the footprint, which says whether there was a worktree to lose. */
+  whole: JobWhole | null;
   diff: Diff;
   floor: boolean;
   onClose: () => void;
@@ -190,6 +193,8 @@ function DiffSheet({
       floor={floor}
       branch={job.branch ?? job.id}
       files={files}
+      // **Which silence this is**, where the reading can say. #381.
+      whyNoReading={gaveBackTheWorktree(diff, job.id, whole) ? WORKTREE_GIVEN_BACK : undefined}
       // What the counts are counted against. Absent on a peer built before
       // 7.9, where `measured_whole` defaults to true and the header falls back
       // to the neutral phrase rather than claiming a base nothing named.
@@ -201,6 +206,26 @@ function DiffSheet({
       <DecidedDiff diff={diff} jobId={job.id} />
     </JobDiffSheet>
   );
+}
+
+/**
+ * Whether the missing reading is a worktree that was given back.
+ *
+ * **`work: None` is two facts and only one of them may be named.** Fleet
+ * answers it whenever `worktree_of` finds nothing, which covers a Job whose
+ * worktree was reclaimed after it finished *and* a Job that never got one —
+ * one that failed before a Drone was placed. Saying `the worktree was given
+ * back` over the second is the same false certainty #381 was filed about,
+ * pointed the other way, so the phrase needs evidence rather than a default.
+ *
+ * The footprint is that evidence. Fleet writes it from the worktree at the
+ * instant the Job stopped, so a Job holding one had a worktree to read and no
+ * longer has it. Absent, the header keeps the neutral phrase — which is
+ * honest, because absent is exactly where Bridge does not know.
+ */
+export function gaveBackTheWorktree(diff: Diff, jobId: string, whole: JobWhole | null): boolean {
+  if (diff.state !== "read" || diff.jobId !== jobId || diff.work !== undefined) return false;
+  return whole?.footprint !== undefined;
 }
 
 /**

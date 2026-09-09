@@ -82,6 +82,8 @@ On 9 Sep 2026 one did. A request naming a bug and an addition became two Jobs; t
 
 **The reading is Fleet's own and a Drone may not supply it.** `crates/fleet/src/gate.rs` holds the rule and why: a Drone reporting that its own work is unnecessary is prose, and reading prose catches an honest Drone and believes a dishonest one. This asks before a Drone exists, which is the only place the question can be answered by something with nothing at stake.
 
+**A sibling that lands once a Drone is already working does not close the Job.** Its earlier steps wrote commits, and those are not only the part the sibling duplicated — closing it would throw away work nobody has read, and killing it mid-step is a different decision again. So the next step boundary carries what landed into the fresh Drone's opening brief, quoting the sibling's own Evidence, and the Drone decides. That block gates nothing: no Check reads it and no Judge sees it, which is what makes telling safe where `crates/fleet/src/gate.rs`'s rule makes believing unsafe.
+
 **Every failure runs the Job.** An unreadable answer, a call that could not be made, a sibling that submitted no evidence — each answers *needed*. Of the two answers only *supersede it* cannot be taken back: a Job wrongly run repeats work and is caught at review; a Job wrongly superseded is work nobody notices is missing.
 
 `proposal_id` is what makes a sibling findable, and it is the only thing on the record that says two Jobs are the same request.

@@ -289,7 +289,15 @@ export function chaptersOf({
       // The patch opens on the layer that can hold it. It is the Job's whole
       // patch and the expensive read, and a 602px column was never going to
       // hold either — #286, frame 4j.
-      ...(sheet === "diff"
+      //
+      // **Not offered where there is no patch behind it.** This chapter reads
+      // the footprint, which Fleet takes once and keeps; the diff reads the
+      // worktree, which is given back when a Job is done with it. So a
+      // finished Job lists what it wrote above a control that opens a layer
+      // saying the worktree is gone — the count reads as the truth and the
+      // patch reads as broken, and it is neither. #381. A control that goes
+      // nowhere is worse than one that is not there.
+      ...(sheet === "diff" || !readable(diff, job.id)
         ? {}
         : {
             act: (
@@ -358,6 +366,19 @@ function summaryOf(
     ...(open ? ["open"] : []),
   ];
   return said.length === 0 ? undefined : said.join(" · ");
+}
+
+/**
+ * Whether there is a patch to open at all.
+ *
+ * **`work` absent is the worktree being gone**, which is the line the wire
+ * already draws: a Drone that changed nothing answers `work` present with no
+ * files, and that is a reading worth opening. Anything not yet read is
+ * offered, because it is about to be one.
+ */
+function readable(diff: Diff, jobId: string): boolean {
+  if (diff.state !== "read" || diff.jobId !== jobId) return true;
+  return diff.work !== undefined;
 }
 
 /** How many entries the log's collapsed preview shows. The drawing's own five. */

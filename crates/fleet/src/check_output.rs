@@ -308,7 +308,7 @@ fn file_name(step: &StepId, attempt: Attempt, ordinal: usize, infix: &str) -> Op
 /// and a criterion id under the same rule and for the same reason; a second
 /// spelling of it here and there is how the two would come to disagree about
 /// which id is safe.
-pub(crate) fn one_component(id: &str) -> bool {
+pub fn one_component(id: &str) -> bool {
     !id.is_empty()
         && id != "."
         && id != ".."

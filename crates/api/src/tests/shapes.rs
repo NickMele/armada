@@ -17,9 +17,10 @@ use ipc::mcp::{CheckRan, CheckReport};
 use ipc::{
     Actor, Asked, CallArguments, CheckOutput, EvidenceType, Finding, FleetCapacity, Held, Instant,
     JobDetail, JobDiff, JobEvidence, JobExamined, JobHistory, JobId, JobProcess, JobRemarks,
-    JobResources, JobStatus, JobSummary, Look, ManifestId, ManifestSummary, ModelChoices, Movement,
-    NotedField, Origin, ReclaimedBranch, ReclaimedWorktree, Recorded, RunId, StatusMoved, StepId,
-    Submitted, Urgency, Work, WorkflowId, WorkflowSummary, WorktreeReclaimed,
+    JobResources, JobStatus, JobSummary, KeptFrame, Look, ManifestId, ManifestSummary,
+    ModelChoices, Movement, NotedField, Origin, ReclaimedBranch, ReclaimedWorktree, Recorded,
+    RunId, StatusMoved, StepId, Submitted, Urgency, Work, WorkflowId, WorkflowSummary,
+    WorktreeReclaimed,
 };
 
 /// A spelling the registry has. Panics in a test rather than returning an
@@ -45,6 +46,23 @@ pub const THE_ARGUMENT: &str = "cat <<'EOF' > notes.md\n  one\n  two\n  three\nE
 /// an output no row of the Job carries, which is a different answer from a
 /// missing Job.
 pub const THE_OUTPUT: &str = "implement.1.0.log";
+
+/// The one kept frame this fake's record holds, spelled the way a frame is
+/// named: the run's directory and the harness's own file name, joined.
+///
+/// **Two components, unlike [`THE_OUTPUT`].** A Check's output file name is
+/// built by Fleet out of the row's key and is unique within the Job by
+/// construction; a frame's name came from the repository's spec, so the run
+/// directory in front of it is what identifies a row.
+pub const THE_FRAME: &str = "implement.1/job-detail-refused.png";
+
+/// The bytes the fake answers with — an eight-byte PNG signature and nothing
+/// else.
+///
+/// **Not a real image, and it does not need to be.** What the route has to
+/// prove is that the file comes back as itself under a media type read from its
+/// name, which is a property of the response and not of the pixels.
+pub const THE_FRAME_BYTES: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 
 /// A proposal body, as Bridge would send it.
 pub const A_PROPOSAL: &str = r#"{
@@ -90,6 +108,7 @@ fn step_rail(
         judged: Vec::new(),
         flagged: Vec::new(),
         deliverables: Vec::new(),
+        frames: Vec::new(),
         attempts: Vec::new(),
         verdicts: Vec::new(),
         judging: None,
@@ -414,6 +433,21 @@ pub fn check_output(kept: String) -> CheckOutput {
         total_lines: 2_180,
         bytes: 61_204,
         whole: false,
+    }
+}
+
+/// One kept frame, as the row that comes back beside the bytes.
+///
+/// **The fake holds exactly one**, keyed by [`THE_FRAME`]. `kept` is the run
+/// directory and the name joined — the same value the caller sent — because
+/// that identity has one spelling and the record composes it.
+pub fn frame(kept: String) -> KeptFrame {
+    KeptFrame {
+        attempt: 1,
+        name: "job-detail-refused.png".to_string(),
+        path: format!(".armada/frames/01RUNNING/{kept}"),
+        bytes: THE_FRAME_BYTES.len() as u64,
+        kept,
     }
 }
 

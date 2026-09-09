@@ -40,6 +40,7 @@ pub struct Crossed {
     cleared: Option<Cleared>,
     redirect: Option<Redirected>,
     dispatched: Option<Dispatched>,
+    overtaken: Option<Overtaken>,
 }
 
 impl Crossed {
@@ -79,6 +80,19 @@ impl Crossed {
     /// goes through and the note is owed to *the next Drone* rather than to the
     /// next Drone of one act. A caller that had to remember it is a caller that
     /// could forget.
+    /// That a Job from the same request landed work while this one was
+    /// between steps.
+    ///
+    /// **Folded in rather than passed in, like [`and_redirect`]** and for the
+    /// same reason: it is a fact about the Job at the moment a Drone starts,
+    /// not about the act that reached the spawn. `crate::spawning` asks the
+    /// record for it on every spawn.
+    ///
+    /// [`and_redirect`]: Crossed::and_redirect
+    pub fn and_overtaken(self, overtaken: Option<Overtaken>) -> Crossed {
+        Crossed { overtaken, ..self }
+    }
+
     pub fn and_redirect(self, redirect: Option<Redirected>) -> Crossed {
         Crossed { redirect, ..self }
     }
@@ -108,6 +122,64 @@ impl Crossed {
 
     pub(crate) fn dispatched(&self) -> Option<&Dispatched> {
         self.dispatched.as_ref()
+    }
+
+    pub(crate) fn overtaken(&self) -> Option<&Overtaken> {
+        self.overtaken.as_ref()
+    }
+}
+
+/// That a Job read off the same request landed work while this one was between
+/// steps.
+///
+/// # Why a Drone is told rather than the Job stopped
+///
+/// Two Jobs from one reading are unordered by construction, so either may land
+/// the other's work. Before dispatch `crate::superseding` asks whether anything
+/// is left to do and closes the Job where nothing is — it can, because no Drone
+/// has started and no branch holds anything.
+///
+/// **Once a Drone has worked, that answer costs too much to act on.** The Job's
+/// earlier steps wrote commits, and those commits are not only the part a
+/// sibling has now duplicated. Closing it would throw away work nobody has
+/// read; killing it mid-step is a different decision again. So the boundary
+/// says what happened and lets the Drone decide, which is the one thing that is
+/// cheap and cannot be wrong.
+///
+/// **It gates nothing.** No Check reads it, no Judge sees it, and a Drone that
+/// ignores it is refused by exactly what would have refused it anyway. That is
+/// what makes telling safe where `crate::gate`'s rule makes believing unsafe.
+///
+/// **Drafted wording**, like [`Cleared`] and [`Reconciling`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Overtaken {
+    title: String,
+    claimed: String,
+}
+
+impl Overtaken {
+    /// What a landed sibling was called, and what its Evidence claimed the work
+    /// now does.
+    ///
+    /// **The sibling's own `claimed`**, quoted and never paraphrased, for
+    /// [`Redirected`]'s reason: it is a statement somebody else's Drone made
+    /// about work this one is about to repeat, and Fleet summarising it would
+    /// be Fleet deciding what they meant.
+    pub fn of(title: &str, claimed: &str) -> Overtaken {
+        Overtaken {
+            title: title.to_string(),
+            claimed: claimed.to_string(),
+        }
+    }
+
+    /// The block, as it reaches a Drone.
+    pub(crate) fn text(&self) -> String {
+        let Overtaken { title, claimed } = self;
+        format!(
+            "WHAT LANDED WHILE YOU WERE WORKING
+
+This Job and another were read off one              request, so neither waits on the other. That one — \"{title}\" — has since              landed, and its own evidence says:\n\n  \"{claimed}\"\n\nSome of what this              step was going to do may already be in your base. Read before you write, and say              in your evidence what you found rather than doing it twice. Where nothing is              left, that is a finding and not a failure."
+        )
     }
 }
 

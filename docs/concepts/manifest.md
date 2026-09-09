@@ -90,6 +90,7 @@ Separate registries, not the same thing tagged two ways:
 | --- | --- | --- |
 | Checks | Mandatory — must pass to land or advance code | Fleet, as part of mechanical verification |
 | Commands | Optional, general-purpose — migrations, doc generation, builds, formatting | A Drone during a Job, and you directly via Bridge |
+| Evidence | Declares the harness — how this repo shows what a change did | Fleet, on a step whose evidence type is `visual` |
 | Ports | Names a port a workspace needs, so Armada can place it | Nothing invokes it — Fleet reads it at claim time |
 
 Checks gate workflow advancement — see [Workflow](workflow.md).
@@ -239,9 +240,47 @@ It is a condition the Drone cannot resolve. Killing it is Fleet's: `checks-runne
 
 Whether the per-Check field may raise the configured bound or only lower it is open (see Open questions).
 
+## Evidence — how this repository shows its work
+
+On a change whose point is not the code — a panel that should collapse, a screen that should render differently — the diff is the least useful thing on the screen, and it used to be the only thing offered. Reviewing meant reading a patch to infer an outcome you could have been shown.
+
+Checks say whether work advances and Commands say what a Drone may run. Neither says how this project demonstrates that a change did what was asked. `evidence:` is that third thing.
+
+```yaml
+evidence:
+  serve: pnpm dev --port 6006
+  ready: curl -sf http://localhost:6006
+  run: pnpm exec playwright test {}
+  frames: .playwright/frames
+  never:
+    - /settings
+```
+
+| Field | What it is |
+| --- | --- |
+| `serve` | Starts the thing being shown. Long-running: held for the run, ended after it. It names its own port — Armada assigns none |
+| `ready` | Exits zero once `serve` is up. Required, and there is no sleep to fall back on |
+| `run` | Runs one spec. `{}` is where the spec's path goes, and a template without it is refused |
+| `frames` | Where the harness writes, relative to the repo root. Fleet reads it after the run and keeps what it finds |
+| `never` | Paths a spec must never visit. Optional, and Armada does not enforce it |
+
+**Four command lines and a directory, and not one of them is Armada's.** Nothing in Fleet knows what a browser is or which framework wrote the frames, the same way nothing in the Checks runner knows cargo from pnpm. Reaching a state is what an end-to-end test already does, so the repository's existing harness is the mechanism and Armada gains no capture stack of its own. A repository needing a pipeline writes a script and names the script — there is no shell, so `run` cannot pipe or chain.
+
+**`ready` is a command and not a duration.** A number would be a guess against a machine somebody else is using, and what it produces is a frame of a blank page that looks exactly like a frame of a broken one.
+
+**`never` is honest about being a comment.** Nothing here drives a browser, so there is no navigation to intercept. What reads it is the block a Drone writing the spec is given, and the reviewer reading the spec against it. That is weaker than an interception, and the alternative is a key that reads as a guarantee.
+
+**A section this repository does not declare is not a default.** A workflow with a `visual` step resolved against a Manifest with no harness is refused before anything is dispatched — so it reaches a person as a sentence rather than as a Job that cut a worktree, spawned a Drone and captured nothing.
+
+### A Drone attesting to its own work
+
+Every other evidence type is checkable by something other than the Drone. A screenshot of the wrong state looks exactly like one of the right state.
+
+**The spec is what makes it checkable.** The Drone names a spec and never hands over a file; Fleet runs it and owns the frames. The spec is code, it lands in the diff next to the change, and a wrong frame comes from a wrong spec somebody can read. Weaker than a test, much stronger than an image with no provenance — and it is why a frame carries no caption. A sentence saying what a frame shows would be the attestation put back in a field nothing can check.
+
 ## Ports
 
-A third definition registry, alongside Checks and Commands. It defines rather than narrows, which is why it sits at the top level and not under permissions.
+A fourth definition registry, alongside Checks, Commands and Evidence. It defines rather than narrows, which is why it sits at the top level and not under permissions.
 
 **Ports union across a Convoy's declaring Manifests, qualified by Manifest id.** The direction is stated here because the section cannot carry it: the permissions and knowledge sections exist so a setting inherits its Convoy direction from where it sits, and Ports is a third direction on a two-direction boundary.
 
@@ -415,18 +454,18 @@ Both are per-Manifest, not global, and both use the same override pattern one le
 
 | Setting | Values | Behavior |
 | --- | --- | --- |
-| `auto_merge` | `never` / `tests-pass` / `always` | Enforced by Fleet before merge |
+| `auto_merge` | `never` / `checks-pass` / `always` | Enforced by Fleet before merge |
 | `review_gate` | `human_always` (default) / `auto_if_judge_passes` | Whether a workflow's final review step requires a human |
 
 A false `auto_merge` result routes to Inbox > Job Reviews rather than merging.
 
 `review_gate` decides whether the final review step can advance on a Judge pass alone — see [Workflow](workflow.md), the `advance_gate` field.
 
-**Across a Job gated by several Manifests, most-restrictive-wins for both**: `never` beats `tests-pass` beats `always`, and `human_always` beats `auto_if_judge_passes`. There is one PR, so the most cautious gating Manifest holds.
+**Across a Job gated by several Manifests, most-restrictive-wins for both**: `never` beats `checks-pass` beats `always`, and `human_always` beats `auto_if_judge_passes`. There is one PR, so the most cautious gating Manifest holds.
 
 **Both are read at the question, never frozen onto a step.** A step declares `manifest_rule:auto_merge` or `manifest_rule:review_gate` and the record keeps the key rather than the answer — the settings rows call both policies *Live*, so a value written onto a Job at creation would go on stating a decision the repository had since changed. Fleet resolves `review_gate` at the advance gate and `auto_merge` on the sweep over an open pull request.
 
-**`tests-pass` is the forge's checks, not Armada's.** A Check named in `armada.yml` has already run at the gate the Job is holding at, and totalling the two would claim a gate had held that never ran. Only *every check passed* is a pass: a repository whose forge runs nothing has proved nothing, and a check that finished in a word Armada has no name for counts as not passed.
+**`checks-pass` is the forge's checks, not Armada's.** A Check named in `armada.yml` has already run at the gate the Job is holding at, and totalling the two would claim a gate had held that never ran. Only *every check passed* is a pass: a repository whose forge runs nothing has proved nothing, and a check that finished in a word Armada has no name for counts as not passed.
 
 **`auto_merge` does not read an approval, and `always` means always.** Its three values are all about machines; a person approving on the forge is neither, and whether that becomes a fourth value or a policy of its own is undecided. A forge that requires a review refuses the merge, so branch protection is the backstop and it is the forge's.
 

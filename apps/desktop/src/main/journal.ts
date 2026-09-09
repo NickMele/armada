@@ -140,8 +140,13 @@ export class JournalSocket {
   private broke(detail: string): void {
     const jobId = this.jobId;
     if (jobId === null) return;
-    this.socket?.removeAllListeners();
-    this.socket = null;
+    // **Let go, not merely dropped.** One of the two ways here is a frame this
+    // Bridge could not parse, and that leaves a socket which is otherwise
+    // perfectly healthy: without this it stayed open with every listener
+    // removed, buffering frames nobody would read, while Fleet held a
+    // connection for a pane that had stopped listening. `close` is what knows
+    // how to let one go, including a handshake still in flight.
+    this.close();
     this.publish({ state: "failed", jobId, log: this.log, detail });
   }
 }

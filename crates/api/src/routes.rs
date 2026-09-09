@@ -36,9 +36,9 @@ use crate::commands::{
 use crate::daemon::Daemon;
 use crate::journal::Journal;
 use crate::queries::{
-    get_call, get_capacity, get_check_output, get_diff, get_evidence, get_job, get_job_events,
-    get_job_resources, get_manifest_reading, get_remarks, list_jobs, list_manifests, list_models,
-    list_reports, list_workflows, list_worktrees,
+    get_call, get_capacity, get_check_output, get_diff, get_evidence, get_frame, get_job,
+    get_job_events, get_job_resources, get_manifest_reading, get_remarks, list_jobs,
+    list_manifests, list_models, list_reports, list_workflows, list_worktrees,
 };
 use crate::sockets::{events, job_log, observe_job};
 use crate::stream::Broadcaster;
@@ -157,6 +157,16 @@ pub const SERVED: &[Route] = &[
         operation: "get_check_output",
         method: "GET",
         path: "/jobs/:job_id/checks/:kept/output",
+    },
+    // One frame a step's harness produced, answered as the file. `:kept` is the
+    // run directory and the file name joined — composed by Fleet, handed to the
+    // client on the row, and resolved against the rows this Job holds before
+    // anything is opened. Two components rather than one because a frame's name
+    // is the harness's own and two steps may both have written `home.png`.
+    Route {
+        operation: "get_frame",
+        method: "GET",
+        path: "/jobs/:job_id/frames/:run/:name",
     },
     Route {
         operation: "list_workflows",
@@ -548,6 +558,7 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
             "/jobs/:job_id/checks/:kept/output",
             get(get_check_output::<D>),
         )
+        .route("/jobs/:job_id/frames/:run/:name", get(get_frame::<D>))
         .route("/jobs/:job_id/approve_review", post(approve_review::<D>))
         .route("/jobs/:job_id/merge", post(merge_pull_request::<D>))
         .route("/jobs/:job_id/request_changes", post(request_changes::<D>))

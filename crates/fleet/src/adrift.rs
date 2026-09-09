@@ -475,6 +475,19 @@ pub enum Adrift {
     ///
     /// [`NoSuchCall`]: Adrift::NoSuchCall
     NoSuchCheckOutput { named: String },
+    /// A request named a kept frame no row of this Job carries.
+    ///
+    /// **The Job is there and the image is not** — [`NoSuchCheckOutput`]'s
+    /// distinction one record over, and it arrives for the same two reasons: a
+    /// name read off a row whose `.armada/frames` directory has since been
+    /// reclaimed, or a name that was never one.
+    ///
+    /// It is also what a caller naming anything at all gets where the Job kept
+    /// no frames, because the Job's own rows are the only thing that resolves
+    /// this name to a file. Nothing else decides what may be opened.
+    ///
+    /// [`NoSuchCheckOutput`]: Adrift::NoSuchCheckOutput
+    NoSuchFrame { named: String },
     /// A proposal named no model and nothing configured supplies one.
     ///
     /// Refused **at creation**, which is the whole point: the same value used

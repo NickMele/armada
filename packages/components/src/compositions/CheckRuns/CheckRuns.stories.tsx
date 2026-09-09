@@ -178,3 +178,48 @@ export const TheOpenOutputSaysSo: Story = {
     await expect(rest).toHaveLength(3);
   },
 };
+
+/**
+ * **A skipped Check's reason, which is a sentence and not a measurement.**
+ *
+ * `produced` is documented as *the exit code, the signal, the budget it
+ * outran* — short, mono, measured. A Check that is skipped because nothing it
+ * covers changed carries a whole clause there instead, naming every path
+ * pattern it watches, and this row is where that turned up in the app.
+ *
+ * It broke the row in two ways at once. The result column was `max-content`
+ * with `nowrap`, so the sentence sized the grid wider than the pane and drew
+ * itself over the finding beside it; and the finding's column, squeezed to
+ * nothing, took an identifier set to break `anywhere` down to one character a
+ * line — `t`, `y`, `p`, `e`, `c`, `h`, `e`, `c`, `k` straight down the panel.
+ *
+ * Both halves give way here: the reason wraps against a right edge the short
+ * results still line up on, and the name keeps its own width as the column's
+ * floor.
+ */
+export const ASkippedCheckSaysWhy: Story = {
+  args: {
+    label: "Checks",
+    rows: [
+      { id: "build", says: "Passed", identifier: "build", named: "passed", output: "implement.1.0.log" },
+      { id: "test", says: "Passed", identifier: "test", named: "passed", output: "implement.1.1.log" },
+      {
+        id: "typecheck",
+        says: "Not run",
+        identifier: "typecheck",
+        named: "queued",
+        result:
+          "no changed file is under apps/**, packages/**, crates/core-model/domain/**, protocol-version.toml, package.json, pnpm-lock.yaml or pnpm-workspace.yaml",
+      },
+      {
+        id: "bridge_build",
+        says: "Not run",
+        identifier: "bridge_build",
+        named: "queued",
+        result:
+          "no changed file is under apps/**, packages/**, crates/core-model/domain/**, protocol-version.toml, package.json, pnpm-lock.yaml or pnpm-workspace.yaml",
+      },
+      { id: "diff_nonempty", says: "Passed", identifier: "diff_nonempty", named: "passed" },
+    ],
+  },
+};

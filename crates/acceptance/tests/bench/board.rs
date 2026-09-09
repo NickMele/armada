@@ -48,10 +48,11 @@ pub fn on_its_branch(run: &mut Run) {
 /// defect this workspace names. So `board.rs` asserts what each Check *did* and
 /// not what each step declared, and says so in its header.
 ///
-/// `deliverables`, `attempts`, `verdicts` and `judging` are empty on every
-/// step: the first is read off the filesystem, the second and third are
-/// folded from the store's log, and the fourth is a live slot — this bench
-/// holds none of the four.
+/// `deliverables`, `frames`, `attempts`, `verdicts` and `judging` are empty on
+/// every step: the first is read off the filesystem, the second off a table
+/// only a real harness run writes, the third and fourth are folded from the
+/// store's log, and the fifth is a live slot — this bench holds none of the
+/// five.
 pub fn step_facts(job: &Job, ruled: &[(&str, &Ruling)]) -> Vec<StepFacts> {
     job.steps()
         .iter()
@@ -91,6 +92,7 @@ pub fn step_facts(job: &Job, ruled: &[(&str, &Ruling)]) -> Vec<StepFacts> {
                     .map(|found| found.cited().iter().map(Flagged::from).collect())
                     .unwrap_or_default(),
                 deliverables: Vec::new(),
+                frames: Vec::new(),
                 attempts: Vec::new(),
                 verdicts: Vec::new(),
                 judging: None,

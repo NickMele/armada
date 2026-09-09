@@ -128,7 +128,7 @@ Grouping the diff per Workspace for review is presentation, not gate scope.
 
 ### Which Manifest's policy applies — freeze, auto-merge, review gate, budget cap
 
-**Split along safety versus resource.** Dispatch freeze, `auto_merge` and `review_gate` are **most-restrictive-wins** across the gating Manifests: any frozen Manifest freezes the Job, `never` beats `tests-pass` beats `always`, `human_always` beats `auto_if_judge_passes`.
+**Split along safety versus resource.** Dispatch freeze, `auto_merge` and `review_gate` are **most-restrictive-wins** across the gating Manifests: any frozen Manifest freezes the Job, `never` beats `checks-pass` beats `always`, `human_always` beats `auto_if_judge_passes`.
 
 The **budget cap follows `owner_manifest_id`**, not the minimum. Why: taking the lowest lets a small Workspace's cap, sized for its own work, kill a Convoy several times larger for a reason unrelated to that Workspace. Over-caution on a safety setting costs a manual step; over-caution on a resource setting makes the work impossible.
 

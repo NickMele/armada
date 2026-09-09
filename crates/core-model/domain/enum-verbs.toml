@@ -814,6 +814,14 @@ vocabulary = "Evidence type"
 in_code = ""
 notes = "Design Plan's product, and the contract's table calls it `Document or mockup`. The verb takes the narrower half: a mockup is a document here, and a verb naming both would ask a reader to pick which one arrived when the type does not distinguish them. Neither glyph nor token, for `diff`'s reason."
 
+[verbs.evidence_type.visual]
+verb = "what it looks like"
+icon = ""
+status_token = ""
+vocabulary = "Evidence type"
+in_code = ""
+notes = "The one value whose product is not a file the Drone wrote but a frame Fleet captured by running the repository's own harness against a spec the Drone wrote. The verb says the outcome rather than the artifact — `a screenshot` names the file format, and what the type means is that this step is reviewed by looking at it. `a rendering` was rejected: it reads as something Armada produced, and Armada produces nothing here. Neither glyph nor token, for `diff`'s reason — it renders in mono on the evidence trail's provenance line, which is a label and not a badge."
+
 [verbs.change_kind.added]
 verb = "added"
 icon = ""

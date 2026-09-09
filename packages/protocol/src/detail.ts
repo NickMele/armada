@@ -23,6 +23,7 @@
 
 import type { JobFootprint } from "./footprint";
 import type { Flagged, Judged, KeptDeliverable } from "./judged";
+import type { KeptFrame } from "./showing";
 import type { StepAttempt } from "./attempt";
 import type {
   CheckRun,
@@ -477,6 +478,32 @@ export type StepDetail = {
    * none, and so does one whose Judge was never asked.
    */
   deliverables?: KeptDeliverable[];
+  /**
+   * The frames this step's harness produced, oldest run first. Since 9.2.
+   *
+   * **What a step whose point is not the code is reviewed by.** On a change
+   * that should make something look different, the patch is the least useful
+   * thing on the screen and it used to be the only thing offered — reviewing
+   * meant reading a diff to infer an outcome you could have been shown. These
+   * are the outcome.
+   *
+   * **Rows, never images.** Each says what it is called, what it weighs and
+   * what to ask for; the bytes are fetched from the frame route, once, by
+   * whoever opens one. A detail is re-read on every event naming the open Job,
+   * and a frame is hundreds of kilobytes.
+   *
+   * **Absent rather than empty**, which is `deliverables`' shape and its
+   * reason: Fleet drops the field where there are none, and a peer built before
+   * 9.2 sends no such field at all. Both are *this step has no frames*, and a
+   * reader that required the key would break on the second.
+   *
+   * That is the ordinary case — every step that declared no `visual` evidence,
+   * which is most of them, and one whose harness ran and captured nothing.
+   * **Absent never means the harness failed**: a repository with a broken
+   * harness and a spec that photographed nothing look the same here, and what
+   * happened is a line in the Job's own log.
+   */
+  frames?: KeptFrame[];
   /**
    * Every run of this step, oldest first. **`Attempt 1 refused`, `Attempt 2
    * advanced`** — the rows the run tree draws under a step that was worked

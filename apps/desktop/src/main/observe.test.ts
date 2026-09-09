@@ -123,6 +123,30 @@ describe("a transcript socket that stops", () => {
     expect(turns.attached()).toBe(false);
   });
 
+  // The same leak `journal.test.ts` covers, on the socket that has the older
+  // history of losing what it had read: the connection is let go, not merely
+  // dropped, and the server is what says so.
+  it("lets the connection go when it cannot read what arrived", async () => {
+    const fleet = await serving();
+    const published = watching();
+    const turns = new ObserveSocket((state) => published.publish(state));
+    opened.push(() => turns.close());
+
+    turns.open(fleet.port, A_JOB);
+    const fleetSide = await fleet.talking;
+    fleetSide.send(JSON.stringify(OPENED));
+    fleetSide.send(JSON.stringify(A_ROW));
+    await published.until((state) => "turns" in state && state.turns.rows.length === 1);
+
+    const closed = once(fleetSide, "close");
+    fleetSide.send("{ not json");
+
+    await closed;
+    expect(turns.attached()).toBe(false);
+    const broke = await published.until((state) => state.state === "failed");
+    expect("turns" in broke && broke.turns.rows.length).toBe(1);
+  });
+
   // **The handshake is the case that crashed.** A pane closed before Fleet
   // answers leaves ws no connection to close, so it aborts and reports the
   // abort as an `error` a tick later. With every listener already gone, Node

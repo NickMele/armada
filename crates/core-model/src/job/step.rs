@@ -307,3 +307,35 @@ pub struct StepEvidence {
     /// Everything the claim does not assert. Legitimately empty.
     pub not_claimed: String,
 }
+
+/// One frame a step's harness produced, as `store` holds it.
+///
+/// The record half of a capture, the way [`StepCheck`] is the record half of a
+/// Check's run — and it holds a reference and never the bytes, which is
+/// [`StepCheck::output_path`]'s rule for [`StepCheck::output_path`]'s reason: a
+/// row says where a file is and a reader asks for the file.
+///
+/// **There is no field for what it shows.** A frame is a photograph of a state
+/// the spec reached, and the only honest account of which state that was is the
+/// spec, which is code in the diff. A caption here would be a Drone attesting
+/// to its own work in a field nothing can check.
+///
+/// [`StepCheck`]: crate::StepCheck
+/// [`StepCheck::output_path`]: crate::StepCheck::output_path
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StepFrame {
+    /// What the harness called it — the file's own name in the directory
+    /// `evidence.frames` points at, carried so a person reading a list of
+    /// frames sees the words the spec used rather than an ordinal.
+    pub name: String,
+    /// Where Fleet kept it, relative to the repository root.
+    ///
+    /// **Fleet's copy and never the harness's original.** The original is
+    /// inside the Job's worktree, which `armada clean` takes; the copy is
+    /// beside the Check outputs and the deliverables, under `.armada/`, for
+    /// `fleet::keeping`'s reason.
+    pub path: String,
+    /// What the file weighs. Read when the copy was made, because that is the
+    /// one moment the count is both cheap and final.
+    pub bytes: u64,
+}

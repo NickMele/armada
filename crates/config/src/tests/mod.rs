@@ -12,6 +12,7 @@
 
 mod after_merge;
 mod fences;
+mod harness;
 mod live;
 mod loops;
 mod manifest;
