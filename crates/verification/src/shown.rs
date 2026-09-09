@@ -227,8 +227,30 @@ impl Flat {
 /// be the same function on both sides of a comparison, which is what writing it
 /// down once here buys.
 pub fn digest(text: &str) -> String {
+    digest_of(text.as_bytes())
+}
+
+/// The same digest, over bytes that are not text.
+///
+/// **One algorithm and two doors, so a comparison cannot be made against a
+/// different function.** [`digest`] is what a Judge's question is measured by;
+/// this is what a frame a harness photographed is measured by. They are the
+/// same eight lines because the alternative is two hashes named `digest` in one
+/// workspace, and the first person to compare one against the other gets an
+/// answer that is wrong in the direction nobody checks.
+///
+/// **What it decides, on a frame, is whether to fold a pair away** — and that
+/// is why the failure direction matters more than the collision rate. Two
+/// frames whose digests differ are drawn, which is never wrong, only noisy: a
+/// PNG encoder may spell the same picture two ways. Two frames whose digests
+/// agree are folded, and a collision there would hide a change. Sixty-four bits
+/// over data nobody is choosing adversarially is not a risk anybody meets, and
+/// the caller compares the byte count beside it anyway — see
+/// `packages/screens/src/frames.ts`, which will not fold a pair on the digest
+/// alone.
+pub fn digest_of(bytes: &[u8]) -> String {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for byte in text.as_bytes() {
+    for byte in bytes {
         hash ^= u64::from(*byte);
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }

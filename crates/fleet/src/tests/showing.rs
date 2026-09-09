@@ -67,6 +67,7 @@ fn a_name_no_row_holds_resolves_to_no_file_whatever_it_spells() {
             path: format!(".armada/frames/{HANDLE}/implement.1/home.png"),
             bytes: 8,
             side: Side::Branch,
+            digest: String::from("a1b2c3d4e5f60718"),
         },
     }];
 
@@ -110,6 +111,7 @@ fn a_row_whose_file_is_gone_is_the_same_answer_as_a_name_that_was_never_one() {
                 path: format!("{at}/home.png"),
                 bytes: 8,
                 side: Side::Branch,
+                digest: String::from("a1b2c3d4e5f60718"),
             },
         },
         store::KeptFrame {
@@ -120,6 +122,7 @@ fn a_row_whose_file_is_gone_is_the_same_answer_as_a_name_that_was_never_one() {
                 path: format!("{at}/reclaimed.png"),
                 bytes: 8,
                 side: Side::Branch,
+                digest: String::from("a1b2c3d4e5f60718"),
             },
         },
     ];
@@ -163,12 +166,14 @@ fn what_is_kept_outlives_the_worktree_and_a_frame_that_would_not_copy_is_dropped
                 path: String::new(),
                 bytes: 8,
                 side: Side::Branch,
+                digest: String::from("a1b2c3d4e5f60718"),
             },
             StepFrame {
                 name: "never-written.png".to_string(),
                 path: String::new(),
                 bytes: 0,
                 side: Side::Branch,
+                digest: String::from("a1b2c3d4e5f60718"),
             },
         ],
         &worktree,
@@ -382,6 +387,7 @@ fn the_handle_is_what_the_run_directory_is_named_after() {
                 path: String::new(),
                 bytes: 8,
                 side: Side::Branch,
+                digest: String::from("a1b2c3d4e5f60718"),
             }],
             Path::new("/nonexistent"),
             "shots",

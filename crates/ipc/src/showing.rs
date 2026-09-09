@@ -86,6 +86,25 @@ pub struct KeptFrame {
     /// `Option` would make every reader spell that out again.
     #[serde(default = "on_the_branch")]
     pub side: Side,
+    /// A digest of this frame's own bytes, or empty where none was taken.
+    ///
+    /// **What lets a surface fold a pair away without fetching either image.**
+    /// A spec that photographs ten screens photographs ten of which the change
+    /// touched one; comparing two of these is how the nine that did not are
+    /// cut, and it costs no round trip.
+    ///
+    /// **Sound in one direction only, which is the direction that matters.**
+    /// Digests that differ mean *draw it* — at worst noise, since a PNG encoder
+    /// may spell one picture two ways. Digests that agree mean *fold it*, and
+    /// being wrong there hides the change somebody came to see, so a client
+    /// compares [`bytes`](KeptFrame::bytes) beside it.
+    ///
+    /// **Empty is not a match.** A frame kept before this field existed carries
+    /// none, and two empties must not read as a pair that agrees — the client
+    /// draws both, which is what it would have done anyway. Absent on a peer
+    /// built before 9.6 and defaulted here for that reason.
+    #[serde(default)]
+    pub digest: String,
 }
 
 /// What a row with no `side` is. See [`KeptFrame::side`].

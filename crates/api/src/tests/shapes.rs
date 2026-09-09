@@ -450,6 +450,14 @@ pub fn frame(kept: String) -> KeptFrame {
         bytes: THE_FRAME_BYTES.len() as u64,
         kept,
         side: ipc::Side::from_wire("branch").expect("a side"),
+        // **A literal, and deliberately not computed from `THE_FRAME_BYTES`.**
+        // What a route test can prove is that the field crosses; whether the
+        // hash of some bytes is this string is `verification`'s own question,
+        // and `api` does not depend on that crate. Re-implementing eight lines
+        // here to make the two agree would be the second `digest` in one
+        // workspace that `verification::digest_of` exists to prevent — and it
+        // would agree forever without either side being checked.
+        digest: String::from("9a1e5c73b0d4f28e"),
     }
 }
 

@@ -37,6 +37,9 @@ fn frame(name: &str, side: Side) -> StepFrame {
         ),
         bytes: 8,
         side,
+        // The same digest on both sides, so a caller that folds a matching pair
+        // folds this one. A test whose subject is the pairing overrides it.
+        digest: String::from("a1b2c3d4e5f60718"),
     }
 }
 
@@ -250,6 +253,7 @@ fn what_the_base_run_left_behind_is_not_counted_as_the_branch_s() {
             path: String::new(),
             bytes: 4,
             side: Side::Base,
+            digest: String::from("a1b2c3d4e5f60718"),
         }],
         &worktree,
         "shots",

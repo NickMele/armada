@@ -152,6 +152,7 @@ pub(super) fn record_a_whole_run(store: &mut Store, id: &str, saying: &str, when
                 name: "job-detail-refused.png".to_string(),
                 path: format!(".armada/frames/{id}/fix.1/job-detail-refused.png"),
                 bytes: 41_002,
+                digest: String::from("a1b2c3d4e5f60718"),
                 side: Side::Branch,
             }],
             &at(when),
