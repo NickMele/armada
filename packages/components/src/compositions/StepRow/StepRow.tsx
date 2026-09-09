@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronRight, Lock } from "lucide-react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { conceptSaid } from "../../concepts";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
@@ -66,6 +67,21 @@ export type StepRowFact = {
    * `RunTreeFact.children`, which this is drawn from.
    */
   children?: StepRowFact[];
+  /**
+   * Whether the rows beneath this fact **start** folded.
+   *
+   * **A default, not a capability.** Every fact carrying children can be
+   * folded and unfolded; this only says which way it opens. An attempt that is
+   * over starts closed and the one still open starts open, because a step held
+   * after three tries otherwise draws fifteen rows — twelve of them the gate
+   * saying the same thing about runs nobody can act on any more, with the
+   * attempt a person came to read pushed off the bottom.
+   *
+   * **Folded, never hidden.** What each attempt came to stays on its own row
+   * either way; what folds is the gate's working beneath it. An attempt whose
+   * outcome had to be opened to be read would be a worse tree than a long one.
+   */
+  folded?: boolean;
 };
 
 /** The em dash a step that has not run shows in place of a duration. */
@@ -268,24 +284,71 @@ export function StepRow({
             {factsAbsent ?? "Nothing was recorded against this step."}
           </p>
         ) : (
-          facts.map((fact, at) => (
-            <div className="armada-srow__fact" key={at}>
-              <FactLabel>{fact.label}</FactLabel>
-              {fact.value}
-              {fact.children === undefined || fact.children.length === 0 ? null : (
-                <div className="armada-srow__fact-children">
-                  {fact.children.map((child, c) => (
-                    <div className="armada-srow__fact" key={c}>
-                      <FactLabel>{child.label}</FactLabel>
-                      {child.value}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))
+          facts.map((fact, at) => <Fact fact={fact} key={at} />)
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * One fact and, where it has them, the rows nested beneath it.
+ *
+ * **A folded fact holds its own open state**, because which spent attempts a
+ * reader has opened is a reading of this step and nothing above it needs to
+ * know. The step's own chevron decides whether any of this is on screen; this
+ * decides how much of it is, once it is.
+ */
+function Fact({ fact }: { fact: StepRowFact }) {
+  const nested = fact.children ?? [];
+  // **Every fact with rows beneath it folds; `folded` only says where it
+  // starts.** An attempt that is over opens closed and the one still open
+  // opens open, and either can be changed — a default is a guess about what a
+  // reader wants first, not a rule about what they may do.
+  const [open, setOpen] = useState(fact.folded !== true);
+  const folds = nested.length > 0;
+
+  const rows =
+    nested.length === 0 ? null : (
+      <div className="armada-srow__fact-children" hidden={folds && !open}>
+        {nested.map((child, c) => (
+          <div className="armada-srow__fact" key={c}>
+            <FactLabel>{child.label}</FactLabel>
+            {child.value}
+          </div>
+        ))}
+      </div>
+    );
+
+  if (!folds) {
+    return (
+      <div className="armada-srow__fact">
+        <FactLabel>{fact.label}</FactLabel>
+        {fact.value}
+        {rows}
+      </div>
+    );
+  }
+
+  return (
+    <div className="armada-srow__fact">
+      {/* The name is the control, so the whole of what a reader would press
+          answers. A chevron beside a name that does the same thing is two
+          targets for one act, and the name is the larger of them.
+
+          The outcome stays outside the button: it is read, not pressed, and it
+          is the reason a spent attempt keeps its row when its working folds. */}
+      <button
+        type="button"
+        className="armada-srow__fold"
+        aria-expanded={open}
+        onClick={() => setOpen((was) => !was)}
+      >
+        <ChevronRight className="armada-srow__fold-mark" size={GLYPH} strokeWidth={STROKE} aria-hidden />
+        <FactLabel>{fact.label}</FactLabel>
+      </button>
+      {fact.value}
+      {rows}
     </div>
   );
 }

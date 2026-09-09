@@ -260,3 +260,81 @@ export const ReadOnly: Story = {
 export const HeldByTheCaller: Story = {
   args: { steps: BUG, onSelect: () => {}, openSteps: ["root_cause", "fix"] },
 };
+
+/**
+ * **Three tries, and only the last one is open.**
+ *
+ * A retried step draws every attempt with its own Checks, Judge and Verdict
+ * nested beneath it. At three attempts that is fifteen rows, twelve of which
+ * are the gate saying the same thing about runs nobody can act on any more —
+ * and the attempt still open, the one a person came to read, is the one pushed
+ * off the bottom of the column.
+ *
+ * **Every attempt keeps its row and its outcome and folds its working.** What
+ * a reader scans down this column is `stopped`, `stopped`, `stopped`, `waiting
+ * on you`; the three rows beneath each are what they open when one of them
+ * turns out to matter. Folded rather than dropped — an attempt whose outcome
+ * had to be opened to be read would be a worse tree than a long one.
+ *
+ * **All three fold, including the one that starts open.** `folded` is a
+ * default and not a capability: it says which way an attempt opens, never
+ * whether it can be closed. A reader who has read the current attempt can put
+ * it away like any other.
+ *
+ * The name is the control. A chevron beside a name that does the same thing is
+ * two targets for one act.
+ */
+export const SpentAttemptsFold: Story = {
+  args: {
+    onSelect: () => {},
+    steps: [
+      {
+        id: "scope",
+        label: "Scope the change",
+        activity: "stopped",
+        elapsed: "5m 00s",
+        status: "retries spent",
+        current: true,
+        factsOpen: true,
+        facts: [
+          {
+            label: "Attempt 1",
+            value: "stopped · run_ended",
+            named: "refused",
+            folded: true,
+            children: [
+              { label: "Checks", value: "not reached" },
+              { label: "Judge", value: "1 declared" },
+              { label: "Verdict", value: "the Drone's run ended", named: "refused" },
+            ],
+          },
+          {
+            label: "Attempt 2",
+            value: "stopped · no_report",
+            named: "refused",
+            folded: true,
+            children: [
+              { label: "Checks", value: "forced_report failed", named: "failed" },
+              { label: "Judge", value: "1 declared" },
+              { label: "Verdict", value: "went quiet", named: "refused" },
+            ],
+          },
+          {
+            label: "Attempt 3",
+            value: "stopped · no_report",
+            named: "refused",
+            children: [
+              { label: "Checks", value: "forced_report failed", named: "failed" },
+              { label: "Judge", value: "1 declared" },
+              { label: "Verdict", value: "went quiet", named: "refused" },
+            ],
+          },
+          { label: "Held", value: "retries spent · waiting on you" },
+        ],
+      },
+      { id: "implement", label: "Implement", activity: "not_started", status: "not started", facts: [] },
+      { id: "tests", label: "Write tests", activity: "not_started", status: "not started", facts: [] },
+      { id: "summarise", label: "Summarise", activity: "not_started", status: "not started", facts: [] },
+    ],
+  },
+};

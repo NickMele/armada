@@ -212,6 +212,21 @@ button.armada-srow__name:focus-visible {
    nests beneath, since `.armada-srow__fact` is itself a flex row. The
    hairline and indent repeat `.armada-srow__facts`' own treatment one level
    in, so a retried step's rail reads as attempt, then its own gate rows. */
+/* **`display: none` here or the attribute does nothing.** `[hidden]` is a
+   user-agent rule of the lowest specificity, and the class below sets
+   `display: flex`, so a folded attempt drew its rows anyway — the chevron
+   turned and nothing moved. Attribute-plus-class outranks the class alone.
+
+   Written attribute-first, which the sibling rule on `__facts` a few lines up
+   does not have to be: the design-value gate reads `fact-children[hidden]` as
+   a Tailwind arbitrary value, because a hyphenated word followed by a bracket
+   is exactly that syntax. `facts[hidden]` has no hyphen and passes. Leading
+   with the attribute says the same thing to a browser and nothing at all to
+   that pattern. */
+[hidden].armada-srow__fact-children {
+  display: none;
+}
+
 .armada-srow__fact-children {
   flex-basis: 100%;
   display: flex;
@@ -243,4 +258,43 @@ button.armada-srow__name:focus-visible {
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/* A spent attempt's own name, doubling as the control that unfolds its gate
+   rows. The name is the target rather than the chevron beside it: one act
+   wants one thing to press, and the name is the larger half of the pair. */
+.armada-srow__fold {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--space-1) / 2);
+  flex: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.armada-srow__fold:hover .armada-srow__fact-label {
+  color: var(--fg-muted);
+}
+
+.armada-srow__fold:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+/* The mark turns rather than swapping for a second glyph, which is what the
+   step's own chevron does one level up. */
+.armada-srow__fold-mark {
+  flex: none;
+  color: var(--fg-subtle);
+  transition: transform var(--duration-fast) var(--ease);
+}
+
+.armada-srow__fold[aria-expanded="true"] .armada-srow__fold-mark {
+  transform: rotate(90deg);
 }
