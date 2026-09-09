@@ -165,7 +165,7 @@ export function Worktrees({ onWant, held, onReclaim, now, onCopied }: WorktreesP
   const nothingHeld = groups.deciding.length === 0 && groups.waiting.length === 0;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="armada-screen__pane">
       {refused.map((one) => (
         <Alert key={one.jobId} tone="escalated" title="One worktree was not given back">
           {said(one.outcome)}
@@ -185,7 +185,7 @@ export function Worktrees({ onWant, held, onReclaim, now, onCopied }: WorktreesP
               what is left — each one failed a safety test, which is not the same as being
               unsafe, and the reason under each row is what the decision is made on.
             </p>
-            <ul className="flex flex-col gap-4">
+            <ul>
               {groups.deciding.map((one) => (
                 <HeldWorktree
                   key={one.job_id}
@@ -222,7 +222,7 @@ export function Worktrees({ onWant, held, onReclaim, now, onCopied }: WorktreesP
               nothing here offers to. They are listed so that a worktree missing from the
               group above reads as a job still going rather than as disk already returned.
             </p>
-            <ul className="flex flex-col gap-4">
+            <ul>
               {groups.waiting.map((one) => (
                 <HeldWorktree
                   key={one.job_id}
@@ -247,7 +247,7 @@ export function Worktrees({ onWant, held, onReclaim, now, onCopied }: WorktreesP
               deciding. Drawn rather than hidden: a worktree that is simply absent from this
               page cannot be told from one already given back.
             </p>
-            <ul className="flex flex-col gap-4">
+            <ul>
               {groups.automatic.map((one) => (
                 <HeldWorktree
                   key={one.job_id}

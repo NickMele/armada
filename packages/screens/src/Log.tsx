@@ -96,7 +96,7 @@ export function Log({
   }
 
   return (
-    <div className="flex flex-col gap-1" {...{ [LOG_REGION]: region }}>
+    <div {...{ [LOG_REGION]: region }}>
       {rows.map((row) => (
         <LogEntry
           key={row.id}

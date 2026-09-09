@@ -35,7 +35,24 @@ body,
 /* The region that scrolls is the shell's panel now, and `min-height: 0` on it
    lives in the shell's own stylesheet with the reason. It is not a spellable
    utility: the theme resets the spacing namespace to `initial`, so `min-h-0`
-   compiles to nothing — checked in the emitted stylesheet, not assumed. */
+   compiles to nothing — checked in the emitted stylesheet, not assumed.
+   
+   **Nor is anything else.** No utility in this app emits a rule: `flex`,
+   `flex-col`, `gap-6`, `flex-1`, `h-full` are all absent from the built
+   stylesheet, so every `className` spelling one of them is decoration on a
+   plain block box. That is not a thing to work around one class at a time — it
+   is why the layout below is written here, in CSS, where it can be read. */
+
+/* What the shell mounts a screen into is `.armada-screen__mounted`, and it
+   lives in the components' own stylesheet rather than here.
+   
+   **Because a rule Bridge owns alone is a rule no story can check.** That class
+   is the link between a bounded window and a bounded screen, and it was the
+   half that was missing — so the arrangement read correctly in Storybook, which
+   mounts a screen into a box it sized itself, and came apart in Bridge, which
+   mounts it into the shell. Kept here, the same thing could happen again and
+   nothing would catch it. `Screens/The shell`'s tall-screen story is what
+   catches it now, and it can only do that if it can see this. */
 
 /* Where a toast lands. Position and stacking order only — the toast owns its
    own surface and every value in it. `--z-toast` is a stacking order rather

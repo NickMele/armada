@@ -365,7 +365,7 @@ export function Jobs({
 
   return (
     <div
-      className="flex flex-col gap-2"
+      className="armada-screen__stack"
       // The cursor is DOM focus. Capturing here rather than on the list means a
       // row reached by mouse, by Tab, by the listbox's own arrows or by `j` all
       // set the same value — two cursors that drift is the alternative.
@@ -377,7 +377,7 @@ export function Jobs({
       }}
     >
       {terminalIds.length === 0 ? null : (
-        <div className="flex justify-end">
+        <div>
           <ClearTerminalControl count={terminalIds.length} stale={stale} onConfirm={() => onClearTerminal(terminalIds)} />
         </div>
       )}

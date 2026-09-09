@@ -287,10 +287,10 @@ export function chaptersOf({
  */
 function Documents({ kept }: { kept: readonly KeptRead[] }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1">
+    <div>
       <span className="text-2xs text-fg-muted">{DOCUMENTS}</span>
       {kept.map((one) => (
-        <span key={one.path} className="flex items-center gap-2">
+        <span key={one.path}>
           {one.opening}
           <span className="text-2xs text-fg-subtle">{one.attempt}</span>
         </span>

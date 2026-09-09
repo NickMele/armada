@@ -94,3 +94,41 @@ export const FleetIsNotRunning: Story = {
   },
   render: Shell.render,
 };
+
+/**
+ * **A screen taller than the window, mounted the way Bridge mounts one.**
+ *
+ * This is the story that was missing, and its absence is why the layout kept
+ * reading right here and wrong in the app. Every other screen story mounts a
+ * screen on its own, into a box the story sized. Bridge mounts it into the
+ * shell — under a head, over a status bar, inside a rail — and the chain from
+ * the window down to the screen is exactly the part that was broken.
+ *
+ * **Nothing outside a pane scrolls.** The rail holds, the status bar holds, and
+ * the tall content moves inside its own box. If this story ever scrolls the
+ * whole shell — if the status bar leaves the bottom of the frame — the chain is
+ * broken again, and it is broken in Bridge with it.
+ *
+ * No head, which is the shape a Job read whole takes: the screen's own header
+ * is the top of the window.
+ */
+export const AScreenTallerThanTheWindow: Story = {
+  args: {
+    ...shell,
+    title: undefined,
+    summary: undefined,
+    actions: undefined,
+    children: (
+      <div className="armada-screen__mounted">
+      <div className="armada-screen__pane">
+        {Array.from({ length: 40 }, (_, at) => (
+          <div key={at} style={{ flex: "none" }}>
+            {`Row ${at + 1} of 40 — the pane scrolls, the frame does not`}
+          </div>
+        ))}
+      </div>
+      </div>
+    ),
+  },
+  render: Shell.render,
+};

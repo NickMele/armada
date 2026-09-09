@@ -120,7 +120,7 @@ export function Reports({ reports, onWant, onCopied }: ReportsProps) {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="armada-screen__pane">
       <Counts calibration={reports.list.calibration} />
       {reports.list.reports.length === 0 ? (
         <Nothing />

@@ -91,23 +91,84 @@
   min-height: 0;
 }
 
-/* The one region that scrolls, and the only place `min-height: 0` is
-   load-bearing: without it the flex child keeps its content's height and the
-   window grows instead of the region scrolling — v1's "layout broke on
+/* Where a screen mounts. **A bounded box, and never a scroller.**
+   
+   It scrolled until 2026-09-09, and that is the whole of the layout complaint
+   this app kept getting: a screen taller than the window scrolled *as a whole*,
+   so the thing a person wanted pinned — a Job's header, a list's own head —
+   left the top of the window with everything else, and the status bar was
+   pushed off the bottom.
+   
+   **The model is VS Code's.** Nothing between the window and a pane scrolls.
+   The chrome is outside — the rail beside this, the status bar under it — and
+   inside, each region owns its own scrollbar and its own position: the run and
+   the panel on a Job, the list on the Board. A reader deep in one is not
+   moving the others, and nothing can slide the frame out from under them.
+   
+   So this box is bounded and every screen that mounts here declares where it
+   scrolls. A screen that declares none simply clips, which is a bug you can see
+   rather than a page that quietly grows.
+   
+   `min-height: 0` stays load-bearing: without it the flex child keeps its
+   content's height and the window grows instead — v1's "layout broke on
    resize", restated in CSS. */
 .armada-shell__mount {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
-  /* **The window is not a scroller, and this is what says so.** This is the one
-     region that scrolls, so a gesture that runs past its end has nowhere left
-     to go — without this the rest of it chains to the document, and the whole
-     app slides under a header that is supposed to be fixed. It is the same
-     declaration `ScrollArea` carries and for the same reason; what made it a
-     defect here is that the readings long enough to reach an end — a log, a
-     patch — are the ones a person keeps scrolling through. */
-  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 0 var(--space-4) var(--space-4);
+}
+
+/* What the shell mounts a screen into: a column that fills the mount and lets
+   the screen inside it be bounded.
+   
+   **This is the link that was missing, and it lived nowhere.** A screen like
+   `InsideAJob` is `height: 100%`, and a percentage needs a definite parent to
+   measure. Bridge wrapped the mount's child in a div spelling Tailwind
+   utilities — `flex flex-col gap-6` — and no utility in this app emits a rule,
+   in Bridge or in Storybook, so it was a plain block box of automatic height.
+   The screen measured against nothing, grew to its content, and scrolled the
+   mount instead of its own regions.
+   
+   Here rather than in `apps/desktop`, because a rule Bridge owns alone is a
+   rule no story can check — which is exactly how the arrangement came to read
+   correctly in Storybook and come apart in the app. */
+.armada-screen__mounted {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-section);
+  flex: 1;
+  min-height: 0;
+}
+
+/* A screen that is one region: it fits the mount and scrolls inside itself.
+   
+   **The mount stopped scrolling, so every screen says where it does.** A page
+   read top to bottom — the reports, the held worktrees, the composer — is one
+   pane and scrolls whole, the way VS Code scrolls a settings page. A screen
+   whose regions are read against each other says so differently: the Board
+   scrolls its rows under a head that stays, and a Job scrolls its run and its
+   panel apart. What none of them does any more is move the window's frame. */
+.armada-screen__pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-section);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* A screen that hands the scrolling to a child — the Board, whose list keeps
+   its own head in place and moves only the rows under it. */
+.armada-screen__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
+  min-height: 0;
 }
 
 /* The head's trailing controls. `New job` is the primary; anything beside it

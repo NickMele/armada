@@ -162,7 +162,7 @@ export function DispatchJob({
 
   if (hand) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="armada-screen__pane">
         {/* The way back, above the form. Hand entry is the exception, so
             leaving it is one press and never a dead end. */}
         <div>

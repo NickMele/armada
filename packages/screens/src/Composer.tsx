@@ -202,7 +202,7 @@ export function Composer({
         <CardTitle>Propose a job</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-col gap-4">
+        <div>
           <Input
             label="Title"
             value={title}
@@ -228,7 +228,7 @@ export function Composer({
             className="hidden"
             onChange={onFilesPicked}
           />
-          <div className="flex flex-col gap-2">
+          <div>
             <Button
               variant="secondary"
               size="sm"
@@ -237,7 +237,7 @@ export function Composer({
               Attach
             </Button>
             {attachments.length > 0 && (
-              <div className="flex flex-wrap gap-2">
+              <div>
                 {attachments.map((attachment) => (
                   <AttachmentChip
                     key={attachment.path}
@@ -248,7 +248,7 @@ export function Composer({
               </div>
             )}
           </div>
-          <div className="flex flex-wrap gap-4">
+          <div>
             <Select
               label="Workflow"
               value={workflowId}
@@ -266,7 +266,7 @@ export function Composer({
             {/* Read-only, so it is a labelled value rather than a field —
                 the drawing's own treatment. The repository, because
                 `armada.yml` declares no name. */}
-            <div className="flex flex-col gap-1">
+            <div>
               <span className="text-2xs text-fg-muted">Project</span>
               {manifest === undefined ? null : (
                 <span className="mono text-fg-default">{manifest.repository}</span>
@@ -305,7 +305,7 @@ export function Composer({
               rail a running Job draws, one moment earlier — see `preview.ts`
               for why no row here carries a result. */}
           {preview.length === 0 ? null : (
-            <div className="flex flex-col gap-1">
+            <div>
               <span className="text-2xs text-fg-muted">{PREVIEW}</span>
               <WorkflowRail steps={preview} />
             </div>

@@ -7,6 +7,14 @@
   flex-direction: column;
   gap: var(--space-3);
   min-width: 0;
+  /* **The list is a pane, so it fits its box and scrolls inside it.** The
+     heading, the count and the filters stay put and the rows move under them —
+     which is what a person wants when they are looking for one Job, and what
+     the shell can no longer do on their behalf now that its mount is bounded.
+     `min-height: 0` because a flex child keeps its content's height without
+     it, and the frame below would never get the chance to scroll. */
+  flex: 1;
+  min-height: 0;
 }
 
 .armada-active-jobs__header {
@@ -62,6 +70,12 @@
 .armada-active-jobs__frame {
   display: flex;
   flex-direction: column;
+  /* The rows are what moves. The head above them and the controls above that
+     are the frame a person reads against, so they hold their place. */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border-radius: var(--radius-md);
   border: var(--border-width) solid var(--border-default);
   background: var(--bg-raised);
