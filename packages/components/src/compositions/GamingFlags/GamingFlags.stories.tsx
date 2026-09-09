@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn } from "storybook/test";
 import { Dialog } from "../../primitives/Dialog/Dialog";
 import { Textarea } from "../../primitives/Textarea/Textarea";
 import { GamingFlags } from "./GamingFlags";
@@ -156,6 +157,108 @@ export const WhereWithNowhereToGo: Story = {
           "`crates/api/src/tests/served.rs:214` — the assertion compares a value against " +
           "itself, so it holds for every possible implementation.",
         at: { file: "crates/api/src/tests/served.rs", line: 214 },
+      },
+    ],
+  },
+};
+
+/**
+ * **The flag that was wrong, drawn so that a person can see it is.** #580, on
+ * a real job: `assertion_weakened` over a rustdoc sentence, and reading the
+ * diff by hand was the only way to learn the check had it backwards.
+ *
+ * The question is what makes that readable without the diff. *Does this change
+ * alter an existing assertion* — the sentence is documentation, not an
+ * assertion — and *is that assertion made nowhere else in this change*. Both
+ * clauses fail, and neither is recoverable from the word `assertion_weakened`.
+ *
+ * The brief is the whole exchange the answer came out of, named in words
+ * because the location above it is a path too and only one of them opens the
+ * change.
+ */
+export const WhyTheFlagFired: Story = {
+  args: {
+    citation: "whole",
+    said: "What the gaming check found, and where:",
+    onOpenAt: fn(),
+    onOpenBrief: fn(),
+    flags: [
+      {
+        pattern: "assertion_weakened",
+        verb: "an assertion now asserts less",
+        asked:
+          "Does this change alter an existing assertion so that it asserts less than it did, " +
+          "and is that assertion made nowhere else in this change?",
+        cited:
+          "`crates/store/src/retain.rs:41` — the sentence *touch nothing that is its record* " +
+          "became *touch nothing that is its record but the mark that says so*, which holds " +
+          "back less than it did.",
+        at: { file: "crates/store/src/retain.rs", line: 41 },
+        brief: ".armada/briefs/12-the-job/regression_verify.1.gaming.assertion_weakened.txt",
+      },
+    ],
+  },
+  /**
+   * **The press hands back the path and the row reads the basename**, which is
+   * the one thing here a rendering cannot show. Every brief begins
+   * `.armada/briefs/`, so the label is the last segment — and a control that
+   * called back with what it displays would ask main for a file that is not on
+   * the wire, which main refuses by name.
+   */
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: /the brief/ }));
+    await expect(args.onOpenBrief).toHaveBeenCalledWith(
+      ".armada/briefs/12-the-job/regression_verify.1.gaming.assertion_weakened.txt",
+    );
+  },
+};
+
+/**
+ * **A pattern the diff decides, which was asked nothing.** `test_deleted`,
+ * `test_skipped` and `check_config_edited` are answered by reading the change,
+ * with no model call — so there is no question to quote and no exchange to
+ * keep, and the row draws neither.
+ *
+ * **Absent is the answer, not a gap.** A row that reserved space for a
+ * question these patterns will never have would say the record is incomplete,
+ * which is the reading that sends somebody looking for a file nobody wrote.
+ */
+export const AnsweredByTheDiffAndNotAsked: Story = {
+  args: {
+    citation: "whole",
+    said: "What the gaming check found, and where:",
+    onOpenAt: fn(),
+    onOpenBrief: fn(),
+    flags: [
+      {
+        pattern: "test_deleted",
+        verb: "a test file was removed whole",
+        cited: "`crates/api/src/tests/served.rs` was deleted in the step it gates.",
+        at: { file: "crates/api/src/tests/served.rs" },
+      },
+    ],
+  },
+};
+
+/**
+ * The brief where the surface cannot open one. **A value, not a control**, for
+ * the reason the location is: a person who knows the path can still find the
+ * file, and a press that goes nowhere is worse than no press.
+ */
+export const TheBriefWithNowhereToOpen: Story = {
+  args: {
+    citation: "whole",
+    said: "What it flagged",
+    flags: [
+      {
+        pattern: "no_findings_on_substantial_diff",
+        verb: "a review that found nothing in a substantial change",
+        asked:
+          "Does this review report no findings against a change large enough that finding " +
+          "none is itself the claim being made?",
+        cited: "1,204 lines across 18 files, and the review answered clean.",
+        brief:
+          ".armada/briefs/12-the-job/review.2.gaming.no_findings_on_substantial_diff.txt",
       },
     ],
   },

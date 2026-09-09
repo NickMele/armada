@@ -63,6 +63,38 @@ export type GamingFlag = {
    * point at, and the file is still worth opening.
    */
   at?: GamingFlagAt;
+  /**
+   * The narrow question the check was actually asked about this pattern, word
+   * for word — *Does this change alter an existing assertion so that it
+   * asserts less than it did, and is that assertion made nowhere else in this
+   * change?*
+   *
+   * **The one thing on the row a flag can be judged against.** A spelling says
+   * what was looked for and a citation says what was seen, and neither says
+   * what was claimed — so `assertion_weakened` over a rustdoc sentence read as
+   * a finding until somebody spent an afternoon on the diff proving it was
+   * not. The clauses are the whole of it: the second one is why a sentence
+   * restated elsewhere in the change is not a weakened assertion.
+   *
+   * **Absent is an answer about the check rather than a gap.** Three patterns
+   * are decided by reading the diff and nothing was asked, and a flag recorded
+   * before Fleet kept this has none.
+   *
+   * **Drawn only where the citation is read whole.** A question is forty words
+   * and the rail's row is one line of pointers; the two surfaces a flag is
+   * judged on both read whole, and clipping a question to eight words would
+   * put half a test on screen — which is the failure the row already had.
+   */
+  asked?: string;
+  /**
+   * Where the whole exchange behind this flag is, relative to the repository
+   * root. **The path, never the document**, exactly as a criterion's brief is.
+   *
+   * Absent wherever `asked` is, plus the flag Fleet could not write one for.
+   * It draws as a control where `onOpenBrief` was given and as a value where
+   * it was not, for `at`'s reason.
+   */
+  brief?: string;
 };
 
 /** Where in the change a flag points. */
@@ -103,6 +135,13 @@ export type GamingFlagsProps = {
    * offering none.
    */
   onOpenAt?: (at: GamingFlagAt) => void;
+  /**
+   * Open the brief a flag was answered in, given its path. Absent draws the
+   * brief as a value, for `onOpenAt`'s reason — and the value is still worth
+   * drawing, because a path a person can find by hand beats knowing there was
+   * an exchange and not where.
+   */
+  onOpenBrief?: (brief: string) => void;
 };
 
 /**
@@ -115,12 +154,19 @@ export type GamingFlagsProps = {
  * sentence was structure being thrown away and then read back out of prose.
  * Drawing it once is what stops the two surfaces from disagreeing about what a
  * flag looks like.
+ *
+ * **A row says what was asked as well as what was found.** Six of the nine
+ * patterns cost a model call against a question written to be argued with, and
+ * for as long as the row drew only the spelling and the citation that answer
+ * was spent and discarded — leaving a reader to re-derive it off the diff, or
+ * to take the flag on trust. #580.
  */
 export function GamingFlags({
   flags,
   said,
   citation = "clipped",
   onOpenAt,
+  onOpenBrief,
 }: GamingFlagsProps) {
   if (flags.length === 0) return null;
   return (
@@ -138,6 +184,13 @@ export function GamingFlags({
             >
               {flag.verb ?? flag.pattern}
             </span>
+            {/* Above the citation, because it is the question the citation is
+                the answer to. Not through `Prose`: this is one sentence the
+                registry holds, written by hand, and rendering it as markup
+                would invite a check to word its own question in markup. */}
+            {flag.asked === undefined || citation !== "whole" ? null : (
+              <p className="armada-gaming-flags__asked">{flag.asked}</p>
+            )}
             {flag.cited === undefined || flag.cited === "" ? null : citation === "whole" ? (
               <div className="armada-gaming-flags__cited">
                 <Prose text={flag.cited} />
@@ -150,6 +203,9 @@ export function GamingFlags({
               </span>
             )}
             {flag.at == null ? null : <Where at={flag.at} onOpen={onOpenAt} />}
+            {flag.brief === undefined ? null : (
+              <Brief path={flag.brief} onOpen={onOpenBrief} />
+            )}
           </li>
         ))}
       </ul>
@@ -185,6 +241,46 @@ function Where({ at, onOpen }: { at: GamingFlagAt; onOpen?: (at: GamingFlagAt) =
       onClick={() => onOpen(at)}
     >
       {where}
+    </button>
+  );
+}
+
+/**
+ * The brief the flag was answered in — `the brief implement.1.gaming.txt`.
+ *
+ * **The basename, with the whole path in the title.** Every one of these
+ * begins `.armada/briefs/`, so a row set to the full path reads as a column of
+ * the same eleven characters; the last segment names the step, the attempt and
+ * the pattern, which is the half somebody is hunting for.
+ *
+ * **Named in words, because it sits beside a location that is also a path.**
+ * Two mono paths under one finding say nothing about which is the change and
+ * which is the exchange, and the one thing a reader is deciding here is which
+ * of the two to open.
+ */
+function Brief({ path, onOpen }: { path: string; onOpen?: (brief: string) => void }) {
+  const named = (
+    <>
+      <span className="armada-gaming-flags__brief-of">the brief</span>{" "}
+      {path.slice(path.lastIndexOf("/") + 1)}
+    </>
+  );
+  if (onOpen === undefined) {
+    return (
+      <span className="armada-gaming-flags__brief" title={path}>
+        {named}
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="armada-gaming-flags__brief"
+      data-opens="true"
+      title={path}
+      onClick={() => onOpen(path)}
+    >
+      {named}
     </button>
   );
 }

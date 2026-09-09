@@ -621,6 +621,7 @@ export function JobDetail({
                 <StepActs
                   job={job}
                   whole={whole}
+                  opens={opensRecords}
                   render={render}
                   acting={acting}
                   stale={stale}

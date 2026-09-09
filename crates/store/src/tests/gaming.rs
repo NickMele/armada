@@ -7,6 +7,13 @@ use core_model::{CitedAt, GamingFlag, GamingPattern, RepoPath, StepId};
 
 use crate::tests::{created_at, job_id, open, top_level, TempDir};
 
+/// The question `assertion_weakened` puts, as `GamingPattern::question` words
+/// it. Spelled out here rather than read from the enum: what a row has to
+/// survive is the text that went out, and a test reading the question back
+/// from the same place the writer did would pass on a column that dropped it.
+const ASKED: &str = "Does this change alter an existing assertion so that it asserts less \
+                     than it did, and is that assertion made nowhere else in this change?";
+
 #[test]
 fn the_patterns_a_step_tripped_survive_with_what_each_cited() {
     let dir = TempDir::new();
@@ -24,11 +31,19 @@ fn the_patterns_a_step_tripped_survive_with_what_each_cited() {
                     pattern: GamingPattern::TestDeleted,
                     cited: "tests/reader.rs, removed whole".to_string(),
                     at: Some(CitedAt::in_file(RepoPath::new("tests/reader.rs"))),
+                    // The patch decided it, so nothing was asked and no call
+                    // was kept.
+                    asked: None,
+                    brief_path: None,
                 },
                 GamingFlag {
                     pattern: GamingPattern::AssertionWeakened,
                     cited: "src/read.rs:88, `assert!(rows.len() > 0)`".to_string(),
                     at: Some(CitedAt::at_line(RepoPath::new("src/read.rs"), 88)),
+                    asked: Some(ASKED.to_string()),
+                    brief_path: Some(
+                        ".armada/briefs/01GAME/fix.1.gaming.assertion_weakened.txt".to_string(),
+                    ),
                 },
             ],
             &created_at(),
@@ -59,6 +74,24 @@ fn the_patterns_a_step_tripped_survive_with_what_each_cited() {
         ],
         "where each flag points survives, line and all"
     );
+    assert_eq!(
+        read[0].1[1].asked.as_deref(),
+        Some(ASKED),
+        "the question a judged flag answered is what tells a real finding from a wrong one"
+    );
+    assert_eq!(
+        read[0].1[1].brief_path.as_deref(),
+        Some(".armada/briefs/01GAME/fix.1.gaming.assertion_weakened.txt"),
+        "and the whole call it answered is still reachable"
+    );
+    assert_eq!(
+        (
+            read[0].1[0].asked.as_deref(),
+            read[0].1[0].brief_path.as_deref()
+        ),
+        (None, None),
+        "a pattern the patch decided was asked nothing, and null says so"
+    );
 }
 
 /// A flag with nowhere to point round-trips as one, rather than as a file
@@ -83,6 +116,12 @@ fn a_flag_with_nowhere_to_point_reads_back_with_nowhere_to_point() {
                 pattern: GamingPattern::NoFindingsOnSubstantialDiff,
                 cited: "REVIEW.md reports nothing against 94 changed lines".to_string(),
                 at: None,
+                asked: Some(
+                    "Is this review reporting no findings against a diff substantial \
+                             enough to have some?"
+                        .to_string(),
+                ),
+                brief_path: None,
             }],
             &created_at(),
         )
@@ -117,6 +156,8 @@ fn a_second_look_at_the_same_run_of_a_step_supersedes_the_first() {
                     pattern,
                     cited: "src/lib.rs:1".to_string(),
                     at: Some(CitedAt::at_line(RepoPath::new("src/lib.rs"), 1)),
+                    asked: None,
+                    brief_path: None,
                 }],
                 &created_at(),
             )

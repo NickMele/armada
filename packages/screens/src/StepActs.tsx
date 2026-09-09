@@ -17,6 +17,7 @@ import type { JobDetail as JobWhole, JobSummary } from "@armada/protocol";
 import type { ConfirmableAct } from "./Acts";
 import { ACT_LABEL } from "./copy";
 import { OverruleControl } from "./Overrule";
+import type { Opens } from "./phases";
 import { recourseOf } from "./recovery";
 import { RedirectControl } from "./Redirect";
 import type { Render } from "./render";
@@ -60,6 +61,7 @@ import { steeringOf } from "./steering";
 export function StepActs({
   job,
   whole,
+  opens,
   render,
   acting,
   stale,
@@ -70,6 +72,13 @@ export function StepActs({
 }: {
   job: JobSummary;
   whole: JobWhole | null;
+  /**
+   * How a kept record opens. **Carried through rather than used here** —
+   * nothing in this header opens a file, and the override dialog draws a
+   * gaming flag's brief, which is one of the three records the panel already
+   * opens beside the verdict it argues with.
+   */
+  opens: Opens;
   render: Render;
   acting: boolean;
   stale: boolean;
@@ -127,6 +136,7 @@ export function StepActs({
           <OverruleControl
             jobId={job.id}
             overrule={overrule}
+            opens={opens}
             disabled={acting || stale}
             onOverrule={onOverrule}
           />

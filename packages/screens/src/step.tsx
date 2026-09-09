@@ -33,7 +33,7 @@ import type { ReactNode } from "react";
 
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
 import { span } from "./duration";
-import { Opening, type Opens } from "./phases";
+import { Opening, openKept, type Opens } from "./phases";
 import { recourseOf } from "./recovery";
 import { refusedIn } from "./refused";
 import { escalation } from "./render";
@@ -139,6 +139,12 @@ export function questionOf(
  * flag* and reading it in the dialog that confirms the act it exists to
  * inform.
  *
+ * **And the finding is drawn with the question it answers.** A pattern and a
+ * quoted line say what was seen and not what was claimed about it, so the band
+ * used to reconcile a stopped step with a clean gate by asking a person to
+ * trust the check. #580: it read `assertion_weakened` over a rustdoc sentence,
+ * and only the diff said so.
+ *
  * **What each act does is not here.** That was ninety words describing four
  * acts, in the imperative, detached from every control it named. Each sentence
  * is on its act's tooltip now, with its binding, and the band says where the
@@ -229,9 +235,18 @@ export function noticeOf(
               // spelling is the key, never the copy. A pattern with no row
               // falls back to it rather than rendering nothing.
               verb: GAMING_PATTERN[flag.pattern]?.verb ?? undefined,
+              // Named rather than spread: the wire says `brief_path`, as it
+              // does on a criterion's verdict, and the component takes the
+              // path of anything it can open under one word.
+              brief: flag.brief_path,
             }))}
             said={WHAT_THE_CHECK_FOUND}
             citation="whole"
+            // The brief opens where the flag is read. It is the third of the
+            // records `phases.tsx` already opens, kept in the same directory
+            // and by the same rule — so it goes through `openKept` rather
+            // than growing a second answer to a failed open.
+            onOpenBrief={(brief) => openKept(opens, { kept: brief, what: "brief" })}
           />
         )}
         {refused === undefined ? null : <Refusals {...refused} />}

@@ -125,6 +125,8 @@ pub(super) fn record_a_whole_run(store: &mut Store, id: &str, saying: &str, when
                 pattern: GamingPattern::AssertionWeakened,
                 cited: saying.to_string(),
                 at: None,
+                asked: None,
+                brief_path: None,
             }],
             &at(when),
         )

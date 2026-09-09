@@ -267,6 +267,26 @@ pub struct Flagged {
     /// it. One did, and job detail stopped drawing.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub at: Option<CitedAt>,
+    /// The narrow question this flag is the answer to, word for word.
+    ///
+    /// **What lets a reader tell a real finding from a wrong one**, which
+    /// `pattern` and `cited` together cannot: they say what was seen and not
+    /// what was claimed about it. A rustdoc sentence cited under
+    /// `assertion_weakened` reads as a finding until the question says it was
+    /// about an assertion.
+    ///
+    /// **Absent is a real answer.** Three patterns are decided by the patch,
+    /// cost no call and were asked nothing, and a flag recorded before this
+    /// field existed threw its question away.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub asked: Option<String>,
+    /// Where the whole call was kept, under `.armada/briefs/`, as
+    /// [`Judged::brief_path`] spells it — the step, the baseline and the diff
+    /// the question above was put with. Absent for
+    /// [`asked`](Flagged::asked)'s reasons, and where nothing could be
+    /// written.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub brief_path: Option<String>,
 }
 
 /// Where in the change a flag points, for the flags that point anywhere.
@@ -301,6 +321,8 @@ impl From<&core_model::GamingFlag> for Flagged {
             pattern: flag.pattern.as_wire().to_string(),
             cited: flag.cited.clone(),
             at: flag.at.as_ref().map(CitedAt::from),
+            asked: flag.asked.clone(),
+            brief_path: flag.brief_path.clone(),
         }
     }
 }
