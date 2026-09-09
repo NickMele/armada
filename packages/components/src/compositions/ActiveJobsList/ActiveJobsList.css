@@ -19,12 +19,20 @@
   min-height: 0;
 }
 
+/* Inset to the same edge the controls are, and for the same reason: the rows
+   below run to the pane's edges and everything above them does not.
+   
+   **It was missed when the pane stopped insetting its contents**, so the count
+   sentence sat flush against the pane's left edge while the surface's name in
+   the head above it was 16px in — two lines of one heading, out of line with
+   each other by exactly the padding that had been taken away. */
 .armada-active-jobs__header {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-4);
   min-width: 0;
+  padding: var(--space-3) var(--space-4) 0;
 }
 
 .armada-active-jobs__titles {
@@ -68,7 +76,7 @@
    around it, where a row is a band across the region. */
 .armada-active-jobs__controls {
   min-width: 0;
-  padding: var(--space-3) var(--space-4) 0;
+  padding: 0 var(--space-4);
 }
 
 /* The frame is the pane's middle, not a card in it.

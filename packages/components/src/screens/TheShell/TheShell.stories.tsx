@@ -149,11 +149,14 @@ export const AScreenTallerThanTheWindow: Story = {
 export const OneRowInATallWindow: Story = {
   args: {
     ...shell,
-    summary: "1 job needs you. 1 on the Board.",
+    // No summary on the head: Bridge puts the count on the list, beside the
+    // control that changes it. The head keeps the surface's name, and the two
+    // have to line up — which is what this story is now also for.
+    summary: undefined,
     children: (
       <div className="armada-screen__mounted">
         <div className="armada-screen__stack">
-          <ActiveJobsList selectable label="Job Board">
+          <ActiveJobsList summary="1 job needs you. 1 on the Board." selectable label="Job Board">
             <JobRowStacked
               status="escalated"
               statusIcon={Megaphone}
