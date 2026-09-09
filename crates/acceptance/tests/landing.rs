@@ -5,10 +5,9 @@
 //! is entered**, holds while a person reads what went out, and ends when that
 //! person merges. A workflow where **no** step declares it finishes with
 //! nothing pushed and no pull request — `design-plan`, `code-review`, `epic`
-//! and `prototype`, four of the eight this repository ships. The apparatus is
-//! [`bench::landing`], over [`bench::board`]'s round trip, so every assertion
-//! about what somebody is shown is made against a value that has been through
-//! [`ipc::encode`] and back.
+//! and `prototype`. The apparatus is [`bench::landing`], over
+//! [`bench::board`]'s round trip, so every assertion about what somebody is
+//! shown is made against a value that has been through [`ipc::encode`] and back.
 //!
 //! **The press itself is not asserted, for `recovery.rs`'s reason.** Merging is
 //! a `Fleet` method over a store, a repository and a forge that is a process,
@@ -22,6 +21,7 @@
 //! | That the delivering step is entered while the Job is still `running`, so the branch goes out before anybody is asked about it — #520 | The order inside the entry: the rebase, the commit, then the push. That is one `Fleet` method, and `fleet`'s own tests drive it through fakes |
 //! | That the Job holds at `awaiting_review` with that step at `awaiting_human`, that a Board is served both, and that it carries no `Stuck` — so the merge is not a recourse and cannot be drawn as one | That a person is *shown* the pull request, or that Bridge draws the act anywhere. Nothing here renders |
 //! | That merging is what takes the Job to `completed_success`, recorded as a person's act, and that every answer at the gate is an operation Fleet serves | That the press does it, or that pressing one lands. `Fleet::merge_pull_request` writes to somebody else's repository |
+//! | That the comments on the pull request are served for a person to choose from, and that the act they press with is one Fleet serves | That a comment reaches a Drone, or that the pull request is answered. Both need a forge, and `fleet::tests::remarks` drives them through fakes |
 //! | That a run of the after-merge Checks cannot start against a tree nobody committed — #474 | That it runs **once** for one commit. The dedupe is `store::already_proved`, keyed by the commit, and `store` has no in-memory constructor |
 
 // The bench is shared with the other milestones' tests and none of them uses
@@ -241,8 +241,11 @@ async fn a_person_merging_is_what_takes_the_job_to_completed_success() {
 /// the router, so a match here is a live route and not a coincidence of
 /// spelling.
 ///
-/// **`merge_pull_request` is the fourth**, and it is the one act in this
-/// workspace that writes to a repository Fleet did not make.
+/// **`merge_pull_request` is the fourth**, and `take_up_remarks` the fifth.
+/// Both write to a repository Fleet did not make: one merges the branch and one
+/// writes a comment saying which of that pull request's own comments a person
+/// picked for a Drone. The read they pick from is here too, because a choice
+/// nothing serves is a choice nobody can make.
 #[test]
 fn every_answer_at_the_human_gate_is_one_fleet_serves() {
     for act in [
@@ -250,6 +253,8 @@ fn every_answer_at_the_human_gate_is_one_fleet_serves() {
         "request_changes",
         "reject_job",
         "merge_pull_request",
+        "take_up_remarks",
+        "get_remarks",
     ] {
         assert!(
             api::SERVED.iter().any(|route| route.operation == act),
