@@ -336,8 +336,8 @@ notes = """
 requires_checks is valid only if requires_worktree is true (validated at config load). ref_source (default_branch / job_specified_branch) picks which branch gets checked out — a code-review workflow checks out the PR's branch, not main, while still getting an isolated worktree. Resolved before the allowlist check on dispatch.
 """
 
-[settings.auto-merge-policy-never-tests-pass-always]
-name = "Auto-merge policy (never / tests-pass / always)"
+[settings.auto-merge-policy-never-checks-pass-always]
+name = "Auto-merge policy (never / checks-pass / always)"
 scope = "Manifest only"
 default = "never"
 lifetime = "Live"
@@ -348,9 +348,9 @@ read_by = "config, fleet"
 notes = """
 Explicit in brief, per-project. Built in #525: config reads the top-level `auto_merge:` key, core-model folds it most-restrictive-wins across a Job's gating Manifests, and fleet::merging acts on it — on the sweep over an open pull request, once per pull request per process, recorded with Fleet as the actor rather than a person.
 
-`read_by` was `adapters, fleet` and no adapter ever read it. What an adapter answers is `WhatTheForgeRan`, which is the reading `tests-pass` consults; the policy itself is never seen below Fleet.
+`read_by` was `adapters, fleet` and no adapter ever read it. What an adapter answers is `WhatTheForgeRan`, which is the reading `checks-pass` consults; the policy itself is never seen below Fleet.
 
-**`tests-pass` is the forge's own checks and not Armada's.** Armada's ran at the gate the Job is holding at, and totalling the two would claim a gate had held that never ran. Only all-passed is a pass: a repository whose forge runs nothing has proved nothing, and a check finishing in a word this build has no name for counts as not passed (#524).
+**`checks-pass` is the forge's own checks and not Armada's.** Armada's ran at the gate the Job is holding at, and totalling the two would claim a gate had held that never ran. Only all-passed is a pass: a repository whose forge runs nothing has proved nothing, and a check finishing in a word this build has no name for counts as not passed (#524).
 
 **An approval is not one of the three values and is deliberately unread.** All three are about machines; whether a person approving on the forge becomes `auto_merge: approved` or a policy of its own is undecided and was not settled by #525. `always` therefore merges over an outstanding request for changes, with the forge's own branch protection as the backstop.
 """

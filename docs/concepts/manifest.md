@@ -415,18 +415,18 @@ Both are per-Manifest, not global, and both use the same override pattern one le
 
 | Setting | Values | Behavior |
 | --- | --- | --- |
-| `auto_merge` | `never` / `tests-pass` / `always` | Enforced by Fleet before merge |
+| `auto_merge` | `never` / `checks-pass` / `always` | Enforced by Fleet before merge |
 | `review_gate` | `human_always` (default) / `auto_if_judge_passes` | Whether a workflow's final review step requires a human |
 
 A false `auto_merge` result routes to Inbox > Job Reviews rather than merging.
 
 `review_gate` decides whether the final review step can advance on a Judge pass alone — see [Workflow](workflow.md), the `advance_gate` field.
 
-**Across a Job gated by several Manifests, most-restrictive-wins for both**: `never` beats `tests-pass` beats `always`, and `human_always` beats `auto_if_judge_passes`. There is one PR, so the most cautious gating Manifest holds.
+**Across a Job gated by several Manifests, most-restrictive-wins for both**: `never` beats `checks-pass` beats `always`, and `human_always` beats `auto_if_judge_passes`. There is one PR, so the most cautious gating Manifest holds.
 
 **Both are read at the question, never frozen onto a step.** A step declares `manifest_rule:auto_merge` or `manifest_rule:review_gate` and the record keeps the key rather than the answer — the settings rows call both policies *Live*, so a value written onto a Job at creation would go on stating a decision the repository had since changed. Fleet resolves `review_gate` at the advance gate and `auto_merge` on the sweep over an open pull request.
 
-**`tests-pass` is the forge's checks, not Armada's.** A Check named in `armada.yml` has already run at the gate the Job is holding at, and totalling the two would claim a gate had held that never ran. Only *every check passed* is a pass: a repository whose forge runs nothing has proved nothing, and a check that finished in a word Armada has no name for counts as not passed.
+**`checks-pass` is the forge's checks, not Armada's.** A Check named in `armada.yml` has already run at the gate the Job is holding at, and totalling the two would claim a gate had held that never ran. Only *every check passed* is a pass: a repository whose forge runs nothing has proved nothing, and a check that finished in a word Armada has no name for counts as not passed.
 
 **`auto_merge` does not read an approval, and `always` means always.** Its three values are all about machines; a person approving on the forge is neither, and whether that becomes a fourth value or a policy of its own is undecided. A forge that requires a review refuses the merge, so branch protection is the backstop and it is the forge's.
 

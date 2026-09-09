@@ -10,7 +10,7 @@
 //!
 //! **Nothing here decides anything.** No Job transitions and no gate is touched
 //! by the reading. What it is *for*, beyond the line, is `auto_merge:
-//! tests-pass`, and every part of whether that may merge is `crate::merging`'s.
+//! checks-pass`, and every part of whether that may merge is `crate::merging`'s.
 //!
 //! **A line in the Job's log when the reading changes, and not on every ask.**
 //! The rotation returns to the same open pull request for as long as it stays
