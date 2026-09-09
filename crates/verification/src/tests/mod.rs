@@ -13,7 +13,9 @@
 //! [`quoted`] is the reading under a citation — whether the words a refusal
 //! puts in quotation marks are in what the call was shown, or in nothing.
 //! [`located`] is where a gaming flag says it found what it found, and which
-//! half of a location each pattern can establish.
+//! half of a location each pattern can establish. [`shown`] is the same
+//! question about the other document — where in the brief a Judge's own
+//! quotation is, and which labelled part of it holds the words.
 //! [`widening`] is the call a request for more scope costs — the one Judge
 //! call about a plan rather than about work.
 //! [`answered`] is the Check tier of a brief — the two outcomes a Judge can
@@ -28,6 +30,7 @@ mod located;
 mod product;
 mod quoted;
 mod request;
+mod shown;
 mod submission;
 mod widening;
 

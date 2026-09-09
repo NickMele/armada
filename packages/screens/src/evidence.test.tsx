@@ -109,9 +109,9 @@ function refusedStep(): StepDetail {
     ],
     judge_checks: [{ criteria: 2, panel_size: 3, gaming_check: false }],
     judged: [
-      { attempt: 1, criterion_id: "c1", member: 1, verdict: "met" },
-      { attempt: 1, criterion_id: "c1", member: 2, verdict: "met" },
-      { attempt: 1, criterion_id: "c1", member: 3, verdict: "met" },
+      { attempt: 1, criterion_id: "c1", member: 1, verdict: "met", given: HANDED_C1 },
+      { attempt: 1, criterion_id: "c1", member: 2, verdict: "met", given: HANDED_C1 },
+      { attempt: 1, criterion_id: "c1", member: 3, verdict: "met", given: HANDED_C1 },
       {
         attempt: 1,
         criterion_id: "c2",
@@ -121,8 +121,12 @@ function refusedStep(): StepDetail {
         produced: "Suite green, with that case deleted from tests/loose.rs",
         consequence: "A parser regression ships as verified",
         brief_path: ".armada/judge/01M130/c2.md",
+        // Both refusers quoted the same lines of the same Check's output,
+        // which is why the grounds group into one block above.
+        cited: [{ region: "check:test_suite", from_line: 2007, to_line: 2008 }],
+        given: HANDED_C2,
       },
-      { attempt: 1, criterion_id: "c2", member: 2, verdict: "met" },
+      { attempt: 1, criterion_id: "c2", member: 2, verdict: "met", given: HANDED_C2 },
       {
         attempt: 1,
         criterion_id: "c2",
@@ -132,10 +136,20 @@ function refusedStep(): StepDetail {
         produced: "Suite green, with that case deleted from tests/loose.rs",
         consequence: "A parser regression ships as verified",
         brief_path: ".armada/judge/01M130/c2.md",
+        cited: [{ region: "check:test_suite", from_line: 2007, to_line: 2008 }],
+        given: HANDED_C2,
       },
     ],
   });
 }
+
+/**
+ * What each criterion's panel was handed. **One per criterion, not one per
+ * step**: every criterion is its own brief, so two criteria digest two ways and
+ * a fixture that shared one would assert a comparison Fleet never makes.
+ */
+const HANDED_C1 = { digest: "3f7a10c2b40de991", size: 41_204, model: "haiku" };
+const HANDED_C2 = { digest: "9c41ab0e77d25631", size: 43_880, model: "haiku" };
 
 /** The Job's frozen criteria, which is what gives a verdict row its words. */
 const CRITERIA = [
@@ -345,4 +359,114 @@ test("a Judge that has not been asked says what is coming, not nothing", async (
   // The chapter's own header says where the panel stands, in the registry's
   // word — the same one the strip's tier stands at.
   expect(page.getByText("not reached").elements().length).toBeGreaterThan(0);
+});
+
+test("the citation list says which judge quoted what, and where in the brief", async () => {
+  screen(refusedStep());
+  // `j1 · 02` — the member and the criterion's frozen position, which is what a
+  // citation names. Two refusers, two rows, and the criterion nothing objected
+  // to contributes none: a `met` answer writes no prose to quote from.
+  await expect.element(page.getByText("j1 \u00b7 02")).toBeVisible();
+  await expect.element(page.getByText("j3 \u00b7 02")).toBeVisible();
+  expect(document.querySelectorAll(".armada-judge-citations__row").length).toBe(2);
+  expect(page.getByText("check:test_suite lines 2007\u20132008").elements().length).toBe(2);
+});
+
+test("a citation opens the brief it points into", async () => {
+  screen(refusedStep());
+  await page.getByRole("button", { name: /j1 \u00b7 02/ }).first().click();
+  expect(asked).toContainEqual({ kept: ".armada/judge/01M130/c2.md", what: "brief" });
+});
+
+test("what each judge was handed is drawn, and says the panel was a panel", async () => {
+  screen(refusedStep());
+  // The digest of the object every member of c2's panel was sent, in the
+  // comparison view — which is the one that opens.
+  await expect.element(page.getByText("9c41ab0e77d25631")).toBeVisible();
+  await expect.element(page.getByText("Every judge was handed the same brief")).toBeVisible();
+  // A segment per member, plus the comparison — which is the reading the view
+  // exists for, and the reason it leads.
+  await expect.element(page.getByRole("tab", { name: "Compare" })).toBeVisible();
+  expect(page.getByRole("tab").elements().length).toBe(4);
+});
+
+test("a panel handed two different objects says so instead", async () => {
+  // The answer this view exists to be able to give. Nothing in Fleet writes it
+  // today — the brief is built once outside the panel loop — which is exactly
+  // why the digest is stored per member rather than asserted off that loop.
+  const apart = refusedStep();
+  const drifted = { ...HANDED_C2, digest: "0000000000000000", size: 12 };
+  screen({
+    ...apart,
+    judged: apart.judged.map((one) =>
+      one.criterion_id === "c2" && one.member === 3 ? { ...one, given: drifted } : one,
+    ),
+  });
+  await expect.element(page.getByText("The judges were not handed the same brief")).toBeVisible();
+  expect(document.body.textContent).not.toContain("Every judge was handed the same brief");
+});
+
+test("one judge draws what it cited and no panel comparison at all", async () => {
+  screen(
+    step({
+      checks: [],
+      judge_checks: [{ criteria: 1, gaming_check: false }],
+      judged: [
+        {
+          attempt: 1,
+          criterion_id: "c1",
+          verdict: "not_met",
+          expected: "The exported signatures unchanged",
+          produced: "One argument added to `parse`",
+          consequence: "Every caller outside this repository stops compiling",
+          brief_path: ".armada/judge/01M130/c1.md",
+          cited: [{ region: "diff", from_line: 88, to_line: 88 }],
+          given: HANDED_C1,
+        },
+      ],
+    }),
+    [CRITERIA[0] as (typeof CRITERIA)[number]],
+  );
+  // The criterion alone, with no judge in front of it. `member` is absent at a
+  // panel of one, and naming it `j1` would invent a position the record
+  // deliberately does not carry.
+  await expect.element(page.getByText("diff line 88")).toBeVisible();
+  expect(document.body.textContent).not.toContain("j1 \u00b7 ");
+  // What the one judge was handed is still drawn, and with no segmented
+  // control: a control offering one segment is a promise nobody kept.
+  await expect.element(page.getByText("What the Judge was handed")).toBeVisible();
+  expect(page.getByRole("tab").elements().length).toBe(0);
+  // And no assurance, because there is no panel for the objects to be
+  // identical across.
+  expect(document.body.textContent).not.toContain("Every judge was handed the same brief");
+});
+
+test("a panel that refused nothing draws no citation list", async () => {
+  // A no-objection writes no prose under the veto-only contract, so there is
+  // nothing to have quoted — and an empty list under every passing step would
+  // be the screen explaining its own contract to somebody who did not ask.
+  screen(
+    step({
+      checks: [],
+      judge_checks: [{ criteria: 1, gaming_check: false }],
+      judged: [{ attempt: 1, criterion_id: "c1", verdict: "met", given: HANDED_C1 }],
+    }),
+    [CRITERIA[0] as (typeof CRITERIA)[number]],
+  );
+  await expect.element(page.getByText("Verdicts", { exact: true })).toBeVisible();
+  expect(document.body.textContent).not.toContain("What the panel quoted");
+});
+
+test("a Fleet that served neither reading draws the grid and nothing under it", async () => {
+  // Every row a Fleet before protocol 8.3 wrote. The grid is unchanged and the
+  // two regions below it are absent — never an empty digest table, which would
+  // read as a panel that was handed nothing.
+  const older = refusedStep();
+  screen({
+    ...older,
+    judged: older.judged.map(({ cited: _cited, given: _given, ...rest }) => rest),
+  });
+  await expect.element(page.getByText("refused by 2 of 3")).toBeVisible();
+  expect(document.body.textContent).not.toContain("What the panel quoted");
+  expect(document.body.textContent).not.toContain("What each judge was handed");
 });

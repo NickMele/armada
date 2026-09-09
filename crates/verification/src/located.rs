@@ -40,21 +40,11 @@ use crate::quoted;
 pub(crate) fn in_the_patch(patch: &Patch, cited: &str) -> Option<CitedAt> {
     let spans: Vec<String> = quoted::spans(cited)
         .iter()
-        .flat_map(|span| elisions(span))
+        .flat_map(|span| quoted::elisions(span))
         .map(|part| quoted::words(&part))
         .filter(|words| words.split_whitespace().count() >= quoted::A_CITATION)
         .collect();
     spans.iter().find_map(|span| holding(patch, span))
-}
-
-/// Each side of an elision on its own, for [`quoted::invented`]'s reason: a
-/// model quoting across a cut writes `"drops X … and Y"`, and looking for the
-/// whole of that finds nothing anywhere.
-fn elisions(span: &str) -> Vec<String> {
-    span.split('\u{2026}')
-        .flat_map(|part| part.split("..."))
-        .map(str::to_string)
-        .collect()
 }
 
 /// The first line of the patch holding `span`, as a location.

@@ -42,7 +42,7 @@ pub(super) fn workflow() -> ResolvedWorkflow {
     ])
 }
 
-fn checks() -> Vec<StepCheck> {
+pub(super) fn checks() -> Vec<StepCheck> {
     vec![StepCheck {
         name: "build".to_string(),
         outcome: CheckOutcome::Passed,
@@ -70,7 +70,7 @@ fn patch() -> Patch {
     Patch::of("--- a/src/log.rs\n+++ b/src/log.rs\n+    let n = n - 1;\n".to_string())
 }
 
-fn brief(workflow: &ResolvedWorkflow) -> Brief {
+pub(super) fn brief(workflow: &ResolvedWorkflow) -> Brief {
     brief_measured_against(workflow, &[])
 }
 
@@ -125,6 +125,10 @@ fn refusal(id: &str) -> Judgment {
         produced: Some("the loop stops at n - 1".into()),
         consequence: Some("the last row is dropped".into()),
         brief_path: None,
+        // Typed rather than read back off a brief: `Refusals::among` folds
+        // verdicts and reads neither of these.
+        cited: None,
+        given: None,
     }
 }
 
@@ -137,6 +141,8 @@ fn met(id: &str) -> Judgment {
         produced: None,
         consequence: None,
         brief_path: None,
+        cited: None,
+        given: None,
     }
 }
 
@@ -311,6 +317,32 @@ fn a_refusal_quoting_what_it_was_actually_shown_still_refuses() {
         )
         .expect("a refusal quoting the material");
     assert_eq!(judged.verdict, JudgeVerdict::NotMet);
+    // The other half of containment, and the half that survives the call. The
+    // check above establishes that both quotations are in the brief and then
+    // discards the finding; these are the two placements it keeps, so a person
+    // reading the record does not have to search the brief for the words the
+    // refusal argued from.
+    let placed = judged
+        .cited
+        .as_deref()
+        .expect("a call records what it placed");
+    let regions: Vec<&str> = placed
+        .iter()
+        .map(|citation| citation.region.as_str())
+        .collect();
+    assert_eq!(
+        regions,
+        vec!["reference:scope", "diff"],
+        "each quotation is placed in the part of the brief that holds it, in \
+         the order the refusal wrote them"
+    );
+    assert!(
+        placed
+            .iter()
+            .all(|citation| citation.from_line >= 1 && citation.to_line >= citation.from_line),
+        "a line of the brief, which is a file `brief_path` names and a person \
+         can open"
+    );
 }
 
 /// **The two honest refusals this check stopped**, at the level where the cost

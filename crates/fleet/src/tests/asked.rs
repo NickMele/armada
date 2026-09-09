@@ -129,6 +129,44 @@ async fn a_verdict_can_be_read_against_the_question_that_went_out() {
     );
 }
 
+/// The same assertion about the other half of a call's record: what a member
+/// was handed is a digest of the bytes that went out, not of anything upstream
+/// of them.
+///
+/// **This is what makes `Judged.given` worth putting on the wire.** A digest
+/// taken off the `Brief` would say the members of a panel were handed the same
+/// object because the panel loop hands them one — which is the sentence the
+/// field exists to replace. Taken off the `Ask`, it is a reading, and a run
+/// that did not hand them the same object would come back saying so.
+#[tokio::test]
+async fn what_a_call_was_handed_is_a_digest_of_the_bytes_that_went_out() {
+    let judge = Arc::new(FakeJudge::with_no_objection());
+    let ruling = ruled(Arc::clone(&judge), Asked::nowhere(), &worktree()).await;
+
+    let judged = ruling.judged();
+    let sent = judge.asked();
+    assert_eq!(judged.len(), sent.len(), "one record per call");
+    for (judgment, question) in judged.iter().zip(sent.iter()) {
+        let given = judgment
+            .given
+            .as_ref()
+            .expect("every call records what it was handed");
+        assert_eq!(
+            given.digest,
+            verification::digest(question),
+            "the digest is of what the model was sent"
+        );
+        assert_eq!(given.size, question.chars().count() as u32);
+        assert!(!given.model.is_empty(), "and which model was asked");
+    }
+    assert_ne!(
+        judged[0].given.as_ref().map(|given| &given.digest),
+        judged[1].given.as_ref().map(|given| &given.digest),
+        "two criteria are two briefs, so two digests — a value that folded \
+         across criteria would compare the wrong things"
+    );
+}
+
 /// The trap the issue names second. A Judge that passes something it should
 /// have refused is only visible against its input, so a pass keeps its brief
 /// exactly as a refusal does.

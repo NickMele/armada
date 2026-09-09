@@ -115,7 +115,7 @@ pub use job::{
 pub use journal::{
     JournalClosed, JournalMessage, JournalOpened, LogNote, NoteLevel, NotedField, Quiet,
 };
-pub use judged::{CitedAt, Flagged, Judged, KeptDeliverable};
+pub use judged::{Citation, CitedAt, Flagged, Given, Judged, KeptDeliverable};
 pub use overlap::{ScopeOverlap, SharedPath};
 pub use proposing::{ProposalInFlight, ProposalReach, ProposalStopped, StopProposal};
 pub use raising::{CapRaise, RaisedBy};

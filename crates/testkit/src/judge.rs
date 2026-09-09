@@ -232,7 +232,9 @@ fn quoted(value: &str) -> String {
 /// `brief_path` is `None`: where a brief was kept is a fact about a filesystem
 /// and a fixture has none. `member` is `None` for the same shape of reason —
 /// one judge is the default, and a panel is a fact about a step's declaration
-/// rather than about one refusal. The test that cares sets either directly.
+/// rather than about one refusal. `cited` and `given` are both `None` for a
+/// third: each is a fact about a call that went out, and a refusal typed into a
+/// test never went anywhere. The test that cares sets any of them directly.
 pub fn refusal(
     criterion: &str,
     expected: &str,
@@ -247,5 +249,7 @@ pub fn refusal(
         produced: Some(produced.to_string()),
         consequence: Some(consequence.to_string()),
         brief_path: None,
+        cited: None,
+        given: None,
     }
 }

@@ -28,12 +28,15 @@
 // | A refusal's finding | `Judged.expected`, `produced`, `consequence` |
 // | The brief a refusal answers, opened | `Judged.brief_path` |
 // | The criterion's own words and its frozen position | `JobDetail.acceptance_criteria` |
+// | What each member quoted, and where in the brief | `Judged.cited`, since protocol 8.3 |
+// | What each member was handed, compared across the panel | `Judged.given`, since protocol 8.3 |
 //
 // What the components were built for and the wire has not got — the assertion
-// set, the console viewer, the input digest, the per-judge citation sets behind
-// `JudgeRefusal.overlap`, and `JudgeVerdicts.measured` — is not drawn. Every
-// one of them is a record of what a judge or a Check *read* rather than what it
-// answered, which is a change to Fleet before it is a change to any screen.
+// set, the console viewer, the per-judge citation *sets* behind
+// `JudgeRefusal.overlap`, and `JudgeVerdicts.measured` — is not drawn. The
+// first two are a record of what a Check read; the third is a reading over
+// `Judged.cited` that nobody has written; the fourth needs a join from a
+// criterion to the Check that settled it, and none exists.
 //
 // # Nothing empty is labelled
 //

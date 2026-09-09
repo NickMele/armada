@@ -9,19 +9,28 @@ import type { ReactNode } from "react";
  * cited region — which makes this the densest navigation surface on the
  * screen.
  *
- * **A judge that met a criterion is here too.** Veto-only means a pass writes
- * no prose, but it must still record what it read. That one field is what
- * separates *a judge caught something* from *the criterion is ambiguous*, and
- * without it a lone dissent is unreadable. A list that showed only refusals
- * would throw away the half of the comparison that does the work.
+ * **A judge that met a criterion is here too**, wherever there is anything to
+ * put in a row. That is what separates *a judge caught something* from *the
+ * criterion is ambiguous*, and without it a lone dissent is unreadable — a
+ * list that showed only refusals would throw away the half of the comparison
+ * that does the work.
+ *
+ * **What the wire cannot fill that in from, today.** `Judged.cited` places
+ * every quotation a member made, and a `met` answer is one line under the
+ * Judge's answer format — no prose, so nothing to quote and nothing to place.
+ * So a screen fed by Fleet draws refusals here and a judge that met a criterion
+ * appears only where something else recorded what it read. `JudgeInputs` is the
+ * reading that does carry across both verdicts.
  *
  * **Rows are grouped by nothing and sorted by nothing.** They are in the order
- * the panel recorded them, per judge, per criterion — a citation list that
+ * the panel recorded them, per criterion, per judge — a citation list that
  * reordered itself would be a second index over a record whose own order is
  * evidence of how the panel ran.
  *
- * **Nothing on the wire serves this.** A citation per judge is part of the
- * panel record `Judged` does not carry — see `JudgeVerdicts`. Fixtures only.
+ * **The wire serves this.** `Judged.cited` arrived in protocol 8.3: one entry
+ * per quotation, carrying the labelled part of the brief that holds it and the
+ * lines it is on, which is what `where` renders. `screens`' `cited.ts` is what
+ * builds the rows. This block said fixtures only until 2026-09-09.
  */
 
 export type JudgeCitation = {

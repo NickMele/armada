@@ -56,6 +56,84 @@ export type Judged = {
    * can re-read against its input. Opened the way `CheckRun.output_path` is.
    */
   brief_path?: string;
+  /**
+   * Where in the brief this member's own words are quoted from. Since 8.3.
+   *
+   * **What one member read, which the verdict does not say.** The marks say
+   * which way each judge went and the three fields say why; this says what each
+   * of them was looking at, which is what separates two members refusing off
+   * one line from two refusing off different ones.
+   *
+   * **Absent is ordinary and is not a gap.** A `met` answer writes no prose and
+   * quotes nothing, and a refusal that describes rather than quotes has cited
+   * in words nothing can place.
+   */
+  cited?: Citation[];
+  /**
+   * What this member's call was handed. Since 8.3.
+   *
+   * **The evidence that a panel was a panel.** Unanimity rests on the members
+   * running against identical inputs, and until this the guarantee could not be
+   * asked about on this seam: three rows carried three identical keys, and the
+   * claim rested on the shape of a loop nobody outside Fleet can see. Compare
+   * `digest` across the members — that is what the field is for.
+   *
+   * **Absent means nobody wrote it down**, which is every row a Fleet before
+   * 8.3 produced. Never "the input was empty".
+   */
+  given?: Given;
+};
+
+/**
+ * One quotation a verdict made, placed in the brief the call was shown.
+ * `crates/ipc/src/judged.rs`.
+ *
+ * **Where the words are, never the words.** `Judged.brief_path` names the file
+ * and this is a coordinate into it — so this is opened the way every kept
+ * record is, through main, and the renderer never composes a path.
+ *
+ * **Not `Flagged.at`, which is the same question about the patch.** A gaming
+ * flag points into the change; a Judge's citation points into what it was
+ * shown. Two documents, and drawing one as the other sends a reader to a file
+ * over a brief.
+ */
+export type Citation = {
+  /**
+   * Which labelled part of the brief holds it — `request`, `checks`,
+   * `check:test_suite`, `reference:root_cause`, `deliverable`, `summary`,
+   * `diff`, or `brief` for a line under no part.
+   *
+   * **An open set, and it is rendered rather than matched on.** Half of it is
+   * named after a Check or a step the workflow declared, so nothing could hold
+   * the list — `string`, like every closed set here and for a stronger reason.
+   */
+  region: string;
+  /** The first line of the brief the quotation is on, counted from one. */
+  from_line: number;
+  /** The last. Equal to `from_line` where it does not cross a line break. */
+  to_line: number;
+};
+
+/**
+ * What one member of a panel was handed. `crates/ipc/src/judged.rs`.
+ *
+ * **Three readings of one object, because one is not enough to argue with.**
+ * The digest says two members got the same thing or did not and says nothing
+ * about what the thing was; the size and the model are what a person reads once
+ * the answer is no.
+ */
+export type Given = {
+  /**
+   * A digest over the exact text this member's call was sent.
+   *
+   * **A comparison, never a signature.** The rows of one panel were written by
+   * one build in one pass, which is the whole span it is compared across.
+   */
+  digest: string;
+  /** How long that text was, in characters. */
+  size: number;
+  /** The model this member's call ran on. */
+  model: string;
 };
 
 /**

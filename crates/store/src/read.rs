@@ -421,7 +421,7 @@ impl Store {
         let rows = self
             .collect(
                 "SELECT step_id, criterion, verdict, expected, produced, consequence,
-                        brief_path, member
+                        brief_path, member, cited, given
                  FROM job_step_judgments AS j WHERE job_id = ?1
                    AND attempt = (SELECT max(attempt) FROM job_step_judgments
                                   WHERE job_id = j.job_id AND step_id = j.step_id)
@@ -430,9 +430,12 @@ impl Store {
                 "reading judgments",
                 |row| {
                     let verdict = string(row, "verdict")?;
+                    let (cited, given) = crate::judged::what_it_read(row)?;
                     Ok((
                         StepId::new(string(row, "step_id")?),
                         Judgment {
+                            cited,
+                            given,
                             criterion_id: CriterionId::new(string(row, "criterion")?),
                             member: maybe_number(row, "member")?,
                             verdict: enum_value(

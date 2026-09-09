@@ -120,39 +120,56 @@ impl<'a> Answered<'a> {
         Answered { checks, printed }
     }
 
-    /// The Check tier, laid out for one call.
+    /// The Check tier, laid out for one call, in labelled parts.
     ///
     /// The rows first and the output after, in the step's declaration order
     /// both times. A reader — and a model — gets the whole shape of what ran
-    /// before any of it starts quoting, which is the ordering `Product::told`
+    /// before any of it starts quoting, which is the ordering `Product::parts`
     /// uses for the same reason.
-    pub(crate) fn told(&self) -> String {
-        let mut told = String::from("Checks that already ran, and what they answered:\n");
+    ///
+    /// **One part per Check that printed, rather than one for the whole
+    /// tier.** A criterion about coverage is answered off one suite's output,
+    /// and a citation saying `check:test_suite` says which — where a citation
+    /// saying `checks` would send a reader to a region holding four commands'
+    /// output and leave them to find the one that was quoted.
+    ///
+    /// Concatenated, this is byte for byte what it was when it was one string.
+    pub(crate) fn parts(&self) -> Vec<(String, String)> {
+        let mut rows = String::from("Checks that already ran, and what they answered:\n");
         if self.checks.is_empty() {
-            told.push_str("  (the step declared none)\n");
+            rows.push_str("  (the step declared none)\n");
         }
         for check in self.checks {
-            told.push_str(&format!("  {} — {}", check.name, check.outcome.as_wire()));
+            rows.push_str(&format!("  {} — {}", check.name, check.outcome.as_wire()));
             // **`produced` and not a sentence assembled here.** On a skip it is
             // the paths the Check covers, which is the whole answer to why it
             // did not run; on a pass it is absent, because there the outcome is
             // the whole sentence. A colon rather than "because" so that a
             // `produced` written for some other outcome still reads.
             if let Some(produced) = check.produced.as_deref() {
-                told.push_str(&format!(": {produced}"));
+                rows.push_str(&format!(": {produced}"));
             }
-            told.push('\n');
+            rows.push('\n');
         }
-        told.push('\n');
+        rows.push('\n');
+        let mut parts = vec![(String::from(THE_TIER), rows)];
         for check in self.checks {
             let printed = self
                 .printed
                 .iter()
                 .find(|printed| printed.check == check.name);
             if let Some(printed) = printed {
-                told.push_str(&printed.quoted());
+                parts.push((format!("{ONE_CHECK}:{}", check.name), printed.quoted()));
             }
         }
-        told
+        parts
     }
 }
+
+/// What the tier's own rows are called on a citation — every Check and what
+/// each answered, which is one region however many Checks there are.
+const THE_TIER: &str = "checks";
+
+/// What one Check's output is called, singular because it is one Check:
+/// `check:test_suite`.
+const ONE_CHECK: &str = "check";

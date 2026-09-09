@@ -29,6 +29,7 @@ use core_model::{CriterionId, JudgeCriterion, JudgeVerdict, Judgment};
 use crate::answered::Answered;
 use crate::product::{Product, Reference};
 use crate::request::Request;
+use crate::shown::{placed, Laid, Region};
 
 /// The two words a Judge may answer with, and the three fields a refusal owes.
 ///
@@ -72,6 +73,10 @@ passed nor refused.";
 pub struct Brief {
     criterion: CriterionId,
     question: String,
+    /// What the assembler put where, so a quotation can be placed in a part of
+    /// the brief rather than only on a line of it. See
+    /// [`shown`](mod@crate::shown).
+    regions: Vec<Region>,
 }
 
 impl Brief {
@@ -96,36 +101,48 @@ impl Brief {
         references: &[Reference<'_>],
         answered: Answered<'_>,
     ) -> Brief {
-        let mut question = String::new();
-        question.push_str(
+        // **Laid in labelled parts, and the text is byte for byte what it
+        // was.** The labels are what a citation says it landed in, and they
+        // are recorded at assembly rather than recognised afterwards — see
+        // [`shown`](mod@crate::shown).
+        let mut laid = Laid::new();
+        laid.loose(
             "You are verifying one condition on work somebody else did. \
              Answer only the question at the end.\n\n",
         );
-        question.push_str(&format!("Step: {}\n\n", step.label()));
+        laid.loose(&format!("Step: {}\n\n", step.label()));
         // **First, and above the step's own evidence.** The request is the
         // outermost yardstick — an earlier step's note is measured against it
         // too — so it is read before anything it is the standard for, which is
-        // the ordering `Reference::all` already argues for one level down.
-        question.push_str(&request.told());
+        // the ordering `Reference::parts` already argues for one level down.
+        laid.part(REQUEST, &request.told());
         // **The deterministic facts, and the whole of them.** A name and an
         // outcome word is what this rendered until #205, which dropped the two
         // parts a criterion is actually answered from: why a Check that did not
         // run did not, and what a Check that ran observed. A Judge asked
         // whether a suite covers a case was answering off the diff while the
         // suite's own output sat unread.
-        question.push_str(&answered.told());
+        for (label, part) in answered.parts() {
+            laid.part(&label, &part);
+        }
         // The yardstick before the product, the way the gaming brief puts its
         // baseline first: what the work is measured against is context for
         // reading it, and it is labelled as not being the thing under judgment.
-        question.push_str(&Reference::all(references));
-        question.push_str(&product.told());
-        question.push_str("\nThe question, which is yes or no:\n\n");
-        question.push_str(&criterion.question);
-        question.push_str("\n\n");
-        question.push_str(ANSWER_FORMAT);
+        for (label, part) in Reference::parts(references) {
+            laid.part(&label, &part);
+        }
+        for (label, part) in product.parts() {
+            laid.part(&label, &part);
+        }
+        laid.loose("\nThe question, which is yes or no:\n\n");
+        laid.loose(&criterion.question);
+        laid.loose("\n\n");
+        laid.loose(ANSWER_FORMAT);
+        let (question, regions) = laid.done();
         Brief {
             criterion: criterion.criterion_id.clone(),
             question,
+            regions,
         }
     }
 
@@ -156,11 +173,20 @@ impl Brief {
     /// member was asked and is identical for all of them, so nothing here knows
     /// which call this answer came back from. The panel loop counts, and stamps
     /// it on.
+    ///
+    /// **`given` comes back `None` for the third time in a row.** What one
+    /// member was handed is a fact about the call that went out, and the call
+    /// is the panel loop's. This assembles the text; it does not send it.
     pub fn read(&self, answer: &str) -> Result<Judgment, Unreadable> {
         let verdict = field(answer, "verdict")
             .and_then(|found| JudgeVerdict::from_wire(&found))
             .ok_or(Unreadable::NoVerdict)?;
         if !verdict.refuses() {
+            // **Nothing cited, because nothing was written.** A `met` answer
+            // is one line under `ANSWER_FORMAT`, so there is no prose to quote
+            // out of and an empty list is the whole truth about it. What that
+            // judge was *given* is on `given`, and is the reading a
+            // no-objection does carry.
             return Ok(Judgment {
                 criterion_id: self.criterion.clone(),
                 member: None,
@@ -169,6 +195,8 @@ impl Brief {
                 produced: None,
                 consequence: None,
                 brief_path: None,
+                cited: Some(Vec::new()),
+                given: None,
             });
         }
         // Constitutional rule 4: a refusal must cite. An uncited one is
@@ -188,6 +216,17 @@ impl Brief {
                 return Err(Unreadable::RefusalQuotesWhatIsNotThere { span });
             }
         }
+        // Rule 4 a third time, and this is the half that survives the call.
+        // Containment above establishes that every attributed quotation is in
+        // the brief and then throws the finding away; this keeps where each
+        // one is, so a person reading the record does not have to search the
+        // brief for the words the refusal is arguing from.
+        let cited = Some(
+            [&expected, &produced, &consequence]
+                .into_iter()
+                .flat_map(|field| placed(&self.question, &self.regions, field))
+                .collect(),
+        );
         Ok(Judgment {
             criterion_id: self.criterion.clone(),
             member: None,
@@ -196,9 +235,14 @@ impl Brief {
             produced: Some(produced),
             consequence: Some(consequence),
             brief_path: None,
+            cited,
+            given: None,
         })
     }
 }
+
+/// What the request's part of a brief is called on a citation.
+const REQUEST: &str = "request";
 
 /// One `name: value` line, wherever in the answer it appears.
 ///

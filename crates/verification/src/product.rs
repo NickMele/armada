@@ -240,25 +240,34 @@ impl<'a> Product<'a> {
         self.changed
     }
 
-    /// The work product, laid out for one call.
-    pub(crate) fn told(&self) -> String {
-        let mut told = String::new();
+    /// The work product, laid out for one call, in labelled parts.
+    ///
+    /// **Three parts, because a criterion is about one of them.** The document
+    /// a step was asked for, the three-line summary submitted with it and the
+    /// diff are three different things to be judged against, and a citation
+    /// saying which is the difference between sending a reader to a note and
+    /// sending them to a patch.
+    ///
+    /// Concatenated, this is byte for byte what it was when it was one string.
+    pub(crate) fn parts(&self) -> Vec<(String, String)> {
+        let mut parts = Vec::new();
         // **The file first, and labelled as the document.** Where a step was
         // asked for one, the criteria are about it and the three strings are a
         // summary of it — so the summary is read second and says what it is.
         // A Judge that could not tell them apart would answer "does this plan
         // name a root cause" against whichever came first.
         if let Some(delivered) = self.delivered {
-            told.push_str(&format!(
+            let mut told = format!(
                 "What this step produced, which is the document it was asked \
                  for. Fleet read it from {}:\n\n",
                 delivered.target
-            ));
+            );
             told.push_str(delivered.contents);
             told.push('\n');
+            parts.push((String::from(DELIVERABLE), told));
         }
         if let Some(written) = self.written {
-            told.push_str(match self.delivered.is_some() {
+            let mut told = String::from(match self.delivered.is_some() {
                 true => {
                     "\nThe summary submitted with it. The document is above; \
                      these three lines are not it:\n\n"
@@ -274,9 +283,10 @@ impl<'a> Product<'a> {
                     false => written.not_claimed,
                 }
             ));
+            parts.push((String::from(SUMMARY), told));
         }
         if let Some(patch) = self.changed {
-            told.push_str(match self.written.is_some() || self.delivered.is_some() {
+            let mut told = String::from(match self.written.is_some() || self.delivered.is_some() {
                 // Said plainly, so a Judge weighing a written deliverable does
                 // not read the files beside it as the thing it was asked about.
                 true => "\nThe step also changed these files:\n\n",
@@ -284,10 +294,23 @@ impl<'a> Product<'a> {
             });
             told.push_str(patch.as_str());
             told.push('\n');
+            parts.push((String::from(DIFF), told));
         }
-        told
+        parts
     }
 }
+
+/// What the document a step was asked for is called on a citation.
+const DELIVERABLE: &str = "deliverable";
+
+/// What the three lines submitted with it are called. Never `deliverable`: on
+/// a step that wrote a document they are a summary *of* it, and a citation that
+/// could not tell them apart would send a reader to the wrong one of two things
+/// on one screen.
+const SUMMARY: &str = "summary";
+
+/// What the branch diff is called.
+const DIFF: &str = "diff";
 
 /// Why a step has no work product a Judge could be shown.
 ///
@@ -350,28 +373,48 @@ impl<'a> Reference<'a> {
         self.step
     }
 
-    /// Every reference, laid out for one call. Empty where the step names none,
-    /// which is the common shape.
-    pub(crate) fn all(references: &[Reference<'_>]) -> String {
+    /// Every reference, laid out for one call, in labelled parts. Empty where
+    /// the step names none, which is the common shape.
+    ///
+    /// **One part per reference**, named by the step it came from — which is
+    /// the same rule [`Reference::to`] already keeps for the prose: a yardstick
+    /// a refusal cannot attribute is one nobody can go and read, and that holds
+    /// for a citation as much as for a sentence.
+    ///
+    /// Concatenated, this is byte for byte what it was when it was one string.
+    pub(crate) fn parts(references: &[Reference<'_>]) -> Vec<(String, String)> {
         if references.is_empty() {
-            return String::new();
+            return Vec::new();
         }
-        let mut told = String::from(
-            "What earlier steps established, which this work is measured against \
-             and is not itself under judgment:\n\n",
-        );
+        let mut parts = vec![(
+            String::from(REFERENCES),
+            String::from(
+                "What earlier steps established, which this work is measured against \
+                 and is not itself under judgment:\n\n",
+            ),
+        )];
         for reference in references {
-            told.push_str(&format!(
-                "  `{}` established: {}\n  shown by: {}\n  not claimed: {}\n\n",
-                reference.step,
-                reference.evidence.claimed,
-                reference.evidence.shown_by,
-                match reference.evidence.not_claimed.is_empty() {
-                    true => "(nothing)",
-                    false => &reference.evidence.not_claimed,
-                }
+            parts.push((
+                format!("{REFERENCE}:{}", reference.step),
+                format!(
+                    "  `{}` established: {}\n  shown by: {}\n  not claimed: {}\n\n",
+                    reference.step,
+                    reference.evidence.claimed,
+                    reference.evidence.shown_by,
+                    match reference.evidence.not_claimed.is_empty() {
+                        true => "(nothing)",
+                        false => &reference.evidence.not_claimed,
+                    }
+                ),
             ));
         }
-        told
+        parts
     }
 }
+
+/// What the line introducing the yardsticks is called on a citation.
+const REFERENCES: &str = "references";
+
+/// What one yardstick is called, named by the step it came from:
+/// `reference:root_cause`.
+const REFERENCE: &str = "reference";

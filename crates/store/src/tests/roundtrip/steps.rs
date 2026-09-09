@@ -14,8 +14,8 @@
 //! The fixtures fill every `Option`; [`super`] says why.
 
 use core_model::{
-    CheckOutcome, CriterionId, EvidenceType, JudgeVerdict, Judgment, StepCheck, StepEvidence,
-    StepId,
+    CheckOutcome, Citation, CriterionId, EvidenceType, Given, JudgeVerdict, Judgment, StepCheck,
+    StepEvidence, StepId,
 };
 
 use crate::tests::{created_at, job_id, open, top_level, TempDir};
@@ -107,6 +107,16 @@ fn what_the_judge_said_survives_the_process_that_asked() {
                     produced: Some("the bound widened to match the reader".to_string()),
                     consequence: Some("every caller reads one row too many".to_string()),
                     brief_path: Some(".armada/briefs/01JDG/fix.1.c1.txt".to_string()),
+                    cited: Some(vec![Citation {
+                        region: "check:test_suite".to_string(),
+                        from_line: 2007,
+                        to_line: 2008,
+                    }]),
+                    given: Some(Given {
+                        digest: "3f7a10c2b40de991".to_string(),
+                        size: 41_204,
+                        model: "haiku".to_string(),
+                    }),
                 },
                 Judgment {
                     criterion_id: CriterionId::new("c2"),
@@ -120,6 +130,14 @@ fn what_the_judge_said_survives_the_process_that_asked() {
                     // path the writer never had. `member` is absent for the
                     // same reason it is absent everywhere one judge answered.
                     brief_path: None,
+                    // A no-objection quotes nothing, because it writes no
+                    // prose to quote out of — `[]`, because the question was
+                    // asked. `given` is absent for the opposite reason: this
+                    // is a row written the way a build before V34 wrote every
+                    // row, and the read has to answer `None` rather than an
+                    // empty digest.
+                    cited: Some(Vec::new()),
+                    given: None,
                 },
             ],
             &created_at(),
@@ -152,6 +170,26 @@ fn what_the_judge_said_survives_the_process_that_asked() {
         read[0].1[1].expected.is_none(),
         "there is nothing a no-objection is refusing on"
     );
+    assert_eq!(
+        read[0].1[0].cited,
+        Some(vec![Citation {
+            region: "check:test_suite".to_string(),
+            from_line: 2007,
+            to_line: 2008,
+        }]),
+        "where in the brief the refusal quoted from comes back with it"
+    );
+    assert_eq!(
+        read[0].1[0].given.as_ref().map(|given| given.size),
+        Some(41_204),
+        "and what the call was handed"
+    );
+    assert_eq!(
+        (read[0].1[1].cited.as_deref(), read[0].1[1].given.is_none()),
+        (Some([].as_slice()), true),
+        "a member that quoted nothing reads as an empty list and one nobody \
+         recorded an input for reads as absent — never the other way round"
+    );
 }
 
 /// Three members answer one criterion, and the record can tell them apart.
@@ -179,6 +217,25 @@ fn a_panels_members_come_back_told_apart() {
             .then(|| "every caller reads one row too many".to_string()),
         // One brief, three answers. `judged.rs` says why the path is shared.
         brief_path: Some(".armada/briefs/01PNL/fix.1.c1.txt".to_string()),
+        cited: Some(
+            (verdict == JudgeVerdict::NotMet)
+                .then(|| {
+                    vec![Citation {
+                        region: "diff".to_string(),
+                        from_line: 88,
+                        to_line: 88,
+                    }]
+                })
+                .unwrap_or_default(),
+        ),
+        // The same digest on every member, which is what a panel run against
+        // identical inputs writes. The point of storing it per member is that
+        // a run which did *not* would come back saying so.
+        given: Some(Given {
+            digest: "9c41ab0e77d25631".to_string(),
+            size: 12_880,
+            model: "haiku".to_string(),
+        }),
     };
     store
         .record_step_judgments(
@@ -215,6 +272,22 @@ fn a_panels_members_come_back_told_apart() {
     assert!(
         read[0].1.iter().all(|one| one.brief_path.is_some()),
         "every member answered the one brief that was kept"
+    );
+    let digests: Vec<Option<&str>> = read[0]
+        .1
+        .iter()
+        .map(|one| one.given.as_ref().map(|given| given.digest.as_str()))
+        .collect();
+    assert_eq!(
+        digests,
+        vec![Some("9c41ab0e77d25631"); 3],
+        "the panel's own record says every member was handed the same object, \
+         which is the guarantee unanimity rests on and was asserted by nothing"
+    );
+    assert_eq!(
+        read[0].1[1].cited.as_deref().map(<[_]>::len),
+        Some(1),
+        "and the member that refused says where in the brief it quoted from"
     );
 }
 
