@@ -2,9 +2,9 @@
 //!
 //! **Three of them are written once and the fourth is written later.** The
 //! commit, the push and the pull request are what the finishing turn did; what
-//! became of that pull request is what somebody else did afterwards, because
-//! Armada opens one and a person merges it. So `delivery_landed` has its own
-//! writer, its own migration and its own reason to be null.
+//! became of that pull request is settled after that turn is over, whether a
+//! person merged it on the forge or pressed for Fleet to. So `delivery_landed`
+//! has its own writer, its own migration and its own reason to be null.
 //!
 //! **The record existed and was thrown away.** `fleet::delivery` has committed,
 //! pushed and opened a pull request since before this file, and put the result
