@@ -70,10 +70,10 @@ it is not an axis, and origin is a label rather than an axis — drawn as a filt
 and rejected, see Origin tagging below. What is left is a state filter, a text
 match and a sort.
 
-### Five state tabs, each carrying its own count
+### Six state tabs, each carrying its own count
 
-All, Needs you, Running, Queued, Finished. The count is mono and trailing; a tab
-with nothing behind it renders no count rather than a `0`.
+All, Needs you, Running, Queued, Finished, Cleared. The count is mono and
+trailing; a tab with nothing behind it renders no count rather than a `0`.
 
 | Tab | What it holds |
 | --- | --- |
@@ -81,32 +81,48 @@ with nothing behind it renders no count rather than a `0`.
 | Needs you | The statuses that stop until a person reads them — `awaiting_approval`, `awaiting_attestation`, `awaiting_repair`, `awaiting_review`, `escalated` |
 | Running | Everything in flight, `piloted` included: a Job a person has taken over is still moving |
 | Queued | `queued`, whatever its reason |
-| Finished | Every terminal status |
+| Finished | Every terminal status whose worktree has not been reclaimed |
+| Cleared | Every Job whose worktree and branch were given back while its record stayed |
 
-**The four state tabs partition every status**, which is what makes the counts
-add up and what makes `All` a sum rather than a sixth reading. The partition is
-derived from `job-statuses.toml` — `terminal`, `mode` and `who_is_acting` —
-rather than listed anywhere a surface can retype it.
+**Five of the six state tabs partition every status**, which is what makes the
+counts add up and what makes `All` a sum rather than a seventh reading. The
+partition is derived from `job-statuses.toml` — `terminal`, `mode` and
+`who_is_acting` — rather than listed anywhere a surface can retype it.
+`Cleared` is not part of that partition: it is read off `reclaimed_at`, a fact
+on the Job row rather than on the registry, because a reclaimed Job's own
+status is still whatever it stopped at.
 
 | Tab | Rule |
 | --- | --- |
-| Finished | `terminal` |
+| Cleared | `reclaimed_at` is set |
+| Finished | `terminal`, and `reclaimed_at` is not set |
 | Needs you | the row's `asking` is set |
 | Running | `mode = "Working"` |
 | Needs you | `who_is_acting = "Person"` |
 | Queued | `who_is_acting = "Drone"` |
 
-**Every tab is a positive rule and none is a leftover.** Reaching the four by
-subtracting the ones that could be named would make membership depend on the
-absence of a rule, so the next status added anywhere would join one silently.
+**Every tab is a positive rule and none is a leftover.** Reaching the five
+registry-partitioned tabs by subtracting the ones that could be named would
+make membership depend on the absence of a rule, so the next status added
+anywhere would join one silently.
 
-**One rule is not a lifecycle row, and it is the only one.** A [Drone](drone.md)
-that has asked a person a question is on a Job that is `running`, with
-`who_is_acting = "Drone"`, and nothing about the Job or its step moves while it
-waits — which is deliberate, and is why there is no seventh step state for it.
-So `job-statuses.toml` has nothing to say about this and cannot: it is a fact
-about a live working slot rather than about a status, and it rides on the Job
-row as `asking`.
+**`Cleared` exists because a clear used to read as doing nothing.** Before it,
+the Board's bulk `Clear` deleted every finished Job's whole record — the log,
+the Checks, the Judgments, the workflow results — along with the worktree a
+person was trying to reclaim. `Clear` now reclaims disk and keeps the record,
+and this tab is where a reclaimed Job goes so the act reads as what it did
+rather than as nothing.
+
+**One of the five registry-partitioned rules is not a lifecycle row.** A
+[Drone](drone.md) that has asked a person a question is on a Job that is
+`running`, with `who_is_acting = "Drone"`, and nothing about the Job or its
+step moves while it waits — which is deliberate, and is why there is no
+seventh step state for it. So `job-statuses.toml` has nothing to say about
+this and cannot: it is a fact about a live working slot rather than about a
+status, and it rides on the Job row as `asking`. `Cleared`'s rule is the same
+shape one level up — `reclaimed_at` is a fact about the row rather than the
+registry — but it sits outside the five-way partition entirely rather than
+inside it, which is why it is read first rather than fitted among them.
 
 It is asked **before** `mode = "Working"`, because that rule would otherwise
 claim it first and a question would sit under Running — invisible until somebody
@@ -130,7 +146,7 @@ without its accent underline; clearing the search restores it. The sentence
 above is a statement about what search reaches, and moving the tab to satisfy it
 would spend a filter the person chose with nothing left to give back.
 
-**Choosing a tab clears the search**, by `1`–`5` or by clicking one. A suspended
+**Choosing a tab clears the search**, by `1`–`6` or by clicking one. A suspended
 control that did nothing when pressed would be a dead one, and pressing a tab
 asks for a state rather than a match — so the match gives way, in the direction
 that has an undo.

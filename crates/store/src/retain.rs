@@ -14,11 +14,24 @@
 //! to forget a Job by name still gets real deletion; this is what a sweep
 //! reaches for instead, over every Job it is giving disk back for.
 
-use core_model::JobId;
+use core_model::{JobId, Timestamp};
 use rusqlite::OptionalExtension;
 
 use crate::error::{fault, WriteError};
 use crate::open::Store;
+
+/// Version 38 — whether a Job's disk has been given back.
+///
+/// Beside the change it makes, like [`crate::numbering::V36`]: `schema.rs` is
+/// at the 900 lines the gate refuses at.
+///
+/// **Null, and no backfill.** Nothing recorded a reclaim before this column
+/// existed, so every row predating it is a Job whose disk — as far as this
+/// column can say — still stands, which is the honest reading rather than a
+/// guess. `Store::retain_job` is the one writer.
+pub(crate) const V38: &str = r#"
+ALTER TABLE jobs ADD COLUMN reclaimed_at TEXT;
+"#;
 
 /// What keeping one Job's record, while giving its resources back, did.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -33,15 +46,22 @@ pub struct Retained {
 }
 
 impl Store {
-    /// Reclaim one Job's resources, and touch nothing that is its record.
+    /// Reclaim one Job's resources, and touch nothing that is its record but
+    /// the mark that says so.
     ///
-    /// **Only `job_drone_process` goes.** Every other table `forget_job`
-    /// walks — `job_events`, the Checks, the Judgments, the Evidence, the
-    /// footprint, the declared plans, the delivery columns on `jobs` itself —
-    /// is workflow history, not a resource a sweep is reclaiming, and stays.
-    /// An id naming no Job is not a failure, for `forget_job`'s reason: there
-    /// is nothing here for either call to have taken.
-    pub fn retain_job(&mut self, job_id: &JobId) -> Result<Retained, WriteError> {
+    /// **Only `job_drone_process` goes, and `reclaimed_at` is stamped.** Every
+    /// other table `forget_job` walks — `job_events`, the Checks, the
+    /// Judgments, the Evidence, the footprint, the declared plans, the
+    /// delivery columns on `jobs` itself — is workflow history, not a
+    /// resource a sweep is reclaiming, and stays. An id naming no Job is not
+    /// a failure, for `forget_job`'s reason: there is nothing here for either
+    /// call to have taken.
+    ///
+    /// **`at` is the caller's clock reading, not this store's.** Every writer
+    /// in this crate takes its instant as an argument rather than reading one
+    /// off the machine, so a replay stays deterministic; `fleet::Clock` is
+    /// where a reading is actually taken.
+    pub fn retain_job(&mut self, job_id: &JobId, at: &Timestamp) -> Result<Retained, WriteError> {
         let id = job_id.as_str();
         let existed = self
             .conn
@@ -56,6 +76,13 @@ impl Store {
             .map_err(fault("clearing a Drone's process"))
             .map_err(WriteError::Database)?
             > 0;
+        self.conn
+            .execute(
+                "UPDATE jobs SET reclaimed_at = ?1 WHERE job_id = ?2",
+                (at.as_str(), id),
+            )
+            .map_err(fault("stamping a job as reclaimed"))
+            .map_err(WriteError::Database)?;
         Ok(Retained {
             existed,
             drone_process,

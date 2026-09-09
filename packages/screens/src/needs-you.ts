@@ -27,7 +27,7 @@ import type { JobSummary } from "@armada/protocol";
 import { instant } from "./duration";
 
 /**
- * The five tabs, in the order they are drawn and keyed.
+ * The six tabs, in the order they are drawn and keyed.
  *
  * **Here rather than in `board.ts`, where the strip that draws them is.** A
  * type import is erased at runtime and still typechecked, so leaving it there
@@ -36,35 +36,44 @@ import { instant } from "./duration";
  * through the bundle. `board.ts` re-exports both, and the tab strip is still
  * the only thing that draws them.
  */
-export type BoardTab = "all" | "needs-you" | "running" | "queued" | "finished";
+export type BoardTab = "all" | "needs-you" | "running" | "queued" | "finished" | "cleared";
 
-/** The four a job can be in. `all` is not a state and holds every job. */
+/** The five a job can be in. `all` is not a state and holds every job. */
 export type StateTab = Exclude<BoardTab, "all">;
 
 /**
  * Which state tab a job is in, or `null` where this build's registry has no
  * lifecycle row for its status.
  *
- * **`null` is a real answer and it is not a fifth tab.** Two things reach it: a
+ * **`null` is a real answer and it is not a sixth tab.** Two things reach it: a
  * status this build's registry has never heard of, and one whose `terminal`,
- * `mode` and `who_is_acting` match none of the four rules. The first also has no
- * verb and no glyph, so the list already draws it as a named line beneath the
- * rows rather than as a row.
+ * `mode` and `who_is_acting` match none of the rules below. The first also has
+ * no verb and no glyph, so the list already draws it as a named line beneath
+ * the rows rather than as a row.
  *
  * Either way it counts under `All` and under no state tab, which makes the
  * counts stop summing — visibly, which is the point. A residual tab that
  * swallowed both would make a registry change look like nothing happened.
  */
 export function tabOf(job: JobSummary): StateTab | null {
+  // **Read off the row and not off the registry, and first.** `reclaimed_at`
+  // is not a lifecycle fact — a cleared job's status is still whatever it
+  // stopped at, `killed` or `completed_success` or the rest — so nothing
+  // below could ever say this on its own, the same way `asking` rides on the
+  // row rather than on `JOB_LIFECYCLE`. It is first because a cleared job is
+  // always terminal, and `terminal` below would otherwise claim it as
+  // `finished` — which is the exact defect `#570` was filed over.
+  if (job.reclaimed_at !== undefined) return "cleared";
   const life = JOB_LIFECYCLE[job.status];
   if (life === undefined) return null;
   if (life.terminal) return "finished";
-  // **The one rule here that is not a lifecycle row, and it is first for a
-  // reason.** A drone waiting on an answer is on a `running` job whose
-  // `who_is_acting` is `Drone`, so every rule below would put it under Running
-  // — and a question on a job nobody has open would be invisible until somebody
-  // opened it. The registry cannot say this: it is a fact about a live slot
-  // rather than about a status, which is exactly why it rides on the row.
+  // **The one rule here that is not a lifecycle row, and it is first among the
+  // rest for a reason.** A drone waiting on an answer is on a `running` job
+  // whose `who_is_acting` is `Drone`, so every rule below would put it under
+  // Running — and a question on a job nobody has open would be invisible
+  // until somebody opened it. The registry cannot say this: it is a fact
+  // about a live slot rather than about a status, which is exactly why it
+  // rides on the row.
   //
   // It is above `terminal` in intent and below it in code because a terminal
   // job has no drone left to be waiting, so the two can never both be true.

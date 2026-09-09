@@ -93,7 +93,7 @@ import {
   type BoardSort,
   type BoardTab,
 } from "./board";
-import { ClearTerminalControl } from "@armada/shell";
+import { ClearTerminalControl, ForgetTerminalControl } from "@armada/shell";
 import { boardPressOf, SEARCH_KEY, verbOf } from "./keys";
 import type { BoardReach } from "./keys";
 import { foldedNote, foldLineages, headlineOf } from "./lineage";
@@ -139,11 +139,17 @@ export type JobsProps = {
    */
   onCompose: () => void;
   /**
-   * Clear every terminal Job at once. Confirmed here, before it is called —
-   * there is no undo on the other side of this, and unlike a kill there is no
-   * record left afterward to check the confirmation against.
+   * Reclaim every terminal, not-yet-reclaimed Job's worktree and branch at
+   * once. Confirmed here, before it is called — the act cannot be taken back
+   * on a per-Job basis once it lands, even though the record survives it.
    */
   onClearTerminal: (jobIds: readonly string[]) => void;
+  /**
+   * Delete every terminal Job's whole record at once. Confirmed here, before
+   * it is called — there is no undo on the other side of this, and unlike a
+   * kill there is no record left afterward to check the confirmation against.
+   */
+  onForgetTerminal: (jobIds: readonly string[]) => void;
   /** A clipboard write is silent, so the surface confirms every one with a toast. */
   onCopied: (value: string) => void;
   /**
@@ -168,6 +174,7 @@ export function Jobs({
   onKill,
   onCompose,
   onClearTerminal,
+  onForgetTerminal,
   onCopied,
   onCursor,
   reach,
@@ -208,11 +215,18 @@ export function Jobs({
   const drawn = bounded.filter((job) => readingOf(job).as === "badge");
   const undrawable = bounded.filter((job) => readingOf(job).as !== "badge");
   // Every Job Bridge holds, not just the bounded window drawn below — a Job
-  // scrolled past `DRAWN` is still cleared, since the point is clearing the
+  // scrolled past `DRAWN` is still reached, since the point is clearing the
   // board Fleet holds rather than the rows currently on screen.
-  const terminalIds = jobs
-    .filter((job) => JOB_LIFECYCLE[job.status]?.terminal === true)
+  const terminalJobs = jobs.filter((job) => JOB_LIFECYCLE[job.status]?.terminal === true);
+  // `Clear` only reaches a Job that has not already given its disk back —
+  // reclaiming one a second time is not a refusal, but a bulk button that
+  // kept re-sending it would read as doing nothing on every second press.
+  const reclaimableIds = terminalJobs
+    .filter((job) => job.reclaimed_at === undefined)
     .map((job) => job.id);
+  // `Delete record` reaches every terminal Job, reclaimed or not — deleting
+  // the record a reclaim kept is the whole of what the act is for.
+  const forgettableIds = terminalJobs.map((job) => job.id);
 
   const tabs = BOARD_TABS.map((row) => ({
     id: row.id,
@@ -376,9 +390,22 @@ export function Jobs({
         onCursor?.(row.dataset.jobId);
       }}
     >
-      {terminalIds.length === 0 ? null : (
+      {reclaimableIds.length === 0 && forgettableIds.length === 0 ? null : (
         <div>
-          <ClearTerminalControl count={terminalIds.length} stale={stale} onConfirm={() => onClearTerminal(terminalIds)} />
+          {reclaimableIds.length === 0 ? null : (
+            <ClearTerminalControl
+              count={reclaimableIds.length}
+              stale={stale}
+              onConfirm={() => onClearTerminal(reclaimableIds)}
+            />
+          )}
+          {forgettableIds.length === 0 ? null : (
+            <ForgetTerminalControl
+              count={forgettableIds.length}
+              stale={stale}
+              onConfirm={() => onForgetTerminal(forgettableIds)}
+            />
+          )}
         </div>
       )}
       <ActiveJobsList

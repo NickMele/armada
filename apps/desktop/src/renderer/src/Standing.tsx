@@ -42,9 +42,13 @@ export type StandingProps = {
   missed: number;
   acknowledged: number;
   onAcknowledged: (missed: number) => void;
-  /** What a reclaim gave back. */
-  givenBack: WorktreeReclaimed | null;
-  onGivenBack: (given: WorktreeReclaimed | null) => void;
+  /**
+   * What a reclaim gave back. **An array**: the per-Job act always sets one
+   * entry, and a bulk clear sets one per branch a base cannot reach — so a
+   * sweep that kept three says so three times rather than once.
+   */
+  givenBack: WorktreeReclaimed[];
+  onGivenBack: (given: WorktreeReclaimed[]) => void;
   /** The last command's answer, and the failure half of it where there is one. */
   commandFailure: Failure | null;
   outcome: Outcome | null;
@@ -120,18 +124,24 @@ export function Standing({
           working, and drawing it in the escalation hue would tell somebody the
           act failed when it did exactly what it promised. Dismissed by hand: a
           directory and a branch are what a person goes and looks at, and a
-          notice that vanished while they did is one they cannot get back. */}
-      {givenBack === null ? null : (
+          notice that vanished while they did is one they cannot get back.
+
+          One line per entry rather than one Alert per entry: a bulk clear
+          that kept several branches is one thing that happened, read at
+          once, not a stack a person dismisses one at a time. */}
+      {givenBack.length === 0 ? null : (
         <Alert
           tone="neutral"
-          title="Worktree reclaimed"
+          title={givenBack.length === 1 ? "Worktree reclaimed" : `${givenBack.length} worktrees reclaimed`}
           action={
-            <Button variant="ghost" size="sm" onClick={() => onGivenBack(null)}>
+            <Button variant="ghost" size="sm" onClick={() => onGivenBack([])}>
               Dismiss
             </Button>
           }
         >
-          {reclaimed(givenBack)}
+          {givenBack.map((given) => (
+            <p key={given.job_id}>{reclaimed(given)}</p>
+          ))}
         </Alert>
       )}
 

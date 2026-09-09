@@ -441,7 +441,7 @@ export type Proposed =
   | { ok: false; why: "refused"; outcome: Outcome };
 
 /**
- * What `clearTerminalJobs` answered. **Not `Outcome`**: there is no bulk
+ * What `forgetTerminalJobs` answered. **Not `Outcome`**: there is no bulk
  * `forget_job`, so this is one call per id and some can refuse while others
  * land — a status that moved between the press and the call, or an id Fleet
  * no longer holds. `cleared` is folded into the board as each call answers;
@@ -449,6 +449,19 @@ export type Proposed =
  */
 export type ClearOutcome = {
   cleared: string[];
+  failed: { jobId: string; outcome: Outcome }[];
+};
+
+/**
+ * What `clearTerminalJobs` answered. `ClearOutcome`'s shape one field wider:
+ * a reclaim's `failed` half is the same — a status that moved, or an id Fleet
+ * no longer holds — but the half that lands carries a receipt and not only an
+ * id, because a kept branch is a real outcome and not only a fact for the row
+ * to fold. `reclaimed()` in `@armada/screens` is what turns each entry into a
+ * sentence.
+ */
+export type ReclaimOutcome = {
+  reclaimed: WorktreeReclaimed[];
   failed: { jobId: string; outcome: Outcome }[];
 };
 

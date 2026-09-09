@@ -166,6 +166,15 @@ export const CONFIRM: Record<ConfirmableAct, { title: string; body: string; tone
       "can only narrow. Fleet read the worktree before offering this, so there is one to take " +
       "over.",
   },
+  // The one confirmation on this row for an act that cannot be undone. Its
+  // worktree and branch go with it where a reclaim has not already taken
+  // them — this is the whole record, not only the disk.
+  forget_job: {
+    title: "Delete this job's record?",
+    body:
+      "The job, its log, its checks and its judgments are removed from the board along with " +
+      "its whole record. There is no undo, and a deleted job cannot be opened again.",
+  },
 };
 
 /**
@@ -243,6 +252,7 @@ export const ACT_LABEL: Record<JobAct, string> = {
   override_verdict: "Overrule the verdict",
   rerun_gate: "Ask the gate again",
   reclaim_worktree: "Reclaim worktree",
+  forget_job: "Delete record",
 };
 
 /**
@@ -263,4 +273,5 @@ export const MENU_LABEL: Record<JobAct, string> = {
   override_verdict: "Overrule the verdict, the refused work stands",
   rerun_gate: "Ask the gate again, on the evidence already submitted",
   reclaim_worktree: "Reclaim worktree, the job stays on the board",
+  forget_job: "Delete record, there is no undo",
 };

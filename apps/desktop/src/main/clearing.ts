@@ -23,7 +23,7 @@
 // It holds no connection. The `Board` it is handed is what any act needs, so
 // nothing here can drift from what the socket believes.
 
-import type { ClearOutcome, Outcome, WorktreeReclaimed } from "@armada/protocol";
+import type { ClearOutcome, Outcome, ReclaimOutcome, WorktreeReclaimed } from "@armada/protocol";
 import { ask, route } from "./request";
 // Type-only, and therefore not a cycle at runtime: `Board` is what an act needs
 // of the connection, and it is declared where the acts are.
@@ -46,15 +46,48 @@ export class Clearing {
   }
 
   /**
-   * Clear every terminal Job at once. **One `forget_job` per id, sent in
-   * turn** — there is no bulk route on the wire, and each Job is forgotten
-   * independently, so a status that moved between the press and this call
-   * (or an id already gone) does not stop the rest.
+   * Reclaim every terminal Job's worktree and branch at once, keeping every
+   * row. **One `reclaim_worktree` per id, sent in turn** — there is no bulk
+   * route on the wire, and each Job is reclaimed independently, so a status
+   * that moved between the press and this call (or an id already gone) does
+   * not stop the rest.
    *
    * **The caller decides which ids are terminal.** This sends exactly what it
    * is given; Fleet's 409 is the safety net, not the gate.
+   *
+   * `forgetTerminal` below is the other bulk act, and deletes the record this
+   * one keeps.
+   *
+   * **The receipt travels, not only the id.** A branch a bulk clear kept for
+   * holding commits the base cannot reach is a real outcome and the caller
+   * has to be able to say which ones — `ReclaimOutcome` carries the whole
+   * `WorktreeReclaimed` per success rather than `ClearOutcome`'s bare id.
    */
-  async clearTerminal(jobIds: readonly string[]): Promise<ClearOutcome> {
+  async clearTerminal(jobIds: readonly string[]): Promise<ReclaimOutcome> {
+    const reclaimed: WorktreeReclaimed[] = [];
+    const failed: { jobId: string; outcome: Outcome }[] = [];
+    for (const jobId of jobIds) {
+      const outcome = await this.reclaim(jobId);
+      // `reclaim` always sets `reclaimed` where it answers `ok`; the
+      // narrowing is spelled out rather than asserted, so a future change to
+      // that shape fails here instead of silently dropping a receipt.
+      if (outcome.ok && outcome.reclaimed !== undefined) reclaimed.push(outcome.reclaimed);
+      else if (!outcome.ok) failed.push({ jobId, outcome });
+    }
+    return { reclaimed, failed };
+  }
+
+  /**
+   * Delete every terminal Job's whole record, in bulk. **One `forget_job` per
+   * id, sent in turn**, for `clearTerminal`'s reason above — there is no bulk
+   * route and no id's failure stops the rest.
+   *
+   * **The bulk shape of the one act on this seam that cannot be undone.**
+   * `forget` below is also called singly, for the per-Job "Delete record" act
+   * — the two are one method sent over one id or several, the way `reclaim`
+   * is.
+   */
+  async forgetTerminal(jobIds: readonly string[]): Promise<ClearOutcome> {
     const cleared: string[] = [];
     const failed: { jobId: string; outcome: Outcome }[] = [];
     for (const jobId of jobIds) {
@@ -70,8 +103,8 @@ export class Clearing {
    *
    * **The Job is untouched.** What was reclaimed is disk and not the record, so
    * the row stays exactly where it is on the board and the answer is a receipt
-   * rather than a Job. `clearTerminal` above is the other half and takes the
-   * row.
+   * rather than a Job. `forgetTerminal` is the other act and takes the row;
+   * `clearTerminal` above is this one, sent over a whole set at once.
    *
    * **A kept branch comes back as a success.** Fleet always runs this with the
    * safe setting and there is no force on this seam, so a branch holding
@@ -95,16 +128,14 @@ export class Clearing {
   }
 
   /**
-   * Delete one terminal Job's whole record.
-   *
-   * **Private, because nothing sends one.** Clearing a board is a set and the
-   * bulk shape above is the only caller — a single-id entry point would be a
-   * second way in to the one act on this seam that cannot be undone.
+   * Delete one terminal Job's whole record. **The one act on this seam that
+   * cannot be undone**, singly or in the bulk shape `forgetTerminal` sends it
+   * in.
    *
    * `board.forget` is what actually removes the row; `job.forgotten` on the
    * stream does the same thing for a window that did not make the call itself.
    */
-  private async forget(jobId: string): Promise<Outcome> {
+  async forget(jobId: string): Promise<Outcome> {
     if (this.forgetting.has(jobId)) return { ok: false, why: "already_forgetting" };
     const port = this.board.port();
     if (port === null) return { ok: false, why: "not_connected" };

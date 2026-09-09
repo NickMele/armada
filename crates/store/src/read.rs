@@ -322,6 +322,15 @@ impl Store {
         // stays distinct from the null.
         let created = created.cost_capped(maybe_wide(row, "cost_cap_micros")?);
 
+        // Read back for `branch`'s reason: no event describes giving a
+        // worktree back, so this column is its own authority. Null on every
+        // Job whose disk still stands, and on every row written before
+        // version 37.
+        let created = match maybe(row, "reclaimed_at")? {
+            Some(at) => created.on_reclaimed(Timestamp::from_rfc3339(at)),
+            None => created,
+        };
+
         let events = self.events_for(&job_id)?;
         Ok((replay(created, &events)?, cached))
     }

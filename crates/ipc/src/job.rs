@@ -184,6 +184,17 @@ pub struct JobSummary {
     /// in `main` or has been sitting unread for a week.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub landed: Option<Settled>,
+    /// When this Job's worktree and branch were given back while its record
+    /// stayed. **Absent is a Job whose disk still stands** — every Job before
+    /// a reclaim, and every Job a reclaim has not yet reached.
+    ///
+    /// This is what a `Cleared` tab is keyed off: the reclaim that ran did
+    /// not delete a row for it to notice, and there is no other way to tell a
+    /// cleared Job from a finished one apart from asking whether its worktree
+    /// happens to exist on disk right now — which is not a record of an act,
+    /// only a directory that might be gone for some other reason.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reclaimed_at: Option<Instant>,
 }
 
 impl JobSummary {
@@ -223,6 +234,7 @@ impl JobSummary {
             current_step_id: job.current_step_id().map(StepId::from),
             assigned_drone: job.assigned_drone().map(DroneId::from),
             redispatched_from: job.redispatched_from().map(JobId::from),
+            reclaimed_at: job.reclaimed_at().map(Instant::from),
             asking,
             // Filled by the caller that has it, and `None` here on purpose:
             // it is not a field of `core_model::Job` at all — it is what a

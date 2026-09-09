@@ -41,9 +41,13 @@ where
 {
     /// Remove this Job's checkout, then delete the branch it derived.
     ///
-    /// **The record is untouched.** The Job is still on the Board afterwards
-    /// with everything it recorded; [`forget_job`](Fleet::forget_job) is what
-    /// takes the row.
+    /// **The record survives, marked rather than untouched.** The Job is
+    /// still on the Board afterwards with everything it recorded — its log,
+    /// its Checks, its Judgments, its workflow results — and
+    /// [`forget_job`](Fleet::forget_job) is still what takes the row. What
+    /// does change is the one thing that is a resource and not a record: the
+    /// stale Drone pid `retain_job` clears, and the `reclaimed_at` stamp a
+    /// Board reads to tell this Job apart from one whose disk still stands.
     ///
     /// **Terminal only**, for a forget's reason: there is no disk to reclaim
     /// while a Drone might still write to it.
@@ -76,11 +80,22 @@ where
         // falls back to the remote's head and then to `main`/`master` — and
         // where nothing answers at all, the branch is kept unanswered rather
         // than deleted on a guess.
-        adapters::reclaim(&spec, self.manifest().base(), UnmergedWork::Keep).map_err(|cause| {
-            Adrift::NotReclaimed {
+        let reclaimed = adapters::reclaim(&spec, self.manifest().base(), UnmergedWork::Keep)
+            .map_err(|cause| Adrift::NotReclaimed {
                 job: job_id.clone(),
                 cause,
-            }
-        })
+            })?;
+        // The stale half `armada clean` already clears — a Drone's pid row
+        // naming a worktree that just went — and the mark that tells a later
+        // read this Job's disk is back. Stamped after the worktree succeeds,
+        // for `armada clean`'s reason: touching the row first and the
+        // worktree failing to go would leave a row nothing can derive a
+        // worktree for.
+        self.store()
+            .lock()
+            .await
+            .retain_job(job_id, &self.now())
+            .map_err(Adrift::Writing)?;
+        Ok(reclaimed)
     }
 }

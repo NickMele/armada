@@ -47,7 +47,7 @@ fn a_retained_jobs_row_survives_with_its_status() {
     a_job_with_a_history(&mut store, "01RETAINED");
 
     let kept = store
-        .retain_job(&job_id("01RETAINED"))
+        .retain_job(&job_id("01RETAINED"), &at("2026-09-09T00:00:00.000Z"))
         .expect("the job is retained");
 
     assert!(kept.existed);
@@ -56,6 +56,28 @@ fn a_retained_jobs_row_survives_with_its_status() {
         .load_job(&job_id("01RETAINED"))
         .expect("the row is still there to read");
     assert_eq!(job.status(), core_model::JobStatus::Queued);
+}
+
+/// The mark a Board reads to tell a cleared Job from a finished one. Without
+/// it, a clear from the board looks like it did nothing.
+#[test]
+fn retaining_a_job_stamps_when_it_was_reclaimed() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job_with_a_history(&mut store, "01RETAINED");
+
+    store
+        .retain_job(&job_id("01RETAINED"), &at("2026-09-09T00:00:00.000Z"))
+        .expect("the job is retained");
+
+    let job = store
+        .load_job(&job_id("01RETAINED"))
+        .expect("the row is still there to read");
+    assert_eq!(
+        job.reclaimed_at(),
+        Some(&at("2026-09-09T00:00:00.000Z")),
+        "the instant the caller supplied is what the row now says"
+    );
 }
 
 /// The neighbour is the whole point, exactly as it is in `tests::forget`:
@@ -68,7 +90,7 @@ fn retaining_one_job_leaves_every_other_job_alone() {
     a_job_with_a_history(&mut store, "01UNTOUCHED");
 
     store
-        .retain_job(&job_id("01RETAINED"))
+        .retain_job(&job_id("01RETAINED"), &at("2026-09-09T00:00:00.000Z"))
         .expect("the job is retained");
 
     let untouched = store
@@ -85,7 +107,7 @@ fn an_id_naming_no_job_is_answered_rather_than_refused() {
     let mut store = open(&dir);
 
     let kept = store
-        .retain_job(&job_id("01NEVEREXISTED"))
+        .retain_job(&job_id("01NEVEREXISTED"), &at("2026-09-09T00:00:00.000Z"))
         .expect("an absent job is not an error");
 
     assert!(!kept.existed);
@@ -103,7 +125,7 @@ fn retaining_a_job_clears_its_drone_process() {
         .expect("the process is recorded");
 
     let kept = store
-        .retain_job(&job_id("01WITHDRONE"))
+        .retain_job(&job_id("01WITHDRONE"), &at("2026-09-09T00:00:00.000Z"))
         .expect("the job is retained");
 
     assert!(kept.drone_process, "the live pid was cleared");
@@ -129,7 +151,7 @@ fn retaining_a_job_with_no_drone_process_reports_none_cleared() {
     a_job_with_a_history(&mut store, "01NODRONE");
 
     let kept = store
-        .retain_job(&job_id("01NODRONE"))
+        .retain_job(&job_id("01NODRONE"), &at("2026-09-09T00:00:00.000Z"))
         .expect("the job is retained");
 
     assert!(kept.existed);
@@ -154,7 +176,7 @@ fn retaining_a_job_leaves_a_neighbours_drone_process_alone() {
         .expect("the process is recorded");
 
     store
-        .retain_job(&job_id("01RETAINED"))
+        .retain_job(&job_id("01RETAINED"), &at("2026-09-09T00:00:00.000Z"))
         .expect("the job is retained");
 
     assert_eq!(
@@ -214,7 +236,7 @@ fn retaining_a_job_the_judge_ruled_on_keeps_every_table_beneath_it() {
     );
 
     let kept = store
-        .retain_job(&job_id(id))
+        .retain_job(&job_id(id), &at("2026-09-09T00:00:00.000Z"))
         .expect("a judged job is retained rather than refused by a foreign key");
     assert!(kept.existed);
 
