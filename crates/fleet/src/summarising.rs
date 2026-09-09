@@ -16,14 +16,40 @@ use std::collections::BTreeMap;
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::Refusal;
 use core_model::{
-    Job, JobId as CoreJobId, JobStatus as CoreJobStatus, QueuedReason as CoreQueuedReason,
+    BudgetHold, Job, JobId as CoreJobId, JobStatus as CoreJobStatus,
+    QueuedReason as CoreQueuedReason,
 };
 
 use ipc::JobSummary;
 
 use crate::admitting::clear_to_run;
+use crate::allowance::Overspent;
 use crate::daemon::Fleet;
 use crate::sub_dispatch::waiting_on_children;
+
+/// Why an approved Job has not started, and — where that is a ceiling — which
+/// of the two.
+///
+/// **One answer and not two reads.** `Fleet::overspent` names the ceiling
+/// already; folding that to `over_budget` and then asking again would be two
+/// readings of one board taken at two instants. Every caller wants both fields
+/// or neither, which is why they travel as one value.
+pub(crate) struct Waiting {
+    pub(crate) reason: Option<CoreQueuedReason>,
+    /// **Absent unless `reason` is `over_budget`.** It qualifies that label and
+    /// says nothing on its own.
+    pub(crate) budget: Option<BudgetHold>,
+}
+
+impl Waiting {
+    /// Nothing is holding this Job, or what holds it is not a ceiling.
+    fn on(reason: Option<CoreQueuedReason>) -> Waiting {
+        Waiting {
+            reason,
+            budget: None,
+        }
+    }
+}
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -49,7 +75,8 @@ where
         Ok(JobSummary::of(
             job,
             reason.as_ref(),
-            queued,
+            queued.reason,
+            queued.budget,
             asking,
             self.resumption(job),
         ))
@@ -74,12 +101,9 @@ where
     /// half does not free on its own and is still computed here, because what
     /// changes it is a person raising the cap and a stored label would survive
     /// that.
-    pub(crate) async fn queued_reason(
-        &self,
-        job: &Job,
-    ) -> Result<Option<CoreQueuedReason>, Refusal> {
+    pub(crate) async fn queued_reason(&self, job: &Job) -> Result<Waiting, Refusal> {
         if job.status() != CoreJobStatus::Queued {
-            return Ok(None);
+            return Ok(Waiting::on(None));
         }
         let (loaded, _) = self.every_job().await.map_err(|why| self.refusal(why))?;
         let standing: BTreeMap<CoreJobId, CoreJobStatus> = loaded
@@ -88,7 +112,7 @@ where
             .map(|held| (held.id().clone(), held.status()))
             .collect();
         if !clear_to_run(job, &standing) {
-            return Ok(Some(CoreQueuedReason::BlockedByDependency));
+            return Ok(Waiting::on(Some(CoreQueuedReason::BlockedByDependency)));
         }
         // **The same label as the edge above, because it is the same fact from
         // the Board's side.** The registry gives a `queued` Job no reason
@@ -97,21 +121,23 @@ where
         // dependency label says. The mechanism differs — provenance rather than
         // an edge — and that difference is not a Board fact.
         if waiting_on_children(job, &crate::sub_dispatch::children_standing(&loaded.jobs)) {
-            return Ok(Some(CoreQueuedReason::BlockedByDependency));
+            return Ok(Waiting::on(Some(CoreQueuedReason::BlockedByDependency)));
         }
         // **Before the machine reading, and not only because admission asks it
         // first.** Headroom frees on its own and a spent budget does not, so a
         // Job that is both would be told it is waiting for something that is
         // already on its way when the thing actually holding it needs a person.
-        // The dollars and the turns fold to this one label; which of the two it
-        // was is on the Job's detail, where the figures are.
-        if self
-            .overspent(job)
-            .await
-            .map_err(|why| self.refusal(why))?
-            .is_some()
-        {
-            return Ok(Some(CoreQueuedReason::OverBudget));
+        // The dollars and the turns fold to this one label, and which of the
+        // two it was rides beside it: the same read answers both, and the two
+        // take different acts.
+        if let Some(over) = self.overspent(job).await.map_err(|why| self.refusal(why))? {
+            return Ok(Waiting {
+                reason: Some(CoreQueuedReason::OverBudget),
+                budget: Some(match over {
+                    Overspent::Cost => BudgetHold::CostCap,
+                    Overspent::Turns => BudgetHold::TurnCap,
+                }),
+            });
         }
         // **The same predicate admission opens with**, asked of the same
         // roster. The bound and each of the three machine readings fold to the
@@ -119,6 +145,8 @@ where
         // of them it was is not a Board fact.
         let mut slots = self.slots().lock().await;
         let room = self.room_for_another(&mut slots).await;
-        Ok((!room.granted()).then_some(CoreQueuedReason::WaitingOnResources))
+        Ok(Waiting::on(
+            (!room.granted()).then_some(CoreQueuedReason::WaitingOnResources),
+        ))
     }
 }

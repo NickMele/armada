@@ -21,8 +21,8 @@
 //! `modelUsage` holds the sum of both and its `total_cost_usd` reconstructs
 //! from that sum exactly. So the cost is the session's running total and the
 //! turns are per invocation. `fleet::allowance::spent` does the fold: last
-//! cost, summed turns. What a Job *may* spend is here too, as [`V32`]'s
-//! column.
+//! cost, summed turns. What a Job *may* spend and *may* turn is here too, as
+//! [`V32`]'s and [`V40`]'s columns.
 
 use core_model::Job;
 
@@ -124,6 +124,36 @@ CREATE TABLE job_drone_spend (
 INSERT INTO job_drone_spend (job_id, drone_id, cost_micros, turns, ran_ms)
     SELECT job_id, drone_id, cost_micros, turns, ran_ms FROM job_drone_spend_priced;
 DROP TABLE job_drone_spend_priced;
+"#;
+
+/// Version 40 — how many turns this one Job may take.
+///
+/// **[`V32`] again, for the other ceiling.** The column, the null, the two
+/// triggers and the reasoning behind each are that migration's; what is new is
+/// only which number it holds. Job `01M22TYSAE0023MADDP5ZQEYGW` is the Job that
+/// bought this one — 393 turns against a 300 constant with no tier under it,
+/// stopped on the cheap final step of work every Check had passed, and its
+/// branch committed by hand.
+///
+/// **Turns and not a second unit of money**, so nothing here converts: a turn
+/// is a count off the harness's terminating line, which is why the column is
+/// bare `INTEGER` where the dollars are micros.
+pub(crate) const V40: &str = r#"
+ALTER TABLE jobs ADD COLUMN turn_cap INTEGER;
+
+CREATE TRIGGER jobs_are_never_given_a_negative_turn_cap_on_insert
+BEFORE INSERT ON jobs
+WHEN NEW.turn_cap IS NOT NULL AND NEW.turn_cap < 0
+BEGIN
+    SELECT RAISE(ABORT, 'a turn cap is how many turns a Job may take, and below nothing is not a number it may take');
+END;
+
+CREATE TRIGGER jobs_are_never_given_a_negative_turn_cap_on_update
+BEFORE UPDATE ON jobs
+WHEN NEW.turn_cap IS NOT NULL AND NEW.turn_cap < 0
+BEGIN
+    SELECT RAISE(ABORT, 'a turn cap is how many turns a Job may take, and below nothing is not a number it may take');
+END;
 "#;
 
 /// What one Drone's run came to.
@@ -245,6 +275,29 @@ impl Store {
                 ),
             )
             .map_err(fault("recording what a Job may spend"))
+            .map_err(WriteError::Database)?;
+        if updated == 0 {
+            return Err(WriteError::NoSuchJob {
+                job_id: job.id().clone(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Record how many turns this Job may take, including that it may take
+    /// whatever the tier above allows.
+    ///
+    /// **[`Store::record_cost_cap`]'s twin**, and a second statement rather
+    /// than a widened one: the two acts move at different moments, and a write
+    /// that set both would re-state a ceiling nobody touched.
+    pub fn record_turn_cap(&mut self, job: &Job) -> Result<(), WriteError> {
+        let updated = self
+            .conn
+            .execute(
+                "UPDATE jobs SET turn_cap = ?2 WHERE job_id = ?1",
+                (job.id().as_str(), job.turn_cap().map(|turns| turns as i64)),
+            )
+            .map_err(fault("recording how many turns a Job may take"))
             .map_err(WriteError::Database)?;
         if updated == 0 {
             return Err(WriteError::NoSuchJob {

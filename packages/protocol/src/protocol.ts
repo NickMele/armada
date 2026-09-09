@@ -58,6 +58,19 @@ export type JobSummary = {
    */
   queued_reason?: string;
   /**
+   * Which of the two ceilings is holding a Job that is over budget — a key
+   * into `BUDGET_HOLD` in the generated vocabulary. Since protocol 9.4.
+   *
+   * **Present only where `queued_reason` is `over_budget`**, and absent
+   * everywhere else including on a Fleet built before it said which. It costs
+   * Fleet nothing: the predicate that computed the reason already knew.
+   *
+   * Without it the money cap and the turn cap fold to one label, and a surface
+   * offering the cost-cap control on a Job held for turns offers a press that
+   * cannot start it.
+   */
+  budget_hold?: string;
+  /**
    * Which act a person took to put this Job back in the queue — a key into
    * `RESUMPTION` in the generated vocabulary.
    *

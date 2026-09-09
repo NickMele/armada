@@ -153,11 +153,14 @@ pub enum QueuedReason {
     /// rather than an escalation trigger: nothing has gone wrong with the work,
     /// and the Job is one number away from running.
     ///
-    /// **Which signal it was — the dollars or the turns — is not carried
-    /// here**, for the reason `fleet::headroom::Short` is not a variant of this
-    /// enum either: the registry gives `queued` one label per kind of wait, and
-    /// telling the two apart is done from the figures on the Job's detail,
-    /// where what was spent stands beside what was allowed.
+    /// **Which signal it was — the dollars or the turns — is [`BudgetHold`]
+    /// beside this**, not a fourth variant here: the registry gives `queued`
+    /// one label per kind of wait, and this is one kind. It was the figures on
+    /// the Job's detail alone until Sept 2026, and that failed the way this
+    /// row's own argument predicts — the pair is only readable to somebody who
+    /// already knows there are two ceilings, and only one of them had an act
+    /// behind it. Job `01M22TYSAE0023MADDP5ZQEYGW` stranded at 393 turns
+    /// against 300 with nothing on the screen naming turns at all.
     OverBudget,
     /// Nothing is in its way but the slot.
     WaitingOnResources,
@@ -252,6 +255,54 @@ impl AdmissionHold {
 
     pub fn from_wire(value: &str) -> Option<AdmissionHold> {
         AdmissionHold::ALL
+            .iter()
+            .copied()
+            .find(|hold| hold.as_wire() == value)
+    }
+}
+
+/// Which of a Job's two ceilings is holding it, where one is.
+///
+/// **The finer half of [`QueuedReason::OverBudget`]**, exactly as
+/// [`AdmissionHold`] is of [`QueuedReason::WaitingOnResources`]. A Board row is
+/// unchanged by this existing: the label is still `over_budget`. What it adds
+/// is the half that decides what a person does next, because the two take
+/// opposite acts — the dollars want a bigger number, and the turns want either
+/// a bigger number or a different brief.
+///
+/// # It costs nothing to carry
+///
+/// `fleet::Fleet::overspent` already answers which ceiling it was and
+/// `queued_reason` already threw that answer away. Nothing extra is read for
+/// this field; what changed is that the answer reaches the wire.
+///
+/// # One value, because a Job is refused on the first ceiling it is past
+///
+/// `fleet::allowance::Allowance::exceeded_by` names cost first, so a Job over
+/// both reads as [`CostCap`](BudgetHold::CostCap). That is the order the
+/// predicate has always had and it is not a ranking of remedies — it is that
+/// dollars are what the row a person set is denominated in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BudgetHold {
+    /// Past `settings.budget-cost-cap-per-job`, as resolved for this Job.
+    CostCap,
+    /// Past `settings.budget-turn-cap-per-job`, as resolved for this Job.
+    TurnCap,
+}
+
+impl BudgetHold {
+    /// Every variant, in the order the predicate asks them.
+    pub const ALL: &'static [BudgetHold] = &[BudgetHold::CostCap, BudgetHold::TurnCap];
+
+    pub fn as_wire(&self) -> &'static str {
+        match self {
+            BudgetHold::CostCap => "cost_cap",
+            BudgetHold::TurnCap => "turn_cap",
+        }
+    }
+
+    pub fn from_wire(value: &str) -> Option<BudgetHold> {
+        BudgetHold::ALL
             .iter()
             .copied()
             .find(|hold| hold.as_wire() == value)

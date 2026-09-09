@@ -15,7 +15,7 @@ use axum::http::StatusCode;
 use axum::response::Response;
 use ipc::{
     CapRaise, ChangesRequested, ChosenAnswer, FileReport, JobRequest, Overruled, ProposeJob,
-    Redirection, RemarksTakenUp, RestartRequested, StopProposal,
+    Redirection, RemarksTakenUp, RestartRequested, StopProposal, TurnRaise,
 };
 
 use crate::answers::{answer, refused, undecodable};
@@ -238,6 +238,28 @@ pub(crate) async fn raise_cost_cap<D: Commands>(
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
     match served.daemon().raise_cost_cap(job.id(), raise).await {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// The other ceiling, and the same three refusals in the same order. 409 on a
+/// terminal Job, 422 on a figure at or under the cap in force, 422 again where
+/// the surface asked past its own ceiling.
+///
+/// **A route of its own and never a field on the one above.** The two ceilings
+/// are refused separately and cleared separately, so a caller that raised one
+/// and was told about the other could not act on the answer.
+pub(crate) async fn raise_turn_cap<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+    body: Bytes,
+) -> Response {
+    let raise: TurnRaise = match ipc::decode("a turn cap", &body) {
+        Ok(raise) => raise,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served.daemon().raise_turn_cap(job.id(), raise).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }

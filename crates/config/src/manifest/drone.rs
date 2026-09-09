@@ -26,12 +26,13 @@ use crate::yaml::{self, Table};
 /// The keys M1 reads inside `drone`. **The first three are spelled as a
 /// workflow step spells them** — `crate::workflow::step`'s `STEP_KEYS` and
 /// `crate::scope`'s `SCOPE_KEYS` carry the same three words, because they are
-/// the same three values one tier up. The cap has no step tier: a step is not
-/// what a person approved and is not what a cap is set against.
+/// the same three values one tier up. Neither cap has a step tier: a step is
+/// not what a person approved and is not what a cap is set against.
 const DRONE_KEYS: &[&str] = &[
     "quiet_after_seconds",
     "poke_limit",
     "cost_cap_micros_per_job",
+    "turn_cap_per_job",
     "exclude_paths",
 ];
 
@@ -70,8 +71,8 @@ impl Drone {
 /// step tier's and are unchanged by being written here — one value written in
 /// two places that read it differently is the defect this chain avoids.
 ///
-/// **`cost_cap_micros_per_job: 0` is a sentence too**, so [`yaml::counted`] and
-/// not [`yaml::positive`]: it holds a repository's Jobs, not the Fleet.
+/// **Both caps read `0` as a sentence too**, so [`yaml::counted`] and not
+/// [`yaml::positive`]: each holds a repository's Jobs, not the Fleet.
 ///
 /// **An absent list is never an empty one**, and [`yaml::list`] refuses the
 /// empty one for every list in this file. So absence has exactly one reading:
@@ -102,6 +103,13 @@ pub(super) fn read(value: &Value, out: &mut Vec<Refusal>) -> Drone {
     let cost_cap_micros = table
         .optional("cost_cap_micros_per_job")
         .and_then(|value| yaml::counted(&cap_key, value, out));
+    // `counted` is `u32` here too, and the ceiling it imposes is not a
+    // constraint on anything: a per-Job turn cap of four billion is a Job
+    // nothing stops.
+    let turns_key = table.at("turn_cap_per_job");
+    let turn_cap = table
+        .optional("turn_cap_per_job")
+        .and_then(|value| yaml::counted(&turns_key, value, out));
     // Read exactly as `evidence_scope.exclude_paths` is read one tier down,
     // through the same helper and with the same absence of validation: two
     // readings of one word is the split this key's spelling exists to avoid.
@@ -123,6 +131,7 @@ pub(super) fn read(value: &Value, out: &mut Vec<Refusal>) -> Drone {
             quiet_after_seconds,
             poke_limit,
             cost_cap_micros,
+            turn_cap,
         },
         exclude_paths,
     }

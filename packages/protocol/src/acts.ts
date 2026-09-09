@@ -87,6 +87,25 @@ export type CapRaise = {
 };
 
 /**
+ * The body of `raise_turn_cap`. `crates/ipc/src/raising.rs`.
+ *
+ * **Its own type beside `CapRaise`, because the two ceilings are two.** A
+ * single body carrying either would mean two things and no outcome could be
+ * attributed to one of them — the same argument that keeps the caps two rows in
+ * `crates/config/settings.toml` and two routes on the wire.
+ *
+ * **It raises and never lowers**, on `CapRaise`'s terms and for its reason.
+ *
+ * A turn count, and no unit conversion anywhere on this act: `JobSpend.turns`
+ * and `JobSpend.turn_cap` are the same plain integers, so the figure a person
+ * is shown and the figure that is sent are the same number.
+ */
+export type TurnRaise = {
+  turn_cap: number;
+  raised_by: RaisedBy;
+};
+
+/**
  * Which surface a raise came through, and therefore what it may ask for.
  *
  * **Provenance, never a credential.** Nothing on this seam authenticates

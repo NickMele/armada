@@ -245,6 +245,28 @@ pub enum Adrift {
         asked: u64,
         ceiling: u64,
     },
+    /// A turn raise was asked for on a Job that is over.
+    ///
+    /// **[`NotCappable`](Adrift::NotCappable)'s twin and a variant of its
+    /// own**, so the sentence a caller reads names the ceiling it tried to
+    /// move. A route that answered the cost cap's refusal would send somebody
+    /// to look at money over a Job held for turns.
+    NotTurnCappable { job: JobId, status: JobStatus },
+    /// A turn raise carried a figure at or under the ceiling already in force.
+    /// [`CapNotRaised`](Adrift::CapNotRaised)'s twin, for its reasons.
+    TurnCapNotRaised {
+        job: JobId,
+        asked: u64,
+        in_force: u64,
+    },
+    /// Helm asked for more turns than Helm may ask for.
+    /// [`CapAboveCeiling`](Adrift::CapAboveCeiling)'s twin, for its reasons,
+    /// and unreachable by a person for the same one.
+    TurnCapAboveCeiling {
+        job: JobId,
+        asked: u64,
+        ceiling: u64,
+    },
     /// The repository a Job's worktree is in would not open, so neither half
     /// of the reclaim was attempted.
     ///

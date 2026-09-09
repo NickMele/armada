@@ -1,8 +1,8 @@
-//! Giving one Job more money, and who is giving it.
+//! Giving one Job more of a ceiling, and who is giving it.
 //!
-//! **A Job over its cost cap waits at `queued` reading `over_budget` until
-//! somebody raises the cap** — `docs/concepts/machine.md`, Budget, says so and
-//! nothing on this seam carried the act. So the label was a dead end: the
+//! **A Job over either cap waits at `queued` reading `over_budget` until
+//! somebody raises that cap** — `docs/concepts/machine.md`, Budget, says so and
+//! nothing on this seam carried either act. So the label was a dead end: the
 //! remedy was a number, the number was a machine-wide setting, and raising it
 //! for one Job meant raising it for every Job or restarting Fleet.
 //!
@@ -23,17 +23,37 @@ use serde::{Deserialize, Serialize};
 /// running Job's ceiling is a different act nobody has asked for, and it would
 /// strand work mid-flight rather than let it finish.
 ///
-/// **The turn cap is not here.** `budget-turn-cap-per-job` catches what a wide
-/// dollar ceiling misses, and a Job that turns and turns was usually not
-/// askable as written — the remedy there is the brief, not a bigger number. One
-/// body carrying either would be one route meaning whichever the caller had in
-/// mind, and this one is named for the number it moves.
+/// **The turn cap is [`TurnRaise`] and not a second field here.** One body
+/// carrying either would be one route meaning whichever the caller had in mind,
+/// and this one is named for the number it moves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CapRaise {
     /// What this Job may cost from now on, in millionths of a dollar — the unit
     /// [`JobSpend`](crate::JobSpend) reads in, so the figure a person typed and
     /// the figure they were shown are the same integer.
     pub cost_cap_micros: u64,
+    /// Which surface the raise came through. See [`RaisedBy`].
+    pub raised_by: RaisedBy,
+}
+
+/// A new turn ceiling for one Job.
+///
+/// **[`CapRaise`]'s twin, and separate for that type's reason.** It raises and
+/// never lowers, and a figure at or under the cap in force is refused at the
+/// Fleet boundary rather than here.
+///
+/// **It exists because the argument against it was falsified.** The turn cap
+/// shipped with no act at all, on the reading that a Job over it is going in
+/// circles and wants a rewritten brief rather than a bigger number. Job
+/// `01M22TYSAE0023MADDP5ZQEYGW` was neither: it had finished, passed every
+/// Check, and stopped at 393 turns against 300 with a cheap final step unrun.
+/// A redispatch would have thrown the work away.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TurnRaise {
+    /// How many turns this Job may take from now on, counted the way
+    /// [`JobSpend`](crate::JobSpend) counts them — summed across every
+    /// terminating line of every Drone of the Job.
+    pub turn_cap: u64,
     /// Which surface the raise came through. See [`RaisedBy`].
     pub raised_by: RaisedBy,
 }

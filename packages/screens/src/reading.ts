@@ -12,7 +12,7 @@
 
 import type { LucideIcon } from "lucide-react";
 
-import { ESCALATION_REASON, JOB_STATUS, QUEUED_REASON } from "@armada/components";
+import { BUDGET_HOLD, ESCALATION_REASON, JOB_STATUS, QUEUED_REASON } from "@armada/components";
 import type { Rendering } from "@armada/components";
 import type { JobSummary } from "@armada/protocol";
 
@@ -26,10 +26,16 @@ export type Reading =
    */
   | { as: "text"; verb: string | null; wire: string; missing: readonly string[] };
 
-/** The vocabulary a status takes its reason from, where it takes one. */
+/**
+ * The vocabulary a status takes its reason from, where it takes one.
+ *
+ * **Two tables for `queued`, because the finer word is its own.** Their keys
+ * are disjoint, so the order below is one lookup across both rather than a
+ * precedence between them.
+ */
 function reasonOf(status: string, named: string | undefined): Rendering | undefined {
   if (named === undefined) return undefined;
-  if (status === "queued") return QUEUED_REASON[named];
+  if (status === "queued") return BUDGET_HOLD[named] ?? QUEUED_REASON[named];
   if (status === "escalated") return ESCALATION_REASON[named];
   return undefined;
 }
@@ -43,9 +49,30 @@ function reasonOf(status: string, named: string | undefined): Rendering | undefi
  * queued Job.
  */
 function namedOn(job: JobSummary): string | undefined {
-  if (job.status === "queued") return job.queued_reason;
+  if (job.status === "queued") {
+    // **`over_budget` reads finer where the wire says which ceiling caught
+    // it.** The money cap and the turn cap fold to one word, only one of them
+    // has the control a person is about to press, and a header saying `Over
+    // budget` leaves them to work out which. `budget_hold` refines the reason
+    // the way `admission_hold` refines `waiting on resources`.
+    //
+    // The fold stays where the field is absent — an older Fleet — because the
+    // coarse word is still true there.
+    const finer = job.queued_reason === OVER_BUDGET ? job.budget_hold : undefined;
+    // Only where this build can render it. A spelling from a newer Fleet falls
+    // back to the coarse word rather than past both tables to the bare status,
+    // which would say `queued` about a job nothing is going to start.
+    if (finer !== undefined && BUDGET_HOLD[finer] !== undefined) return finer;
+    return job.queued_reason;
+  }
   return job.reason?.named;
 }
+
+/**
+ * The one queued reason two words can be true of. `enum-verbs.toml`'s
+ * spelling, named once rather than typed at the comparison.
+ */
+const OVER_BUDGET = "over_budget";
 
 export function readingOf(job: JobSummary): Reading {
   const base = JOB_STATUS[job.status];

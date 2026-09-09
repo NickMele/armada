@@ -16,7 +16,7 @@
 
 import type { BridgeState } from "../shared/bridge";
 import type { ClearOutcome, Draft, Outcome, ReclaimOutcome } from "@armada/protocol";
-import type { CapRaise, ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report, RestartRequested } from "@armada/protocol";
+import type { CapRaise, ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report, RestartRequested, TurnRaise } from "@armada/protocol";
 import type { ProposalInFlight, Proposed } from "@armada/protocol";
 import { ask, isJobSummary, MODEL_CALL_MS, route, type Answer } from "./request";
 import { Clearing } from "./clearing";
@@ -75,6 +75,7 @@ type Busy =
   | "already_overruling"
   | "already_rereading"
   | "already_raising"
+  | "already_raising_turns"
   | "already_reporting"
   | "already_deciding"
   | "already_answering";
@@ -113,6 +114,12 @@ export class JobCommands {
    * about money while the job is being decided.
    */
   private readonly raising = new Set<string>();
+  /**
+   * Jobs with a turn cap being raised. Its own set beside the cost cap's: the
+   * two acts clear different holds, and a shared set would refuse the second
+   * press on a job whose first raise cleared the wrong ceiling.
+   */
+  private readonly raisingTurns = new Set<string>();
   /** Jobs with a decision on the work in flight. One press sends one decision. */
   private readonly deciding = new Set<string>();
   /** Jobs with a report being filed. Its own set: filing is not an act on the job. */
@@ -503,6 +510,41 @@ export class JobCommands {
     };
     return this.act(jobId, this.raising, "already_raising", (port) =>
       ask(port, "POST", route(jobId, "raise_cost_cap"), body),
+    );
+  }
+
+  /**
+   * Give one job more turns than the tier above it allows.
+   *
+   * **The other half of what `over_budget` folds, which had no act at all.**
+   * The dollar cap got a route and a control; the turn cap in the same setting
+   * stayed a number changed by a rebuild, on the reading that a job over it is
+   * going in circles and wants a new brief. Job `01M22TYSAE0023MADDP5ZQEYGW`
+   * falsified that: it finished its work, passed every Check, had its verdict
+   * overruled, then stopped at 393 turns against 300 with a cheap summarise
+   * never run. A redispatch would have thrown away thirty-five files three
+   * gates had already passed.
+   *
+   * **A plain turn count and no conversion.** `JobSpend.turns` and
+   * `JobSpend.turn_cap` read in the same integers, unlike the cost cap's
+   * millionths of a dollar.
+   *
+   * **A figure that does not raise is refused before the request is sent**, on
+   * `raiseCostCap`'s terms and for its reason. The cap in force is what the
+   * caller compares against, and the caller has it — `JobSpend.turn_cap`.
+   */
+  async raiseTurnCap(jobId: string, turnCap: number): Promise<Outcome> {
+    if (!Number.isFinite(turnCap) || turnCap <= 0) {
+      return { ok: false, why: "turn_cap_not_raised" };
+    }
+    const body: TurnRaise = {
+      turn_cap: Math.round(turnCap),
+      // Always `person`, for `raiseCostCap`'s reason: the field says which
+      // surface composed the request, and this app is only ever the one.
+      raised_by: "person",
+    };
+    return this.act(jobId, this.raisingTurns, "already_raising_turns", (port) =>
+      ask(port, "POST", route(jobId, "raise_turn_cap"), body),
     );
   }
 

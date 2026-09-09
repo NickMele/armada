@@ -15,6 +15,8 @@
 //! raises it. Nothing here re-proves that a spend past a ceiling holds a Job
 //! back, and the first case leans on it.
 
+mod turns;
+
 use api::Queries;
 use ipc::{CapRaise, RaisedBy};
 use store::Store;
@@ -26,15 +28,15 @@ use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fittings, worktree_directory};
 use crate::tests::tmp::TempDir;
 
-type Fixture = Fleet<testkit::FakeHarness, testkit::FakeVcs, FakeWorkProduct>;
+pub(super) type Fixture = Fleet<testkit::FakeHarness, testkit::FakeVcs, FakeWorkProduct>;
 
 /// The allowance that ships, held against here for `allowance`'s reason: a case
 /// that trips it trips the number a person would meet.
 /// See `armada::serve::PROVISIONAL_ALLOWANCE`.
-const SHIPPED: Allowance = Allowance::of(Micros::dollars(5), 300);
+pub(super) const SHIPPED: Allowance = Allowance::of(Micros::dollars(5), 300);
 
 /// A Fleet whose Jobs are held against the shipped cap.
-fn capped(home: &TempDir) -> Fixture {
+pub(super) fn capped(home: &TempDir) -> Fixture {
     let mut fittings: Fittings<testkit::FakeHarness, testkit::FakeVcs, FakeWorkProduct> =
         fittings(home, FakeWorkProduct::changed(&["src/log.rs"]));
     fittings.allowance = SHIPPED;
@@ -42,7 +44,7 @@ fn capped(home: &TempDir) -> Fixture {
 }
 
 /// Approve a Job, with the worktree its dispatch would want.
-async fn approved(fleet: &Fixture, home: &TempDir, title: &str) -> core_model::JobId {
+pub(super) async fn approved(fleet: &Fixture, home: &TempDir, title: &str) -> core_model::JobId {
     let job = fleet.propose(a_proposal(title)).await.expect("a proposal");
     worktree_directory(home, &job);
     dispatched(fleet, job.id())

@@ -322,6 +322,10 @@ impl Store {
         // stays distinct from the null.
         let created = created.cost_capped(maybe_wide(row, "cost_cap_micros")?);
 
+        // The other ceiling, read the same way and null on every row written
+        // before version 40.
+        let created = created.turn_capped(maybe_wide(row, "turn_cap")?);
+
         // Read back for `branch`'s reason: no event describes giving a
         // worktree back, so this column is its own authority. Null on every
         // Job whose disk still stands, and on every row written before

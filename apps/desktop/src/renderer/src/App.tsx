@@ -381,6 +381,7 @@ export function App() {
                 }
                 onOverrule={(jobId, reason) => void commands.overrule(jobId, reason)}
                 onRaiseCap={(jobId, micros) => void commands.raiseCap(jobId, micros)}
+                onRaiseTurnCap={(jobId, turns) => void commands.raiseTurns(jobId, turns)}
                 onRerun={(jobId) => void commands.rerun(jobId)}
                 onReport={commands.report}
                 onApprove={(jobId) => void commands.approve(jobId)}

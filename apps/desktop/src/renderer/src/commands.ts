@@ -291,6 +291,20 @@ export function useCommands(sending: Sending) {
   }
 
   /**
+   * Let one job take more turns. **Not through `act`**, on `raiseCap`'s terms:
+   * the dialog that collected the figure was the confirmation, and what changes
+   * is that the next dispatch is not refused for turns.
+   */
+  async function raiseTurns(jobId: string, turnCap: number): Promise<void> {
+    setActing(jobId);
+    try {
+      setOutcome(await window.armada.raiseTurnCap(jobId, turnCap));
+    } finally {
+      setActing(null);
+    }
+  }
+
+  /**
    * File a report on a job that failed in error.
    *
    * **Not through `act`, and not like the others at all**: nothing about the
@@ -395,6 +409,7 @@ export function useCommands(sending: Sending) {
     overrule,
     rerun,
     raiseCap,
+    raiseTurns,
     report,
     decide,
     refresh,

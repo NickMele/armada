@@ -88,6 +88,13 @@ impl Commands for FakeDaemon {
     ) -> Result<JobSummary, Refusal> {
         self.fake_raise_cost_cap(job_id, raise).await
     }
+    async fn raise_turn_cap(
+        &self,
+        job_id: JobId,
+        raise: ipc::TurnRaise,
+    ) -> Result<JobSummary, Refusal> {
+        self.fake_raise_turn_cap(job_id, raise).await
+    }
     async fn file_report(
         &self,
         job_id: JobId,

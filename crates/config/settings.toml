@@ -113,7 +113,7 @@ notes = """
 
 **Per Job, and the slash in the old name is gone.** A Drone belongs to a workflow step, so a four-step Job is four Drones; a per-Drone ceiling on that Job is four times the number anybody thought they set, and the Job is what a person approved. `store::job_drone_spend` is the join — one row per Drone, keyed on the Drone so recording twice is recording once, summed per Job.
 
-**It is one of two rows and not one number.** `docs/spikes/005-what-does-a-job-cost.md` priced three identical, identically successful runs of one Job at $0.063, $0.087 and $0.146 — a 2.31x spread on cache warmth alone, with almost none of it attributable to the work. A dollar ceiling tight enough to catch a runaway kills a healthy Job that started cold, so this one is deliberately wide and `budget-turn-cap-per-job` below is what catches what it misses. Whatever refuses a Job says which of the two it was: `queued_reason` reads `over_budget` for both and the Job's detail carries the figures beside the caps, because "over budget" and "took four times as many turns as any other run" take opposite remedies.
+**It is one of two rows and not one number.** `docs/spikes/005-what-does-a-job-cost.md` priced three identical, identically successful runs of one Job at $0.063, $0.087 and $0.146 — a 2.31x spread on cache warmth alone, with almost none of it attributable to the work. A dollar ceiling tight enough to catch a runaway kills a healthy Job that started cold, so this one is deliberately wide and `budget-turn-cap-per-job` below is what catches what it misses. Whatever refuses a Job says which of the two it was: `queued_reason` reads `over_budget` for both and `budget_hold` beside it names the ceiling, because "over budget" and "took four times as many turns as any other run" are acted on differently.
 
 **Notional dollars.** Spike 5 established that `total_cost_usd` is what a run would have cost at API list price, and a subscription account is not billed per token. The figure is arithmetically exact and denominated in a currency nothing here spends, which makes it a runaway detector rather than an invoice.
 
@@ -128,24 +128,30 @@ It has no value here for the reason none of Fleet's other dials does — `crates
 
 [settings.budget-turn-cap-per-job]
 name = "Budget: turn cap per Job"
-scope = "Machine"
+scope = "Kit → Manifest"
 lifetime = "Live"
-merge_strategy = "n/a — single layer"
-peer_polarity = "n/a — single layer"
+merge_strategy = "REPLACE"
+peer_polarity = "Lower is stricter"
 owner = "Fleet"
-read_by = "fleet"
+read_by = "config, fleet"
 notes = """
 **Enforced, through the same predicate as the row above** — `fleet::allowance::Fleet::overspent`, which admission asks before it starts a Drone and which the Board's `over_budget` label is answered from. It refuses the next dispatch and stops nothing that is running, for that row's reason.
 
-**The second signal, and the one that actually catches a Drone going wrong.** Spike 5's three runs of one Job turned 7, 7 and 4 times while their prices spread 2.31x, so turns are the steady reading the price is not. The remedies differ too: over the dollar cap, a person raises the cap or accepts the spend; over this one, the Drone is going in circles and the brief is what needs rewriting.
+**The second signal, and the one that actually catches a Drone going wrong.** Spike 5's three runs of one Job turned 7, 7 and 4 times while their prices spread 2.31x, so turns are the steady reading the price is not.
+
+**Two remedies and not one, which corrects what this row said until Sept 2026.** It said that over the dollar cap a person raises the cap or accepts the spend, and that over this one the Drone is going in circles and the brief is what needs rewriting. The second half is true of a Job that is turning and getting nowhere and false of a Job that has finished and is held out of its last step, and nothing told the two apart. Which one it is is a person's reading of the Job in front of them, so both acts exist: `raise_turn_cap` moves the number and `redispatch_job` throws the run away.
 
 Turns are summed across every terminating line of every Drone of the Job. A stream carries one such line per invocation rather than one per process, and `num_turns` on each is that invocation's — which is why turns are added and the cost is not. Measured: `docs/spikes/004-transcript-idle-session.ndjson`.
 
 **A new row, added with the Throughput milestone.** The registry had no turn ceiling; the only nearby rows are `loop_cap`, which bounds a step deliberately redone, and the thrashing norms, which bound one step against `StepNorms`. Neither counts across a whole Job.
 
-**It stays `Machine`, where the row above became `Kit → Manifest`, and the paragraph above is the reason.** Over the dollar cap a person raises the cap or accepts the spend, so a lever is the remedy and Sept 2026 built one; over this one the Drone is going in circles, and a lever would only buy more circles. A repository that could raise its own turn ceiling could opt out of the one signal that reads steadily across cache warmth. The two still resolve into one `fleet::Allowance` and one `exceeded_by` — what tiers is the value, not the pair.
+**Three tiers, and this row said `Machine` and a single layer until Sept 2026.** The argument for staying flat was that a lever would only buy more circles, and that a repository able to raise its own turn ceiling could opt out of the one signal reading steadily across cache warmth. **What falsified it is the row above's own incident, on the other half of the same constant.** Job `01M22TYSAE0023MADDP5ZQEYGW` finished its work, passed every Check, had its last verdict overruled, and stopped at 393 turns against a 300 constant with a cheap `summarise` never run; capacity was free, nothing was in its way, and there was no key, no route and no act anywhere. Its thirty-five changed files were committed by hand. A ceiling nobody can move is not a policy, it is a rebuild — and that sentence was accepted for dollars two paragraphs up and left unapplied here for a day.
 
-It has no value here for the reason the row above does not — `crates/armada/src/serve.rs` resolves it, as part of `PROVISIONAL_ALLOWANCE`. It ships at three hundred: a four-step Job at a generous thirty turns a step is 120, so three hundred leaves room for a workflow twice that long and still stops a Drone that has been going round for hours.
+So `armada.yml` now carries `drone.turn_cap_per_job`, a Job carries `jobs.turn_cap`, and `fleet::Allowance::at` is still the only place either order is written. The precedence, the three-tiers-rather-than-two reading of `scope`, and the difference between `Some(0)` and stating nothing are all the row above's, unchanged. What holds a repository back from opting out is not the absence of a lever: it is that a ceiling somebody had to raise is a ceiling somebody read.
+
+**The two ceilings stay two acts.** `raise_cost_cap` and `raise_turn_cap` are separate routes with separate refusals, because a caller told the wrong one moved has been told nothing it can act on. They still resolve into one `fleet::Allowance` and one `exceeded_by` — what tiers is each value, not the pair — and `queued_reason = over_budget` still folds them both, with `budget_hold` beside it saying which.
+
+It has no value here for the reason the row above does not — `crates/armada/src/serve.rs` resolves the machine tier, as part of `PROVISIONAL_ALLOWANCE`, and that tier still needs a rebuild to change; what the two tiers under it buy is that nobody has to wait for one. It ships at three hundred: a four-step Job at a generous thirty turns a step is 120, so three hundred leaves room for a workflow twice that long and still stops a Drone that has been going round for hours.
 """
 
 [settings.budget-quota-floor-for-interactive-use]

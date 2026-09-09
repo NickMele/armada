@@ -173,10 +173,14 @@ on two machines and `fleet::Micros` is an integer everywhere else; `per_job`
 because a four-step Job is four Drones, and a key read as per-Drone under a
 `drone:` section would be four times the ceiling anybody thought they set.
 
-The turn cap does not tier. `budget-turn-cap-per-job` stays `Machine`, and that
-row carries the reason: a Job over the dollar cap often just started cold and
-the remedy is the number, while a Job over the turn cap is going in circles and
-raising the number buys more circles.
+**The turn cap tiers the same way**, through `drone.turn_cap_per_job`, and the
+same three rules hold for it: the same order, the same absence, the same zero.
+It stayed `Machine` for a day on the argument that a Job over the turn cap is
+going in circles and a bigger number buys more circles — which is true of a Job
+turning and getting nowhere and false of one that finished and was held out of
+its last step, and `budget-turn-cap-per-job` carries the Job that showed the
+difference. Both keys are counted rather than positive, so `0` reads as a
+ceiling of nothing at either.
 
 ## How much of the tree a Check reads
 

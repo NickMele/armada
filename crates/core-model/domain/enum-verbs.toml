@@ -20,6 +20,10 @@
 #                                back. The finer half of
 #                                `queued_reason.waiting_on_resources`, read
 #                                fleet-wide rather than per Job
+#   budget_hold                - which of a Job's two ceilings is holding it.
+#                                The finer half of `queued_reason.over_budget`,
+#                                and per Job where `admission_hold` is
+#                                fleet-wide
 #   resumption                 - which act a person took to put a `queued` Job
 #                                back in the queue. Absent on a Job that was
 #                                approved and has never run
@@ -84,7 +88,8 @@
 #   notes        - the reasoning the row carried
 #   hint         - the sentence a status bar tooltip reads for the variant,
 #                  where the verb alone gives no reasoning. Carried only by
-#                  `admission_hold`'s four rows today; every other table
+#                  `admission_hold`'s four rows and `budget_hold`'s two today;
+#                  every other table
 #                  leaves it unset and the generator emits `null`. Never a
 #                  measured figure — `FleetCapacity` carries no headroom
 #                  number over the wire at all (`crates/ipc/src/capacity.rs`),
@@ -278,7 +283,7 @@ icon = ""
 status_token = "--status-not-started"
 vocabulary = "Queued reason"
 in_code = ""
-notes = "An approved Job whose Drones have already spent more than `settings.budget-cost-cap-per-job` or turned more than `settings.budget-turn-cap-per-job` allows. It reads before `waiting on resources` when both are true, because headroom frees on its own and a spent budget does not — a Job told it is waiting for the machine would be waiting for something that is not coming. Which of the two signals it was is the operator's distinction and not the Board's, the same way `fleet::headroom::Short` tells CPU from memory from disk beneath one label; the figures are on the Job's detail, where a person reads what was spent against what was allowed. No glyph: nothing in the registry depicts money, and it stays owed beside the escalation reasons that have none."
+notes = "An approved Job whose Drones have already spent more than `settings.budget-cost-cap-per-job` or turned more than `settings.budget-turn-cap-per-job` allows. It reads before `waiting on resources` when both are true, because headroom frees on its own and a spent budget does not — a Job told it is waiting for the machine would be waiting for something that is not coming. Which of the two it was rides beside this label as `budget_hold`, the way `admission_hold` qualifies `waiting on resources`. It was the figures on the detail alone until Sept 2026, on the reading that the distinction was the operator's; that failed, because it asks a person to know there are two ceilings before they can see which one caught them, and only one of the two had an act behind it. No glyph: nothing in the registry depicts money, and it stays owed beside the escalation reasons that have none."
 
 [verbs.queued_reason.waiting_on_resources]
 verb = "waiting on resources"
@@ -323,6 +328,24 @@ vocabulary = "Admission hold"
 in_code = ""
 notes = "The one of the three that has actually run out: 31 Aug 2026, a volume filled during a parallel agent run and three agents died at zero bytes free holding uncommitted work. Named first by short_of for that reason."
 hint = "Fleet did not find enough free disk space to start another drone."
+
+[verbs.budget_hold.cost_cap]
+verb = "over the cost cap"
+icon = ""
+status_token = "--status-not-started"
+vocabulary = "Budget hold"
+in_code = ""
+notes = "The specific form of over budget, spelled as the same axis so it reads as one. Cost cap and never budget: the lexicon gives budget to Machine, the whole installation, and this is one job. No glyph, for over_budget's reason — nothing in the registry depicts money."
+hint = "This job's drones have spent what it was allowed. Raising its cost cap lets the next one start."
+
+[verbs.budget_hold.turn_cap]
+verb = "over the turn cap"
+icon = ""
+status_token = "--status-not-started"
+vocabulary = "Budget hold"
+in_code = ""
+notes = "The row that made this vocabulary worth having. It folded into over budget with no way to tell it from the dollars and no act to clear it, and job 01M22TYSAE0023MADDP5ZQEYGW stranded at 393 turns against 300 having passed every check. The hint names both remedies because the reading is genuinely ambiguous — a job going in circles and a job held out of its cheap last step are the same number. No glyph: arrow-up-to-line is the escalation reason loop_cap, a ceiling that stopped something, which is what this is about clearing."
+hint = "This job's drones have taken every turn it was allowed. Raise its turn cap to finish, or redispatch it if it was going in circles."
 
 [verbs.resumption.reviewed]
 verb = "reviewed"

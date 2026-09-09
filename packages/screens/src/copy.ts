@@ -49,8 +49,12 @@ export function said(outcome: Outcome): string {
       return "That gate is already being re-run. It was not asked twice.";
     case "already_raising":
       return "That cost cap is already being raised. It was not sent twice.";
+    case "already_raising_turns":
+      return "That turn cap is already being raised. It was not sent twice.";
     case "cap_not_raised":
       return "A new cost cap has to be higher than the one in force. Nothing was sent, and the job is still held.";
+    case "turn_cap_not_raised":
+      return "A new turn cap has to be higher than the one in force. Nothing was sent, and the job is still held.";
     case "empty_report":
       return "A report needs what you know went wrong. The record on its own says nothing that was not already on the job.";
     case "already_reporting":
@@ -242,6 +246,17 @@ export const REPORT_LABEL = "Report this job";
  * every other job is held to, which is the opposite of what it does.
  */
 export const RAISE_CAP_LABEL = "Raise the cost cap";
+
+/**
+ * Let this job take more turns. **Not a `JobAct`** for `RAISE_CAP_LABEL`'s
+ * reason, and it carries that label's rule too: "turn cap", never "budget".
+ * `actions.toml` calls it `raise_turn_cap` and binds it to `T`.
+ *
+ * **Its own words beside the cost cap's, because the two ceilings are two.** A
+ * job held on turns reads the same `over budget` label a job out of money
+ * reads, and raising the cost cap does not start it.
+ */
+export const RAISE_TURN_CAP_LABEL = "Raise the turn cap";
 
 export const ACT_LABEL: Record<JobAct, string> = {
   kill_drone: "Kill drone",

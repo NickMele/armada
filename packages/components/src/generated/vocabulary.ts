@@ -63,6 +63,12 @@ export const ADMISSION_HOLD: Readonly<Record<string, Rendering | undefined>> = {
   "disk": { verb: "waiting on disk", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started", hint: "Fleet did not find enough free disk space to start another drone." },
 };
 
+/** `budget_hold`, keyed by the wire value. */
+export const BUDGET_HOLD: Readonly<Record<string, Rendering | undefined>> = {
+  "cost_cap": { verb: "over the cost cap", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started", hint: "This job's drones have spent what it was allowed. Raising its cost cap lets the next one start." },
+  "turn_cap": { verb: "over the turn cap", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started", hint: "This job's drones have taken every turn it was allowed. Raise its turn cap to finish, or redispatch it if it was going in circles." },
+};
+
 /** `resumption`, keyed by the wire value. */
 export const RESUMPTION: Readonly<Record<string, Rendering | undefined>> = {
   "reviewed": { verb: "reviewed", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started", hint: null },
@@ -266,6 +272,8 @@ export const GAPS: readonly Gap[] = [
   { vocabulary: "admission_hold", variant: "cpu", missing: ["icon"] },
   { vocabulary: "admission_hold", variant: "memory", missing: ["icon"] },
   { vocabulary: "admission_hold", variant: "disk", missing: ["icon"] },
+  { vocabulary: "budget_hold", variant: "cost_cap", missing: ["icon"] },
+  { vocabulary: "budget_hold", variant: "turn_cap", missing: ["icon"] },
   { vocabulary: "resumption", variant: "reviewed", missing: ["icon"] },
   { vocabulary: "resumption", variant: "restarted", missing: ["icon"] },
   { vocabulary: "resumption", variant: "overruled", missing: ["icon"] },

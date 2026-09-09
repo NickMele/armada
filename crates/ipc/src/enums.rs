@@ -133,6 +133,23 @@ wire_enum! {
     QueuedReason, core_model::QueuedReason, "a queued reason"
 }
 wire_enum! {
+    /// Which of a Job's two ceilings is holding it, where one is.
+    ///
+    /// **The finer half of [`QueuedReason::OverBudget`]**, and beside it rather
+    /// than inside it: the Board's label is still `over_budget`, and this says
+    /// which act would clear it.
+    ///
+    /// **Closed, unlike [`AdmissionHold`](crate::AdmissionHold).** That one is
+    /// open because its set grows with every resource signal Fleet learns to
+    /// read; there are two budget ceilings and `fleet::allowance` argues out
+    /// the two candidates for a third — wall clock is `drone-job-timeout`'s,
+    /// and quota carries no quantity. Bridge matches on this to choose which
+    /// raise it offers, which is [`JobStatus`]'s case rather than
+    /// `AdmissionHold`'s: a word it never heard of is a control it would draw
+    /// wrong.
+    BudgetHold, core_model::BudgetHold, "a budget hold"
+}
+wire_enum! {
     /// Which act a person took to put a `queued` Job back in the queue.
     ///
     /// **The other axis over `queued`**, beside [`QueuedReason`]: that one says

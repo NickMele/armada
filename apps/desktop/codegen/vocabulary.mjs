@@ -84,6 +84,7 @@ const WANTED = [
   "job_status",
   "queued_reason",
   "admission_hold",
+  "budget_hold",
   "resumption",
   "escalation_reason",
   "check_outcome",
@@ -114,6 +115,11 @@ const WANTED = [
 // below is keyed by the wire value with an `undefined` answer for a key this
 // build has never heard of, which is exactly what makes that safe — see
 // `crates/ipc/src/capacity.rs`.
+
+// `budget_hold` is here for the reason `admission_hold` is: a Job held on turns
+// and a Job held on money both fold to `queued_reason.over_budget`, and only one
+// of the two is cleared by raising a cost cap. Its two rows carry a verb, a
+// token and a hint and no glyph — nothing in the registry depicts money.
 
 // `resumption` is here because a queued row says which act a person took to put
 // it back, and that word is the registry's. Its three rows carry a verb and a

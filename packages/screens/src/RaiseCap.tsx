@@ -4,11 +4,11 @@
 // `Overrule.tsx`'s rule: the set of acts and how they are arranged is one
 // subject, and what a single act asks a person for before it sends is another.
 //
-// **The one dialog here that collects a number rather than a sentence.** The
-// other three take a person's own words; this takes a figure, and everything
-// below is about making the figure decidable — what the job has spent, what it
-// is held to, and what the new ceiling would be — so that nobody has to leave
-// the dialog to work out what to type.
+// **One of the two dialogs here that collect a number rather than a sentence**,
+// `RaiseTurnCap.tsx` being the other. The rest take a person's own words; this
+// takes a figure, and everything below is about making the figure decidable —
+// what the job has spent, what it is held to, and what the new ceiling would be
+// — so that nobody has to leave the dialog to work out what to type.
 
 import { useState } from "react";
 import { Button, Dialog, Input } from "@armada/components";
@@ -151,13 +151,16 @@ export function RaiseCapControl({
             `${spend.drones} ${spend.drones === 1 ? "drone" : "drones"}. Raising the cap lets the next drone ` +
             "start; nothing already done is thrown away and the job stays exactly where it is."}
         </p>
-        {/* What it does not touch. Both halves matter: somebody who thought
-            this widened the installation would use it more carefully than they
-            need to, and somebody who thought it lifted the turn cap would raise
-            it again when a job going round and round did not move. */}
+        {/* What it does not touch. This paragraph argued until Sept 2026
+            that the turn cap wanted no lever, because a job over it was going
+            in circles and a bigger number bought more circles. Job
+            `01M22TYSAE0023MADDP5ZQEYGW` falsified that: it passed every Check
+            and then stopped at 393 turns against 300 with a cheap summarise
+            never run. The turn cap has a control of its own now, and the
+            sentence sends a person to it rather than arguing against it. */}
         <p>
           This job only. The cap every other job is held to does not move, and neither does the turn
-          cap — a job over that one is going in circles, and a bigger number buys more circles.
+          cap — that ceiling has a control of its own on this header.
         </p>
       </Dialog>
     </>

@@ -772,7 +772,7 @@ notes = """
 
 **It moves a number and never the Job.** No status changes, no step advances and no Drone is asked for — admission was already going to start one and was refused for money. What comes back is the summary, and the fact a caller is reading it for is `queued_reason`: `over_budget` before the raise, absent or `waiting_on_resources` after it. That is the whole answer to *did this unblock it*, and it is answered by the same predicate admission asks rather than by a second reading here.
 
-**Only the dollar cap.** `budget-turn-cap-per-job` is the other ceiling and takes the opposite remedy — a Job that turns and turns was usually not askable as written, and the fix is the brief. One route moving either would be a body that means two things, and the `over_budget` label folding both is exactly why the Job's detail carries the figures beside the caps.
+**Only the dollar cap**, and `raise_turn_cap` below is the other. One route moving either would be a body that means two things and an outcome nobody could attribute — which is the same argument that keeps them two rows in `crates/config/settings.toml`.
 
 **It raises. 422 on a value at or under the cap in force**, which is not pedantry about a word: the act exists because work is stopped, and a call that leaves the Job stopped while answering 200 is the failure this route was built against. Lowering a running Job's ceiling is a different act nobody has asked for, and it would strand work mid-flight rather than let it finish.
 
@@ -781,6 +781,23 @@ notes = """
 **`helm_access` is `Yes`, which makes it the third command Helm reaches outright** — beside `redirect_drone`, the one Intervention Ladder rung it has, and `examine_job`, which decides nothing. The owner asked for both surfaces by name, and the reason is the Job that produced this route: it hit its cap on its last step, on the cheapest model, summarising work three gates had already passed. A person is not always at the screen when that happens.
 
 **And Helm is bounded where a person is not**, which is the whole of `raised_by`. `crates/fleet/src/raising.rs` carries the ceiling and defends its shape; what belongs here is why the field exists at all. Nothing on this seam authenticates anybody, so this is a statement of *which surface composed the request* rather than a credential — Bridge fills it in because a person pressed a control, and the Helm tool adapter fills it in because it is Fleet's own code wrapping a model's request. **The model has no field for it**, which is the property `spawning::dispatches` has one seam over: what a Drone may do is rendered by Fleet into its allowlist and refused by Fleet at the call, and no argument the agent writes reaches either.
+"""
+
+[operations.raise_turn_cap]
+kind = "command"
+transport = "HTTP"
+helm_access = "Yes"
+description = "Let one Job take more turns than the tier above it allows"
+notes = """
+**The other half of what `over_budget` folds, and it had nothing at all.** The dollar cap got three tiers, a route and a control in Sept 2026; the turn cap in the same constant got none of them, and stayed a compile-time number changed by a rebuild. `budget-turn-cap-per-job` read `scope = "Machine"`, `merge_strategy = "n/a — single layer"`, and there was no key in `armada.yml`, no column on a Job and no act anywhere.
+
+**What falsified the reason there was no act.** The argument was that a Job over its turn cap is going in circles and wants its brief rewritten rather than a bigger number, so a lever would buy more circles. Job `01M22TYSAE0023MADDP5ZQEYGW` was the counter-example: it finished its work, passed every Check, had its last verdict overruled, and then stopped at 393 turns against 300 with a cheap `summarise` never run. A redispatch would have thrown away thirty-five files that three gates had already passed, and its branch was committed by hand instead. A Job going in circles and a Job held out of its last step are both over the same number, and only one of them wants a new brief.
+
+**It moves a number and never the Job**, exactly as `raise_cost_cap` does, and what comes back is the summary. The field a caller reads it for is `queued_reason` — and beside it `budget_hold`, which says which of the two ceilings the label is about, so a caller can tell "cleared" from "still held, on the other one".
+
+**422 on a value at or under the cap in force**, and **409 on a terminal Job**, for that route's reasons.
+
+**`helm_access` is `Yes`**, for that route's reason and with more force: the Job that bought this route stopped on its cheapest final step, and a person is not always at the screen when that happens. Helm is bounded where a person is not — `raised_by` again, the same `Ceiling` and the same `HELM_MULTIPLE`, because a bound on how far an agent may move a ceiling says nothing about what the ceiling counts.
 """
 
 [operations.redirect_drone]

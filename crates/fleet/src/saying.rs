@@ -183,6 +183,41 @@ impl fmt::Display for Adrift {
                 dollars(*ceiling),
                 dollars(*asked)
             ),
+            // Turns, in the unit they are counted in — the same three
+            // sentences as the cost cap's above, saying which ceiling and what
+            // a person does about it. The remedy differs and is named: a Job
+            // going in circles is redispatched, and a Job that finished and
+            // was held out of its last step wants the number.
+            Adrift::NotTurnCappable { job, status } => write!(
+                out,
+                "{} is {} and its turn cap cannot be raised. Nothing is left to turn on a Job                  that is over — a replacement is `redispatch_job`",
+                job.as_str(),
+                status.as_wire()
+            ),
+            Adrift::TurnCapNotRaised {
+                job,
+                asked,
+                in_force,
+            } => write!(
+                out,
+                "{} already has a turn cap of {}, so {} would not raise it. This act only ever                  raises: a Job held for turns is still held after a cap that did not move",
+                job.as_str(),
+                in_force,
+                asked
+            ),
+            Adrift::TurnCapAboveCeiling {
+                job,
+                asked,
+                ceiling,
+            } => write!(
+                out,
+                "Helm may raise {}'s turn cap as far as {} and asked for {}. A Job needing \
+                 more than double the turns it would otherwise be allowed is one for a person \
+                 to look at rather than a bigger number",
+                job.as_str(),
+                ceiling,
+                asked
+            ),
             Adrift::NotReclaimable { job, status } => write!(
                 out,
                 "{} is {} and its worktree cannot be reclaimed. There is no disk to give back \
@@ -465,6 +500,9 @@ impl Adrift {
             | Adrift::NotCappable { job, .. }
             | Adrift::CapNotRaised { job, .. }
             | Adrift::CapAboveCeiling { job, .. }
+            | Adrift::NotTurnCappable { job, .. }
+            | Adrift::TurnCapNotRaised { job, .. }
+            | Adrift::TurnCapAboveCeiling { job, .. }
             | Adrift::NotReclaimed { job, .. }
             | Adrift::NotRedispatchable { job, .. }
             | Adrift::NeverRan { job }
@@ -542,11 +580,14 @@ impl Error for Adrift {
             // its own fields rather than in a chain — `RepoUnreadable` is a
             // pair of strings and not an error type.
             | Adrift::NotReclaimable { .. }
-            // The three a raise makes, which say what the record or the request
-            // holds rather than wrapping anything that failed.
+            // The six the two raises make, which say what the record or the
+            // request holds rather than wrapping anything that failed.
             | Adrift::NotCappable { .. }
             | Adrift::CapNotRaised { .. }
             | Adrift::CapAboveCeiling { .. }
+            | Adrift::NotTurnCappable { .. }
+            | Adrift::TurnCapNotRaised { .. }
+            | Adrift::TurnCapAboveCeiling { .. }
             | Adrift::NotReclaimed { .. }
             | Adrift::NotRedispatchable { .. }
             | Adrift::NeverRan { .. }

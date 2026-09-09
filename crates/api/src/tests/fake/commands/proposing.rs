@@ -68,6 +68,7 @@ impl FakeDaemon {
             branch: None,
             reason: None,
             queued_reason: None,
+            budget_hold: None,
             resumption: None,
             workflow_id: proposal.workflow_id,
             owner_manifest_id: proposal.owner_manifest_id,

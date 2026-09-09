@@ -470,6 +470,23 @@ export type BridgeApi = {
    */
   raiseCostCap: (jobId: string, costCapMicros: number) => Promise<Outcome>;
   /**
+   * Let one Job take more turns than the tier above it allows.
+   *
+   * **The other ceiling `over_budget` folds, and until now the one with no
+   * remedy.** A Job at its turn cap waits at `queued` reading the same label a
+   * Job out of money reads, and raising the cost cap does not start it.
+   *
+   * **It moves nothing**, on `raiseCostCap`'s terms. What comes back is the
+   * Job, and the field worth reading is `queued_reason`.
+   *
+   * The figure is a plain turn count, which is the unit `JobSpend` reads it in
+   * — there is no conversion on this act. **It raises only**: a value at or
+   * under the cap in force is refused before the request is sent, matching the
+   * 422 Fleet would answer. Fleet refuses 409 on a terminal Job, which has no
+   * turns left to take.
+   */
+  raiseTurnCap: (jobId: string, turnCap: number) => Promise<Outcome>;
+  /**
    * Say that this Job failed in error, in your own words, and file the Job's
    * own record with it.
    *
@@ -749,6 +766,7 @@ export const CHANNELS = {
   overrideVerdict: "bridge:override-verdict",
   rerunGate: "bridge:rerun-gate",
   raiseCostCap: "bridge:raise-cost-cap",
+  raiseTurnCap: "bridge:raise-turn-cap",
   fileReport: "bridge:file-report",
   watchJob: "bridge:watch-job",
   observeJob: "bridge:observe-job",
