@@ -150,6 +150,39 @@ impl fmt::Display for Adrift {
                 job.as_str(),
                 status.as_wire()
             ),
+            // Dollars, because dollars are what a person set and what the
+            // detail draws beside the spend. The micros are the wire's unit and
+            // are nobody's sentence.
+            Adrift::NotCappable { job, status } => write!(
+                out,
+                "{} is {} and its cost cap cannot be raised. Nothing is left to spend on a Job                  that is over — a replacement is `redispatch_job`",
+                job.as_str(),
+                status.as_wire()
+            ),
+            Adrift::CapNotRaised {
+                job,
+                asked,
+                in_force,
+            } => write!(
+                out,
+                "{} already has a cost cap of {}, so {} would not raise it. This act only ever                  raises: a Job held for money is still held after a cap that did not move",
+                job.as_str(),
+                dollars(*in_force),
+                dollars(*asked)
+            ),
+            Adrift::CapAboveCeiling {
+                job,
+                asked,
+                ceiling,
+            } => write!(
+                out,
+                "Helm may raise {}'s cost cap as far as {} and asked for {}. A Job needing \
+                 more than double what it would otherwise be allowed is one for a person to \
+                 look at rather than a bigger number",
+                job.as_str(),
+                dollars(*ceiling),
+                dollars(*asked)
+            ),
             Adrift::NotReclaimable { job, status } => write!(
                 out,
                 "{} is {} and its worktree cannot be reclaimed. There is no disk to give back \
@@ -413,6 +446,9 @@ impl Adrift {
             | Adrift::NotReaped { job, .. }
             | Adrift::NotForgettable { job, .. }
             | Adrift::NotReclaimable { job, .. }
+            | Adrift::NotCappable { job, .. }
+            | Adrift::CapNotRaised { job, .. }
+            | Adrift::CapAboveCeiling { job, .. }
             | Adrift::NotReclaimed { job, .. }
             | Adrift::NotRedispatchable { job, .. }
             | Adrift::NeverRan { job }
@@ -486,6 +522,11 @@ impl Error for Adrift {
             // its own fields rather than in a chain — `RepoUnreadable` is a
             // pair of strings and not an error type.
             | Adrift::NotReclaimable { .. }
+            // The three a raise makes, which say what the record or the request
+            // holds rather than wrapping anything that failed.
+            | Adrift::NotCappable { .. }
+            | Adrift::CapNotRaised { .. }
+            | Adrift::CapAboveCeiling { .. }
             | Adrift::NotReclaimed { .. }
             | Adrift::NotRedispatchable { .. }
             | Adrift::NeverRan { .. }
@@ -547,4 +588,17 @@ impl Error for Adrift {
             | Adrift::WorkUnreadable { cause, .. } => Some(cause.as_ref()),
         }
     }
+}
+
+/// A cost cap, from millionths of a dollar, for a sentence a person reads.
+///
+/// **Dollars because that is the unit the figure was decided in.** The wire and
+/// the record carry micros, which is an integer so that two machines compare a
+/// cap the same way — and no refusal has ever been improved by quoting one.
+///
+/// Two places, always. A cap is set in whole dollars or in cents; four places
+/// belong to a *spend*, where a Job that has cost a tenth of a penny must not
+/// read as free, and a ceiling is never that small.
+fn dollars(micros: u64) -> String {
+    format!("${:.2}", micros as f64 / 1_000_000.0)
 }

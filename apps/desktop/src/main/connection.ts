@@ -429,6 +429,28 @@ export class FleetConnection {
       return;
     }
 
+    if (event.kind === "drone.spawned" || event.kind === "drone.exited") {
+      // **`job.step_advanced`'s shape, and for its reason.** `assigned_drone`
+      // is a field of the row, so the summary travels whole and the Board gains
+      // or loses the Drone without a round trip.
+      //
+      // **The detail is re-read, and on the exit that read is the point.** Fleet
+      // writes the Drone's spend row before publishing an exit — see
+      // `crates/fleet/src/allowance.rs` — so this is the first message on which
+      // a whole figure can be read back. It is re-read rather than folded for
+      // `job.judging`'s reason: what a Drone cost is served on the Job's own
+      // `spend`, and a second copy carried here would give one fact two homes.
+      //
+      // Both kinds were arriving already and neither was matched, so each fell
+      // through to the tail below, read `event.job_id` as `undefined` and was
+      // taken for a Job this window had never seen — a full `GET /jobs` twice
+      // per step boundary, and the open Job never re-read at all.
+      this.publish({ connection });
+      this.fold(event.job);
+      this.refresh(fleet.port, event.job.id);
+      return;
+    }
+
     if (event.kind === "job.files_changed") {
       // **Only the open Job's, and the whole list rather than a fold.** The
       // reading replaces what is held, so a file that stopped being changed

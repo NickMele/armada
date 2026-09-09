@@ -17,6 +17,7 @@ import { JOB_LIFECYCLE } from "@armada/components";
 import type { Outcome } from "@armada/protocol";
 import type { FileReport, JobDetail as JobWhole, JobSummary } from "@armada/protocol";
 import { ACT_LABEL, MENU_LABEL, REPORT_LABEL } from "./copy";
+import { RaiseCapControl } from "./RaiseCap";
 import { recourseOf } from "./recovery";
 import type { Render } from "./render";
 import { ReportControl } from "./Report";
@@ -160,6 +161,9 @@ export function Acts({
   onReport,
   reporting,
   onReporting,
+  onRaiseCap,
+  raising,
+  onRaising,
   onCopied,
 }: {
   job: JobSummary;
@@ -190,6 +194,16 @@ export function Acts({
    */
   reporting: boolean;
   onReporting: (up: boolean) => void;
+  /**
+   * Give this job a higher cost ceiling. **Not one of the acts** — it moves no
+   * status, no step and no drone, which is why it is not in `JobAct` and does
+   * not reach the split button. It carries the figure because the dialog that
+   * collected it is the confirmation.
+   */
+  onRaiseCap: (jobId: string, costCapMicros: number) => void;
+  /** Whether the raise dialog is up. Held by the screen; `B` opens it too. */
+  raising: boolean;
+  onRaising: (up: boolean) => void;
   onCopied: (value: string) => void;
 }) {
   const life = JOB_LIFECYCLE[job.status];
@@ -246,8 +260,32 @@ export function Acts({
               onSelect: () => onAct(act, job.id),
             })),
         ];
+  // Whether this job is being held for money. **The wire's answer and not a
+  // comparison made here**: `queued_reason` is computed by Fleet from the same
+  // predicate admission asks, and a screen that compared the spend to the cap
+  // for itself would be a second reading — right until the two disagreed on a
+  // job Fleet was already starting.
+  const held = heldForMoney(job);
   return (
     <>
+      {/* The one control on this header that changes what the job may spend,
+          drawn where the refusal is read. **Only on a job held for money**: the
+          act is legal on any job that is not over, and offering it everywhere
+          would put a money control on every row of a board nobody is worried
+          about the money on. It needs the detail for the figures the dialog is
+          decided against, so it waits for that like every other act here.
+          Neutral and never a lead — a split button's face is what a stray Enter
+          hits, and this one is a decision about spending. */}
+      {held && whole?.spend !== undefined ? (
+        <RaiseCapControl
+          jobId={job.id}
+          spend={whole.spend}
+          disabled={acting || stale}
+          open={raising && !stale}
+          onOpen={onRaising}
+          onRaise={onRaiseCap}
+        />
+      ) : null}
       {/* The dialog with no button. Offered on every stopped job rather than
           only the ones something can still be done to — a job nothing can be
           done to is the one most likely to have failed wrongly and been left. */}
@@ -335,6 +373,30 @@ export function Acts({
  * that end this Job state what they cost and no key beside it.
  */
 const REPORT_KEY = "b";
+
+/**
+ * The one reason a queued job carries that does not clear on its own —
+ * `enum-verbs.toml`'s spelling, named once rather than typed at the comparison.
+ * Rename it there and the raise control stops being offered, which is visible
+ * rather than silent.
+ */
+const OVER_BUDGET = "over_budget";
+
+/**
+ * Whether this job is stopped for money.
+ *
+ * **The wire's answer and not a comparison made here.** `queued_reason` is
+ * computed by Fleet from the same predicate admission asks, and a screen that
+ * compared the spend to the cap for itself would be a second reading — right
+ * until the two disagreed on a job Fleet was already starting.
+ *
+ * Exported because the keyboard needs the same answer: `B` opens the dialog
+ * from `JobDetail.tsx`, and a binding offered where the control is not would be
+ * a key that answers nothing.
+ */
+export function heldForMoney(job: JobSummary): boolean {
+  return job.status === "queued" && job.queued_reason === OVER_BUDGET;
+}
 
 /**
  * The act on the face of the split button. Two, and never a third: the lead is

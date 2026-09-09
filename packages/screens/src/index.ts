@@ -18,6 +18,7 @@ export * from "./JobDetail";
 export * from "./Jobs";
 export * from "./Log";
 export * from "./Overrule";
+export * from "./RaiseCap";
 export * from "./Redirect";
 export * from "./Report";
 export * from "./Reports";

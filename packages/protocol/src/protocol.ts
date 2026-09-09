@@ -365,6 +365,8 @@ export type { StepAttempt } from "./attempt";
 export type {
   ChangedFile,
   Delivered,
+  DroneExited,
+  DroneSpawned,
   Event,
   JobAsking,
   JobCreated,

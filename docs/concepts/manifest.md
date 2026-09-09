@@ -365,28 +365,37 @@ Kit's global **Agent file** ("how I work" — personal, cross-project) has **no 
 
 ### What's frozen vs. live
 
-Skills/MCP/Agent-files/Commands are frozen into a Drone at spawn time, a process boot-time constraint. Allowlist and dispatch freeze are enforced live at every gated checkpoint. The budget cap is enforced live too, and it is [Machine](machine.md)'s rather than a Manifest's — see below.
+Skills/MCP/Agent-files/Commands are frozen into a Drone at spawn time, a process boot-time constraint. Allowlist and dispatch freeze are enforced live at every gated checkpoint. The budget cap is enforced live too, and since 8 Sept 2026 a Manifest states the dollar half of it — live at every tier, and frozen at none, because a Job past its cap is refused again at every admission until a number moves. See below.
 
 Checks split: a Check that existed at spawn is frozen for the life of the Job, while a Check added mid-Job gates immediately — additive-only, and for a different reason than the boot-time constraint above. Full detail on [Drone](drone.md) and [Fleet](fleet.md).
 
-## Budget — a Manifest has none
+## Budget — a Manifest states the dollar cap and not the turn cap
 
-**A budget cap is [Machine](machine.md)'s, and a Manifest has no say in it.**
-That is what the Kit/Machine split is for: how much this installation is willing
-to spend on a Job is a property of the installation, not of the repository the
-work is in. There is one cap, so there is no precedence rule and no override.
+**A Manifest may state `drone.cost_cap_micros_per_job`**, in millionths of a
+dollar, and it sits between [Machine](machine.md)'s number and the Job's own.
+Stating nothing defers upward; stating zero says no Job here starts anything,
+which is how a repository is held without stopping the Fleet the other
+repositories run under.
 
-A Manifest-only budget row existed in the registry and is gone. It declared a
-full override of the Machine cap, and the reasoning around it had been arguing
-with itself for a while — two independent caps with no stated precedence, and
-budget named as the one place the Kit/Machine test gave an unclear answer. That
-a project-level version *parses* is not that it belongs.
+**This section said the opposite until 8 Sept 2026**, and the sentence it argued
+for was that there is one cap, so no precedence rule and no override. What
+falsified it was a Job refused its last step at $5.28 against a $5 compile-time
+constant, with no lever anywhere. An earlier Manifest-only row had been deleted
+for good reasons that still hold — it declared a *full override* of the Machine
+cap with no stated precedence, which is two independent caps rather than a tier.
+What is here now is a tier: one order, written once, in `fleet::Allowance::at`.
 
-**Two things the deleted row was carrying that are still true**, and they are
-Machine's now: verification spend counts against the cap, because a cap that
-excluded the Judge would understate what the Job cost; and a cap is a resource
-setting rather than a safety one, so nothing anywhere takes the minimum across
-peers. Neither needed a Manifest tier to be true.
+**The turn cap is still Machine's alone.** Over the dollar cap a Job often just
+started cold and the remedy is the number; over the turn cap it is going in
+circles, and a repository that could raise its own would be opting out of the
+one signal that reads steadily across cache warmth.
+
+**Two things the deleted row was carrying that are still true.** Verification
+spend counts against the cap, because a cap that excluded the Judge would
+understate what the Job cost; and a cap is a resource setting rather than a
+safety one, so nothing takes the minimum across a Job's gating Manifests — the
+owning Manifest's number is the one that applies. Peer polarity records that a
+lower cap is the stricter one, for whatever consults it later.
 
 ## Dispatch freeze
 

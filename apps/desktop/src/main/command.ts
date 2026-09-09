@@ -16,7 +16,7 @@
 
 import type { BridgeState } from "../shared/bridge";
 import type { ClearOutcome, Draft, Outcome } from "@armada/protocol";
-import type { ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report, RestartRequested } from "@armada/protocol";
+import type { CapRaise, ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report, RestartRequested } from "@armada/protocol";
 import type { ProposalInFlight, Proposed } from "@armada/protocol";
 import { ask, isJobSummary, MODEL_CALL_MS, route, type Answer } from "./request";
 import { Clearing } from "./clearing";
@@ -74,6 +74,7 @@ type Busy =
   | "already_restarting"
   | "already_overruling"
   | "already_rereading"
+  | "already_raising"
   | "already_reporting"
   | "already_deciding"
   | "already_answering";
@@ -105,6 +106,13 @@ export class JobCommands {
    * press that names a different Job's different act.
    */
   private readonly rereading = new Set<string>();
+  /**
+   * Jobs with a cost cap being raised. Its own set: a raise moves no status and
+   * asks for no drone, so it is not in flight with anything else — and one set
+   * shared with an act that does move the job would refuse a press that is
+   * about money while the job is being decided.
+   */
+  private readonly raising = new Set<string>();
   /** Jobs with a decision on the work in flight. One press sends one decision. */
   private readonly deciding = new Set<string>();
   /** Jobs with a report being filed. Its own set: filing is not an act on the job. */
@@ -443,6 +451,41 @@ export class JobCommands {
       // not on a store read. `MODEL_CALL_MS` says why the ordinary wait is the
       // wrong one here.
       ask(port, "POST", route(jobId, "rerun_gate"), undefined, MODEL_CALL_MS),
+    );
+  }
+
+  /**
+   * Give one job a higher cost ceiling than the tier above it allows.
+   *
+   * **The act the `over_budget` label has always pointed at.** A job past its
+   * cost cap waits at `queued` reading that label until somebody raises it, and
+   * before this the only remedy was a machine-wide setting: raised for every
+   * job at once, taken on a restart.
+   *
+   * **It goes through `act` like the others even though it moves nothing.** The
+   * job is folded and the open one re-read for one reason — `queued_reason` is
+   * computed by Fleet from the board, so whether the raise was enough is on the
+   * answer and nowhere this app could work out.
+   *
+   * **A figure that does not raise is refused before the request is sent**,
+   * matching the 422 Fleet would give it: a press reporting success while the
+   * job is still stopped for money is the failure the route exists against. The
+   * cap in force is what the caller compares against, and the caller has it —
+   * `JobSpend.cost_cap_micros`, drawn beside the spend on the same screen.
+   */
+  async raiseCostCap(jobId: string, costCapMicros: number): Promise<Outcome> {
+    if (!Number.isFinite(costCapMicros) || costCapMicros <= 0) {
+      return { ok: false, why: "cap_not_raised" };
+    }
+    const body: CapRaise = {
+      cost_cap_micros: Math.round(costCapMicros),
+      // **Always `person`, and never a choice this app makes.** The field says
+      // which surface composed the request; Helm's tool adapter is the only
+      // thing that will ever send the other value, and it is Fleet's own code.
+      raised_by: "person",
+    };
+    return this.act(jobId, this.raising, "already_raising", (port) =>
+      ask(port, "POST", route(jobId, "raise_cost_cap"), body),
     );
   }
 

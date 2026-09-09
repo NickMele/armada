@@ -71,10 +71,24 @@ Voice may adjust length and formality. It may not override the voice principles,
 
 ## Budget
 
-**A budget is Machine's and nothing else has one.** No Manifest, no Kit, no
-second tier — which is what the Kit/Machine split is for, and it is why there is
-no precedence rule to state. A repo has no opinion about how much this
-installation will spend on it.
+**The dollar cap has three tiers, and this page held the opposite until 8 Sept
+2026.** It said a budget is Machine's and nothing else has one — no Manifest, no
+Kit, no second tier, and so no precedence rule to state. What falsified it was
+a Job that hit $5.28 against a $5 constant and was refused its last step, a
+cheap `handoff` over work three gates had already passed, with no lever
+anywhere: no key, no route, no action. So the order is now **the machine's
+number, then the repository's `drone.cost_cap_micros_per_job`, then the Job's
+own** — each stating nothing to defer to the one above it, and a cap of zero
+meaning *start nothing* rather than *nothing stated*. `fleet::Allowance::at` is
+where the order is written.
+
+**The turn cap did not move and stays Machine's alone.** Over the dollar cap a
+Job often just started cold and the remedy is the number; over the turn cap it
+is going in circles and raising the number buys more circles.
+
+**A cap is live at every tier.** A Job past its cap is refused again at every
+admission until a number moves, so a ceiling that took a restart to change would
+reach every Job except the one that needs it.
 
 **It is per Job, and two numbers rather than one.** A Drone belongs to a
 workflow step, so a four-step Job is four Drones; a per-Drone ceiling on that

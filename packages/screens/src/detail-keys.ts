@@ -123,8 +123,10 @@ export type DetailPress =
   | { act: "output" }
   /** `g` — open a stage of the phase strip. */
   | { act: "stage" }
-  /** `b` — say this job failed in error. The only act key this surface binds. */
-  | { act: "report" };
+  /** `b` — say this job failed in error. */
+  | { act: "report" }
+  /** `B` — give this job a higher cost ceiling. */
+  | { act: "raise" };
 
 /**
  * What a keypress means on job detail, or `null` for nothing.
@@ -176,6 +178,10 @@ export function detailPressOf(event: KeyboardEvent): DetailPress | null {
       return { act: "stage" };
     case "b":
       return { act: "report" };
+    // Shifted, because plain `b` is the report above: the lowercase mnemonic is
+    // spent, and a mistyped filing key must not open a dialog about money.
+    case "B":
+      return { act: "raise" };
     default:
       return null;
   }
@@ -246,6 +252,15 @@ export type DetailShape = {
    * unswallowed rather than answered with nothing.
    */
   onReport?: () => void;
+  /**
+   * Open the raise dialog — `B`. **The second entry here that moves nothing on
+   * the screen**, and it takes `onReport`'s shape for that reason: the screen
+   * owns the dialog and passes in what to call.
+   *
+   * Absent where the job is not being held for money, and the press is then
+   * left unswallowed rather than answered with nothing.
+   */
+  onRaiseCap?: () => void;
 };
 
 /** The open state this file holds, in the shape the screen takes it in. */
@@ -393,6 +408,8 @@ function act(press: DetailPress, shape: DetailShape, on: Moves): boolean {
       return stage(shape, on);
     case "report":
       return report(shape);
+    case "raise":
+      return raise(shape);
   }
 }
 
@@ -417,6 +434,20 @@ function sheet(open: (() => void) | undefined): boolean {
 function report(shape: DetailShape): boolean {
   if (shape.onReport === undefined) return false;
   shape.onReport();
+  return true;
+}
+
+/**
+ * `B`, from `actions.toml` — `raise_cost_cap`, scope `detail`. It confirms, and
+ * the dialog it raises is the confirmation: nothing is sent by the press.
+ *
+ * **Absent on every job that is not held for money**, which is `report`'s rule
+ * for a different reason: that act is offered on one render, and this one is
+ * offered where the screen is drawing the refusal it answers.
+ */
+function raise(shape: DetailShape): boolean {
+  if (shape.onRaiseCap === undefined) return false;
+  shape.onRaiseCap();
   return true;
 }
 

@@ -1,4 +1,5 @@
-// The three bodies a person's own words cross in.
+// The bodies bridge composes and sends — three carrying a person's own words,
+// and one carrying a number.
 //
 // # Cut out of `protocol.ts`, and the cut is not the line count
 //
@@ -9,7 +10,7 @@
 // the only ones bridge composes and sends. `ChangesRequested` had already left
 // for `work.ts` on the same reasoning; these three stayed by history.
 //
-// # What they have in common is what makes them three types and not one
+// # What the three word-carrying ones have in common makes them three and not one
 //
 // All three are structurally one string, and each says who reads it. A redirect
 // steers a drone that is there. A restart's note reaches a drone that does not
@@ -63,3 +64,40 @@ export type RestartRequested = {
 export type Overruled = {
   reason: string;
 };
+
+/**
+ * The body of `raise_cost_cap`. `crates/ipc/src/raising.rs`.
+ *
+ * **The one body here that is not a person's own words.** The other three carry
+ * a sentence somebody typed; this carries a figure, and the whole of what it
+ * does is move one number on one job.
+ *
+ * **It raises and never lowers.** Fleet refuses a value at or under the cap in
+ * force with a 422 — a call answering 200 while the job is still stopped for
+ * money is exactly what the route was built against — and bridge refuses it
+ * before the press, matching that. Lowering a running job's ceiling is a
+ * different act nobody has asked for.
+ *
+ * Micros, not dollars: `JobSpend` reads in millionths of a dollar, so the
+ * figure a person is shown and the figure that is sent are the same integer.
+ */
+export type CapRaise = {
+  cost_cap_micros: number;
+  raised_by: RaisedBy;
+};
+
+/**
+ * Which surface a raise came through, and therefore what it may ask for.
+ *
+ * **Provenance, never a credential.** Nothing on this seam authenticates
+ * anybody, so the field says which surface composed the request and is filled
+ * in by that surface — bridge sends `person` because somebody pressed a
+ * control, and Helm's tool adapter will send `helm` because it is Fleet's own
+ * code wrapping a model's request. A person is unbounded; Helm is not, because
+ * an agent that can lift its own budget has no budget.
+ *
+ * **Bridge only ever sends `person`.** The other value is here because the type
+ * is the wire's and the wire carries both — not because anything in this app
+ * chooses between them.
+ */
+export type RaisedBy = "person" | "helm";

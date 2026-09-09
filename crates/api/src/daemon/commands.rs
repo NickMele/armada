@@ -19,8 +19,8 @@ use std::future::Future;
 
 use crate::daemon::Refusal;
 use ipc::{
-    ChangesRequested, ChosenAnswer, FileReport, JobExamined, JobForgotten, JobId, JobSummary,
-    ProposeJob, Redirection, Redispatched, RemarksTakenUp, Report, RestartRequested,
+    CapRaise, ChangesRequested, ChosenAnswer, FileReport, JobExamined, JobForgotten, JobId,
+    JobSummary, ProposeJob, Redirection, Redispatched, RemarksTakenUp, Report, RestartRequested,
     WorktreeReclaimed,
 };
 
@@ -452,6 +452,31 @@ pub trait Commands: Send + Sync + 'static {
         job_id: JobId,
         filing: FileReport,
     ) -> impl Future<Output = Result<Report, Refusal>> + Send;
+
+    /// `raise_cost_cap` — give this Job a higher cost ceiling than the tier
+    /// above it allows.
+    ///
+    /// **The act the `over_budget` label has always pointed at**, and the one
+    /// thing here that changes what a Job may spend. Until it the remedy was a
+    /// machine-wide setting, raised for every Job at once and taken only on a
+    /// restart. The dollar cap only: `budget-turn-cap-per-job` takes the
+    /// opposite remedy, and one signature moving either would be a body
+    /// meaning two things.
+    ///
+    /// **It moves nothing** — no status, no step, no Drone. Admission was going
+    /// to start one and was refused for money, so the next turn starts it, and
+    /// the field a caller reads the summary for is `queued_reason`.
+    ///
+    /// [`Refusal::IllegalMove`] on a terminal Job. [`Refusal::Unacceptable`] on
+    /// a figure at or under the cap in force — answering 200 while leaving the
+    /// work stopped is what this route was built against — and again where the
+    /// surface asked past its ceiling, which a person has none of.
+    /// `crates/fleet/src/raising.rs` carries that ceiling and defends it.
+    fn raise_cost_cap(
+        &self,
+        job_id: JobId,
+        raise: CapRaise,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `answer_question` — a person picks one of the answers a waiting Drone
     /// offered.

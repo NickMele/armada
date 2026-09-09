@@ -268,17 +268,19 @@ const PROVISIONAL_MERGE_NOTICE: Noticing = Noticing::every(Duration::from_secs(6
 /// up on its own until now.
 const PROVISIONAL_RECLAIM_SWEEP: Reclaiming = Reclaiming::every(Duration::from_secs(300));
 
-/// What one Job may spend before Fleet stops starting Drones on it.
+/// What one Job may spend before Fleet stops starting Drones on it, **where
+/// nothing below this says otherwise**: `armada.yml` and a Job's own column
+/// each override the dollars, and `fleet::Allowance::at` writes that order and
+/// carries why the turns do not. Changing this one still needs a rebuild; what
+/// the two under it buy is that nobody has to wait for one.
 ///
-/// **Two `settings.toml` rows in one value**: `budget-cost-cap-per-job` for the
-/// dollars and `budget-turn-cap-per-job` for the turns, resolved here like
-/// every other dial on this page. They are two rows because one number cannot
-/// carry both — see `fleet::allowance`, and spike 5, which is why there are two
-/// signals at all.
+/// **Two `settings.toml` rows in one value**: `budget-cost-cap-per-job` and
+/// `budget-turn-cap-per-job`. Two rows because one number cannot carry both —
+/// see `fleet::allowance`, and spike 5, which is why there are two signals.
 ///
 /// | Cap | Value | Why there |
 /// |---|---|---|
-/// | Dollars | 5 | Deliberately wide. A small feature Job measured a mean of $0.099 across three identical successful runs whose prices spread 2.31x on cache warmth alone — $0.063, $0.087, $0.146 — with almost none of that attributable to the work, so a cap anywhere near the mean would refuse a healthy Job for having started cold. Five dollars is roughly fifty such Jobs: not a Job going slightly over, but one that has stopped making progress and kept paying |
+/// | Dollars | 10 | Deliberately wide. A small feature Job measured a mean of $0.099 across three identical successful runs whose prices spread 2.31x on cache warmth alone — $0.063, $0.087, $0.146 — with almost none of that attributable to the work, so a cap anywhere near the mean would refuse a healthy Job for having started cold. Ten dollars is roughly a hundred such Jobs: not a Job going slightly over, but one that has stopped making progress and kept paying. It was five until 9 Sep 2026, when `01M21BKVPW002DC0ATD1X9T0VF` was refused its last step at $5.28 having spent three of its six Drones on defects in Armada rather than on the work — a runaway detector should not be spent by the runaway detector's own bugs |
 /// | Turns | 300 | The ceiling that actually catches something. The same three runs turned 7, 7 and 4 times, so turns are the steady signal the price is not. A four-step Job at a generous thirty turns a step is 120; three hundred leaves room for a workflow twice that long and still stops a Drone that has been going in circles for hours |
 ///
 /// **Neither figure stops a Drone that is spending**, and the settings rows say
@@ -291,7 +293,7 @@ const PROVISIONAL_RECLAIM_SWEEP: Reclaiming = Reclaiming::every(Duration::from_s
 /// billed per token. The figure is arithmetically exact and denominated in a
 /// currency nothing here spends, which is what makes it a runaway detector
 /// rather than an invoice.
-const PROVISIONAL_ALLOWANCE: Allowance = Allowance::of(Micros::dollars(5), 300);
+const PROVISIONAL_ALLOWANCE: Allowance = Allowance::of(Micros::dollars(10), 300);
 
 /// How often Fleet is turned. **Provisional**, and nothing has measured it.
 ///

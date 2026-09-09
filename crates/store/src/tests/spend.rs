@@ -5,8 +5,13 @@
 //! incremented at both would bill one Drone twice. Every test below is either
 //! about the sum being right across Drones, or about it not moving when one
 //! Drone is recorded again.
+//!
+//! The last few are about the other half of the comparison — what one Job *may*
+//! spend, which is a nullable column where **null and zero must never collapse
+//! into one answer**: null defers to `armada.yml` and then to the composition
+//! root, and zero is a Job that starts nothing.
 
-use crate::tests::{job_id, open, top_level, TempDir};
+use crate::tests::{created_at, job_id, open, top_level, TempDir};
 use crate::{DroneSpend, Spend, Store, WriteError};
 
 fn a_job(store: &mut Store, id: &str) {
@@ -22,8 +27,17 @@ fn drone(value: &str) -> core_model::DroneId {
 
 fn spent(cost_micros: u64, turns: u64, ran_ms: u64) -> DroneSpend {
     DroneSpend {
-        cost_micros,
+        cost_micros: Some(cost_micros),
         turns,
+        ran_ms,
+    }
+}
+
+/// A Drone that was stopped before it could name a price.
+fn unpriced(ran_ms: u64) -> DroneSpend {
+    DroneSpend {
+        cost_micros: None,
+        turns: 0,
         ran_ms,
     }
 }
@@ -70,6 +84,7 @@ fn four_drones_of_one_job_add_up_to_the_job() {
             turns: 28,
             ran_ms: 88_000,
             drones: 4,
+            unpriced: 0,
         },
         "the Job's figure is every Drone's, added up"
     );
@@ -100,6 +115,7 @@ fn recording_one_drone_twice_does_not_bill_it_twice() {
             turns: 9,
             ran_ms: 40_000,
             drones: 1,
+            unpriced: 0,
         },
         "one Drone, recorded twice, is one Drone's spend"
     );
@@ -174,6 +190,127 @@ fn a_spend_against_no_job_is_refused_by_name() {
     );
 }
 
+/// A cap set on a Job survives the process that set it, and the value is the
+/// one that was written rather than the machine's.
+#[test]
+fn a_cap_raised_on_a_job_survives_a_reopen() {
+    let dir = TempDir::new();
+    let stored = top_level("01CAP0000000000000000001");
+    let mut store = open(&dir);
+    store.insert_job(&stored, &created_at()).expect("stored");
+    assert_eq!(
+        stored.cost_cap_micros(),
+        None,
+        "a Job is created taking whatever the tiers above it say"
+    );
+
+    let raised = stored.cost_capped(Some(10_000_000));
+    store.record_cost_cap(&raised).expect("the cap is written");
+    drop(store);
+
+    let mut reopened = open(&dir);
+    let loaded = reopened
+        .load_job(&job_id("01CAP0000000000000000001"))
+        .expect("loads");
+    assert_eq!(loaded.cost_cap_micros(), Some(10_000_000));
+    assert_eq!(loaded, raised, "and nothing else about the Job moved");
+
+    // Clearing is the same write with nothing in it, which is why there is one
+    // method rather than a setter and a clearer — a person taking a cap off is
+    // asking for the repository's number back.
+    reopened
+        .record_cost_cap(&loaded.cost_capped(None))
+        .expect("the cap is cleared");
+    drop(reopened);
+    assert_eq!(
+        open(&dir)
+            .load_job(&job_id("01CAP0000000000000000001"))
+            .expect("loads"),
+        stored,
+        "cleared, and the record is back where it started"
+    );
+}
+
+/// **A cap of zero is not an absence**, and this is the assertion that keeps
+/// them apart across the file. A Job capped at zero starts nothing; a Job with
+/// no cap starts whatever the repository and the machine allow.
+#[test]
+fn a_cap_of_zero_reads_back_as_zero_and_not_as_unset() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    let held = top_level("01CAP0000000000000000002").cost_capped(Some(0));
+    store.insert_job(&held, &created_at()).expect("stored");
+    drop(store);
+
+    assert_eq!(
+        open(&dir)
+            .load_job(&job_id("01CAP0000000000000000002"))
+            .expect("loads")
+            .cost_cap_micros(),
+        Some(0)
+    );
+}
+
+/// A Job written before version 32 reads as having no cap of its own, which is
+/// the same sentence as the one it ran under: the machine's number.
+#[test]
+fn a_job_from_before_the_column_existed_reads_as_uncapped() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    store
+        .insert_job(&top_level("01CAP0000000000000000003"), &created_at())
+        .expect("stored");
+    store
+        .conn
+        .execute(
+            "UPDATE jobs SET cost_cap_micros = NULL WHERE job_id = ?1",
+            (job_id("01CAP0000000000000000003").as_str(),),
+        )
+        .expect("the column is nulled, as an older row holds it");
+    assert_eq!(
+        store
+            .load_job(&job_id("01CAP0000000000000000003"))
+            .expect("loads")
+            .cost_cap_micros(),
+        None
+    );
+}
+
+/// A negative cap is refused by the schema rather than widened into a ceiling
+/// nothing could reach. `INTEGER` is signed and the field is not, so a `-1`
+/// left to `as u64` would arrive as eighteen quintillion dollars.
+#[test]
+fn a_negative_cap_is_refused_by_the_row_that_would_hold_it() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    store
+        .insert_job(&top_level("01CAP0000000000000000004"), &created_at())
+        .expect("stored");
+    let refused = store.conn.execute(
+        "UPDATE jobs SET cost_cap_micros = -1 WHERE job_id = ?1",
+        (job_id("01CAP0000000000000000004").as_str(),),
+    );
+    assert!(
+        refused.is_err(),
+        "the trigger refuses it: {refused:?}, and nothing in this crate can write one anyway"
+    );
+}
+
+/// A cap written against a Job that is not there is refused by name, for
+/// `record_drone_spend`'s reason.
+#[test]
+fn a_cap_against_no_job_is_refused_by_name() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    let why = store
+        .record_cost_cap(&top_level("01CAP0000000000000000005").cost_capped(Some(1)))
+        .expect_err("there is no such Job");
+    assert!(
+        matches!(why, WriteError::NoSuchJob { .. }),
+        "a missing Job is named rather than reported as a fault: {why:?}"
+    );
+}
+
 /// Forgetting a Job takes its spend rows with it, because the table points at
 /// `jobs` and `forget_job` asks the file which tables do.
 #[test]
@@ -202,4 +339,69 @@ fn forgetting_a_job_forgets_what_it_spent() {
         vec!["job_drone_spend".to_string()],
         "the table points at jobs, so forget_job's catalog finds it"
     );
+}
+
+/// **A Drone nobody priced is counted and not added.**
+///
+/// Job `01M21BKVPW002DC0ATD1X9T0VF` is the instance: six Drones, two of them
+/// signalled mid-run after 277 and 299 seconds, and the two contributed
+/// `cost_micros = 0` each — so the Job read as $5.28 against a $5 cap while
+/// having spent more than it could say. Cost arrives on the terminating line of
+/// a session and those two never emitted one, so what they have is no price
+/// rather than a price of nothing.
+#[test]
+fn a_drone_that_named_no_price_is_counted_and_left_out_of_the_total() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job(&mut store, "01SPEND00000000000000007");
+    let job = job_id("01SPEND00000000000000007");
+
+    store
+        .record_drone_spend(
+            &job,
+            &drone("01DRONE0000000000000000A"),
+            &spent(171_532, 4, 21_122),
+        )
+        .expect("the priced Drone is recorded");
+    store
+        .record_drone_spend(&job, &drone("01DRONE0000000000000000B"), &unpriced(277_546))
+        .expect("the unpriced Drone is recorded");
+    store
+        .record_drone_spend(&job, &drone("01DRONE0000000000000000C"), &unpriced(299_901))
+        .expect("the second unpriced Drone is recorded");
+
+    let read = store.spend_for(&job).expect("the spend is read");
+    assert_eq!(
+        read.cost_micros, 171_532,
+        "the total is of the Drones that named a price"
+    );
+    assert_eq!(read.drones, 3, "all three held a slot");
+    assert_eq!(
+        read.unpriced, 2,
+        "and two of the three are missing from the figure above"
+    );
+    assert_eq!(
+        read.ran_ms, 598_569,
+        "the wall clock is Fleet's own, so every Drone answers it"
+    );
+}
+
+/// **The pair to it**: a Drone that reported a cost of nothing is priced.
+///
+/// Without this the case above passes against a store that treated any zero as
+/// unpriced, which is the relabelling `V32` refuses to do to history.
+#[test]
+fn a_drone_that_reported_a_cost_of_nothing_is_not_an_unpriced_one() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job(&mut store, "01SPEND00000000000000008");
+    let job = job_id("01SPEND00000000000000008");
+    store
+        .record_drone_spend(&job, &drone("01DRONE0000000000000000D"), &spent(0, 1, 900))
+        .expect("the free Drone is recorded");
+
+    let read = store.spend_for(&job).expect("the spend is read");
+    assert_eq!(read.cost_micros, 0);
+    assert_eq!(read.drones, 1);
+    assert_eq!(read.unpriced, 0, "it named a price, and the price was none");
 }

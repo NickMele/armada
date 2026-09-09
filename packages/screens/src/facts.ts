@@ -184,7 +184,25 @@ function elapsedFact(job: JobSummary, now: number): JobDetailField[] {
 function spendFact(whole: JobWhole | null): JobDetailField[] {
   const spend = whole?.spend;
   if (spend === undefined) return [];
-  return [{ label: "Spend", value: money(spend.cost_micros), mono: true }];
+  return [{ label: "Spend", value: spent(spend.cost_micros, spend.unpriced), mono: true }];
+}
+
+/**
+ * A spend, and whether it is the whole of one.
+ *
+ * **A figure that is a floor says so.** Cost reaches Armada on the terminating
+ * line of a session, so a drone signalled mid-run leaves none behind — and one
+ * job read as `~$5.28` against a $5 cap while two of its six drones, stopped
+ * after 277 and 299 seconds, had contributed nothing to the number a person was
+ * deciding on.
+ *
+ * **`at least` rather than a footnote or a warning colour.** It is the same
+ * fact either way and this is the shortest way to say it; a reader who does not
+ * care reads past two words, and one who does is not sent hunting.
+ */
+function spent(micros: number, unpriced: number | undefined): string {
+  const shown = money(micros);
+  return unpriced === undefined || unpriced === 0 ? shown : `at least ${shown}`;
 }
 
 /**

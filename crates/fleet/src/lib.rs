@@ -96,6 +96,9 @@ mod proposing;
 /// the record that is keyed by the commit rather than by a Job.
 mod proving;
 pub mod questioning;
+/// Giving one Job more money than the tier above it allows, and the ceiling on
+/// which surface may give it. **The act `over_budget` has always pointed at.**
+pub mod raising;
 pub mod readmitting;
 pub mod readopting;
 mod reclaiming;

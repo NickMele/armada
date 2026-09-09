@@ -15,8 +15,12 @@
 //!
 //! **Quota is not a fourth.** Spike 5 settled it: the rate-limit event carries
 //! a window and a status and no quantity.
+//!
+//! **The dollars tier and the turns do not**, which is the one place the pair
+//! comes apart. [`Allowance::at`] carries the argument.
 
 use adapter_traits::{AgentHarness, Delivery, DroneEvent, Vcs, WorkProduct};
+use config::Manifest;
 use core_model::{DroneId, Job, JobId, JobStatus};
 use store::{DroneSpend, Spend};
 
@@ -39,6 +43,15 @@ impl Micros {
         Micros(dollars * 1_000_000)
     }
 
+    /// A figure that already arrived in this unit — off the wire, or off the
+    /// Job's own column. **Beside [`Micros::dollars`] rather than replacing
+    /// it**: a caller writing a ceiling down says what it means in the unit it
+    /// decided in, and a caller carrying one across a boundary does not
+    /// convert.
+    pub const fn of(count: u64) -> Micros {
+        Micros(count)
+    }
+
     pub const fn count(&self) -> u64 {
         self.0
     }
@@ -54,8 +67,9 @@ impl Micros {
 /// allowed and the figure that is over is visible in the pair.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Overspent {
-    /// Past `settings.budget-cost-cap-per-job`. The remedy is a number: raise
-    /// the cap, or accept that this Job costs what it costs.
+    /// Past `settings.budget-cost-cap-per-job`, as [`Allowance::at`] resolved
+    /// it for this Job. The remedy is a number: raise the cap on this Job, on
+    /// the repository, or accept that this Job costs what it costs.
     Cost,
     /// Past `settings.budget-turn-cap-per-job`. The remedy is usually the
     /// brief: a Job that turns and turns was not askable as written.
@@ -96,6 +110,45 @@ impl Allowance {
         self.turns
     }
 
+    /// What this one Job may spend, given what Fleet is running with.
+    ///
+    /// # Three tiers, and this is the only place their order is written
+    ///
+    /// The composition root's constant — `self` — then `armada.yml`'s
+    /// `drone.cost_cap_micros_per_job`, then the Job's own column, each
+    /// deferring upward where it states nothing. **`Some(0)` is a cap and
+    /// `None` is an absence**: capped at zero a Job starts nothing, which holds
+    /// one Job, or one repository, without stopping the Fleet.
+    ///
+    /// # The turns do not tier, and that is a decision
+    ///
+    /// Spike 5 priced three identical successful runs of one Job at $0.063,
+    /// $0.087 and $0.146 — 2.31x on cache warmth — while their turns held at 7,
+    /// 7 and 4. So a Job over the dollar cap often just started cold and the
+    /// remedy is the number; over the turn cap it is going in circles, and
+    /// raising the number buys more circles. **A lever exists for the reading
+    /// whose remedy is a number.** The two stay one type and one
+    /// `exceeded_by` — what tiers is the value, not the pair.
+    ///
+    /// # Live at every tier, and frozen at none
+    ///
+    /// A Job past its cap is refused at every admission until a number moves,
+    /// so a cap frozen at creation — as a step's `quiet_after_seconds` is —
+    /// would reach every Job but the one that needs it.
+    pub fn at(self, manifest: &Manifest, job: &Job) -> Allowance {
+        let repository = match manifest.cost_cap_micros() {
+            Some(micros) => Micros(u64::from(micros)),
+            None => self.cost,
+        };
+        Allowance {
+            cost: match job.cost_cap_micros() {
+                Some(micros) => Micros(micros),
+                None => repository,
+            },
+            turns: self.turns,
+        }
+    }
+
     /// Which ceiling this spend is past, or `None` where it is inside both.
     ///
     /// **Cost first**, and the order decides only which one is named: dollars
@@ -131,6 +184,13 @@ impl Allowance {
 /// `ran` is Fleet's own clock and not the stream's: the harness reports a
 /// duration per terminating line and Armada does not carry it, and the wall
 /// clock is what a person means by how long a step took either way.
+///
+/// **A stream with no terminating line answers [`None`], never nought.** Cost
+/// is carried on that line alone, so a Drone that was signalled mid-run has no
+/// price rather than a price of nothing — and a Drone that ran for five minutes
+/// and cost `0` is a sentence nothing should be able to write. Job
+/// `01M21BKVPW002DC0ATD1X9T0VF` had two of them, and read as $5.28 against a $5
+/// cap while having spent more than it could say.
 pub(crate) fn spent(events: &[DroneEvent], ran: std::time::Duration) -> DroneSpend {
     let mut spend = DroneSpend {
         ran_ms: ran.as_millis() as u64,
@@ -141,7 +201,7 @@ pub(crate) fn spent(events: &[DroneEvent], ran: std::time::Duration) -> DroneSpe
             turns, cost_micros, ..
         } = event
         {
-            spend.cost_micros = *cost_micros;
+            spend.cost_micros = Some(*cost_micros);
             spend.turns += *turns as u64;
         }
     }
@@ -180,6 +240,39 @@ where
         self.record_spend(&stood_down.job, &stood_down.drone, &stood_down.spent)
             .await?;
         Ok(stood_down)
+    }
+
+    /// Write down what the Drone in the slot has spent, before the Job moves.
+    ///
+    /// **[`reap`](Fleet::reap)'s ordering, at the acts that reach a step
+    /// boundary with the Drone still in the slot.** A client re-reads the Job
+    /// on the event that says it moved, so a figure written after that publish
+    /// is one nothing goes back for — and on an advance nothing does, because
+    /// what follows is `drone.spawned`, which carries a row and not a move. A
+    /// Job whose detail drew $4.12 against a Fleet answering $5.28 was short by
+    /// its last Drone for exactly that reason.
+    ///
+    /// **A running total, and the upsert is what makes that safe.**
+    /// [`Working::spent`] is what the Drone has cost so far, so this is honest
+    /// at whatever instant it is taken; the fold in
+    /// [`stood_down_paying`](Fleet::stood_down_paying) is taken after the drain
+    /// and is the only one that can be final, and it replaces this on the row
+    /// keyed by the same Drone.
+    ///
+    /// **A fold that names nothing is not written.** An adopted Drone's
+    /// terminating line went into a pipe with no reader, so its fold is zero of
+    /// everything — and writing that would replace the figure the Fleet before
+    /// this one left, which nothing here can recover.
+    pub(crate) async fn paid_so_far(&self, working: &Option<Working>) -> Result<(), Adrift> {
+        let Some(at_work) = working.as_ref() else {
+            return Ok(());
+        };
+        let spent = at_work.spent(&self.now());
+        if spent.cost_micros.is_none() && spent.turns == 0 {
+            return Ok(());
+        }
+        let (job, _, drone) = at_work.drone();
+        self.record_spend(&job, &drone, &spent).await
     }
 
     /// Write down what one Drone of a Job spent.
@@ -228,11 +321,15 @@ where
     /// it and this cannot stop that Drone; a terminal Job is not going to start
     /// another. The read costs one query and there is no reason to pay it for a
     /// row that could not act on the answer.
+    ///
+    /// **The cap is resolved here and not held anywhere**, which is what makes
+    /// raising one on a Job that is already over it take effect at the next
+    /// turn of the loop rather than at the next restart.
     pub(crate) async fn overspent(&self, job: &Job) -> Result<Option<Overspent>, Adrift> {
         if job.status() != JobStatus::Queued {
             return Ok(None);
         }
         let spent = self.spend_of(job.id()).await?;
-        Ok(self.allowance().exceeded_by(&spent))
+        Ok(self.allowance_for(job).exceeded_by(&spent))
     }
 }

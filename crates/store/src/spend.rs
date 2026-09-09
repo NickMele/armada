@@ -21,7 +21,10 @@
 //! `modelUsage` holds the sum of both and its `total_cost_usd` reconstructs
 //! from that sum exactly. So the cost is the session's running total and the
 //! turns are per invocation. `fleet::allowance::spent` does the fold: last
-//! cost, summed turns.
+//! cost, summed turns. What a Job *may* spend is here too, as [`V32`]'s
+//! column.
+
+use core_model::Job;
 
 use crate::error::{fault, LoadJobError, RowError, WriteError};
 use crate::open::Store;
@@ -55,6 +58,74 @@ CREATE TABLE job_drone_spend (
 ) STRICT;
 "#;
 
+/// Version 32 — what this one Job may spend.
+///
+/// **A column on `jobs` and not a table**, which is [`V23`]'s call inverted for
+/// [`crate::delivery`]'s reason: at most one ceiling per Job, written when
+/// somebody sets one and read on every admission.
+///
+/// **Null on every existing row, and that is the answer rather than a gap.** A
+/// Job that ran before this had no cap of its own and took the machine's, which
+/// is exactly what null says. There is nothing to backfill and nothing to
+/// guess — [`crate::schema::V5`]'s rule.
+///
+/// **Null and zero are different sentences and the schema keeps them apart.**
+/// Null defers to `armada.yml` and then to the composition root; zero is a Job
+/// that starts nothing. A column with a `NOT NULL DEFAULT 0` would have made
+/// the two one value and the second unreachable.
+///
+/// The trigger refuses a negative on both writes. `INTEGER` is signed, the
+/// reader widens to `u64`, and a `-1` that reached the row would come back as
+/// eighteen quintillion dollars — a cap that cannot be exceeded, arriving
+/// silently. Nothing in this crate can write one; the trigger is for whatever
+/// opens the file that is not this crate.
+pub(crate) const V32: &str = r#"
+ALTER TABLE jobs ADD COLUMN cost_cap_micros INTEGER;
+
+CREATE TRIGGER jobs_are_never_given_a_negative_cost_cap_on_insert
+BEFORE INSERT ON jobs
+WHEN NEW.cost_cap_micros IS NOT NULL AND NEW.cost_cap_micros < 0
+BEGIN
+    SELECT RAISE(ABORT, 'a cost cap is what a Job may spend, and below nothing is not a number it may spend');
+END;
+
+CREATE TRIGGER jobs_are_never_given_a_negative_cost_cap_on_update
+BEFORE UPDATE ON jobs
+WHEN NEW.cost_cap_micros IS NOT NULL AND NEW.cost_cap_micros < 0
+BEGIN
+    SELECT RAISE(ABORT, 'a cost cap is what a Job may spend, and below nothing is not a number it may spend');
+END;
+"#;
+
+/// Version 33 — a price that was never named.
+///
+/// **`NULL`, and it is not a cost of zero.** `total_cost_usd` reaches Armada on
+/// one line — the terminating line of a session — so a Drone signalled before
+/// it emits one leaves no figure at all. Written as `0` those two are the same
+/// row, and Job `01M21BKVPW002DC0ATD1X9T0VF` is what that cost: two of its six
+/// Drones ran 277 and 299 seconds against a $5 cap and were billed nothing,
+/// because both were stopped by defects that killed them mid-run. The Job read
+/// as $5.28 spent and had spent more, and nothing on it said so.
+///
+/// **Nothing is backfilled**, for [`V23`]'s reason and one of its own: a `0`
+/// already on disk may be either, and a migration that guessed would relabel a
+/// Drone that genuinely cost nothing. Rows written from here on can be told
+/// apart; rows written before cannot, and no surface pretends otherwise.
+pub(crate) const V33: &str = r#"
+ALTER TABLE job_drone_spend RENAME TO job_drone_spend_priced;
+CREATE TABLE job_drone_spend (
+    job_id      TEXT    NOT NULL REFERENCES jobs(job_id),
+    drone_id    TEXT    NOT NULL,
+    cost_micros INTEGER,
+    turns       INTEGER NOT NULL,
+    ran_ms      INTEGER NOT NULL,
+    PRIMARY KEY (job_id, drone_id)
+) STRICT;
+INSERT INTO job_drone_spend (job_id, drone_id, cost_micros, turns, ran_ms)
+    SELECT job_id, drone_id, cost_micros, turns, ran_ms FROM job_drone_spend_priced;
+DROP TABLE job_drone_spend_priced;
+"#;
+
 /// What one Drone's run came to.
 ///
 /// **Three counts and no verdict.** Whether the run went well is the gate's,
@@ -63,10 +134,14 @@ CREATE TABLE job_drone_spend (
 /// vanished.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct DroneSpend {
-    /// Millionths of a dollar, as `DroneEvent::Ended` carries it. An integer
-    /// because a cap compared against a float is a cap that answers
-    /// differently on two machines.
-    pub cost_micros: u64,
+    /// Millionths of a dollar, as `DroneEvent::Ended` carries it, or [`None`]
+    /// where the Drone never named one. An integer because a cap compared
+    /// against a float is a cap that answers differently on two machines.
+    ///
+    /// **`None` is not zero and the two must not converge.** The figure arrives
+    /// on the terminating line of a session, so a Drone signalled before it
+    /// emits one has no price rather than a price of nothing. See [`V32`].
+    pub cost_micros: Option<u64>,
     /// How many turns the Drone took, summed across every terminating line of
     /// its stream. See this module's note on why cost is not summed with it.
     pub turns: u64,
@@ -90,6 +165,15 @@ pub struct Spend {
     pub ran_ms: u64,
     /// How many Drones this is the sum of.
     pub drones: u64,
+    /// How many of those named no price, and are therefore in `drones` and in
+    /// none of the figures above.
+    ///
+    /// **The same argument as `drones` one level down.** That field exists
+    /// because a Job that spent nothing and a Job that has not run both read as
+    /// zero; this one because a Drone that cost nothing and a Drone nobody
+    /// priced do too. A total quoted without it is a floor being read as a
+    /// sum — which is what let a Job over its cap read as under it.
+    pub unpriced: u64,
 }
 
 impl Store {
@@ -118,7 +202,7 @@ impl Store {
                 (
                     job_id.as_str(),
                     drone_id.as_str(),
-                    spend.cost_micros as i64,
+                    spend.cost_micros.map(|micros| micros as i64),
                     spend.turns as i64,
                     spend.ran_ms as i64,
                 ),
@@ -142,16 +226,52 @@ impl Store {
         Ok(())
     }
 
+    /// Record what this Job may spend, including that it may spend whatever
+    /// the tier above allows.
+    ///
+    /// **It writes `None` where [`Store::record_branch`] returns early on
+    /// one**, and that is the difference between the two columns rather than an
+    /// inconsistency: a Job cannot un-have a worktree, and a person clearing a
+    /// cap is asking for the repository's number back. A method that could only
+    /// set would be a lever that does not return.
+    pub fn record_cost_cap(&mut self, job: &Job) -> Result<(), WriteError> {
+        let updated = self
+            .conn
+            .execute(
+                "UPDATE jobs SET cost_cap_micros = ?2 WHERE job_id = ?1",
+                (
+                    job.id().as_str(),
+                    job.cost_cap_micros().map(|micros| micros as i64),
+                ),
+            )
+            .map_err(fault("recording what a Job may spend"))
+            .map_err(WriteError::Database)?;
+        if updated == 0 {
+            return Err(WriteError::NoSuchJob {
+                job_id: job.id().clone(),
+            });
+        }
+        Ok(())
+    }
+
     /// What every Drone of this Job has spent, added up.
     ///
     /// **A Job with no rows answers zero of everything**, which is every Job
     /// that has not started and every Job that finished before version 23. A
     /// caller that needs to tell those apart reads [`Spend::drones`].
+    ///
+    /// **The cost is of the Drones that named one.** `SUM` skips a `NULL`, so a
+    /// Job holding an unpriced Drone answers a total that is a floor rather
+    /// than a sum, and [`Spend::unpriced`] is how many rows it is short of.
     pub fn spend_for(&self, job_id: &core_model::JobId) -> Result<Spend, LoadJobError> {
         self.conn
             .query_row(
+                // `SUM` already skips a `NULL`, so the total is of the priced
+                // rows by construction; the count beside it is what says how
+                // many were left out of it.
                 "SELECT COALESCE(SUM(cost_micros), 0), COALESCE(SUM(turns), 0), \
-                 COALESCE(SUM(ran_ms), 0), COUNT(*) \
+                 COALESCE(SUM(ran_ms), 0), COUNT(*), \
+                 COUNT(*) FILTER (WHERE cost_micros IS NULL) \
                  FROM job_drone_spend WHERE job_id = ?1",
                 (job_id.as_str(),),
                 |row| {
@@ -160,6 +280,7 @@ impl Store {
                         turns: row.get::<_, i64>(1)? as u64,
                         ran_ms: row.get::<_, i64>(2)? as u64,
                         drones: row.get::<_, i64>(3)? as u64,
+                        unpriced: row.get::<_, i64>(4)? as u64,
                     })
                 },
             )

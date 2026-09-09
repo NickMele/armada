@@ -698,6 +698,70 @@ fn zero_pokes_is_carried_and_zero_patience_is_refused() {
 }
 
 #[test]
+fn a_repository_says_what_one_of_its_jobs_may_spend() {
+    let manifest = parse("version: 1\nid: a\ndrone:\n  cost_cap_micros_per_job: 20000000\n")
+        .expect("a repository with a ceiling of its own");
+    assert_eq!(manifest.cost_cap_micros(), Some(20_000_000));
+    // The other two are untouched by it, exactly as they are by each other.
+    assert_eq!(manifest.quiet_after_seconds(), None);
+    assert_eq!(manifest.poke_limit(), None);
+}
+
+#[test]
+fn a_repository_that_states_no_cap_defers_rather_than_defaulting() {
+    // Absent is not five dollars. `fleet::Allowance::at` is the only place the
+    // order is written, and a number invented here would be a second one.
+    let manifest = parse(WHOLE).expect("a file with no `drone` section at all");
+    assert_eq!(manifest.cost_cap_micros(), None);
+}
+
+#[test]
+fn a_repository_capped_at_zero_says_nothing_starts_here() {
+    // The one lever that holds a whole repository's Jobs at `queued` without
+    // stopping the Fleet the other repositories are running under. Distinct
+    // from absence, which is the reading a `NOT NULL DEFAULT 0` anywhere in
+    // this chain would have destroyed.
+    assert_eq!(
+        parse("version: 1\nid: a\ndrone:\n  cost_cap_micros_per_job: 0\n")
+            .expect("a repository that starts nothing")
+            .cost_cap_micros(),
+        Some(0)
+    );
+}
+
+#[test]
+fn a_cap_that_is_not_a_number_is_refused_by_name() {
+    let refused = refusals(parse(
+        "version: 1\nid: a\ndrone:\n  cost_cap_micros_per_job: ten dollars\n",
+    ));
+    assert_eq!(
+        fault_at(&refused, "drone.cost_cap_micros_per_job"),
+        &Fault::WrongType {
+            wanted: "a whole number of zero or more",
+            found: "text",
+        }
+    );
+}
+
+#[test]
+fn a_cap_wider_than_the_column_holds_is_refused_rather_than_wrapped() {
+    // `u32::MAX` micros is $4,294.96 and a per-Job ceiling above that is not a
+    // ceiling — see `crate::live::Dials`, where the width is argued. What
+    // matters is that the refusal is named: a truncated cap would be a number
+    // nobody typed, enforced silently.
+    let refused = refusals(parse(
+        "version: 1\nid: a\ndrone:\n  cost_cap_micros_per_job: 9000000000\n",
+    ));
+    assert_eq!(
+        fault_at(&refused, "drone.cost_cap_micros_per_job"),
+        &Fault::WrongType {
+            wanted: "a whole number of zero or more",
+            found: "a number outside that range",
+        }
+    );
+}
+
+#[test]
 fn a_drone_section_that_declares_neither_key_is_refused() {
     // `setup: {}`'s rule, for a section where both keys are optional: the
     // author wrote the section and left it blank, which is a key to delete
@@ -708,7 +772,7 @@ fn a_drone_section_that_declares_neither_key_is_refused() {
 }
 
 #[test]
-fn a_key_the_drone_section_does_not_read_hard_fails_and_names_the_three_it_does() {
+fn a_key_the_drone_section_does_not_read_hard_fails_and_names_the_four_it_does() {
     // `heartbeat_interval_minutes` is a real `settings.toml` row with a
     // Manifest tier and nothing reading it, so it is exactly the key this
     // refusal keeps out of a file until a reader exists.
@@ -718,7 +782,12 @@ fn a_key_the_drone_section_does_not_read_hard_fails_and_names_the_three_it_does(
     assert!(matches!(
         fault_at(&refused, "drone.heartbeat_interval_minutes"),
         Fault::Unknown { known }
-            if *known == ["quiet_after_seconds", "poke_limit", "exclude_paths"]
+            if *known == [
+                "quiet_after_seconds",
+                "poke_limit",
+                "cost_cap_micros_per_job",
+                "exclude_paths",
+            ]
     ));
 }
 

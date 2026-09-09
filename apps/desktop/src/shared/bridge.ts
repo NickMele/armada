@@ -426,6 +426,28 @@ export type BridgeApi = {
    */
   rerunGate: (jobId: string) => Promise<Outcome>;
   /**
+   * Give one job a higher cost ceiling than the tier above it allows.
+   *
+   * **The act the `over_budget` label has always pointed at.** A job past its
+   * cost cap waits at `queued` reading that label until somebody raises the cap
+   * — the one reason a queued job carries that does not clear on its own — and
+   * the only remedy before this was a machine-wide setting that governs every
+   * job and takes on a restart.
+   *
+   * **It moves nothing.** No status, no step, no drone: admission was going to
+   * start one and was refused for money, so the next turn starts it. What comes
+   * back is the job, and the field worth reading is `queued_reason` —
+   * `over_budget` before, absent or `waiting_on_resources` after.
+   *
+   * The figure is millionths of a dollar, which is the unit `JobSpend` reads
+   * in. **It raises only**: a value at or under the cap in force is refused
+   * before the request is sent, matching the 422 Fleet would answer, because a
+   * press that reports success and leaves the job stopped is the failure this
+   * exists against. Fleet refuses 409 on a terminal job, which has nothing left
+   * to spend.
+   */
+  raiseCostCap: (jobId: string, costCapMicros: number) => Promise<Outcome>;
+  /**
    * Say that this Job failed in error, in your own words, and file the Job's
    * own record with it.
    *
@@ -685,6 +707,7 @@ export const CHANNELS = {
   restartStep: "bridge:restart-step",
   overrideVerdict: "bridge:override-verdict",
   rerunGate: "bridge:rerun-gate",
+  raiseCostCap: "bridge:raise-cost-cap",
   fileReport: "bridge:file-report",
   watchJob: "bridge:watch-job",
   observeJob: "bridge:observe-job",

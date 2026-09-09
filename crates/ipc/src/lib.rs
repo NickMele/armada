@@ -54,6 +54,8 @@ pub mod mcp;
 /// verdict** — nothing in it is readable as a refusal.
 mod overlap;
 mod proposing;
+/// A new cost ceiling for one Job, and which surface asked for it.
+mod raising;
 /// Fleet's last read of `armada.yml`, held rather than announced. **The one
 /// shape here about the fleet and not about a Job**, beside `capacity`.
 mod reading;
@@ -116,6 +118,7 @@ pub use journal::{
 pub use judged::{CitedAt, Flagged, Judged, KeptDeliverable};
 pub use overlap::{ScopeOverlap, SharedPath};
 pub use proposing::{ProposalInFlight, ProposalReach, ProposalStopped, StopProposal};
+pub use raising::{CapRaise, RaisedBy};
 pub use reading::{ManifestFault, ManifestMoved, ManifestReading, ManifestRefused};
 pub use reclaimed::{ReclaimedBranch, ReclaimedWorktree, WorktreeReclaimed};
 pub use remarks::{JobRemarks, Remark, RemarksTakenUp};

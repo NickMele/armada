@@ -40,6 +40,8 @@ export type Event =
   | ({ kind: "job.created" } & JobCreated)
   | ({ kind: "job.state_changed" } & JobStateChanged)
   | ({ kind: "job.step_advanced" } & JobStepAdvanced)
+  | ({ kind: "drone.spawned" } & DroneSpawned)
+  | ({ kind: "drone.exited" } & DroneExited)
   | ({ kind: "job.files_changed" } & JobFilesChanged)
   | ({ kind: "job.judging" } & JobJudging)
   | ({ kind: "job.asking" } & JobAsking)
@@ -112,6 +114,45 @@ export type JobStepAdvanced = {
   to: string;
   /** The status the step moved beneath. Not a status change. */
   status: string;
+  actor: string;
+  at: string;
+};
+
+/**
+ * A Drone started against a worktree. `crates/ipc/src/event.rs`.
+ *
+ * **`job.step_advanced`'s shape, and for its reason.** `assigned_drone` is a
+ * field of the row, so the summary travels whole and a list replaces the row
+ * rather than asking for it again.
+ */
+export type DroneSpawned = {
+  /** The Job as it now stands, with `assigned_drone` set. */
+  job: JobSummary;
+  step_id: string;
+  drone_id: string;
+  /** What a person checks out to watch it. Absent where the worktree names none. */
+  branch?: string;
+  actor: string;
+  at: string;
+};
+
+/**
+ * A Drone is gone, however it went. `crates/ipc/src/event.rs`.
+ *
+ * **It does not say why**, and a client must not read one into it: what an
+ * ending meant is the Job's own `job.state_changed`, and an outcome restated
+ * here would be a second statement of it.
+ *
+ * **It is what says a Drone's run has been paid for.** Fleet writes the spend
+ * row before publishing this, on every path a Drone ends — so a detail re-read
+ * on this kind is the first one that can see the whole figure. See
+ * `crates/fleet/src/allowance.rs`.
+ */
+export type DroneExited = {
+  /** The Job as it now stands, with `assigned_drone` gone. */
+  job: JobSummary;
+  step_id: string;
+  drone_id: string;
   actor: string;
   at: string;
 };
