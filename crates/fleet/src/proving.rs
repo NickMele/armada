@@ -27,7 +27,6 @@ use crate::adrift::Adrift;
 use crate::check_output::kept_for_a_commit;
 use crate::checking;
 use crate::daemon::Fleet;
-use crate::transcript;
 
 /// What the Checks said about one commit, waiting for the turn that records it.
 ///
@@ -176,7 +175,7 @@ where
             if !unhappy.is_empty() {
                 envelope = envelope.with_field("failed", FieldValue::Str(unhappy.join(", ")));
             }
-            let _ = transcript::note(&self.host().repo_root, &one.job, &envelope);
+            self.noted_in_the_log(&one.job, &envelope);
             recorded.push(proved);
         }
         Ok(recorded)
@@ -194,7 +193,7 @@ where
         let envelope = self
             .envelope(level, wording, at_commit, base)
             .in_job(job.as_ulid().clone());
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 
     fn envelope(&self, level: Level, wording: &str, at_commit: &str, base: &str) -> Envelope {

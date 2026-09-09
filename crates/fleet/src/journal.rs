@@ -23,7 +23,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 
 use api::{Journal, Reading};
-use core_model::{JobId, Level};
+use core_model::Level;
 use ipc::{DroneId, Instant, LogNote, NoteLevel, NotedField, StepId, Voice};
 use serde::Deserialize;
 
@@ -59,8 +59,8 @@ impl JobLogs {
 }
 
 impl Journal for JobLogs {
-    fn read(&self, job: &ipc::JobId, from: u64) -> Reading {
-        read_from(&self.repo_root, &job.to_domain(), from)
+    fn read(&self, handle: &str, from: u64) -> Reading {
+        read_from(&self.repo_root, handle, from)
     }
 }
 
@@ -69,8 +69,8 @@ impl Journal for JobLogs {
 /// **A log that is not there is nothing at `from`**, not a fault. A Job at the
 /// approval gate has written no line, and neither has one proposed before any
 /// of this existed.
-fn read_from(repo_root: &str, job: &JobId, from: u64) -> Reading {
-    let at = log_of(repo_root, job);
+fn read_from(repo_root: &str, handle: &str, from: u64) -> Reading {
+    let at = log_of(repo_root, handle);
     let Ok(mut file) = File::open(&at) else {
         return nothing(from);
     };
@@ -139,7 +139,7 @@ fn nothing(from: u64) -> Reading {
     }
 }
 
-/// One line of `.armada/logs/<job-id>.jsonl`, as this reads it back.
+/// One line of `.armada/logs/<handle>.jsonl`, as this reads it back.
 ///
 /// **Only the fields a viewer is shown.** `crate::transcript::row::Line` is the
 /// writing half and carries the whole envelope; this is deliberately narrower,

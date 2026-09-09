@@ -487,7 +487,7 @@ async fn a_link_that_still_fails_to_resolve_on_redispatch_notes_it_on_the_replac
 
     let log = std::fs::read_to_string(crate::transcript::log_of(
         &home.path().to_string_lossy(),
-        replacement.dispatched.id(),
+        &replacement.dispatched.handle(),
     ))
     .expect("the replacement's own log");
     assert!(

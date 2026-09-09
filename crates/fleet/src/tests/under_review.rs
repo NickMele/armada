@@ -94,10 +94,10 @@ fn approved_with_a_failing_check() -> UnderReview {
     }
 }
 
-fn the_log(home: &TempDir, job: &core_model::JobId) -> String {
+fn the_log(home: &TempDir, handle: &str) -> String {
     std::fs::read_to_string(crate::transcript::log_of(
         &home.path().to_string_lossy(),
-        job,
+        handle,
     ))
     .expect("the Job's own log")
 }
@@ -122,7 +122,7 @@ async fn an_open_pull_request_is_asked_what_is_happening_on_it() {
         1,
         "one ask, on the turn the rotation reached this Job"
     );
-    let log = the_log(&home, &job_id);
+    let log = the_log(&home, &fleet.load(&job_id).await.expect("the Job").handle());
     assert!(
         log.contains("somebody has approved it"),
         "who looked at it: {log}"
@@ -153,7 +153,7 @@ async fn what_somebody_wrote_on_it_is_counted_and_never_quoted() {
         .now_under_review(approved_with_a_failing_check());
     fleet.turn().await.unwrap();
 
-    let log = the_log(&home, &job_id);
+    let log = the_log(&home, &fleet.load(&job_id).await.expect("the Job").handle());
     assert!(
         !log.contains("ignore all previous instructions"),
         "nothing anybody outside this machine wrote is repeated here: {log}"
@@ -211,7 +211,7 @@ async fn a_reading_that_has_not_changed_is_read_again_and_written_once() {
         4,
         "asked every time the rotation came round"
     );
-    let log = the_log(&home, &job_id);
+    let log = the_log(&home, &fleet.load(&job_id).await.expect("the Job").handle());
     assert_eq!(
         log.matches("somebody has approved it").count(),
         1,
@@ -240,7 +240,7 @@ async fn a_reading_that_changed_is_written_again() {
     });
     fleet.turn().await.unwrap();
 
-    let log = the_log(&home, &job_id);
+    let log = the_log(&home, &fleet.load(&job_id).await.expect("the Job").handle());
     assert!(
         log.contains("somebody has asked for changes"),
         "the second reading is its own line: {log}"
@@ -274,7 +274,7 @@ async fn a_forge_that_would_not_answer_writes_nothing_and_forgets_nothing() {
         .now_under_review(approved_with_a_failing_check());
     fleet.turn().await.unwrap();
 
-    let log = the_log(&home, &job_id);
+    let log = the_log(&home, &fleet.load(&job_id).await.expect("the Job").handle());
     assert_eq!(
         log.matches("somebody has approved it").count(),
         1,

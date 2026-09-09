@@ -33,7 +33,6 @@ use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::delivery::Delivered;
 use crate::gate::Ruling;
-use crate::transcript;
 use crate::working::Working;
 
 impl<H, V, W> Fleet<H, V, W>
@@ -159,7 +158,7 @@ where
         // A log line that will not write does not undo anything, for
         // `boundary::noted_stood_down`'s reason: the record already carries
         // what the branch came to.
-        let _ = transcript::note(&self.host().repo_root, job.id(), &envelope);
+        self.noted_in_the_log(job.id(), &envelope);
     }
 
     /// Put the work on the branch and the branch where it is going.

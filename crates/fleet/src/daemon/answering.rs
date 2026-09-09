@@ -62,9 +62,15 @@ where
     /// and that nothing will be read from here.
     pub async fn reconcile(&self) -> Result<Reconciled, Adrift> {
         let (loaded, unreadable) = self.every_job().await?;
+        // Before anything else reads a path: every Job's name, and the rename
+        // of what an older Fleet wrote under a ULID. See
+        // [`mod@crate::naming`] and `crate::transcript::migrating`.
+        self.names().learn_all(&loaded.jobs);
+        let rekeyed = crate::transcript::rekeyed(&self.host().repo_root, &loaded.jobs).await;
         let mut reconciled = Reconciled {
             repaired: loaded.repaired.len(),
             unreadable,
+            rekeyed,
             ..Reconciled::default()
         };
         // Every **step** the store says holds a Drone, whatever status its Job
@@ -159,6 +165,7 @@ where
         let (new, origin) = self.drafted(proposal, stated, &at, minted_by, number)?;
         let job = Job::create_top_level(new, origin, at.clone());
         store.insert_job(&job, &at).map_err(Adrift::Writing)?;
+        self.learn_the_name(&job);
         drop(store);
         // After the write, never before: a client told about a row the store
         // then refused would hold a Job that does not exist, and a resync would
@@ -220,12 +227,19 @@ where
     }
 
     /// One Job, folded from its events. The status column is not read.
+    ///
+    /// **Every read takes the Job's name**, which is what keeps
+    /// [`mod@crate::naming`] total for a Job created by a Fleet that has since
+    /// been restarted with an older store.
     pub async fn load(&self, job_id: &JobId) -> Result<Job, Adrift> {
-        self.store
+        let job = self
+            .store
             .lock()
             .await
             .load_job(job_id)
-            .map_err(Adrift::Reading)
+            .map_err(Adrift::Reading)?;
+        self.learn_the_name(&job);
+        Ok(job)
     }
 
     /// The qualifying reason the Job's last transition stored, where it stored

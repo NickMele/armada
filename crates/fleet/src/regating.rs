@@ -36,7 +36,6 @@ use crate::at_step::AtStep;
 use crate::daemon::Fleet;
 use crate::gate::{rule_on, Ruling};
 use crate::keeping::Keeping;
-use crate::transcript;
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -298,7 +297,7 @@ where
         .in_job(job.as_ulid().clone())
         .at_step(step.as_str())
         .with_field("came_to", FieldValue::Str(came_to(ruling).to_string()));
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 }
 

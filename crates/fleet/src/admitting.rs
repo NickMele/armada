@@ -40,7 +40,6 @@ use crate::headroom::{Reading, Short};
 use crate::slots::Slots;
 use crate::sub_dispatch::{children_standing, waiting_on_children};
 use crate::superseding::{siblings_of, still_needed, Landed, StillNeeded};
-use crate::transcript;
 
 /// Whether Fleet may start another Drone, and what stops it where it may not.
 ///
@@ -371,7 +370,7 @@ where
         .in_job(job.as_ulid().clone())
         .with_field("landed_by", FieldValue::Str(by.as_str().to_string()))
         .with_field("because", FieldValue::Str(because.to_string()));
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 
     /// When the Job was released to run, as the log's own sequence.

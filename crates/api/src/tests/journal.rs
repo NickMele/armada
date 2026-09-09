@@ -52,7 +52,7 @@ impl FakeLog {
 }
 
 impl Journal for FakeLog {
-    fn read(&self, _job: &JobId, from: u64) -> Reading {
+    fn read(&self, _handle: &str, from: u64) -> Reading {
         let written = self.written.lock().expect("not poisoned");
         let seen = from as usize;
         Reading {
@@ -217,13 +217,18 @@ async fn an_unknown_job_is_a_404_before_the_upgrade() {
 /// A listener built with no reader answers a fault naming what is missing.
 /// **Never an empty stream** — that reads as a Job nothing is happening to,
 /// which is the one thing this route must never say by accident.
+///
+/// **The Job has to exist for this to be the answer.** The `:job_id` segment is
+/// resolved before the handler runs, so an id naming nothing is the 404 above
+/// whatever the listener was built with.
 #[tokio::test]
 async fn a_fleet_with_no_reader_says_so_rather_than_opening_an_empty_stream() {
     let events = Broadcaster::new();
     let daemon = Arc::new(FakeDaemon::new(events.clone()));
     let app = router(Served::sharing(daemon, run_id(), events));
+    let job = a_job(&app).await;
     assert_eq!(
-        handshake(app, "/jobs/01JOB/log").await,
+        handshake(app, &format!("/jobs/{}/log", job.as_str())).await,
         StatusCode::INTERNAL_SERVER_ERROR
     );
 }

@@ -25,7 +25,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::extract::ws::{Message, WebSocket};
-use ipc::{JobId, JournalClosed, JournalMessage, JournalOpened, LogNote, Quiet, PROTOCOL_VERSION};
+use ipc::{JournalClosed, JournalMessage, JournalOpened, LogNote, Quiet, PROTOCOL_VERSION};
+
+use crate::reference::Resolved;
 
 /// How often the reader looks for lines written since its last pass.
 ///
@@ -49,7 +51,12 @@ pub trait Journal: Send + Sync + 'static {
     /// **A Job with no log yet answers with nothing at `from`**, which is
     /// ordinary rather than an error: a Job that has not been dispatched has
     /// written no line, and so has one dispatched before any of this existed.
-    fn read(&self, job: &JobId, from: u64) -> Reading;
+    ///
+    /// **The handle, not the id.** A Job's log sits beside its worktree, its
+    /// briefs and its deliverables, and all four are named by what a person
+    /// calls the Job. The socket resolves the route's segment once and passes
+    /// what came back.
+    fn read(&self, handle: &str, from: u64) -> Reading;
 }
 
 /// What one pass over a Job's log came to.
@@ -77,8 +84,9 @@ pub struct Reading {
 ///
 /// The socket is never read from. The Job is in the path, so there is no
 /// subscribe message, and dropping the connection is the whole of unsubscribing.
-pub(crate) async fn relay(mut socket: WebSocket, job_id: JobId, journal: Arc<dyn Journal>) {
-    let first = pass(&journal, &job_id, 0).await;
+pub(crate) async fn relay(mut socket: WebSocket, job: Resolved, journal: Arc<dyn Journal>) {
+    let job_id = job.id();
+    let first = pass(&journal, job.handle(), 0).await;
     let opened = JournalOpened {
         protocol_version: PROTOCOL_VERSION,
         job_id: job_id.clone(),
@@ -100,7 +108,7 @@ pub(crate) async fn relay(mut socket: WebSocket, job_id: JobId, journal: Arc<dyn
             }
         }
         tokio::time::sleep(FOLLOW).await;
-        reading = pass(&journal, &job_id, from).await;
+        reading = pass(&journal, job.handle(), from).await;
         from = reading.from;
     }
 }
@@ -110,10 +118,10 @@ pub(crate) async fn relay(mut socket: WebSocket, job_id: JobId, journal: Arc<dyn
 /// **Blocking, and said so.** The read is a file read, and running it inline
 /// would hold a worker for the length of it — which is nothing on a short log
 /// and is a stall on the first pass over a long one.
-async fn pass(journal: &Arc<dyn Journal>, job_id: &JobId, from: u64) -> Reading {
+async fn pass(journal: &Arc<dyn Journal>, handle: &str, from: u64) -> Reading {
     let journal = Arc::clone(journal);
-    let job_id = job_id.clone();
-    match tokio::task::spawn_blocking(move || journal.read(&job_id, from)).await {
+    let handle = handle.to_string();
+    match tokio::task::spawn_blocking(move || journal.read(&handle, from)).await {
         Ok(reading) => reading,
         // The task itself failed, which is a panic in the reader rather than
         // anything about the log. Ending the stream with a reason is the only

@@ -220,6 +220,7 @@ where
             inbox: EvidenceInbox::new(),
             delivered: Mutex::new(BTreeMap::new()),
             slots: Mutex::new(Slots::bounded_by(fittings.concurrency)),
+            names: crate::naming::Names::new(),
             machine: fittings.machine,
             headroom: fittings.headroom,
             polling: fittings.polling,

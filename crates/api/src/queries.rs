@@ -13,11 +13,28 @@
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::Response;
-use ipc::JobId;
+use serde::Deserialize;
 
 use crate::answers::{answer, refused};
 use crate::daemon::Queries;
+use crate::reference::Resolved;
 use crate::routes::Served;
+
+/// The second segment of `/jobs/:job_id/calls/:call_id`.
+///
+/// **Its own struct rather than a tuple**, because the Job is extracted beside
+/// it and a tuple would make each of the two handlers state a segment it does
+/// not use.
+#[derive(Deserialize)]
+pub(crate) struct Called {
+    call_id: String,
+}
+
+/// The second segment of `/jobs/:job_id/checks/:kept/output`. See [`Called`].
+#[derive(Deserialize)]
+pub(crate) struct Kept {
+    kept: String,
+}
 
 pub(crate) async fn list_jobs<D: Queries>(State(served): State<Served<D>>) -> Response {
     match served.daemon().list_jobs().await {
@@ -55,9 +72,9 @@ pub(crate) async fn get_manifest_reading<D: Queries>(State(served): State<Served
 /// and where each got to, the criteria, the branch, the brief.
 pub(crate) async fn get_job<D: Queries>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
 ) -> Response {
-    match served.daemon().get_job(JobId::carried(job_id)).await {
+    match served.daemon().get_job(job.id()).await {
         Ok(detail) => answer(StatusCode::OK, &detail, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -72,9 +89,9 @@ pub(crate) async fn get_job<D: Queries>(
 /// `crates/store/src/fold.rs` stays the only thing that replays them.
 pub(crate) async fn get_job_events<D: Queries>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
 ) -> Response {
-    match served.daemon().get_job_events(JobId::carried(job_id)).await {
+    match served.daemon().get_job_events(job.id()).await {
         Ok(history) => answer(StatusCode::OK, &history, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -87,9 +104,9 @@ pub(crate) async fn get_job_events<D: Queries>(
 /// sentences per step and that is however large the work is.
 pub(crate) async fn get_evidence<D: Queries>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
 ) -> Response {
-    match served.daemon().get_evidence(JobId::carried(job_id)).await {
+    match served.daemon().get_evidence(job.id()).await {
         Ok(evidence) => answer(StatusCode::OK, &evidence, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -102,9 +119,9 @@ pub(crate) async fn get_evidence<D: Queries>(
 /// not answer is a 500 and never an empty list.
 pub(crate) async fn get_remarks<D: Queries>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
 ) -> Response {
-    match served.daemon().get_remarks(JobId::carried(job_id)).await {
+    match served.daemon().get_remarks(job.id()).await {
         Ok(remarks) => answer(StatusCode::OK, &remarks, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -115,9 +132,9 @@ pub(crate) async fn get_remarks<D: Queries>(
 /// are what a person reading a diff needs and nothing else does.
 pub(crate) async fn get_diff<D: Queries>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
 ) -> Response {
-    match served.daemon().get_diff(JobId::carried(job_id)).await {
+    match served.daemon().get_diff(job.id()).await {
         Ok(diff) => answer(StatusCode::OK, &diff, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -136,13 +153,9 @@ pub(crate) async fn get_diff<D: Queries>(
 /// sample and the render.
 pub(crate) async fn get_job_resources<D: Queries>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
 ) -> Response {
-    match served
-        .daemon()
-        .get_job_resources(JobId::carried(job_id))
-        .await
-    {
+    match served.daemon().get_job_resources(job.id()).await {
         Ok(resources) => answer(StatusCode::OK, &resources, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -166,13 +179,10 @@ pub(crate) async fn get_job_resources<D: Queries>(
 /// in it names nothing, which is a different thing from the Job not existing.
 pub(crate) async fn get_call<D: Queries>(
     State(served): State<Served<D>>,
-    Path((job_id, call_id)): Path<(String, String)>,
+    job: Resolved,
+    Path(Called { call_id }): Path<Called>,
 ) -> Response {
-    match served
-        .daemon()
-        .get_call(JobId::carried(job_id), call_id)
-        .await
-    {
+    match served.daemon().get_call(job.id(), call_id).await {
         Ok(call) => answer(StatusCode::OK, &call, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -196,13 +206,10 @@ pub(crate) async fn get_call<D: Queries>(
 /// which is a different thing from the Job not existing.
 pub(crate) async fn get_check_output<D: Queries>(
     State(served): State<Served<D>>,
-    Path((job_id, kept)): Path<(String, String)>,
+    job: Resolved,
+    Path(Kept { kept }): Path<Kept>,
 ) -> Response {
-    match served
-        .daemon()
-        .get_check_output(JobId::carried(job_id), kept)
-        .await
-    {
+    match served.daemon().get_check_output(job.id(), kept).await {
         Ok(output) => answer(StatusCode::OK, &output, served.run_id()),
         Err(refusal) => refused(refusal),
     }

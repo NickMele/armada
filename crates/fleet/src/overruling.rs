@@ -31,7 +31,6 @@ use verification::OutcomeTurn;
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
-use crate::transcript;
 
 /// Why a person says the verdict is wrong. **Never empty.**
 ///
@@ -270,6 +269,6 @@ where
             FieldValue::Str(overruled.as_wire().to_string()),
         )
         .with_field("said", FieldValue::Str(overruling.text().to_string()));
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 }

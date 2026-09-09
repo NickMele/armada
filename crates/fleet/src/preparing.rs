@@ -37,7 +37,6 @@ use verification::{Exit, NeverRan};
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
-use crate::transcript;
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -222,7 +221,7 @@ where
         for (key, value) in fields {
             envelope = envelope.with_field(*key, value.clone());
         }
-        let _ = transcript::note(&self.host().repo_root, job.id(), &envelope);
+        self.noted_in_the_log(job.id(), &envelope);
     }
 }
 

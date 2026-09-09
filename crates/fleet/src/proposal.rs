@@ -40,7 +40,6 @@ use crate::drafting::StatedBy;
 use crate::judging::{watched, CallFailed, JudgeBudget};
 use crate::proposals::Watching;
 use crate::proposing::{Brief, NotProposed, Proposal, ProposedJob};
-use crate::transcript;
 
 /// Everything one call needs in order to ask.
 ///
@@ -284,7 +283,7 @@ where
         )
         .in_job(job.as_ulid().clone())
         .with_field("cause", FieldValue::Str(cause.to_string()));
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 
     /// One proposed Job, as the wire shape `drafted` refuses or accepts.

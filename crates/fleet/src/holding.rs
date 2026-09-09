@@ -34,7 +34,6 @@ use core_model::{
 use crate::adrift::Adrift;
 use crate::converging::elapsed;
 use crate::daemon::Fleet;
-use crate::transcript;
 
 /// How often Fleet asks what it could give back.
 ///
@@ -332,7 +331,7 @@ where
         .in_job(job.as_ulid().clone())
         .with_field("worktree", FieldValue::Str(said_of(&reclaimed.worktree)))
         .with_field("branch", FieldValue::Str(said_of_branch(&reclaimed.branch)));
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 
     fn noted_unreclaimed(&self, job: &JobId, why: &str) {
@@ -345,7 +344,7 @@ where
         )
         .in_job(job.as_ulid().clone())
         .with_field("cause", FieldValue::Str(why.to_string()));
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 }
 

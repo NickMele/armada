@@ -36,7 +36,6 @@ use core_model::{Component, Envelope, FieldValue, JobId, Level, Timestamp};
 use crate::adrift::Adrift;
 use crate::converging::elapsed;
 use crate::daemon::Fleet;
-use crate::transcript;
 use ipc::Settled;
 
 /// How often the forge is asked about one pull request.
@@ -406,7 +405,7 @@ where
     /// `pub(crate)` for its second caller, `crate::under_review`, which runs on
     /// this sweep and writes into the same Job's log for the same reason.
     pub(crate) fn logged(&self, job: &JobId, envelope: Envelope) {
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 
     /// Tell whoever is watching, with the Job's row as it now stands.

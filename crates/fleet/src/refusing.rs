@@ -17,7 +17,7 @@
 use adapter_traits::{AgentHarness, Delivery, NotMerged, Vcs, WorkProduct};
 use api::Refusal;
 use ipc::{RunId, WireError, WireValue};
-use store::{LoadJobError, WriteError};
+use store::{LoadJobError, ResolveJobError, WriteError};
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
@@ -158,6 +158,15 @@ where
                 WireError::raised(NO_SUCH_JOB, said, self.run_id())
                     .about_job(ipc::JobId::from(job_id)),
             ),
+            // The same 404 one segment earlier, and with no Job on it: what the
+            // caller said resolved to nothing, so there is no id to name. A
+            // database that would not answer is the fault it always was.
+            Adrift::Unresolvable(ResolveJobError::Database(_)) => {
+                Refusal::Fault(WireError::raised(FAULT, said, self.run_id()))
+            }
+            Adrift::Unresolvable(_) => {
+                Refusal::NoSuchJob(WireError::raised(NO_SUCH_JOB, said, self.run_id()))
+            }
             // The machine refused the move. The caller asked for something the
             // edge table does not have — approving a Job already running,
             // killing one already over — and 409 is the answer to that.

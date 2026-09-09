@@ -34,15 +34,15 @@ use crate::Adrift;
 /// Every line the Job's log holds, as raw text. Read rather than parsed: what
 /// is asserted is that a fact reached the file a person opens, and `ipc` owns
 /// the shape of a line.
-fn logged(home: &TempDir, job: &JobId) -> String {
-    let path = log_of(&home.path().to_string_lossy(), job);
+fn logged(home: &TempDir, handle: &str) -> String {
+    let path = log_of(&home.path().to_string_lossy(), handle);
     std::fs::read_to_string(path).unwrap_or_default()
 }
 
 /// How many lines say a given thing. The count is the assertion, not the
 /// presence: the loop ticks four times a second.
-fn saying(home: &TempDir, job: &JobId, said: &str) -> usize {
-    logged(home, job)
+fn saying(home: &TempDir, handle: &str, said: &str) -> usize {
+    logged(home, handle)
         .lines()
         .filter(|line| line.contains(said))
         .count()
@@ -117,7 +117,7 @@ async fn a_decline_says_which_guard_refused_in_the_jobs_log() {
     let _held = fleet.the_only_slot().await.lock().await.take();
     fleet.turn().await.unwrap();
 
-    let written = logged(&home, job.id());
+    let written = logged(&home, &job.handle());
     assert!(
         written.contains("the gate declined to rule on the evidence that landed"),
         "a decline that writes nothing is the absence this issue is about: {written}"
@@ -167,7 +167,7 @@ async fn a_submission_no_slot_will_ever_hold_escalates_the_job_it_was_for() {
         0,
         "the submission went with the escalation rather than being declined for ever"
     );
-    let written = logged(&home, job.id());
+    let written = logged(&home, &job.handle());
     assert!(
         written.contains("the evidence that landed can no longer be ruled on"),
         "the strand is written down as well as escalated: {written}"
@@ -229,7 +229,7 @@ async fn a_submission_overtaken_by_the_next_job_escalates_the_one_it_was_for() {
         Some(TransitionReason::Escalation(EscalationTrigger::Interrupted))
     );
     assert!(
-        logged(&home, first.id()).contains("nothing_is_working"),
+        logged(&home, &first.handle()).contains("nothing_is_working"),
         "the guard that refused is named in the log of the Job it refused about"
     );
     assert_eq!(
@@ -260,10 +260,10 @@ async fn a_decline_that_stands_writes_one_line_rather_than_one_a_turn() {
     }
 
     assert_eq!(
-        saying(&home, job.id(), "nothing_is_working"),
+        saying(&home, &job.handle(), "nothing_is_working"),
         2,
         "one line for the decline and one for the strand it became: {}",
-        logged(&home, job.id())
+        logged(&home, &job.handle())
     );
 }
 
@@ -378,7 +378,7 @@ async fn a_gate_that_cannot_read_its_artifact_escalates_and_names_the_artifact()
         StepLevelTrigger::of(EscalationTrigger::GateUndecided).map(StepVerdict::Failed),
     );
 
-    let written = logged(&home, job.id());
+    let written = logged(&home, &job.handle());
     assert!(
         written.contains("the gate could not read what it needed to rule"),
         "a gate that reads nothing and writes nothing is the whole defect: {written}"
@@ -436,7 +436,7 @@ async fn a_turn_that_could_not_carry_the_job_forward_reaches_the_jobs_log() {
     };
     fleet.noted_adrift(&why);
 
-    let written = logged(&home, job.id());
+    let written = logged(&home, &job.handle());
     assert!(
         written.contains("the turn could not carry the Job forward"),
         "{written}"

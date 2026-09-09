@@ -31,6 +31,12 @@ const JOB: &str = "01JOBAAAAAAAAAAAAAAAAAAAAA";
 const RUN: &str = "01RUNAAAAAAAAAAAAAAAAAAAAA";
 const DRONE: &str = "01DRONEKKKKKKKKKKKKKKKKKKK";
 
+/// What the Job is called, which is what its log and its transcript directory
+/// are named by.
+const HANDLE: &str = "7-a-job-that-was-refused";
+/// A Job nothing ever ran, for the empty answer.
+const NEVER_RAN: &str = "8-a-job-that-never-ran";
+
 /// The command the real Job was refused, as its transcript recorded it.
 const REFUSED: &str = "cargo nextest run --package ipc 2>&1 | tail -80";
 
@@ -39,6 +45,7 @@ fn recording(at: &TempDir, drone: &str) -> Recording {
         &at.path().to_string_lossy(),
         Spine {
             job: JobId::carried(Ulid::carried(JOB)),
+            handle: String::from(HANDLE),
             drone: DroneId::carried(Ulid::carried(drone)),
             step: StepId::new("implement"),
             run: Ulid::carried(RUN),
@@ -75,11 +82,7 @@ async fn a_refusal_names_the_command_it_was_refused_over() {
     recording.saw(&[called("toolu_01B13LL", REFUSED), refused("toolu_01B13LL")]);
     recording.settled().await;
 
-    let read = refusals(
-        &at.path().to_string_lossy(),
-        &JobId::carried(Ulid::carried(JOB)),
-    )
-    .await;
+    let read = refusals(&at.path().to_string_lossy(), HANDLE).await;
 
     assert_eq!(read.in_all(), 1);
     let [one] = read.kept() else {
@@ -112,11 +115,7 @@ async fn a_refused_heredoc_says_it_was_cut_and_how_long_it_was() {
     recording.saw(&[called("toolu_01Haa", &heredoc), refused("toolu_01Haa")]);
     recording.settled().await;
 
-    let read = refusals(
-        &at.path().to_string_lossy(),
-        &JobId::carried(Ulid::carried(JOB)),
-    )
-    .await;
+    let read = refusals(&at.path().to_string_lossy(), HANDLE).await;
 
     let [one] = read.kept() else {
         panic!("one refusal, carried: {:?}", read.kept());
@@ -145,11 +144,11 @@ async fn a_run_that_was_refused_nothing_carries_nothing() {
     recording.settled().await;
 
     let root = at.path().to_string_lossy().to_string();
-    let read = refusals(&root, &JobId::carried(Ulid::carried(JOB))).await;
+    let read = refusals(&root, HANDLE).await;
     assert!(read.kept().is_empty());
     assert_eq!(read.in_all(), 0);
 
-    let never_ran = refusals(&root, &JobId::carried(Ulid::carried(RUN))).await;
+    let never_ran = refusals(&root, NEVER_RAN).await;
     assert!(
         never_ran.kept().is_empty() && never_ran.in_all() == 0,
         "a Job with no log is missing, not an error"
@@ -172,11 +171,7 @@ async fn a_capped_list_states_how_many_there_were() {
     }
     recording.settled().await;
 
-    let read = refusals(
-        &at.path().to_string_lossy(),
-        &JobId::carried(Ulid::carried(JOB)),
-    )
-    .await;
+    let read = refusals(&at.path().to_string_lossy(), HANDLE).await;
 
     assert_eq!(read.kept().len(), REFUSALS);
     assert_eq!(read.in_all(), over as u64, "and the rest are counted");
@@ -198,11 +193,7 @@ async fn a_refusal_with_no_call_row_names_the_tool_and_guesses_nothing() {
     recording.saw(&[refused("toolu_01Gone")]);
     recording.settled().await;
 
-    let read = refusals(
-        &at.path().to_string_lossy(),
-        &JobId::carried(Ulid::carried(JOB)),
-    )
-    .await;
+    let read = refusals(&at.path().to_string_lossy(), HANDLE).await;
 
     let [one] = read.kept() else {
         panic!("the refusal is carried even with nothing to join it to");
@@ -232,11 +223,7 @@ async fn both_attempts_refusals_are_the_one_jobs() {
         recording.settled().await;
     }
 
-    let read = refusals(
-        &at.path().to_string_lossy(),
-        &JobId::carried(Ulid::carried(JOB)),
-    )
-    .await;
+    let read = refusals(&at.path().to_string_lossy(), HANDLE).await;
 
     assert_eq!(read.in_all(), 2);
     assert_eq!(

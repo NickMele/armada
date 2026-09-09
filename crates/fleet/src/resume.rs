@@ -36,7 +36,6 @@ use crate::briefing::Stopped;
 use crate::daemon::Fleet;
 use crate::reviewing::Said;
 use crate::session::{LiveSession, Occasion};
-use crate::transcript;
 use crate::working::Working;
 
 /// A Drone that took a turn after a person redirected it.
@@ -276,7 +275,7 @@ where
         .at_step(step.as_str());
         // A log line that will not write does not undo the move, for
         // `silence::noted_quiet`'s reason: the transition is its own record.
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 
     /// Ask for a fresh Drone on the worktree the last one left. **The second

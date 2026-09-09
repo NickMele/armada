@@ -24,7 +24,7 @@ use crate::tests::daemon::{
     a_fleet_judged_by, a_proposal, diff_evidence, fittings, one, worktree_directory,
 };
 use crate::tests::http::call;
-use crate::tests::restarting::{on_it, until_spoken};
+use crate::tests::restarting::{on_it, the_handle, until_spoken};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
 use crate::Adrift;
@@ -685,7 +685,12 @@ async fn a_fresh_drone_at_the_next_step_is_told_what_the_overruled_one_produced(
         .await
         .expect("the turn puts the fresh Drone on part 2");
 
-    let said = until_spoken(&home, &on_it(&fleet, &job_id).await).await;
+    let said = until_spoken(
+        &home,
+        &the_handle(&fleet, &job_id).await,
+        &on_it(&fleet, &job_id).await,
+    )
+    .await;
     assert!(
         said.contains("What part 1 produced"),
         "the Drone on part 2 was told nothing about part 1: {said}"

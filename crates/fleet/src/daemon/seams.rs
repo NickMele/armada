@@ -51,6 +51,10 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
+    /// What each Job is called on disk. See [`mod@crate::naming`].
+    pub(crate) fn names(&self) -> &crate::naming::Names {
+        &self.names
+    }
     pub(crate) fn store(&self) -> &Mutex<Store> {
         &self.store
     }

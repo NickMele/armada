@@ -195,7 +195,7 @@ async fn a_job_that_changed_nothing_is_answered_rather_than_committed() {
     // and a person would otherwise read the same blank row as a workflow that
     // delivers nothing by design.
     let root = home.path().to_string_lossy().into_owned();
-    let said = JobLogs::under(&root).read(&ipc::JobId::from(job.id()), 0);
+    let said = JobLogs::under(&root).read(&job.handle(), 0);
     assert!(
         said.notes
             .iter()
@@ -287,7 +287,7 @@ async fn a_refused_commit_still_completes_the_job_and_says_so() {
     // out would read on the Job's page exactly like a workflow that delivers
     // nothing by design.
     let root = home.path().to_string_lossy().into_owned();
-    let said = JobLogs::under(&root).read(&ipc::JobId::from(job.id()), 0);
+    let said = JobLogs::under(&root).read(&job.handle(), 0);
     let line = said
         .notes
         .iter()

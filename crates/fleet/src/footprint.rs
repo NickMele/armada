@@ -33,7 +33,6 @@ use core_model::{
 
 use crate::converging::elapsed;
 use crate::daemon::Fleet;
-use crate::transcript;
 use crate::working::Working;
 
 /// The shortest time between two readings of one Drone's worktree.
@@ -228,7 +227,7 @@ where
         )
         .in_job(job.as_ulid().clone())
         .with_field("cause", FieldValue::Str(why.to_string()));
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 }
 

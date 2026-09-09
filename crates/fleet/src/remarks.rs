@@ -30,7 +30,6 @@ use core_model::{Component, Envelope, FieldValue, Job, JobId, JobStatus, Level};
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::resume::Redirection;
-use crate::transcript;
 
 /// How much of a login or a timestamp reaches the forge.
 ///
@@ -243,7 +242,7 @@ where
                     &said.pull_request,
                 );
                 envelope = envelope.with_field("cause", FieldValue::Str(why.clone()));
-                let _ = transcript::note(&self.host().repo_root, job.id(), &envelope);
+                self.noted_in_the_log(job.id(), &envelope);
             }
         }
         written
@@ -261,7 +260,7 @@ where
         pull_request: &str,
     ) {
         let envelope = self.about_the_reply(job, level, saying, pull_request);
-        let _ = transcript::note(&self.host().repo_root, job.id(), &envelope);
+        self.noted_in_the_log(job.id(), &envelope);
     }
 
     /// The envelope the two above share, so the fields cannot come to differ.

@@ -49,8 +49,8 @@ fn a_commit_nobody_has_taken(home: &TempDir, handle: &str) {
     commit(&at, "work nobody has taken");
 }
 
-fn log_of(home: &TempDir, job: &core_model::JobId) -> String {
-    let path = crate::transcript::log_of(&home.path().to_string_lossy(), job);
+fn log_of(home: &TempDir, handle: &str) -> String {
+    let path = crate::transcript::log_of(&home.path().to_string_lossy(), handle);
     std::fs::read_to_string(path).unwrap_or_default()
 }
 
@@ -111,7 +111,7 @@ async fn what_the_sweep_took_is_written_into_the_jobs_own_log() {
 
     fleet.turn().await.expect("a turn");
 
-    let said = log_of(&home, &job_id);
+    let said = log_of(&home, &handle);
     assert!(
         said.contains("fleet reclaimed this job's worktree"),
         "the Job's own log says it happened: {said}"
@@ -320,7 +320,7 @@ async fn a_worktree_already_given_back_is_not_swept_a_second_time() {
         "nothing to give back is nothing to report"
     );
     assert_eq!(
-        log_of(&home, &job_id)
+        log_of(&home, &handle)
             .matches("fleet reclaimed this job's worktree")
             .count(),
         1

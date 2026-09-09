@@ -88,7 +88,7 @@ where
             held,
             processes,
             worktree: self.sized_worktree(job).await,
-            wrote_last_at: wrote_last(&log_of(&self.host().repo_root, job.id())),
+            wrote_last_at: wrote_last(&log_of(&self.host().repo_root, &job.handle())),
         })
     }
 

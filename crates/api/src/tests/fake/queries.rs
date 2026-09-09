@@ -17,9 +17,26 @@ use ipc::{
 use super::FakeDaemon;
 use crate::tests::shapes;
 use crate::tests::shapes::run_id;
-use crate::{Observed, Queries, Refusal};
+use crate::{Observed, Queries, Refusal, Resolved};
 
 impl Queries for FakeDaemon {
+    /// **The three forms, against the summaries the fake is holding.** A real
+    /// daemon asks the store; this asks the list, which is the same three
+    /// answers and lets a route test drive a handle through the extractor
+    /// without a store behind it.
+    async fn resolve_job(&self, named: String) -> Result<Resolved, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        let found = jobs.iter().find(|job| {
+            job.id.as_str() == named
+                || job.handle == named
+                || job.handle.split('-').next() == Some(named.as_str())
+        });
+        match found {
+            Some(job) => Ok(Resolved::of(job.id.clone(), job.handle.clone())),
+            None => Err(self.no_such_job(&JobId::carried(named))),
+        }
+    }
+
     async fn list_jobs(&self) -> Result<JobList, Refusal> {
         if *self.mute.lock().expect("not poisoned") {
             return Err(self.fault("the fake was told not to answer"));

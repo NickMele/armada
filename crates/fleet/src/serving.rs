@@ -25,13 +25,14 @@
 //! second vocabulary that agrees with the log only until something changes.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
-use api::{Observed, Queries, Refusal};
+use api::{Observed, Queries, Refusal, Resolved};
+use core_model::JobReference;
 use ipc::{
     CallArguments, FleetCapacity, JobDelivery, JobDetail, JobDiff, JobEvidence, JobHistory, JobId,
     JobList, JobRemarks, JobResources, JobSpend, ManifestReading, ManifestSummary, ModelChoices,
     Work, WorkflowSummary, WorktreesHeld,
 };
-use store::LoadJobError;
+use store::{LoadJobError, ResolveJobError};
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
@@ -51,6 +52,29 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
+    /// What a caller said, turned into the Job they meant.
+    ///
+    /// **Three reads and not one, deliberately.** `store::Store::resolve_job`
+    /// answers with the id and the handle together, so nothing downstream loads
+    /// the Job a second time to derive a path from it.
+    ///
+    /// **The Manifest is this Fleet's own.** A number counts within one, and a
+    /// Fleet serves one repository — so the scope is not a parameter and cannot
+    /// be chosen by a caller. A store holding two Manifests answers about this
+    /// one or answers nothing.
+    async fn resolve_job(&self, named: String) -> Result<Resolved, Refusal> {
+        let Some(reference) = JobReference::read(&named) else {
+            return Err(self.refusal(Adrift::Unresolvable(ResolveJobError::NoSuchJob { named })));
+        };
+        let found = self
+            .store()
+            .lock()
+            .await
+            .resolve_job(&reference, Some(self.manifest().id()))
+            .map_err(|why| self.refusal(Adrift::Unresolvable(why)))?;
+        Ok(Resolved::of(JobId::from(&found.job_id), found.handle))
+    }
+
     async fn list_jobs(&self) -> Result<JobList, Refusal> {
         let (loaded, unreadable) = self.every_job().await.map_err(|why| self.refusal(why))?;
         // **One read for the whole list**, filled in afterwards rather than
@@ -446,9 +470,11 @@ where
     /// and says so: [`Adrift::NoSuchCall`], which is a 422 — the Job is there,
     /// and the id names nothing in it.
     async fn get_call(&self, job_id: JobId, call_id: String) -> Result<CallArguments, Refusal> {
-        let id = job_id.to_domain();
-        self.load(&id).await.map_err(|why| self.refusal(why))?;
-        crate::transcript::arguments(&self.host().repo_root, &id, &call_id)
+        let job = self
+            .load(&job_id.to_domain())
+            .await
+            .map_err(|why| self.refusal(why))?;
+        crate::transcript::arguments(&self.host().repo_root, &job.handle(), &call_id)
             .await
             .ok_or_else(|| self.refusal(Adrift::NoSuchCall { named: call_id }))
     }
@@ -564,12 +590,13 @@ where
     /// Job is read**: watching is a property of a connection, not of the work,
     /// and a status that would refuse a viewer does not exist.
     async fn observe_job(&self, job_id: JobId) -> Result<Observed, Refusal> {
-        self.load(&job_id.to_domain())
+        let job = self
+            .load(&job_id.to_domain())
             .await
             .map_err(|why| self.refusal(why))?;
         let live = self.turns().watching(&job_id);
         let (history, skipped) =
-            crate::transcript::history(&self.host().repo_root, &job_id.to_domain()).await;
+            crate::transcript::history(&self.host().repo_root, &job.handle()).await;
         Ok(Observed {
             job_id,
             live,

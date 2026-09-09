@@ -614,7 +614,7 @@ async fn a_pipe_something_else_holds_open_does_not_hold_the_turn_loop() {
         fleet.the_only_slot().await.lock().await.is_none(),
         "the slot was not given back"
     );
-    let log = logged(&home, &job);
+    let log = logged(&home, &record.handle());
     the_stray_tool_ended(&marker);
     assert!(
         log.contains("cut short"),
@@ -694,7 +694,7 @@ async fn the_line_for_a_policy_ending_names_the_call_that_was_refused() {
         )),
     );
 
-    let log = logged(&home, &job);
+    let log = logged(&home, &fleet.load(&job).await.expect("the Job").handle());
     let line = log
         .lines()
         .find(|line| line.contains("nothing had been submitted"))
@@ -796,10 +796,10 @@ async fn a_drone_that_has_not_ended_its_run_still_gets_its_pokes() {
 }
 
 /// The Job's own activity log, as text.
-fn logged(home: &TempDir, job: &core_model::JobId) -> String {
+fn logged(home: &TempDir, handle: &str) -> String {
     std::fs::read_to_string(crate::transcript::log_of(
         &home.path().to_string_lossy(),
-        job,
+        handle,
     ))
     .unwrap_or_default()
 }

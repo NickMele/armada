@@ -384,6 +384,10 @@ impl fmt::Display for Adrift {
                  is what makes a plan creatable in dependency order and a cycle impossible \
                  to state"
             ),
+            // The resolver's own words, which quote what the caller said. A
+            // sentence written here would be a second wording of the same
+            // refusal, and the two would drift.
+            Adrift::Unresolvable(why) => write!(out, "{why}"),
             Adrift::NoSuchCall { named } => write!(
                 out,
                 "nothing in this Job's transcripts is the call `{named}`. The record holds \
@@ -490,6 +494,7 @@ impl Adrift {
             | Adrift::NoSuchPeer { .. }
             | Adrift::NoSuchCall { .. }
             | Adrift::NoSuchCheckOutput { .. }
+            | Adrift::Unresolvable(_)
             | Adrift::Modelless
             | Adrift::NothingToPropose
             | Adrift::NoReadingWorktree(_)
@@ -507,6 +512,7 @@ impl Error for Adrift {
         match self {
             Adrift::BootRead(cause) => Some(cause),
             Adrift::Reading(cause) => Some(cause),
+            Adrift::Unresolvable(cause) => Some(cause),
             Adrift::Writing(cause) => Some(cause),
             Adrift::IllegalMove(cause) => Some(cause),
             Adrift::IllegalStepMove(cause) => Some(cause),

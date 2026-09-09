@@ -31,7 +31,6 @@ use core_model::{Actor, AdvanceGate, Component, Envelope, FieldValue, Job, JobId
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
-use crate::transcript;
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -274,6 +273,6 @@ where
                 .with_field("refused", FieldValue::Str(refused.kind().to_string()))
                 .with_field("cause", FieldValue::Str(refused.said()));
         }
-        let _ = transcript::note(&self.host().repo_root, job.id(), &envelope);
+        self.noted_in_the_log(job.id(), &envelope);
     }
 }

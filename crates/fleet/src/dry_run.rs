@@ -35,7 +35,6 @@ use verification::Ran;
 
 use crate::check_output;
 use crate::daemon::Fleet;
-use crate::transcript;
 
 /// How many times one step may ask.
 ///
@@ -446,7 +445,7 @@ where
         .with_field("narrowed", FieldValue::Bool(report.narrowed));
         // A log line that will not write does not fail the call: the Drone has
         // its answer, and nothing about the Job moved either way.
-        let _ = transcript::note(&self.host().repo_root, plan.record.id(), &envelope);
+        self.noted_in_the_log(plan.record.id(), &envelope);
     }
 }
 

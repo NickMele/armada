@@ -44,6 +44,7 @@ use crate::headroom::{Headroom, Machine, Polling};
 use crate::holding::Reclaiming;
 use crate::judging::{Aloft, JudgeBudget};
 use crate::mint::Mint;
+use crate::naming::Names;
 use crate::noticing::{Noticing, Sweep};
 use crate::peer::{Drones, PeerOf};
 use crate::proposals::Proposals;
@@ -106,6 +107,10 @@ pub struct Fleet<H, V, W> {
     /// Which Jobs are being worked and how many may be. See [`crate::slots`]
     /// for the two locks and the order they are taken in.
     slots: Mutex<Slots>,
+    /// What each Job is called on disk. **Minted here, not a fitting** — it is
+    /// filled from the boot read and from every insert, so nothing outside this
+    /// crate could hand one over already true. See [`mod@crate::naming`].
+    names: Names,
     machine: Arc<dyn Machine>,
     headroom: Headroom,
     polling: Polling,

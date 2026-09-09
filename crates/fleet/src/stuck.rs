@@ -78,7 +78,7 @@ where
     /// file under `.armada/transcripts/` is what survives, and the Job's log is
     /// what names it.
     async fn refused(&self, job: &Job) -> Refusals {
-        crate::transcript::refusals(&self.host().repo_root, job.id()).await
+        crate::transcript::refusals(&self.host().repo_root, &job.handle()).await
     }
 
     /// What Fleet knows about this Job that its record does not say.

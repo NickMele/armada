@@ -85,6 +85,7 @@ fn taps(at: &TempDir) -> Taps {
         &at.path().to_string_lossy(),
         Spine {
             job: job(),
+            handle: String::from("3-a-job-at-a-boundary"),
             drone: DroneId::carried(Ulid::carried(DRONE)),
             step: StepId::new("implement"),
             run: Ulid::carried(RUN),

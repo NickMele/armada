@@ -36,7 +36,6 @@ use crate::daemon::Fleet;
 use crate::gate::{self, SentBack};
 use crate::resume::Redirection;
 use crate::session::{LiveSession, Occasion};
-use crate::transcript;
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -461,7 +460,7 @@ where
         .in_job(job.as_ulid().clone());
         // A log line that will not write does not undo the write that matters,
         // for `resume::noted_roused`'s reason: the column is the record.
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 
     /// A verdict on the work: the Job is over and its Drone is ended.

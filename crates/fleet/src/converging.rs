@@ -37,7 +37,6 @@ use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::judging;
 use crate::session::{LiveSession, Occasion};
-use crate::transcript;
 use crate::working::Working;
 
 /// What a step is expected to cost before any of this looks at it.
@@ -674,7 +673,7 @@ where
         }
         // A log line that will not write does not stop the Job: the stage is
         // on the slot, and the escalation is a transition of its own.
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 }
 
