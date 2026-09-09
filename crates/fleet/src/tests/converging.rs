@@ -15,6 +15,8 @@
 //! injected into it or does not. That is the whole difference between the last
 //! two cases, and it is a property of a process rather than of a value.
 
+mod handed;
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -116,8 +118,28 @@ fn alive(pid: u32) -> bool {
         .unwrap_or(false)
 }
 
+/// A Drone that is handed the directive and does nothing about it.
+///
+/// **Three statements, and the middle one is what the case is about.** The
+/// opening brief is swallowed for [`a_drone_that_answers`]'s reason; the
+/// directive is then read and echoed verbatim, which is what a real Drone under
+/// `--replay-user-messages` does when the session hands it one; and then it
+/// goes quiet, which is the refusal this case is named for.
+///
+/// **Echoing it is not a detail of the shell.** A fixture that never touched
+/// stdin modelled a session that was never handed the turn — a different Drone
+/// entirely, and not one `no_report` is a finding about. That is
+/// [`a_drone_still_inside_a_call`], and the case below it carries what telling
+/// them apart cost. `testkit::REPLAYED` reads the echo back.
 fn a_drone_that_will_not_answer(calls: u32) -> FakeHarness {
-    FakeHarness::running("/bin/sh", &["-c", "echo BUSY; sleep 30"]).reading("BUSY", called(calls))
+    FakeHarness::running(
+        "/bin/sh",
+        &[
+            "-c",
+            "echo BUSY; IFS= read -r _; IFS= read -r line; printf '%s\\n' \"$line\"; sleep 30",
+        ],
+    )
+    .reading("BUSY", called(calls))
 }
 
 /// The same Drone, except that it answers every turn injected into it. Its

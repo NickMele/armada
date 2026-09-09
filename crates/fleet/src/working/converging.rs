@@ -58,6 +58,55 @@ impl Working {
         self.transcript.progress().boundaries
     }
 
+    /// How many turns Armada has put into this session the Drone has been
+    /// handed so far.
+    ///
+    /// Read before the directive goes down the pipe, for
+    /// [`rested`](Working::rested)'s reason and with a sharper edge: this
+    /// counter moves *because of* the write being made, so a baseline taken
+    /// afterwards would read the directive's own acknowledgement as one that
+    /// was already there and call it delivered before it was.
+    pub(crate) fn handed(&self) -> usize {
+        self.transcript.progress().delivered
+    }
+
+    /// Whether the directive has reached the Drone.
+    ///
+    /// **Sent is not told.** Injection lands at a turn boundary, so a Drone
+    /// inside a tool call is handed nothing until that call returns — measured
+    /// at 1.59s between two fast calls and 33.14s inside a slow one, spike 4,
+    /// and at 92s on Job `01M21BKVPW002DC0ATD1X9T0VF`. That Drone obeyed 26
+    /// seconds after it was handed the turn and was stopped 2 seconds later,
+    /// having spent 92 of its 120 waiting to be spoken to.
+    ///
+    /// **False is not a Drone ignoring anything**, which is the whole reason
+    /// `crate::converging` waits rather than escalating on it.
+    pub(crate) fn was_handed_the_directive(&self) -> bool {
+        self.transcript.progress().delivered > self.handed_before
+    }
+
+    /// When the directive reached the Drone, or [`None`] while it has not.
+    ///
+    /// **The instant the report grace runs from**, and a different fact from
+    /// the `asked_at` beside it in [`Chain::Reporting`]: that one dates the
+    /// look whose finding the directive carries, and the escalation quotes it.
+    /// One field for both would make a re-armed deadline rewrite when the look
+    /// happened.
+    pub(crate) fn handed_the_directive(&self) -> Option<&Timestamp> {
+        self.handed_at.as_ref()
+    }
+
+    /// Stamp the instant the directive landed. **Idempotent**, because it is
+    /// asked on every turn of the vigil and the first reading is the true one —
+    /// a stamp that moved would give a Drone a fresh grace for every turn it
+    /// stayed quiet, which is the opposite of what this measures.
+    ///
+    /// Accurate to the turn loop's own period rather than to the pipe, which is
+    /// what makes it a stamp rather than a measurement.
+    pub(crate) fn handed_the_directive_at(&mut self, now: Timestamp) {
+        self.handed_at.get_or_insert(now);
+    }
+
     /// The Drone has been told to report, from this instant.
     ///
     /// `in_plan` is the declared plan as the look that produced `why` found it.
@@ -65,10 +114,12 @@ impl Working {
         &mut self,
         asked_at: Timestamp,
         rested_before: usize,
+        handed_before: usize,
         why: NotConverging,
         in_plan: Vec<RepoPath>,
     ) {
         self.rested_before = rested_before;
+        self.handed_before = handed_before;
         self.chain = Chain::Reporting {
             asked_at,
             why,
