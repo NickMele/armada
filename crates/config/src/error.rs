@@ -698,6 +698,27 @@ pub enum ResolveError {
         manifest: PathBuf,
         disagreements: Vec<Disagreement>,
     },
+    /// One or more steps declare `evidence_type: visual` and the Manifest
+    /// declares no `evidence:` harness to capture with.
+    ///
+    /// **Its own variant rather than a [`Disagreement`]**, which is two files
+    /// that both say something and say different things. This is one file
+    /// asking for a capability the other never claimed, which is
+    /// [`ChecksNotDeclared`](ResolveError::ChecksNotDeclared)'s shape — and the
+    /// same argument for refusing it here: the alternative is a Job that runs
+    /// three steps, spawns a Drone on the fourth and captures nothing, having
+    /// asked a repository for a harness it does not have.
+    ///
+    /// **Reported after a missing Check and before a disagreement**, because a
+    /// workflow whose names do not resolve is not yet a workflow to ask this
+    /// of, and because the fix is the same size as a missing name: declare the
+    /// section, or stop asking for it.
+    ShowsWithNoHarness {
+        workflow: PathBuf,
+        manifest: PathBuf,
+        /// Every step that asked, in the order the workflow declares them.
+        steps: Vec<StepId>,
+    },
 }
 
 impl fmt::Display for ResolveError {
@@ -723,6 +744,28 @@ impl fmt::Display for ResolveError {
                 for said in disagreements {
                     write!(f, "; {said}")?;
                 }
+                return Ok(());
+            }
+            ResolveError::ShowsWithNoHarness {
+                workflow,
+                manifest,
+                steps,
+            } => {
+                // The remedy is in the sentence, because the two halves of it
+                // are in two files and a reader holding one of them cannot see
+                // the other. Naming the section is what makes this actionable
+                // without a second lookup.
+                let named: Vec<&str> = steps.iter().map(StepId::as_str).collect();
+                write!(
+                    f,
+                    "{} has {} step(s) whose evidence is what they look like — {} — \
+                     and {} declares no `evidence:` harness to capture with. \
+                     Declare one, or stop asking for it",
+                    workflow.display(),
+                    steps.len(),
+                    Listed(&named, "none"),
+                    manifest.display()
+                )?;
                 return Ok(());
             }
         };

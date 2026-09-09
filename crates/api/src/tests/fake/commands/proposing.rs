@@ -83,6 +83,8 @@ impl FakeDaemon {
             // No slot, so nothing is waiting. See `Tools::ask_question`.
             asking: false,
             landed: None,
+            // Nothing has reclaimed a Job just proposed.
+            reclaimed_at: None,
         };
         self.jobs.lock().expect("not poisoned").push(job.clone());
         self.events.publish(Event::JobCreated(JobCreated {

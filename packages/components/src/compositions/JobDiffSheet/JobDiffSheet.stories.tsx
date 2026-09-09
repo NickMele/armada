@@ -219,3 +219,34 @@ export const NoReading: Story = {
     await expect(sheet).toHaveTextContent("Fleet commits once at the end");
   },
 };
+
+/**
+ * **The worktree was given back**, and the header says which silence this is.
+ *
+ * `NoReading` above is the honest answer to three different questions, and for
+ * two of them that is right — a read still in flight and a read Fleet did not
+ * answer are both about to become something else. The third is not. A job that
+ * finished had a worktree, wrote to it and gave it back, and the Produced
+ * chapter beside this sheet still lists every file it wrote. A person reading
+ * the two together had a count against a blank and no way to tell which of them
+ * was lying. Neither is: the footprint is kept and the worktree is not.
+ *
+ * So the caller names it. `whyNoReading` replaces the flat phrase and nothing
+ * else moves — the body still carries the long form, because a header that
+ * explains is a header nobody finishes reading.
+ */
+export const TheWorktreeWasGivenBack: Story = {
+  args: {
+    ...NoReading.args,
+    whyNoReading: "the worktree was given back",
+  },
+  play: async ({ canvas }) => {
+    const sheet = canvas.getByRole("dialog", { name: "Job diff" });
+
+    await expect(sheet).toHaveTextContent("the worktree was given back");
+    await expect(sheet).not.toHaveTextContent("no reading");
+
+    // Still no count, for the same reason it had none in the story above.
+    await expect(sheet).not.toHaveTextContent("0 files");
+  },
+};

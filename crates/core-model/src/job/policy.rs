@@ -37,12 +37,24 @@ pub enum AutoMerge {
     Never,
     /// A machine may decide, once **the forge's** checks have all passed.
     ///
-    /// **Not Armada's Checks.** `adapter_traits::WhatTheForgeRan` is the
-    /// reading this names — the repository's own automation, run against the
-    /// branch under review — and a Check declared in `armada.yml` has already
-    /// run at the gate this policy is read at. Totalling the two would say a
-    /// gate had held that never ran.
-    TestsPass,
+    /// **Not Armada's Checks, and the name is deliberately the ambiguous one.**
+    /// It sits in the same file as a `checks:` block that means something else,
+    /// and it was named for the person writing it rather than the person
+    /// reading it beside that block: on a forge the word for these is checks,
+    /// and calling them tests was wrong because one of them is as likely to be
+    /// a lint or a build. The cost is that this doc comment and
+    /// `docs/concepts/manifest.md` carry the disambiguation instead of the
+    /// name doing it.
+    ///
+    /// `adapter_traits::WhatTheForgeRan` is the reading it names — the
+    /// repository's own automation, run against the branch under review — and a
+    /// Check declared in `armada.yml` has already run at the gate this policy
+    /// is read at. Totalling the two would say a gate had held that never ran.
+    ///
+    /// **A repository whose forge runs nothing never merges under this.**
+    /// `NothingRan` is not `AllPassed`, which is the cautious reading and the
+    /// one the fold everywhere else in this file takes.
+    ChecksPass,
     /// A machine may decide, whatever ran.
     Always,
 }
@@ -50,7 +62,7 @@ pub enum AutoMerge {
 impl AutoMerge {
     /// Every value, for a refusal that names what the file could have said.
     pub const ALL: &'static [AutoMerge] =
-        &[AutoMerge::Never, AutoMerge::TestsPass, AutoMerge::Always];
+        &[AutoMerge::Never, AutoMerge::ChecksPass, AutoMerge::Always];
 
     /// Exactly as `armada.yml` writes it. **Hyphenated in the middle value**,
     /// which is `docs/concepts/manifest.md`'s spelling and the one the settings
@@ -59,7 +71,7 @@ impl AutoMerge {
     pub fn as_written(&self) -> &'static str {
         match self {
             AutoMerge::Never => "never",
-            AutoMerge::TestsPass => "tests-pass",
+            AutoMerge::ChecksPass => "checks-pass",
             AutoMerge::Always => "always",
         }
     }
@@ -82,7 +94,7 @@ impl AutoMerge {
         let policy = *policy;
         match policy {
             AutoMerge::Never => 0,
-            AutoMerge::TestsPass => 1,
+            AutoMerge::ChecksPass => 1,
             AutoMerge::Always => 2,
         }
     }
@@ -198,24 +210,24 @@ mod tests {
         }
     }
 
-    /// `never` beats `tests-pass` beats `always`, in either order the
+    /// `never` beats `checks-pass` beats `always`, in either order the
     /// Manifests are listed in — `convoy.md`'s rule, and the order-independence
     /// is what makes it a resolution rather than a precedence.
     #[test]
     fn the_most_cautious_gating_manifest_holds() {
         assert_eq!(
-            AutoMerge::across(vec![AutoMerge::Always, AutoMerge::TestsPass]),
-            AutoMerge::TestsPass
+            AutoMerge::across(vec![AutoMerge::Always, AutoMerge::ChecksPass]),
+            AutoMerge::ChecksPass
         );
         assert_eq!(
-            AutoMerge::across(vec![AutoMerge::TestsPass, AutoMerge::Always]),
-            AutoMerge::TestsPass
+            AutoMerge::across(vec![AutoMerge::ChecksPass, AutoMerge::Always]),
+            AutoMerge::ChecksPass
         );
         assert_eq!(
             AutoMerge::across(vec![
                 AutoMerge::Always,
                 AutoMerge::Never,
-                AutoMerge::TestsPass
+                AutoMerge::ChecksPass
             ]),
             AutoMerge::Never
         );

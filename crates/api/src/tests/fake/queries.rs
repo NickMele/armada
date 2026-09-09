@@ -10,7 +10,7 @@
 
 use ipc::{
     CallArguments, CheckOutput, FleetCapacity, JobDetail, JobDiff, JobEvidence, JobHistory, JobId,
-    JobList, JobRemarks, JobResources, ManifestReading, ManifestSummary, ModelChoices,
+    JobList, JobRemarks, JobResources, KeptFrame, ManifestReading, ManifestSummary, ModelChoices,
     WorkflowSummary, WorktreesHeld,
 };
 
@@ -156,6 +156,29 @@ impl Queries for FakeDaemon {
             )));
         }
         Ok(shapes::check_output(kept))
+    }
+
+    /// **The same two refusals again**, and nothing here opens a file: what the
+    /// route has to prove is that the bytes come back as themselves, under a
+    /// media type read off the name, and that a name the record does not hold
+    /// reaches nothing.
+    async fn get_frame(
+        &self,
+        job_id: JobId,
+        kept: String,
+    ) -> Result<(KeptFrame, Vec<u8>), Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        if !jobs.iter().any(|job| job.id == job_id) {
+            return Err(self.no_such_job(&job_id));
+        }
+        if kept != shapes::THE_FRAME {
+            return Err(Refusal::Unacceptable(ipc::WireError::raised(
+                "fleet.no_such_frame",
+                format!("no step of this Job kept a frame named `{kept}`"),
+                run_id(),
+            )));
+        }
+        Ok((shapes::frame(kept), shapes::THE_FRAME_BYTES.to_vec()))
     }
 
     async fn list_workflows(&self) -> Result<Vec<WorkflowSummary>, Refusal> {

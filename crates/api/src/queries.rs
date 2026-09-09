@@ -15,7 +15,7 @@ use axum::http::StatusCode;
 use axum::response::Response;
 use serde::Deserialize;
 
-use crate::answers::{answer, refused};
+use crate::answers::{answer, file, refused};
 use crate::daemon::Queries;
 use crate::reference::Resolved;
 use crate::routes::Served;
@@ -34,6 +34,16 @@ pub(crate) struct Called {
 #[derive(Deserialize)]
 pub(crate) struct Kept {
     kept: String,
+}
+
+/// The two segments after the Job on `get_frame`, named rather than
+/// positional. **A tuple `Path` would take the Job's segment too**, and the
+/// Job's segment is `Resolved`'s — which is the whole reason this struct
+/// exists where `Kept`'s one field did not need it.
+#[derive(Deserialize)]
+pub(crate) struct Framed {
+    run: String,
+    name: String,
 }
 
 pub(crate) async fn list_jobs<D: Queries>(State(served): State<Served<D>>) -> Response {
@@ -211,6 +221,42 @@ pub(crate) async fn get_check_output<D: Queries>(
 ) -> Response {
     match served.daemon().get_check_output(job.id(), kept).await {
         Ok(output) => answer(StatusCode::OK, &output, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// One frame a step's harness produced, answered as the file itself.
+///
+/// **The one route on this seam that does not answer JSON.** An image has no
+/// window — a truncated PNG is not a shorter PNG, it is a file nothing can draw
+/// — so there is no partial reading for an envelope to describe, and base64
+/// would inflate the bytes by a third to carry nothing extra. The split is
+/// `get_check_output`'s: the row rides `StepDetail` and the image is fetched
+/// once, by whoever opens one.
+///
+/// The media type is read off the frame's own name rather than stored beside
+/// its path, and `nosniff` goes with it — `answers::file` holds both, and why.
+///
+/// 404 where the Job is unknown. 422 where the Job is known and no row of it
+/// kept a frame under that name — a reclaimed `.armada/frames`, or a name that
+/// was never one.
+/// **Two path segments and one id.** A frame's name is the harness's own, so
+/// two steps of one Job may both have written `home.png` and the file name
+/// alone identifies no row — the run's directory in front of it is what does.
+/// They are rejoined here into the `kept` the record composes, which keeps the
+/// one spelling of that identity in `showing::tail` rather than a second one
+/// here.
+pub(crate) async fn get_frame<D: Queries>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+    Path(Framed { run, name }): Path<Framed>,
+) -> Response {
+    match served
+        .daemon()
+        .get_frame(job.id(), format!("{run}/{name}"))
+        .await
+    {
+        Ok((held, bytes)) => file(&held.name, bytes),
         Err(refusal) => refused(refusal),
     }
 }

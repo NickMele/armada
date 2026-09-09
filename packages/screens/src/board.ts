@@ -9,22 +9,29 @@
 // would narrow by a fact nobody narrows on. What is left is state, and one text
 // match. `docs/concepts/job-board.md` carries both decisions.
 //
-// # The five tabs partition the twelve statuses, and the registry does the
-// partitioning
+// # The six tabs partition the twelve statuses, and the registry does most of
+// the partitioning
 //
 // No list of statuses is written here. `job-statuses.toml` says whether a Job
 // is over and what it is doing, the codegen carries both onto `JOB_LIFECYCLE`,
-// and the four state tabs are read off those two fields plus the one status the
-// `Queued` tab is named after. **`tabOf` itself is in `needs-you.ts` now**, so
-// that main can read the same rule; what it does is unchanged and the table
-// below is still what it does:
+// and four of the five state tabs are read off those two fields plus the one
+// status the `Queued` tab is named after. **`tabOf` itself is in `needs-you.ts`
+// now**, so that main can read the same rule; what it does is unchanged and the
+// table below is still what it does:
 //
 // | Tab | Rule |
 // |---|---|
-// | Finished | `terminal` |
+// | Cleared | `reclaimed_at` is set — a row fact, not a registry one, and read first |
+// | Finished | `terminal`, and `reclaimed_at` is not set |
 // | Running | `mode` is `Working` — `running` and `piloted`, because a job somebody has taken over is still moving |
 // | Needs you | `who_is_acting` is `Person`, **or the row says `asking`** |
 // | Queued | `who_is_acting` is `Drone` — `queued` |
+//
+// **`Cleared` is not a registry state.** `reclaimed_at` is a fact `#570`
+// added to the row when a job's worktree and branch are given back while its
+// record stays — a `Cleared` job's own `status` is still whatever it stopped
+// at, terminal either way. Splitting it out of `Finished` is what keeps a
+// bulk clear from reading as though it deleted the row it was asked to keep.
 //
 // **Every tab is a positive rule and none is a leftover.** `Needs you` was
 // reached by subtraction until `who_is_acting` was emitted: not over, not
@@ -60,7 +67,7 @@
 // a filter the person chose in order to make a sentence true, and then cannot
 // give it back. Suspending makes the same sentence true and costs nothing.
 //
-// **Choosing a tab clears the search**, whether by `1`–`5` or by clicking one.
+// **Choosing a tab clears the search**, whether by `1`–`6` or by clicking one.
 // A suspended tab that did nothing when pressed would be a dead control, and
 // pressing one is asking for a state rather than for a match — so the search is
 // what gives way, in the direction that has an undo. Retyping a query is a
@@ -81,7 +88,7 @@ import type { BoardTab } from "./needs-you";
 export type { BoardTab, StateTab } from "./needs-you";
 
 /**
- * The tabs, their labels, the key that selects each — `1` through `5`, in the
+ * The tabs, their labels, the key that selects each — `1` through `6`, in the
  * order they are drawn — and what each says when it holds nothing.
  *
  * The key is the position, which is why it is here and not typed into a
@@ -89,8 +96,8 @@ export type { BoardTab, StateTab } from "./needs-you";
  * second tab answered `3` would be unlearnable.
  *
  * **Each empty line is written, not templated.** "Nothing is under running" is
- * what a template produces and nobody says; the four sentences below are what a
- * person would say, and there are only four of them.
+ * what a template produces and nobody says; the six sentences below are what a
+ * person would say, and there are only six of them.
  */
 export const BOARD_TABS: readonly {
   id: BoardTab;
@@ -103,6 +110,9 @@ export const BOARD_TABS: readonly {
   { id: "running", label: "Running", shortcut: "3", empty: "Nothing is running." },
   { id: "queued", label: "Queued", shortcut: "4", empty: "Nothing is queued." },
   { id: "finished", label: "Finished", shortcut: "5", empty: "Nothing has finished." },
+  // Split out of `Finished` by `#570`: a reclaimed job is still terminal, and
+  // a tab that could not tell it apart is the defect the issue was filed over.
+  { id: "cleared", label: "Cleared", shortcut: "6", empty: "Nothing has been cleared." },
 ];
 
 /** Where the Board opens. Everything, because nothing has been asked yet. */

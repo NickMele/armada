@@ -34,6 +34,7 @@ export * from "./remarks";
 export * from "./report";
 export * from "./resources";
 export * from "./setup";
+export * from "./showing";
 export * from "./turn";
 export * from "./version";
 export * from "./waiting";

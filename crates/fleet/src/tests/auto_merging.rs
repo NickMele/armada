@@ -100,13 +100,13 @@ async fn a_repository_that_says_nothing_never_merges_itself() {
     );
 }
 
-/// **`tests-pass` waits for the forge's own checks, and merges when they are
+/// **`checks-pass` waits for the forge's own checks, and merges when they are
 /// green.** The Job then ends exactly as a press ends it, because it is the
 /// same act.
 #[tokio::test]
 async fn tests_pass_merges_once_the_forge_is_green() {
     let home = TempDir::new();
-    let fleet = a_fleet_whose_policy_answers(&home, "auto_merge: tests-pass\n");
+    let fleet = a_fleet_whose_policy_answers(&home, "auto_merge: checks-pass\n");
     let job_id = one_sweep_over(&fleet, &home, WhatTheForgeRan::AllPassed { checks: 3 }).await;
 
     assert_eq!(fleet.vcs().times_asked_to_merge(), 1);
@@ -140,13 +140,13 @@ async fn tests_pass_merges_nothing_the_forge_has_not_actually_passed() {
         WhatTheForgeRan::Unreadable,
     ] {
         let home = TempDir::new();
-        let fleet = a_fleet_whose_policy_answers(&home, "auto_merge: tests-pass\n");
+        let fleet = a_fleet_whose_policy_answers(&home, "auto_merge: checks-pass\n");
         let job_id = one_sweep_over(&fleet, &home, checks.clone()).await;
 
         assert_eq!(
             fleet.vcs().times_asked_to_merge(),
             0,
-            "tests-pass merged on `{}`",
+            "checks-pass merged on `{}`",
             checks.kind()
         );
         assert_eq!(
@@ -157,7 +157,7 @@ async fn tests_pass_merges_nothing_the_forge_has_not_actually_passed() {
 }
 
 /// **`always` does not read the forge at all**, which is the value meaning what
-/// it says: a repository that wanted the checks consulted has `tests-pass` to
+/// it says: a repository that wanted the checks consulted has `checks-pass` to
 /// say so with, and making the two behave alike on a forge that runs nothing
 /// would leave them one word apart in the file and identical in effect.
 #[tokio::test]

@@ -20,11 +20,11 @@ use crate::yaml::{self, Table};
 /// given are the same set — the honest shape when nothing is deferred.
 const AUTO_MERGE_WORDS: &[(&str, AutoMerge)] = &[
     ("never", AutoMerge::Never),
-    ("tests-pass", AutoMerge::TestsPass),
+    ("checks-pass", AutoMerge::ChecksPass),
     ("always", AutoMerge::Always),
 ];
 /// `auto_merge`'s set, spelled for a refusal.
-const AUTO_MERGE_LEGAL: &[&str] = &["never", "tests-pass", "always"];
+const AUTO_MERGE_LEGAL: &[&str] = &["never", "checks-pass", "always"];
 /// The values `review_gate` takes, for [`AUTO_MERGE_WORDS`]' reason.
 const REVIEW_GATE_WORDS: &[(&str, ReviewGate)] = &[
     ("human_always", ReviewGate::HumanAlways),

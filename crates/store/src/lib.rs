@@ -62,6 +62,8 @@ mod retain;
 mod revision;
 mod row;
 mod schema;
+/// The frames a step's harness produced, and where each one was kept.
+mod showing;
 /// What a Job's Drones have cost it: one row per Drone, summed per Job.
 mod spend;
 #[cfg(feature = "wreckage")]
@@ -86,4 +88,5 @@ pub use report::Report;
 pub use resolving::{NamedJob, ResolveJobError};
 pub use retain::Retained;
 pub use schema::KNOWN_SCHEMA_VERSION;
+pub use showing::KeptFrame;
 pub use spend::{DroneSpend, Spend};

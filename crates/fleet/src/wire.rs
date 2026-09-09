@@ -384,6 +384,7 @@ pub(crate) fn step_facts(
     ran: Vec<Attempted<Vec<core_model::StepCheck>>>,
     judged: Vec<Attempted<Vec<core_model::Judgment>>>,
     flagged: Vec<(core_model::StepId, Vec<core_model::GamingFlag>)>,
+    frames: Vec<store::KeptFrame>,
     moves: &[StepMove],
 ) -> Vec<StepFacts> {
     job.steps()
@@ -447,6 +448,23 @@ pub(crate) fn step_facts(
                     .and_then(|declared| declared.deliverable())
                     .map(|target| kept_for(repo_root, job, step.step_id(), &attempts, target))
                     .unwrap_or_default(),
+                // **Read off the record, unlike `deliverables` above.** A
+                // frame's name is the harness's own — the repository's spec
+                // chose it — so there is no arithmetic to rebuild it from and
+                // the rows are the only list there is. `kept` is composed here
+                // rather than stored beside the path, so the route's id and the
+                // record's path have one source.
+                frames: frames
+                    .iter()
+                    .filter(|held| &held.step == step.step_id())
+                    .map(|held| ipc::KeptFrame {
+                        attempt: held.attempt,
+                        name: held.frame.name.clone(),
+                        path: held.frame.path.clone(),
+                        bytes: held.frame.bytes,
+                        kept: crate::showing::tail(&held.frame.path),
+                    })
+                    .collect(),
                 // Derived from `attempts` rather than read again: the mapping
                 // from `(outcome, why)` to a ruling lives once, on
                 // `StepAttempt` itself.

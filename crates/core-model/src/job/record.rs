@@ -19,10 +19,10 @@
 //! cannot be asked for.
 //!
 //! **The other mutators write one field and mint nothing** —
-//! [`Job::on_branch`], [`Job::redirect_waits`], [`Job::redirect_delivered`] and
-//! [`Job::cost_capped`] — because no event carries a worktree, a note or a
-//! ceiling. [`Job::drone_spawned`] and [`Job::drone_exited`] do mint one:
-//! presence has to fold.
+//! [`Job::on_branch`], [`Job::on_reclaimed`], [`Job::redirect_waits`],
+//! [`Job::redirect_delivered`] and [`Job::cost_capped`] — because no event
+//! carries a worktree, a reclaim, a note or a ceiling. [`Job::drone_spawned`]
+//! and [`Job::drone_exited`] do mint one: presence has to fold.
 
 use alloc::vec::Vec;
 
@@ -160,6 +160,14 @@ pub struct Job {
     /// has never been dispatched, and is absent rather than a name it does not
     /// yet have.
     branch: Option<Branch>,
+    /// When this Job's worktree and branch were given back while its record
+    /// stayed. **`None` is a Job whose disk still stands** — every Job before a
+    /// reclaim, and every Job a reclaim has not yet reached.
+    ///
+    /// Written the same way `branch` is: no event describes giving a worktree
+    /// back, so this column is its own authority and the fold does not touch
+    /// it.
+    reclaimed_at: Option<Timestamp>,
     /// A person's note written where there was no Drone to take it, waiting
     /// for the next one. `None` on every Job that has never been sent back
     /// across a gate, and on every Job whose note has been delivered — see
@@ -237,6 +245,8 @@ impl Job {
             number: new.number,
             // No worktree exists yet. `on_branch` is what fills this in.
             branch: None,
+            // A Job that was just created has nothing to give back.
+            reclaimed_at: None,
             // Nothing has been said to a Job that does not exist yet.
             redirect_waiting: None,
             // Unset, which is this Job taking whatever the repository and the
@@ -295,6 +305,21 @@ impl Job {
     pub fn on_branch(&self, branch: Branch) -> Job {
         let mut job = self.clone();
         job.branch = Some(branch);
+        job
+    }
+
+    /// Record that this Job's worktree and branch were given back.
+    ///
+    /// **The fourth mutator, [`on_branch`](Job::on_branch)'s reason.** No event
+    /// carries a reclaim, so this column is the authority for its own field the
+    /// way every non-status column is, and the rebuild reads it back rather
+    /// than folding it.
+    ///
+    /// It overwrites: a Job reclaimed twice keeps the later instant, the same
+    /// way a re-dispatched worktree's branch is renamed rather than refused.
+    pub fn on_reclaimed(&self, at: Timestamp) -> Job {
+        let mut job = self.clone();
+        job.reclaimed_at = Some(at);
         job
     }
 
@@ -661,6 +686,11 @@ impl Job {
     /// The branch the Job's worktree is on. `None` until one is made.
     pub fn branch(&self) -> Option<&Branch> {
         self.branch.as_ref()
+    }
+    /// When this Job's worktree and branch were given back. `None` is a Job
+    /// whose disk still stands.
+    pub fn reclaimed_at(&self) -> Option<&Timestamp> {
+        self.reclaimed_at.as_ref()
     }
     /// The note the next Drone will open with, where a person left one.
     ///

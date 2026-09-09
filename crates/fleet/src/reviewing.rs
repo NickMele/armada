@@ -79,7 +79,7 @@ where
     /// The same act, with the actor named.
     ///
     /// **Two roads and one of them is not a person.** `auto_merge` resolving to
-    /// `tests-pass` or `always` lets Fleet take the work off the gate itself —
+    /// `checks-pass` or `always` lets Fleet take the work off the gate itself —
     /// `crate::merging` — and a record saying a human did that would be the one
     /// lie the actor field exists to prevent. Everything else about the act is
     /// identical, which is why this is one function with a parameter rather

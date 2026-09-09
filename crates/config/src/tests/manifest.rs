@@ -109,6 +109,10 @@ fn a_section_m1_does_not_read_hard_fails_and_names_what_it_does_read() {
             "base",
             "checks",
             "commands",
+            // The third registry, beside the Checks that decide whether work
+            // advances and the Commands a Drone may run: how this repository
+            // demonstrates that a change did what was asked.
+            "evidence",
             "setup",
             "drone",
             "after_merge",
@@ -872,7 +876,7 @@ mod policies {
         let Fault::NotInTheSchema { legal, .. } = fault_at(&refused, "auto_merge") else {
             panic!("an underscore where the value is hyphenated is not in the schema");
         };
-        assert_eq!(*legal, ["never", "tests-pass", "always"]);
+        assert_eq!(*legal, ["never", "checks-pass", "always"]);
         let Fault::NotInTheSchema { legal, .. } = fault_at(&refused, "review_gate") else {
             panic!("a gate word is not a review_gate value");
         };

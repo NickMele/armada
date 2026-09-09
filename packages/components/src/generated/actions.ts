@@ -355,7 +355,7 @@ export const ACTIONS: readonly Action[] = [
     verb: "State filter",
     icon: Filter,
     iconAbsent: null,
-    shortcut: "1–5",
+    shortcut: "1–6",
     scope: "job board",
     destructive: false,
     confirms: false,

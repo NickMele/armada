@@ -9,7 +9,7 @@
 //! whether a *machine* decides; [`Fleet::merge_pull_request`] is a person, and
 //! Fleet performing it is what runs those Checks. `#523`.
 //!
-//! `tests-pass` and `always` are the other road into the same act:
+//! `checks-pass` and `always` are the other road into the same act:
 //! [`Fleet::merged_if_the_policy_says_so`] is the sweep pressing the button
 //! nobody pressed. **Same merge, same record, same Checks, different actor** —
 //! the record says `fleet`, because a Job read back as approved by a person
@@ -159,7 +159,7 @@ where
     /// `auto_merge` says; the policy answers a `manifest_rule:auto_merge` gate
     /// and nothing else.
     ///
-    /// **`tests-pass` reads [`WhatTheForgeRan`] and nothing else** — the
+    /// **`checks-pass` reads [`WhatTheForgeRan`] and nothing else** — the
     /// forge's own automation against the branch, which is what a person means
     /// by "tests pass" on a pull request. Armada's Checks already ran at the
     /// gate this Job holds at, and totalling the two would claim a gate had

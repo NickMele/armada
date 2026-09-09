@@ -166,7 +166,7 @@ where
             .last_reason(job.id())
             .await
             .map_err(|why| self.refusal(why))?;
-        let (ran, flagged, moves, ran_every_attempt, judged_every_attempt) = {
+        let (ran, flagged, moves, ran_every_attempt, judged_every_attempt, frames) = {
             let store = self.store().lock().await;
             let ran = store
                 .step_checks(job.id())
@@ -190,7 +190,20 @@ where
             let judged_every_attempt = store
                 .step_judgments_every_attempt(job.id())
                 .map_err(|why| self.refusal(Adrift::Reading(why)))?;
-            (ran, flagged, moves, ran_every_attempt, judged_every_attempt)
+            // Every attempt's, for `ran_every_attempt`'s reason: a person
+            // comparing the run that was handed back against the one that
+            // passed needs both, and the rail stamps each with its run.
+            let frames = store
+                .step_frames_every_attempt(job.id())
+                .map_err(|why| self.refusal(Adrift::Reading(why)))?;
+            (
+                ran,
+                flagged,
+                moves,
+                ran_every_attempt,
+                judged_every_attempt,
+                frames,
+            )
         };
         // The plans are read with the footprint and only with it: they are what
         // it is measured against, and a running Job has neither — its live
@@ -283,6 +296,7 @@ where
                 ran_every_attempt,
                 judged_every_attempt,
                 flagged,
+                frames,
                 &moves,
             ),
             recorded
@@ -510,6 +524,46 @@ where
         };
         crate::check_output::kept_output(&self.host().repo_root, &kept, &ran)
             .ok_or_else(|| self.refusal(Adrift::NoSuchCheckOutput { named: kept }))
+    }
+
+    /// One frame a step's harness produced, as the file itself.
+    ///
+    /// **The rows are the allowlist**, which is `get_check_output`'s rule and
+    /// the whole of what makes a caller-supplied name safe to open a file with:
+    /// `showing::frame_bytes` resolves the name against the frames this Job
+    /// kept before it opens anything, so a name no row holds reaches no file,
+    /// whatever it spells.
+    ///
+    /// A row whose file will not open is the same answer as a name that was
+    /// never one — [`Adrift::NoSuchFrame`], a 422. The Job is there and the
+    /// image is not, which is a reclaimed `.armada/frames` and is a different
+    /// thing from the Job being absent.
+    async fn get_frame(
+        &self,
+        job_id: JobId,
+        kept: String,
+    ) -> Result<(ipc::KeptFrame, Vec<u8>), Refusal> {
+        let id = job_id.to_domain();
+        self.load(&id).await.map_err(|why| self.refusal(why))?;
+        let frames = {
+            let store = self.store().lock().await;
+            store
+                .step_frames_every_attempt(&id)
+                .map_err(|why| self.refusal(Adrift::Reading(why)))?
+        };
+        let (held, bytes) = crate::showing::frame_bytes(&self.host().repo_root, &kept, &frames)
+            .ok_or_else(|| self.refusal(Adrift::NoSuchFrame { named: kept }))?;
+        // The same row the detail carries, built the one way it is built.
+        Ok((
+            ipc::KeptFrame {
+                attempt: held.attempt,
+                name: held.frame.name.clone(),
+                path: held.frame.path.clone(),
+                bytes: held.frame.bytes,
+                kept: crate::showing::tail(&held.frame.path),
+            },
+            bytes,
+        ))
     }
 
     /// Every workflow this Fleet holds, so a caller can name one that will not

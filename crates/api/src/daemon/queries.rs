@@ -18,8 +18,8 @@ use crate::observing::Observed;
 use crate::reference::Resolved;
 use ipc::{
     CallArguments, CheckOutput, FleetCapacity, JobDetail, JobDiff, JobEvidence, JobHistory, JobId,
-    JobList, JobRemarks, JobResources, ManifestReading, ManifestSummary, ModelChoices, ReportList,
-    WorkflowSummary, WorktreesHeld,
+    JobList, JobRemarks, JobResources, KeptFrame, ManifestReading, ManifestSummary, ModelChoices,
+    ReportList, WorkflowSummary, WorktreesHeld,
 };
 
 /// Everything a client reads.
@@ -242,6 +242,36 @@ pub trait Queries: Send + Sync + 'static {
         job_id: JobId,
         kept: String,
     ) -> impl Future<Output = Result<CheckOutput, Refusal>> + Send;
+
+    /// `get_frame` — one frame a step's harness produced, as the file itself.
+    ///
+    /// **The only query on this seam that answers bytes rather than JSON.** A
+    /// frame has no window: [`Queries::get_check_output`] serves a tail and
+    /// describes it, and an image cannot be described that way, because a
+    /// truncated PNG is not a shorter PNG. So there is nothing partial for an
+    /// envelope to carry, and base64 would inflate the bytes by a third.
+    ///
+    /// The split is that method's, on the same measurement — the cheap fact
+    /// rides [`KeptFrame`] on the record, re-read on every event naming the
+    /// open Job, and the image is fetched once by whoever opens one.
+    ///
+    /// **`kept` names a row, not a path.** The run directory and the file name
+    /// joined, composed by Fleet, resolved against the rows this Job holds
+    /// before anything is opened. The record is the allowlist and nothing else
+    /// decides what may be read.
+    ///
+    /// The [`KeptFrame`] comes back with the bytes, so a media type is answered
+    /// from the file's own name rather than stored beside its path.
+    ///
+    /// [`Refusal::NoSuchJob`] where the id names no Job.
+    /// [`Refusal::Unacceptable`] where the Job is there and no row of it kept a
+    /// frame under that name — a reclaimed `.armada/frames`, or a name that was
+    /// never one.
+    fn get_frame(
+        &self,
+        job_id: JobId,
+        kept: String,
+    ) -> impl Future<Output = Result<(KeptFrame, Vec<u8>), Refusal>> + Send;
 
     /// `list_workflows` — the workflows Fleet holds, with their steps.
     ///

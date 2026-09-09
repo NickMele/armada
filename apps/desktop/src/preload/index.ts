@@ -9,6 +9,7 @@ import type {
   Draft,
   Outcome,
   Proposed,
+  ReclaimOutcome,
 } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
 import type { Artifact, Followed, Opened } from "@armada/protocol";
@@ -69,22 +70,30 @@ const api: BridgeApi = {
 
   killJob: (jobId: string): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.killJob, jobId),
 
-  // Real deletion, and the only entry here where that is true — every other
-  // act moves a Job further, and this removes the row. One entry taking every
-  // id rather than a loop of `killJob`-shaped calls at the call site, because
-  // the loop belongs to main: it is the process holding the board these ids
-  // came off of.
-  clearTerminalJobs: (jobIds: readonly string[]): Promise<ClearOutcome> =>
+  // The disk, never the record — every row this reaches stays on the board,
+  // under `Cleared`. One entry taking every id rather than a loop of
+  // `killJob`-shaped calls at the call site, because the loop belongs to
+  // main: it is the process holding the board these ids came off of.
+  clearTerminalJobs: (jobIds: readonly string[]): Promise<ReclaimOutcome> =>
     ipcRenderer.invoke(CHANNELS.clearTerminalJobs, jobIds),
 
-  // The other half of the entry above, and a separate one for the reason
-  // `crates/ipc/operations.toml` gives: that one takes the record and this
-  // takes the disk, and one call with two unrelated things to fail at is
-  // worse than two calls. One id at a time — a person reclaims the Job they
-  // are looking at, and the bulk shape above exists because clearing a board
-  // is a set.
+  // Real deletion, and the only entry here where that is true — every other
+  // act moves a Job further, and this removes the row. A separate entry from
+  // the one above for the reason `crates/ipc/operations.toml` gives: one call
+  // with two unrelated things to fail at is worse than two calls.
+  forgetTerminalJobs: (jobIds: readonly string[]): Promise<ClearOutcome> =>
+    ipcRenderer.invoke(CHANNELS.forgetTerminalJobs, jobIds),
+
+  // The per-Job half of `clearTerminalJobs` above. One id at a time — a
+  // person reclaims the Job they are looking at, and the bulk shape exists
+  // because clearing a board is a set.
   reclaimWorktree: (jobId: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.reclaimWorktree, jobId),
+
+  // The per-Job half of `forgetTerminalJobs` above. Real deletion, and there
+  // is no undo.
+  forgetJob: (jobId: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.forgetJob, jobId),
 
   redirectDrone: (jobId: string, instruction: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.redirectDrone, jobId, instruction),

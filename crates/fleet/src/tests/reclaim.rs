@@ -150,6 +150,56 @@ async fn a_merged_branch_and_its_worktree_are_both_given_back() {
     );
 }
 
+/// **The defect `#570` found.** `Fleet::reclaim_worktree` gave the worktree
+/// back and left the stale Drone pid standing — `retain_job` existed and
+/// nothing on this seam called it, so a Board's clear button reclaimed disk
+/// while `job_drone_process` still named a pid whose worktree was gone. Run
+/// through the live-Fleet seam and not through `armada clean`, because that is
+/// the path `#570` was actually about.
+#[tokio::test]
+async fn reclaiming_through_a_live_fleet_clears_the_stale_drone_process_and_marks_the_row() {
+    let home = TempDir::new();
+    let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    a_repository(&home);
+    let job_id = a_finished_job(&fleet, "stale pid").await;
+    let handle = fleet.load(&job_id).await.expect("the Job").handle();
+    a_worktree_for(&home, &handle);
+
+    fleet
+        .store()
+        .lock()
+        .await
+        .record_drone_process(&store::DroneProcess {
+            job_id: job_id.clone(),
+            step_id: core_model::StepId::new("fix"),
+            drone_id: core_model::DroneId::carried(core_model::Ulid::carried(
+                "01DRONE00000000000000099".to_string(),
+            )),
+            pid: 4096,
+            started_at: String::from("Wed  9 Sep 00:00:00 2026"),
+            spawned_at: core_model::Timestamp::from_rfc3339("2026-09-09T00:00:00.000Z"),
+        })
+        .expect("the stale process is recorded, as a live Drone's spawn would have");
+
+    Fleet::reclaim_worktree(&fleet, &job_id)
+        .await
+        .expect("a terminal Job's disk comes back");
+
+    let store = fleet.store().lock().await;
+    assert_eq!(
+        store.drone_process(&job_id).expect("the read succeeds"),
+        None,
+        "a worktree's removal makes the pid stale, and reclaim_worktree clears it now"
+    );
+    let job = store
+        .load_job(&job_id)
+        .expect("the row survives — reclaiming is not forgetting");
+    assert!(
+        job.reclaimed_at().is_some(),
+        "the mark a Board reads to tell this Job apart from one whose disk still stands"
+    );
+}
+
 /// **The safety argument, run.** A branch holding a commit the base cannot
 /// reach is kept, the disk still comes back, and the answer names the base and
 /// the count rather than reporting one number for both halves.

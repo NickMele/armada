@@ -275,15 +275,28 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.killJob, (_event, jobId: string) =>
     connection?.commands.killJob(jobId),
   );
-  // Real deletion, and the only channel here where that is true. One call per
-  // id, in main, because main is what holds the board these ids came off of —
-  // the renderer decides which ids are terminal and sends the set once.
-  ipcMain.handle(CHANNELS.clearTerminalJobs, (_event, jobIds: string[]) =>
-    connection?.commands.clearTerminalJobs(jobIds),
-  );
   // The disk rather than the record, and the one act here `armada clean` could
   // already do — but only with Fleet stopped, which is never when a person
-  // wants the space back. The Job stays on the board afterwards.
+  // wants the space back. Every row stays on the board afterwards, under
+  // `Cleared`. One call per id, in main, because main is what holds the board
+  // these ids came off of — the renderer decides which ids are terminal and
+  // sends the set once.
+  // The re-read afterwards is not bookkeeping: whether the row is still held is
+  // Fleet's reading, and a checkout that would not go has to stay on the list.
+  ipcMain.handle(CHANNELS.clearTerminalJobs, async (_event, jobIds: string[]) => {
+    const outcome = await connection?.commands.clearTerminalJobs(jobIds);
+    await connection?.rereadHeld();
+    return outcome;
+  });
+  // Real deletion, and the only channel here where that is true. One call per
+  // id, in main, for `clearTerminalJobs`'s reason above.
+  ipcMain.handle(CHANNELS.forgetTerminalJobs, (_event, jobIds: string[]) =>
+    connection?.commands.forgetTerminalJobs(jobIds),
+  );
+  // The disk rather than the record, and the one act here `armada clean`
+  // could already do — but only with Fleet stopped, which is never when a
+  // person wants the space back. The Job stays on the board afterwards,
+  // under `Cleared`.
   // The re-read afterwards is not bookkeeping: whether the row is still held is
   // Fleet's reading, and a checkout that would not go has to stay on the list.
   // Folding the receipt in instead would be Bridge deciding a worktree is gone.
@@ -292,6 +305,11 @@ void app.whenReady().then(() => {
     await connection?.rereadHeld();
     return outcome;
   });
+  // The per-Job half of `forgetTerminalJobs` above. Real deletion, and there
+  // is no undo.
+  ipcMain.handle(CHANNELS.forgetJob, (_event, jobId: string) =>
+    connection?.commands.forgetJob(jobId),
+  );
   // The two acts that resume a step without redispatching. Which applies is
   // decided by whether the Job still holds a Drone; Fleet is the authority
   // and refuses the wrong one rather than Bridge picking silently.

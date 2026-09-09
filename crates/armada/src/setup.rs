@@ -254,7 +254,11 @@ impl SetupRefused {
             SetupRefused::ManifestRefused(why) | SetupRefused::WorkflowRefused(why) => why.path(),
             SetupRefused::ChecksNotDeclared(
                 ResolveError::ChecksNotDeclared { workflow, .. }
-                | ResolveError::StepsDisagreeWithTheManifest { workflow, .. },
+                | ResolveError::StepsDisagreeWithTheManifest { workflow, .. }
+                // The workflow, not the Manifest, though either file could be
+                // the one to edit: it is the file that made the request, and
+                // the sentence below names the other one twice.
+                | ResolveError::ShowsWithNoHarness { workflow, .. },
             ) => workflow,
         }
     }
@@ -342,6 +346,31 @@ impl fmt::Display for SetupRefused {
                     write!(f, "\n  {said}")?;
                 }
                 Ok(())
+            }
+            SetupRefused::ChecksNotDeclared(ResolveError::ShowsWithNoHarness {
+                workflow,
+                manifest,
+                steps,
+            }) => {
+                write!(
+                    f,
+                    "{} has {} step(s) whose evidence is what they look like, and {} \
+                     declares no `evidence:` harness to capture with",
+                    workflow.display(),
+                    steps.len(),
+                    manifest.display()
+                )?;
+                for step in steps {
+                    write!(f, "\n  step `{}` asks to be shown", step.as_str())?;
+                }
+                // The remedy, once, under the list rather than on every line:
+                // one edit answers every step here, and repeating it per row
+                // would read as several.
+                write!(
+                    f,
+                    "\n  declare `evidence:` in {}, or drop `evidence_type: visual`",
+                    manifest.display()
+                )
             }
         }
     }

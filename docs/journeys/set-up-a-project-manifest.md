@@ -125,7 +125,7 @@ A sheet over the picker, one workspace at a time, opened from a row and closed b
 
 **Every policy value comes from a fixed set, so the control shows all options at once.** No text fields — a command string is free text and gets an input, a policy value never is.
 
-**Each control carries a plain-words line naming the consequence of the selected value**, because `tests-pass` means nothing on its own.
+**Each control carries a plain-words line naming the consequence of the selected value**, because `checks-pass` means nothing on its own.
 
 **A row reads *from Kit* until touched and *set here* after**, which is the whole inheritance story on this surface.
 

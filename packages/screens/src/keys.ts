@@ -33,7 +33,7 @@
 // | `x` | kill, confirms | here, through the confirmation every destructive act already takes |
 // | `n` | new job | here — the one key that acts on nothing on screen |
 // | `/` | search the current list | here |
-// | `1`–`5` | state filter, Job Board only, in tab order | here |
+// | `1`–`6` | state filter, Job Board only, in tab order | here |
 //
 // **The arrows are not in `boardPressOf` and that is deliberate.** `Active jobs
 // list` is a listbox and already roves on `↓ ↑ Home End`; a second handler on
@@ -165,7 +165,7 @@ export type BoardPress =
    * job-identity payload under the same key would be a different artifact.
    */
   | { act: "copy" }
-  /** `1`–`5` — set the state filter. */
+  /** `1`–`6` — set the state filter. */
   | { act: "tab"; tab: BoardTab }
   /** `n` — the one key that acts on nothing on screen. */
   | { act: "compose" };
@@ -267,7 +267,7 @@ export const SEARCH_KEY = "/";
  *
  * **Here because it is the same map from the other side.** `boardPressOf`
  * above says what a key means; this says what a palette row means, and the two
- * answer the same acts — `1`–`5` and `/`. Splitting them across two files
+ * answer the same acts — `1`–`6` and `/`. Splitting them across two files
  * would be one act with two owners.
  *
  * **An imperative handle, and deliberately one.** The state filter and the
@@ -278,7 +278,7 @@ export const SEARCH_KEY = "/";
  * its state.
  */
 export type BoardReach = {
-  /** `1`–`5`, and the search clears with them, exactly as a tab press does. */
+  /** `1`–`6`, and the search clears with them, exactly as a tab press does. */
   tab: (tab: BoardTab) => void;
   /** `/` — put the cursor in the search field, selecting what is there. */
   search: () => void;

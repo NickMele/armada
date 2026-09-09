@@ -375,15 +375,17 @@ fn a_deleted_policy_falls_back_to_the_cautious_value_rather_than_keeping_the_las
 /// down with it.
 #[test]
 fn a_refused_file_leaves_the_policy_in_force() {
-    let repository = Repository::holding(&format!("{PATIENT}auto_merge: tests-pass\n"));
+    let repository = Repository::holding(&format!("{PATIENT}auto_merge: checks-pass\n"));
     let (manifest, reloads) = reloadable(&repository.manifest());
 
-    repository.save(&format!("{PATIENT}auto_merge: tests-pass\npoke_limit: 4\n"));
+    repository.save(&format!(
+        "{PATIENT}auto_merge: checks-pass\npoke_limit: 4\n"
+    ));
     reloads
         .reread()
         .expect_err("a key at the top level nothing reads");
 
-    assert_eq!(manifest.auto_merge(), AutoMerge::TestsPass);
+    assert_eq!(manifest.auto_merge(), AutoMerge::ChecksPass);
 }
 
 /// **Five live keys move in one save, and each is reported on its own.** The
