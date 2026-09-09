@@ -47,6 +47,7 @@ mod landing;
 mod mcp;
 mod reclaim;
 mod transcript;
+mod under_review;
 mod watching;
 mod work_product;
 mod worktree;

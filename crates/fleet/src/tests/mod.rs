@@ -103,5 +103,6 @@ mod tmp;
 mod tools;
 mod transcript;
 mod unattended;
+mod under_review;
 mod watching;
 mod widening;

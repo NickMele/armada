@@ -20,7 +20,7 @@
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
-use crate::Worktree;
+use crate::{UnderReview, Worktree};
 
 /// The branch a Job's work merges into, and where the name came from.
 ///
@@ -132,8 +132,12 @@ pub enum Opened {
 
 /// What became of the pull request after it was opened. **The question a
 /// person actually has about finished work**, and the one the record could not
-/// answer: Armada opens a pull request and a person merges it, so what happened
-/// next is only ever knowable by asking.
+/// answer: a merge Fleet did not perform is only ever knowable by asking.
+///
+/// **Fleet may merge, and what stays a person's is the decision** —
+/// [`Delivery::merge`] is the act a person pressed for. This is the other way a
+/// pull request settles, and there is no third: either Armada did it and knows,
+/// or somebody did it on the forge and Armada finds out on a sweep.
 ///
 /// **Every failure is [`Unknown`](Landing::Unknown)**, which is the rule
 /// [`Opened`] already keeps one call earlier: no tool, not signed in, no such
@@ -543,6 +547,32 @@ pub trait Delivery {
     /// long before anybody merges its work, so the caller passes the repository
     /// every worktree was cut from, which is not one.
     fn landed(&self, in_repo: &str, pull_request: &str) -> WhatBecameOfIt;
+
+    /// What the people and the machines on the forge say about a pull request
+    /// nobody has merged yet.
+    ///
+    /// **Asked only where [`landed`](Delivery::landed) answered
+    /// [`Landing::Open`].** A merged pull request has left the sweep's rotation
+    /// and a closed one is terminal, so neither has an answer here anybody
+    /// would act on — the rule [`Rendering`] keeps by riding on that variant.
+    ///
+    /// **A second call and not four more fields on `landed`**, which is the
+    /// reverse of `#427`'s argument for folding [`Rendering`] in, because the
+    /// shape is the reverse: those were four scalars on one line beside the
+    /// state, and these are three lists, one carrying whatever anybody typed
+    /// into a comment box. The callers differ too — a merge pressed from a
+    /// screen reads `landed` and has no use for any of this.
+    ///
+    /// **No `Result`**, for [`landed`](Delivery::landed)'s reason exactly: no
+    /// tool, not signed in and a forge that would not answer are one silence,
+    /// [`UnderReview::unreadable`].
+    ///
+    /// **Nothing here is a verdict and nothing here passes a Check.** See
+    /// [`UnderReview`], whose module carries that argument in full.
+    ///
+    /// `in_repo` is the repository every worktree was cut from, for
+    /// [`landed`](Delivery::landed)'s reason.
+    fn under_review(&self, in_repo: &str, pull_request: &str) -> UnderReview;
 
     /// Merge a pull request Armada opened.
     ///

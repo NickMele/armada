@@ -74,10 +74,13 @@ mod landing;
 /// presses, and Fleet merges the pull request their Job opened.
 mod merging;
 pub mod mint;
-/// Noticing that somebody merged a Job's pull request. **Armada opens one and
-/// a person merges it** — and since `#523` a person may press for it from
-/// Bridge, which is `crate::merging` and reaches the same four things this
-/// module does about a merge it noticed.
+/// Noticing what became of a Job's pull request. **Fleet may merge, and the
+/// decision is what stays a person's** — a press from Bridge is
+/// `crate::merging` and reaches the same four things this module does about a
+/// merge it noticed. What this module is for is the other way one settles:
+/// somebody merged it on the forge, and that is only ever knowable by asking.
+/// An open one is asked a second question on the same rotation —
+/// `crate::under_review`.
 pub mod noticing;
 /// Where two Jobs claim the same paths, worked out at read time. **A
 /// warning and nothing else** — no dispatch path reaches it.
@@ -128,6 +131,9 @@ pub mod transcript;
 pub mod turning;
 /// The one vigil whose subject is a Job with no Drone to watch.
 mod unattended;
+/// What the forge says about a pull request nobody has merged yet, read on the
+/// sweep `noticing` already runs.
+mod under_review;
 pub mod watch;
 pub mod widening;
 /// The redactions the `Queries` and `Commands` impls call by hand. Split out to

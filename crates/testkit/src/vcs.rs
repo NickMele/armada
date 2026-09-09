@@ -31,7 +31,7 @@ use std::sync::Mutex;
 use adapter_traits::{
     Base, BaseOnTheRemote, BroughtUpToDate, Change, CommitTime, Committed, Delivery, Landing,
     Merged, NotDelivered, NotMerged, Opened, Pushed, Renewed, RepositoryStanding, Review, Standing,
-    Vcs, WhatBecameOfIt, Worktree, WorktreeSpec,
+    UnderReview, Vcs, WhatBecameOfIt, Worktree, WorktreeSpec,
 };
 
 use crate::work_product::Holding;
@@ -144,6 +144,13 @@ pub enum Delivered {
     /// rarely it happens — a test that could not see the calls could not tell a
     /// sweep that asks once from one that asks every turn.
     AskedWhatBecameOfIt { pull_request: String },
+    /// The forge was asked who has looked at an open pull request, what ran
+    /// against it and what anybody wrote on it. **Counted for
+    /// [`AskedWhatBecameOfIt`](Delivered::AskedWhatBecameOfIt)'s reason**: this
+    /// rides the same rotation, and a test that could not see the calls could
+    /// not tell a sweep that asks once from one that asks about a merged pull
+    /// request it should have stopped asking about.
+    AskedWhatIsUnderReview { pull_request: String },
     /// The forge was asked to compare a pull request afresh. **Counted for
     /// [`AskedWhatBecameOfIt`](Delivered::AskedWhatBecameOfIt)'s reason and
     /// then some**: this one closes and reopens a person's pull request, so a
@@ -179,6 +186,11 @@ pub struct Delivering {
     /// The branch the forge says the pull request merges into. `None` is a
     /// forge that answered nothing, which is what [`Landing::Unknown`] means.
     pub base_on_the_forge: Option<String>,
+    /// What the forge says about the pull request while it is still open.
+    /// Unreadable by default, which is the answer on a machine with no forge —
+    /// and the one every case that is not about reviews should get, so that
+    /// nothing reads an approval nobody scripted.
+    pub under_review: UnderReview,
     /// What closing and reopening comes to. Renewed by default, because the
     /// case a test has to write out is the one where it was left closed.
     pub renewed: Renewed,
@@ -205,6 +217,7 @@ impl Default for Delivering {
             // every existing test's Job land the moment anything asked.
             landed: Landing::Unknown,
             base_on_the_forge: Some(String::from("main")),
+            under_review: UnderReview::unreadable(),
             renewed: Renewed::Renewed,
             repository: RepositoryStanding::AlreadyHadIt {
                 base: String::from("main"),
@@ -300,6 +313,24 @@ impl FakeVcs {
     /// consuming builder could not express the case at all.
     pub fn now_landed(&self, landed: Landing) {
         self.delivery.lock().expect("not poisoned").landed = landed;
+    }
+
+    /// Say what the forge says about the open pull request: who has looked at
+    /// it, what ran against it, what anybody wrote.
+    ///
+    /// `&self` for [`now_landed`](FakeVcs::now_landed)'s reason — nothing is
+    /// reviewed until the Job that opened the pull request has finished, by
+    /// which time the fake is inside a Fleet.
+    pub fn now_under_review(&self, under_review: UnderReview) {
+        self.delivery.lock().expect("not poisoned").under_review = under_review;
+    }
+
+    /// How many times the forge has been asked what is happening on an open
+    /// pull request. **Counted apart from the merge question**, because the two
+    /// ride one rotation and a test proving the sweep did not grow a second
+    /// loop is counting these against those.
+    pub fn times_asked_what_is_under_review(&self) -> usize {
+        self.counted(|it| matches!(it, Delivered::AskedWhatIsUnderReview { .. }))
     }
 
     /// Say what the forge does when it is asked to merge.
@@ -524,6 +555,20 @@ impl Delivery for FakeVcs {
             landing: delivery.landed.clone(),
             base: delivery.base_on_the_forge.clone(),
         }
+    }
+
+    fn under_review(&self, _in_repo: &str, pull_request: &str) -> UnderReview {
+        self.delivered
+            .lock()
+            .expect("not poisoned")
+            .push(Delivered::AskedWhatIsUnderReview {
+                pull_request: pull_request.to_string(),
+            });
+        self.delivery
+            .lock()
+            .expect("not poisoned")
+            .under_review
+            .clone()
     }
 
     fn merge(&self, _in_repo: &str, pull_request: &str) -> Result<Merged, NotMerged> {
