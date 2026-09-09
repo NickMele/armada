@@ -143,15 +143,17 @@ At the M1 gate this field drives nothing a Drone can observe. The Evidence tool 
 type = "array[path]"
 concern = "Verification"
 parent = "evidence_scope"
-purpose = "The unrelated modules this kind of work should stay out of. Optional."
+purpose = "The unrelated modules this kind of work should stay out of. Optional, and inherited where absent."
 notes = """
-Applied after `context_paths` resolves, so it wins over anything the Drone declared or the Manifest defaulted. Optional, with no stated default.
+Applied after `context_paths` resolves, so it wins over anything the Drone declared or the Manifest defaulted.
+
+**Optional, and a step that omits it is still fenced.** Since 8 Sep 2026 it is the last of three tiers: the step's list, then `drone.exclude_paths` in the repository's `armada.yml`, then a compiled-in default of `node_modules` and `target`. What to exclude varies by repository rather than by kind of work, and seven workflow files each restating a Cargo-and-pnpm guess is seven places to correct it from. A step that states a list keeps it whole — the lower tier replaces the one above rather than joining it, because the glob dialect has no negation and a union would make the default the one entry nobody could drop. `config::resolve` is the only place the order is written, and `docs/contracts/configuration.md` carries the argument.
 
 **It is the liftable tier, and `#417` is what made that true.** An entry here is a boundary an author drew before anybody had read the code, so a Drone that finds its fix genuinely needs one of these paths asks with `request_scope` and a Judge answers whether the paths belong to the step. A cleared path is declarable, and it stays cleared at the gate — the Job's scope revisions carry it.
 
 **Secrets are no longer an example of this field, and were removed from all nine shipped blocks.** They are the other tier: boundaries nothing lifts, stated in no definition and named by no key, because every one of them lives inside the repository a Drone has a worktree of and a list a Drone could edit is not a boundary. `docs/contracts/configuration.md` holds both tiers and the reason the second is compiled in.
 
-What is left in the shipped definitions is `node_modules/` and `target/` — generated output, which decides nothing about what is checked or judged, and which a Judge asked about would refuse on its own.
+What is left in the shipped definitions is `node_modules/` and `target/` — generated output, which decides nothing about what is checked or judged, and which a Judge asked about would refuse on its own. Those two words are now also the compiled-in default, so a step dropping them keeps them.
 """
 why = "A denylist that resolved first could be widened by a later declaration. Splitting it in two came later, and for the opposite reason: one list that refused everything the same way left a Drone blocked by a guess with no route but to fail its step."
 
@@ -228,15 +230,43 @@ Armada runs commands and reads exit codes; it never parses tool output. The Mani
 
 A mechanical check answers whether the command succeeded. Anything requiring the output to be understood — which tests ran, how many, whether they were weakened — is a Judge question, answered by reading the files, which is what `evidence_scope.context_paths` is for. A `git diff` already carries the before and the after, so no baseline needs capturing or parsing.
 
-The sanctioned `mechanical_check.type` values are listed below; there are no others, and a type naming a shape rather than a named Check — "the full suite" — is deliberately unsanctioned, since it invites the parsing this rule forbids. Bug's `regression_verify` is `manifest_check` for the suite plus a Judge asking whether the diff changes behaviour beyond the stated root cause — the same shape Refactor uses, so one rule covers both.
+The sanctioned `mechanical_check.type` values are listed below; there are no others, and a type naming a *shape of work* rather than something `armada.yml` declares — "the full suite" — is deliberately unsanctioned, since it invites the parsing this rule forbids. Bug's `regression_verify` is `manifest_check` for the suite plus a Judge asking whether the diff changes behaviour beyond the stated root cause — the same shape Refactor uses, so one rule covers both.
+
+That sentence read "a shape rather than a named Check" and was narrowed when `every_manifest_check` was added, because it had come to refuse something it was never about. What it forbids is a type Armada would have to interpret — "the full suite" names a kind of testing and nothing in an `armada.yml` answers to it, so honouring it would mean knowing what a suite is. `every_manifest_check` names the Checks registry, resolves against it before dispatch, and freezes onto the Job as one `manifest_check` per declared Check. Nothing is parsed and nothing is interpreted: it is a quantifier over the same commands and exit codes, not a new kind of assertion.
 """
 why = "Maintaining parsers for cargo test, pytest, jest, go test, JUnit XML, TAP and the rest is an unbounded surface with no end, and every new tool would become a change to Armada rather than a line in an `armada.yml`."
 
 [[fields.mechanical_checks.types]]
 type = "manifest_check"
-asserts = "A named Check in the repo's `armada.yml` ran and exited 0. Carries `check` and `expect_exit_code`"
+asserts = "A named Check in the repo's `armada.yml` ran and exited as that Check declares. Carries `check`"
 used_by = ["Bug", "Refactor"]
-notes = "The general case, and the one to reach for"
+notes = """
+The general case where a step wants some of a repository's Checks and not all of them.
+
+**`expect_exit_code` moved to `checks.<name>` in `armada.yml` and defaults to 0.** A Check that legitimately exits non-zero — Bug's deliberately failing reproduction, a linter whose clean state is `1` — knows that about itself, and the repository that wrote the command is the only place that knows it. On the step it was restated in every workflow naming the Check, and went stale one file at a time the day the command changed. The key still parses here so that workflows written before the move go on loading; where a step writes it, it must say what the Manifest says, and a pair that disagrees is refused before dispatch rather than resolved by picking one.
+"""
+
+[[fields.mechanical_checks.types]]
+type = "every_manifest_check"
+asserts = "Every Check the repo's `armada.yml` declares ran and each exited as it declares. Carries nothing"
+used_by = []
+notes = """
+**Nothing uses it yet, and the empty list is the honest reading.** The parser carries it and the shipped definitions under `.armada/workflows/` still enumerate; they are switched over in their own change, which is what keeps a Job in flight from meeting a form neither file agreed on.
+
+**What a shipped workflow says instead of a list of names.** A `feature` whose `implement` step spelled seven Check names fitted exactly one repository and went stale the moment that repository declared an eighth — a gate that quietly stopped covering something, which is the failure `checks.<name>.when` exists one file along to prevent. This says *run what this repository declares*, whatever that is.
+
+**A step says this; a step never omits its way into meaning it.** An empty `mechanical_checks` is an ungated step and stays one. Half the shipped workflows have steps producing a document nothing compiles, and reading absence as *all* would gate every one of them on the repository's build.
+
+**It resolves before dispatch and never reaches the record.** `config::ResolvedWorkflow` expands it against the Manifest in hand, so a Job freezes one `manifest_check` per declared Check. A Check added to `armada.yml` afterwards is gated on by the next Job, not this one, which is the same freezing rule `run`, `when`, `requires` and `narrow` follow.
+
+**It expands in the order `armada.yml` writes its Checks, which is the order they run in.** `fleet::checking` starts four at a time off that order and refills as each finishes, so the first four declared are the four that start. Until a step could say this, the workflow file's `mechanical_checks` array was the only place a repository could sequence its gate; expanding alphabetically would have reordered every repository's gate silently, and on Armada's own `armada.yml` it puts the two slowest Checks first, so a Drone that broke the compile waits on a browser to be told. There is no `order:` key in either file to state the sequence twice with, for the reason `steps[]` has none: order is already the semantics.
+
+**It does not compose with a named Check on the same step**, in either order, and two of it on one step is refused too: it already covers every name, so the pair would run one Check twice. It does compose with `diff_nonempty`, which is what `implement` needs — a build passes cleanly on an empty diff.
+
+**A Manifest declaring no Checks expands it to nothing, and that is not refused.** `docs/concepts/manifest.md` sanctions an ungated workspace as a state rather than a mistake — nearest-ancestor ownership means a workspace declaring none is ungated — so refusing here would make a documented state unusable with any shipped workflow. And *run what this repository declares* reads literally: a repository declaring nothing runs nothing.
+
+**What is refused is the silence, and the fix is a record rather than a rejection.** Expanded to nothing, this step's frozen check list is empty — indistinguishable from a step that declared no gate at all, and the two need opposite readings: one verified nothing while asking to, the other never asked. So the declaration is frozen beside the expansion as `ResolvedStep::gates_on_every_check`, and `fleet::wire` draws it as a declared check of this kind ahead of whatever it came to. A Job read back a week later says *this step gated on every Check its repository declared*, with the empty list beside it saying the repository declared none.
+"""
 
 [[fields.mechanical_checks.types]]
 type = "diff_nonempty"

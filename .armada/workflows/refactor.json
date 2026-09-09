@@ -1,92 +1,24 @@
-# Refactor, reduced to what M1's parser accepts.
-# See `bug.json` beside this file for the shape all seven hold to, for why a
-# reduced form exists at all, and for the three ways the designed samples under
-# `crates/core-model/domain/workflow-samples/` are stale against the parser --
-# `question` where it reads `criteria[]`, `declare_plan_at` inside
-# `evidence_scope` where the registry parents it to the step, and
-# `max_context_size`, which M1 does not read. `reference_docs` was a fourth and
-# is not any more -- M1 reads it. The questions below are ported from the
-# designed files; none of the shape is.
+# Refactor, reduced to what M1's parser accepts. `bug.json` beside this file
+# carries what all eight hold to, and where the schema, the catalogue and the
+# Check reasoning live.
 #
 # The designed `refactor.json` runs six steps in a loop with a Judge on four.
-# This form is `bug.json`'s shape: `scope` renamed `plan`, `refactor` renamed
-# `implement`, and `review` + `merge` + `close` folded into one auto `handoff`.
+# This form is Bug's shape: `scope` renamed `plan`, `refactor` renamed
+# `implement`, and `review` + `merge` + `close` folded into one `handoff`.
 #
-# `implement` carries `regression_verify`'s `test` check and its gaming check
-# both. **Refactor is the workflow where the gaming check earns most**: a
-# restructure that breaks a test has an obvious cheap fix -- weaken the test --
-# and `test_scope_narrowed`, `assertion_weakened`, `test_skipped` and
-# `test_deleted` are exactly that fix's signatures.
-#
-# `handoff` carries no Judge. A step with no criterion asks the Judge nothing.
-#
-# **`handoff` is gated `human_always`.** The designed file reaches a human gate
-# through `manifest_rule:review_gate`, which is still refused as `OutsideM1`, so
-# this is not ported -- it is the owner's decision, taken Aug 28 2026: every
-# workflow that produces code stops before it lands. A Job that writes a diff and
-# finishes without a person having read it is the thing this gate exists to
-# prevent, and `refactor` is the workflow actually dispatched most.
-#
-# The gate-and-judge agreement rule does not apply to it. That rule compares a
-# gate naming a *tier* against that tier's declaration; `human_always` names an
-# *actor*, so a step may carry it with or without a Judge.
-#
-# **A step whose `evidence_type` is `facts_note` carries a Judge again.** The
-# Judge is shown what the step produced, and on a written step that is the note
-# -- `verification::Product` reads the step's own declared `evidence_type` to
-# decide which. The rule that a Drone's account of *how the step went* stays out
-# is untouched; what changed is that its deliverable is no longer folded into
-# that account. See #153.
-#
-# `reference_docs` is read now too, so a later step names what an earlier step
-# established and the Judge is shown it, labelled as the standard rather than
-# the target.
-#
-# **The Judge is shown the request now** -- the Job's title, its facts and its
-# acceptance criteria are on every brief since #169. Nothing below changed for
-# it, and that is the honest outcome here rather than an oversight: `plan`'s
-# designed criterion ports whole, because whether a plan describes structure
-# only is answerable from the plan. Bug and Feature each got a criterion back
-# that had been dropped for wanting the request; Refactor had none owed.
+# **Refactor is the workflow where the gaming check earns most.** A restructure
+# that breaks a test has an obvious cheap fix -- weaken the test -- and
+# `test_scope_narrowed`, `assertion_weakened`, `test_skipped` and `test_deleted`
+# are exactly that fix's signatures.
 #
 # **Nothing here carries #190's defect, and that is worth writing down because
 # the issue names this file.** What refused a sound restructure was Feature's
-# `implements_the_scope`, through its *and nothing outside it* clause, and Bug's
-# sibling, through *anything the plan did not describe*. Neither criterion below
-# has such a clause: `restructures_without_changing` asks about behaviour, and
-# an unscoped move inside a refactor is still a move. Refactor has the mirror
-# gap instead -- no criterion asks whether the restructure the plan named is the
-# one that was performed -- and that is a different issue from this one.
-#
-# What is still not joined is `acceptance_criteria[]` to a step. They reach a
-# brief as the whole Job's bar and no criterion can name one of them --
-# `config/src/judge.rs` refuses `source_ref` for that reason.
-#
-# **`typecheck`, `bridge_build`, `storybook` and `bridge_test` are on
-# `implement`.** See `bug.json` for the defect they were added for. Refactor is
-# where a rename that compiles in Rust and breaks an import in TypeScript is
-# the likeliest single failure, and `implement`'s `test` said nothing about it.
-# `bridge_test` is what makes a Bridge refactor safe to take at all: the
-# rendered assertions read roles and text rather than internals, so moving a
-# component's markup around is proved rather than eyeballed.#
-# **A step whose product a later step reads writes a file.** `artifact_exists`
-# is carried now, and `bug.json` carries the reasoning: a written step used to
-# hand the next one three prose strings, two of which `verification::submission`
-# says nothing routes on. Fleet opens the path this step declares and puts the
-# file's contents in the Judge's brief as the document the step produced; the
-# three strings are shown beside it, labelled as the summary. The mechanical
-# check reads only the file's size, so an empty file stops the step and whether
-# what is in it is any good stays the Judge's question.
-#
-# **`model: haiku` on `handoff`, and nowhere else.** `bug.json` carries the
-# reasoning and the cache cost. `plan` decides what may move and what may not --
-# which is the whole of what a refactor is -- and `implement` produces the diff
-# the Checks and the Judge read; neither names a model, so both are run as the
-# Job was proposed. `handoff` reports.
-#
-# **`handoff` is the step that sends the work out**, on entry rather than on
-# advance, and every other step declares `false`. `bug.json` carries the
-# reasoning.
+# `implements_the_scope` and Bug's sibling, through their *nothing outside it*
+# clauses. Neither criterion below has one: `restructures_without_changing` asks
+# about behaviour, and an unscoped move inside a refactor is still a move.
+# Refactor has the mirror gap instead -- no criterion asks whether the
+# restructure the plan named is the one that was performed -- and that is a
+# different issue from this one.
 {
   "version": 1,
   "workflow_id": "refactor",
@@ -104,15 +36,7 @@
         }
       ],
       "evidence_scope": {
-        "context_source": "drone_declared",
-        # The ordinary tier: boundaries a Judge may lift when a Drone asks and
-        # the request makes sense. Secrets, CI configuration and the workflow
-        # definitions are not stated here -- nothing lifts those and no file a
-        # Drone has a worktree of names them. `docs/contracts/configuration.md`.
-        "exclude_paths": [
-          "node_modules/",
-          "target/"
-        ]
+        "context_source": "drone_declared"
       },
       "judge_checks": [
         {
@@ -136,34 +60,7 @@
       "retry_limit": 2,
       "mechanical_checks": [
         {
-          "type": "manifest_check",
-          "check": "test",
-          "expect_exit_code": 0
-        },
-        {
-          "type": "manifest_check",
-          "check": "format",
-          "expect_exit_code": 0
-        },
-        {
-          "type": "manifest_check",
-          "check": "typecheck",
-          "expect_exit_code": 0
-        },
-        {
-          "type": "manifest_check",
-          "check": "bridge_build",
-          "expect_exit_code": 0
-        },
-        {
-          "type": "manifest_check",
-          "check": "storybook",
-          "expect_exit_code": 0
-        },
-        {
-          "type": "manifest_check",
-          "check": "bridge_test",
-          "expect_exit_code": 0
+          "type": "every_manifest_check"
         },
         {
           "type": "diff_nonempty"
@@ -172,14 +69,6 @@
       "declare_plan_at": "step_start",
       "evidence_scope": {
         "context_source": "drone_declared",
-        # The ordinary tier: boundaries a Judge may lift when a Drone asks and
-        # the request makes sense. Secrets, CI configuration and the workflow
-        # definitions are not stated here -- nothing lifts those and no file a
-        # Drone has a worktree of names them. `docs/contracts/configuration.md`.
-        "exclude_paths": [
-          "node_modules/",
-          "target/"
-        ],
         "reference_docs": [
           "plan.evidence"
         ],

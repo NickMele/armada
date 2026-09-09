@@ -1,34 +1,39 @@
 //! `armada.yml`, in the slice M1 reads.
 //!
-//! **These keys, and nothing else.** `version`, `id`, `base`; `run`, `when`,
-//! `requires` and `narrow` under `checks.<name>`; `run` and `destructive` under
-//! `commands.<name>`; `setup.requires`; and `quiet_after_seconds` and
-//! `poke_limit` under `drone`, `#414`'s — the first section here that is a dial
-//! rather than a registry, spelled as a step spells it and named for the reason
-//! `docs/contracts/configuration.md` gives. `fleet::Liveness::at` orders its
-//! tiers and nothing else does. Every other section the concept page describes
-//! is refused: permissions, secrets, ports, skills, budget, dispatch freeze,
-//! auto-merge.
+//! **These keys, and nothing else.** `version`, `id`, `base`; `run`,
+//! `expect_exit_code`, `when`, `requires` and `narrow` under `checks.<name>`;
+//! `run` and `destructive` under `commands.<name>`; `setup.requires`; and the
+//! three keys [`drone`] reads, the one section here that is a dial rather than
+//! a registry. Every other section the concept page describes is refused:
+//! permissions, secrets, ports, skills, budget, dispatch freeze, auto-merge.
 //!
-//! **A key nothing reads is worse than a key that is not there.** A file
-//! carrying `budget: 40` that no code consumes reads to its author as a budget
-//! that is set. Refusing it keeps every deferred section additive rather than a
-//! migration. [`Manifest::version`] refuses no number for the same reason.
+//! **A key nothing reads is worse than a key that is not there.** A `budget:
+//! 40` nothing consumes reads as a budget that is set, and refusing it keeps
+//! every deferred section additive. [`Manifest::version`] refuses no number too.
 //!
 //! `checks.<name>.when` is a list of `core_model::PathPattern`s checked at
-//! load, so one this parser cannot read is a refusal beside every other in the
-//! file rather than a Check that quietly stops running. **Absent means always.**
-//!
-//! **Both `requires` keys name Commands this file declares, resolved at load,
-//! and share every refusal** — see [`named_commands`]. `setup`'s code word is
+//! load, so one this parser cannot read is a refusal rather than a Check that
+//! quietly stops running — **absent means always**, as `expect_exit_code`'s
+//! absence means zero and [`Check::expect_exit_code`] says why that key left
+//! the workflow step. **Both `requires` keys name Commands this file declares
+//! and share every refusal** — [`named_commands`]; `setup`'s code word is
 //! *preparation*, because `armada::setup` runs nothing and means something
-//! else; one word over two meanings is a second vocabulary.
+//! else, and one word over two meanings is a second vocabulary. The three
+//! values this file produces live in [`declared`].
+
+mod declared;
+
+pub use declared::{Check, Command, Preparation};
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use core_model::{Covers, ManifestId, Narrowing, PathPattern, Prerequisite, ResolvedCheck, Ulid};
+use core_model::{
+    Covers, ManifestId, Narrowing, PathPattern, Prerequisite, RepoPath, ResolvedCheck, Ulid,
+};
 use serde_yaml_ng::Value;
+
+mod drone;
 
 use crate::error::{Fault, LoadError, Refusal};
 use crate::live::{Cell, Patience, Reloads};
@@ -45,8 +50,11 @@ const TOP_LEVEL: &[&str] = &[
     "drone",
     "after_merge",
 ];
-/// The keys M1 reads inside `checks.<name>`.
-const CHECK_KEYS: &[&str] = &["run", "when", "requires", "narrow"];
+/// The keys M1 reads inside `checks.<name>`. **`expect_exit_code` is spelled
+/// here as a workflow step spells it**, for the reason `drone:` below gives
+/// about its own two: one value written under two names is a vocabulary split,
+/// and this one is moving from the step to here.
+const CHECK_KEYS: &[&str] = &["run", "expect_exit_code", "when", "requires", "narrow"];
 /// The keys M1 reads inside `checks.<name>.narrow`.
 const NARROW_KEYS: &[&str] = &["run", "each", "from", "under", "except"];
 /// The keys M1 reads inside `commands.<name>`.
@@ -57,116 +65,6 @@ const SETUP_KEYS: &[&str] = &["requires"];
 /// the section says one thing: which of this repository's Checks are worth
 /// running against a tree a merge left behind.
 const AFTER_MERGE_KEYS: &[&str] = &["checks"];
-/// The keys M1 reads inside `drone`. **Spelled as a workflow step spells
-/// them** — `crates/config/src/workflow/step.rs`'s `STEP_KEYS` carries the same two
-/// words, because they are the same two values one tier up.
-const DRONE_KEYS: &[&str] = &["quiet_after_seconds", "poke_limit"];
-
-/// A command a change must pass to land or to advance a step.
-///
-/// **Armada records how to invoke a tool and never what the tool means.** There
-/// is no field here for what the command produces, which tests it runs or how
-/// its output should be read: a Check is a command and an exit code, and
-/// anything needing the output understood is a Judge question.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Check {
-    run: String,
-    when: Option<Covers>,
-    requires: Vec<Prerequisite>,
-    narrow: Option<Narrowing>,
-}
-
-impl Check {
-    /// The command line, verbatim as the repo wrote it.
-    pub fn run(&self) -> &str {
-        &self.run
-    }
-
-    /// Which paths this Check covers. **`None` where the file declares no
-    /// `when`, and that means always** — never "covers nothing".
-    ///
-    /// An `Option` rather than an empty [`Covers`] because the two would be one
-    /// value with opposite meanings, and [`Covers::of`] has no way to build an
-    /// empty one for exactly that reason.
-    pub fn when(&self) -> Option<&Covers> {
-        self.when.as_ref()
-    }
-
-    /// The Commands that run before this Check, **in the order the file names
-    /// them**, already resolved to their command lines.
-    ///
-    /// Empty where the file declares no `requires`, which is every Manifest
-    /// written before the key existed. `requires: []` is refused rather than
-    /// read as empty, for `when`'s reason — a list with nothing in it is a key
-    /// to delete.
-    pub fn requires(&self) -> &[Prerequisite] {
-        &self.requires
-    }
-
-    /// How this Check is run against a subset of the tree. **`None` where the
-    /// file declares no `narrow`, and that means it runs whole** — never
-    /// "narrows to nothing".
-    ///
-    /// The second question about paths a Check can be asked, and it is not
-    /// [`when`](Check::when)'s: `when` decides whether the Check runs at all,
-    /// this decides what it reads once it does. `format` covers every path and
-    /// still narrows to the Rust ones, so one key could not carry both.
-    pub fn narrow(&self) -> Option<&Narrowing> {
-        self.narrow.as_ref()
-    }
-}
-
-/// A command available to run against the repo, gating nothing.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Command {
-    run: String,
-    destructive: bool,
-}
-
-impl Command {
-    pub fn run(&self) -> &str {
-        &self.run
-    }
-
-    /// Whether a **Drone** invoking this pauses for approval. It does not gate
-    /// a person invoking it by hand, who is already the one triggering it.
-    ///
-    /// Absent means `false`. The common case is a command that is not
-    /// destructive, and a required flag on every entry would be noise on the
-    /// many to catch the few.
-    pub fn is_destructive(&self) -> bool {
-        self.destructive
-    }
-}
-
-/// A Command that has to run in a worktree before any step does, resolved.
-///
-/// **Name and command line together, because the two answer different
-/// questions and a failure needs both.** The name is what the file wrote and
-/// what a person edits; the `run` string is what was executed. A failure
-/// reporting only the second reads as an install that broke on its own, which
-/// is the mystery this whole key exists to end.
-///
-/// There is no way to build one but by resolving a `setup.requires` entry
-/// against a declared Command, so a caller holding one is holding a name the
-/// Manifest declared.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Preparation {
-    name: String,
-    run: String,
-}
-
-impl Preparation {
-    /// The Command's name, as `setup.requires` wrote it.
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    /// The command line, taken from `commands.<name>.run` at load.
-    pub fn run(&self) -> &str {
-        &self.run
-    }
-}
 
 /// One workspace's `armada.yml`, parsed and validated.
 ///
@@ -186,9 +84,20 @@ pub struct Manifest {
     version: u32,
     base: Option<String>,
     checks: BTreeMap<String, Check>,
+    /// Every name in `checks`, in the order `armada.yml` wrote them.
+    ///
+    /// **A second view of one set, never a second set.** It is built from the
+    /// same walk as `checks` and holds exactly its keys, so the two cannot
+    /// disagree about what is declared — only about what order to read it in,
+    /// which is the whole reason both exist.
+    checks_as_written: Vec<String>,
     commands: BTreeMap<String, Command>,
     prepared_by: Vec<Preparation>,
     proved_after_a_merge: Vec<ResolvedCheck>,
+    /// **Not behind the cell**, because it is not live: every workflow was
+    /// resolved against it at daemon start, so a save that moves it is
+    /// reported as needing a restart rather than adopted. See [`crate::live`].
+    exclude_paths: Vec<RepoPath>,
     /// The two `lifetime = "Live"` keys, behind a cell every clone shares.
     /// See [`crate::live`] for why these and not the whole file.
     live: Cell,
@@ -277,8 +186,36 @@ impl Manifest {
         self.commands.get(name)
     }
 
+    /// Every declared Check name, **in the order `armada.yml` writes them,
+    /// which is the order they run in**.
+    ///
+    /// **Order is the semantics, and there is no key to state it twice with.**
+    /// This is `config`'s existing rule about a workflow's `steps[]` — see
+    /// `order_is_the_semantics_and_there_is_no_field_for_it` — applied a file
+    /// along, and it had to be kept the moment a step could gate on every Check
+    /// without naming one. Until then the workflow file was the only place a
+    /// repository could sequence its gate, and the sequence was lost in this
+    /// parse without anything saying so.
+    ///
+    /// **The sequence is worth keeping because it is the author's, not because
+    /// it makes a failure arrive sooner.** Nothing about a gate stops early —
+    /// `fleet::checking` cancels no Check when one fails, and writes every
+    /// result into a slot sized from the declaration — so what a Drone is told,
+    /// and when, is the same whatever order the four raced in. What the order
+    /// decides is which four start first, and that is a scheduling question
+    /// this parser has no opinion about. Losing it to a `BTreeMap` was still a
+    /// regression: a repository could sequence its gate and then could not.
+    ///
+    /// **Not [`check_names`](Manifest::check_names)**, which is the same set
+    /// sorted, for a message rather than for a run.
+    pub fn checks_as_written(&self) -> &[String] {
+        &self.checks_as_written
+    }
+
     /// Every declared Check name, sorted. Handed to a refusal so the message
-    /// can name what the file does declare beside what it does not.
+    /// can name what the file does declare beside what it does not — a list a
+    /// person scans for a name they expected wants to be alphabetical, which is
+    /// the opposite of what a list a machine runs wants.
     pub fn check_names(&self) -> Vec<String> {
         self.checks.keys().cloned().collect()
     }
@@ -308,9 +245,10 @@ impl Manifest {
     /// them**. Empty is the default and is opt-in on purpose — see
     /// `docs/concepts/manifest.md`, *Proving what merged*, and `#474`.
     ///
-    /// **`when` is dropped, `requires` is refused, `expect_exit_code` is zero.**
-    /// All three are a step's question and there is no step here; the refusal is
+    /// **`when` and `narrow` are dropped and `requires` is refused** — each is
+    /// a step's or a Drone's question and there is no step here; the refusal is
     /// [`Fault::PreparesTheRepository`], and [`after_merge`] carries why.
+    /// `expect_exit_code` is the Check's own and is kept.
     pub fn proved_after_a_merge(&self) -> &[ResolvedCheck] {
         &self.proved_after_a_merge
     }
@@ -355,6 +293,25 @@ impl Manifest {
         self.live.read().poke_limit
     }
 
+    /// What a step's work in this repository stays out of, where the step
+    /// does not say for itself. **`&[]` where the file declares no
+    /// `drone.exclude_paths`**, which is the repository deferring to the
+    /// default rather than a list invented here.
+    ///
+    /// **The middle of three tiers, and the only one a repository writes.**
+    /// `crate::resolve` is where the order is written and it is written
+    /// nowhere else — a step's list beats this, and this beats the compiled-in
+    /// default that file carries. The argument for the order, and for why an
+    /// inherited list replaces rather than joins the one above it, is there.
+    ///
+    /// **Read off the value, not through the live cell**, unlike the two keys
+    /// beside it in the same section: this one is frozen at daemon start
+    /// because a `ResolvedWorkflow` was built from it there, and a Job's own
+    /// record carries the resolved list it ran under.
+    pub fn exclude_paths(&self) -> &[RepoPath] {
+        &self.exclude_paths
+    }
+
     /// Both live keys at once, for the one caller that adopts them together.
     pub(crate) fn patience(&self) -> Patience {
         self.live.read()
@@ -378,27 +335,37 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         .optional("base")
         .and_then(|value| yaml::text("base", value, out));
 
-    let drafted = match top.optional("checks") {
+    let (drafted, checks_as_written) = match top.optional("checks") {
         Some(value) => registry(value, "checks", CHECK_KEYS, out, check_entry),
-        None => BTreeMap::new(),
+        None => (BTreeMap::new(), Vec::new()),
     };
-    let commands = match top.optional("commands") {
+    let (commands, _) = match top.optional("commands") {
         Some(value) => registry(value, "commands", COMMAND_KEYS, out, command_entry),
-        None => BTreeMap::new(),
+        None => (BTreeMap::new(), Vec::new()),
     };
     // Both `requires` keys are resolved after `commands`, because every entry
-    // is resolved against it. Nothing about the order of the file matters —
-    // `Table` reads by name — only that the registry is built before it is
-    // consulted.
+    // is resolved against it. **Which section comes first does not matter** —
+    // `Table` reads by name, so an author never has to put `commands:` above
+    // `checks:` — only that the registry is built before it is consulted.
+    //
+    // The order *within* `checks:` does matter, and is kept: see
+    // [`Manifest::checks_as_written`]. The two are different questions and this
+    // sentence used to answer both, which stopped being true the day a step
+    // could gate on every Check without naming one.
+    //
+    // The Commands registry has no such order to keep. What runs before a Check
+    // is sequenced by that Check's own `requires` list, and preparation by
+    // `setup.requires` — both of which are arrays, where order is already the
+    // semantics.
     let declares: BTreeSet<String> = drafted.keys().cloned().collect();
     let checks = required_by(drafted, &declares, &commands, out);
     let prepared_by = match top.optional("setup") {
         Some(value) => preparation(value, &declares, &commands, out),
         None => Vec::new(),
     };
-    let (quiet_after_seconds, poke_limit) = match top.optional("drone") {
-        Some(value) => patience(value, out),
-        None => (None, None),
+    let drone = match top.optional("drone") {
+        Some(value) => drone::read(value, out),
+        None => drone::Drone::unstated(),
     };
     // After `checks` for `setup.requires`' reason, one registry along: every
     // entry resolves against it, and a file's order is never something an
@@ -426,54 +393,13 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         version: version?,
         base,
         checks,
+        checks_as_written,
         commands,
         prepared_by,
         proved_after_a_merge,
-        live: Cell::holding(Patience {
-            quiet_after_seconds,
-            poke_limit,
-        }),
+        exclude_paths: drone.exclude_paths,
+        live: Cell::holding(drone.patience),
     })
-}
-
-/// `drone:`, the repository's own patience with a Drone that goes quiet.
-///
-/// **Both keys optional and the section refused when it holds neither.** A
-/// `drone:` with nothing under it says nothing, exactly as `setup:` with
-/// nothing under it does, and [`Table::close`] reports no fault for an empty
-/// table — so the emptiness has to be asked about here or it is not asked about
-/// at all.
-///
-/// **The two zeros disagree, and each key is right about its own.** This is
-/// `crates/config/src/workflow/step.rs`'s split arriving one file up: a
-/// `quiet_after_seconds: 0` pokes a Drone on its first turn and escalates it on
-/// its third, which nobody means, and a `poke_limit: 0` says the first silence
-/// past the threshold escalates, which somebody might. Both readings are the
-/// step tier's and are unchanged by being written here — one value written in
-/// two places that read it differently is the defect this whole chain exists to
-/// avoid.
-///
-/// A refused value reads as absent from here, which is safe for the reason the
-/// workflow parser gives: the refusal is already in `out`, and a file with any
-/// refusal in it does not load at all.
-fn patience(value: &Value, out: &mut Vec<Refusal>) -> (Option<u32>, Option<u32>) {
-    let Some(mut table) = Table::open("drone", value, out) else {
-        return (None, None);
-    };
-    if table.is_empty() {
-        out.push(Refusal::new("drone", Fault::Empty));
-        return (None, None);
-    }
-    let quiet_key = table.at("quiet_after_seconds");
-    let quiet_after_seconds = table
-        .optional("quiet_after_seconds")
-        .and_then(|value| yaml::positive(&quiet_key, value, out));
-    let poke_key = table.at("poke_limit");
-    let poke_limit = table
-        .optional("poke_limit")
-        .and_then(|value| yaml::counted(&poke_key, value, out));
-    table.close(DRONE_KEYS, out);
-    (quiet_after_seconds, poke_limit)
 }
 
 /// `setup.requires`, resolved against the Commands the same file declares.
@@ -558,15 +484,22 @@ fn after_merge(
                     value: name,
                 },
             )),
-            // `when` dropped and `expect_exit_code` zero: both are a step's
-            // question, and after a merge there is no step to ask it of.
-            // `narrow` dropped for the same shape of reason one tier along —
-            // it is a Drone's question about its own change, and what merged
-            // is the whole tree.
+            // `when` dropped: it is a step's question — which of a change's
+            // paths this Check covers — and after a merge there is no step and
+            // no change to ask it of. `narrow` dropped for the same shape of
+            // reason one tier along: it is a Drone's question about its own
+            // work, and what merged is the whole tree.
+            //
+            // **`expect_exit_code` is kept, and used to be hard zero here.**
+            // It was a step's question while it was a step's key. It is the
+            // Check's own now, so a Check that legitimately exits non-zero
+            // says so once and every reader agrees — including this one, which
+            // would otherwise report the same Check as failing after every
+            // merge for the reason it was declared with.
             Some(check) => built.push(ResolvedCheck::ManifestCheck {
                 name,
                 run: check.run().to_string(),
-                expect_exit_code: 0,
+                expect_exit_code: check.expect_exit_code(),
                 when: None,
                 requires: Vec::new(),
                 narrow: None,
@@ -614,6 +547,7 @@ fn required_by(
             name,
             Check {
                 run: draft.run,
+                expect_exit_code: draft.expect_exit_code,
                 when: draft.when,
                 requires,
                 narrow: draft.narrow,
@@ -686,24 +620,44 @@ fn texts(items: Vec<(String, &Value)>, out: &mut Vec<Refusal>) -> Vec<(String, S
 }
 
 /// An open-ended map of author-chosen names to entries of one shape.
+/// The entries by name, **and the order the file wrote them in**.
+///
+/// Two returns rather than one ordered map, because the two are asked
+/// different questions and only one caller asks the second. A name is looked up
+/// far more often than a registry is walked, and a message listing what is
+/// declared reads better sorted — so the map stays a `BTreeMap` and the order
+/// travels beside it.
+///
+/// **Order is the semantics here, exactly as it is for `steps[]`.** `config`'s
+/// own `order_is_the_semantics_and_there_is_no_field_for_it` states the rule on
+/// a workflow's steps and it holds a file along: `checks:` is what a repository
+/// sequences its gate with, and there is no `order` key to state it twice with.
+/// It went missing between the parse and the caller until
+/// `every_manifest_check` needed it — see [`Manifest::checks_as_written`].
 fn registry<T>(
     value: &Value,
     key: &'static str,
     known: &'static [&'static str],
     out: &mut Vec<Refusal>,
     entry: fn(&str, &Value, &'static [&'static str], &mut Vec<Refusal>) -> Option<T>,
-) -> BTreeMap<String, T> {
+) -> (BTreeMap<String, T>, Vec<String>) {
     let mut built = BTreeMap::new();
+    let mut written = Vec::new();
     let Some(table) = Table::open(key, value, out) else {
-        return built;
+        return (built, written);
     };
     for (name, item) in table.into_entries() {
         let at = format!("{key}.{name}");
         if let Some(parsed) = entry(&at, item, known, out) {
+            // First appearance, so the two agree on their contents whatever a
+            // duplicated key in the document does to the map.
+            if !built.contains_key(&name) {
+                written.push(name.clone());
+            }
             built.insert(name, parsed);
         }
     }
-    built
+    (built, written)
 }
 
 /// A Check whose `requires` entries have been read and not yet resolved.
@@ -714,6 +668,7 @@ fn registry<T>(
 /// and [`required_by`] resolves them once both registries are built.
 struct DraftCheck {
     run: String,
+    expect_exit_code: i64,
     when: Option<Covers>,
     /// `None` where the file declares no `requires`, which is a Check nothing
     /// runs before. Distinct from an empty list, which [`yaml::list`] refuses
@@ -793,6 +748,16 @@ fn check_entry(
     let run = table
         .required("run", out)
         .and_then(|value| yaml::text(&table.at("run"), value, out));
+    // **Absent is zero, and a malformed one is a refusal rather than zero.** A
+    // file writing `expect_exit_code: "one"` meant to declare a Check that
+    // legitimately fails, and quietly giving it zero would make that Check
+    // unpassable while reading as declared. Same split as `retry_limit` one
+    // file along, for the same reason.
+    let code_key = table.at("expect_exit_code");
+    let expect_exit_code = match table.optional("expect_exit_code") {
+        None => Some(0),
+        Some(value) => yaml::integer(&code_key, value, out),
+    };
     // **A missing `when` and an unreadable `when` are not the same answer.**
     // The first is a Check that always runs; the second is a file that does not
     // load. So a fault inside the list refuses the Check rather than falling
@@ -816,6 +781,7 @@ fn check_entry(
     table.close(known, out);
     Some(DraftCheck {
         run: run?,
+        expect_exit_code: expect_exit_code?,
         when: when.ok()?,
         requires,
         narrow,

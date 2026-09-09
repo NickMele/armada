@@ -75,6 +75,12 @@ where
     /// that nothing is watching — see [`crate::unattended`], which is the half
     /// that moves the Job.
     pub(crate) async fn prepared(&self, job: &Job, worktree: &Worktree) -> Result<(), Adrift> {
+        // **Before the early return below**, because a workflow whose steps
+        // deliver files is not a workflow that requires an install, and a Job
+        // in a repository declaring no `setup.requires` needs this every bit as
+        // much.
+        self.deliverables_awaited(job, Path::new(worktree.path()));
+
         let required = self.manifest().prepared_by();
         if required.is_empty() {
             return Ok(());
@@ -137,6 +143,66 @@ where
             &[("seconds", FieldValue::Int(began.elapsed().as_secs() as i64))],
         );
         Ok(())
+    }
+
+    /// Put every file this workflow's steps are told to write where they are
+    /// told to write it, empty.
+    ///
+    /// **The path a step declares is a path a Drone must not have to build.**
+    /// `.armada/artifacts/` is in every shipped workflow and in no fresh
+    /// worktree, so the first thing a Drone reaches for is `mkdir -p` — a
+    /// command no repository declares, refused by the allowlist, and refused
+    /// silently. Job `01M21BKVPW002DC0ATD1X9T0VF` spent its last turn there.
+    /// The directory is Fleet's to make, because Fleet is what named the path.
+    ///
+    /// **Empty, and that gates nothing.** `artifact_exists` reads the file's
+    /// size, so a file nobody wrote still stops its step — what this removes is
+    /// the directory that had to exist first, not the writing. A step's Drone
+    /// still delivers or does not.
+    ///
+    /// **Every step's, not the one about to run.** A worktree is prepared once
+    /// and lives for the whole Job, so doing this per spawn would ask the same
+    /// question three times to write the same three directories.
+    ///
+    /// **A failure here is not a failure of the Job.** The path is a step's
+    /// declaration and may be one this filesystem will not take; the step that
+    /// declared it fails at its own gate, with its own wording, rather than
+    /// escalating a Job before any step has started. The line says what could
+    /// not be made.
+    fn deliverables_awaited(&self, job: &Job, worktree: &Path) {
+        for step in job.workflow().steps() {
+            let Some(target) = step.deliverable() else {
+                continue;
+            };
+            let at = worktree.join(target);
+            let made = at
+                .parent()
+                .map(std::fs::create_dir_all)
+                .transpose()
+                .and_then(|_| {
+                    // **`create_new`, so a worktree that already holds the file
+                    // keeps it.** Every spawn after the first reaches a
+                    // prepared worktree through `resume::surviving_worktree`
+                    // rather than through here, but a restart that did reach
+                    // this must not blank the deliverable a person is about to
+                    // read.
+                    match std::fs::File::create_new(&at) {
+                        Err(why) if why.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+                        other => other.map(|_| ()),
+                    }
+                });
+            if let Err(why) = made {
+                self.noted_preparing(
+                    job,
+                    "the file a step is told to write could not be made for it",
+                    &[
+                        ("step", FieldValue::Str(step.id().as_str().to_string())),
+                        ("target", FieldValue::Str(target.to_string())),
+                        ("because", FieldValue::Str(why.to_string())),
+                    ],
+                );
+            }
+        }
     }
 
     /// One line in the Job's own log, where the person watching it is looking.

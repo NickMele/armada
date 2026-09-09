@@ -1,53 +1,26 @@
-# Revert, reduced to what M1's parser accepts.
-# See `bug.json` beside this file for the shape all seven hold to, for why a
-# reduced form exists at all, and for the three ways the designed samples under
-# `crates/core-model/domain/workflow-samples/` are stale against the parser --
-# `question` where it reads `criteria[]`, `declare_plan_at` inside
-# `evidence_scope` where the registry parents it to the step, and
-# `max_context_size`, which M1 does not read. `reference_docs` was a fourth and
-# is not any more -- M1 reads it. The questions below are ported from the
-# designed files; none of the shape is.
+# Revert, reduced to what M1's parser accepts. `bug.json` beside this file
+# carries what all eight hold to, and where the schema, the catalogue and the
+# Check reasoning live.
 #
 # The designed `revert.json` runs five steps in a loop and opens on `revert`
 # itself -- there is no plan step, since a revert's scope is inherited from the
 # Job it undoes rather than classified. This form keeps that shape: `revert`,
 # then `review` + `merge` + `close` folded into one `handoff`.
 #
-# **`handoff` is gated `human_always`**, which is the folded `review` step's
-# own gate -- see `feature.json` for why a fold takes the strictest of the
-# three. Revert is the second workflow whose designed `review` spells
-# `human_always` as a literal, and `workflows.toml` gives the opposite reason
-# to Feature's: Feature's review is human because the behaviour is new, this
-# one because the behaviour is old, worked, and is being thrown away.
+# **`handoff` is gated `human_always`**, which is the folded `review` step's own
+# gate -- see `feature.json` for why a fold takes the strictest of the three.
+# Revert is the second workflow whose designed `review` spells `human_always` as
+# a literal, and `workflows.toml` gives the opposite reason to Feature's:
+# Feature's review is human because the behaviour is new, this one because the
+# behaviour is old, worked, and is being thrown away.
 #
 # **The designed `revert` step carries a judge check with no question in it.**
-# That is a hole in the sample, not a decision, so the criteria below are
+# That is a hole in the sample rather than a decision, so the criteria below are
 # written here rather than ported. What a revert has to be judged on is narrow
 # and obvious: that it undoes the named change, and that it undoes only that.
 #
-# `revert` carries the designed `regression_verify`'s `test` check itself,
-# dropping its `lint` check, which this repository's Manifest does not declare.
-#
-# `handoff` carries no Judge. A step with no criterion asks the Judge nothing,
-# and the designed `review`'s summary check declares `gates_advancement:
-# false`, which M1's parser does not read -- see `feature.json`.
-#
-# **`typecheck`, `bridge_build`, `storybook` and `bridge_test` are on
-# `revert`.** See `bug.json` for the defect they were added for. Undoing a
-# commit that touched both halves is the case: a revert that restores the Rust
-# and leaves the Bridge calling what it removed passes `build` and `test` and
-# does not compile. `bridge_test` is the half that catches the other shape of
-# it -- a revert that compiles and puts a component back to a state its own
-# stories no longer describe.
-#
-# **`model: haiku` on `handoff`, and nowhere else.** `bug.json` carries the
-# reasoning and the cache cost. `revert` produces a diff and is judged on
-# undoing one named change and nothing else, which is the deciding work of this
-# workflow entire -- it names no model and is run as the Job was proposed.
-# `handoff` reports.
-#
-# **`handoff` is the step that sends the work out**, on entry rather than on
-# advance, and `revert` declares `false`. `bug.json` carries the reasoning.
+# `revert` carries the designed `regression_verify`'s `test` check, dropping its
+# `lint` check, which this repository's Manifest does not declare.
 {
   "version": 1,
   "workflow_id": "revert",
@@ -61,39 +34,7 @@
       "retry_limit": 2,
       "mechanical_checks": [
         {
-          "type": "manifest_check",
-          "check": "build",
-          "expect_exit_code": 0
-        },
-        {
-          "type": "manifest_check",
-          "check": "test",
-          "expect_exit_code": 0
-        },
-        {
-          "type": "manifest_check",
-          "check": "format",
-          "expect_exit_code": 0
-        },
-        {
-          "type": "manifest_check",
-          "check": "typecheck",
-          "expect_exit_code": 0
-        },
-        {
-          "type": "manifest_check",
-          "check": "bridge_build",
-          "expect_exit_code": 0
-        },
-        {
-          "type": "manifest_check",
-          "check": "storybook",
-          "expect_exit_code": 0
-        },
-        {
-          "type": "manifest_check",
-          "check": "bridge_test",
-          "expect_exit_code": 0
+          "type": "every_manifest_check"
         },
         {
           "type": "diff_nonempty"
@@ -102,14 +43,6 @@
       "declare_plan_at": "step_start",
       "evidence_scope": {
         "context_source": "drone_declared",
-        # The ordinary tier: boundaries a Judge may lift when a Drone asks and
-        # the request makes sense. Secrets, CI configuration and the workflow
-        # definitions are not stated here -- nothing lifts those and no file a
-        # Drone has a worktree of names them. `docs/contracts/configuration.md`.
-        "exclude_paths": [
-          "node_modules/",
-          "target/"
-        ],
         "scope_diff_check": true
       },
       "judge_checks": [

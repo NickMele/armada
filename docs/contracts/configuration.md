@@ -240,13 +240,76 @@ Rules that follow:
   edit to `armada.yml` changes the next Job rather than what a running Drone is
   told about its own work.
 
+## What a passing run of a Check looks like
+
+Added 8 September 2026, with `checks.<name>.expect_exit_code`. The key was on
+the workflow step that named the Check, and it moved here.
+
+**A Check that legitimately exits non-zero knows that about itself.** A
+deliberately failing reproduction, a linter whose clean state is `1` — the
+repository that wrote the command is the only place that knows what a passing
+run of it looks like. Written on a step instead, the same number is restated in
+every workflow that gates on the Check, and the day the command changes they go
+stale one file at a time and silently.
+
+**Absent means zero**, which is what every Check ever written here meant. This
+is the one place in the file where absence has a numeric answer rather than a
+behavioural one, and it is safe for the reason `when`'s absence is not: there is
+no second reading of "the command succeeded" for a parser to fall into.
+
+Two consequences that follow from the key living here rather than on a step:
+
+- **`after_merge` keeps it**, where it drops `when` and refuses `requires`.
+  Those are a step's and a Drone's questions and there is no step after a merge;
+  this one is the Check's, so a Check that passes by failing does not report as
+  broken every time somebody merges.
+- **A step may still write it, and must agree.** The seven shipped workflow
+  files carry the old spelling and a change that stopped parsing them would stop
+  every Job in flight. Where a step writes it, `config::ResolvedWorkflow`
+  compares it against the Manifest and refuses the pair that disagrees —
+  reading either one silently would be Armada deciding which file is right about
+  a repository's own command. Restating it correctly is legal and does nothing,
+  which is what makes deleting the step's copy a separate, safe edit.
+
+**And a step can stop naming Checks one at a time.** `mechanical_checks` gained
+`{"type": "every_manifest_check"}`, which means *every Check this Manifest
+declares*, whatever those are. A shipped `feature` that spelled seven names
+fitted one repository and went stale the moment that repository declared an
+eighth — a gate that quietly stopped covering something. It is a thing a step
+**says**: an empty `mechanical_checks` is an ungated step and stays one, because
+half the shipped workflows have steps producing a document nothing compiles.
+The schema is `crates/core-model/domain/workflowdef-fields.toml`, which carries
+the rest — including that it does not compose with a named Check on the same
+step.
+
+**The order `checks:` is written in is the order they run in, and there is no
+key to state it twice with.** Fleet starts four of a step's Checks at a time off
+that order, so the first four declared are the four that start. Until a step
+could gate on every Check, the workflow file's list was the only place a
+repository sequenced its gate — so `checks:` inherits the sequencing along with
+the naming, and reordering it for tidiness now changes the gate. This is the
+`steps[]` rule a file along: order is already the semantics, and two statements
+of it can disagree.
+
+**A repository declaring no Checks expands it to nothing, and that is recorded
+rather than refused.** An ungated workspace is a state this document's own
+nearest-ancestor rule sanctions, so refusing would make a documented state
+unusable with any shipped workflow; and *run what this repository declares*
+reads literally. What the empty expansion must not do is go quiet, because an
+empty check list then means two opposite things — *asked for a gate and got
+none* and *never asked*. So the declaration is frozen onto the step beside the
+expansion, and served as a declared check of that kind ahead of whatever it
+came to. That is the general rule this instance follows: **where a resolution
+can legitimately produce nothing, the record carries what was asked for, not
+only what it came to.**
+
 ## Two tiers of path boundary, and only one of them is configuration
 
 Added 3 September 2026, with `#417`. A step's `exclude_paths` held two kinds of entry and refused both the same way, which is why a Drone that found the right fix in a fenced-off file had nowhere to go: the declaration was refused mechanically, and the widening it would have been pointed at grows the Job's `write_targets` rather than the list that refused it.
 
 | | Ordinary | Absolute |
 | --- | --- | --- |
-| Where it is written | `evidence_scope.exclude_paths`, per step, in a workflow definition | Nowhere. Compiled into `verification` |
+| Where it is written | `evidence_scope.exclude_paths` on a step, `drone.exclude_paths` in an `armada.yml`, or nowhere — see the section below | Nowhere. Compiled into `verification` |
 | What it is | A boundary somebody drew before anybody had read the code | Secrets, what decides which checks run, what decides how the work is judged |
 | At `declare_scope` | Refused, and the refusal names `request_scope` | Refused, and the refusal says asking will not change it |
 | At `request_scope` | The Judge is asked whether the paths belong to the step | Refused before any call. There is no answer that lifts it |
@@ -264,6 +327,28 @@ Added 3 September 2026, with `#417`. A step's `exclude_paths` held two kinds of 
 **Build configuration is deliberately ordinary.** `Cargo.toml`, `package.json` and a Makefile are what `check_config_edited` flags, and none of them is absolute: they are files ordinary work edits constantly, and a boundary that stopped a Job adding a dependency would refuse the work rather than protect anything. The gaming check is the right instrument there — it flags, and a Judge reads.
 
 **The ordinary tier is what a Judge may lift, and the shipped workflows now say only that.** `.env` was in every one of them and is gone from all nine, because an entry sitting in the liftable list teaches the next author that that is where secrets go. What is left is `node_modules/` and `target/`: generated output, which decides nothing about what is checked or judged, and which a Judge asked about would refuse on its own.
+
+## Where the ordinary tier is written, once rather than per step
+
+Added 8 September 2026. The paragraph above ends with two words that every step of every shipped workflow restated, and what is wrong with that is not the repetition: `node_modules/` and `target/` are a Cargo-and-pnpm guess, they are wrong for most repositories, and a workflow definition is the wrong place to correct them from. A repository cannot edit seven files it did not write.
+
+So `exclude_paths` is now the third tier of three, resolved the way `quiet_after_seconds` is:
+
+| Tier | Where | When it is read |
+| --- | --- | --- |
+| Step | `evidence_scope.exclude_paths` in a workflow definition | Frozen with the workflow at Job creation |
+| Repository | `drone.exclude_paths` in `armada.yml` | Daemon start, when each workflow is resolved against the Manifest |
+| Default | `WHERE_NO_REPOSITORY_AUTHORS` in `crates/config/src/resolve.rs` | Compiled in |
+
+`config::resolve`'s `fenced` is where the order is written and it is written nowhere else. A step that states a list keeps it whole, which is what makes this change invisible to every workflow already written.
+
+**The lower tier replaces the one above it rather than joining it.** Every other deny-shaped list in this document unions, and this one does not, because the glob dialect above has no negation: under a union a repository could add a fence and never drop one, and the compiled-in guess would be the one thing in the chain nobody could correct — which is the objection this section exists to answer. Union is still what `peer_polarity` says, because that field is about several Manifests gating one Job, where most-restrictive-wins is a different question.
+
+**`Frozen for the Job`, though the two keys beside it in `drone:` are `Live`.** Each workflow was resolved against this list at daemon start and each Job froze the result, so a Job asked later why a path was refused answers from its own record. A save that moves it is reported as needing a restart, naming `drone.exclude_paths` rather than the `drone:` section — saying the section would tell a person that the `quiet_after_seconds` beside it also needs one, which is the opposite of true.
+
+**`.gitignore` was the obvious source and it does not hold.** It was the first suggestion and it fails on four counts, any one of which is enough. It is a second glob dialect, with `!`, `?`, `[` and anchoring, where the section above says there is one and a second is a change to that section first. It lives inside the worktree the Drone has, and `.gitignore` is deliberately an ordinary file that ordinary work edits — so the fence could be moved by the thing it fences. It names `.armada/` in this very repository, where every written step sends its deliverable, so a gitignore-derived denylist would re-fence the one directory `#431` deliberately carved out of the absolute tier. And answering *is this path ignored* is a filesystem question for `git2`, where `verification::scope` is deliberately a text comparison that reaches no filesystem and depends on no VCS. What survives of the suggestion is its premise, and this section is the answer to it: the exclusions belong to the repository, not to the workflow.
+
+**There is no spelling for "this repository fences nothing".** The empty list is refused wherever it is written — absent is never empty, per the section above — so a tier that says nothing is deferring rather than clearing. A repository that wants no fence states the narrowest path it can name. Named here rather than fixed, because a third reading of an absent key is the thing that rule exists to prevent.
 
 ## What else the review changed
 
@@ -404,7 +489,8 @@ That day also closes the one gap it cannot close now. A setting nothing reads is
 
 - **[armada-yml-schema]** What is the exact `armada.yml` schema?
   M1 decided a subset — `version`, `id`, `base`, `checks.<name>.run`,
-  `checks.<name>.when`, `checks.<name>.requires`, `checks.<name>.narrow`,
+  `checks.<name>.expect_exit_code`, `checks.<name>.when`,
+  `checks.<name>.requires`, `checks.<name>.narrow`,
   `commands.<name>.run`,
   `commands.<name>.destructive` and `setup.requires` — with every
   other key (`permissions`, `knowledge`, `policy`,

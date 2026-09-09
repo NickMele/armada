@@ -50,5 +50,5 @@ pub use job::{
     StepEvent, StepEvidence, StepId, StepLevelTrigger, StepSeed, StepState, StepTarget,
     StepTransitioned, StepVerdict, Stuck, Subject, Target, Title, TopLevelOrigin, TransitionReason,
     Transitioned, TriggerKind, TriggerLevel, Urgency, WorkflowId, WriteTargets, ADVANCING_STATUSES,
-    ARTIFACT_EXISTS, DIFF_NONEMPTY, EDGES, MANIFEST_CHECK, STEP_EDGES,
+    ARTIFACT_EXISTS, DIFF_NONEMPTY, EDGES, EVERY_MANIFEST_CHECK, MANIFEST_CHECK, STEP_EDGES,
 };

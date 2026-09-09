@@ -1,10 +1,13 @@
 //! The Manifest keys a person may change under a running Fleet, and the one
 //! handle that may change them.
 //!
-//! **Not the whole file.** `crates/config/settings.toml` files two of
-//! `armada.yml`'s keys as `lifetime = "Live"` — `drone.quiet_after_seconds` and
-//! `drone.poke_limit` — and files `manifest-checks-init-commands-named-checks`
-//! and `manifest-commands-registry` as *Frozen for the Job*. Swapping the whole
+//! **Not the whole file, and not even the whole of one section.**
+//! `crates/config/settings.toml` files two of `armada.yml`'s keys as
+//! `lifetime = "Live"` — `drone.quiet_after_seconds` and `drone.poke_limit` —
+//! and files the Checks and Commands registries and `drone.exclude_paths` as
+//! *Frozen for the Job*. The last of those sits in the same `drone:` block as
+//! the two live ones, which is why [`Frozen`] names a key there and a section
+//! everywhere else: what decides is what was resolved against a value at boot. Swapping the whole
 //! Manifest would move the second pair too, and every [`ResolvedWorkflow`] was
 //! checked against the Checks the file declared at boot: holding a
 //! `Setup` is supposed to be proof the two files agree, and a Manifest replaced
@@ -100,6 +103,12 @@ pub enum Frozen {
     Checks,
     Commands,
     Setup,
+    /// **A key, where every other variant is a section.** Two of `drone:`'s
+    /// three keys are live and this one is not — every `ResolvedWorkflow` took
+    /// its copy of this list at boot — so naming the section would tell a
+    /// person that a `quiet_after_seconds` they just changed needs a restart,
+    /// which is the opposite of true.
+    DroneExcludePaths,
 }
 
 impl Frozen {
@@ -111,6 +120,7 @@ impl Frozen {
             Frozen::Checks => "checks",
             Frozen::Commands => "commands",
             Frozen::Setup => "setup",
+            Frozen::DroneExcludePaths => "drone.exclude_paths",
         }
     }
 }
@@ -183,6 +193,7 @@ struct AtStart {
     checks: Vec<String>,
     commands: Vec<String>,
     setup: Vec<String>,
+    exclude_paths: Vec<String>,
 }
 
 impl AtStart {
@@ -197,6 +208,14 @@ impl AtStart {
                 .prepared_by()
                 .iter()
                 .map(|step| step.name().to_string())
+                .collect(),
+            // Bodies, not names, because the whole value is the list: unlike
+            // `checks`, there is nothing behind an entry here that a shorter
+            // comparison could miss.
+            exclude_paths: manifest
+                .exclude_paths()
+                .iter()
+                .map(|path| path.as_str().to_string())
                 .collect(),
         }
     }
@@ -225,6 +244,9 @@ impl AtStart {
         }
         if self.setup != other.setup {
             changed.push(Frozen::Setup);
+        }
+        if self.exclude_paths != other.exclude_paths {
+            changed.push(Frozen::DroneExcludePaths);
         }
         changed
     }

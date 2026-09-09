@@ -136,6 +136,13 @@ impl EvidenceScope {
 
     /// The denylist. **Applied after `context_paths` resolves**, so it wins
     /// over anything the Drone declared.
+    ///
+    /// **On a resolved step this is the answer, not the step's own words.** A
+    /// definition may state nothing and inherit the repository's list or the
+    /// default beneath it; `config::resolve` orders those tiers and writes the
+    /// result here, once, before a Job freezes it. So a caller holding a
+    /// `ResolvedStep` reads what the step is fenced by without knowing there
+    /// were tiers, and the Job's own record says what it ran under.
     pub fn exclude_paths(&self) -> &[RepoPath] {
         &self.exclude_paths
     }

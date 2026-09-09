@@ -43,7 +43,15 @@ request is not a reason.";
 /// code, so a look that did not know a path was fenced would be answering a
 /// narrower question than the one being asked — and a look told "the step
 /// forbids this" would be answering a wider one. What it is given is when the
-/// boundary was set and by whom, which is what makes the question decidable.
+/// boundary was set, which is what makes the question decidable.
+///
+/// **It no longer says by whom, and that is the change `drone.exclude_paths`
+/// forced.** A fence may now come from the step, from the repository's
+/// `armada.yml` or from `config::resolve`'s default, and the resolved step
+/// carries no tag saying which — deliberately, because the answer would be the
+/// same either way and a tag nothing reads is a tag that goes stale. What every
+/// tier shares is the only fact the question turns on: it was drawn before this
+/// task's code was read.
 ///
 /// Nothing is written where nothing is fenced, so the ordinary request carries
 /// no paragraph about a list it does not touch.
@@ -65,9 +73,9 @@ fn fenced(question: &mut String, step: &ResolvedStep, asked: &[RepoPath]) {
     }
     question.push_str(
         "\nOf those, the step was written to stay out of the following. That \
-         was decided when the workflow was written, before anybody had read \
-         this task's code, and it is not a rule you are being asked to \
-         enforce — it is context for the one question below:\n",
+         was decided before anybody had read this task's code, and it is not a \
+         rule you are being asked to enforce — it is context for the one \
+         question below:\n",
     );
     for path in behind {
         question.push_str(&format!("  {}\n", path.as_str()));

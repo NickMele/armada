@@ -38,7 +38,7 @@ mod yaml;
 #[cfg(test)]
 mod tests;
 
-pub use error::{Fault, LoadError, Refusal, ResolveError, UnknownCheck};
+pub use error::{Disagreement, Fault, LoadError, Refusal, ResolveError, UnknownCheck};
 pub use live::{Adopted, Frozen, LiveKey, Moved, Reloads};
 pub use manifest::{Check, Command, Manifest, Preparation};
 pub use resolve::ResolvedWorkflow;

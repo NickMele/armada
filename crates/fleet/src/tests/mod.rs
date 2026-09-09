@@ -34,6 +34,7 @@ mod coupling;
 mod covering;
 mod crossing;
 mod daemon;
+mod declaring;
 mod delivering;
 mod delivery;
 mod detach;

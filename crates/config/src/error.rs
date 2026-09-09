@@ -246,6 +246,16 @@ pub enum Fault {
     /// Reported on the second and naming the first, for
     /// [`Fault::DuplicateStepId`]'s reason: the fix is to look at both.
     TwoDeliveringSteps { first_at: usize },
+    /// **A step gating on every declared Check and naming one by hand.** The
+    /// two spellings are one statement made twice: `every_manifest_check`
+    /// already covers whatever `armada.yml` declares, so the named entry beside
+    /// it is a Check the gate would run and report twice, and a step that
+    /// declares `every_manifest_check` twice says the same thing again.
+    ///
+    /// Reported on the second of the pair and naming the first, for
+    /// [`Fault::DuplicateStepId`]'s reason: the fix is to look at both, and
+    /// which one to delete is the author's call rather than a reader's.
+    EveryCheckAndByName { first_at: usize },
     /// **A step naming a model this machine does not offer.** Its own variant
     /// rather than [`Fault::NotInTheSchema`], because the legal set is not the
     /// schema's: it is whatever roster the caller resolved, so the same file is
@@ -465,6 +475,13 @@ impl fmt::Display for Fault {
                 "is a second `artifact_exists` on one step, which already \
                  delivers `{first}`"
             ),
+            Fault::EveryCheckAndByName { first_at } => write!(
+                f,
+                "cannot stand beside `mechanical_checks[{first_at}]`: a step \
+                 gates on every Check `armada.yml` declares or on the ones it \
+                 names, and `every_manifest_check` already covers every name, \
+                 so the two together would run one Check twice"
+            ),
             Fault::NoSuchModel { value, roster } => {
                 let offered: Vec<&str> = roster.iter().map(String::as_str).collect();
                 write!(
@@ -609,6 +626,52 @@ pub struct UnknownCheck {
     pub declared: Vec<String>,
 }
 
+/// One way a step and the Manifest say different things about a Check that
+/// exists in both.
+///
+/// **Not [`UnknownCheck`], which is a name that resolves to nothing.** These
+/// are steps whose names all resolved and whose meaning still does not survive
+/// the meeting, so they are reported apart: the fix for a miss is a typo, and
+/// the fix for one of these is deciding which file is right.
+///
+/// **An enum with one variant, because the class is what it is.** A second key
+/// a step and a Manifest can both state arrives as a second variant rather than
+/// a second error type, and the report already loops.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Disagreement {
+    /// **A step restating an `expect_exit_code` the Manifest does not agree
+    /// with.** The key is the Check's own and the step's copy survives only so
+    /// that workflows written before the move go on parsing; a copy that says
+    /// something else is a gate two files disagree about, and reading either
+    /// one silently is the parser deciding which repository is right about its
+    /// own command.
+    ExitCode {
+        step: StepId,
+        check: String,
+        step_expects: i64,
+        manifest_expects: i64,
+    },
+}
+
+impl fmt::Display for Disagreement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Disagreement::ExitCode {
+                step,
+                check,
+                step_expects,
+                manifest_expects,
+            } => write!(
+                f,
+                "step `{}` expects `{check}` to exit {step_expects}, and the \
+                 Manifest declares {manifest_expects}. The code is the Check's \
+                 own — delete it from the step",
+                step.as_str()
+            ),
+        }
+    }
+}
+
 /// Why a WorkflowDef could not be resolved against a Manifest.
 ///
 /// **The one cross-file validation, and the point of this milestone step.** A
@@ -625,15 +688,44 @@ pub enum ResolveError {
         manifest: PathBuf,
         unknown: Vec<UnknownCheck>,
     },
+    /// Every name resolved and the two files still say different things.
+    ///
+    /// **Reported only once no name is missing**, because a step's copy of an
+    /// exit code cannot be compared against a Check that is not there, and a
+    /// report holding both would name the same edit twice.
+    StepsDisagreeWithTheManifest {
+        workflow: PathBuf,
+        manifest: PathBuf,
+        disagreements: Vec<Disagreement>,
+    },
 }
 
 impl fmt::Display for ResolveError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let ResolveError::ChecksNotDeclared {
-            workflow,
-            manifest,
-            unknown,
-        } = self;
+        let (workflow, manifest, unknown) = match self {
+            ResolveError::ChecksNotDeclared {
+                workflow,
+                manifest,
+                unknown,
+            } => (workflow, manifest, unknown),
+            ResolveError::StepsDisagreeWithTheManifest {
+                workflow,
+                manifest,
+                disagreements,
+            } => {
+                write!(
+                    f,
+                    "{} and {} disagree in {} place(s)",
+                    workflow.display(),
+                    manifest.display(),
+                    disagreements.len()
+                )?;
+                for said in disagreements {
+                    write!(f, "; {said}")?;
+                }
+                return Ok(());
+            }
+        };
         write!(
             f,
             "{} names {} Check(s) {} does not declare",

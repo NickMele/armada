@@ -158,11 +158,11 @@ fn implement_carries_the_test_check_too_because_a_separate_verify_step_said_noth
         [
             MechanicalCheck::ManifestCheck {
                 check: "build".to_string(),
-                expect_exit_code: 0,
+                expect_exit_code: Some(0),
             },
             MechanicalCheck::ManifestCheck {
                 check: "test".to_string(),
-                expect_exit_code: 0,
+                expect_exit_code: Some(0),
             },
             MechanicalCheck::DiffNonempty,
         ]

@@ -2,10 +2,9 @@
 //!
 //! **`context_paths` is refused by name, and that is the whole rule.** At
 //! definition time nobody knows the paths — `context_source: drone_declared`
-//! says so — and the schema puts the field on the **resolved** object rather
-//! than on the definition. So a file carrying one gets a refusal naming which
-//! object it belongs to, rather than "unknown key", which would read as a field
-//! M1 has not reached.
+//! says so — and the schema puts the field on the **resolved** object. So a
+//! file carrying one gets a refusal naming which object it belongs to, rather
+//! than "unknown key", which would read as a field M1 has not reached.
 //!
 //! **`reference_docs` is read, and names evidence rather than a file.** Each
 //! entry is `<step_id>.evidence`, parsed through `EvidenceRef` — the same type
@@ -13,15 +12,17 @@
 //! cannot drift into two forms of one thing. Anything else is refused rather
 //! than resolved: a definition pointing the Judge at a path on disk would name
 //! something nothing recorded. **Which step it names is not checked here** —
-//! whether it is strictly earlier is a question about the Job's position in the
-//! workflow, and `fleet` answers it where the position is known.
+//! that is a question about position in the workflow, and `fleet` answers it.
+//!
+//! **`exclude_paths` absent is a step inheriting, not a step fencing nothing**
+//! — a step stating one still wins, and `crate::resolve` orders the tiers.
 //!
 //! **`max_context_size` is refused as deferred.** It is a legal schema key and
 //! it is not read: the number is undecided and its owner is verification rather
 //! than the Judge, because `docs/concepts/judge.md` makes the cap deliberately
 //! ownerless — it bounds all of verification, not the Judge Check alone. A key
-//! nothing reads is a promise the file makes and the system does not keep,
-//! which is `crate::workflow`'s reason applied here.
+//! nothing reads is a promise the system does not keep, which is
+//! `crate::workflow`'s reason applied here.
 
 use core_model::{ContextSource, DeclarePlanAt, EvidenceRef, EvidenceScope, RepoPath};
 use serde_yaml_ng::Value;

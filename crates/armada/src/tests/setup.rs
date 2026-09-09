@@ -125,14 +125,20 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
         .collect();
 
     // **Declaration order, and it is the order they run in.** `WorkflowDef` has
-    // no field for sequencing — see `config`'s own test saying so — so this list
-    // is `bug.json`'s `implement` step read top to bottom.
+    // no field for sequencing — see `config`'s own test saying so.
+    //
+    // **The file declaring that sequence has moved, and this list moved with
+    // it.** It used to be `bug.json`'s `implement` step read top to bottom;
+    // that step says `every_manifest_check` now, so the order is
+    // `armada.yml`'s `checks_as_written` and `format` is last where the
+    // definition put it third. The property the move had to keep is that the
+    // order is a repository's to state — which is why this stayed an ordered
+    // comparison rather than becoming a set.
     assert_eq!(
         resolved,
         vec![
             ("build", "cargo build --workspace --locked"),
             ("test", "cargo nextest run --workspace --exclude acceptance"),
-            ("format", "cargo fmt --all --check"),
             // **One name, not a chain.** A `run` gets no shell, so the `&&`
             // this used to hold was passed to `tsc` as an argument and the
             // Check could never pass. The chain lives in a `package.json`
@@ -144,8 +150,75 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
             // script again, and for the same reason: it chains two runners —
             // the screens' pure modules in node, then every story in a browser.
             ("bridge_test", "pnpm bridge-test"),
+            // **Last, and left there deliberately.** `#387` gave this
+            // `requires: [fmt]`, so the formatter runs before the Check reads
+            // and it now rarely fails at all — while `checking` starts four at
+            // a time, so moving it up would push `typecheck` out of the first
+            // wave for a Check that fixes itself first.
+            ("format", "cargo fmt --all --check"),
         ]
     );
+}
+
+/// **`every_manifest_check` expands in the order `armada.yml` writes, and that
+/// order is the order the gate runs.**
+///
+/// The seven names the shipped steps spell out are moving out of the workflow
+/// files, and until they did, the workflow file was the only place this
+/// repository sequenced its gate — the assertion above is that sequence read
+/// top to bottom. Expanded alphabetically the same seven come back as
+/// `bridge_build, bridge_test, build, …`: the same set, and the two slowest
+/// Checks leading.
+///
+/// **What that costs is a schedule, not a report.** `fleet::checking` starts
+/// four at a time and cancels nothing when one fails, and it writes each result
+/// into a slot sized from the declaration — so a Drone is told the same seven
+/// things in the same order however they raced. The order decides which four
+/// start, which is worth pinning because it is `armada.yml`'s to decide, and
+/// not because it makes anything arrive sooner.
+///
+/// **Asserted against the real Manifest and a definition written here**, rather
+/// than by editing a shipped file: the claim is about the expansion, and it has
+/// to hold before the seven files switch over as well as after.
+#[test]
+fn gating_on_every_check_runs_them_in_the_order_armada_yml_writes_them() {
+    let setup = Setup::at(&repository(), &roster()).expect("a setup that loads");
+    let text = "version: 1\nworkflow_id: sweeping\nname: sweeping\nstructure: linear\nsteps:\n  \
+                - id: implement\n    label: Implement\n    evidence_type: diff\n    \
+                delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      \
+                - { type: every_manifest_check }\n      - { type: diff_nonempty }\n";
+    let def = WorkflowDef::parse(std::path::Path::new("sweeping.yml"), text, &roster())
+        .expect("a step may gate on every declared Check");
+    let resolved = config::ResolvedWorkflow::resolve(&def, setup.manifest())
+        .expect("every declared Check resolves against the file that declared it");
+
+    let names: Vec<&str> = resolved.steps()[0]
+        .checks()
+        .iter()
+        .filter_map(ResolvedCheck::name)
+        .collect();
+    assert_eq!(
+        names,
+        vec![
+            "build",
+            "test",
+            "typecheck",
+            "bridge_build",
+            "storybook",
+            "bridge_test",
+            "format",
+        ],
+        "the order `armada.yml` declares them in, which is the order they answer \
+         in — not `check_names`' alphabetical, which leads with the two slowest"
+    );
+    // The same seven, and no eighth: the expansion is the registry and the
+    // registry is what `check_names` lists.
+    let mut sorted = names.clone();
+    sorted.sort_unstable();
+    assert_eq!(sorted, setup.manifest().check_names());
+    // And the declaration survives beside what it came to, which is what a
+    // repository declaring no Checks would be left with.
+    assert!(resolved.steps()[0].gates_on_every_check());
 }
 
 /// **`--exclude acceptance` is load-bearing and is asserted as such.**
@@ -249,6 +322,52 @@ fn two_or_more_workflow_definitions_load_and_are_held_by_their_own_ids() {
     let mut ids: Vec<&str> = setup.workflows().keys().map(|id| id.as_str()).collect();
     ids.sort();
     assert_eq!(ids, vec!["alpha", "beta"]);
+}
+
+/// **The whole daemon-start path, over a workflow that names no Check.** The
+/// test above resolves one definition against the real Manifest; this walks
+/// `Setup::at` — read the Manifest, read the definitions beside it, resolve
+/// each — which is what a repository whose workflows have been switched over
+/// actually goes through.
+///
+/// The Manifest here declares its Checks in an order the alphabet does not
+/// agree with, so a resolution that quietly sorted them would come back
+/// `apple, build, zebra` and fail here rather than in a Job.
+#[test]
+fn a_repository_whose_workflow_names_no_check_starts_and_keeps_its_order() {
+    let dir = TempDir::new();
+    dir.write(
+        "armada.yml",
+        "version: 1\nid: 01FIXTUREMANIFEST\nchecks:\n  zebra:\n    run: run zebra\n  \
+         build:\n    run: run build\n  apple:\n    run: run apple\n",
+    );
+    dir.write(
+        ".armada/workflows/sweeping.yml",
+        "version: 1\nworkflow_id: sweeping\nname: sweeping\nstructure: linear\nsteps:\n  \
+         - id: only\n    label: \"Only step\"\n    evidence_type: diff\n    delivers: true\n    \
+         advance_gate: auto\n    mechanical_checks:\n      - { type: every_manifest_check }\n",
+    );
+
+    let setup = Setup::at(dir.path(), &roster()).expect("a repository that gates on all of them");
+    let workflow = setup
+        .workflows()
+        .values()
+        .next()
+        .expect("the one definition");
+    let ran: Vec<(&str, &str)> = workflow.steps()[0]
+        .checks()
+        .iter()
+        .filter_map(|check| Some((check.name()?, check.run()?)))
+        .collect();
+    assert_eq!(
+        ran,
+        vec![
+            ("zebra", "run zebra"),
+            ("build", "run build"),
+            ("apple", "run apple"),
+        ],
+        "the Manifest's order, with each Check's own command lifted in"
+    );
 }
 
 /// Two files naming the same `workflow_id` is refused, and the refusal names

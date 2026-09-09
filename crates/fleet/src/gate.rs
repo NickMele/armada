@@ -454,27 +454,30 @@ where
 ///
 /// `None` where the step declares no deliverable, which is every step whose
 /// product is the diff. `Some(Err(..))` where it declares one and the file
-/// could not be read — **not `None`**, because the two mean opposite things and
-/// folding them would hand the Judge a step's summary in place of the document
-/// it summarises, which is the substitution this whole capability removes.
+/// could not be read — **not `None`**, because folding the two would hand the
+/// Judge a step's summary in place of the document it summarises.
 ///
-/// **The path is the frozen workflow's.** `ResolvedStep::deliverable` reads it
-/// off a `mechanical_checks[].target` authored in the definition and frozen at
-/// Job creation, and `config` refused a target that globs, that is absolute or
-/// that holds `..` where the definition was parsed. So no Drone chose this path
-/// and none can move it, which is the whole difference between reading it and
-/// opening whatever a submission's `shown_by` happened to name.
+/// **Shared with the mid-step look rather than siblinged**: a second copy is a
+/// second place the bound, the symlink decision and the meaning of `Err`
+/// against `None` are stated. `crate::converging` calls this one.
+///
+/// **The path is the frozen workflow's.** `ResolvedStep::deliverable` reads a
+/// `mechanical_checks[].target` authored in the definition and frozen at Job
+/// creation, which `config` refused where it globbed, was absolute or held
+/// `..`. No Drone chose it and none can move it, which is the difference
+/// between reading this file and opening whatever a `shown_by` named.
 ///
 /// Read to one byte past the bound rather than whole: a Drone that wrote five
 /// megabytes must not cost five megabytes of Fleet's memory to refuse.
 /// [`Delivered::read`] is what does the refusing, so the bound is stated once.
 ///
 /// **A symlink at the path is followed, and that grants nothing.** A Drone can
-/// already read whatever it can read and copy the bytes into the file, so a
-/// link is a shorter way to do what `cat` does. What a link could otherwise
-/// smuggle in — something enormous, something that is not text — is what the
-/// bound and this function's error arm already answer.
-fn deliverable(step: &ResolvedStep, worktree: &Path) -> Option<Result<String, std::io::Error>> {
+/// already copy whatever it can read into the file, so a link is a shorter
+/// `cat`. What one could smuggle in is what the bound and the `Err` answer.
+pub(crate) fn deliverable(
+    step: &ResolvedStep,
+    worktree: &Path,
+) -> Option<Result<String, std::io::Error>> {
     let target = step.deliverable()?;
     Some(File::open(worktree.join(target)).and_then(|file| {
         let mut held = String::new();

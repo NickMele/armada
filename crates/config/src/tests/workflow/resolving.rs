@@ -8,10 +8,28 @@
 use core_model::ResolvedCheck;
 
 use super::{bug_with, manifest, parse, BUG};
-use crate::error::ResolveError;
+use crate::error::{Disagreement, ResolveError, UnknownCheck};
 use crate::manifest::Manifest;
 use crate::resolve::ResolvedWorkflow;
 use crate::tests::named;
+
+/// The names that resolved to nothing, or a panic naming what came back
+/// instead. A refusal of the other shape here is a test that would otherwise
+/// pass by matching nothing.
+fn missing(error: &ResolveError) -> &[UnknownCheck] {
+    match error {
+        ResolveError::ChecksNotDeclared { unknown, .. } => unknown,
+        other => panic!("expected an undeclared name and got: {other}"),
+    }
+}
+
+/// The places the two files say different things, same shape and same reason.
+fn disagreements(error: &ResolveError) -> &[Disagreement] {
+    match error {
+        ResolveError::StepsDisagreeWithTheManifest { disagreements, .. } => disagreements,
+        other => panic!("expected a disagreement and got: {other}"),
+    }
+}
 
 #[test]
 fn a_resolved_workflow_carries_the_command_not_the_name() {
@@ -52,7 +70,7 @@ fn a_step_naming_a_check_the_manifest_lacks_is_refused_before_dispatch() {
     )
     .expect("the definition itself is well formed");
     let error = ResolvedWorkflow::resolve(&def, &manifest()).expect_err("`lint` is not declared");
-    let ResolveError::ChecksNotDeclared { unknown, .. } = &error;
+    let unknown = missing(&error);
     assert_eq!(unknown.len(), 1);
     assert_eq!(unknown[0].step.as_str(), "lint");
     assert_eq!(unknown[0].check, "lint");
@@ -75,7 +93,7 @@ fn naming_a_command_where_a_check_belongs_is_told_which_mistake_it_was() {
     )
     .expect("well formed");
     let error = ResolvedWorkflow::resolve(&def, &manifest()).expect_err("`fmt` is a Command");
-    let ResolveError::ChecksNotDeclared { unknown, .. } = &error;
+    let unknown = missing(&error);
     assert!(unknown[0].is_a_command);
     assert!(
         error
@@ -92,7 +110,7 @@ fn every_unresolved_name_is_reported_not_only_the_first() {
     )
     .expect("well formed");
     let error = ResolvedWorkflow::resolve(&def, &manifest()).expect_err("two names miss");
-    let ResolveError::ChecksNotDeclared { unknown, .. } = &error;
+    let unknown = missing(&error);
     let names: Vec<&str> = unknown.iter().map(|u| u.check.as_str()).collect();
     assert_eq!(names, ["lint", "typecheck"]);
 }
@@ -157,4 +175,222 @@ fn a_built_in_check_declares_no_paths_and_always_runs() {
     assert_eq!(diff.when(), None);
     assert!(!diff.needs_changed_paths());
     assert!(diff.covers(&[]));
+}
+
+/// The same two Checks, one of which passes by failing. `repro` is the shape
+/// the key exists for — a deliberately failing test, which `bug.json`'s
+/// designed sample already declares `expect_exit_code: 1` on.
+const FAILING_MANIFEST: &str = r#"
+version: 1
+id: armada
+checks:
+  build:
+    run: cargo build --workspace
+  test:
+    run: cargo nextest run --workspace
+    expect_exit_code: 1
+commands:
+  fmt:
+    run: cargo fmt --all
+"#;
+
+/// **A step that writes nothing takes the Manifest's code.** The move the whole
+/// change is for: the repository that wrote the command is the one that knows a
+/// clean run of it is `1`, and every workflow naming the Check inherits that
+/// without restating it.
+#[test]
+fn a_step_that_says_nothing_about_an_exit_code_takes_the_checks_own() {
+    let def = parse(
+        "version: 1\nworkflow_id: bug\nname: bug\nstructure: linear\nsteps:\n  - id: repro\n    label: Reproduce\n    evidence_type: diff\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: manifest_check, check: test }\n      - { type: manifest_check, check: build }\n",
+    )
+    .expect("a step may leave the key out");
+    let manifest = Manifest::parse(&named("armada.yml"), FAILING_MANIFEST).expect("a manifest");
+    let resolved = ResolvedWorkflow::resolve(&def, &manifest).expect("every name declared");
+    let expects: Vec<Option<i64>> = resolved.steps()[0]
+        .checks()
+        .iter()
+        .map(ResolvedCheck::expects)
+        .collect();
+    assert_eq!(
+        expects,
+        [Some(1), Some(0)],
+        "the Check that declares one carries it, and the one that does not is zero"
+    );
+}
+
+/// **The seven shipped workflows still parse and still resolve.** Every one of
+/// them writes `expect_exit_code: 0` today and the Manifest's default is zero,
+/// so the pair agrees and nothing changes for a Job in flight. This is the
+/// claim that lets the workflow files be switched over separately.
+#[test]
+fn a_step_restating_the_manifests_code_is_carried_unchanged() {
+    let def = parse(BUG).expect("the worked example");
+    let resolved = ResolvedWorkflow::resolve(&def, &manifest()).expect("the old spelling resolves");
+    assert_eq!(resolved.steps()[1].checks()[0].expects(), Some(0));
+}
+
+/// **And a step restating it wrongly is refused before dispatch.** The key
+/// survives so old workflows parse, not so that a workflow can override a
+/// repository about its own command — two files disagreeing about what a
+/// passing run looks like has no reading that is not a guess, and the guess
+/// would make the Check unpassable for every Job dispatched here.
+#[test]
+fn a_step_contradicting_the_manifests_exit_code_is_refused() {
+    let def = parse(
+        "version: 1\nworkflow_id: bug\nname: bug\nstructure: linear\nsteps:\n  - id: repro\n    label: Reproduce\n    evidence_type: diff\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: manifest_check, check: test, expect_exit_code: 0 }\n",
+    )
+    .expect("the definition itself is well formed");
+    let manifest = Manifest::parse(&named("armada.yml"), FAILING_MANIFEST).expect("a manifest");
+    let error = ResolvedWorkflow::resolve(&def, &manifest).expect_err("the two disagree");
+    assert_eq!(
+        disagreements(&error),
+        [Disagreement::ExitCode {
+            step: core_model::StepId::new("repro".to_string()),
+            check: "test".to_string(),
+            step_expects: 0,
+            manifest_expects: 1,
+        }]
+    );
+    let message = error.to_string();
+    assert!(message.contains("delete it from the step"), "{message}");
+}
+
+/// **`every_manifest_check` is the whole registry, whatever is in it.** The
+/// point of the spelling: the same step resolves to two Checks here and to
+/// however many the next repository declares, and a Check added to `armada.yml`
+/// is gated on without a workflow being edited.
+#[test]
+fn a_step_may_gate_on_every_check_the_manifest_declares() {
+    let def = parse(
+        "version: 1\nworkflow_id: feature\nname: feature\nstructure: linear\nsteps:\n  - id: implement\n    label: Implement\n    evidence_type: diff\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: every_manifest_check }\n      - { type: diff_nonempty }\n",
+    )
+    .expect("a step may gate on all of them");
+    let manifest = Manifest::parse(&named("armada.yml"), FAILING_MANIFEST).expect("a manifest");
+    let resolved = ResolvedWorkflow::resolve(&def, &manifest).expect("every name declared");
+    let checks = resolved.steps()[0].checks();
+    // Sorted, because `checks:` is a map and has no order somebody wrote.
+    assert_eq!(
+        checks
+            .iter()
+            .map(ResolvedCheck::label)
+            .collect::<Vec<&str>>(),
+        ["build", "test", "diff_nonempty"]
+    );
+    // Each carries what the Manifest says about it, exactly as a named one
+    // does — the command, and the code that means it passed.
+    assert_eq!(checks[0].run(), Some("cargo build --workspace"));
+    assert_eq!(checks[1].expects(), Some(1));
+    assert_eq!(checks[2], ResolvedCheck::DiffNonempty);
+    // And the step keeps saying what it asked for, beside what that came to.
+    assert!(resolved.steps()[0].gates_on_every_check());
+}
+
+/// **A step that declares no mechanical check is still ungated.** The
+/// load-bearing half of the design: absence must not become *all*, or the four
+/// shipped workflows whose steps produce a document nothing compiles would gate
+/// on this repository's Rust build.
+#[test]
+fn declaring_no_checks_is_not_declaring_every_check() {
+    let def = parse(
+        "version: 1\nworkflow_id: design\nname: design\nstructure: linear\nsteps:\n  - id: draft\n    label: Draft\n    evidence_type: document\n    delivers: false\n    advance_gate: auto\n",
+    )
+    .expect("well formed");
+    let manifest = Manifest::parse(&named("armada.yml"), FAILING_MANIFEST).expect("a manifest");
+    let resolved = ResolvedWorkflow::resolve(&def, &manifest).expect("nothing to resolve");
+    assert!(resolved.steps()[0].checks().is_empty());
+    // The Manifest declares two, so the empty list here is not the registry
+    // being empty — it is the step never having asked, and the record says
+    // which of the two an empty list means.
+    assert!(!resolved.steps()[0].gates_on_every_check());
+}
+
+/// **A repository declaring no Checks expands to nothing, and is not refused.**
+/// `docs/concepts/manifest.md` sanctions an ungated workspace as a state rather
+/// than a mistake, and *run what this repository declares* reads literally: a
+/// repository declaring nothing runs nothing. Refusing would have made a
+/// documented state unusable with any shipped workflow.
+///
+/// **What was wrong was the silence.** The step is frozen saying it asked for
+/// every Check, so the empty list beside it reads as *the repository declared
+/// none* rather than as *this step declared no gate*.
+#[test]
+fn gating_on_every_check_where_the_manifest_declares_none_expands_to_nothing_and_says_so() {
+    let def = parse(
+        "version: 1\nworkflow_id: feature\nname: feature\nstructure: linear\nsteps:\n  - id: implement\n    label: Implement\n    evidence_type: diff\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: every_manifest_check }\n",
+    )
+    .expect("well formed");
+    let bare = Manifest::parse(&named("armada.yml"), "version: 1\nid: tooling\n").expect("bare");
+    let resolved = ResolvedWorkflow::resolve(&def, &bare).expect("an ungated repository is legal");
+    let step = &resolved.steps()[0];
+    assert!(step.checks().is_empty(), "there was nothing to expand to");
+    assert!(
+        step.gates_on_every_check(),
+        "and the record still says the step asked for all of them"
+    );
+}
+
+/// A Manifest whose declaration order is not its alphabetical order, so the
+/// two are told apart by what comes back rather than by luck.
+const OUT_OF_ORDER_MANIFEST: &str = r#"
+version: 1
+id: armada
+checks:
+  zebra:
+    run: run zebra
+  build:
+    run: run build
+  apple:
+    run: run apple
+"#;
+
+/// **The expansion is the file's order, not the alphabet's.** `checks:` is
+/// where a repository sequences its gate — `fleet::checking` starts four at a
+/// time off this order — and until a step could gate on every Check, the
+/// workflow file was the only place that sequence was written. Expanding
+/// alphabetically would have reordered every repository's gate silently, and
+/// this repository's own `armada.yml` argues the sequence in its own words,
+/// with measured seconds.
+///
+/// `check_names` is the other view of the same set and stays sorted, because a
+/// message listing what is declared is scanned by a person for a name they
+/// expected. Both are asserted here so neither can quietly become the other.
+#[test]
+fn every_manifest_check_expands_in_the_order_the_manifest_writes_not_the_alphabet() {
+    let def = parse(
+        "version: 1\nworkflow_id: feature\nname: feature\nstructure: linear\nsteps:\n  - id: implement\n    label: Implement\n    evidence_type: diff\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: every_manifest_check }\n",
+    )
+    .expect("well formed");
+    let manifest =
+        Manifest::parse(&named("armada.yml"), OUT_OF_ORDER_MANIFEST).expect("a manifest");
+    assert_eq!(
+        manifest.checks_as_written(),
+        ["zebra", "build", "apple"],
+        "the file's order survives the parse"
+    );
+    assert_eq!(
+        manifest.check_names(),
+        ["apple", "build", "zebra"],
+        "and the sorted view is still sorted, for the message that reads it"
+    );
+
+    let resolved = ResolvedWorkflow::resolve(&def, &manifest).expect("every name declared");
+    assert_eq!(
+        resolved.steps()[0]
+            .checks()
+            .iter()
+            .map(ResolvedCheck::label)
+            .collect::<Vec<&str>>(),
+        ["zebra", "build", "apple"],
+        "the gate runs them as the file wrote them"
+    );
+}
+
+/// A step that named its Checks one at a time never claims it asked for all of
+/// them, however many the Manifest happens to declare.
+#[test]
+fn naming_checks_by_hand_does_not_read_as_gating_on_every_one() {
+    let def = parse(BUG).expect("the worked example");
+    let resolved = ResolvedWorkflow::resolve(&def, &manifest()).expect("every name declared");
+    assert_eq!(resolved.steps()[1].checks().len(), 3);
+    assert!(!resolved.steps()[1].gates_on_every_check());
 }
