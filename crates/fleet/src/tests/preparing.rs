@@ -17,13 +17,13 @@ use std::path::Path;
 use adapter_traits::WorktreeSpec;
 use config::Manifest;
 use core_model::{EscalationTrigger, JobStatus, StepState, TransitionReason, TriggerLevel};
-use testkit::{FakeHarness, FakeVcs, FakeWorkProduct};
+use testkit::{FakeHarness, FakeVcs, FakeWorkProduct, Gate, Sketch};
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{
-    a_proposal, diff_evidence, fittings, note_evidence, worktree_directory,
+    a_proposal, diff_evidence, fittings, note_evidence, one, worktree_directory,
 };
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
@@ -257,5 +257,139 @@ async fn the_log_names_each_command_as_it_is_attempted() {
     assert!(
         !log.contains("the worktree is prepared"),
         "the span never closed, so nothing may claim it did"
+    );
+}
+
+// ------------------------------- the file a step is told to write
+
+/// A workflow whose first step delivers a file two directories down, and whose
+/// second delivers nothing.
+///
+/// **Two steps and only one deliverable**, because the assertion is as much
+/// about what is *not* made: a preparation that created something for every
+/// step would be one nobody could tell from one that read the declarations.
+fn one_step_delivers() -> config::ResolvedWorkflow {
+    testkit::resolved(&[
+        Sketch {
+            id: "implement",
+            label: "Implement",
+            evidence_type: Some("facts_note"),
+            gates: &[Gate::ArtifactExists {
+                target: ".armada/artifacts/implement.md",
+            }],
+            judged_on: &[],
+            scope: None,
+            gaming: None,
+        },
+        Sketch {
+            id: "summarise",
+            label: "Summarise",
+            evidence_type: Some("facts_note"),
+            gates: &[],
+            judged_on: &[],
+            scope: None,
+            gaming: None,
+        },
+    ])
+}
+
+/// **(f)** The path a step declares is a path its Drone finds already there.
+///
+/// Job `01M21BKVPW002DC0ATD1X9T0VF` is why: told to write
+/// `.armada/artifacts/scope.md` into a worktree holding no such directory, its
+/// Drone reached for `mkdir -p` — a command no repository declares, refused by
+/// the allowlist, and refused silently. It never wrote anything and the step
+/// died at `no_report`. Fleet named the path, so the directory is Fleet's.
+#[tokio::test]
+async fn the_file_a_step_is_told_to_write_is_there_before_its_drone_is() {
+    let home = TempDir::new();
+    let mut fittings = fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    fittings.workflows = one(one_step_delivers());
+    let fleet = Fleet::assembled(fittings);
+
+    let job = fleet
+        .propose(a_proposal("a Job whose first step delivers a file"))
+        .await
+        .expect("proposed");
+    worktree_directory(&home, job.id());
+    dispatched(&fleet, job.id()).await.expect("dispatch runs");
+
+    let at = worktree(&home, job.id()).join(".armada/artifacts/implement.md");
+    assert!(
+        at.is_file(),
+        "the Drone was told to write {}, and had to be able to",
+        at.display()
+    );
+    assert_eq!(
+        std::fs::read_to_string(&at).expect("readable").len(),
+        0,
+        "empty, so `artifact_exists` still stops a step whose Drone delivered nothing"
+    );
+}
+
+/// **(g)** Preparing a worktree makes nothing a step did not ask for.
+///
+/// The pair to (f). Without it, a preparation that made one directory per step
+/// whether or not the step declared a deliverable would pass (f) exactly.
+#[tokio::test]
+async fn a_step_declaring_no_deliverable_has_nothing_made_for_it() {
+    let home = TempDir::new();
+    let mut fittings = fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    fittings.workflows = one(one_step_delivers());
+    let fleet = Fleet::assembled(fittings);
+
+    let job = fleet
+        .propose(a_proposal("a Job whose second step delivers nothing"))
+        .await
+        .expect("proposed");
+    worktree_directory(&home, job.id());
+    dispatched(&fleet, job.id()).await.expect("dispatch runs");
+
+    assert!(
+        !worktree(&home, job.id())
+            .join(".armada/artifacts/summarise.md")
+            .exists(),
+        "nothing declared that path, so nothing may create it"
+    );
+}
+
+/// **(h)** A deliverable already written is not blanked by a second preparation.
+///
+/// **`create_new` is what makes this true**, and it is worth a case: every spawn
+/// after the first reaches a prepared worktree through
+/// `resume::surviving_worktree` rather than through here, but a restart that did
+/// reach it would otherwise delete the document a person is about to read.
+#[tokio::test]
+async fn a_deliverable_already_written_survives_being_prepared_again() {
+    let home = TempDir::new();
+    let mut fittings = fittings(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    fittings.workflows = one(one_step_delivers());
+    let fleet = Fleet::assembled(fittings);
+
+    let job = fleet
+        .propose(a_proposal("a Job prepared twice"))
+        .await
+        .expect("proposed");
+    worktree_directory(&home, job.id());
+    dispatched(&fleet, job.id()).await.expect("dispatch runs");
+
+    let at = worktree(&home, job.id()).join(".armada/artifacts/implement.md");
+    std::fs::write(&at, "what the Drone found").expect("the Drone writes its finding");
+
+    fleet
+        .prepared(
+            &fleet.load(job.id()).await.expect("readable"),
+            &adapter_traits::Worktree::at(
+                worktree(&home, job.id()).to_string_lossy(),
+                "armada/anything",
+            ),
+        )
+        .await
+        .expect("preparing a worktree that is already prepared");
+
+    assert_eq!(
+        std::fs::read_to_string(&at).expect("readable"),
+        "what the Drone found",
+        "a second preparation took the deliverable away"
     );
 }
