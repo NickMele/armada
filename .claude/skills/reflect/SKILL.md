@@ -64,13 +64,24 @@ For every branch this session committed to. The gate is all of it, every time:
 
 | | |
 |---|---|
-| `cargo build --workspace --locked` | clean |
+| `cargo build --workspace --locked` | **no warnings, not exit 0** — see below |
 | `cargo nextest run --workspace --exclude acceptance` | the count, against the count on `main` |
 | `cargo test -p acceptance` | separately; a milestone's own claim may be red while it is in flight |
 | `cargo fmt --all --check` | clean |
 | `cargo xtask verify-docs` | green — a stale `docs/OPEN.md` fails it |
 | `cargo xtask verify-foundations` | **the delta, never the colour.** A `missing:` line this session added is a regression |
 | Bridge: `typecheck`, `build`, `build-storybook` | if `apps/` or `packages/` was touched |
+
+**A warning is a gate line this table used to let through.** Confirmed
+2026-09-09: `cargo build` printed `method allowance is never used` on every run
+for a day, this row said "clean", and a reflect run reported PASS on it —
+correctly, because every Check and both `xtask` verbs were green. The `build`
+Check passes with warnings and `verify-foundations` does not read dead code, so
+nothing in the repository was ever going to raise it. The owner found it in
+`pnpm dev`. **Count the warnings and compare the count**, the same way this
+table already says to compare `verify-foundations` — `cargo build --workspace
+--all-targets 2>&1 | grep -c '^warning'` against the same on `origin/main`. A
+warning this session added is a regression whatever the exit code says.
 
 **Take the baseline from `main` in the same pass**, not from a brief written
 hours ago. Counts moved 1249 → 1325 in one evening here; a stale baseline turns

@@ -421,6 +421,16 @@ That day also closes the one gap it cannot close now. A setting nothing reads is
   inherits the rest. What is undecided is where that baseline comes from —
   the Job's base commit, a stored reading, or a run against `main` per gate —
   and what a Job does when the baseline itself will not run.
+  **A compiler warning is the second instance and wants the same answer.**
+  `#556` left `Fleet::allowance` with no callers once the cost cap tiered, and
+  `cargo build` printed `method allowance is never used` on every run for a day
+  — through a full reflect run that reported the gate green, because it was. The
+  `build` Check passes with warnings and `verify-foundations` does not read dead
+  code, so nothing failed. `-D warnings` is the threshold-shaped fix and fails
+  here for the reason above: eight lints already warn on `main`, which is what
+  `[clippy-as-a-check]` in `docs/OPEN.md` is about. Whatever baseline answers
+  the `missing:` lines answers the warning count too, and a repository that
+  gates one and not the other has decided nothing.
 
 - **[evidence-clarification-round-cap]** Is the evidence clarification-round
   cap 2 or 3?
