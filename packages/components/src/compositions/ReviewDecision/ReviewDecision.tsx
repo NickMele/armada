@@ -38,10 +38,11 @@ import { Textarea } from "../../primitives/Textarea/Textarea";
  * and the operations inventory calls it a hard stop. It sits below a rule, with
  * its own sentence, so what it costs is read before it is reached.
  *
- * **Approve does not confirm and reject does.** Approving is the ordinary path
- * — it is why the gate exists, and asking twice for the common case is a gate
- * in the wrong place. Rejecting ends two things, so the caller confirms it and
- * this only asks.
+ * **Approve does not confirm; merge and reject do.** Approving is the ordinary
+ * path — it is why the gate exists, and asking twice for the common case is a
+ * gate in the wrong place. Rejecting ends two things. Merging is the one act
+ * here that writes into a repository Fleet did not make, and nothing in Bridge
+ * takes it back. Both are the caller's to confirm, and this only asks.
  *
  * **Request changes is refused with a blank note**, before the press, matching
  * the 422 Fleet gives it. A round trip to learn the field was empty is a
@@ -58,7 +59,10 @@ export type ReviewDecisionProps = {
   note: string;
   onNote: (note: string) => void;
   /**
-   * Merge the pull request and take the work. Sent on the press.
+   * Ask to merge the pull request and take the work. **The caller confirms**,
+   * because this writes into a repository Fleet did not make and Bridge cannot
+   * undo it — the same shape as `onReject`, and for the other of the two
+   * reasons an answer here is worth a second press.
    *
    * **Absent is a job with no pull request to merge** — a workflow that
    * declares no delivering step opened none, and so did one whose push failed.

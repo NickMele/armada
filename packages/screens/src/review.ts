@@ -380,3 +380,34 @@ export const CONFIRM_REJECT = {
     "branch stays where it left it. To send the work back instead, close this and request " +
     "changes: that keeps the drone, the worktree and the step.",
 } as const;
+
+/**
+ * What the confirmation for a merge says.
+ *
+ * **The one act in Armada that writes into a repository Fleet did not make.**
+ * `crates/fleet/src/merging.rs` opens on that sentence, and it is why this
+ * confirms while approving does not: everything else a press here does is
+ * confined to a worktree Fleet cut, and this changes what everybody else
+ * builds on.
+ *
+ * **It states the mechanism and promises no outcome**, which is the design
+ * contract's rule about a confirmation. So it names where the commits land,
+ * says the after-merge checks run against what landed — the whole reason Fleet
+ * performs the merge rather than a person doing it on the forge — and says
+ * plainly that taking it back is a revert somebody makes in the repository,
+ * because Bridge has no undo to offer and a dialog implying one would be worse
+ * than the reading.
+ *
+ * **It does not ask "merge this pull request?" a second time.** The button
+ * already said that; a body that restates the title costs a keystroke and
+ * carries nothing.
+ */
+export const CONFIRM_MERGE = {
+  title: "Merge this job's pull request?",
+  body:
+    "The pull request merges on the forge, so the job's commits land on the base branch and " +
+    "everybody working from it gets them on their next pull. Armada then runs the " +
+    "repository's after-merge checks against what landed — merging on the forge instead " +
+    "skips them, and running them is the reason this button exists. The job is approved with " +
+    "it. Bridge cannot take a merge back: undoing one is a revert made in the repository.",
+} as const;
