@@ -1,130 +1,37 @@
-# Feature, reduced to what M1's parser accepts.
-# See `bug.json` beside this file for the shape all seven hold to, for why a
-# reduced form exists at all, and for the three ways the designed samples under
-# `crates/core-model/domain/workflow-samples/` are stale against the parser --
-# `question` where it reads `criteria[]`, `declare_plan_at` inside
-# `evidence_scope` where the registry parents it to the step, and
-# `max_context_size`, which M1 does not read. `reference_docs` was a fourth and
-# is not any more -- M1 reads it. The questions below are ported from the
-# designed files; none of the shape is.
+# Feature, reduced to what M1's parser accepts. `bug.json` beside this file
+# carries what all eight hold to, and where the schema, the catalogue and the
+# Check reasoning live.
 #
-# The designed `feature.json` runs seven steps in a loop, with Judge checks on
-# five and a human gate at review. This form keeps `scope`, `implement` and
-# `tests`, and folds `review`, `merge` and `close` into one `handoff` -- the
-# same fold `bug.json` makes.
+# The designed `feature.json` runs seven steps in a loop. This form keeps
+# `scope`, `implement` and `tests`, and folds `review`, `merge` and `close` into
+# one `handoff` -- Bug's fold. `regression_verify`'s question does not vanish
+# with its step: it is carried as `implement`'s second criterion, on the diff it
+# was asking about.
 #
-# **`handoff` is gated `human_always`, and that is the folded `review` step's
-# own gate.** Folding steps folds their gates too, and of the three the fold
-# swallows, `review`'s is the strictest -- `merge` and `close` reach for a
-# Manifest rule that is still refused. So the last thing before the work lands
-# is a person reading it, which is what the designed `review` says and what
-# Bug's cannot say, since Bug's review gate is `manifest_rule:review_gate`.
-#
+# **`handoff` is gated `human_always`, and here that is the folded `review`
+# step's own gate.** Of the three the fold swallows, `review`'s is the
+# strictest; the other two reach for a Manifest rule the parser still defers.
 # Feature is where the designed file spells `human_always` as a literal rather
 # than reaching a Manifest for it, and `workflows.toml` gives the reason: new
 # behaviour is the case where the engineer looks every time.
 #
-# `regression_verify`'s question does not vanish with its step. It is carried
-# as `implement`'s second criterion, which is the step whose diff it was asking
-# about; the designed file only separates them because its loop can route back
-# to one and not the other.
-#
-# `tests` carries the designed `regression_verify`'s `test` check itself rather
-# than a separate step, and carries the gaming check the designed file puts
-# there -- a test step is exactly where a weakened assertion pays off.
-#
-# **`handoff` still carries no Judge.** A step with no criterion asks the Judge
-# nothing, and the designed `review` pairs its human gate with a summary check
-# declaring `gates_advancement: false` -- a key M1's parser does not read.
-# Porting it would turn a summary written for the reviewer into a veto standing
-# between the reviewer and the work.
-#
-# **A step whose `evidence_type` is `facts_note` carries a Judge again.** The
-# Judge is shown what the step produced, and on a written step that is the note
-# -- `verification::Product` reads the step's own declared `evidence_type` to
-# decide which. The rule that a Drone's account of *how the step went* stays out
-# is untouched; what changed is that its deliverable is no longer folded into
-# that account. See #153.
-#
-# `reference_docs` is read now too, so a later step names what an earlier step
-# established and the Judge is shown it, labelled as the standard rather than
-# the target.#
-# **A step whose product a later step reads writes a file.** `artifact_exists`
-# is carried now, and `bug.json` carries the reasoning: a written step used to
-# hand the next one three prose strings, two of which `verification::submission`
-# says nothing routes on. Fleet opens the path this step declares and puts the
-# file's contents in the Judge's brief as the document the step produced; the
-# three strings are shown beside it, labelled as the summary. The mechanical
-# check reads only the file's size, so an empty file stops the step and whether
-# what is in it is any good stays the Judge's question.
-#
-#
-# **The Judge is shown the request now**, which is what `judge.md` rule 2 said
-# all along and what #169 built: the Job's title, its facts and its acceptance
-# criteria are on every brief.
-#
-# **`scope` is the step that must not go unverified**, because a Drone that
-# scopes wrongly does the wrong work for every step after it. Its designed
-# criterion is restored below in the designed wording, and it is the half that
-# needed the request: a beautifully specific note about the wrong change passes
-# every question that reads the note alone. The narrower criterion stays beside
-# it rather than being replaced -- a note can address the request and still be
-# too vague to scope anything, and the two failures look nothing alike to
-# whoever reads the refusal.
-#
 # **`implements_the_scope` tolerates an unscoped restructure, and its sibling is
-# why it can.** It refused a Job whose Drone built the scoped feature and also
-# split a module that had reached the 900-line hard refusal: the Judge was right
-# about the facts and wrong about the consequence, because
-# `no_behaviour_beyond_scope` had already answered the question that mattered,
-# and answered it `met`. So this criterion keeps the half only it can answer --
-# was the described thing built, or was something else built in its place -- and
-# the clause that also refused work outside the note is gone. #190.
+# why it can.** Its *and nothing outside it* clause refused a Job whose Drone
+# built the scoped feature and also split a module that had reached the 900-line
+# hard refusal -- while `no_behaviour_beyond_scope` had already answered the
+# question that mattered, and answered it `met`. #190 removed the clause.
 #
-# **The two must not converge.** Narrowing this one to behaviour would make it a
+# **The two must not converge.** Narrowing this one to behaviour makes it a
 # second spelling of the criterion beside it, and the two disagreeing is what
 # made that refusal legible at all: *the behaviour is exactly what you scoped;
 # the diff contains work you did not scope*. Widening its sibling is the same
 # mistake from the other end -- `no_behaviour_beyond_scope` is what caught a
 # Drone doing three steps' work in one PR, which is `docs/scope.md`'s fourth
-# pain and the reason that row reads "partly solved".
+# pain.
 #
-# **What is still not joined.** `acceptance_criteria[]` belongs to the Job and
-# no criterion here names which of them it tests; `config/src/judge.rs` refuses
-# `source_ref` for that reason. The brief labels them as the whole Job's bar
-# rather than the step's, so a scope note is not refused for not having shipped
-# the feature -- but a criterion that wanted to test one of them by name still
-# cannot be written.
-#
-# Each criterion is its own call, so the entry below is one more Judge call per
-# Job on Feature's cheapest step.
-#
-# **`typecheck`, `bridge_build`, `storybook` and `bridge_test` are on both diff
-# steps.** See `bug.json` for the defect they were added for. Feature is the
-# workflow where they matter most, because new behaviour is the case where a
-# Bridge half gets written at all -- and they are on `tests` as well as
-# `implement` because `tests` produces a diff too, and a diff produced in the
-# step after the compilers ran is a diff nothing compiled.
-#
-# The split above them stays what it was: `implement` gates on `build` and
-# `tests` on `test`. The four Bridge Checks do not split that way, and it is no
-# longer for want of a runner: `bridge_test` is the other half of the pair and
-# it is on both steps rather than only on `tests`. A Bridge feature's tests are
-# its stories, which are written in the step that writes the component -- so a
-# Feature whose `implement` left them failing would advance to a step whose
-# whole subject is a test suite that does not pass.
-#
-# **`model: haiku` on `handoff`, and nowhere else.** `bug.json` carries the
-# reasoning and the cache cost. Here it places the same way: `scope` decides what
-# the change is, `implement` and `tests` each produce a diff a Check and a Judge
-# read, and all three stay on the Job's model by saying nothing. `handoff`
-# summarises work that is already done and already verified.
-#
-# **`handoff` is the step that sends the work out**, on entry rather than on
-# advance, and every other step declares `false`. `bug.json` carries the
-# reasoning; the shape is identical here because the ending is: a workflow that
-# produces a diff stops before it lands, and the branch has to be out before the
-# person at the gate can read it.
+# **`scope` carries two criteria rather than one.** A note can address the
+# request and still be too vague to scope anything, and the two failures look
+# nothing alike to whoever reads the refusal.
 {
   "version": 1,
   "workflow_id": "feature",

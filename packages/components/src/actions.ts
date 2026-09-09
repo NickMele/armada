@@ -124,3 +124,36 @@ export function globalActs(): readonly Action[] {
       action.id !== "bridge_surfaces",
   );
 }
+
+/**
+ * One act, by the id the registry keys it on.
+ *
+ * **Nothing else may write a binding down.** `actions.toml` is the authority on
+ * what a key does and the generator carries it here, and every caption on a
+ * screen has to come through this — because a caption written by hand is a
+ * promise about a key that nothing keeps in step. `Open the log` was captioned
+ * `Enter` for four rounds of feedback after the registry moved it to `L`: the
+ * shared configuration was there the whole time and that one call site simply
+ * did not read it. `Open the diff` beside it said `f`, which was right by
+ * coincidence and would have gone the same way on the next move.
+ *
+ * Throws on an id the registry does not carry, rather than rendering nothing:
+ * a caption that quietly vanished is how a binding goes missing unnoticed.
+ */
+export function actionOf(id: string): Action {
+  const found = ACTIONS.find((act) => act.id === id);
+  if (found === undefined) {
+    throw new Error(`no action \`${id}\` in the registry — actions.toml is the authority`);
+  }
+  return found;
+}
+
+/**
+ * The key an act answers to, for drawing beside it.
+ *
+ * A string rather than a `Kbd`, so the caller decides where it renders and
+ * this decides only what it says.
+ */
+export function keyFor(id: string): string {
+  return actionOf(id).shortcut;
+}

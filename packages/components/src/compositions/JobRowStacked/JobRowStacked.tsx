@@ -123,6 +123,20 @@ export type JobRowStackedProps = {
    * or on an engine without `subgrid`.
    */
   tracks?: string;
+  /**
+   * Which arrangement this row is drawn in.
+   *
+   * `card` stacks the headline over its field run; `table` puts them on one
+   * line under a header that names each column. **The markup is the same
+   * either way** — the table view drops the wrappers out of the layout so the
+   * headline and every field land in the row's own columns, so nothing here
+   * branches and no field set has to be rewritten to switch.
+   *
+   * **A row inside a list takes the list's view and not this**, which is what
+   * makes a list of rows in two arrangements impossible. Set it only on a row
+   * standing on its own, which is what a story does.
+   */
+  view?: "card" | "table";
   /** The one secondary control. Never a primary, and never more than one. */
   action?: ReactNode;
   /**
@@ -211,6 +225,7 @@ export function JobRowStacked({
   jobId,
   fields,
   tracks,
+  view,
   action,
   actionKey,
   pulsing = false,
@@ -253,6 +268,7 @@ export function JobRowStacked({
       aria-selected={opens ? (selected ?? false) : undefined}
       tabIndex={tabIndex}
       data-job-id={jobId}
+      data-view={view}
       data-focused={focused || undefined}
       data-selected={selected || undefined}
       data-dimmed={dimmed || undefined}
@@ -293,15 +309,23 @@ export function JobRowStacked({
               data-mono={field.mono || undefined}
               data-emphasis={field.emphasis || undefined}
               data-quiet={field.quiet || undefined}
+              data-labelled={field.label !== undefined || undefined}
             >
-              {field.icon ? <field.icon size={FIELD_ICON} strokeWidth={FIELD_STROKE} aria-hidden /> : null}
+              {/* **The name comes first in the markup, whichever view draws
+                  it.** A card stacks it over the value in small caps; a table
+                  takes it off the screen and lets the column header say it
+                  once. Same field, same data, and the arrangement decides —
+                  which is the whole claim the two views make. */}
               {field.label ? <span className="armada-job-row__field-label">{field.label}</span> : null}
-              <Copyable
-                className="armada-job-row__field-value"
-                value={field.value}
-                copyValue={field.copyValue}
-                onCopied={onCopied}
-              />
+              <span className="armada-job-row__field-body">
+                {field.icon ? <field.icon size={FIELD_ICON} strokeWidth={FIELD_STROKE} aria-hidden /> : null}
+                <Copyable
+                  className="armada-job-row__field-value"
+                  value={field.value}
+                  copyValue={field.copyValue}
+                  onCopied={onCopied}
+                />
+              </span>
             </span>
           ))}
         </div>

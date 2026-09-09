@@ -13,12 +13,20 @@
 // the region that draws it rather than folded into `JobDetail`, which is
 // re-read every time an event names the open Job.
 //
-// # Reject confirms; approve does not
+// # Merge and reject confirm; approve and request changes do not
 //
 // Approving is the ordinary path and is why the gate exists — a gate that costs
 // two presses for the common case is a gate in the wrong place. Rejecting ends
 // the Job and the Drone, so it takes a dialog, and the dialog's words name the
 // drone and name the milder act rather than asking whether you are sure.
+//
+// **Merging takes one for a different reason, and it is the reason it is not
+// the same dialog.** Rejecting is terminal inside Armada; merging is the one
+// act here that writes into a repository Fleet did not make, so what it costs
+// is not a Job but what everybody else builds on — `crates/fleet/src/merging.rs`
+// opens on that sentence and writes its log line before the write for it. The
+// other two answers stay one press, because each is confined to a worktree
+// Fleet cut.
 //
 // # Merging is offered where there is a pull request, and nowhere else
 //
@@ -29,11 +37,12 @@
 // `fleet.nothing_to_merge`, and an act a person can press to be refused is a
 // worse surface than one that is not drawn.
 //
-// **It does not confirm.** Merging is a write to a repository Armada does not
-// own, which is why it is the loudest line in the Job's log — but it is also
-// the ordinary ending of a Job whose branch went out, and a confirm on the
-// common case is the gate in the wrong place again. What stops a second press
-// is `deciding`, which is the same guard the other three have.
+// **It confirms, decided on 2026-09-08.** It shipped in #532 without one, on
+// the reading that it is the ordinary ending of a Job whose branch already went
+// out and that `deciding` already blocks a second press. `deciding` is about the
+// second press; this is about the first one being deliberate, and the act is
+// still the only one on this surface that reaches outside a worktree Fleet
+// made. The dialog is what stands between the press and the write. #533.
 
 import { useEffect, useState } from "react";
 import { Dialog, ReviewDecision, UnifiedDiff, type UnifiedDiffProps } from "@armada/components";
@@ -43,6 +52,7 @@ import type { JobSummary } from "@armada/protocol";
 import type { Work } from "@armada/protocol";
 import {
   CHANGED_NOTHING,
+  CONFIRM_MERGE,
   CONFIRM_REJECT,
   diffNote,
   drawn,
@@ -117,7 +127,10 @@ export function Decide({
   // The reviewer's own words, held here: it is a draft until it is sent, and
   // nothing outside this region knows or cares that one is being written.
   const [note, setNote] = useState("");
-  const [confirming, setConfirming] = useState(false);
+  // Which answer is being confirmed, and never two flags. Both dialogs are
+  // modal and only one act is in flight at a time, so a union says that in the
+  // type rather than leaving a state where both layers are up.
+  const [asking, setAsking] = useState<"merge" | "reject" | null>(null);
 
   useEffect(() => {
     onNeedMaterial(job.id);
@@ -126,7 +139,16 @@ export function Decide({
 
   // A draft belongs to the Job it was written about. Carrying one into the next
   // Job opened would put one drone's feedback in front of another's work.
-  useEffect(() => setNote(""), [job.id]);
+  //
+  // **A question in the air belongs to it too**, and this one is why the reset
+  // is not only about the note: `onConfirm` reads `job.id` at press time, so a
+  // dialog left standing across a switch would ask about the Job that was on
+  // screen and answer for the one that is. It closes with the Job it was asked
+  // about.
+  useEffect(() => {
+    setNote("");
+    setAsking(null);
+  }, [job.id]);
 
   const off = stale || deciding;
   const why = stale ? NOT_LIVE : deciding ? IN_FLIGHT : undefined;
@@ -136,25 +158,47 @@ export function Decide({
       <ReviewDecision
         note={note}
         onNote={setNote}
-        {...(pullRequest === undefined ? {} : { onMerge: () => onMerge(job.id) })}
+        {...(pullRequest === undefined ? {} : { onMerge: () => setAsking("merge") })}
         onApprove={() => onApprove(job.id)}
         onRequestChanges={() => onRequestChanges(job.id, note)}
-        onReject={() => setConfirming(true)}
+        onReject={() => setAsking("reject")}
         disabled={off}
         {...(why === undefined ? {} : { disabledNote: why })}
       />
 
-      {/* The one act on this surface that ends something, and the only one that
-          confirms. Cancel holds initial focus; the dialog owns that rule and
-          this only supplies the words. */}
+      {/* The one act here that writes outside a worktree Fleet made.
+          **Neutral, not destructive**: nothing ends and nothing is destroyed,
+          and the confirm keeps the accent fill the control a person just
+          pressed had — a red confirm would make the merge read as an error
+          state on its way in. `restart_step` is the same reading, and it is the
+          only other neutral confirmation Bridge draws.
+
+          The confirm carries the opener's own words, because the contract says
+          an act keeps its name through the flow. */}
       <Dialog
-        open={confirming}
+        open={asking === "merge"}
+        tone="neutral"
+        title={CONFIRM_MERGE.title}
+        confirmLabel="Merge and take the work"
+        onCancel={() => setAsking(null)}
+        onConfirm={() => {
+          setAsking(null);
+          onMerge(job.id);
+        }}
+      >
+        {CONFIRM_MERGE.body}
+      </Dialog>
+
+      {/* The one act on this surface that ends something. Cancel holds initial
+          focus; the dialog owns that rule and this only supplies the words. */}
+      <Dialog
+        open={asking === "reject"}
         tone="destructive"
         title={CONFIRM_REJECT.title}
         confirmLabel="Reject the work"
-        onCancel={() => setConfirming(false)}
+        onCancel={() => setAsking(null)}
         onConfirm={() => {
-          setConfirming(false);
+          setAsking(null);
           onReject(job.id);
         }}
       >

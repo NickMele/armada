@@ -20,10 +20,11 @@ import {
   JobDiffSheet,
   JobHoldsSheet,
   railOfPatch,
+  type ActivityFilter,
   type JobDiffFile,
   type JobHoldsSheetProps,
 } from "@armada/components";
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import type { Diff, Observed } from "@armada/protocol";
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
@@ -69,7 +70,15 @@ export type DetailSheetProps = {
   /** What one log takes, by name, so the sheet's rows are not the preview's. */
   log: { region: string; openId: string | null; onOpen: (rowId: string | null) => void };
   held: HeldAt | null;
-  onHold: (held: HeldAt) => void;
+  /**
+   * Hold the reading where it is, or `null` to follow the tail again.
+   *
+   * **Null is what *Jump to now* means.** It used to hold again at the current
+   * instant, which updates the timestamp and resets the count and leaves the
+   * reading held — so the one control on the strip appeared to do nothing, and
+   * the strip it belongs to stayed up saying the tail was not being followed.
+   */
+  onHold: (held: HeldAt | null) => void;
   /**
    * The full machine reading, exactly as the panel used to draw it — every
    * state and every argument, `Look now` included. Built by the caller, because
@@ -100,6 +109,18 @@ export function DetailSheet({
   floor,
   onClose,
 }: DetailSheetProps) {
+  // **Which actor's lines to show.** Held here rather than by the panel: it is
+  // a reading of one sheet and it should start over the next time the sheet is
+  // opened, which is what a state on the component that mounts with the sheet
+  // gives. Above the early returns because a hook cannot be conditional; the
+  // other sheets carry it and never read it.
+  const [filter, setFilter] = useState<ActivityFilter>("all");
+  // The four tabs were drawn from the component's own default and handed no
+  // handler, so every one of them was a control that did nothing when pressed.
+  // `LogActor` and `ActivityFilter` are the same three names plus `all`, so
+  // selecting is the comparison and no mapping stands between them.
+  const shown = useMemo(() => shownBy(rows, filter), [filter, rows]);
+
   if (which === "log") {
     return (
       <ActivityLogSheet
@@ -113,9 +134,11 @@ export function DetailSheet({
         // this is the open step's own `updated_at` — the instant the panel's
         // own `Took` is measured to, rather than a second reading of it.
         endedAt={clock(step.updated_at)}
+        filter={filter}
+        onFilter={setFilter}
         heldAt={held?.at}
         arrived={held === null ? 0 : Math.max(rows.length - held.rows, 0)}
-        onJumpToNow={() => onHold(holdOf(now, rows.length))}
+        onJumpToNow={() => onHold(null)}
         escalation={escalationOf(job, whole, step, onClose)}
         onClose={onClose}
       >
@@ -123,7 +146,7 @@ export function DetailSheet({
             for the reason the chapter's preview does: an empty sheet reading as
             a step that has not started is the panel's defect one layer out. */}
         <Log
-          rows={rows}
+          rows={shown}
           emptyNote={whyNotWatching(observed) ?? NOTHING_YET_ON_THIS_STEP}
           calls={calls}
           {...log}
@@ -173,6 +196,22 @@ function DiffSheet({
       <DecidedDiff diff={diff} jobId={job.id} />
     </JobDiffSheet>
   );
+}
+
+/**
+ * The lines one filter selects.
+ *
+ * **Its own function so the tabs can be checked without mounting a sheet.**
+ * They were drawn from the component's own default and handed no handler at
+ * all, so all four were controls that did nothing when pressed and nothing
+ * said so — which is the shape of defect a rendered assertion catches late and
+ * a function's return catches immediately.
+ *
+ * `LogActor` and `ActivityFilter` are the same three names plus `all`, so the
+ * selection is the comparison and nothing maps between them.
+ */
+export function shownBy(rows: LogRow[], filter: ActivityFilter): LogRow[] {
+  return filter === "all" ? rows : rows.filter((row) => row.actor === filter);
 }
 
 /** The reading, held where it is now. One spelling, used opening and jumping. */

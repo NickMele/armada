@@ -1,5 +1,5 @@
 import { useId } from "react";
-import type { ComponentPropsWithRef } from "react";
+import type { ComponentPropsWithRef, ReactNode } from "react";
 
 /**
  * A single-line text field, with its label and its invalid message.
@@ -26,9 +26,33 @@ export type InputProps = Omit<ComponentPropsWithRef<"input">, "size"> & {
   message?: string;
   /** Machine-derived content — a path, a branch, a command. Mono, one step smaller. */
   mono?: boolean;
+  /**
+   * Something drawn inside the field's own box, at its trailing edge — the key
+   * that focuses it, a unit, a count.
+   *
+   * **Inside, because the field is what it belongs to.** A hint sitting beside
+   * a search box is a second control on the line and takes the eye as one; the
+   * same hint inside the box is a property of the field. What kept it outside
+   * was ownership rather than design: the padding that makes room for it is
+   * this component's to write, and a caller doing it from its own stylesheet
+   * would be reaching into this one.
+   *
+   * The field gives up its own border when this is set and the box around the
+   * pair takes it, so the two read as one control and the focus ring goes
+   * round both. Nothing is reserved when it is absent.
+   */
+  trailing?: ReactNode;
 };
 
-export function Input({ label, invalid = false, message, mono = false, id, ...rest }: InputProps) {
+export function Input({
+  label,
+  invalid = false,
+  message,
+  mono = false,
+  trailing,
+  id,
+  ...rest
+}: InputProps) {
   const generated = useId();
   const inputId = id ?? generated;
   const messageId = `${inputId}-message`;
@@ -41,14 +65,21 @@ export function Input({ label, invalid = false, message, mono = false, id, ...re
           {label}
         </label>
       )}
-      <input
-        {...rest}
-        id={inputId}
-        className="armada-input"
-        data-mono={mono || undefined}
-        aria-invalid={invalid || undefined}
-        aria-describedby={showMessage ? messageId : undefined}
-      />
+      {/* `display: contents` unless something is trailing, so a field with no
+          adornment renders exactly the box it always did. */}
+      <div className="armada-input-field__well" data-trailing={trailing !== undefined || undefined}>
+        <input
+          {...rest}
+          id={inputId}
+          className="armada-input"
+          data-mono={mono || undefined}
+          aria-invalid={invalid || undefined}
+          aria-describedby={showMessage ? messageId : undefined}
+        />
+        {trailing === undefined ? null : (
+          <span className="armada-input-field__trailing">{trailing}</span>
+        )}
+      </div>
       {showMessage && (
         <span className="armada-input-field__message" id={messageId}>
           {message}

@@ -87,3 +87,88 @@
     grid-column: 1 / -1;
   }
 }
+
+/* ---- the table view -----------------------------------------------------
+
+   The frame swaps its track list and the rows follow, because they subgrid
+   from it. One declaration is the whole switch. */
+.armada-active-jobs__frame[data-view="table"] {
+  grid-template-columns: var(--armada-job-table-tracks);
+}
+
+/* The track list follows how many facts the caller named, so no column is
+   reserved for one nothing fills. Both arrangements, and each has its own
+   pair — a table gives the headline a column of its own and a card does not. */
+.armada-active-jobs__frame[data-view="table"][data-columns="3"] {
+  grid-template-columns: var(--armada-job-table-tracks-3);
+}
+
+.armada-active-jobs__frame[data-columns="3"]:not([data-view="table"]) {
+  grid-template-columns: var(--armada-job-row-tracks-3);
+}
+
+/* The column names, once, above the rows. `--bg-sunken` rather than the row's
+   raised ground, for the reason an input takes it: this is the surface the
+   rows sit on rather than one of them, and a header that shared their fill
+   would read as a first row with the wrong content in it. */
+.armada-active-jobs__columns {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  column-gap: var(--space-3);
+  min-height: var(--h-row-header);
+  padding: 0 var(--space-4);
+  border-bottom: var(--border-width) solid var(--border-default);
+  background: var(--bg-sunken);
+}
+
+/* Set in the same small caps a field label takes, so the header reads as the
+   name of a column rather than as a value in one. */
+.armada-active-jobs__column {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  min-width: 0;
+}
+
+/* The four names start at the workflow column: the badge needs no header to be
+   read as a status, and the actions are not a fact about the Job. */
+.armada-active-jobs__columns > .armada-active-jobs__column:nth-child(1) {
+  grid-column: 3;
+}
+
+.armada-active-jobs__columns > .armada-active-jobs__column:nth-child(2) {
+  grid-column: 4;
+}
+
+.armada-active-jobs__columns > .armada-active-jobs__column:nth-child(3) {
+  grid-column: 5;
+  /* Run time is the figure column, and a header sits against the edge its
+     values are compared down. A left-aligned name over right-aligned numbers
+     is two columns wearing one label. */
+  text-align: right;
+}
+
+.armada-active-jobs__columns > .armada-active-jobs__column:nth-child(4) {
+  grid-column: 6;
+}
+
+/* A field's own label is what a screen reader reads, and the header is what a
+   person reads. Both are needed and only one is drawn, so the label is taken
+   off the screen rather than out of the markup. `display: none` would remove
+   it from the accessibility tree with it, which is the bug this avoids. */
+.armada-active-jobs__frame[data-view="table"] .armada-job-row__field-label {
+  position: absolute;
+  width: var(--border-width);
+  height: var(--border-width);
+  margin: calc(var(--border-width) * -1);
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
