@@ -30,7 +30,7 @@ use adapter_traits::{
     AgentHarness, Delivery, DroneSpawnConfig, Grant, McpConfig, Model, Prompt, SpawnConfigRefused,
     Toolbelt, Vcs, WorkProduct, Worktree,
 };
-use core_model::{Component, DroneId, Envelope, EscalationTrigger, Job, JobId, Level, StepId};
+use core_model::{Component, DroneId, Envelope, EscalationTrigger, Job, Level, StepId};
 
 use crate::adrift::Adrift;
 use crate::briefing::Opening;
@@ -156,7 +156,7 @@ where
         // the log envelope already anticipates it — so the transcript of the
         // Drone that went before is untouched and this one opens beside it.
         let drone = DroneId::carried(self.mint().ulid());
-        let recording = match self.recording(&job_id, &drone, step) {
+        let recording = match self.recording(job, &drone, step) {
             Ok(recording) => recording,
             Err(cause) => {
                 // `would_not_start`. Everything resolved and the machine said
@@ -273,7 +273,7 @@ where
         )
         .in_job(job.id().as_ulid().clone())
         .at_step(step.as_str());
-        let _ = crate::transcript::note(&self.host().repo_root, job.id(), &envelope);
+        self.noted_in_the_log(job.id(), &envelope);
         Ok(())
     }
 
@@ -284,20 +284,21 @@ where
     /// names the file its rows are in.
     pub(crate) fn recording(
         &self,
-        job: &JobId,
+        job: &Job,
         drone: &DroneId,
         step: &StepId,
     ) -> Result<Taps, std::io::Error> {
         Taps::opening(
             &self.host().repo_root,
             Spine {
-                job: job.clone(),
+                job: job.id().clone(),
+                handle: job.handle(),
                 drone: drone.clone(),
                 step: step.clone(),
                 run: self.run().clone(),
             },
             Arc::clone(self.clock()),
-            self.turns().feeding(&ipc::JobId::from(job)),
+            self.turns().feeding(&ipc::JobId::from(job.id())),
         )
     }
 

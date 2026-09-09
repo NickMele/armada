@@ -38,7 +38,6 @@ use verification::{Request, Widened, WideningBrief};
 
 use crate::daemon::Fleet;
 use crate::judging;
-use crate::transcript;
 
 /// The receipt. **One word, and no way to make it say anything else** — the
 /// shape every Drone-facing receipt has, and for the same reason: what came
@@ -483,7 +482,7 @@ where
         if let Some(Some(cause)) = unkept {
             envelope = envelope.with_field("not_kept", FieldValue::Str(cause));
         }
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 }
 

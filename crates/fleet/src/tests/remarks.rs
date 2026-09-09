@@ -300,7 +300,7 @@ async fn a_forge_that_would_not_take_the_reply_leaves_the_drone_asked_for() {
     );
     let log = std::fs::read_to_string(crate::transcript::log_of(
         &home.path().to_string_lossy(),
-        &job_id,
+        &fleet.load(&job_id).await.expect("the Job").handle(),
     ))
     .expect("the Job's own log");
     assert!(

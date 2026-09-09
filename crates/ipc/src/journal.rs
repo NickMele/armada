@@ -3,7 +3,7 @@
 //! **The third voice, and it reached nowhere.** `ActivityLog` is specified as
 //! one stream carrying the Drone's turns, Armada's injected turns and Fleet's
 //! own events. Two travelled [`observe_job`](crate::TurnMessage); the third
-//! went to `.armada/logs/<job-id>.jsonl` and was read by nothing, so a Job with
+//! went to `.armada/logs/<handle>.jsonl` and was read by nothing, so a Job with
 //! no Drone on it drew a blank panel for the whole of preparation. **The
 //! missing half of a surface designed whole**, not a new record.
 //!
@@ -63,7 +63,7 @@ pub struct NotedField {
     pub value: String,
 }
 
-/// One line of `.armada/logs/<job-id>.jsonl`, as a viewer is shown it.
+/// One line of `.armada/logs/<handle>.jsonl`, as a viewer is shown it.
 ///
 /// **Absent, never present-and-null**, the rule `crate::detail` states and
 /// `docs/concepts/log-envelope.md` owns: a client handed `step: null` cannot

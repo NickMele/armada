@@ -175,8 +175,13 @@ async fn until_reaped(fleet: &Fixture) {
 /// **`pub(super)` so `overruling` can read a brief too.** An override onto a
 /// Job whose Drone has gone spawns exactly as a restart does, and a second
 /// copy of this poll is a second thing that can be wrong about the queue.
-pub(super) async fn until_spoken(home: &TempDir, drone: &DroneId) -> String {
-    let path = transcript_of(&home.path().to_string_lossy(), drone);
+/// What the Job is called, which is what its transcript directory is named by.
+pub(super) async fn the_handle(fleet: &Fixture, job: &JobId) -> String {
+    fleet.load(job).await.expect("the Job").handle()
+}
+
+pub(super) async fn until_spoken(home: &TempDir, handle: &str, drone: &DroneId) -> String {
+    let path = transcript_of(&home.path().to_string_lossy(), handle, drone);
     for _ in 0..400 {
         if let Ok(said) = std::fs::read_to_string(&path) {
             if !said.trim().is_empty() {
@@ -273,7 +278,12 @@ async fn a_conflicted_rebase_on_a_restart_is_the_new_drones_opening_work() {
         .await
         .expect("the turn puts the fresh Drone on");
 
-    let said = until_spoken(&home, &on_it(&fleet, &job).await).await;
+    let said = until_spoken(
+        &home,
+        &the_handle(&fleet, &job).await,
+        &on_it(&fleet, &job).await,
+    )
+    .await;
     assert!(
         said.contains("conflict markers in them"),
         "the Drone was not told there was anything to resolve: {said}"
@@ -366,7 +376,12 @@ async fn a_restart_onto_a_current_branch_rebases_nothing_and_says_nothing() {
         fleet.vcs().delivered().is_empty(),
         "nothing was behind anything, on either spawn"
     );
-    let said = until_spoken(&home, &on_it(&fleet, &job).await).await;
+    let said = until_spoken(
+        &home,
+        &the_handle(&fleet, &job).await,
+        &on_it(&fleet, &job).await,
+    )
+    .await;
     assert!(
         !said.contains("THE BRANCH YOU ARE ON"),
         "a branch that did not move is not announced: {said}"
@@ -403,7 +418,12 @@ async fn a_restart_carrying_a_note_opens_the_new_drone_with_it() {
         .await
         .expect("the turn puts the fresh Drone on");
 
-    let said = until_spoken(&home, &on_it(&fleet, &job).await).await;
+    let said = until_spoken(
+        &home,
+        &the_handle(&fleet, &job).await,
+        &on_it(&fleet, &job).await,
+    )
+    .await;
     assert!(
         said.contains("WHAT A PERSON ASKED FOR"),
         "the note reached no block of the opening brief: {said}"
@@ -445,7 +465,12 @@ async fn a_restart_with_no_note_hands_the_new_drone_nothing_extra() {
         .await
         .expect("the turn puts the fresh Drone on");
 
-    let said = until_spoken(&home, &on_it(&fleet, &job).await).await;
+    let said = until_spoken(
+        &home,
+        &the_handle(&fleet, &job).await,
+        &on_it(&fleet, &job).await,
+    )
+    .await;
     assert!(
         !said.contains("WHAT A PERSON ASKED FOR"),
         "a restart nobody typed into announced a note anyway: {said}"
@@ -519,7 +544,12 @@ async fn a_restart_with_no_note_delivers_the_one_already_waiting() {
         .await
         .expect("the turn puts the fresh Drone on");
 
-    let said = until_spoken(&home, &on_it(&fleet, &job).await).await;
+    let said = until_spoken(
+        &home,
+        &the_handle(&fleet, &job).await,
+        &on_it(&fleet, &job).await,
+    )
+    .await;
     assert!(
         said.contains("start from the failing case"),
         "the waiting note was skipped by the act that spawned the Drone it was for: {said}"

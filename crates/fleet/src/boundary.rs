@@ -33,7 +33,6 @@ use crate::crossing::Crossed;
 use crate::daemon::Fleet;
 use crate::drone::Ending;
 use crate::drone_moves::steps_holding_a_drone;
-use crate::transcript;
 use crate::watch::Drained;
 use crate::working::{StoodDown, Working};
 
@@ -197,7 +196,7 @@ where
         // A log line that will not write does not undo the ending, for
         // `resume::noted_roused`'s reason: the departure is its own record, in
         // the same log, written by `drone_left`.
-        let _ = transcript::note(&self.host().repo_root, &stood_down.job, &envelope);
+        self.noted_in_the_log(&stood_down.job, &envelope);
     }
 }
 

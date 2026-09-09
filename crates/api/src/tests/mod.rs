@@ -11,6 +11,7 @@ mod fake;
 mod journal;
 mod mcp;
 mod observing;
+mod reference;
 mod served;
 mod shapes;
 mod stream;

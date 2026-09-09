@@ -69,7 +69,7 @@ pub use fields::{
 };
 pub use gaming::{CitedAt, DecidedBy, EvidenceRef, GamingCheck, GamingFlag, GamingPattern};
 pub use guard::Guard;
-pub use handle::{handle_of, names_a_credential, JobNumber, CREDENTIAL_NAMES};
+pub use handle::{handle_of, names_a_credential, JobNumber, JobReference, CREDENTIAL_NAMES};
 pub use ids::{
     BlankModel, BlankTitle, CriterionId, DroneId, JobId, ManifestId, ModelName, ProposalId,
     RepoPath, StepId, Title, WorkflowId,

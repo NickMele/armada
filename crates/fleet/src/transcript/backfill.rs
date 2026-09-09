@@ -4,7 +4,7 @@
 //!
 //! A transcript is named by a `drone_id` that is minted at dispatch and stored
 //! on no record — `assigned_drone` has no event that sets it — so the
-//! `drone transcript opened` line in `.armada/logs/<job-id>.jsonl` is the only
+//! `drone transcript opened` line in `.armada/logs/<handle>.jsonl` is the only
 //! thing joining a Job to its rows. A retry is a second `drone_id` under the
 //! one `job_id`, so a Job may name several, and they are read in the order the
 //! log names them.
@@ -25,15 +25,15 @@
 //! this existed, and neither is an error.
 
 use std::collections::VecDeque;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use core_model::{DroneId, JobId, Refusal, Refusals, Timestamp};
+use core_model::{DroneId, Refusal, Refusals, Timestamp};
 use ipc::{CallArguments, Saw, TranscriptRow};
 use serde::Deserialize;
 use tokio::fs;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
-use crate::transcript::{log_of, transcript_of};
+use crate::transcript::{log_of, transcript_of, transcripts_dir};
 
 /// How many rows a viewer is handed before the live ones.
 ///
@@ -55,10 +55,10 @@ pub const REFUSALS: usize = 50;
 const OPENED: &str = "drone transcript opened";
 
 /// What was already said, oldest first, and how many older rows were left out.
-pub async fn history(repo_root: &str, job: &JobId) -> (Vec<TranscriptRow>, u64) {
+pub async fn history(repo_root: &str, handle: &str) -> (Vec<TranscriptRow>, u64) {
     let mut kept: VecDeque<TranscriptRow> = VecDeque::with_capacity(0);
     let mut skipped = 0u64;
-    for at in transcripts(repo_root, job).await {
+    for at in transcripts(repo_root, handle).await {
         let Ok(file) = fs::File::open(&at).await else {
             continue;
         };
@@ -101,8 +101,8 @@ pub async fn history(repo_root: &str, job: &JobId) -> (Vec<TranscriptRow>, u64) 
 /// says so, and does not guess a size. That is the one case where what comes
 /// back is less than the argument, and it is a fact about the record rather
 /// than about the transport.
-pub async fn arguments(repo_root: &str, job: &JobId, call: &str) -> Option<CallArguments> {
-    for at in transcripts(repo_root, job).await {
+pub async fn arguments(repo_root: &str, handle: &str, call: &str) -> Option<CallArguments> {
+    for at in transcripts(repo_root, handle).await {
         let Ok(file) = fs::File::open(&at).await else {
             continue;
         };
@@ -160,8 +160,8 @@ pub async fn arguments(repo_root: &str, job: &JobId, call: &str) -> Option<CallA
 ///
 /// A Job with no log, a transcript that was reclaimed and a Drone that was
 /// refused nothing all answer [`Refusals::none`]. None is an error.
-pub async fn refusals(repo_root: &str, job: &JobId) -> Refusals {
-    let files = transcripts(repo_root, job).await;
+pub async fn refusals(repo_root: &str, handle: &str) -> Refusals {
+    let files = transcripts(repo_root, handle).await;
     let (mut kept, in_all) = refused_calls(&files).await;
     if kept.is_empty() {
         return Refusals::none();
@@ -289,8 +289,10 @@ async fn against(files: &[PathBuf], kept: &mut [Refusal]) {
 /// It reads the whole file rather than seeking, for the reason `history` reads
 /// it: a JSONL file has no index, the last line is not at a known offset, and
 /// this is asked once per adopted Drone at a boot.
-pub async fn last_heard(repo_root: &str, drone: &DroneId) -> Option<Timestamp> {
-    let file = fs::File::open(transcript_of(repo_root, drone)).await.ok()?;
+pub async fn last_heard(repo_root: &str, handle: &str, drone: &DroneId) -> Option<Timestamp> {
+    let file = fs::File::open(transcript_of(repo_root, handle, drone))
+        .await
+        .ok()?;
     let mut lines = BufReader::new(file).lines();
     let mut last = None;
     while let Ok(Some(line)) = lines.next_line().await {
@@ -307,10 +309,16 @@ pub async fn last_heard(repo_root: &str, drone: &DroneId) -> Option<Timestamp> {
 /// again and writes a second `drone transcript opened` line for it, which is
 /// the record of the restart — but a path read twice is a history showing every
 /// row of that Drone twice.
-async fn transcripts(repo_root: &str, job: &JobId) -> Vec<PathBuf> {
-    let Ok(log) = fs::File::open(log_of(repo_root, job)).await else {
+///
+/// **The file name is taken and the path on the line is not.** A line written
+/// before `crate::transcript::migrating` moved these files gives the path the
+/// file was at when it was opened; what identifies a transcript is the Drone's
+/// own minted id, which is the name, and where it lives is this Fleet's answer.
+async fn transcripts(repo_root: &str, handle: &str) -> Vec<PathBuf> {
+    let Ok(log) = fs::File::open(log_of(repo_root, handle)).await else {
         return Vec::new();
     };
+    let under = transcripts_dir(repo_root, handle);
     let mut named = Vec::new();
     let mut lines = BufReader::new(log).lines();
     while let Ok(Some(line)) = lines.next_line().await {
@@ -319,7 +327,10 @@ async fn transcripts(repo_root: &str, job: &JobId) -> Vec<PathBuf> {
         };
         if entry.msg == OPENED {
             if let Some(at) = entry.fields.transcript {
-                let at = PathBuf::from(at);
+                let Some(name) = Path::new(&at).file_name() else {
+                    continue;
+                };
+                let at = under.join(name);
                 if !named.contains(&at) {
                     named.push(at);
                 }

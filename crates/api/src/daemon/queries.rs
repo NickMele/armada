@@ -15,6 +15,7 @@ use std::future::Future;
 
 use crate::daemon::Refusal;
 use crate::observing::Observed;
+use crate::reference::Resolved;
 use ipc::{
     CallArguments, CheckOutput, FleetCapacity, JobDetail, JobDiff, JobEvidence, JobHistory, JobId,
     JobList, JobRemarks, JobResources, KeptFrame, ManifestReading, ManifestSummary, ModelChoices,
@@ -30,6 +31,21 @@ use ipc::{
 /// place a partial failure is quietly completed — the v1 bug that lost
 /// twenty-one Jobs, one layer further out.
 pub trait Queries: Send + Sync + 'static {
+    /// The Job a request named, whichever of the three ways it named it: the
+    /// record's ULID, the handle Bridge shows beside it, or the number that
+    /// handle starts with.
+    ///
+    /// **Not an operation, and on no route of its own.** It is what the
+    /// `:job_id` segment goes through before any handler sees it —
+    /// [`Resolved`] is the extractor — so a client that has a handle can call
+    /// every route under `/jobs/:job_id` with it and nothing else changes.
+    ///
+    /// **The Manifest a number counts within is the implementation's own.** A
+    /// Fleet serves one repository and supplies it; a number is refused rather
+    /// than resolved against whichever repository answered first, which is why
+    /// nothing about the scope is a parameter here.
+    fn resolve_job(&self, named: String) -> impl Future<Output = Result<Resolved, Refusal>> + Send;
+
     /// `list_jobs` — Jobs with state and reason.
     fn list_jobs(&self) -> impl Future<Output = Result<JobList, Refusal>> + Send;
 

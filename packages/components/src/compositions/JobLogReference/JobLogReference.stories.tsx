@@ -38,8 +38,8 @@ export const OnARunningJob: Story = {
       {
         icon: LOG,
         iconLabel: "Log",
-        value: ".armada/logs/job_2d90bb.jsonl",
-        copyValue: ".armada/logs/job_2d90bb.jsonl",
+        value: ".armada/logs/12-the-drone-count-is-wrong.jsonl",
+        copyValue: ".armada/logs/12-the-drone-count-is-wrong.jsonl",
         meta: "142 lines · 0 error",
         open: OPENS,
       },
@@ -76,8 +76,8 @@ export const OnAFailedJob: Story = {
       {
         icon: LOG,
         iconLabel: "Log",
-        value: ".armada/logs/job_91ab.jsonl",
-        copyValue: ".armada/logs/job_91ab.jsonl",
+        value: ".armada/logs/13-say-why-a-job-is-waiting.jsonl",
+        copyValue: ".armada/logs/13-say-why-a-job-is-waiting.jsonl",
         meta: "318 lines · 4 error",
         separated: true,
         open: OPENS,
@@ -99,8 +99,8 @@ export const OnAFinishedJob: Story = {
       {
         icon: LOG,
         iconLabel: "Log",
-        value: ".armada/logs/job_4f10.jsonl",
-        copyValue: ".armada/logs/job_4f10.jsonl",
+        value: ".armada/logs/14-the-reader-drops-a-line.jsonl",
+        copyValue: ".armada/logs/14-the-reader-drops-a-line.jsonl",
         meta: "204 lines · 0 error",
       },
     ],
@@ -120,8 +120,8 @@ export const WithErrors: Story = {
       {
         icon: LOG,
         iconLabel: "Log",
-        value: ".armada/logs/job_91ab.jsonl",
-        copyValue: ".armada/logs/job_91ab.jsonl",
+        value: ".armada/logs/13-say-why-a-job-is-waiting.jsonl",
+        copyValue: ".armada/logs/13-say-why-a-job-is-waiting.jsonl",
         meta: "318 lines · 4 error",
       },
     ],
@@ -166,8 +166,8 @@ export const LongPaths: Story = {
       {
         icon: LOG,
         iconLabel: "Log",
-        value: "/Users/user/Development/armada/.armada/logs/01JQ8ZK4T7WY3N2VXB6RGM5D9C.jsonl",
-        copyValue: "/Users/user/Development/armada/.armada/logs/01JQ8ZK4T7WY3N2VXB6RGM5D9C.jsonl",
+        value: "/Users/user/Development/armada/.armada/logs/12-the-drone-count-is-wrong.jsonl",
+        copyValue: "/Users/user/Development/armada/.armada/logs/12-the-drone-count-is-wrong.jsonl",
         separated: true,
       },
       {
@@ -211,8 +211,8 @@ export const WhatOpensAndWhatOnlyCopies: Story = {
       {
         icon: LOG,
         iconLabel: "Log",
-        value: "/Users/user/Development/armada/.armada/logs/01JQ8ZK4T7WY3N2VXB6RGM5D9C.jsonl",
-        copyValue: "/Users/user/Development/armada/.armada/logs/01JQ8ZK4T7WY3N2VXB6RGM5D9C.jsonl",
+        value: "/Users/user/Development/armada/.armada/logs/12-the-drone-count-is-wrong.jsonl",
+        copyValue: "/Users/user/Development/armada/.armada/logs/12-the-drone-count-is-wrong.jsonl",
         separated: true,
         open: OPENS,
       },

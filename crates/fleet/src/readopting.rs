@@ -77,8 +77,12 @@ where
         else {
             return Ok(Recovered::Interrupted);
         };
-        let last_heard =
-            crate::transcript::last_heard(&self.host().repo_root, &recorded.drone_id).await;
+        let last_heard = crate::transcript::last_heard(
+            &self.host().repo_root,
+            &job.handle(),
+            &recorded.drone_id,
+        )
+        .await;
         match reattaching(&recorded, last_heard, self.now()) {
             Reattachment::Adopted(adopted) => self.adopted(job, *adopted).await,
             Reattachment::Gone => {
@@ -124,7 +128,7 @@ where
             Ok(worktree) => worktree,
             Err(cause) => return self.ended_instead(job, adopted, &cause.to_string()).await,
         };
-        let taps = match self.recording(job.id(), adopted.drone(), adopted.step()) {
+        let taps = match self.recording(job, adopted.drone(), adopted.step()) {
             Ok(taps) => taps,
             Err(cause) => return self.ended_instead(job, adopted, &cause.to_string()).await,
         };
@@ -241,7 +245,7 @@ where
         for (key, value) in fields {
             envelope = envelope.with_field(*key, value.clone());
         }
-        let _ = crate::transcript::note(&self.host().repo_root, job.id(), &envelope);
+        self.noted_in_the_log(job.id(), &envelope);
     }
 }
 

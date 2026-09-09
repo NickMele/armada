@@ -6,8 +6,12 @@ description: Find out what a Job did and why it stopped — one command that pri
 # What happened to a Job
 
 ```sh
-./scripts/job <job-id>
+./scripts/job 1-board-s-clear-button-should-reclaim-worktr
 ```
+
+**Whatever the owner pasted is what you type.** A Job answers to the handle
+Bridge shows beside it, to the number that handle starts with, or to its id —
+here and on every route under `/jobs/:job_id`. There is nothing to convert.
 
 **Read that before you open a single file under `.armada/`.** It is the whole
 record of one Job in one screen, and it is assembled from both places the
@@ -23,7 +27,7 @@ what it prints.
   `run_ended`, `gate_failure` — that names a category and not an instance.
 - A Job went quiet, or is sitting where you did not expect it to sit.
 - A step failed a gate and you need what the Judge actually said.
-- The owner pastes a Job id and asks what is going on.
+- The owner pastes a Job id and asks what is going on. Paste it back in.
 
 **Do not reach for the transcript first.** A transcript is hundreds of rows and
 reading one is what this repository exists to escape. `--transcript` exists and

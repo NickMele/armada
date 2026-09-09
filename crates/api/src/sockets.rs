@@ -16,13 +16,14 @@
 //! All three are extractors in the same `Router`. There is no second port.
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Path, State};
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
-use ipc::{JobId, Missed, Resync, StreamMessage, WireError, PROTOCOL_VERSION};
+use ipc::{Missed, Resync, StreamMessage, WireError, PROTOCOL_VERSION};
 
 use crate::answers::{problem, refused};
 use crate::daemon::Queries;
+use crate::reference::Resolved;
 use crate::routes::Served;
 use crate::stream::Next;
 
@@ -43,10 +44,10 @@ pub(crate) const NO_JOURNAL: &str = "api.no_journal_reader";
 /// the history, in that order.
 pub(crate) async fn observe_job<D: Queries>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
     upgrade: WebSocketUpgrade,
 ) -> Response {
-    match served.daemon().observe_job(JobId::carried(job_id)).await {
+    match served.daemon().observe_job(job.id()).await {
         Ok(observed) => upgrade.on_upgrade(move |socket| crate::observing::relay(socket, observed)),
         Err(refusal) => refused(refusal),
     }
@@ -55,15 +56,14 @@ pub(crate) async fn observe_job<D: Queries>(
 /// One Job's own log: what Fleet did to it, as the Job's log recorded it.
 ///
 /// **Per-Job and its own socket**, for the reasons at the top of this module.
-/// The Job is asked for **before** the upgrade, so an id that names nothing is
-/// a 404 the caller reads at the moment they asked — the same order
-/// [`observe_job`] takes, and once per connection rather than once per pass.
+/// The Job is resolved **before** the upgrade — `crate::reference::Resolved` is
+/// the extractor — so an id that names nothing is a 404 the caller reads at the
+/// moment they asked, and the handle the log is named by comes back with it.
 pub(crate) async fn job_log<D: Queries>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
     upgrade: WebSocketUpgrade,
 ) -> Response {
-    let job_id = JobId::carried(job_id);
     let Some(journal) = served.journal() else {
         return problem(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -72,13 +72,10 @@ pub(crate) async fn job_log<D: Queries>(
                 "this Fleet was built with no reader for a Job's own log",
                 served.run_id().clone(),
             )
-            .about_job(job_id),
+            .about_job(job.id()),
         );
     };
-    if let Err(refusal) = served.daemon().get_job(job_id.clone()).await {
-        return refused(refusal);
-    }
-    upgrade.on_upgrade(move |socket| crate::journal::relay(socket, job_id, journal))
+    upgrade.on_upgrade(move |socket| crate::journal::relay(socket, job, journal))
 }
 
 /// The event stream. **Global, and a client subscribes to nothing** — one

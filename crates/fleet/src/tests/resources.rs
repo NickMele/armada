@@ -265,7 +265,7 @@ async fn what_the_examination_found_is_written_into_the_jobs_own_log() {
 
     let written = std::fs::read_to_string(crate::transcript::log_of(
         &home.path().to_string_lossy(),
-        job.id(),
+        &job.handle(),
     ))
     .expect("the Job's log");
     assert!(written.contains("a person asked whether this Job is working"));

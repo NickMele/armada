@@ -38,7 +38,6 @@ use crate::drone_moves::steps_holding_a_drone;
 use crate::evidence::{Decline, Standing};
 use crate::gate::{rule_on, Ruling};
 use crate::keeping::Keeping;
-use crate::transcript;
 use crate::turning::{Turned, Worked};
 use crate::working::Working;
 
@@ -394,7 +393,7 @@ where
         // A log line that will not write does not stop the Job: the decline is
         // still the gate's answer, and the escalation is a transition of its
         // own.
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 
     /// Write down what the gate could not read. **Nothing on any other
@@ -437,7 +436,7 @@ where
         .at_step(step.as_str())
         .with_field("artifact", FieldValue::Str(artifact.to_string()))
         .with_field("said", FieldValue::Str(cause.to_string()));
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 
     /// Write down that there is nothing to look at, and why.
@@ -465,7 +464,7 @@ where
         .in_job(job.as_ulid().clone())
         .at_step(step.as_str())
         .with_field("said", FieldValue::Str(why.said()));
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 
     /// Write down that a submission can no longer reach a gate at all.
@@ -484,7 +483,7 @@ where
         )
         .with_field("held", FieldValue::Bool(false))
         .with_field("escalated", FieldValue::Bool(escalated));
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 
     /// Say what a Job ending took with it.
@@ -505,7 +504,7 @@ where
         )
         .in_job(job.as_ulid().clone())
         .with_field("dropped", FieldValue::Int(dropped as i64));
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 
     /// Write a turn that could not carry a Job forward into **that Job's** log.
@@ -530,6 +529,6 @@ where
         )
         .in_job(job.as_ulid().clone())
         .with_field("said", FieldValue::Str(why.to_string()));
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 }

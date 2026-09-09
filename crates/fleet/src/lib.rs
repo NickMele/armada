@@ -74,6 +74,10 @@ mod landing;
 /// presses, and Fleet merges the pull request their Job opened.
 mod merging;
 pub mod mint;
+/// What each Job is called on disk, answerable without a lock. **Every path
+/// under `.armada/` is named by the handle**, and half the places that write a
+/// Job's log line hold only its id.
+mod naming;
 /// Noticing what became of a Job's pull request. **Fleet may merge, and the
 /// decision is what stays a person's** — a press from Bridge is
 /// `crate::merging` and reaches the same four things this module does about a

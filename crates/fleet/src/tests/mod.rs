@@ -63,6 +63,7 @@ mod landing;
 mod linking;
 mod looping;
 mod merging;
+mod migrating;
 mod modelling;
 mod noticing;
 mod out_of_bounds;

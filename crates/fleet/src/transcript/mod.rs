@@ -25,6 +25,8 @@
 //! `crate::readopting` reopens the same file and writes what nothing observed.
 
 mod backfill;
+/// Renaming what an older Fleet wrote under a ULID.
+mod migrating;
 mod refused;
 mod row;
 
@@ -45,6 +47,7 @@ use crate::clock::Clock;
 use row::Line;
 
 pub use backfill::{arguments, history, last_heard, refusals, HISTORY, REFUSALS};
+pub use migrating::{rekeyed, Rekeyed};
 pub use refused::refused_in;
 
 /// How many rows may be waiting to be written.
@@ -83,6 +86,10 @@ pub trait Tap: Send + Sync {
 #[derive(Clone, Debug)]
 pub struct Spine {
     pub job: JobId,
+    /// What the Job is called, which is what its log file and its transcript
+    /// directory are named by. Carried rather than looked up: a recording is
+    /// opened from a Job the caller is already holding.
+    pub handle: String,
     pub drone: DroneId,
     /// The step the Drone was spawned on, which is every row's step: a Drone
     /// belongs to one step and its transcript is that step's. [`StepLabel`] is
@@ -120,21 +127,34 @@ impl StepLabel {
     }
 }
 
-/// Where a Drone's rows land, under the repository it is working in.
-pub fn transcript_of(repo_root: &str, drone: &DroneId) -> PathBuf {
+/// Where one Job's transcripts live: a directory per Job, a file per Drone.
+///
+/// **Named by the handle, like the four beside it** — `asked::briefs_dir`,
+/// `check_output::checks_dir`, `keeping::deliverables_dir` and the worktree. A
+/// Job has more than one Drone over its life, so the Drone stays the file name
+/// and the Job becomes the directory; keyed by the Drone's own minted id alone,
+/// nothing here could be reached from the one id a person can read.
+pub fn transcripts_dir(repo_root: &str, handle: &str) -> PathBuf {
     Path::new(repo_root)
         .join(".armada")
         .join("transcripts")
-        .join(format!("{}.jsonl", drone.as_str()))
+        .join(handle)
+}
+
+/// Where a Drone's rows land, under the Job it is working.
+pub fn transcript_of(repo_root: &str, handle: &str, drone: &DroneId) -> PathBuf {
+    transcripts_dir(repo_root, handle).join(format!("{}.jsonl", drone.as_str()))
 }
 
 /// Where a Job's log lines land. The path `docs/concepts/log-envelope.md`
 /// names, and until now nothing wrote it.
-pub fn log_of(repo_root: &str, job: &JobId) -> PathBuf {
+///
+/// **The handle, not the id**, for [`transcripts_dir`]'s reason.
+pub fn log_of(repo_root: &str, handle: &str) -> PathBuf {
     Path::new(repo_root)
         .join(".armada")
         .join("logs")
-        .join(format!("{}.jsonl", job.as_str()))
+        .join(format!("{handle}.jsonl"))
 }
 
 /// A transcript being written.
@@ -163,9 +183,9 @@ impl Recording {
         spine: Spine,
         clock: Arc<dyn Clock>,
     ) -> Result<Recording, io::Error> {
-        let at = transcript_of(repo_root, &spine.drone);
+        let at = transcript_of(repo_root, &spine.handle, &spine.drone);
         let transcript = appending(&at)?;
-        let mut log = appending(&log_of(repo_root, &spine.job))?;
+        let mut log = appending(&log_of(repo_root, &spine.handle))?;
         // Written before any row, and the only thing that makes a file named
         // by a minted id findable from the Job it belongs to.
         write_line(&mut log, &opened(&spine, clock.now(), &at))?;
@@ -386,8 +406,8 @@ fn envelope(spine: &Spine, step: &StepId, at: Timestamp, msg: &str) -> Envelope 
 /// The Job log is otherwise written by the transcript's own writer task. This
 /// is the other author: something Fleet observed about a Job that no Drone
 /// event carries — a step editing outside its declared scope is the first.
-pub fn note(repo_root: &str, job: &JobId, envelope: &Envelope) -> Result<(), io::Error> {
-    let mut log = appending(&log_of(repo_root, job))?;
+pub fn note(repo_root: &str, handle: &str, envelope: &Envelope) -> Result<(), io::Error> {
+    let mut log = appending(&log_of(repo_root, handle))?;
     write_line(&mut log, envelope)
 }
 

@@ -32,7 +32,6 @@ use verification::{drifted, InScope, Lifted, OutsideScope};
 use crate::daemon::Fleet;
 use crate::session::{LiveSession, Occasion};
 use crate::terms::Redeclaring;
-use crate::transcript;
 use crate::working::Working;
 
 /// The receipt. **One word, and no way to make it say anything else** — the
@@ -186,7 +185,7 @@ where
         .in_job(job.as_ulid().clone())
         .at_step(step.as_str())
         .with_field("cause", FieldValue::Str(why.to_string()));
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 
     /// Compare live edits against the plan, once, for the step being worked.
@@ -291,7 +290,7 @@ where
         );
         // A log line that will not write does not stop the Job: the drift is
         // still on the slot, and the gate reads the footprint for itself.
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 }
 

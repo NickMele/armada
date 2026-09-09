@@ -124,8 +124,8 @@ async fn undecided(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
     job_id
 }
 
-fn logged(home: &TempDir, job: &core_model::JobId) -> String {
-    std::fs::read_to_string(log_of(&home.path().to_string_lossy(), job)).unwrap_or_default()
+fn logged(home: &TempDir, handle: &str) -> String {
+    std::fs::read_to_string(log_of(&home.path().to_string_lossy(), handle)).unwrap_or_default()
 }
 
 // ------------------------------------------------------ the act itself
@@ -211,7 +211,7 @@ async fn a_gate_that_still_cannot_decide_says_so_again_and_moves_nothing() {
         "the same trigger, because the same thing is still true"
     );
 
-    let written = logged(&home, &job_id);
+    let written = logged(&home, &job.handle());
     assert!(
         written.contains("a person asked the gate again on the evidence already submitted"),
         "a press that changed nothing is exactly the press a person needs to see happened: \
@@ -303,7 +303,7 @@ async fn a_re_run_that_reaches_a_failing_check_rules_on_it() {
         "a Check that ran and failed is an answer, and this act carries it out — \
          to the status a failing Check reaches anywhere else"
     );
-    let written = logged(&home, &job_id);
+    let written = logged(&home, &job.handle());
     assert!(
         written.contains("\"came_to\":\"failed\""),
         "the log says what the second reading came to, and it was not `undecided`: {written}"

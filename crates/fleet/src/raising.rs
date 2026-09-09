@@ -23,7 +23,6 @@ use ipc::{CapRaise, RaisedBy};
 use crate::adrift::Adrift;
 use crate::allowance::Micros;
 use crate::daemon::Fleet;
-use crate::transcript;
 
 /// How much more than the tier it would inherit Helm may raise a Job to.
 ///
@@ -205,6 +204,6 @@ where
             "raised_by",
             FieldValue::Str(raised_by.as_wire().to_string()),
         );
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 }

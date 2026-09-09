@@ -26,8 +26,8 @@
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
-    Actor, DispatchOrigin, Job, JobId, JobStatus, Origin, ResolvedStep, StepId, StepState,
-    TopLevelOrigin,
+    Actor, DispatchOrigin, Job, JobId, JobReference, JobStatus, Origin, ResolvedStep, StepId,
+    StepState, TopLevelOrigin,
 };
 use ipc::mcp::DispatchJob;
 
@@ -165,9 +165,13 @@ where
         let siblings = self.children_of(caller).await?;
         let mut waits_on = Vec::with_capacity(asked.after.len());
         for named in &asked.after {
-            let peer = siblings
-                .iter()
-                .find(|child| child.id().as_str() == named)
+            // **The same three forms a person may say**, against a set already
+            // in memory: `dispatch_job` answers with an id, and a Drone that
+            // read a sibling's handle off a Board or a branch names it with
+            // that. `JobReference::names` is the one reader of what a Job is
+            // called, so this and the API cannot come to disagree.
+            let peer = JobReference::read(named)
+                .and_then(|reference| siblings.iter().find(|child| reference.names(child)))
                 .ok_or_else(|| NotDispatched::NotASibling {
                     named: named.clone(),
                 })?;
@@ -205,6 +209,7 @@ where
         )?;
         let child = Job::create_sub_dispatched(new, dispatching.origin(), at.clone());
         store.insert_job(&child, &at).map_err(Adrift::Writing)?;
+        self.learn_the_name(&child);
         drop(store);
         // After the write, for `Fleet::proposed_job`'s reason: a client told
         // about a row the store then refused would hold a Job that is not

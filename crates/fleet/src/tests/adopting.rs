@@ -231,7 +231,11 @@ async fn a_drone_that_outlives_its_fleet_is_picked_up_by_the_next_one() {
     // Polled, because a row is queued to the writer task rather than written
     // by the caller — see `transcript::Tap`, which may not block the loop that
     // advances the Job.
-    let at = crate::transcript::transcript_of(&home.path().to_string_lossy(), &drone);
+    let at = crate::transcript::transcript_of(
+        &home.path().to_string_lossy(),
+        &second.load(&job).await.expect("the Job").handle(),
+        &drone,
+    );
     let mut rows = String::new();
     let deadline = tokio::time::Instant::now() + A_CHILD_HAS_LONG_ENOUGH;
     while tokio::time::Instant::now() < deadline {

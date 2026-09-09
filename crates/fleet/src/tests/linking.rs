@@ -102,7 +102,7 @@ async fn a_link_that_fails_to_resolve_leaves_the_request_unchanged_and_notes_why
 
     let log = std::fs::read_to_string(crate::transcript::log_of(
         &home.path().to_string_lossy(),
-        job.id(),
+        &job.handle(),
     ))
     .expect("the Job's own log");
     assert!(

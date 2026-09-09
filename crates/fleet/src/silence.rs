@@ -687,7 +687,7 @@ where
         // A log line that will not write does not stop the Job, for
         // `converging::noted`'s reason: what happened is on the slot, and the
         // escalation is a transition of its own.
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 }
 

@@ -120,6 +120,37 @@ def ask(port, path):
         return "unreachable", None
 
 
+def handle_on_disk(root, said):
+    """The handle a ULID, a handle or a bare number names, from `.armada/logs/`.
+
+    **The fallback, for a Fleet that is down.** Fleet resolves all three itself
+    and answers with the handle it found; this is the same three answers taken
+    off the one directory named by every one of them, so a post-mortem with the
+    daemon wedged still reaches the files.
+
+    `None` where nothing on disk answers to it, and a bare number that names
+    more than one is refused rather than guessed — the same rule the resolver
+    in `store` keeps for a number outside a Manifest.
+    """
+    logs = os.path.join(root, ".armada", "logs")
+    try:
+        named = sorted(name[:-6] for name in os.listdir(logs) if name.endswith(".jsonl"))
+    except OSError:
+        return None
+    if said in named:
+        return said
+    if said.isdigit():
+        starting = [one for one in named if one == said or one.startswith(f"{said}-")]
+        return starting[0] if len(starting) == 1 else None
+    # A ULID. The file is named by the handle, so the only thing that joins the
+    # two is a line inside it — every line carries `job_id`.
+    for one in named:
+        for row in read_jsonl(os.path.join(logs, f"{one}.jsonl"))[:1]:
+            if row.get("job_id") == said:
+                return one
+    return None
+
+
 def read_jsonl(path):
     """Every row of a JSONL file, skipping any line that will not parse.
 
@@ -178,9 +209,9 @@ def clock(stamp):
 # ---------------------------------------------------------------- 1. the Job
 
 
-def say_job(detail, standing, job_id, root, sources):
+def say_job(detail, standing, said, handle, root, sources):
     job = (detail or {}).get("job", {})
-    heading(f"JOB {job_id}")
+    heading(f"JOB {handle or said}")
     if not detail:
         if standing == "gone":
             print("  Fleet answered and does not hold this Job — `armada clean` took")
@@ -194,6 +225,9 @@ def say_job(detail, standing, job_id, root, sources):
         return
     print(f"  {job.get('title', '(no title)')}")
     print()
+    # Both ids, because each is the one the other cannot be used for: the handle
+    # is what a person says and the ULID is what every row in the store joins on.
+    field("id", job.get("id"))
     reason = (job.get("reason") or {}).get("named")
     field("status", job.get("status") + (f" — {reason}" if reason else ""))
     steps = detail.get("steps") or []
@@ -204,7 +238,7 @@ def say_job(detail, standing, job_id, root, sources):
     field("model", job.get("model"))
     field("origin", job.get("origin"))
     field("branch", job.get("branch"))
-    worktree = os.path.join(root, ".armada", "worktrees", job_id)
+    worktree = os.path.join(root, ".armada", "worktrees", handle or said)
     on_disk = "on disk" if os.path.isdir(worktree) else "gone"
     field("worktree", f"{worktree} ({on_disk})")
     stuck = detail.get("stuck")
@@ -419,7 +453,7 @@ def say_transcript(transcripts, full):
 # ---------------------------------------------------------------- assembly
 
 
-def drones_of(job_id, events, log_rows):
+def drones_of(events, log_rows):
     """Every Drone this Job has had, oldest first, from whichever source spoke.
 
     Fleet's transition record is the authority; the Job's log names the same
@@ -442,7 +476,12 @@ def main():
         description="What happened to one Job: its shape, every transition, each "
         "step's verdict, what its Drone was refused, and how the run ended.",
     )
-    parser.add_argument("job_id", help="the Job's id, as Bridge and the log spell it")
+    parser.add_argument(
+        "job",
+        metavar="JOB",
+        help="the Job: its handle as Bridge shows it, the number that handle "
+        "starts with, or its id",
+    )
     parser.add_argument("--full", action="store_true", help="do not cut claims, findings or arguments")
     parser.add_argument("--transcript", action="store_true", help="also print every transcript row, one per line")
     parser.add_argument("--log", type=int, default=20, metavar="N", help="lines of the Job's log to show, 0 for all")
@@ -453,25 +492,35 @@ def main():
     port, why = fleet_port()
     sources = [why, f"{os.path.join(root, '.armada')}"]
 
-    standing, detail = ask(port, f"/jobs/{args.job_id}")
-    _, events = ask(port, f"/jobs/{args.job_id}/events")
-    _, evidence = ask(port, f"/jobs/{args.job_id}/evidence")
+    # **Fleet takes all three forms**, so the same text goes on every route.
+    # What comes back names the Job the way `.armada/` does, which is what the
+    # sections read off disk are keyed by.
+    standing, detail = ask(port, f"/jobs/{args.job}")
+    _, events = ask(port, f"/jobs/{args.job}/events")
+    _, evidence = ask(port, f"/jobs/{args.job}/evidence")
+    handle = ((detail or {}).get("job") or {}).get("handle") or handle_on_disk(root, args.job)
 
-    log_path = os.path.join(root, ".armada", "logs", f"{args.job_id}.jsonl")
+    log_path = os.path.join(root, ".armada", "logs", f"{handle or args.job}.jsonl")
     log_rows = read_jsonl(log_path)
     transcripts = []
-    for drone_id in drones_of(args.job_id, events, log_rows):
-        rows = read_jsonl(os.path.join(root, ".armada", "transcripts", f"{drone_id}.jsonl"))
+    under = os.path.join(root, ".armada", "transcripts", handle or args.job)
+    for drone_id in drones_of(events, log_rows):
+        rows = read_jsonl(os.path.join(under, f"{drone_id}.jsonl"))
         if rows:
             transcripts.append((drone_id, rows))
 
     if not detail and not log_rows:
-        print(f"Nothing here knows Job {args.job_id}.", file=sys.stderr)
+        print(f"Nothing here knows Job {args.job}.", file=sys.stderr)
         print(f"  {why}", file=sys.stderr)
         print(f"  no log at {log_path}", file=sys.stderr)
+        print(
+            "  a Job answers to its handle, to the number that handle starts "
+            "with, or to its id",
+            file=sys.stderr,
+        )
         return 1
 
-    say_job(detail, standing, args.job_id, root, sources)
+    say_job(detail, standing, args.job, handle, root, sources)
     say_transitions(events, log_rows)
     say_steps(detail, evidence, args.full)
     say_refusals(transcripts, args.full)

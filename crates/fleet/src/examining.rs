@@ -26,7 +26,6 @@ use ipc::{Asked, Finding, Held, JobExamined, JobResources, Look, NotedField};
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::resources::{expects_a_drone, since};
-use crate::transcript;
 
 /// How recently the Job's log must have been written for that alone to say
 /// something is moving.
@@ -157,7 +156,7 @@ where
                 FieldValue::Str(format!("{} — {}", wired(look.found), look.said)),
             );
         }
-        let _ = transcript::note(&self.host().repo_root, job.id(), &envelope);
+        self.noted_in_the_log(job.id(), &envelope);
     }
 }
 

@@ -23,6 +23,11 @@ fn job() -> JobId {
     JobId::carried(Ulid::carried("01JOBLOG"))
 }
 
+/// What the Job's log is named by, which is what a person calls the Job.
+fn handle() -> &'static str {
+    "4-what-fleet-wrote-about-a-job"
+}
+
 fn envelope(msg: &str) -> Envelope {
     Envelope::new(
         Timestamp::from_rfc3339("2026-09-04T09:00:00.000Z"),
@@ -35,7 +40,7 @@ fn envelope(msg: &str) -> Envelope {
 }
 
 fn read(root: &str, from: u64) -> api::Reading {
-    JobLogs::under(root).read(&ipc::JobId::from(&job()), from)
+    JobLogs::under(root).read(handle(), from)
 }
 
 /// The claim: what Fleet wrote about a Job with no Drone on it comes back.
@@ -43,8 +48,8 @@ fn read(root: &str, from: u64) -> api::Reading {
 fn what_fleet_wrote_about_a_job_comes_back_as_notes() {
     let dir = TempDir::new();
     let root = dir.path().to_string_lossy().into_owned();
-    note(&root, &job(), &envelope("worktree cut")).expect("a line is written");
-    note(&root, &job(), &envelope("preparation began")).expect("a line is written");
+    note(&root, handle(), &envelope("worktree cut")).expect("a line is written");
+    note(&root, handle(), &envelope("preparation began")).expect("a line is written");
 
     let reading = read(&root, 0);
 
@@ -71,7 +76,7 @@ fn a_notes_fields_come_back_as_what_it_opens_to() {
         .with_field("paths", FieldValue::Str("crates/api/src/routes.rs".into()))
         .with_field("outside", FieldValue::Int(3))
         .with_field("declared", FieldValue::Bool(false));
-    note(&root, &job(), &envelope).expect("a line is written");
+    note(&root, handle(), &envelope).expect("a line is written");
 
     let reading = read(&root, 0);
     let fields = &reading.notes[0].fields;
@@ -106,7 +111,7 @@ fn the_level_a_line_was_written_at_reaches_the_note() {
         "a preparation command failed",
     )
     .in_job(job().as_ulid().clone());
-    note(&root, &job(), &warned).expect("a line is written");
+    note(&root, handle(), &warned).expect("a line is written");
 
     assert_eq!(read(&root, 0).notes[0].level, NoteLevel::Warn);
 }
@@ -118,12 +123,12 @@ fn the_level_a_line_was_written_at_reaches_the_note() {
 fn a_second_pass_reads_only_what_was_appended_since() {
     let dir = TempDir::new();
     let root = dir.path().to_string_lossy().into_owned();
-    note(&root, &job(), &envelope("worktree cut")).expect("a line is written");
+    note(&root, handle(), &envelope("worktree cut")).expect("a line is written");
 
     let first = read(&root, 0);
     assert_eq!(first.notes.len(), 1);
 
-    note(&root, &job(), &envelope("preparation began")).expect("a line is written");
+    note(&root, handle(), &envelope("preparation began")).expect("a line is written");
 
     let second = read(&root, first.from);
     assert_eq!(second.notes.len(), 1);
@@ -146,9 +151,9 @@ fn a_second_pass_reads_only_what_was_appended_since() {
 fn a_half_written_line_is_read_whole_on_the_next_pass() {
     let dir = TempDir::new();
     let root = dir.path().to_string_lossy().into_owned();
-    note(&root, &job(), &envelope("worktree cut")).expect("a line is written");
+    note(&root, handle(), &envelope("worktree cut")).expect("a line is written");
 
-    let at = log_of(&root, &job());
+    let at = log_of(&root, handle());
     let whole = std::fs::read_to_string(&at).expect("the log reads");
     let second = format!(
         r#"{{"ts":"2026-09-04T09:00:02.000Z","level":"info","component":"fleet","run_id":"01RUN","msg":"preparation began","job_id":"01JOBLOG"}}"#
@@ -200,10 +205,10 @@ fn a_job_with_no_log_reads_as_nothing_rather_than_as_a_fault() {
 fn a_line_that_will_not_decode_is_counted() {
     let dir = TempDir::new();
     let root = dir.path().to_string_lossy().into_owned();
-    note(&root, &job(), &envelope("worktree cut")).expect("a line is written");
+    note(&root, handle(), &envelope("worktree cut")).expect("a line is written");
     let mut file = std::fs::OpenOptions::new()
         .append(true)
-        .open(log_of(&root, &job()))
+        .open(log_of(&root, handle()))
         .expect("the log opens");
     writeln!(file, "{{not json").expect("a bad line lands");
     drop(file);

@@ -54,6 +54,9 @@ mod read;
 mod remarks;
 /// What a person says went wrong, kept after the Job it is about is gone.
 mod report;
+/// A ULID, a whole handle or a bare number in, one Job out — **a second way
+/// in and never a second key.**
+mod resolving;
 /// Giving a Job's resources back without giving up its record.
 mod retain;
 mod revision;
@@ -82,6 +85,7 @@ pub use process::DroneProcess;
 pub use proving::Proved;
 pub use read::{Loaded, RowIdentity, StatusRepair, UnreadableRow};
 pub use report::Report;
+pub use resolving::{NamedJob, ResolveJobError};
 pub use retain::Retained;
 pub use schema::KNOWN_SCHEMA_VERSION;
 pub use showing::KeptFrame;

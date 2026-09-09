@@ -10,16 +10,17 @@
 //! daemon's — see `crate::answers::undecodable`. Nothing downstream was asked.
 
 use axum::body::Bytes;
-use axum::extract::{Path, State};
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
 use ipc::{
-    CapRaise, ChangesRequested, ChosenAnswer, FileReport, JobId, JobRequest, Overruled, ProposeJob,
+    CapRaise, ChangesRequested, ChosenAnswer, FileReport, JobRequest, Overruled, ProposeJob,
     Redirection, RemarksTakenUp, RestartRequested, StopProposal,
 };
 
 use crate::answers::{answer, refused, undecodable};
 use crate::daemon::Commands;
+use crate::reference::Resolved;
 use crate::routes::Served;
 
 pub(crate) async fn propose_job<D: Commands>(
@@ -78,13 +79,9 @@ pub(crate) async fn stop_proposal<D: Commands>(
 
 pub(crate) async fn approve_dispatch<D: Commands>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
 ) -> Response {
-    match served
-        .daemon()
-        .approve_dispatch(JobId::carried(job_id))
-        .await
-    {
+    match served.daemon().approve_dispatch(job.id()).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -98,9 +95,9 @@ pub(crate) async fn approve_dispatch<D: Commands>(
 /// dispatch gate under a second name.
 pub(crate) async fn approve_review<D: Commands>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
 ) -> Response {
-    match served.daemon().approve_review(JobId::carried(job_id)).await {
+    match served.daemon().approve_review(job.id()).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -116,13 +113,9 @@ pub(crate) async fn approve_review<D: Commands>(
 /// 409s, and a missing tool or an unreadable refusal are 500s. Nothing retries.
 pub(crate) async fn merge_pull_request<D: Commands>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
 ) -> Response {
-    match served
-        .daemon()
-        .merge_pull_request(JobId::carried(job_id))
-        .await
-    {
+    match served.daemon().merge_pull_request(job.id()).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -135,18 +128,14 @@ pub(crate) async fn merge_pull_request<D: Commands>(
 /// 409 where the Drone is gone: there is nobody to tell.
 pub(crate) async fn request_changes<D: Commands>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
     body: Bytes,
 ) -> Response {
     let note: ChangesRequested = match ipc::decode("a review note", &body) {
         Ok(note) => note,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served
-        .daemon()
-        .request_changes(JobId::carried(job_id), note)
-        .await
-    {
+    match served.daemon().request_changes(job.id(), note).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -163,18 +152,14 @@ pub(crate) async fn request_changes<D: Commands>(
 /// comment at all.
 pub(crate) async fn take_up_remarks<D: Commands>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
     body: Bytes,
 ) -> Response {
     let picked: RemarksTakenUp = match ipc::decode("the comments picked", &body) {
         Ok(picked) => picked,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served
-        .daemon()
-        .take_up_remarks(JobId::carried(job_id), picked)
-        .await
-    {
+    match served.daemon().take_up_remarks(job.id(), picked).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -185,9 +170,9 @@ pub(crate) async fn take_up_remarks<D: Commands>(
 /// the Board and carries no verdict at all.
 pub(crate) async fn reject_job<D: Commands>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
 ) -> Response {
-    match served.daemon().reject_job(JobId::carried(job_id)).await {
+    match served.daemon().reject_job(job.id()).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -203,18 +188,14 @@ pub(crate) async fn reject_job<D: Commands>(
 /// with no stopped step. 422 on a blank reason.
 pub(crate) async fn override_verdict<D: Commands>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
     body: Bytes,
 ) -> Response {
     let overruling: Overruled = match ipc::decode("an override", &body) {
         Ok(overruling) => overruling,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served
-        .daemon()
-        .override_verdict(JobId::carried(job_id), overruling)
-        .await
-    {
+    match served.daemon().override_verdict(job.id(), overruling).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -231,9 +212,9 @@ pub(crate) async fn override_verdict<D: Commands>(
 /// went with the slot and `restart_step` is what applies.
 pub(crate) async fn rerun_gate<D: Commands>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
 ) -> Response {
-    match served.daemon().rerun_gate(JobId::carried(job_id)).await {
+    match served.daemon().rerun_gate(job.id()).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -249,18 +230,14 @@ pub(crate) async fn rerun_gate<D: Commands>(
 /// surface asked past its own ceiling, which a person never meets.
 pub(crate) async fn raise_cost_cap<D: Commands>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
     body: Bytes,
 ) -> Response {
     let raise: CapRaise = match ipc::decode("a cost cap", &body) {
         Ok(raise) => raise,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served
-        .daemon()
-        .raise_cost_cap(JobId::carried(job_id), raise)
-        .await
-    {
+    match served.daemon().raise_cost_cap(job.id(), raise).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -270,9 +247,9 @@ pub(crate) async fn raise_cost_cap<D: Commands>(
 /// on, which is still there.
 pub(crate) async fn kill_drone<D: Commands>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
 ) -> Response {
-    match served.daemon().kill_drone(JobId::carried(job_id)).await {
+    match served.daemon().kill_drone(job.id()).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -284,9 +261,9 @@ pub(crate) async fn kill_drone<D: Commands>(
 /// Drone.
 pub(crate) async fn kill_job<D: Commands>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
 ) -> Response {
-    match served.daemon().kill_job(JobId::carried(job_id)).await {
+    match served.daemon().kill_job(job.id()).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -303,9 +280,9 @@ pub(crate) async fn kill_job<D: Commands>(
 /// did — and it does real work, which is not what a GET promises.
 pub(crate) async fn examine_job<D: Commands>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
 ) -> Response {
-    match served.daemon().examine_job(JobId::carried(job_id)).await {
+    match served.daemon().examine_job(job.id()).await {
         Ok(examined) => answer(StatusCode::OK, &examined, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -320,9 +297,9 @@ pub(crate) async fn examine_job<D: Commands>(
 /// keeps that concern.
 pub(crate) async fn forget_job<D: Commands>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
 ) -> Response {
-    match served.daemon().forget_job(JobId::carried(job_id)).await {
+    match served.daemon().forget_job(job.id()).await {
         Ok(forgotten) => answer(StatusCode::OK, &forgotten, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -336,13 +313,9 @@ pub(crate) async fn forget_job<D: Commands>(
 /// reach is kept on purpose, and the answer names it rather than failing.
 pub(crate) async fn reclaim_worktree<D: Commands>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
 ) -> Response {
-    match served
-        .daemon()
-        .reclaim_worktree(JobId::carried(job_id))
-        .await
-    {
+    match served.daemon().reclaim_worktree(job.id()).await {
         Ok(reclaimed) => answer(StatusCode::OK, &reclaimed, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -353,9 +326,9 @@ pub(crate) async fn reclaim_worktree<D: Commands>(
 /// recovery, not the creation — the new Job's id is in the body.
 pub(crate) async fn redispatch_job<D: Commands>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
 ) -> Response {
-    match served.daemon().redispatch_job(JobId::carried(job_id)).await {
+    match served.daemon().redispatch_job(job.id()).await {
         Ok(both) => answer(StatusCode::OK, &both, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -368,18 +341,14 @@ pub(crate) async fn redispatch_job<D: Commands>(
 /// 409 where the Drone is gone, naming `restart_step` as the act that applies.
 pub(crate) async fn redirect_drone<D: Commands>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
     body: Bytes,
 ) -> Response {
     let instruction: Redirection = match ipc::decode("a redirect", &body) {
         Ok(instruction) => instruction,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served
-        .daemon()
-        .redirect_drone(JobId::carried(job_id), instruction)
-        .await
-    {
+    match served.daemon().redirect_drone(job.id(), instruction).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -390,14 +359,14 @@ pub(crate) async fn redirect_drone<D: Commands>(
 /// where the id names an answered question, or where the label was not offered.
 pub(crate) async fn answer_question<D: Commands>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
     body: Bytes,
 ) -> Response {
     let chosen: ChosenAnswer = match ipc::decode("an answer", &body) {
         Ok(chosen) => chosen,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    let job_id = JobId::carried(job_id);
+    let job_id = job.id();
     match served.daemon().answer_question(job_id, chosen).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
@@ -419,7 +388,7 @@ pub(crate) async fn answer_question<D: Commands>(
 /// not the same request as one with no note.
 pub(crate) async fn restart_step<D: Commands>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
     body: Bytes,
 ) -> Response {
     // Emptiness is read here rather than through an `Option<Json<_>>`
@@ -434,11 +403,7 @@ pub(crate) async fn restart_step<D: Commands>(
             Err(why) => return undecodable(&why.to_string(), served.run_id()),
         }
     };
-    match served
-        .daemon()
-        .restart_step(JobId::carried(job_id), note)
-        .await
-    {
+    match served.daemon().restart_step(job.id(), note).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }
@@ -453,18 +418,14 @@ pub(crate) async fn restart_step<D: Commands>(
 /// sentence has added nothing at all.
 pub(crate) async fn file_report<D: Commands>(
     State(served): State<Served<D>>,
-    Path(job_id): Path<String>,
+    job: Resolved,
     body: Bytes,
 ) -> Response {
     let filing: FileReport = match ipc::decode("a report", &body) {
         Ok(filing) => filing,
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
-    match served
-        .daemon()
-        .file_report(JobId::carried(job_id), filing)
-        .await
-    {
+    match served.daemon().file_report(job.id(), filing).await {
         Ok(report) => answer(StatusCode::CREATED, &report, served.run_id()),
         Err(refusal) => refused(refusal),
     }

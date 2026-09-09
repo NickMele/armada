@@ -32,7 +32,6 @@ use core_model::{
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
-use crate::transcript;
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -112,7 +111,7 @@ where
         .with_field("attending", FieldValue::Str("nothing".to_string()));
         // A log line that will not write does not undo the move, for
         // `silence::noted_quiet`'s reason: the transition is its own record.
-        let _ = transcript::note(&self.host().repo_root, job.id(), &envelope);
+        self.noted_in_the_log(job.id(), &envelope);
     }
 }
 

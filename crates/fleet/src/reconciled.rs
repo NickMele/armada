@@ -7,6 +7,8 @@
 
 use core_model::JobId;
 
+use crate::transcript::Rekeyed;
+
 #[derive(Debug, Default)]
 pub struct Reconciled {
     /// Jobs the store says were `running` and whose Drone is gone — **asked
@@ -27,4 +29,7 @@ pub struct Reconciled {
     /// The Jobs dispatched on the way out, where the bound had room and they
     /// were waiting. Empty on the ordinary boot.
     pub admitted: Vec<JobId>,
+    /// What was moved out from under a ULID and under the handle beside it —
+    /// `crate::transcript::migrating`. Zeroes on every boot after the first.
+    pub rekeyed: Rekeyed,
 }

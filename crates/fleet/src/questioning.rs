@@ -31,7 +31,6 @@ use ipc::mcp::{AskQuestion, AskedOption};
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::session::{LiveSession, Occasion};
-use crate::transcript;
 use crate::working::Working;
 
 /// One question a Drone asked, while it is still unanswered.
@@ -449,7 +448,7 @@ where
         // A log line that will not write does not fail the ask, for
         // `crate::silence::noted_quiet`'s reason: what happened is on the slot,
         // and the event is published either way.
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 
     /// Write the answer into the Job's own log. **Where a person's decision is
@@ -468,7 +467,7 @@ where
         .with_field("question_id", FieldValue::Str(question_id.to_string()))
         .with_field("chose", FieldValue::Str(chose.to_string()))
         .with_field("actor", FieldValue::Str(Actor::Human.as_wire().to_string()));
-        let _ = transcript::note(&self.host().repo_root, job, &envelope);
+        self.noted_in_the_log(job, &envelope);
     }
 }
 

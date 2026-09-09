@@ -2,9 +2,9 @@
 //!
 //! # One declaration, two readers
 //!
-//! [`TranscriptRow`] is written to `.armada/transcripts/<drone-id>.jsonl` by
-//! Fleet and read back from it by the backfill. It is here rather than beside
-//! the writer because the live view sends the same shape, and two declarations
+//! [`TranscriptRow`] is written under `.armada/transcripts/<handle>/` by Fleet
+//! and read back from it by the backfill. It is here rather than beside the
+//! writer because the live view sends the same shape, and two declarations
 //! would be two vocabularies that agree until one of them changes.
 //!
 //! **The mapping from `adapter_traits::DroneEvent` is not here.** `ipc` depends
@@ -33,7 +33,7 @@ use crate::event::{ChangedFile, Missed};
 use crate::ids::{Instant, JobId, StepId};
 use crate::version::ProtocolVersion;
 
-/// One line of `.armada/transcripts/<drone-id>.jsonl`.
+/// One line of `.armada/transcripts/<handle>/<drone-id>.jsonl`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TranscriptRow {
     /// When Fleet's line loop saw it, not when it reached the disk.

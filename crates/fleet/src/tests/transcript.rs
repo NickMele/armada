@@ -35,9 +35,14 @@ const SAYS_THREE: &str = "IFS= read -r _; printf 'one\\ntwo\\nthree\\n'";
 const JOB: &str = "01JOBAAAAAAAAAAAAAAAAAAAAA";
 const RUN: &str = "01RUNAAAAAAAAAAAAAAAAAAAAA";
 
+/// What the Job is called, which is what its log and its transcript directory
+/// are named by.
+const HANDLE: &str = "7-a-job-with-a-transcript";
+
 fn spine(drone: &str) -> Spine {
     Spine {
         job: JobId::carried(Ulid::carried(JOB)),
+        handle: String::from(HANDLE),
         drone: DroneId::carried(Ulid::carried(drone)),
         step: StepId::new("implement"),
         run: Ulid::carried(RUN),
@@ -85,16 +90,14 @@ const A_WRITER_HAS_LONG_ENOUGH: usize = 1_200;
 fn rows(at: &TempDir, drone: &str) -> String {
     let path = transcript_of(
         &at.path().to_string_lossy(),
+        HANDLE,
         &DroneId::carried(Ulid::carried(drone)),
     );
     std::fs::read_to_string(path).expect("the transcript is on disk")
 }
 
 fn job_log(at: &TempDir) -> String {
-    let path = log_of(
-        &at.path().to_string_lossy(),
-        &JobId::carried(Ulid::carried(JOB)),
-    );
+    let path = log_of(&at.path().to_string_lossy(), HANDLE);
     std::fs::read_to_string(path).expect("the Job's log is on disk")
 }
 
@@ -302,11 +305,7 @@ async fn the_history_is_found_through_the_log_that_names_each_transcript() {
     }]);
     recording.settled().await;
 
-    let (rows, skipped) = history(
-        &at.path().to_string_lossy(),
-        &JobId::carried(Ulid::carried(JOB)),
-    )
-    .await;
+    let (rows, skipped) = history(&at.path().to_string_lossy(), HANDLE).await;
 
     assert_eq!(skipped, 0);
     assert_eq!(rows.len(), 1);
@@ -339,11 +338,7 @@ async fn a_turn_armada_put_into_the_session_is_not_written_down_as_the_drones() 
     ]);
     recording.settled().await;
 
-    let (rows, _) = history(
-        &at.path().to_string_lossy(),
-        &JobId::carried(Ulid::carried(JOB)),
-    )
-    .await;
+    let (rows, _) = history(&at.path().to_string_lossy(), HANDLE).await;
 
     let voiced: Vec<(ipc::Voice, String)> = rows
         .iter()
@@ -375,11 +370,7 @@ async fn what_a_call_did_survives_to_the_row_a_viewer_is_sent() {
     }]);
     recording.settled().await;
 
-    let (rows, _) = history(
-        &at.path().to_string_lossy(),
-        &JobId::carried(Ulid::carried(JOB)),
-    )
-    .await;
+    let (rows, _) = history(&at.path().to_string_lossy(), HANDLE).await;
 
     assert_eq!(
         rows[0].saw,
@@ -414,8 +405,7 @@ async fn a_cut_argument_is_sized_on_the_wire_and_whole_in_the_file() {
     recording.settled().await;
 
     let root = at.path().to_string_lossy().to_string();
-    let job = JobId::carried(Ulid::carried(JOB));
-    let (rows, _) = history(&root, &job).await;
+    let (rows, _) = history(&root, HANDLE).await;
 
     let ipc::Saw::Called {
         detail,
@@ -439,7 +429,7 @@ async fn a_cut_argument_is_sized_on_the_wire_and_whole_in_the_file() {
         "a viewer's row never carries the argument, whatever its size"
     );
 
-    let served = crate::transcript::arguments(&root, &job, "toolu_01Haa")
+    let served = crate::transcript::arguments(&root, HANDLE, "toolu_01Haa")
         .await
         .expect("the file kept what the row did not");
     assert_eq!(served.arguments, heredoc, "the argument, as it was sent");
@@ -460,13 +450,11 @@ async fn a_call_the_record_does_not_hold_answers_with_nothing() {
     }]);
     recording.settled().await;
 
-    assert!(crate::transcript::arguments(
-        &at.path().to_string_lossy(),
-        &JobId::carried(Ulid::carried(JOB)),
-        "toolu_never"
-    )
-    .await
-    .is_none());
+    assert!(
+        crate::transcript::arguments(&at.path().to_string_lossy(), HANDLE, "toolu_never")
+            .await
+            .is_none()
+    );
 }
 
 /// A retry is a second `drone_id` under one `job_id`, and both files are the
@@ -486,11 +474,7 @@ async fn a_retrys_rows_follow_the_first_attempts_under_the_one_job() {
         recording.settled().await;
     }
 
-    let (rows, _) = history(
-        &at.path().to_string_lossy(),
-        &JobId::carried(Ulid::carried(JOB)),
-    )
-    .await;
+    let (rows, _) = history(&at.path().to_string_lossy(), HANDLE).await;
 
     let said: Vec<String> = rows
         .iter()
@@ -507,11 +491,7 @@ async fn a_retrys_rows_follow_the_first_attempts_under_the_one_job() {
 #[tokio::test]
 async fn a_job_with_no_transcript_at_all_answers_with_nothing() {
     let at = TempDir::new();
-    let (rows, skipped) = history(
-        &at.path().to_string_lossy(),
-        &JobId::carried(Ulid::carried(JOB)),
-    )
-    .await;
+    let (rows, skipped) = history(&at.path().to_string_lossy(), HANDLE).await;
     assert!(rows.is_empty());
     assert_eq!(skipped, 0);
 }
@@ -554,11 +534,11 @@ async fn a_running_drone_can_be_watched_and_a_finished_one_leaves_its_history() 
 ///
 /// Polled, because the row is written by the reader task on the far side of the
 /// Drone's pipe rather than by the call that moved the step.
-async fn steps_until(home: &TempDir, job: &JobId, wanted: &str) -> Vec<String> {
+async fn steps_until(home: &TempDir, handle: &str, wanted: &str) -> Vec<String> {
     let root = home.path().to_string_lossy().to_string();
     let mut seen = Vec::new();
     for _ in 0..400 {
-        let (rows, _) = history(&root, job).await;
+        let (rows, _) = history(&root, handle).await;
         seen = rows
             .iter()
             .filter_map(|row| row.step.as_ref().map(|step| String::from(step.as_str())))
@@ -592,7 +572,9 @@ async fn a_row_written_after_a_step_advances_carries_the_step_it_was_written_und
         .await
         .expect("approval puts a Drone on `implement`");
     assert!(
-        !steps_until(&home, job.id(), "implement").await.is_empty(),
+        !steps_until(&home, &job.handle(), "implement")
+            .await
+            .is_empty(),
         "the Drone said something under the step it was spawned on"
     );
 
@@ -606,7 +588,7 @@ async fn a_row_written_after_a_step_advances_carries_the_step_it_was_written_und
 
     // The Drone is told the step advanced, and this one echoes what it is told
     // — so the row that comes back was written under the new step.
-    let steps = steps_until(&home, job.id(), "summarise").await;
+    let steps = steps_until(&home, &job.handle(), "summarise").await;
     assert_eq!(
         steps.first().map(String::as_str),
         Some("implement"),
@@ -640,7 +622,7 @@ async fn the_record_carries_what_armada_said_and_what_fleet_did_beside_the_drone
         .await
         .expect("approval puts a Drone on `implement`");
 
-    let opening = voiced_until(&home, job.id(), ipc::Voice::Armada).await;
+    let opening = voiced_until(&home, &job.handle(), ipc::Voice::Armada).await;
     assert!(
         opening.iter().any(|saw| matches!(
             saw,
@@ -656,7 +638,7 @@ async fn the_record_carries_what_armada_said_and_what_fleet_did_beside_the_drone
         .expect("the step's evidence");
     fleet.turn().await.expect("the gate rules");
 
-    let fleets = voiced_until(&home, job.id(), ipc::Voice::Fleet).await;
+    let fleets = voiced_until(&home, &job.handle(), ipc::Voice::Fleet).await;
     assert!(
         fleets
             .iter()
@@ -670,11 +652,11 @@ async fn the_record_carries_what_armada_said_and_what_fleet_did_beside_the_drone
 ///
 /// Polled for `steps_until`'s reason: the writer drains on a task of its own,
 /// so a row is on disk some time after the call that produced it returned.
-async fn voiced_until(home: &TempDir, job: &JobId, by: ipc::Voice) -> Vec<ipc::Saw> {
+async fn voiced_until(home: &TempDir, handle: &str, by: ipc::Voice) -> Vec<ipc::Saw> {
     let root = home.path().to_string_lossy().to_string();
     let mut seen = Vec::new();
     for _ in 0..400 {
-        let (rows, _) = history(&root, job).await;
+        let (rows, _) = history(&root, handle).await;
         seen = rows
             .iter()
             .filter(|row| row.by == by)

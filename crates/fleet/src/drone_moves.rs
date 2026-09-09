@@ -136,7 +136,7 @@ where
         .at_step(step.as_str())
         .with_field("pid", FieldValue::Int(i64::from(pid)))
         .with_field("because", FieldValue::Str(because.to_string()));
-        let _ = crate::transcript::note(&self.host().repo_root, job.id(), &envelope);
+        self.noted_in_the_log(job.id(), &envelope);
     }
 
     /// Record that the Drone on a step is gone.

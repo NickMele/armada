@@ -33,7 +33,7 @@ use core_model::{
     EscalationTrigger, IllegalDroneMove, IllegalStepTransition, IllegalTransition, JobId,
     JobStatus, RedirectAlreadyWaiting, StepId,
 };
-use store::{LoadAllError, LoadJobError, WriteError};
+use store::{LoadAllError, LoadJobError, ResolveJobError, WriteError};
 
 use crate::preparing::NotPrepared;
 use crate::proposing::{NotProposed, Unresolved};
@@ -553,6 +553,13 @@ pub enum Adrift {
     /// be made says nothing about the request, and turning an outage into "no
     /// workflow fits" refuses a dispatch on the strength of one.
     NotProposed { request: String, cause: NotProposed },
+    /// What a request named is no Job of this Fleet's.
+    ///
+    /// **Not [`Adrift::Reading`]'s missing Job**, which is a ULID the store
+    /// does not hold. This is one step earlier: the text a caller gave —
+    /// a ULID, a handle or a number — resolved to nothing, and the refusal
+    /// quotes what they said rather than a ULID they never typed.
+    Unresolvable(ResolveJobError),
 }
 impl Adrift {
     /// A refusal from the delivery seam, named against the Job it was for.

@@ -234,8 +234,11 @@ async fn the_log_names_each_command_as_it_is_attempted() {
         .await
         .expect_err("the second command fails");
 
-    let log = std::fs::read_to_string(crate::transcript::log_of(&fleet.host().repo_root, job.id()))
-        .expect("the Job has a log");
+    let log = std::fs::read_to_string(crate::transcript::log_of(
+        &fleet.host().repo_root,
+        &job.handle(),
+    ))
+    .expect("the Job has a log");
     let starting: Vec<&str> = log
         .lines()
         .filter(|line| line.contains("a preparation command is starting"))
