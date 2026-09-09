@@ -26,6 +26,7 @@ import {
   DroneBrief,
   Kbd,
   changedFilesSummary,
+  keyFor,
   type StepChapter,
 } from "@armada/components";
 
@@ -190,7 +191,7 @@ export function chaptersOf({
                 {...namesChapter(LOG_CHAPTER)}
               >
                 Open the log
-                <Kbd>Enter</Kbd>
+                <Kbd>{keyFor("open_log")}</Kbd>
               </Button>
             ),
           }),
@@ -262,7 +263,7 @@ export function chaptersOf({
                 {...namesChapter(DIFF_CHAPTER)}
               >
                 Open the diff
-                <Kbd>f</Kbd>
+                <Kbd>{keyFor("open_diff")}</Kbd>
               </Button>
             ),
           }),

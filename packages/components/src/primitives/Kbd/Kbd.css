@@ -1,19 +1,39 @@
-/* kbd — --bg-sunken behind a --border-subtle edge at --radius-sm, mono at
-   --text-2xs in --fg-muted, --h-kbd tall.
+/* kbd — a keycap: --bg-raised inside a --border-default edge at --radius-sm,
+   with a doubled bottom edge for the lip. Mono at --text-2xs in --fg-muted,
+   --h-kbd tall.
+
+   **It used to take --bg-sunken behind --border-subtle, and on half the
+   surfaces that draw it the edge was not there.** --border-subtle is #232B35
+   and --bg-hover is #212A34 — two, one and one apart. A key sits on a Job row
+   only while that row is focused, which is exactly when the row is wearing
+   --bg-hover, so the box vanished and left a letter loose beside a button.
+   A rule and an edge are different jobs and --border-subtle is the rule.
+
+   **Raised rather than sunken, and that reverses the old claim.** A key is a
+   thing that stands off a surface and gets pressed; a well is what you type
+   into. The old fill made it a well, and a 20px well with a letter in it is
+   not something a person reads as a key.
+
+   The lip is the bottom edge at twice the width — the whole of the keycap
+   idea, and one declaration. `box-sizing` is border-box so the lip is inside
+   --h-kbd rather than a third pixel added under it; the box measured 22px
+   before this, which was already a pixel over what the contract asks.
 
    Horizontal padding is --space-1, which is what the contract asks for. The
    sheet draws five, off the four-unit grid and with no token; the contract
    wins, and the difference is one device pixel a side. */
 .armada-kbd {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: none;
   height: var(--h-kbd);
   padding: 0 var(--space-1);
-  border: var(--border-width) solid var(--border-subtle);
+  border: var(--border-width) solid var(--border-default);
+  border-bottom-width: calc(var(--border-width) * 2);
   border-radius: var(--radius-sm);
-  background: var(--bg-sunken);
+  background: var(--bg-raised);
   color: var(--fg-muted);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);

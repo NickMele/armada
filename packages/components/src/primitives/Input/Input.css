@@ -47,6 +47,70 @@
   line-height: var(--leading-xs);
 }
 
+/* The well — the box that holds the field and anything trailing it.
+ *
+ * `display: contents` unless something is trailing, so a field with no
+ * adornment renders the box it always did and nothing below this comment
+ * applies to it.
+ *
+ * **When there is an adornment the well takes the edge and the field gives its
+ * own up**, so the pair reads as one control rather than as a box beside a
+ * chip, and the focus ring goes round both. The alternative — leaving the
+ * field's border and absolutely positioning the adornment over it — needs a
+ * reserved padding nobody can size, because how wide a key is depends on which
+ * key it is. */
+.armada-input-field__well {
+  display: contents;
+}
+
+.armada-input-field__well[data-trailing] {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: var(--h-control);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-md);
+  border-style: solid;
+  border-width: var(--border-width);
+  border-color: var(--border-default);
+  background: var(--bg-sunken);
+  transition: border-color var(--duration-fast) var(--ease);
+}
+
+.armada-input-field__well[data-trailing] .armada-input {
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: 0;
+}
+
+/* The ring belongs to whatever draws the edge, and here that is the well. */
+.armada-input-field__well[data-trailing]:focus-within {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.armada-input-field__well[data-trailing] .armada-input:focus-visible,
+.armada-input-field__well[data-trailing] .armada-input[data-preview-focus] {
+  outline: none;
+}
+
+/* Invalid moves with the edge, for the same reason the ring does. */
+.armada-input-field__well[data-trailing]:has(.armada-input[aria-invalid="true"]) {
+  border-color: var(--status-completed-failed);
+}
+
+.armada-input-field__trailing {
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+
 .armada-input::placeholder {
   color: var(--fg-subtle);
 }

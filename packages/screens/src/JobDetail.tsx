@@ -77,10 +77,11 @@ import type {
   Outcome,
   Watched,
 } from "@armada/protocol";
-import type { FileReport, JobSummary } from "@armada/protocol";
+import type { FileReport, JobSummary, StepDetail } from "@armada/protocol";
 import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
 import type { ConfirmableAct } from "./Acts";
 import { useCallArguments, type ReadCall } from "./calls";
+import { openArtifact } from "./opening";
 import type { OpenArtifact, OpenPullRequest } from "./opening";
 import { DIFF_CHAPTER, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-keys";
 import { useAtFloor } from "@armada/shell";
@@ -221,6 +222,21 @@ export type JobDetailProps = {
   onSaid: (sentence: string) => void;
 };
 
+/**
+ * Which Check's output `o` opens on the open step.
+ *
+ * **The failed one first.** A person reaching for an output on a step that
+ * stopped wants the Check that says why; on a step where nothing failed there
+ * is still a reading worth opening, so the first output there is answers
+ * instead of nothing. Absent where no Check on the step kept one, and the press
+ * is left unswallowed.
+ */
+function outputOf(step: StepDetail | undefined): string | undefined {
+  const runs = step?.check_runs ?? [];
+  const failed = runs.find((run) => run.outcome !== "passed" && run.output_path !== undefined);
+  return (failed ?? runs.find((run) => run.output_path !== undefined))?.output_path;
+}
+
 export function JobDetail({
   onReadDiff,
   onOpenArtifact,
@@ -359,6 +375,24 @@ export function JobDetail({
     // the chapter's own control and Enter is what a focused control already
     // answers — which is the reading `open_log`'s registry row gives it.
     onOpenSheet: () => openSheet("diff"),
+    // `L`, from `actions.toml` — `open_log`, scope `detail`. **This is the line
+    // that was missing.** The registry carried the key, `detail-keys` carried
+    // the binding and dispatched it, and nothing here handed it a handler, so
+    // the press found `undefined`, answered nothing and read as a key that was
+    // never bound. `DetailShape` requires both openers now, so the next one
+    // cannot go missing quietly.
+    onOpenLog: () => openSheet("log"),
+    // `o` — a Check's output, from the open step. The failed Check first: a
+    // person reaching for an output on a step that stopped wants the one that
+    // says why, and on a step where nothing failed the key opens the first
+    // output there is rather than nothing.
+    onOpenOutput: () => {
+      const kept = outputOf(open);
+      if (kept === undefined) return;
+      void openArtifact(onOpenArtifact, job.id, { kept, what: "check" }).then((because) => {
+        if (because !== null) onSaid(because);
+      });
+    },
     // `b`, on the one render that offers the act. Elsewhere the shape carries
     // nothing and the press is left alone rather than answered with a dialog
     // the header is not offering.

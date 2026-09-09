@@ -34,6 +34,10 @@ export type TheListSixStatesOneRowShapeProps = {
   selectable?: boolean;
   /** The listbox's name, where it is one. */
   label?: string;
+  /** Which arrangement the rows take. The list decides it, never a row. */
+  view?: "card" | "table";
+  /** The table view's column names, in the order the rows supply their facts. */
+  columns?: ReactNode[];
   onCopied?: (value: string) => void;
 };
 
@@ -72,6 +76,8 @@ export function TheListSixStatesOneRowShape({
   empty,
   selectable,
   label,
+  view,
+  columns,
   onCopied,
 }: TheListSixStatesOneRowShapeProps) {
   return (
@@ -83,6 +89,8 @@ export function TheListSixStatesOneRowShape({
       empty={empty}
       selectable={selectable}
       label={label}
+      view={view}
+      columns={columns}
     >
       {rows.map((row, index) => (
         <JobRowStacked
