@@ -175,6 +175,65 @@ export const RestartTheStep: Story = {
 };
 
 /**
+ * Merge the pull request. **The only confirmation here for an act that writes
+ * outside Armada** — everything else on this sheet ends something Armada made,
+ * and this one lands commits on a base branch that other people build on.
+ *
+ * **Neutral, and for `Restart the step`'s reason rather than a softer one.**
+ * Nothing ends and nothing is destroyed, and the control a person just pressed
+ * was the accent-filled primary act at the gate: a red confirm would make the
+ * merge read as an error state on the way in. What makes it worth a press is
+ * that it is irreversible from here, and the body says that in the one place a
+ * promise could be made and is not.
+ *
+ * It states the mechanism — where the commits land, which checks run, what
+ * undoing one would actually take — rather than asking "merge this pull
+ * request?" a second time after the button already said it.
+ *
+ * **Reject's confirmation is not on this sheet**, and Bridge draws one:
+ * `Decide.tsx` holds both. That is a gap in this section's claim, not in the
+ * screen.
+ */
+export const MergeThePullRequest: Story = {
+  args: {
+    open: true,
+    tone: "neutral",
+    title: "Merge this job's pull request?",
+    confirmLabel: "Merge and take the work",
+    children:
+      "The pull request merges on the forge, so the job's commits land on the base branch and " +
+      "everybody working from it gets them on their next pull. Armada then runs the " +
+      "repository's after-merge checks against what landed — merging on the forge instead " +
+      "skips them, and running them is the reason this button exists. The job is approved " +
+      "with it. Bridge cannot take a merge back: undoing one is a revert made in the " +
+      "repository.",
+    onConfirm: fn(),
+    onCancel: fn(),
+  },
+  /**
+   * **The rule this dialog exists for, run rather than described.** Cancel
+   * holds initial focus and `Enter` fires the focused control, so `Enter`
+   * cancels — a merge is never one keystroke from the press that opened the
+   * question.
+   *
+   * Asserted here as well as on `Confirmation` because that story is a
+   * destructive-toned dialog, and this is the first neutral one whose confirm
+   * writes into somebody else's repository. A regression that bound `Enter` to
+   * the confirm for accent-filled dialogs would leave that story green.
+   */
+  play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.getByRole("button", { name: "Cancel" })).toHaveFocus();
+
+    await userEvent.keyboard("{Enter}");
+    await expect(args.onCancel).toHaveBeenCalled();
+    await expect(args.onConfirm).not.toHaveBeenCalled();
+
+    await userEvent.keyboard("{Escape}");
+    await expect(args.onConfirm).not.toHaveBeenCalled();
+  },
+};
+
+/**
  * **More than fits, and the controls still reachable.** The body is the one
  * region that gives: the title is fixed above it, the field and the two
  * buttons are fixed below it, and only the prose in between scrolls.

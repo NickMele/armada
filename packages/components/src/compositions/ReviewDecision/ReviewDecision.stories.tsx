@@ -61,6 +61,13 @@ export const ANoteWritten: Story = {
  * Approving is still on the surface, because a person may want the job closed
  * without landing the branch — a change somebody else will carry, or one that
  * is merging by another route.
+ *
+ * **The press asks; it does not merge.** This is the confirmation's closed
+ * state — the caller opens a dialog on `onMerge`, the way it does on
+ * `onReject`, because merging writes into a repository Fleet did not make and
+ * nothing in Bridge takes it back. The words are `Primitives/Dialog → Merge the
+ * pull request`, and what the screen wires is proven in
+ * `packages/screens/src/Decide.test.tsx`, where a screen can be mounted.
  */
 export const APullRequestToMerge: Story = {
   args: {
