@@ -6,28 +6,30 @@
 //! A step naming a Check the Manifest does not declare is a typo in a file, and
 //! the cost of finding it late is a worktree checked out, a Drone spawned, two
 //! steps of real work done and a Job that then stops on a name. So the check
-//! runs once, here, before anything is dispatched.
+//! runs once, here, before anything is dispatched — along with the two ways
+//! files that agree on a name still disagree, which is [`Disagreement`].
+//!
+//! # This is also where a step stops enumerating
+//!
+//! `every_manifest_check` has no answer until a Manifest is in hand, and gets
+//! one here. Expanded, it means *run what this repository declares* and still
+//! freezes onto the Job as the list of Checks the Job gated on — so nothing
+//! downstream of this file knows the spelling exists.
 //!
 //! # The type is the enforcement, not a call somebody remembers to make
 //!
-//! [`ResolvedWorkflow`] has no constructor but [`ResolvedWorkflow::resolve`],
-//! and its fields are private. Holding one is proof the names resolved, which
-//! is why nothing downstream accepts a bare [`WorkflowDef`]. A resolved step
-//! carries the Manifest's command rather than its name, so the lookup that
-//! could have missed happens once.
-//!
-//! # What it produces is `core-model`'s, because a Job keeps it
-//!
+//! [`ResolvedWorkflow`] has no constructor but [`ResolvedWorkflow::resolve`]
+//! and its fields are private, so holding one is proof the names resolved — and
+//! a resolved step carries the Manifest's command rather than its name.
 //! [`ResolvedWorkflow::frozen`] hands back the [`FrozenWorkflow`] a Job is
-//! created with. Resolution happens here once; from then on Fleet reads the
-//! Job's copy and never this file again.
+//! created with; from then on Fleet reads the Job's copy and never this file.
 
 use std::path::PathBuf;
 
 use core_model::{FrozenWorkflow, ResolvedCheck, ResolvedStep, WorkflowId};
 
-use crate::error::{ResolveError, UnknownCheck};
-use crate::manifest::Manifest;
+use crate::error::{Disagreement, ResolveError, UnknownCheck};
+use crate::manifest::{Check, Manifest};
 use crate::workflow::{MechanicalCheck, Step, WorkflowDef};
 
 /// A workflow that can be dispatched against a specific Manifest.
@@ -53,16 +55,34 @@ impl ResolvedWorkflow {
     ) -> Result<ResolvedWorkflow, ResolveError> {
         let mut steps = Vec::with_capacity(def.steps().len());
         let mut unknown = Vec::new();
+        let mut disagreements = Vec::new();
 
         for step in def.steps() {
-            steps.push(resolve_step(step, manifest, &mut unknown));
+            steps.push(resolve_step(
+                step,
+                manifest,
+                &mut unknown,
+                &mut disagreements,
+            ));
         }
 
+        // **A missing name first, and the rest only once every name is
+        // there.** A step's copy of an exit code is compared against a Check
+        // the Manifest declares, so a name that resolved to nothing has
+        // nothing to disagree with — reporting both would name one edit twice
+        // and put the derived complaint above the one that caused it.
         if !unknown.is_empty() {
             return Err(ResolveError::ChecksNotDeclared {
                 workflow: def.path().to_path_buf(),
                 manifest: manifest.path().to_path_buf(),
                 unknown,
+            });
+        }
+        if !disagreements.is_empty() {
+            return Err(ResolveError::StepsDisagreeWithTheManifest {
+                workflow: def.path().to_path_buf(),
+                manifest: manifest.path().to_path_buf(),
+                disagreements,
             });
         }
 
@@ -117,7 +137,12 @@ impl ResolvedWorkflow {
 /// A step's checks, resolved. A name that misses is recorded and the step is
 /// still built, so one pass reports every miss in the workflow — the step
 /// itself is discarded with the rest when `unknown` turns out non-empty.
-fn resolve_step(step: &Step, manifest: &Manifest, unknown: &mut Vec<UnknownCheck>) -> ResolvedStep {
+fn resolve_step(
+    step: &Step,
+    manifest: &Manifest,
+    unknown: &mut Vec<UnknownCheck>,
+    disagreements: &mut Vec<Disagreement>,
+) -> ResolvedStep {
     let mut checks = Vec::with_capacity(step.mechanical_checks().len());
     for check in step.mechanical_checks() {
         match check {
@@ -130,6 +155,31 @@ fn resolve_step(step: &Step, manifest: &Manifest, unknown: &mut Vec<UnknownCheck
                 checks.push(ResolvedCheck::ArtifactExists {
                     target: target.clone(),
                 })
+            }
+            // **The set is read once, here, and the Job freezes what it
+            // found.** A step that says *every Check* is answered against the
+            // Manifest in hand and becomes an ordinary list of resolved
+            // Checks — so nothing downstream learns a fourth kind, `store`
+            // writes the same rows it always did, and the record still says
+            // which Checks the Job actually gated on rather than a promise
+            // that would re-read `armada.yml` mid-Job.
+            //
+            // **Sorted, because a registry has no order to keep.** `checks:`
+            // is a map, so unlike `setup.requires` there is no sequence
+            // somebody wrote; `check_names` hands back the `BTreeMap`'s order
+            // and one machine reads it the same as the next.
+            MechanicalCheck::EveryManifestCheck => {
+                if manifest.check_names().is_empty() {
+                    disagreements.push(Disagreement::NoChecksDeclared {
+                        step: step.id().clone(),
+                    });
+                }
+                for name in manifest.check_names() {
+                    let declared = manifest
+                        .check(&name)
+                        .expect("a name `check_names` handed back is declared");
+                    checks.push(lifted(name, declared, declared.expect_exit_code()));
+                }
             }
             MechanicalCheck::ManifestCheck {
                 check,
@@ -144,18 +194,32 @@ fn resolve_step(step: &Step, manifest: &Manifest, unknown: &mut Vec<UnknownCheck
                 // workflow inherits it, so there is no step-level key to read
                 // here and none to add.
                 //
+                // **`expect_exit_code` joined them, and this is where the old
+                // key is held to it.** A step that writes nothing takes the
+                // Manifest's; a step that writes the same number is a workflow
+                // not yet edited and is carried unchanged; a step that writes a
+                // different one is refused, because two files disagreeing about
+                // what a passing run looks like has no reading that is not a
+                // guess.
+                //
                 // `requires` is already resolved against the Commands registry
                 // by `Manifest::parse`, so nothing here can miss: a name that
                 // did not resolve refused the file before a workflow was
                 // looked at.
-                Some(declared) => checks.push(ResolvedCheck::ManifestCheck {
-                    name: check.clone(),
-                    run: declared.run().to_string(),
-                    expect_exit_code: *expect_exit_code,
-                    when: declared.when().cloned(),
-                    requires: declared.requires().to_vec(),
-                    narrow: declared.narrow().cloned(),
-                }),
+                Some(declared) => {
+                    let expects = declared.expect_exit_code();
+                    if let Some(restated) = expect_exit_code {
+                        if *restated != expects {
+                            disagreements.push(Disagreement::ExitCode {
+                                step: step.id().clone(),
+                                check: check.clone(),
+                                step_expects: *restated,
+                                manifest_expects: expects,
+                            });
+                        }
+                    }
+                    checks.push(lifted(check.clone(), declared, expects));
+                }
                 None => unknown.push(UnknownCheck {
                     step: step.id().clone(),
                     check: check.clone(),
@@ -192,4 +256,21 @@ fn resolve_step(step: &Step, manifest: &Manifest, unknown: &mut Vec<UnknownCheck
     )
     .quiet_after(step.quiet_after_seconds())
     .poking(step.poke_limit())
+}
+
+/// One declared Check, copied onto the record.
+///
+/// **One function, because both spellings produce the same thing.** A step that
+/// names a Check and a step that gates on every one of them must freeze
+/// identical rows, and two copies of five field assignments is how the second
+/// one loses `narrow` the next time a key is added.
+fn lifted(name: String, declared: &Check, expect_exit_code: i64) -> ResolvedCheck {
+    ResolvedCheck::ManifestCheck {
+        name,
+        run: declared.run().to_string(),
+        expect_exit_code,
+        when: declared.when().cloned(),
+        requires: declared.requires().to_vec(),
+        narrow: declared.narrow().cloned(),
+    }
 }

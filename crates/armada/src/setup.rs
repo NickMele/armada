@@ -229,8 +229,13 @@ pub enum SetupRefused {
     /// The definition is there and Armada will not have it.
     WorkflowRefused(LoadError),
     /// The two files disagree: a step names a Check the Manifest has not
-    /// declared. **The one cross-file fault**, and the reason it is answered at
-    /// start rather than at the step that needed the name.
+    /// declared, or names one it declares and says something else about it.
+    /// **The cross-file fault**, and the reason it is answered at start rather
+    /// than at the step that needed the name.
+    ///
+    /// The name is the first of the two shapes and is kept, because it is the
+    /// one every caller and every test already says. What it carries is
+    /// [`ResolveError`], which is where the shapes are told apart.
     ChecksNotDeclared(ResolveError),
 }
 
@@ -247,9 +252,10 @@ impl SetupRefused {
             // there when the second one was added.
             SetupRefused::DuplicateWorkflowId { first, .. } => first,
             SetupRefused::ManifestRefused(why) | SetupRefused::WorkflowRefused(why) => why.path(),
-            SetupRefused::ChecksNotDeclared(ResolveError::ChecksNotDeclared {
-                workflow, ..
-            }) => workflow,
+            SetupRefused::ChecksNotDeclared(
+                ResolveError::ChecksNotDeclared { workflow, .. }
+                | ResolveError::StepsDisagreeWithTheManifest { workflow, .. },
+            ) => workflow,
         }
     }
 }
@@ -317,6 +323,23 @@ impl fmt::Display for SetupRefused {
                         let names: Vec<&str> = miss.declared.iter().map(String::as_str).collect();
                         write!(f, ", and the declared Checks are {}", Listed(&names))?;
                     }
+                }
+                Ok(())
+            }
+            SetupRefused::ChecksNotDeclared(ResolveError::StepsDisagreeWithTheManifest {
+                workflow,
+                manifest,
+                disagreements,
+            }) => {
+                write!(
+                    f,
+                    "{} and {} disagree in {} place(s)",
+                    workflow.display(),
+                    manifest.display(),
+                    disagreements.len()
+                )?;
+                for said in disagreements {
+                    write!(f, "\n  {said}")?;
                 }
                 Ok(())
             }

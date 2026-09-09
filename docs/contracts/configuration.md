@@ -240,6 +240,48 @@ Rules that follow:
   edit to `armada.yml` changes the next Job rather than what a running Drone is
   told about its own work.
 
+## What a passing run of a Check looks like
+
+Added 8 September 2026, with `checks.<name>.expect_exit_code`. The key was on
+the workflow step that named the Check, and it moved here.
+
+**A Check that legitimately exits non-zero knows that about itself.** A
+deliberately failing reproduction, a linter whose clean state is `1` — the
+repository that wrote the command is the only place that knows what a passing
+run of it looks like. Written on a step instead, the same number is restated in
+every workflow that gates on the Check, and the day the command changes they go
+stale one file at a time and silently.
+
+**Absent means zero**, which is what every Check ever written here meant. This
+is the one place in the file where absence has a numeric answer rather than a
+behavioural one, and it is safe for the reason `when`'s absence is not: there is
+no second reading of "the command succeeded" for a parser to fall into.
+
+Two consequences that follow from the key living here rather than on a step:
+
+- **`after_merge` keeps it**, where it drops `when` and refuses `requires`.
+  Those are a step's and a Drone's questions and there is no step after a merge;
+  this one is the Check's, so a Check that passes by failing does not report as
+  broken every time somebody merges.
+- **A step may still write it, and must agree.** The seven shipped workflow
+  files carry the old spelling and a change that stopped parsing them would stop
+  every Job in flight. Where a step writes it, `config::ResolvedWorkflow`
+  compares it against the Manifest and refuses the pair that disagrees —
+  reading either one silently would be Armada deciding which file is right about
+  a repository's own command. Restating it correctly is legal and does nothing,
+  which is what makes deleting the step's copy a separate, safe edit.
+
+**And a step can stop naming Checks one at a time.** `mechanical_checks` gained
+`{"type": "every_manifest_check"}`, which means *every Check this Manifest
+declares*, whatever those are. A shipped `feature` that spelled seven names
+fitted one repository and went stale the moment that repository declared an
+eighth — a gate that quietly stopped covering something. It is a thing a step
+**says**: an empty `mechanical_checks` is an ungated step and stays one, because
+half the shipped workflows have steps producing a document nothing compiles.
+The schema is `crates/core-model/domain/workflowdef-fields.toml`, which carries
+the rest — that it does not compose with a named Check on the same step, and
+that a Manifest declaring no Checks refuses it.
+
 ## Two tiers of path boundary, and only one of them is configuration
 
 Added 3 September 2026, with `#417`. A step's `exclude_paths` held two kinds of entry and refused both the same way, which is why a Drone that found the right fix in a fenced-off file had nowhere to go: the declaration was refused mechanically, and the widening it would have been pointed at grows the Job's `write_targets` rather than the list that refused it.
@@ -404,7 +446,8 @@ That day also closes the one gap it cannot close now. A setting nothing reads is
 
 - **[armada-yml-schema]** What is the exact `armada.yml` schema?
   M1 decided a subset — `version`, `id`, `base`, `checks.<name>.run`,
-  `checks.<name>.when`, `checks.<name>.requires`, `checks.<name>.narrow`,
+  `checks.<name>.expect_exit_code`, `checks.<name>.when`,
+  `checks.<name>.requires`, `checks.<name>.narrow`,
   `commands.<name>.run`,
   `commands.<name>.destructive` and `setup.requires` — with every
   other key (`permissions`, `knowledge`, `policy`,

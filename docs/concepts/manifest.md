@@ -126,6 +126,35 @@ Stating the rule as per-context means per-container Checks need no exception wri
 
 In the Set Up a Project (Manifest) journey's proposal panel, a Check row shows its prerequisites in the same cell as its command.
 
+### What a passing run of a Check looks like
+
+**A Check may declare `expect_exit_code`, and absent means `0`.**
+
+```yaml
+checks:
+  repro:
+    run: cargo test --test regression -- --exact known_bug
+    expect_exit_code: 1
+```
+
+Decided 8 Sep 2026. **The code lives on the Check, not on the step in a
+workflow**, and it moved here from there — the same decision `when` records one
+heading down, for the same reason. A Check that passes by failing knows that
+about itself; a step naming it does not, and the number restated in `bug`,
+`feature`, `refactor` and `revert` drifts the day the command changes.
+
+- **Absent means zero**, which is what every Check written before the key
+  existed meant.
+- **`after_merge` keeps it**, where it drops `when` and `narrow`. Those are a
+  step's and a Drone's questions and there is no step after a merge; this one is
+  the Check's, so a Check that passes by failing does not report as broken every
+  time somebody merges.
+- **A step may still write it, and must agree.** The step-level key still
+  parses so that workflows written before the move go on loading, and a step
+  that writes a *different* number is refused before dispatch. Reading either
+  one silently would be Armada picking which file is right about a repository's
+  own command.
+
 ### Which paths a Check covers
 
 **A Check may declare `when`, a list of path patterns, and a Job that changed none of them does not run it.**

@@ -1,28 +1,32 @@
 //! `armada.yml`, in the slice M1 reads.
 //!
-//! **These keys, and nothing else.** `version`, `id`, `base`; `run`, `when`,
-//! `requires` and `narrow` under `checks.<name>`; `run` and `destructive` under
-//! `commands.<name>`; `setup.requires`; and `quiet_after_seconds` and
-//! `poke_limit` under `drone`, `#414`'s — the first section here that is a dial
+//! **These keys, and nothing else.** `version`, `id`, `base`; `run`,
+//! `expect_exit_code`, `when`, `requires` and `narrow` under `checks.<name>`;
+//! `run` and `destructive` under `commands.<name>`; `setup.requires`; and
+//! `quiet_after_seconds` and `poke_limit` under `drone`, `#414`'s — a dial
 //! rather than a registry, spelled as a step spells it and named for the reason
-//! `docs/contracts/configuration.md` gives. `fleet::Liveness::at` orders its
+//! `docs/contracts/configuration.md` gives; `fleet::Liveness::at` orders its
 //! tiers and nothing else does. Every other section the concept page describes
 //! is refused: permissions, secrets, ports, skills, budget, dispatch freeze,
 //! auto-merge.
 //!
-//! **A key nothing reads is worse than a key that is not there.** A file
-//! carrying `budget: 40` that no code consumes reads to its author as a budget
-//! that is set. Refusing it keeps every deferred section additive rather than a
-//! migration. [`Manifest::version`] refuses no number for the same reason.
+//! **A key nothing reads is worse than a key that is not there.** A `budget:
+//! 40` nothing consumes reads as a budget that is set, and refusing it keeps
+//! every deferred section additive. [`Manifest::version`] refuses no number too.
 //!
 //! `checks.<name>.when` is a list of `core_model::PathPattern`s checked at
-//! load, so one this parser cannot read is a refusal beside every other in the
-//! file rather than a Check that quietly stops running. **Absent means always.**
-//!
-//! **Both `requires` keys name Commands this file declares, resolved at load,
-//! and share every refusal** — see [`named_commands`]. `setup`'s code word is
+//! load, so one this parser cannot read is a refusal rather than a Check that
+//! quietly stops running — **absent means always**, as `expect_exit_code`'s
+//! absence means zero and [`Check::expect_exit_code`] says why that key left
+//! the workflow step. **Both `requires` keys name Commands this file declares
+//! and share every refusal** — [`named_commands`]; `setup`'s code word is
 //! *preparation*, because `armada::setup` runs nothing and means something
-//! else; one word over two meanings is a second vocabulary.
+//! else, and one word over two meanings is a second vocabulary. The three
+//! values this file produces live in [`declared`].
+
+mod declared;
+
+pub use declared::{Check, Command, Preparation};
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -45,8 +49,11 @@ const TOP_LEVEL: &[&str] = &[
     "drone",
     "after_merge",
 ];
-/// The keys M1 reads inside `checks.<name>`.
-const CHECK_KEYS: &[&str] = &["run", "when", "requires", "narrow"];
+/// The keys M1 reads inside `checks.<name>`. **`expect_exit_code` is spelled
+/// here as a workflow step spells it**, for the reason `drone:` below gives
+/// about its own two: one value written under two names is a vocabulary split,
+/// and this one is moving from the step to here.
+const CHECK_KEYS: &[&str] = &["run", "expect_exit_code", "when", "requires", "narrow"];
 /// The keys M1 reads inside `checks.<name>.narrow`.
 const NARROW_KEYS: &[&str] = &["run", "each", "from", "under", "except"];
 /// The keys M1 reads inside `commands.<name>`.
@@ -61,112 +68,6 @@ const AFTER_MERGE_KEYS: &[&str] = &["checks"];
 /// them** — `crates/config/src/workflow/step.rs`'s `STEP_KEYS` carries the same two
 /// words, because they are the same two values one tier up.
 const DRONE_KEYS: &[&str] = &["quiet_after_seconds", "poke_limit"];
-
-/// A command a change must pass to land or to advance a step.
-///
-/// **Armada records how to invoke a tool and never what the tool means.** There
-/// is no field here for what the command produces, which tests it runs or how
-/// its output should be read: a Check is a command and an exit code, and
-/// anything needing the output understood is a Judge question.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Check {
-    run: String,
-    when: Option<Covers>,
-    requires: Vec<Prerequisite>,
-    narrow: Option<Narrowing>,
-}
-
-impl Check {
-    /// The command line, verbatim as the repo wrote it.
-    pub fn run(&self) -> &str {
-        &self.run
-    }
-
-    /// Which paths this Check covers. **`None` where the file declares no
-    /// `when`, and that means always** — never "covers nothing".
-    ///
-    /// An `Option` rather than an empty [`Covers`] because the two would be one
-    /// value with opposite meanings, and [`Covers::of`] has no way to build an
-    /// empty one for exactly that reason.
-    pub fn when(&self) -> Option<&Covers> {
-        self.when.as_ref()
-    }
-
-    /// The Commands that run before this Check, **in the order the file names
-    /// them**, already resolved to their command lines.
-    ///
-    /// Empty where the file declares no `requires`, which is every Manifest
-    /// written before the key existed. `requires: []` is refused rather than
-    /// read as empty, for `when`'s reason — a list with nothing in it is a key
-    /// to delete.
-    pub fn requires(&self) -> &[Prerequisite] {
-        &self.requires
-    }
-
-    /// How this Check is run against a subset of the tree. **`None` where the
-    /// file declares no `narrow`, and that means it runs whole** — never
-    /// "narrows to nothing".
-    ///
-    /// The second question about paths a Check can be asked, and it is not
-    /// [`when`](Check::when)'s: `when` decides whether the Check runs at all,
-    /// this decides what it reads once it does. `format` covers every path and
-    /// still narrows to the Rust ones, so one key could not carry both.
-    pub fn narrow(&self) -> Option<&Narrowing> {
-        self.narrow.as_ref()
-    }
-}
-
-/// A command available to run against the repo, gating nothing.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Command {
-    run: String,
-    destructive: bool,
-}
-
-impl Command {
-    pub fn run(&self) -> &str {
-        &self.run
-    }
-
-    /// Whether a **Drone** invoking this pauses for approval. It does not gate
-    /// a person invoking it by hand, who is already the one triggering it.
-    ///
-    /// Absent means `false`. The common case is a command that is not
-    /// destructive, and a required flag on every entry would be noise on the
-    /// many to catch the few.
-    pub fn is_destructive(&self) -> bool {
-        self.destructive
-    }
-}
-
-/// A Command that has to run in a worktree before any step does, resolved.
-///
-/// **Name and command line together, because the two answer different
-/// questions and a failure needs both.** The name is what the file wrote and
-/// what a person edits; the `run` string is what was executed. A failure
-/// reporting only the second reads as an install that broke on its own, which
-/// is the mystery this whole key exists to end.
-///
-/// There is no way to build one but by resolving a `setup.requires` entry
-/// against a declared Command, so a caller holding one is holding a name the
-/// Manifest declared.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Preparation {
-    name: String,
-    run: String,
-}
-
-impl Preparation {
-    /// The Command's name, as `setup.requires` wrote it.
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    /// The command line, taken from `commands.<name>.run` at load.
-    pub fn run(&self) -> &str {
-        &self.run
-    }
-}
 
 /// One workspace's `armada.yml`, parsed and validated.
 ///
@@ -308,9 +209,10 @@ impl Manifest {
     /// them**. Empty is the default and is opt-in on purpose — see
     /// `docs/concepts/manifest.md`, *Proving what merged*, and `#474`.
     ///
-    /// **`when` is dropped, `requires` is refused, `expect_exit_code` is zero.**
-    /// All three are a step's question and there is no step here; the refusal is
+    /// **`when` and `narrow` are dropped and `requires` is refused** — each is
+    /// a step's or a Drone's question and there is no step here; the refusal is
     /// [`Fault::PreparesTheRepository`], and [`after_merge`] carries why.
+    /// `expect_exit_code` is the Check's own and is kept.
     pub fn proved_after_a_merge(&self) -> &[ResolvedCheck] {
         &self.proved_after_a_merge
     }
@@ -558,15 +460,22 @@ fn after_merge(
                     value: name,
                 },
             )),
-            // `when` dropped and `expect_exit_code` zero: both are a step's
-            // question, and after a merge there is no step to ask it of.
-            // `narrow` dropped for the same shape of reason one tier along —
-            // it is a Drone's question about its own change, and what merged
-            // is the whole tree.
+            // `when` dropped: it is a step's question — which of a change's
+            // paths this Check covers — and after a merge there is no step and
+            // no change to ask it of. `narrow` dropped for the same shape of
+            // reason one tier along: it is a Drone's question about its own
+            // work, and what merged is the whole tree.
+            //
+            // **`expect_exit_code` is kept, and used to be hard zero here.**
+            // It was a step's question while it was a step's key. It is the
+            // Check's own now, so a Check that legitimately exits non-zero
+            // says so once and every reader agrees — including this one, which
+            // would otherwise report the same Check as failing after every
+            // merge for the reason it was declared with.
             Some(check) => built.push(ResolvedCheck::ManifestCheck {
                 name,
                 run: check.run().to_string(),
-                expect_exit_code: 0,
+                expect_exit_code: check.expect_exit_code(),
                 when: None,
                 requires: Vec::new(),
                 narrow: None,
@@ -614,6 +523,7 @@ fn required_by(
             name,
             Check {
                 run: draft.run,
+                expect_exit_code: draft.expect_exit_code,
                 when: draft.when,
                 requires,
                 narrow: draft.narrow,
@@ -714,6 +624,7 @@ fn registry<T>(
 /// and [`required_by`] resolves them once both registries are built.
 struct DraftCheck {
     run: String,
+    expect_exit_code: i64,
     when: Option<Covers>,
     /// `None` where the file declares no `requires`, which is a Check nothing
     /// runs before. Distinct from an empty list, which [`yaml::list`] refuses
@@ -793,6 +704,16 @@ fn check_entry(
     let run = table
         .required("run", out)
         .and_then(|value| yaml::text(&table.at("run"), value, out));
+    // **Absent is zero, and a malformed one is a refusal rather than zero.** A
+    // file writing `expect_exit_code: "one"` meant to declare a Check that
+    // legitimately fails, and quietly giving it zero would make that Check
+    // unpassable while reading as declared. Same split as `retry_limit` one
+    // file along, for the same reason.
+    let code_key = table.at("expect_exit_code");
+    let expect_exit_code = match table.optional("expect_exit_code") {
+        None => Some(0),
+        Some(value) => yaml::integer(&code_key, value, out),
+    };
     // **A missing `when` and an unreadable `when` are not the same answer.**
     // The first is a Check that always runs; the second is a file that does not
     // load. So a fault inside the list refuses the Check rather than falling
@@ -816,6 +737,7 @@ fn check_entry(
     table.close(known, out);
     Some(DraftCheck {
         run: run?,
+        expect_exit_code: expect_exit_code?,
         when: when.ok()?,
         requires,
         narrow,
