@@ -147,6 +147,13 @@ pub struct Job {
     /// across a gate, and on every Job whose note has been delivered — see
     /// [`note`](mod@crate::job::note) for why those two are one value.
     redirect_waiting: Option<RedirectWaiting>,
+    /// What this Job may spend, where somebody set a figure for this Job alone.
+    /// `None` is the ordinary Job and means *defer to the tier above* — the
+    /// Manifest's, or failing that the installation's. **Absent is never
+    /// zero**: a Job with no ceiling of its own is not a Job forbidden to
+    /// spend, and folding the two would stop every Job nobody has thought
+    /// about.
+    cost_cap_micros: Option<u64>,
     subject: Option<Subject>,
     facts: Facts,
     scope_revisions: Vec<ScopeRevision>,
@@ -208,6 +215,9 @@ impl Job {
             branch: None,
             // Nothing has been said to a Job that does not exist yet.
             redirect_waiting: None,
+            // Nobody has decided anything about this Job's money, so the tiers
+            // above it decide.
+            cost_cap_micros: None,
             subject: new.subject,
             facts: new.facts,
             scope_revisions: new.scope_revisions,
@@ -586,6 +596,29 @@ impl Job {
     pub fn branch(&self) -> Option<&Branch> {
         self.branch.as_ref()
     }
+    /// Raise what this Job alone may spend.
+    ///
+    /// **The fifth mutator, and the third the log does not describe.** It takes
+    /// `&self` and returns a new `Job` like the other four, so the no-setter
+    /// property is unchanged.
+    ///
+    /// **It states no ceiling and refuses nothing.** Whether the figure is a
+    /// raise at all, and whether whoever asked was allowed to ask for that
+    /// much, are both decided in `fleet::raising` — the record's job is to hold
+    /// what was decided. A rule here would be a second opinion on a question
+    /// the act already answers, and this type has no way to know which surface
+    /// the number came through.
+    ///
+    /// **It overwrites**, like [`on_branch`](Job::on_branch) and unlike
+    /// [`redirect_waits`](Job::redirect_waits): a cap is a current figure rather
+    /// than an undelivered message, and a second raise over a first is the act
+    /// working.
+    pub fn cost_capped_at(&self, micros: u64) -> Job {
+        let mut job = self.clone();
+        job.cost_cap_micros = Some(micros);
+        job
+    }
+
     /// The note the next Drone will open with, where a person left one.
     ///
     /// **Presence is "a person spoke and nobody was there to hear it"**, and
@@ -593,6 +626,15 @@ impl Job {
     /// note left it.
     pub fn redirect_waiting(&self) -> Option<&RedirectWaiting> {
         self.redirect_waiting.as_ref()
+    }
+    /// What this Job alone may spend, where somebody set a figure for it.
+    ///
+    /// **`None` is *defer to the tier above*, never zero.** The resolution
+    /// across the tiers is `fleet::allowance`'s and is deliberately not here:
+    /// a record cannot see the Manifest or the installation, and a method that
+    /// answered a number would be answering with only the tier it can read.
+    pub fn cost_cap_micros(&self) -> Option<u64> {
+        self.cost_cap_micros
     }
     pub fn subject(&self) -> Option<&Subject> {
         self.subject.as_ref()

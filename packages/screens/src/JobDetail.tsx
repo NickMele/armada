@@ -80,7 +80,7 @@ import type {
 } from "@armada/protocol";
 import type { FileReport, JobSummary, StepDetail } from "@armada/protocol";
 import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
-import type { ConfirmableAct } from "./Acts";
+import { heldForMoney, type ConfirmableAct } from "./Acts";
 import { useCallArguments, type ReadCall } from "./calls";
 import { openArtifact } from "./opening";
 import type { OpenArtifact, OpenPullRequest } from "./opening";
@@ -138,6 +138,12 @@ export type JobDetailProps = {
   onAnswer: (jobId: string, questionId: string, chose: string) => void;
   /** Overrule a Judge that refused the work, with the reason. */
   onOverrule: (jobId: string, reason: string) => void;
+  /**
+   * Give this job a higher cost ceiling, in millionths of a dollar. **The one
+   * handler here that moves no part of the job** — it stops the next dispatch
+   * being refused for money, and the job stays exactly where it was.
+   */
+  onRaiseCap: (jobId: string, costCapMicros: number) => void;
   /** Ask the gate again on a step it could not decide. Nothing is at stake. */
   onRerun: (jobId: string) => void;
   /**
@@ -274,6 +280,7 @@ export function JobDetail({
   onExamine,
   recorded,
   onAct,
+  onRaiseCap,
   onRedirect,
   onAnswer,
   onOverrule,
@@ -314,6 +321,13 @@ export function JobDetail({
   // selection is: a half-written report is about the Job it was written on.
   const [reporting, setReporting] = useState(false);
   useEffect(() => setReporting(false), [job.id]);
+
+  // Whether the raise dialog is up, on `reporting`'s terms and for its reasons:
+  // two controls open it — the header's button and `B` — and the keyboard is
+  // bound at this level. Dropped with the Job, because a figure half typed is
+  // about the Job it was typed on.
+  const [raising, setRaising] = useState(false);
+  useEffect(() => setRaising(false), [job.id]);
 
   // The diff, for every Job that is open rather than only for one at review.
   // **A produced file opens to what it actually wrote**, and it did that on one
@@ -413,6 +427,10 @@ export function JobDetail({
     // nothing and the press is left alone rather than answered with a dialog
     // the header is not offering.
     ...(render === "stopped" && !stale ? { onReport: () => setReporting(true) } : {}),
+    // `B`, on the one state that offers the act: a job stopped for money.
+    // Elsewhere the shape carries nothing and the press is left alone rather
+    // than answered with a dialog no control on this screen is offering.
+    ...(heldForMoney(job) && !stale ? { onRaiseCap: () => setRaising(true) } : {}),
   });
 
   // The rest of any call argument the socket cut, for as long as this Job is
@@ -494,6 +512,9 @@ export function JobDetail({
     onAct,
     onApprove,
     onReport,
+    onRaiseCap,
+    raising,
+    onRaising: setRaising,
     onOpenPullRequest,
     onCopied,
     onSaid,

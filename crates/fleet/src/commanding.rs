@@ -16,8 +16,8 @@
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Commands, Refusal};
 use ipc::{
-    ChangesRequested, JobExamined, JobForgotten, JobId, JobSummary, Overruled, ProposeJob,
-    Redirection, Redispatched, RemarksTakenUp, WorktreeReclaimed,
+    CapRaise, ChangesRequested, JobExamined, JobForgotten, JobId, JobSummary, Overruled,
+    ProposeJob, Redirection, Redispatched, RemarksTakenUp, WorktreeReclaimed,
 };
 
 use crate::adrift::Adrift;
@@ -181,6 +181,20 @@ where
     /// `crate::regating`, and it says more than a sentence would.
     async fn rerun_gate(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
         let job = Fleet::rerun_gate(self, &job_id.to_domain())
+            .await
+            .map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
+    }
+
+    /// More money for one Job, and nothing else changes.
+    ///
+    /// **The summary is re-read rather than folded from the raise.** Nothing
+    /// moved, so the row a caller wants back is the row as it now stands — and
+    /// the field it wants is `queued_reason`, which `summarised` computes from
+    /// the board through the same predicate admission asks. A raise that reports
+    /// its own success would be a second answer to *is this Job still held*.
+    async fn raise_cost_cap(&self, job_id: JobId, raise: CapRaise) -> Result<JobSummary, Refusal> {
+        let job = Fleet::raise_cost_cap(self, &job_id.to_domain(), &raise)
             .await
             .map_err(|why| self.refusal(why))?;
         self.summarised(&job).await

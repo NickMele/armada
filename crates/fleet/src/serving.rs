@@ -219,7 +219,11 @@ where
         // Those two are absent until a Job finishes; this one is what a person
         // watching a running Job wants most, and it is one indexed query. The
         // cap travels with the figure because neither half is readable alone.
-        let allowance = self.allowance();
+        // **The allowance this Job is held to, not the installation's.** A
+        // person who raised this Job's cap reads the figure they set beside the
+        // spend, and a detail still drawing the machine-wide number would say
+        // the Job was over budget on a Job admission is about to start.
+        let allowance = self.held_to(&job);
         let spent = self
             .spend_of(job.id())
             .await

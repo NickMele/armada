@@ -78,6 +78,7 @@ mod proposing;
 mod proving;
 mod questioning;
 mod queued;
+mod raising;
 mod reclaim;
 mod redirect;
 mod redispatch;

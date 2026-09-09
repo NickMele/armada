@@ -30,8 +30,8 @@ use std::sync::Arc;
 use crate::commands::{
     answer_question, approve_dispatch, approve_review, examine_job, file_report, forget_job,
     kill_drone, kill_job, merge_pull_request, override_verdict, propose_from_request, propose_job,
-    reclaim_worktree, redirect_drone, redispatch_job, reject_job, request_changes, rerun_gate,
-    restart_step, stop_proposal, take_up_remarks,
+    raise_cost_cap, reclaim_worktree, redirect_drone, redispatch_job, reject_job, request_changes,
+    rerun_gate, restart_step, stop_proposal, take_up_remarks,
 };
 use crate::daemon::Daemon;
 use crate::journal::Journal;
@@ -255,6 +255,16 @@ pub const SERVED: &[Route] = &[
         operation: "rerun_gate",
         method: "POST",
         path: "/jobs/:job_id/rerun_gate",
+    },
+    // The one act on this table that changes what a Job may spend, and its own
+    // route because nothing else on the Job is a number a person sets. It is
+    // not a field on some general update: there is no general update, and the
+    // reason there is not is that every other row here is a named act with its
+    // own refusals.
+    Route {
+        operation: "raise_cost_cap",
+        method: "POST",
+        path: "/jobs/:job_id/raise_cost_cap",
     },
     Route {
         operation: "kill_drone",
@@ -539,6 +549,7 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
             "/jobs/:job_id/approve_dispatch",
             post(approve_dispatch::<D>),
         )
+        .route("/jobs/:job_id/raise_cost_cap", post(raise_cost_cap::<D>))
         .route("/jobs/:job_id/kill_drone", post(kill_drone::<D>))
         .route("/jobs/:job_id/kill_job", post(kill_job::<D>))
         .route("/jobs/:job_id/forget_job", post(forget_job::<D>))

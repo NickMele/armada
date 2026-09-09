@@ -39,6 +39,15 @@ impl Micros {
         Micros(dollars * 1_000_000)
     }
 
+    /// A figure that already arrived in this unit — off the wire, or off the
+    /// Job's own column. **Beside [`Micros::dollars`] rather than replacing
+    /// it**: a caller writing a ceiling down says what it means in the unit it
+    /// decided in, and a caller carrying one across a boundary does not
+    /// convert.
+    pub const fn of(count: u64) -> Micros {
+        Micros(count)
+    }
+
     pub const fn count(&self) -> u64 {
         self.0
     }
@@ -233,6 +242,25 @@ where
             return Ok(None);
         }
         let spent = self.spend_of(job.id()).await?;
-        Ok(self.allowance().exceeded_by(&spent))
+        Ok(self.held_to(job).exceeded_by(&spent))
+    }
+
+    /// The allowance this Job is actually held to.
+    ///
+    /// **A stub, and the shape of the thing that replaces it.** The Job's own
+    /// figure where somebody raised one for this Job alone, and the
+    /// installation's otherwise — which is two of the three tiers
+    /// `Liveness::at` resolves, missing the Manifest in the middle. The full
+    /// resolution belongs here and is not written here yet.
+    ///
+    /// **The turn cap has no per-Job tier at all** and takes the installation's
+    /// unchanged: `raise_cost_cap` moves the dollars and deliberately not the
+    /// turns, because a Job that turns and turns takes the opposite remedy.
+    pub(crate) fn held_to(&self, job: &Job) -> Allowance {
+        let installation = self.allowance();
+        match job.cost_cap_micros() {
+            None => installation,
+            Some(micros) => Allowance::of(Micros::of(micros), installation.turns()),
+        }
     }
 }

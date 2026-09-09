@@ -81,6 +81,9 @@ const NOT_FORGETTABLE: &str = "fleet.not_forgettable";
 /// same predicate and a client telling a person which one to try next has to be
 /// able to tell them apart.
 const NOT_RECLAIMABLE: &str = "fleet.not_reclaimable";
+/// A raise on a Job that is over. Its own code beside the two above, because
+/// the act a person is told to try instead is a redispatch and not a kill.
+const NOT_CAPPABLE: &str = "fleet.not_cappable";
 /// The repository a Job's worktree is in would not open. **A 500 and never a
 /// 200 with both halves absent** — a client reading "nothing to reclaim" would
 /// draw a Job whose disk is back when the disk is still there.
@@ -194,6 +197,13 @@ where
                 WireError::raised(NOT_RECLAIMABLE, said, self.run_id())
                     .about_job(ipc::JobId::from(job)),
             ),
+            // A raise on a Job that is over — the same shape as the two above
+            // and the opposite half of their predicate. A code of its own for
+            // their reason: what a person does instead is a redispatch.
+            Adrift::NotCappable { job, .. } => Refusal::IllegalMove(
+                WireError::raised(NOT_CAPPABLE, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
+            ),
             // The repository would not open, so neither half was attempted.
             // Fleet's own ground failed and nothing about the request is
             // wrong, which is the 500 this variant is for.
@@ -230,7 +240,14 @@ where
             // The request is well-formed and the values in it cannot work. Not
             // a 500: retrying it will fail identically forever, and the message
             // names what to send instead.
+            // A cap that raises nothing and a ceiling Helm went past are both
+            // well-formed requests carrying a value that cannot work, and the
+            // message names the figure to send instead. **Not a 409**: neither
+            // is about where the Job stands, and a caller reading a conflict
+            // off one would go and look at a status with nothing wrong with it.
             Adrift::Unnameable
+            | Adrift::CapNotRaised { .. }
+            | Adrift::CapAboveCeiling { .. }
             | Adrift::Unreasoned { .. }
             | Adrift::NotFileable { .. }
             | Adrift::NoSuchWorkflow { .. }

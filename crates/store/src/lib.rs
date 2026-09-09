@@ -25,6 +25,8 @@
 //! append-only in the database itself, by trigger.
 
 mod attempt;
+/// What one Job alone may spend, over the ceiling every Job shares.
+mod capping;
 mod columns;
 /// The Drone pointer, where it now lives: one column per step.
 mod delivery;

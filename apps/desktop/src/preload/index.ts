@@ -112,6 +112,14 @@ const api: BridgeApi = {
   // reason crosses, because nothing is being disagreed with.
   rerunGate: (jobId: string): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.rerunGate, jobId),
 
+  // Give one job a higher cost ceiling. **Its own entry and never a general
+  // update**: nothing else here sets a value on a job, and a capability that
+  // could would be one press meaning whatever field it was handed. The figure
+  // is millionths of a dollar, the unit `JobSpend` reads in, so the number
+  // shown and the number sent are the same integer.
+  raiseCostCap: (jobId: string, costCapMicros: number): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.raiseCostCap, jobId, costCapMicros),
+
   // Say a job failed in error, and file its record with the reason. **Its own
   // entry and not a mode on `overrideVerdict`**: that one moves the job past a
   // verdict, and this one moves nothing at all — one capability doing both

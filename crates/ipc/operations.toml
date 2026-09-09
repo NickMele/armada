@@ -728,6 +728,27 @@ held, because Fleet never auto-kills — and it carried no Intervention Ladder
 rung, so Helm never reached it directly.
 """
 
+[operations.raise_cost_cap]
+kind = "command"
+transport = "HTTP"
+helm_access = "Yes"
+description = "Give one Job a higher cost ceiling than the tier above it allows"
+notes = """
+**The act the `over_budget` label has always pointed at and nothing performed.** `docs/concepts/machine.md` says a Job past its cost cap waits at `queued` until somebody raises the cap, and `job-statuses.toml` says the same thing one file over — it is the one reason a `queued` Job carries that does not clear on its own. Until this there was no key, no route and no control: the remedy was a machine-wide setting, so raising it for the Job in front of you raised it for every Job and needed Fleet restarted to take.
+
+**It moves a number and never the Job.** No status changes, no step advances and no Drone is asked for — admission was already going to start one and was refused for money. What comes back is the summary, and the fact a caller is reading it for is `queued_reason`: `over_budget` before the raise, absent or `waiting_on_resources` after it. That is the whole answer to *did this unblock it*, and it is answered by the same predicate admission asks rather than by a second reading here.
+
+**Only the dollar cap.** `budget-turn-cap-per-job` is the other ceiling and takes the opposite remedy — a Job that turns and turns was usually not askable as written, and the fix is the brief. One route moving either would be a body that means two things, and the `over_budget` label folding both is exactly why the Job's detail carries the figures beside the caps.
+
+**It raises. 422 on a value at or under the cap in force**, which is not pedantry about a word: the act exists because work is stopped, and a call that leaves the Job stopped while answering 200 is the failure this route was built against. Lowering a running Job's ceiling is a different act nobody has asked for, and it would strand work mid-flight rather than let it finish.
+
+**409 on a terminal Job.** There is nothing left to spend, so the number would be a value nothing will ever read.
+
+**`helm_access` is `Yes`, and it is the third command Helm reaches** — beside `redirect_drone` and `answer_question`'s refusal, the ladder rungs are where this is argued. The owner asked for both surfaces by name, and the reason is the Job that produced this route: it hit its cap on its last step, on the cheapest model, summarising work three gates had already passed. A person is not always at the screen when that happens.
+
+**And Helm is bounded where a person is not**, which is the whole of `raised_by`. `crates/fleet/src/raising.rs` carries the ceiling and defends its shape; what belongs here is why the field exists at all. Nothing on this seam authenticates anybody, so this is a statement of *which surface composed the request* rather than a credential — Bridge fills it in because a person pressed a control, and the Helm tool adapter fills it in because it is Fleet's own code wrapping a model's request. **The model has no field for it**, which is the property `spawning::dispatches` has one seam over: what a Drone may do is rendered by Fleet into its allowlist and refused by Fleet at the call, and no argument the agent writes reaches either.
+"""
+
 [operations.redirect_drone]
 kind = "command"
 transport = "HTTP"

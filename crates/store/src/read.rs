@@ -34,7 +34,7 @@ use crate::columns;
 use crate::error::{fault, LoadAllError, LoadJobError, RowError};
 use crate::fold::replay;
 use crate::open::Store;
-use crate::row::{column, enum_value, malformed, maybe, maybe_number, string};
+use crate::row::{column, enum_value, malformed, maybe, maybe_large_number, maybe_number, string};
 
 /// What the boot read produced.
 #[derive(Debug, Default)]
@@ -299,6 +299,15 @@ impl Store {
                         detail: held.to_string(),
                     })?
             }
+            None => created,
+        };
+
+        // Read back for `branch` and `redirect_waiting`'s reason: no event
+        // describes what one Job alone may spend, so this column is its own
+        // authority and the fold has nothing to say about it. Null is a Job
+        // that defers to the tier above and is not a ceiling of zero.
+        let created = match maybe_large_number(row, "cost_cap_micros")? {
+            Some(micros) => created.cost_capped_at(micros),
             None => created,
         };
 

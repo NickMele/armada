@@ -307,6 +307,7 @@ export type Outcome =
   | { ok: false; why: "already_restarting" }
   | { ok: false; why: "already_overruling" }
   | { ok: false; why: "already_rereading" }
+  | { ok: false; why: "already_raising" }
   | { ok: false; why: "already_reporting" }
   | { ok: false; why: "empty_instruction" }
   | { ok: false; why: "empty_reason" }
@@ -314,6 +315,15 @@ export type Outcome =
   | { ok: false; why: "already_deciding" }
   | { ok: false; why: "already_answering" }
   | { ok: false; why: "empty_note" }
+  /**
+   * A raise that would not raise. **Refused before it is sent**, for
+   * `empty_note`'s reason and one more: Fleet answers 422 to a figure at or
+   * under the cap in force, and a press that reported success while the job
+   * stayed stopped for money is the failure the act exists against. The cap in
+   * force is on the same screen as the control — `JobSpend.cost_cap_micros` —
+   * so this is a comparison the caller can make.
+   */
+  | { ok: false; why: "cap_not_raised" }
   /**
    * A press at the review gate that picked no comment off the pull request.
    * **Refused before it is sent**, for `empty_note`'s reason: an act that

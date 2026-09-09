@@ -33,6 +33,31 @@ pub(crate) fn maybe_number(row: &Row<'_>, name: &'static str) -> Result<Option<u
     row.get(name).map_err(column("jobs", name))
 }
 
+/// A nullable `INTEGER` column too wide for [`maybe_number`], read unsigned.
+///
+/// Its own function rather than a widening of that one: money is millionths of
+/// a dollar and a turn count is a count, and reading both through one signature
+/// would let a caller take a figure at the wrong scale without saying so.
+///
+/// **A negative is refused rather than wrapped.** SQLite stores signed, nothing
+/// in this workspace writes a negative here, and one in the column came from
+/// outside this crate.
+pub(crate) fn maybe_large_number(
+    row: &Row<'_>,
+    name: &'static str,
+) -> Result<Option<u64>, RowError> {
+    let held: Option<i64> = row.get(name).map_err(column("jobs", name))?;
+    held.map(|value| {
+        u64::try_from(value).map_err(|_| RowError::MalformedColumn {
+            table: "jobs",
+            column: name,
+            detail: "the column holds a negative where nothing may be less than nothing"
+                .to_string(),
+        })
+    })
+    .transpose()
+}
+
 pub(crate) fn column(
     table: &'static str,
     name: &'static str,
