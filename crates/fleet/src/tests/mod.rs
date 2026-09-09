@@ -67,6 +67,7 @@ mod noticing;
 mod out_of_bounds;
 mod overlap;
 mod overruling;
+mod paying;
 mod peer;
 mod planning;
 mod planted;

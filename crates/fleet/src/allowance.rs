@@ -182,6 +182,39 @@ where
         Ok(stood_down)
     }
 
+    /// Write down what the Drone in the slot has spent, before the Job moves.
+    ///
+    /// **[`reap`](Fleet::reap)'s ordering, at the acts that reach a step
+    /// boundary with the Drone still in the slot.** A client re-reads the Job
+    /// on the event that says it moved, so a figure written after that publish
+    /// is one nothing goes back for — and on an advance nothing does, because
+    /// what follows is `drone.spawned`, which carries a row and not a move. A
+    /// Job whose detail drew $4.12 against a Fleet answering $5.28 was short by
+    /// its last Drone for exactly that reason.
+    ///
+    /// **A running total, and the upsert is what makes that safe.**
+    /// [`Working::spent`] is what the Drone has cost so far, so this is honest
+    /// at whatever instant it is taken; the fold in
+    /// [`stood_down_paying`](Fleet::stood_down_paying) is taken after the drain
+    /// and is the only one that can be final, and it replaces this on the row
+    /// keyed by the same Drone.
+    ///
+    /// **A fold that names nothing is not written.** An adopted Drone's
+    /// terminating line went into a pipe with no reader, so its fold is zero of
+    /// everything — and writing that would replace the figure the Fleet before
+    /// this one left, which nothing here can recover.
+    pub(crate) async fn paid_so_far(&self, working: &Option<Working>) -> Result<(), Adrift> {
+        let Some(at_work) = working.as_ref() else {
+            return Ok(());
+        };
+        let spent = at_work.spent(&self.now());
+        if spent.cost_micros == 0 && spent.turns == 0 {
+            return Ok(());
+        }
+        let (job, _, drone) = at_work.drone();
+        self.record_spend(&job, &drone, &spent).await
+    }
+
     /// Write down what one Drone of a Job spent.
     ///
     /// **Called from every place a Drone's run ends**, and safe there because

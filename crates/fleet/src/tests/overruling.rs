@@ -39,7 +39,7 @@ fn implement() -> StepId {
 
 /// The Judge refusing what it was shown. The three lines are the citation a
 /// person reads before deciding they disagree with it.
-fn a_judge_that_refuses() -> FakeJudge {
+pub(super) fn a_judge_that_refuses() -> FakeJudge {
     FakeJudge::refusing(
         "the loop stops at n",
         "the loop stops at n - 1",
@@ -54,7 +54,7 @@ fn a_judge_that_refuses() -> FakeJudge {
 /// what makes the same fixture serve both the refusal and the failed Check: a
 /// Drone that changed nothing fails the mechanical tier and never reaches the
 /// Judge at all.
-fn judged_then_summarised() -> config::ResolvedWorkflow {
+pub(super) fn judged_then_summarised() -> config::ResolvedWorkflow {
     testkit::resolved(judged_then_summarised_steps())
 }
 

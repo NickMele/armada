@@ -197,6 +197,13 @@ where
         step: &StepId,
         working: &mut Option<Working>,
     ) -> Result<(), Adrift> {
+        // **Before the Job or the step moves**, which is `crate::settling`'s
+        // rule about the four records it writes ahead of this call and
+        // [`reap`](Fleet::reap)'s about the spend in particular. Every arm below
+        // publishes at least one move and a client re-reads the Job on it, so a
+        // spend folded afterwards is a Job that reads as costing less than it
+        // did. See [`paid_so_far`](Fleet::paid_so_far).
+        self.paid_so_far(working).await?;
         match ruling {
             // **The Drone ends here, and a fresh one starts the next step on
             // the same worktree.** It used to be told and carried on: same

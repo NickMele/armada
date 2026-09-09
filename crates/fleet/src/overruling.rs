@@ -112,6 +112,11 @@ where
         self.surviving_worktree(&job)?;
         let passed = self.declared_step(&job, &step)?.clone();
         let next = job.workflow().after(&step).cloned();
+        // **Before the move below, for `crate::dispatch::act_on`'s reason.** The
+        // Drone this act stands down is still in the slot when the step advance
+        // is published, and a redirect since the refusal is spend nothing has
+        // written down yet. `Fleet::paid_so_far`.
+        self.paid_so_far(&working).await?;
 
         // **First, and beneath `escalated`.** See the note above: this move is
         // the act, and the Job's own move is what follows from it rather than
