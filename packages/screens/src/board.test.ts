@@ -55,6 +55,19 @@ describe("which tab a job is in", () => {
     }
   });
 
+  it("puts a reclaimed job under Cleared, whichever terminal status it stopped at, and not under Finished", () => {
+    // `#570`: a bulk clear used to delete the row it was asked to keep. The
+    // fix is a row fact, not a registry one — `reclaimed_at` is not on any
+    // lifecycle row, so this is the one rule in the function that is not read
+    // off `JOB_LIFECYCLE`.
+    for (const status of ["completed_success", "killed", "rejected"]) {
+      expect(
+        tabOf(job({ status, reclaimed_at: "2026-09-09T00:00:00.000Z" })),
+        status,
+      ).toBe("cleared");
+    }
+  });
+
   it("puts a job somebody has taken over under Running, not Needs you", () => {
     // `piloted` is `Working` and its actor is a `Person`. Asking the mode first
     // is the whole of why a piloted job does not read as one waiting on you.
@@ -95,7 +108,7 @@ describe("which tab a job is in", () => {
   it("counts the unplaceable under All and under no state tab", () => {
     const stranger = job({ status: "translated_into_greek" });
     expect(inTab(stranger, "all")).toBe(true);
-    for (const tab of ["needs-you", "running", "queued", "finished"] as const) {
+    for (const tab of ["needs-you", "running", "queued", "finished", "cleared"] as const) {
       expect(inTab(stranger, tab), tab).toBe(false);
     }
   });
@@ -109,13 +122,14 @@ describe("which tab a job is in", () => {
 
 describe("the tab strip", () => {
   it("keys the tabs by their position, so a tab moving moves its key", () => {
-    expect(BOARD_TABS.map((tab) => tab.shortcut)).toEqual(["1", "2", "3", "4", "5"]);
+    expect(BOARD_TABS.map((tab) => tab.shortcut)).toEqual(["1", "2", "3", "4", "5", "6"]);
     expect(BOARD_TABS.map((tab) => tab.id)).toEqual([
       "all",
       "needs-you",
       "running",
       "queued",
       "finished",
+      "cleared",
     ]);
   });
 
@@ -267,6 +281,7 @@ describe("what emptied the list", () => {
       ["running", "Nothing is running."],
       ["queued", "Nothing is queued."],
       ["finished", "Nothing has finished."],
+      ["cleared", "Nothing has been cleared."],
     ];
     for (const [tab, sentence] of said) {
       expect(emptiedBy(tab, ""), tab).toBe(sentence);

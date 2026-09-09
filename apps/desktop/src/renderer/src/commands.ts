@@ -86,11 +86,16 @@ export function useCommands(sending: Sending) {
   // the header's act set: sharing one flag would grey out the header's kills
   // while a review note was being sent.
   const [deciding, setDeciding] = useState<string | null>(null);
-  // What the last reclaim answered. **Its own state and not `outcome`** — that
-  // one draws refusals, and this is a success worth reading: the act asks for
-  // two things, the halves can disagree, and a kept branch is something a
-  // person has to go and deal with by hand.
-  const [givenBack, setGivenBack] = useState<WorktreeReclaimed | null>(null);
+  // What the last reclaim (or bulk clear) gave back. **Its own state and not
+  // `outcome`** — that one draws refusals, and this is a success worth
+  // reading: the act asks for two things, the halves can disagree, and a kept
+  // branch is something a person has to go and deal with by hand.
+  //
+  // **An array, because the bulk act can keep more than one.** The per-Job
+  // act always sets exactly one entry; `clearTerminal` below sets one per
+  // branch a base cannot reach, which is the whole reason a person is told
+  // rather than left to notice a branch nothing deleted.
+  const [givenBack, setGivenBack] = useState<WorktreeReclaimed[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   async function propose(draft: Draft): Promise<void> {
@@ -131,30 +136,53 @@ export function useCommands(sending: Sending) {
   }
 
   /**
-   * Clear every terminal Job at once. **One outcome shown, not a tally** — a
-   * failed forget is surfaced through the same refusal pipeline every other
-   * command failure uses, naming the first one that refused; the rest that
-   * succeeded are already gone from the board by the time this returns.
+   * Reclaim every terminal Job's worktree and branch at once, keeping every
+   * row. **One outcome shown, not a tally** — a failed reclaim is surfaced
+   * through the same refusal pipeline every other command failure uses,
+   * naming the first one that refused; the rest that succeeded already show
+   * their disk back by the time this returns.
+   *
+   * **Every kept branch is named, not only the first.** A base that cannot
+   * reach a branch is the safe setting working rather than a fault, and a
+   * sweep that only ever showed the last one would leave every branch before
+   * it silently kept.
    */
   async function clearTerminal(jobIds: readonly string[]): Promise<void> {
     const result = await window.armada.clearTerminalJobs(jobIds);
     if (result.failed.length > 0) setOutcome(result.failed[0]!.outcome);
+    const kept = result.reclaimed.filter((one) => one.branch.unmerged_commits !== undefined);
+    if (kept.length > 0) setGivenBack(kept);
   }
 
   /**
-   * Do the confirmed act. **Five preload calls, not one with a discriminator**
+   * Delete every terminal Job's whole record at once. **The bulk half of
+   * `forget_job`**, for `clearTerminal`'s reason above — one outcome shown,
+   * naming the first refusal, and the rows that succeeded are already gone
+   * from the board.
+   */
+  async function forgetTerminal(jobIds: readonly string[]): Promise<void> {
+    const result = await window.armada.forgetTerminalJobs(jobIds);
+    if (result.failed.length > 0) setOutcome(result.failed[0]!.outcome);
+  }
+
+  /**
+   * Do the confirmed act. **Six preload calls, not one with a discriminator**
    * — killing a Drone leaves the Job, killing the Job ends it, a redispatch
    * mints a replacement, a restart puts a fresh Drone on the same worktree at
-   * the step that stopped, and a reclaim takes the worktree away and leaves
-   * the Job exactly where it is.
+   * the step that stopped, a reclaim takes the worktree away and leaves the
+   * Job exactly where it is, and a forget takes the row.
    *
    * A redispatch answers with the replacement's id, and the detail follows it:
    * the Job that was open is over, and the one worth reading is the new one.
    *
    * **A reclaim answers with a receipt, which is shown rather than folded.**
-   * Nothing on the board changes — the record survives, `clearTerminalJobs` is
-   * what takes it — and the answer's two halves can disagree, so what happened
-   * is stated instead of being left to a silent success.
+   * Nothing on the board changes — the record survives, `forgetJob` is what
+   * takes it — and the answer's two halves can disagree, so what happened is
+   * stated instead of being left to a silent success.
+   *
+   * **A forget answers with nothing to fold either**, for the opposite
+   * reason: there is no row left. `board.forget`, reached through
+   * `Clearing.forget`, is what removes it from what is drawn.
    *
    * **The note arrives rather than being read here.** Only the restart has one,
    * and it is collected by the dialog that confirms — which is the render's, so
@@ -172,9 +200,11 @@ export function useCommands(sending: Sending) {
               ? await window.armada.restartStep(jobId, note)
               : act === "reclaim_worktree"
                 ? await window.armada.reclaimWorktree(jobId)
-                : await window.armada.killJob(jobId);
+                : act === "forget_job"
+                  ? await window.armada.forgetJob(jobId)
+                  : await window.armada.killJob(jobId);
       setOutcome(answer);
-      if (answer.ok && answer.reclaimed !== undefined) setGivenBack(answer.reclaimed);
+      if (answer.ok && answer.reclaimed !== undefined) setGivenBack([answer.reclaimed]);
       if (answer.ok && answer.jobId !== undefined) sending.onOpen(answer.jobId);
     } finally {
       setActing(null);
@@ -356,6 +386,7 @@ export function useCommands(sending: Sending) {
     proposeFrom,
     approve,
     clearTerminal,
+    forgetTerminal,
     act,
     redirect,
     answer,

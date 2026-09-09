@@ -15,7 +15,7 @@
 // what makes "kill the Drone" a request to the daemon that spawned it.
 
 import type { BridgeState } from "../shared/bridge";
-import type { ClearOutcome, Draft, Outcome } from "@armada/protocol";
+import type { ClearOutcome, Draft, Outcome, ReclaimOutcome } from "@armada/protocol";
 import type { CapRaise, ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report, RestartRequested } from "@armada/protocol";
 import type { ProposalInFlight, Proposed } from "@armada/protocol";
 import { ask, isJobSummary, MODEL_CALL_MS, route, type Answer } from "./request";
@@ -336,20 +336,37 @@ export class JobCommands {
 
   // ---------------------------------------------------- clearing up after one
   /**
-   * Delete every terminal Job's whole record. **Real deletion, and there is no
-   * undo** — `clearing.ts` holds it, with the reclaim beside it.
+   * Reclaim every terminal Job's worktree and branch at once. **Every row
+   * survives** — `forgetTerminalJobs` below is the act that takes them, and
+   * `clearing.ts` holds both, one beside the other.
    */
-  clearTerminalJobs(jobIds: readonly string[]): Promise<ClearOutcome> {
+  clearTerminalJobs(jobIds: readonly string[]): Promise<ReclaimOutcome> {
     return this.clearing.clearTerminal(jobIds);
   }
 
   /**
+   * Delete every terminal Job's whole record, at once. **Real deletion, and
+   * there is no undo.**
+   */
+  forgetTerminalJobs(jobIds: readonly string[]): Promise<ClearOutcome> {
+    return this.clearing.forgetTerminal(jobIds);
+  }
+
+  /**
    * Give one terminal Job's worktree and branch back while Fleet is running.
-   * **The record survives**, which is the whole of what separates it from the
-   * act above.
+   * **The record survives**, which is the whole of what separates it from
+   * `forgetJob` below.
    */
   reclaimWorktree(jobId: string): Promise<Outcome> {
     return this.clearing.reclaim(jobId);
+  }
+
+  /**
+   * Delete one terminal Job's whole record. **Real deletion, and there is no
+   * undo** — the per-Job half of `forgetTerminalJobs`.
+   */
+  forgetJob(jobId: string): Promise<Outcome> {
+    return this.clearing.forget(jobId);
   }
 
   // --------------------------------------------------------------- resuming

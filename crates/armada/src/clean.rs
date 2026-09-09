@@ -29,8 +29,9 @@ use std::path::{Path, PathBuf};
 use adapter_traits::WorktreeSpec;
 use adapters::{BranchGone, Reclaimed, UnmergedWork, WorktreeStanding};
 use config::Manifest;
-use core_model::JobId;
+use core_model::{JobId, Timestamp};
 use fleet::runtime::{self, Presence};
+use fleet::{Clock, SystemClock};
 use store::{Forgotten, Retained, Store};
 
 use crate::serve;
@@ -260,7 +261,11 @@ pub fn clean(
     if db.exists() {
         let mut store =
             Store::open(&db).map_err(|why| CleanRefused::StoreUnreadable(Box::new(why)))?;
-        forget_this_manifests_jobs(&mut store, &manifest, &root, unmerged, &mut cleaned);
+        // Read once, before the loop: every Job this sweep retains is stamped
+        // with the same instant, the way `declared_base` answers the same
+        // question for every one of them.
+        let now = SystemClock::new().now();
+        forget_this_manifests_jobs(&mut store, &manifest, &root, unmerged, &now, &mut cleaned);
     }
     report_what_no_job_claims(&root, &mut cleaned);
 
@@ -305,6 +310,7 @@ fn forget_this_manifests_jobs(
     manifest: &Manifest,
     root: &Path,
     unmerged: UnmergedWork,
+    now: &Timestamp,
     cleaned: &mut Cleaned,
 ) {
     let (loaded, unreadable) = match store.load_all_jobs() {
@@ -350,6 +356,7 @@ fn forget_this_manifests_jobs(
             base,
             unmerged,
             Keep::Record,
+            now,
             cleaned,
         ) {
             GaveBack::Done { reclaimed, record } => cleaned.jobs.push(JobCleaned {
@@ -370,7 +377,7 @@ fn forget_this_manifests_jobs(
     }
 
     clear_this_manifests_unreadable_rows(
-        store, manifest, root, base, unmerged, unreadable, cleaned,
+        store, manifest, root, base, unmerged, now, unreadable, cleaned,
     );
 }
 
@@ -385,6 +392,7 @@ fn clear_this_manifests_unreadable_rows(
     root: &Path,
     base: Option<&str>,
     unmerged: UnmergedWork,
+    now: &Timestamp,
     unreadable: Vec<store::UnreadableRow>,
     cleaned: &mut Cleaned,
 ) {
@@ -412,6 +420,7 @@ fn clear_this_manifests_unreadable_rows(
             base,
             unmerged,
             Keep::Nothing,
+            now,
             cleaned,
         ) {
             GaveBack::Done { reclaimed, record } => cleaned.unreadable.push(RowCleared {
@@ -476,6 +485,7 @@ fn give_back(
     base: Option<&str>,
     unmerged: UnmergedWork,
     keep: Keep,
+    now: &Timestamp,
     cleaned: &mut Cleaned,
 ) -> GaveBack {
     // **The handle first, and the id if nothing is there under it.** A worktree
@@ -537,7 +547,7 @@ fn give_back(
         return GaveBack::Done { reclaimed, record };
     }
     let outcome = match keep {
-        Keep::Record => store.retain_job(job_id).map(RecordOutcome::Retained),
+        Keep::Record => store.retain_job(job_id, now).map(RecordOutcome::Retained),
         Keep::Nothing => store.forget_job(job_id).map(RecordOutcome::Forgotten),
     };
     match outcome {

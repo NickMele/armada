@@ -122,6 +122,7 @@ pub fn job_at(id: &str, spelling: &str) -> JobSummary {
         redispatched_from: None,
         asking: false,
         landed: None,
+        reclaimed_at: None,
     }
 }
 

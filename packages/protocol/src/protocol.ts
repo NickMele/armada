@@ -122,6 +122,17 @@ export type JobSummary = {
   created_at: string;
   /** Absent until a worktree exists. A Job at the approval gate has none. */
   branch?: string;
+  /**
+   * When this job's worktree and branch were given back while its record
+   * stayed. Since protocol 9.2.
+   *
+   * **Absent is a job whose disk still stands** — every job before a
+   * reclaim, and every job a reclaim has not yet reached. This is what a
+   * `Cleared` tab is keyed off, rather than off whether the worktree happens
+   * to still be on disk: a directory gone for some other reason is not a
+   * record of an act.
+   */
+  reclaimed_at?: string;
 };
 
 /** One Check a step declares. `crates/ipc/src/checks.rs`. */

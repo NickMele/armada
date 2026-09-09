@@ -307,11 +307,11 @@ kind = "Action"
 tier = "Contextual"
 verb = "State filter"
 icon = "filter"
-shortcut = "1–5"
+shortcut = "1–6"
 scope = "job board"
 destructive = false
 confirms = false
-notes = "One row for the five tabs, in tab order, for the reason ⌘1–⌘5 is one row. `1`–`5` and `⌘1`–`⌘5` are different acts on one row of keys, separated by the modifier and drawn that way deliberately."
+notes = "One row for the six tabs, in tab order, for the reason ⌘1–⌘5 is one row. `1`–`6` and `⌘1`–`⌘5` are different acts on one row of keys, separated by the modifier and drawn that way deliberately. Cleared joined as the sixth tab on 2026-09-09, split out of Finished so a reclaim would not read as though it did nothing."
 
 [actions.observe]
 kind = "Action"

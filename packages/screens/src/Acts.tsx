@@ -42,7 +42,12 @@ export type JobAct =
   // The eighth, and the only one that acts on disk rather than on the record
   // or the machine. `armada clean` could already do it and refuses while Fleet
   // is running, which is exactly when a person wants the space back.
-  | "reclaim_worktree";
+  | "reclaim_worktree"
+  // The ninth, and the one act on this header that cannot be undone. It takes
+  // the row `reclaim_worktree` leaves — `crates/ipc/operations.toml` argues
+  // the split on the same row that argues this one's — so a person wanting
+  // both sends both, and this is never the act a stray `Enter` reaches.
+  | "forget_job";
 
 /**
  * The acts that confirm through the shared dialog. **Redirect and the override
@@ -63,23 +68,25 @@ export type ConfirmableAct = Exclude<
 /**
  * What can be done to this Job from here.
  *
- * **Nine acts, and none of them collapses into another.** Killing the Drone
+ * **Ten acts, and none of them collapses into another.** Killing the Drone
  * ends a process and leaves the Job open with its worktree held; killing the
  * Job ends the Job at `killed`, terminal; redispatch does the second and mints
  * a replacement; approving lets a Job at the gate run. Redirect and restart are
  * the two acts that put a person back on a Job rather than ending or replacing
  * it, and they are never offered together — a redirect wants a live session and
  * a restart wants the Drone gone. Reclaiming the worktree is the one act on
- * disk rather than on the Job: the record stays exactly where it is, and
- * clearing the row is the board's own act.
+ * disk rather than on the Job: the record stays exactly where it is. Forgetting
+ * the Job is the one that takes the record the reclaim leaves — its bulk twin
+ * is the board's own `Clear`/`Delete record` acts, and this is the per-Job door
+ * to the same act.
  *
- * **Five of the nine are drawn on Fleet's answer and not on the row.**
+ * **Six of the ten are drawn on Fleet's answer and not on the row.**
  * `stuck.recourse` on `GET /jobs/:job_id` is the acts Fleet will take now, and
  * `#193` moved them here from a derivation that could not read the filesystem
  * and so offered a restart onto a worktree that had been reclaimed. The two
- * kills and the reclaim are the exceptions and stay derived: none of them is
- * recourse — recourse is how a Job goes forward and these three do not carry
- * one forward — and a Drone to kill is presence on the row.
+ * kills, the reclaim and the forget are the exceptions and stay derived: none
+ * of them is recourse — recourse is how a Job goes forward and these four do
+ * not carry one forward — and a Drone to kill is presence on the row.
  *
  * | Act | Drawn on | Confirms |
  * |---|---|---|
@@ -88,6 +95,7 @@ export type ConfirmableAct = Exclude<
  * | `kill_drone` | a Job holding an `assigned_drone` | yes |
  * | `kill_job` | every non-terminal status | yes |
  * | `reclaim_worktree` | every terminal status | yes |
+ * | `forget_job` | every terminal status | yes |
  * | `redirect` | `recourse` names `redirect_drone` | its own dialog |
  * | `restart_step` | `recourse` names `restart_step` | yes |
  * | `override_verdict` | `recourse` names `override_verdict` | its own dialog |
@@ -225,6 +233,10 @@ export function Acts({
     // than a second one: there is no disk to give back while a Drone might
     // still write to it.
     ...(over ? (["reclaim_worktree"] as ConfirmableAct[]) : []),
+    // The same predicate as the reclaim, for the same reason — there is
+    // nothing to delete while a Job is still in flight — and last, because it
+    // is the one act here that cannot be undone.
+    ...(over ? (["forget_job"] as ConfirmableAct[]) : []),
     // `assigned_drone` is presence rather than state: there is nothing to kill
     // without one.
     ...(job.assigned_drone === undefined ? [] : (["kill_drone"] as ConfirmableAct[])),

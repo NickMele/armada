@@ -57,6 +57,27 @@ fn a_row_names_its_branch_only_once_a_worktree_exists() {
     );
 }
 
+/// **Absent, never present-and-null.** A Job whose disk still stands has not
+/// been reclaimed, and a client that received `reclaimed_at: null` could not
+/// tell that from Fleet having forgotten to say. `#570`'s `Cleared` tab reads
+/// this field, so a row that claimed one silently would misfile every Job on
+/// the board.
+#[test]
+fn a_row_names_when_it_was_reclaimed_only_once_a_reclaim_happened() {
+    let standing = encode(&JobSummary::from(&job())).expect("plain data");
+    assert!(
+        !standing.contains("reclaimed_at"),
+        "a Job whose disk still stands claims no reclaim: {standing}"
+    );
+
+    let cleared = job().on_reclaimed(at("2026-09-09T00:00:00.000Z"));
+    let given_back = encode(&JobSummary::from(&cleared)).expect("plain data");
+    assert!(
+        given_back.contains("\"reclaimed_at\":\"2026-09-09T00:00:00.000Z\""),
+        "the mark a Board reads to tell a cleared Job apart from a finished one is on the row: {given_back}"
+    );
+}
+
 /// The list is where a title is read, so it is on the summary — and the
 /// redaction the summary exists for still holds around it.
 #[test]

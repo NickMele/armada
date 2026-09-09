@@ -25,6 +25,7 @@ import type {
   Outcome,
   Proposed,
   ProtocolVersion,
+  ReclaimOutcome,
   Remarks,
   Reports,
   Skew,
@@ -320,26 +321,45 @@ export type BridgeApi = {
   /** End the Job at `killed`. Terminal, and nothing resumes it. */
   killJob: (jobId: string) => Promise<Outcome>;
   /**
-   * Delete every terminal Job's whole record, one `forget_job` per id. **Real
-   * deletion, not a status** — there is no undo, and a cleared Job cannot be
-   * opened again. The caller decides which ids are terminal; this sends
+   * Reclaim every terminal Job's worktree and branch at once, one
+   * `reclaim_worktree` per id. **Every row survives** — this takes the
+   * directory and the branch, and `forgetTerminalJobs` below is the act that
+   * takes the row. The caller decides which ids are terminal; this sends
    * exactly the ids it is given and refuses none of them itself.
+   *
+   * **A branch nothing has merged is kept**, always — there is no force here —
+   * so a failed id in the outcome may still have given its disk back; read
+   * `reclaimed.branch` on the per-Job act for which half happened.
    */
-  clearTerminalJobs: (jobIds: readonly string[]) => Promise<ClearOutcome>;
+  clearTerminalJobs: (jobIds: readonly string[]) => Promise<ReclaimOutcome>;
+  /**
+   * Delete every terminal Job's whole record at once, one `forget_job` per
+   * id. **Real deletion, not a status** — there is no undo, and a Job this
+   * reaches cannot be opened again. The caller decides which ids are
+   * terminal; this sends exactly the ids it is given and refuses none of them
+   * itself.
+   */
+  forgetTerminalJobs: (jobIds: readonly string[]) => Promise<ClearOutcome>;
   /**
    * Give one terminal Job's worktree and branch back, **without waiting for
    * Fleet to stop**. `armada clean` is the same act from the CLI and refuses
    * while the daemon is running, which is exactly when a person wants the disk.
    *
    * **The record survives.** This takes the directory and the branch;
-   * `clearTerminalJobs` takes the row. Sending both is ordinary and the order
-   * does not matter.
+   * `forgetJob` takes the row. Sending both is ordinary and the order does
+   * not matter.
    *
    * **A branch nothing has merged is kept**, always — there is no force here —
    * so the outcome's `reclaimed` says which half happened rather than reducing
    * both to one flag.
    */
   reclaimWorktree: (jobId: string) => Promise<Outcome>;
+  /**
+   * Delete one terminal Job's whole record. **Real deletion, not a status** —
+   * there is no undo, and the Job cannot be opened again. The per-Job half of
+   * `forgetTerminalJobs`.
+   */
+  forgetJob: (jobId: string) => Promise<Outcome>;
   /**
    * Inject an instruction into the Drone that is there. **Legal only on an
    * escalated Job that still holds one** — Fleet refuses 409 where the Drone
@@ -718,7 +738,9 @@ export const CHANNELS = {
   killDrone: "bridge:kill-drone",
   killJob: "bridge:kill-job",
   clearTerminalJobs: "bridge:clear-terminal-jobs",
+  forgetTerminalJobs: "bridge:forget-terminal-jobs",
   reclaimWorktree: "bridge:reclaim-worktree",
+  forgetJob: "bridge:forget-job",
   redirectDrone: "bridge:redirect-drone",
   answerQuestion: "bridge:answer-question",
   restartStep: "bridge:restart-step",
