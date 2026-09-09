@@ -14,7 +14,7 @@ use core_model::{CitedAt, GamingFlag, GamingPattern, JobId, RepoPath, StepId, Ti
 use crate::attempt::attempt_now;
 use crate::error::{fault, LoadJobError, RowError, WriteError};
 use crate::open::Store;
-use crate::row::{column, enum_value, string};
+use crate::row::{column, enum_value, maybe, string};
 
 /// The table these columns are read from, named once. An error carries it as a
 /// fixed string, never a value from a row.
@@ -40,6 +40,26 @@ const TABLE: &str = "job_step_gaming_flags";
 pub(crate) const V24: &str = r#"
 ALTER TABLE job_step_gaming_flags ADD COLUMN cited_file TEXT;
 ALTER TABLE job_step_gaming_flags ADD COLUMN cited_line INTEGER;
+"#;
+
+/// Version 39 — what the flag was asked, and where the whole call was kept.
+///
+/// Beside the table it changes, like [`V24`] above and for its reason.
+///
+/// **Two columns and not one.** `asked` is the narrow question, which is what
+/// reaches a person on a row; `brief_path` names the file holding the diff and
+/// the baseline that question was put with, which is what an argument weeks
+/// later is settled against. A row carrying only the path would put the reason
+/// a flag fired behind a filesystem read the wire cannot make.
+///
+/// **Both nullable, and null is a real answer.** The three `DecidedBy::Diff`
+/// patterns are answered by the patch and asked nothing, and `fleet::asked`
+/// keeps no brief where there is no repository under the Fleet. **Nothing is
+/// backfilled**, which is V5's rule: the answer to every judged call made
+/// before this was thrown away, and no column can invent it back.
+pub(crate) const V39: &str = r#"
+ALTER TABLE job_step_gaming_flags ADD COLUMN asked TEXT;
+ALTER TABLE job_step_gaming_flags ADD COLUMN brief_path TEXT;
 "#;
 
 impl Store {
@@ -82,8 +102,8 @@ impl Store {
             tx.execute(
                 "INSERT INTO job_step_gaming_flags (
                      job_id, step_id, attempt, ordinal, pattern, cited, flagged_at,
-                     cited_file, cited_line
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                     cited_file, cited_line, asked, brief_path
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
                 rusqlite::params![
                     job_id.as_str(),
                     step_id.as_str(),
@@ -94,6 +114,8 @@ impl Store {
                     at.as_str(),
                     flag.at.as_ref().map(|at| at.path().as_str()),
                     flag.at.as_ref().and_then(CitedAt::line),
+                    flag.asked,
+                    flag.brief_path,
                 ],
             )
             .map_err(fault("writing a gaming flag"))
@@ -123,7 +145,7 @@ impl Store {
     ) -> Result<Vec<(StepId, Vec<GamingFlag>)>, LoadJobError> {
         let rows = self
             .collect(
-                "SELECT step_id, pattern, cited, cited_file, cited_line
+                "SELECT step_id, pattern, cited, cited_file, cited_line, asked, brief_path
                  FROM job_step_gaming_flags AS f
                  WHERE job_id = ?1
                    AND attempt = (SELECT max(attempt) FROM job_step_gaming_flags
@@ -144,6 +166,8 @@ impl Store {
                             )?,
                             cited: string(row, "cited")?,
                             at: cited_at(row)?,
+                            asked: maybe(row, "asked")?,
+                            brief_path: maybe(row, "brief_path")?,
                         },
                     ))
                 },

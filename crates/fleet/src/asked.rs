@@ -15,7 +15,7 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use core_model::{Attempt, CriterionId, StepId};
+use core_model::{Attempt, CriterionId, GamingPattern, StepId};
 
 use crate::check_output::one_component;
 
@@ -106,8 +106,28 @@ impl Asked {
         criterion: &CriterionId,
         question: &str,
     ) -> Option<String> {
+        self.written(file_name(step, attempt, criterion)?, question)
+    }
+
+    /// The same, for the second look, which asks about a pattern rather than a
+    /// criterion.
+    ///
+    /// **A separate method rather than one taking a `&str` name**, so nothing
+    /// can hand this an id a workflow author typed. The pattern set is closed
+    /// and every spelling in it is already one path component, which is the
+    /// whole of what [`file_name`] has to refuse.
+    pub(crate) fn kept_gaming(
+        &self,
+        step: &StepId,
+        attempt: Attempt,
+        pattern: GamingPattern,
+        question: &str,
+    ) -> Option<String> {
+        self.written(gaming_file_name(step, attempt, pattern)?, question)
+    }
+
+    fn written(&self, name: String, question: &str) -> Option<String> {
         let under = self.0.as_ref()?;
-        let name = file_name(step, attempt, criterion)?;
         let dir = briefs_dir(&under.repo_root, &under.handle);
         std::fs::create_dir_all(&dir).ok()?;
         let mut file = std::fs::File::create(dir.join(&name)).ok()?;
@@ -132,4 +152,14 @@ fn file_name(step: &StepId, attempt: Attempt, criterion: &CriterionId) -> Option
     let (step, criterion) = (step.as_str(), criterion.as_str());
     (one_component(step) && one_component(criterion))
         .then(|| format!("{step}.{attempt}.{criterion}.txt"))
+}
+
+/// The file name for one gaming pattern of one run of one step.
+///
+/// **`gaming.` sits between the attempt and the pattern**, so the two looks are
+/// told apart in a directory listing and a criterion sharing a pattern's
+/// spelling cannot overwrite its brief with a different question.
+fn gaming_file_name(step: &StepId, attempt: Attempt, pattern: GamingPattern) -> Option<String> {
+    let (step, pattern) = (step.as_str(), pattern.as_wire());
+    one_component(step).then(|| format!("{step}.{attempt}.gaming.{pattern}.txt"))
 }

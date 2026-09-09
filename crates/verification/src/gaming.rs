@@ -188,6 +188,10 @@ pub fn in_the_diff(patch: &Patch, patterns: &[GamingPattern]) -> Vec<GamingFlag>
                     // The file and never a line: there is no post image of a
                     // file the change removes, so every line in it is gone.
                     at: Some(CitedAt::in_file(RepoPath::new(&path))),
+                    // Nothing was asked and nothing was kept: the patch said
+                    // it, and there is no call for a person to read back.
+                    asked: None,
+                    brief_path: None,
                 });
             }
             continue;
@@ -217,6 +221,8 @@ pub fn in_the_diff(patch: &Patch, patterns: &[GamingPattern]) -> Vec<GamingFlag>
                         Some(line) => CitedAt::at_line(RepoPath::new(&path), line),
                         None => CitedAt::in_file(RepoPath::new(&path)),
                     }),
+                    asked: None,
+                    brief_path: None,
                 });
             }
         }
@@ -247,6 +253,8 @@ fn config_edits(patch: &Patch) -> Vec<GamingFlag> {
             // at all, so naming one of its lines would narrow a claim that is
             // about the whole of it.
             at: Some(CitedAt::in_file(RepoPath::new(&path))),
+            asked: None,
+            brief_path: None,
         })
         .collect()
 }
@@ -297,6 +305,11 @@ impl<'a> Baseline<'a> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GamingBrief {
     pattern: GamingPattern,
+    /// The narrow question alone, kept beside the assembled brief so that a
+    /// flag can carry what it is the answer to. **Held rather than looked up
+    /// again from `pattern`**: a wording that moves would rewrite what an
+    /// existing flag says it was asked.
+    asked: &'static str,
     question: String,
 }
 
@@ -348,11 +361,20 @@ impl GamingBrief {
         question.push_str(asked);
         question.push_str("\n\n");
         question.push_str(ANSWER_FORMAT);
-        Some(GamingBrief { pattern, question })
+        Some(GamingBrief {
+            pattern,
+            asked,
+            question,
+        })
     }
 
     pub fn pattern(&self) -> GamingPattern {
         self.pattern
+    }
+
+    /// The question at the end of the brief, without the diff above it.
+    pub fn asked(&self) -> &'static str {
+        self.asked
     }
 
     pub fn question(&self) -> &str {
@@ -405,6 +427,13 @@ impl GamingBrief {
                 Some(span) => unchecked(&cited, &span),
             },
             at,
+            // The narrow question and not the assembled brief: the brief holds
+            // a whole diff, and what a person needs on the row is the claim the
+            // `yes` above was a `yes` to.
+            asked: Some(self.asked.to_string()),
+            // The caller's, because only it knows whether a file was written
+            // and where. See `fleet::judging::looks::gaming`.
+            brief_path: None,
         }))
     }
 }

@@ -371,6 +371,119 @@ async fn a_gaming_finding_names_its_patterns_on_the_detail_view() {
     );
 }
 
+/// The diff a Drone submits when it softens a sentence rather than an
+/// assertion. What the flag is *about* does not matter to this case; what
+/// matters is that a person can read what was claimed about it.
+const REWORDED: &str = "diff --git a/src/retain.rs b/src/retain.rs\n\
+                        --- a/src/retain.rs\n\
+                        +++ b/src/retain.rs\n\
+                        @@ -40,1 +40,1 @@\n\
+                        -/// touch nothing that is its record\n\
+                        +/// touch nothing that is its record but the mark that says so\n";
+
+/// What the Job is called, which is what its brief directory is named after.
+const HANDLE: &str = "580-say-why-a-flag-fired";
+
+/// **The definition of done.** A judged pattern costs a model call, and the
+/// flag it produces carries the question that was put and the path to the whole
+/// call — so a person facing `evidence_suspect` reads why it fired instead of
+/// reconstructing the argument out of the diff.
+///
+/// The brief lands beside the criteria briefs of the same step and attempt,
+/// which is asserted here rather than assumed: one directory is what makes the
+/// two looks readable against each other.
+#[tokio::test]
+async fn a_judged_flag_carries_the_question_it_answered_and_the_call_it_came_from() {
+    let dir = TempDir::new();
+    let root = dir.path().to_string_lossy().to_string();
+    let workflow = testkit::resolved(&[Sketch {
+        id: "implement",
+        label: "Implement",
+        evidence_type: Some("diff"),
+        gates: &[],
+        judged_on: &[("c1", "Does the change do what the note asked?")],
+        scope: None,
+        gaming: Some(Gaming {
+            baseline: None,
+            flag_if: &["assertion_weakened"],
+        }),
+    }]);
+    let judge = Arc::new(FakeJudge::answering(&[
+        ("Does the change do what the note asked?", "verdict: met"),
+        (
+            "asserts less",
+            "flag: yes\ncited: \"/// touch nothing that is its record\"",
+        ),
+    ]));
+    let worktree = worktree();
+    let at = AtStep::first(workflow.frozen(), &worktree).expect("a first step");
+    let work = FakeWorkProduct::changed(&["src/retain.rs"]).showing(REWORDED);
+    let ruling = rule_on(
+        at,
+        Request::of(testkit::asked_for()),
+        &diff_evidence(),
+        None,
+        &Lifted::default(),
+        Some(&Footprint::nothing()),
+        &[],
+        &work,
+        budget(),
+        &Judging {
+            client: Arc::clone(&judge) as _,
+            budget: JudgeBudget::of(Duration::from_secs(20)),
+            default_model: Model::named("the-cheap-model").expect("a model name"),
+            environment: Environment::nothing(),
+            marking: Marking::detached(),
+            asked: Asked::under(root, HANDLE.to_string()),
+        },
+        &keeping_nowhere(),
+        Policies::unstated(),
+    )
+    .await;
+
+    let Ruling::Suspect { ref flagged, .. } = ruling else {
+        panic!("the gaming check let it through: {ruling:?}");
+    };
+    let flag = &flagged.cited()[0];
+    assert_eq!(
+        flag.asked.as_deref(),
+        GamingPattern::AssertionWeakened.question(),
+        "the flag says what was claimed, not only what was seen"
+    );
+    let path = flag
+        .brief_path
+        .as_deref()
+        .expect("a judged flag names where its call was kept");
+    assert_eq!(
+        path,
+        format!(".armada/briefs/{HANDLE}/implement.1.gaming.assertion_weakened.txt")
+    );
+
+    // The bytes that went out, not a rebuild of them — `tests::asked`'s rule,
+    // and the one comparison a reassembled brief could not make.
+    let kept = std::fs::read_to_string(dir.path().join(path)).expect("the brief is on disk");
+    let sent = judge.asked();
+    assert!(
+        sent.contains(&kept),
+        "the file is one of the questions this judge was actually handed"
+    );
+    assert!(
+        kept.contains(REWORDED) && kept.contains("asserts less"),
+        "and it holds the diff the question was put with"
+    );
+
+    let judged = ruling.judged();
+    let criterion = judged[0]
+        .brief_path
+        .as_deref()
+        .expect("the criterion kept its brief too");
+    assert_eq!(
+        std::path::Path::new(criterion).parent(),
+        std::path::Path::new(path).parent(),
+        "the two looks at one attempt of one step are read in one directory"
+    );
+}
+
 /// One step, gated on nothing a command runs, watching for the one pattern the
 /// diff answers. Nothing here reaches a model.
 fn one_step_watching_for_gaming() -> ResolvedWorkflow {

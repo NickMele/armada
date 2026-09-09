@@ -220,12 +220,20 @@ fn measured_against<'a, 'e>(
 /// The mechanical half runs first and costs nothing. The judged half is one
 /// call per declared pattern the diff cannot answer — **and no panel**, because
 /// this check has no veto for a panel to make stricter.
+///
+/// **What was asked is kept, exactly as the two loops above keep theirs.** A
+/// flag used to reach a person as a pattern spelling and a quoted line, with
+/// the question it answered thrown away — so telling a real finding from a
+/// wrong one meant reading the whole diff, which is the work the call had
+/// already been paid to do. The flag carries the question and the loop writes
+/// the brief; neither changes what a flag *does*, which is nothing.
 pub(crate) async fn gaming(
-    step: &ResolvedStep,
+    at: AtStep<'_>,
     patch: &Patch,
     baseline: Option<Baseline<'_>>,
     judging: &Judging,
 ) -> Result<Option<Flagged>, CallFailed> {
+    let step = at.step();
     let mut flags: Vec<GamingFlag> = Vec::new();
     // Every judged pattern the step declares. A pattern whose brief cannot be
     // built is skipped below, so `nth` can finish short of this — `of` is what
@@ -248,6 +256,14 @@ pub(crate) async fn gaming(
             let Some(brief) = GamingBrief::about(step, pattern, patch, baseline) else {
                 continue;
             };
+            // Before the call, on `Asked::kept`'s rule: a call that times out
+            // or answers in prose produces no flag, and those are the calls a
+            // calibration record has to be able to look at. One file per
+            // pattern per attempt, beside the criteria briefs of the same step.
+            let kept =
+                judging
+                    .asked
+                    .kept_gaming(step.id(), at.attempt(), pattern, brief.question());
             let ask = Ask::put(model.clone(), brief.question(), judging.environment.clone())
                 .map_err(|_| CallFailed::NothingToAsk)?;
             nth += 1;
@@ -266,7 +282,11 @@ pub(crate) async fn gaming(
                 },
             );
             let said = said(judging.client.as_ref(), &ask, judging.budget).await?;
-            flags.extend(brief.read(&said, patch).map_err(CallFailed::Unreadable)?);
+            let mut flag = brief.read(&said, patch).map_err(CallFailed::Unreadable)?;
+            if let Some(flag) = flag.as_mut() {
+                flag.brief_path.clone_from(&kept);
+            }
+            flags.extend(flag);
         }
     }
     Ok(Flagged::among(flags))

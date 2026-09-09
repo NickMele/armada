@@ -659,7 +659,7 @@ where
         .find_map(|gaming| gaming.baseline())
         .and_then(|reference| at.baseline(reference, recorded));
     let baseline = named.map(|(step, evidence)| Baseline::of(step.as_str(), evidence));
-    match judging::gaming(step, &patch, baseline, judging).await {
+    match judging::gaming(at, &patch, baseline, judging).await {
         Ok(None) => None,
         Ok(Some(flagged)) => Some(Ruling::Suspect {
             flagged,
