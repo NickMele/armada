@@ -1,67 +1,29 @@
-# Design Plan, the loop it was designed as. See `bug.json` beside this file for
-# why a reduced form exists at all, and for the six fields this one also holds
-# to.
+# Design Plan, the loop it was designed as. `bug.json` beside this file carries
+# what all eight hold to, and where the schema, the catalogue and the Check
+# reasoning live.
 #
 # `crates/core-model/domain/workflows.toml` calls this Armada's only
 # instantiated loop: `draft` and `present`, with `present`'s `request_changes`
-# routing back to `draft`. It said so while this file could not carry it —
-# `structure: loop` was outside M1's carried set, so this form kept both steps
-# and dropped the loop. It carries it now. The designed
-# `design-plan.json` (`crates/core-model/domain/workflow-samples/`) is what the
-# routing and the cap of five are taken from; the cap lives on the step here
-# rather than under `default_gate_policy`, which is still a deferred key.
-#
-# **`present` carries the designed `human_always`, and that is the half of the
-# loop that always worked.** The thing that ends a design plan is a person
-# reading it. What `request_changes` does with their answer is the half that
-# arrived with the loop: it used to put the Drone back on `present`, which
-# re-presented an unchanged document, and it now sends the work back to `draft`
-# the way the design says.
-#
-# **A Job goes round the loop as many times as the cap buys**, and the cap is
-# the designed five. The return re-enters `draft` and leaves `present` reading
-# `running` — how a step at a human gate already behaves, and what #263 settled
-# against a seventh step state — so the pass that follows walks forward into a
-# step that never left, over the one self-edge in the step machine.
+# routing back to `draft`. The routing and the cap of five are the designed
+# file's; the cap lives on the step here rather than under
+# `default_gate_policy`, which the parser still defers.
 # `crates/fleet/src/tests/looping.rs` drives this file, off disk, round twice
 # and then into a spent cap.
 #
 # **This workflow carries no Judge, and that is a decision rather than an
-# omission.** The designed `design-plan.json` carries none either. Design Plan
-# is a back-and-forth the engineer ends when the design is in a good place --
-# `workflowdef-fields.toml` says treating that as a config error would break
-# it. The thing that ends a design plan is a person reading it, and the loop
-# that carries the reading back is what this file now declares.
+# omission.** The designed file carries none either: Design Plan is a
+# back-and-forth the engineer ends when the design is in a good place, which
+# `workflowdef-fields.toml` says treating as a config error would break. What
+# ends it is `present`'s `human_always`, and what carries the reading back to
+# `draft` is the loop.
 #
-# **A step whose product a later step reads writes a file.** `artifact_exists`
-# is carried now, and `bug.json` carries the reasoning: a written step used to
-# hand the next one three prose strings, two of which `verification::submission`
-# says nothing routes on. Fleet opens the path this step declares and puts the
-# file's contents in the Judge's brief as the document the step produced; the
-# three strings are shown beside it, labelled as the summary. The mechanical
-# check reads only the file's size, so an empty file stops the step and whether
-# what is in it is any good stays the Judge's question.
+# **`draft` is the one step where `artifact_exists` is the whole gate**, since
+# with no Judge nothing else reads what it produced. It refuses an empty file
+# and it refuses a directory of that name, and it still cannot tell a considered
+# design from a sentence.
 #
-# **`draft` is the one step where `artifact_exists` is the whole gate.** This
-# workflow carries no Judge, so nothing else reads what `draft` produced --
-# which is exactly why the check has to answer more than "a path exists". It
-# refuses an empty file and it refuses a directory of that name, and it still
-# cannot tell a considered design from a sentence. `present` is
-# `human_always`, so the reader of the design is a person, which is what this
-# workflow says it wants.
-#
-# **No step of this workflow delivers, and both steps say so.** What Design Plan
-# produces is a document somebody reads, not a change somebody merges. Until
-# `delivers` existed nothing could say that: `present` was the last step, the
-# last step's advance pushed the branch and opened a pull request, and the only
-# thing standing between a design document and a pull request was this
-# repository's `.gitignore` line over `.armada/`. On a repository that tracks
-# it, this workflow opened one on its first Job.
-#
-# The deliverable stays where it is. Where a deliverable *should* live is
-# `[deliverable-location]` in `docs/OPEN.md` and is a different question -- a
-# workflow that writes nothing anywhere still reached the delivery path, which
-# is what this key stops.
+# The deliverable stays under `.armada/`. Where one *should* live is
+# `[deliverable-location]` in `docs/OPEN.md`, and is a different question.
 {
   "version": 1,
   "workflow_id": "design_plan",
