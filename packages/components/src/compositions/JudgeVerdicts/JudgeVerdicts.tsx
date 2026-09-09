@@ -112,11 +112,15 @@ export type JudgeVerdictsProps = {
    */
   judges: ReactNode[];
   /*
-   * **Nothing on the wire serves a panel.** `Judged` is one row per criterion
-   * carrying a single `verdict`, so the judge axis of this grid — the columns,
-   * the split, the per-judge marks — has no producer. It is drawn from
-   * fixtures, and changing that is a change to `Judged` before it is a change
-   * to any screen. Checked against `packages/protocol` on 2026-09-08.
+   * **The panel is on the wire.** `Judged.member` arrived in protocol 7.7 —
+   * one row per criterion *per member*, absent at `panel_size: 1` — so the
+   * columns, the marks and the split all have a producer, and `screens`'
+   * `gates.ts` is what groups them. This block said the opposite until
+   * 2026-09-09, when the grid was built into the job detail screen.
+   *
+   * What still has none: the per-judge citation sets `JudgeRefusal.overlap`
+   * draws, and the input digest `JudgeInputs` draws. Both are what each judge
+   * *read*, and nothing on the wire records that.
    */
   /** The glyphs, from the `circle-*` family the Judge owns. */
   glyphs?: Partial<Record<JudgeMark, LucideIcon>>;

@@ -194,6 +194,13 @@
   text-align: left;
 }
 
+/* Two refusals in one row are two judges' findings and not one reading. A
+   caller hands `refusal` a node, and two blocks with no rule between them ran
+   into a single wall of prose with no boundary where one finding ended. */
+.armada-judge-verdicts__refusal .armada-judge-refusal + .armada-judge-refusal {
+  margin-top: var(--space-3);
+}
+
 /* The row's edge already marks the refusal, and the block inside carries one of
    its own for the standalone use. Both at once drew two red bars an inch apart
    around one reading, so the inner one stands down and the row's continues
