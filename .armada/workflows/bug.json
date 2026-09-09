@@ -62,15 +62,7 @@
         }
       ],
       "evidence_scope": {
-        "context_source": "drone_declared",
-        # The ordinary tier: boundaries a Judge may lift when a Drone asks and
-        # the request makes sense. Secrets, CI configuration and the workflow
-        # definitions are not stated here -- nothing lifts those and no file a
-        # Drone has a worktree of names them. `docs/contracts/configuration.md`.
-        "exclude_paths": [
-          "node_modules/",
-          "target/"
-        ]
+        "context_source": "drone_declared"
       },
       "judge_checks": [
         {
@@ -98,39 +90,7 @@
       "retry_limit": 2,
       "mechanical_checks": [
         {
-          "type": "manifest_check",
-          "check": "build",
-          "expect_exit_code": 0
-        },
-        {
-          "type": "manifest_check",
-          "check": "test",
-          "expect_exit_code": 0
-        },
-        {
-          "type": "manifest_check",
-          "check": "format",
-          "expect_exit_code": 0
-        },
-        {
-          "type": "manifest_check",
-          "check": "typecheck",
-          "expect_exit_code": 0
-        },
-        {
-          "type": "manifest_check",
-          "check": "bridge_build",
-          "expect_exit_code": 0
-        },
-        {
-          "type": "manifest_check",
-          "check": "storybook",
-          "expect_exit_code": 0
-        },
-        {
-          "type": "manifest_check",
-          "check": "bridge_test",
-          "expect_exit_code": 0
+          "type": "every_manifest_check"
         },
         {
           "type": "diff_nonempty"
@@ -139,14 +99,6 @@
       "declare_plan_at": "step_start",
       "evidence_scope": {
         "context_source": "drone_declared",
-        # The ordinary tier: boundaries a Judge may lift when a Drone asks and
-        # the request makes sense. Secrets, CI configuration and the workflow
-        # definitions are not stated here -- nothing lifts those and no file a
-        # Drone has a worktree of names them. `docs/contracts/configuration.md`.
-        "exclude_paths": [
-          "node_modules/",
-          "target/"
-        ],
         "reference_docs": [
           "plan.evidence"
         ],

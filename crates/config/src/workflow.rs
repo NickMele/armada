@@ -54,8 +54,15 @@ const TOP_LEVEL: &[&str] = &["version", "workflow_id", "name", "structure", "ste
 /// `job_steps` column the schema records as deliberately absent, and it is not
 /// `retry_count`, because a plan on its fourth honest draft is not a gate
 /// failure; and `EscalationTrigger::LoopCap` exists with nothing raising it. So
-/// a `loop` definition loads here and nothing yet runs it, which is why no
-/// definition under `.armada/workflows/` declares one.
+/// a `loop` definition loads here and nothing yet runs it.
+///
+/// **Two shipped definitions declare one anyway** — `design-plan.json` and
+/// `epic.json` — and both run as straight lines, because that is all there is
+/// to run them as. This said no definition declared one, which was true when it
+/// was written and stopped being true with nothing noticing. What the key buys
+/// until the machine catches up is the refusal below: a file calling itself a
+/// loop while routing no verdict is refused, so the label cannot be worn by a
+/// workflow that was never going to come back.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Structure {
     Linear,
