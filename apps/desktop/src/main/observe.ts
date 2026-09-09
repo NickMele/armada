@@ -160,8 +160,11 @@ export class ObserveSocket {
   private broke(detail: string): void {
     const jobId = this.jobId;
     if (jobId === null) return;
-    this.socket?.removeAllListeners();
-    this.socket = null;
+    // **Let go, not merely dropped** — `journal.ts` carries why at length: a
+    // frame this Bridge could not parse leaves a healthy socket, and dropping
+    // it without closing left Fleet holding a connection for a pane that had
+    // stopped listening.
+    this.close();
     this.turns = { ...this.turns, live: false };
     this.publish({ state: "failed", jobId, turns: this.turns, detail });
   }

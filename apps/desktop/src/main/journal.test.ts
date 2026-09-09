@@ -50,6 +50,25 @@ describe("a log socket that stops", () => {
     expect(log.attached()).toBe(false);
   });
 
+  // **The socket is Fleet's too.** A frame this Bridge cannot read used to
+  // leave the connection open with every listener removed — nothing to notice
+  // it, and Fleet holding a socket for a pane that had stopped reading. The
+  // assertion is on the server's side, because this Bridge reporting itself
+  // closed is exactly what it did before.
+  it("lets the connection go when it cannot read what arrived", async () => {
+    const fleet = await serving();
+    const log = new JournalSocket(() => {});
+    opened.push(() => log.close());
+
+    log.open(fleet.port, A_JOB);
+    const fleetSide = await fleet.talking;
+    const closed = once(fleetSide, "close");
+    fleetSide.send("{ not json");
+
+    await closed;
+    expect(log.attached()).toBe(false);
+  });
+
   // The same abort, reached the way the crash actually was: a second `open`
   // closes the first, and the first had not finished connecting.
   it("reopens on another Job while the first is still connecting", async () => {
