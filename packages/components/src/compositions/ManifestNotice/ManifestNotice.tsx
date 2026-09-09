@@ -116,11 +116,13 @@ export function ManifestNotice({ reading, onDismiss }: ManifestNoticeProps) {
  * A value, or the word for not having one.
  *
  * **An absent key is a repository deferring to what Fleet is running with**, and
- * that reads differently from a number — so it is spelled rather than left
- * blank, which would read as a value that failed to load.
+ * that reads differently from a value — so it is spelled rather than left
+ * blank, which would read as one that failed to load.
+ *
+ * It takes text because a live key's value is text: two of the four are words.
  */
-function said(value: number | undefined): string {
-  return value === undefined ? "unset" : String(value);
+function said(value: string | undefined): string {
+  return value ?? "unset";
 }
 
 /** The frozen sections, listed as a person would say them. */

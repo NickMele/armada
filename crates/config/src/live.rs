@@ -2,30 +2,35 @@
 //! handle that may change them.
 //!
 //! **Not the whole file, and not even the whole of one section.**
-//! `crates/config/settings.toml` files three of `armada.yml`'s keys as
-//! `lifetime = "Live"` — `drone.quiet_after_seconds`, `drone.poke_limit` and
-//! `drone.cost_cap_micros_per_job` — and files the Checks and Commands
-//! registries and `drone.exclude_paths` as
-//! *Frozen for the Job*. The last of those sits in the same `drone:` block as
-//! the three live ones, which is why [`Frozen`] names a key there and a section
-//! everywhere else: what decides is what was resolved against a value at boot. Swapping the whole
-//! Manifest would move the second pair too, and every [`ResolvedWorkflow`] was
-//! checked against the Checks the file declared at boot: holding a
-//! `Setup` is supposed to be proof the two files agree, and a Manifest replaced
-//! underneath it would falsify that without anything failing.
+//! `crates/config/settings.toml` files five of `armada.yml`'s keys as
+//! `lifetime = "Live"`: three under `drone:` — `quiet_after_seconds`,
+//! `poke_limit` and `cost_cap_micros_per_job` — and the two top-level policies,
+//! `auto_merge` and `review_gate`. It files the Checks and Commands registries
+//! and `drone.exclude_paths` as *Frozen for the Job*. The last sits in the same
+//! `drone:` block as three live ones, which is why [`Frozen`] names a key there
+//! and a section everywhere else: what decides is what was resolved against a
+//! value at boot. Every [`ResolvedWorkflow`] was resolved against the Checks
+//! the file declared there, and holding a `Setup` is meant to be proof the two
+//! files agree — so swapping the whole Manifest would falsify that silently.
 //!
 //! So the live keys sit behind a cell every clone of one Manifest shares, and
-//! the rest of the Manifest is what it was when the daemon read it.
+//! the rest is what it was when the daemon read it. **The two policies are
+//! there because they are read at a question rather than at a boot** —
+//! `fleet::gate` when a gate runs, `fleet::merging` on every sweep over an open
+//! pull request — and somebody turning `auto_merge` off because a Job is about
+//! to land is owed an answer sooner than a restart. The cost cap is live for a
+//! sharper version of that: a Job over it is refused at every admission until
+//! the number moves.
 //!
 //! **[`Reloads`] is the only thing that can write, and the live keys are all it
-//! can write.** Fleet is never handed one, so the crate that holds the Manifest
-//! cannot move it — not by convention, but because the method is not on
-//! anything Fleet has.
-//!
+//! can write.** Fleet is never handed one, so the crate holding the Manifest
+//! cannot move it: the method is not on anything Fleet has.
 //! [`ResolvedWorkflow`]: crate::ResolvedWorkflow
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
+
+use core_model::{AutoMerge, ReviewGate};
 
 use crate::error::LoadError;
 use crate::manifest::Manifest;
@@ -44,9 +49,35 @@ pub(crate) struct Dials {
     /// Millionths of a dollar one Job of this repository may spend. **A `u32`
     /// where the Job's own column is a `u64`**: `u32::MAX` micros is $4,294.96
     /// and a per-Job ceiling above that is not a ceiling, so the narrower type
-    /// loses nothing and is what keeps a move reportable without widening
-    /// [`Moved`] and the wire type built from it.
+    /// loses nothing. It was also what kept a move reportable without widening
+    /// [`Moved`]; that half of the argument is spent, since `Moved` now carries
+    /// the value as text for the two policies' sake, and the ceiling is the
+    /// whole reason now.
     pub(crate) cost_cap_micros: Option<u32>,
+}
+
+/// Every live key's value at once: `drone:`'s [`Dials`] and the two top-level
+/// policies.
+///
+/// **One struct rather than two cells**, because a re-read moves all of it or
+/// none — [`Reloads::reread`] parses the whole file and adopts what it finds,
+/// so a second lock would be a second instant for one save.
+///
+/// **Two types rather than five fields**, because the policies are not `drone:`
+/// keys and [`Dials`] is named for that section. A flat struct would put
+/// `auto_merge` beside `poke_limit` as though the file did, and the file does
+/// not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct InForce {
+    pub(crate) dials: Dials,
+    /// **Defaulted rather than optional**, unlike the pair above it. An absent
+    /// `quiet_after_seconds` defers to the tier Fleet is running with and there
+    /// is a tier to defer to; `auto_merge` and `review_gate` are `Manifest
+    /// only` in the settings registry, so an absent key has nothing above it
+    /// and means the policy's own default. `None` here would be a third
+    /// reading of a two-reading value.
+    pub(crate) auto_merge: AutoMerge,
+    pub(crate) review_gate: ReviewGate,
 }
 
 /// Where the live keys are kept, shared by every clone of one Manifest.
@@ -55,18 +86,19 @@ pub(crate) struct Dials {
 /// the file, hands the Manifest to Fleet by value, and a reload has to reach the
 /// one Fleet is holding rather than a copy nobody consults.
 #[derive(Debug, Clone)]
-pub(crate) struct Cell(Arc<RwLock<Dials>>);
+pub(crate) struct Cell(Arc<RwLock<InForce>>);
 
 impl Cell {
-    pub(crate) fn holding(dials: Dials) -> Cell {
-        Cell(Arc::new(RwLock::new(dials)))
+    pub(crate) fn holding(in_force: InForce) -> Cell {
+        Cell(Arc::new(RwLock::new(in_force)))
     }
 
     /// **A poisoned lock is read through rather than unwrapped.** What it
-    /// guards is three `Option<u32>`, so a panic elsewhere cannot have left it
-    /// half-written — and a Fleet that goes down because a lock was poisoned by
-    /// an unrelated panic is exactly the failure this whole module refuses.
-    pub(crate) fn read(&self) -> Dials {
+    /// guards is three `Option<u32>` and two `Copy` enums, so a panic elsewhere
+    /// cannot have left it half-written — and a Fleet that goes down because a
+    /// lock was poisoned by an unrelated panic is exactly the failure this
+    /// whole module refuses.
+    pub(crate) fn read(&self) -> InForce {
         *self
             .0
             .read()
@@ -75,12 +107,12 @@ impl Cell {
 
     /// Write, and hand back what was there. For [`Cell::read`]'s reason a
     /// poisoned lock is written through.
-    fn replace(&self, dials: Dials) -> Dials {
+    fn replace(&self, in_force: InForce) -> InForce {
         let mut held = self
             .0
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        std::mem::replace(&mut held, dials)
+        std::mem::replace(&mut held, in_force)
     }
 }
 
@@ -96,6 +128,10 @@ pub enum LiveKey {
     /// happening. One Job was refused its last step at $5.28 against a $5
     /// compile-time constant, and there was no reachable number anywhere.
     CostCapMicrosPerJob,
+    /// The two below are the only live keys that are not `drone:`'s, and the
+    /// only two whose value is a word rather than a number.
+    AutoMerge,
+    ReviewGate,
 }
 
 impl LiveKey {
@@ -105,6 +141,13 @@ impl LiveKey {
             LiveKey::QuietAfterSeconds => "drone.quiet_after_seconds",
             LiveKey::PokeLimit => "drone.poke_limit",
             LiveKey::CostCapMicrosPerJob => "drone.cost_cap_micros_per_job",
+            // Top-level and undotted, because that is where `armada.yml` writes
+            // them and this string is what somebody searches the file for. It
+            // is also the key a `manifest_rule:<key>` gate names, and one
+            // spelling is what keeps the gate and the file findable from each
+            // other.
+            LiveKey::AutoMerge => "auto_merge",
+            LiveKey::ReviewGate => "review_gate",
         }
     }
 }
@@ -145,11 +188,22 @@ impl Frozen {
 }
 
 /// One live key's move, carrying both ends so a message can say what it was.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// **Both ends are the value as `armada.yml` writes it, and that is why they
+/// are text.** They were `Option<u32>` while every live key held a number; a
+/// policy's value is a word, and a second pair of fields for the words would be
+/// four fields stating one fact — the vocabulary split this repository refuses.
+/// Nothing on either side of the wire does arithmetic on these: they are
+/// rendered, in one sentence, by [`Display`](std::fmt::Display) here and by
+/// `ManifestNotice` in Bridge.
+///
+/// **[`None`] stays the absent key**, which is not the empty string and is
+/// spelled by [`said`] rather than left blank.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Moved {
     pub key: LiveKey,
-    pub before: Option<u32>,
-    pub after: Option<u32>,
+    pub before: Option<String>,
+    pub after: Option<String>,
 }
 
 impl std::fmt::Display for Moved {
@@ -158,17 +212,17 @@ impl std::fmt::Display for Moved {
             f,
             "{} {} -> {}",
             self.key.as_str(),
-            said(self.before),
-            said(self.after)
+            said(self.before.as_deref()),
+            said(self.after.as_deref())
         )
     }
 }
 
 /// An absent key is a repository deferring to what Fleet is running with, and
 /// that reads differently from a number — so it is spelled rather than blank.
-fn said(value: Option<u32>) -> String {
+fn said(value: Option<&str>) -> String {
     match value {
-        Some(number) => number.to_string(),
+        Some(written) => written.to_string(),
         None => String::from("unset"),
     }
 }
@@ -316,7 +370,7 @@ impl Reloads {
     /// that ignored the edit.
     pub fn reread(&self) -> Result<Adopted, LoadError> {
         let fresh = Manifest::load(&self.path)?;
-        let after = fresh.dials();
+        let after = fresh.in_force();
         let before = self.live.replace(after);
         Ok(Adopted {
             moved: moved(before, after),
@@ -325,31 +379,55 @@ impl Reloads {
     }
 }
 
-/// Which of the three actually changed. **Each on its own**, for the reason
-/// `crates/config/settings.toml` holds a row apiece: a repository that changed
-/// its poke budget did not thereby change its patience or what it will spend,
-/// and a message saying they all moved would be wrong.
-fn moved(before: Dials, after: Dials) -> Vec<Moved> {
+/// Which of the five live keys actually changed. **Each on its own**, for the
+/// reason `crates/config/settings.toml` holds a row apiece: a repository that
+/// changed its poke budget did not thereby change its patience or what it will
+/// spend, and the two policies are as independent again — `auto_merge` is about
+/// whether work lands and `review_gate` about whether somebody signs off, one
+/// step apart. A message saying they all moved would be wrong about four.
+fn moved(before: InForce, after: InForce) -> Vec<Moved> {
     let mut changed = Vec::new();
-    if before.quiet_after_seconds != after.quiet_after_seconds {
+    // **Every number is rendered where it is read**, so `unset` has one
+    // spelling for all five keys and the composition root copies `Moved`
+    // field for field rather than converting three of them.
+    let said = |value: Option<u32>| value.map(|number| number.to_string());
+    if before.dials.quiet_after_seconds != after.dials.quiet_after_seconds {
         changed.push(Moved {
             key: LiveKey::QuietAfterSeconds,
-            before: before.quiet_after_seconds,
-            after: after.quiet_after_seconds,
+            before: said(before.dials.quiet_after_seconds),
+            after: said(after.dials.quiet_after_seconds),
         });
     }
-    if before.poke_limit != after.poke_limit {
+    if before.dials.poke_limit != after.dials.poke_limit {
         changed.push(Moved {
             key: LiveKey::PokeLimit,
-            before: before.poke_limit,
-            after: after.poke_limit,
+            before: said(before.dials.poke_limit),
+            after: said(after.dials.poke_limit),
         });
     }
-    if before.cost_cap_micros != after.cost_cap_micros {
+    if before.dials.cost_cap_micros != after.dials.cost_cap_micros {
         changed.push(Moved {
             key: LiveKey::CostCapMicrosPerJob,
-            before: before.cost_cap_micros,
-            after: after.cost_cap_micros,
+            before: said(before.dials.cost_cap_micros),
+            after: said(after.dials.cost_cap_micros),
+        });
+    }
+    // **Always `Some` on both ends**, unlike the three above: an absent policy
+    // key is the policy's default rather than a deferral, so the sentence a
+    // person reads names the value that was in force rather than the word
+    // `unset`. `InForce::auto_merge` carries why.
+    if before.auto_merge != after.auto_merge {
+        changed.push(Moved {
+            key: LiveKey::AutoMerge,
+            before: Some(before.auto_merge.as_written().to_string()),
+            after: Some(after.auto_merge.as_written().to_string()),
+        });
+    }
+    if before.review_gate != after.review_gate {
+        changed.push(Moved {
+            key: LiveKey::ReviewGate,
+            before: Some(before.review_gate.as_written().to_string()),
+            after: Some(after.review_gate.as_written().to_string()),
         });
     }
     changed

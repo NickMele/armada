@@ -111,7 +111,9 @@ fn a_section_m1_does_not_read_hard_fails_and_names_what_it_does_read() {
             "commands",
             "setup",
             "drone",
-            "after_merge"
+            "after_merge",
+            "auto_merge",
+            "review_gate"
         ]
     );
 }
@@ -810,4 +812,81 @@ fn a_patience_that_is_not_a_number_is_refused_by_name() {
             found: "text",
         }
     );
+}
+
+/// **`auto_merge` and `review_gate` are values on the file, not gate words.**
+/// The two keys a `manifest_rule:<key>` gate names, read where the gate can
+/// reach them; `#525` is where they stopped being sections this parser refused.
+mod policies {
+    use core_model::{AutoMerge, ReviewGate};
+
+    use super::{fault_at, parse, refusals};
+    use crate::error::Fault;
+
+    /// **Absent is the policy's own default, and it is not a refusal.** Both
+    /// are `Manifest only` in `crates/config/settings.toml`, so there is no
+    /// tier above to defer to and every `armada.yml` written before these keys
+    /// existed already meant `never` and `human_always`.
+    #[test]
+    fn a_file_that_says_nothing_takes_the_cautious_value_of_each() {
+        let manifest = parse("version: 1\nid: armada\n").expect("neither key is required");
+        assert_eq!(manifest.auto_merge(), AutoMerge::Never);
+        assert_eq!(manifest.review_gate(), ReviewGate::HumanAlways);
+    }
+
+    #[test]
+    fn every_value_of_each_policy_is_read_off_the_file() {
+        for policy in AutoMerge::ALL {
+            let text = format!(
+                "version: 1\nid: armada\nauto_merge: {}\n",
+                policy.as_written()
+            );
+            assert_eq!(
+                parse(&text).expect("a value the policy has").auto_merge(),
+                *policy
+            );
+        }
+        for policy in ReviewGate::ALL {
+            let text = format!(
+                "version: 1\nid: armada\nreview_gate: {}\n",
+                policy.as_written()
+            );
+            assert_eq!(
+                parse(&text).expect("a value the policy has").review_gate(),
+                *policy
+            );
+        }
+    }
+
+    /// **A mistyped value is refused rather than defaulted**, which is the one
+    /// thing a policy about merging cannot get wrong quietly: `auto_merge:
+    /// nevr` reading as `never` would be right by luck, and the same slip on
+    /// `always` would land work nobody approved.
+    ///
+    /// The refusal names the file's own set, so the correction is on screen.
+    #[test]
+    fn a_word_neither_policy_has_is_refused_and_names_what_the_file_could_say() {
+        let refused = refusals(parse(
+            "version: 1\nid: armada\nauto_merge: tests_pass\nreview_gate: auto\n",
+        ));
+        let Fault::NotInTheSchema { legal, .. } = fault_at(&refused, "auto_merge") else {
+            panic!("an underscore where the value is hyphenated is not in the schema");
+        };
+        assert_eq!(*legal, ["never", "tests-pass", "always"]);
+        let Fault::NotInTheSchema { legal, .. } = fault_at(&refused, "review_gate") else {
+            panic!("a gate word is not a review_gate value");
+        };
+        assert_eq!(*legal, ["human_always", "auto_if_judge_passes"]);
+    }
+
+    /// A policy that is not text at all is refused by the same reader every
+    /// other word in this file goes through, rather than read as its `Debug`.
+    #[test]
+    fn a_policy_that_is_not_a_word_is_refused() {
+        let refused = refusals(parse("version: 1\nid: armada\nauto_merge: true\n"));
+        assert!(matches!(
+            fault_at(&refused, "auto_merge"),
+            Fault::WrongType { .. }
+        ));
+    }
 }

@@ -8,6 +8,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use core_model::{AutoMerge, ReviewGate};
+
 use crate::live::Frozen;
 use crate::manifest::Manifest;
 use crate::LiveKey;
@@ -90,8 +92,10 @@ fn an_edit_reaches_the_manifest_fleet_is_already_holding() {
         adopted.moved().iter().map(|m| m.key).collect::<Vec<_>>(),
         [LiveKey::QuietAfterSeconds]
     );
-    assert_eq!(adopted.moved()[0].before, Some(300));
-    assert_eq!(adopted.moved()[0].after, Some(90));
+    // The value as `armada.yml` writes it, which is text for every live key
+    // now that two of the four hold a word rather than a number.
+    assert_eq!(adopted.moved()[0].before.as_deref(), Some("300"));
+    assert_eq!(adopted.moved()[0].after.as_deref(), Some("90"));
     assert!(adopted.at_restart().is_empty());
     // The line a person reads on the daemon's console. It names the key as
     // `armada.yml` spells it, so it can be searched for in the file it is about.
@@ -304,4 +308,117 @@ fn a_cost_cap_deleted_from_the_file_is_reported_as_unset() {
         adopted.moved()[0].to_string(),
         "drone.cost_cap_micros_per_job 5000000 -> unset"
     );
+}
+
+/// **A person turning `auto_merge` off is answered on the next sweep, not on
+/// the next restart.** That is the whole reason `crates/config/settings.toml`
+/// files both policies `Live`: the moment somebody most wants to stop a machine
+/// landing work is the moment a Job is about to land it, and asking them to
+/// restart a daemon with Drones on it is not an answer.
+///
+/// The Manifest that moves is the one handed out before the edit, which is
+/// `#430`'s own guarantee applied to two more keys.
+#[test]
+fn a_policy_moves_under_a_running_fleet_and_says_which_way() {
+    let repository = Repository::holding(PATIENT);
+    let (manifest, reloads) = reloadable(&repository.manifest());
+    assert_eq!(manifest.auto_merge(), AutoMerge::Never);
+    assert_eq!(manifest.review_gate(), ReviewGate::HumanAlways);
+
+    repository.save(&format!(
+        "{PATIENT}auto_merge: always\nreview_gate: auto_if_judge_passes\n"
+    ));
+    let adopted = reloads.reread().expect("it reads");
+
+    assert_eq!(manifest.auto_merge(), AutoMerge::Always);
+    assert_eq!(manifest.review_gate(), ReviewGate::AutoIfJudgePasses);
+    assert_eq!(
+        adopted.moved().iter().map(|m| m.key).collect::<Vec<_>>(),
+        [LiveKey::AutoMerge, LiveKey::ReviewGate]
+    );
+    // **Neither end is `unset`.** A policy has no tier above it to defer to, so
+    // an absent key is its own default and the sentence names the value that
+    // was actually in force rather than a blank.
+    assert_eq!(
+        adopted.moved()[0].to_string(),
+        "auto_merge never -> always",
+        "the key undotted, because that is where `armada.yml` writes it and what \
+         a `manifest_rule:` gate names"
+    );
+    assert_eq!(
+        adopted.moved()[1].to_string(),
+        "review_gate human_always -> auto_if_judge_passes"
+    );
+    assert!(adopted.at_restart().is_empty());
+}
+
+/// **Deleting the key puts the cautious value back**, and says so, rather than
+/// leaving the last word in force. The other direction is the dangerous one: a
+/// repository that removes `auto_merge: always` has stopped asking for it.
+#[test]
+fn a_deleted_policy_falls_back_to_the_cautious_value_rather_than_keeping_the_last_one() {
+    let loose = format!("{PATIENT}auto_merge: always\n");
+    let repository = Repository::holding(&loose);
+    let (manifest, reloads) = reloadable(&repository.manifest());
+    assert_eq!(manifest.auto_merge(), AutoMerge::Always);
+
+    repository.save(PATIENT);
+    let adopted = reloads.reread().expect("it reads");
+
+    assert_eq!(manifest.auto_merge(), AutoMerge::Never);
+    assert_eq!(adopted.moved()[0].to_string(), "auto_merge always -> never");
+}
+
+/// A file that no longer parses moves neither policy, which is
+/// [`Reloads::reread`]'s standing rule seen from the one key where getting it
+/// wrong lands code: a mistyped `poke_limit` must not take `auto_merge: never`
+/// down with it.
+#[test]
+fn a_refused_file_leaves_the_policy_in_force() {
+    let repository = Repository::holding(&format!("{PATIENT}auto_merge: tests-pass\n"));
+    let (manifest, reloads) = reloadable(&repository.manifest());
+
+    repository.save(&format!("{PATIENT}auto_merge: tests-pass\npoke_limit: 4\n"));
+    reloads
+        .reread()
+        .expect_err("a key at the top level nothing reads");
+
+    assert_eq!(manifest.auto_merge(), AutoMerge::TestsPass);
+}
+
+/// **Five live keys move in one save, and each is reported on its own.** The
+/// two the cell holds apart — `drone:`'s dials and the top-level policies —
+/// are one adoption and one instant, which is what one cell rather than two
+/// buys; the list a person reads is still key by key.
+#[test]
+fn every_live_key_moving_at_once_is_still_five_sentences() {
+    let repository = Repository::holding(&format!(
+        "{PATIENT}  cost_cap_micros_per_job: 5000000\nauto_merge: never\nreview_gate: human_always\n"
+    ));
+    let (manifest, reloads) = reloadable(&repository.manifest());
+
+    repository.save(
+        &format!("{PATIENT}  cost_cap_micros_per_job: 9000000\nauto_merge: always\nreview_gate: auto_if_judge_passes\n")
+            .replace("quiet_after_seconds: 300", "quiet_after_seconds: 90")
+            .replace("poke_limit: 2", "poke_limit: 4"),
+    );
+    let adopted = reloads.reread().expect("it reads");
+
+    assert_eq!(
+        adopted
+            .moved()
+            .iter()
+            .map(|moved| moved.to_string())
+            .collect::<Vec<_>>(),
+        [
+            "drone.quiet_after_seconds 300 -> 90",
+            "drone.poke_limit 2 -> 4",
+            "drone.cost_cap_micros_per_job 5000000 -> 9000000",
+            "auto_merge never -> always",
+            "review_gate human_always -> auto_if_judge_passes",
+        ]
+    );
+    assert!(adopted.at_restart().is_empty());
+    assert_eq!(manifest.cost_cap_micros(), Some(9_000_000));
+    assert_eq!(manifest.auto_merge(), AutoMerge::Always);
 }
