@@ -402,6 +402,26 @@ That day also closes the one gap it cannot close now. A setting nothing reads is
 
 ## Open questions
 
+- **[foundations-as-a-job-gate]** What gates a Job against `verify-foundations`,
+  given that the run is legitimately red?
+  A Check gates advancement and a Command gates nothing, and
+  `verify-foundations` is a Command precisely because it exits non-zero on
+  purpose — `armada.yml` says so where it declares it. So a Job's gate never
+  reads it, and on 8 Sept 2026 Job `01M21BKVPW002DC0ATD1X9T0VF` merged three
+  over-long comment blocks past a fully green gate: `crates/armada/src/clean.rs`
+  at 27 lines, `crates/fleet/src/ending.rs` at 32, `crates/store/src/forget.rs`
+  at 28, all under the 25-line hard refusal, all in files the Job had touched.
+  Every declared Check passed. A person running the gate afterwards is what
+  caught it.
+  **The obvious fix is the one this cannot simply take.** Making it a Check
+  fails every Job on a repository whose baseline is red, which
+  `CLAUDE.md` names as a legitimate state — *read it as a delta against `main`,
+  not as a colour*. So the shape has to be a comparison rather than a
+  threshold: a Job's step fails on the `missing:` lines its own diff added, and
+  inherits the rest. What is undecided is where that baseline comes from —
+  the Job's base commit, a stored reading, or a run against `main` per gate —
+  and what a Job does when the baseline itself will not run.
+
 - **[evidence-clarification-round-cap]** Is the evidence clarification-round
   cap 2 or 3?
   The cap is a content-sufficiency counter — evidence arrived through the

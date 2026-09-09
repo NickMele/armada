@@ -9,10 +9,8 @@
 //! reported and left: evidence, not litter.
 //!
 //! **Reclaiming a Job's disk is not forgetting the Job.** A folded Job keeps
-//! its row, its log and its workflow results — [`Store::retain_job`] clears
-//! only the resource this crate's own act just made stale, the live Drone
-//! process a worktree no longer holds. `Store::forget_job` still means real
-//! deletion, for whoever calls it by name.
+//! its row, its log and its results: [`Store::retain_job`] clears only what
+//! this act made stale, the live Drone process. `forget_job` is still real.
 //!
 //! **A row that will not rebuild has no such record to keep.** It carries its
 //! id and its Manifest and is cleared through that same `WorktreeSpec` — the

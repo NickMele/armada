@@ -19,11 +19,8 @@
 //! the three times this was a list in a loop it was a list three tables out of
 //! date. See that function for what it cost.
 //!
-//! **This is the whole record going, and `armada clean` no longer reaches for
-//! it.** A sweep giving a Job's disk back is not a person asking for the Job
-//! to be forgotten — [`Store::retain_job`](crate::Store::retain_job) is what
-//! it calls instead, over the one table that is a resource rather than a
-//! record. This module is still what a person reaches for by name.
+//! **`armada clean` no longer reaches for this**, because a sweep is not a
+//! person asking: it calls [`Store::retain_job`](crate::Store::retain_job).
 //!
 //! [`schema::MIGRATIONS`]: crate::schema::MIGRATIONS
 
