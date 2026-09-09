@@ -27,6 +27,7 @@ mod process;
 mod proving;
 mod reconstruct;
 mod report;
+mod retain;
 mod revision;
 mod roundtrip;
 mod spend;

@@ -53,6 +53,8 @@ mod read;
 mod remarks;
 /// What a person says went wrong, kept after the Job it is about is gone.
 mod report;
+/// Giving a Job's resources back without giving up its record.
+mod retain;
 mod revision;
 mod row;
 mod schema;
@@ -77,5 +79,6 @@ pub use process::DroneProcess;
 pub use proving::Proved;
 pub use read::{Loaded, RowIdentity, StatusRepair, UnreadableRow};
 pub use report::Report;
+pub use retain::Retained;
 pub use schema::KNOWN_SCHEMA_VERSION;
 pub use spend::{DroneSpend, Spend};
