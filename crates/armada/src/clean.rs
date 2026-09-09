@@ -1,17 +1,23 @@
-//! Giving a repository's worktrees, branches and Jobs back.
+//! Giving a repository's worktrees, branches and their Jobs' resources back.
 //!
 //! # It deletes what a record derives, never what a pattern matches
 //!
 //! A hand-run `git branch -D` over the `armada/*` glob destroyed nine unmerged
 //! branches belonging to no Job. So the branches here are not a list: each is
-//! derived from a record being forgotten, through the `WorktreeSpec` that
-//! derived it in the first place. **No record, no delete.** A worktree with
-//! nothing behind it is reported and left: evidence, not litter.
+//! derived from a record, through the `WorktreeSpec` that derived it in the
+//! first place. **No record, no delete.** A worktree with nothing behind it is
+//! reported and left: evidence, not litter.
 //!
-//! **A row that will not rebuild is still a record.** It carries its id and its
-//! Manifest and is cleared through that same `WorktreeSpec` — the id came out
-//! of this store, not off a glob. Confusing the two left `--all` as the only
-//! recovery from a migration that orphaned four rows.
+//! **Reclaiming a Job's disk is not forgetting the Job.** A folded Job keeps
+//! its row, its log and its workflow results — [`Store::retain_job`] clears
+//! only the resource this crate's own act just made stale, the live Drone
+//! process a worktree no longer holds. `Store::forget_job` still means real
+//! deletion, for whoever calls it by name.
+//!
+//! **A row that will not rebuild has no such record to keep.** It carries its
+//! id and its Manifest and is cleared through that same `WorktreeSpec` — the
+//! id came out of this store, not off a glob. Confusing the two left `--all`
+//! as the only recovery from a migration that orphaned four rows.
 //!
 //! # Work nothing has taken is kept, committed or not
 //!
@@ -27,7 +33,7 @@ use adapters::{BranchGone, Reclaimed, UnmergedWork, WorktreeStanding};
 use config::Manifest;
 use core_model::JobId;
 use fleet::runtime::{self, Presence};
-use store::{Forgotten, Store};
+use store::{Forgotten, Retained, Store};
 
 use crate::serve;
 use crate::setup::MANIFEST;
@@ -58,20 +64,44 @@ pub enum Scope {
     AndTheMachine,
 }
 
+/// What the store did with a Job's row, once its worktree and branch were
+/// reclaimed.
+///
+/// **Two shapes because a clean means two different things.** A Job that
+/// folded keeps its record — [`Retained`] — because there is metadata in it
+/// worth keeping. A row that would not rebuild has none, so it still goes
+/// through [`Forgotten`], the same whole deletion `armada clean` used to give
+/// every Job.
+#[derive(Debug)]
+pub enum RecordOutcome {
+    Retained(Retained),
+    Forgotten(Forgotten),
+}
+
+impl RecordOutcome {
+    /// Whether there was a Job row at all, whichever shape answered.
+    pub fn existed(&self) -> bool {
+        match self {
+            RecordOutcome::Retained(retained) => retained.existed,
+            RecordOutcome::Forgotten(forgotten) => forgotten.existed,
+        }
+    }
+}
+
 /// What one Job's clean did.
 #[derive(Debug)]
 pub struct JobCleaned {
     pub job_id: String,
     pub title: String,
     pub reclaimed: Reclaimed,
-    pub forgotten: Forgotten,
+    pub record: RecordOutcome,
 }
 
 /// What clearing one unreadable row did.
 ///
 /// **Not a [`JobCleaned`].** Nothing here folded into a Job, so there is no
-/// title and no history to report — a row cleared and a Job forgotten are
-/// different events and are said differently.
+/// title and no history to report — a row cleared whole and a Job whose
+/// record was kept are different events and are said differently.
 #[derive(Debug)]
 pub struct RowCleared {
     pub job_id: String,
@@ -79,7 +109,7 @@ pub struct RowCleared {
     /// gone and the reason with it.
     pub why: String,
     pub reclaimed: Reclaimed,
-    pub forgotten: Forgotten,
+    pub record: RecordOutcome,
 }
 
 /// A Job whose checkout holds work nothing has taken.
@@ -193,16 +223,20 @@ pub enum CleanRefused {
 
 /// Clean `root`, as far as `scope` reaches.
 ///
-/// **It removes worktrees, branches and store rows, and nothing beside them.**
-/// A Job's log, its Drones' transcripts, its Checks' output and the
-/// deliverables its Judge read all sit under the repository root rather than
-/// inside the checkout — `fleet::transcript`, `fleet::check_output` and
-/// `fleet::keeping` derive their paths from it — so they survive with no
-/// exemption written here. `#223` was the one record that did not: a step's
-/// deliverable is written inside the worktree, reaches no commit because
-/// `.armada/*` is ignored, and went with the checkout an hour after its Job
-/// was merged. Anything added here that reaches outside `.armada/worktrees/`
-/// is that defect arriving again. `#69` bounds the four together.
+/// **It reclaims worktrees, branches and a Drone's process, and it keeps
+/// every folded Job's record.** A Job's log, its Drones' transcripts, its
+/// Checks' output and the deliverables its Judge read all sit under the
+/// repository root rather than inside the checkout — `fleet::transcript`,
+/// `fleet::check_output` and `fleet::keeping` derive their paths from it — so
+/// they survive with no exemption written here. `#223` was the one record
+/// that did not: a step's deliverable is written inside the worktree, reaches
+/// no commit because `.armada/*` is ignored, and went with the checkout an
+/// hour after its Job was merged. Anything added here that reaches outside
+/// `.armada/worktrees/` is that defect arriving again. `#69` bounds the four
+/// together. What the store held about a folded Job — `job_events`, Checks,
+/// Judgments, Evidence, footprint, plans, delivery — survives too, through
+/// `Store::retain_job` rather than `Store::forget_job`; a row that would not
+/// rebuild has no such record and is still cleared whole.
 pub fn clean(
     root: &Path,
     machine: &Path,
@@ -302,15 +336,12 @@ fn forget_this_manifests_jobs(
         .collect();
 
     for (job_id, title) in mine {
-        match give_back(store, root, &job_id, base, unmerged, cleaned) {
-            GaveBack::Done {
-                reclaimed,
-                forgotten,
-            } => cleaned.jobs.push(JobCleaned {
+        match give_back(store, root, &job_id, base, unmerged, Keep::Record, cleaned) {
+            GaveBack::Done { reclaimed, record } => cleaned.jobs.push(JobCleaned {
                 job_id: job_id.as_str().to_string(),
                 title,
                 reclaimed,
-                forgotten,
+                record,
             }),
             GaveBack::HeldUncommitted { path, files } => cleaned.uncommitted.push(WorkKept {
                 job_id: job_id.as_str().to_string(),
@@ -356,15 +387,20 @@ fn clear_this_manifests_unreadable_rows(
             cleaned.unreadable_elsewhere += 1;
             continue;
         }
-        match give_back(store, root, &named.job_id, base, unmerged, cleaned) {
-            GaveBack::Done {
-                reclaimed,
-                forgotten,
-            } => cleaned.unreadable.push(RowCleared {
+        match give_back(
+            store,
+            root,
+            &named.job_id,
+            base,
+            unmerged,
+            Keep::Nothing,
+            cleaned,
+        ) {
+            GaveBack::Done { reclaimed, record } => cleaned.unreadable.push(RowCleared {
                 job_id: named.job_id.as_str().to_string(),
                 why,
                 reclaimed,
-                forgotten,
+                record,
             }),
             GaveBack::HeldUncommitted { path, files } => cleaned.uncommitted.push(WorkKept {
                 job_id: named.job_id.as_str().to_string(),
@@ -380,11 +416,25 @@ fn clear_this_manifests_unreadable_rows(
     }
 }
 
+/// Whether an id's row is worth keeping once its resources are given back.
+///
+/// **The caller decides, because only the caller knows whether the id folded
+/// into a Job.** A folded Job has metadata worth keeping; a row that would not
+/// rebuild has none, and is still cleared whole through `Store::forget_job`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Keep {
+    /// Keep the record. Only `job_drone_process` is cleared.
+    Record,
+    /// Keep nothing — the row goes through `Store::forget_job`, as every id
+    /// did before this feature.
+    Nothing,
+}
+
 /// What one id's clean did, and whether the next one is worth attempting.
 enum GaveBack {
     Done {
         reclaimed: Reclaimed,
-        forgotten: Forgotten,
+        record: RecordOutcome,
     },
     /// Its checkout holds work nobody has committed, so neither the checkout
     /// nor the record went. Reported by the caller, which is the one that knows
@@ -406,6 +456,7 @@ fn give_back(
     job_id: &JobId,
     base: Option<&str>,
     unmerged: UnmergedWork,
+    keep: Keep,
     cleaned: &mut Cleaned,
 ) -> GaveBack {
     let spec = match WorktreeSpec::for_job(&root.to_string_lossy(), job_id.as_str()) {
@@ -440,25 +491,27 @@ fn give_back(
             return GaveBack::RepositoryClosed;
         }
     };
-    // The worktree first, the record second. A record forgotten before its
-    // worktree failed to go is a worktree nothing can derive a branch for. A
-    // *kept* branch is not a fault: the worktree went, the record goes, and the
-    // branch is a git branch a person merges with git.
+    // The worktree first, the record second. Touching the row before the
+    // worktree failed to go would leave a worktree nothing can derive a
+    // branch for. A *kept* branch is not a fault: the worktree went, the row
+    // is settled, and the branch is a git branch a person merges with git.
     if reclaimed.faulted() {
-        return GaveBack::Done {
-            reclaimed,
-            forgotten: Forgotten::default(),
+        let record = match keep {
+            Keep::Record => RecordOutcome::Retained(Retained::default()),
+            Keep::Nothing => RecordOutcome::Forgotten(Forgotten::default()),
         };
+        return GaveBack::Done { reclaimed, record };
     }
-    match store.forget_job(job_id) {
-        Ok(forgotten) => GaveBack::Done {
-            reclaimed,
-            forgotten,
-        },
+    let outcome = match keep {
+        Keep::Record => store.retain_job(job_id).map(RecordOutcome::Retained),
+        Keep::Nothing => store.forget_job(job_id).map(RecordOutcome::Forgotten),
+    };
+    match outcome {
+        Ok(record) => GaveBack::Done { reclaimed, record },
         Err(why) => {
             cleaned
                 .faults
-                .push(format!("{} was not forgotten: {why}", job_id.as_str()));
+                .push(format!("{}'s row was not settled: {why}", job_id.as_str()));
             GaveBack::Skipped
         }
     }

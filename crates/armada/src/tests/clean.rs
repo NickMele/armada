@@ -15,12 +15,12 @@ use std::process::Command;
 use adapter_traits::{CommitTime, Vcs, Worktree, WorktreeSpec};
 use adapters::{BranchGone, GitVcs, UnmergedWork};
 use core_model::{
-    Facts, Job, JobId, ManifestId, ModelName, NewJob, StepId, StepSeed, Timestamp, Title,
+    DroneId, Facts, Job, JobId, ManifestId, ModelName, NewJob, StepId, StepSeed, Timestamp, Title,
     TopLevelOrigin, Ulid, Urgency,
 };
-use store::Store;
+use store::{DroneProcess, Store};
 
-use crate::clean::{clean, CleanRefused, FileGone, Scope};
+use crate::clean::{clean, CleanRefused, FileGone, RecordOutcome, Scope};
 use crate::serve::STORE_FILE;
 use crate::tests::TempDir;
 
@@ -132,7 +132,7 @@ fn a_job(id: &str, manifest: &str) -> Job {
 // -------------------------------------------------------------- what it does
 
 #[test]
-fn a_jobs_worktree_its_branch_and_its_record_all_go() {
+fn a_jobs_worktree_and_branch_go_but_its_record_is_kept() {
     let repo = a_repository();
     let machine = TempDir::new();
     a_job_with_a_worktree(machine.path(), repo.path(), JOB, MANIFEST_ID);
@@ -146,12 +146,73 @@ fn a_jobs_worktree_its_branch_and_its_record_all_go() {
     .expect("a clean");
 
     assert_eq!(cleaned.jobs.len(), 1);
-    assert!(cleaned.jobs[0].forgotten.existed);
+    assert!(cleaned.jobs[0].record.existed());
+    assert!(
+        matches!(cleaned.jobs[0].record, RecordOutcome::Retained(_)),
+        "a folded Job's ordinary clean keeps its record rather than forgetting it: {:?}",
+        cleaned.jobs[0].record
+    );
     assert!(!repo.path().join(".armada/worktrees").join(JOB).exists());
     assert!(!branches(repo.path()).contains(&format!("armada/{JOB}")));
 
     let mut store = Store::open(&machine.path().join(STORE_FILE)).expect("the store");
-    assert!(store.load_all_jobs().expect("a read").jobs.is_empty());
+    assert_eq!(
+        store.load_all_jobs().expect("a read").jobs.len(),
+        1,
+        "the Job row, its log and its workflow results outlive the clean that \
+         reclaimed its worktree and branch"
+    );
+}
+
+/// **The resource `retain_job` exists to reclaim.** A worktree's removal makes
+/// a Drone's recorded pid stale; the clean that reclaims the worktree clears
+/// the pid too, and leaves everything else about the Job exactly as it was.
+#[test]
+fn a_retained_jobs_stale_drone_process_is_cleared_by_the_clean() {
+    let repo = a_repository();
+    let machine = TempDir::new();
+    a_job_with_a_worktree(machine.path(), repo.path(), JOB, MANIFEST_ID);
+    let mut store = Store::open(&machine.path().join(STORE_FILE)).expect("a store");
+    store
+        .record_drone_process(&DroneProcess {
+            job_id: JobId::carried(Ulid::carried(JOB)),
+            step_id: StepId::new("fix"),
+            drone_id: DroneId::carried(Ulid::carried("01K3Q4R5S6T7V8W9X0Y1Z2D0D0")),
+            pid: 4096,
+            started_at: String::from("Wed  3 Sep 01:14:07 2026"),
+            spawned_at: Timestamp::from_rfc3339("2026-09-03T01:14:07.000Z"),
+        })
+        .expect("the process is recorded");
+    drop(store);
+
+    let cleaned = clean(
+        repo.path(),
+        machine.path(),
+        Scope::Repository,
+        UnmergedWork::Keep,
+    )
+    .expect("a clean");
+
+    let RecordOutcome::Retained(retained) = &cleaned.jobs[0].record else {
+        panic!(
+            "a folded Job's record is retained: {:?}",
+            cleaned.jobs[0].record
+        );
+    };
+    assert!(retained.drone_process, "the stale pid was cleared");
+
+    let store = Store::open(&machine.path().join(STORE_FILE)).expect("the store");
+    assert_eq!(
+        store
+            .drone_process(&JobId::carried(Ulid::carried(JOB)))
+            .expect("the read succeeds"),
+        None,
+        "the worktree it named is gone, so the pid it pointed at cannot still be trusted"
+    );
+    assert!(
+        store.load_job(&JobId::carried(Ulid::carried(JOB))).is_ok(),
+        "clearing the process is not clearing the Job"
+    );
 }
 
 /// **The bug this verb was shaped by.** `clean` derives the branches it deletes
@@ -268,7 +329,13 @@ fn a_row_that_will_not_rebuild_is_cleared_from_its_own_repository() {
         "it says why, while the row still exists to say it: {}",
         cleaned.unreadable[0].why
     );
-    assert!(cleaned.unreadable[0].forgotten.existed);
+    assert!(cleaned.unreadable[0].record.existed());
+    assert!(
+        matches!(cleaned.unreadable[0].record, RecordOutcome::Forgotten(_)),
+        "a row that would not rebuild carries no metadata worth keeping, so it \
+         is still cleared whole: {:?}",
+        cleaned.unreadable[0].record
+    );
     assert!(!repo.path().join(".armada/worktrees").join(JOB).exists());
     assert!(!branches(repo.path()).contains(&format!("armada/{JOB}")));
     assert!(

@@ -222,9 +222,13 @@ See the decision in Armada Decisions.
 surface showing it, which is the test for a table.
 
 **Retention.** `job_events`, `evidence` and `job_facts` are **never
-deleted** — Evidence is what a Job's verdict rests on, and the audit
-trail's value is being complete. Per-Job logs are pruned separately; see
-section 7 and the decision in Armada Decisions.
+deleted** by `armada clean` — Evidence is what a Job's verdict rests on, and
+the audit trail's value is being complete. A sweep reclaims a Job's worktree,
+branch and Drone process through `Store::retain_job`, and keeps the row and
+everything beneath it; `Store::forget_job` is real deletion still, reserved
+for a person naming a Job by id and refused on one that is not yet terminal.
+Per-Job logs are pruned separately; see section 7 and the decision in Armada
+Decisions.
 
 ## Log envelope
 

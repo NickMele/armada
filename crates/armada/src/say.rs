@@ -19,7 +19,7 @@ use std::path::Path;
 
 use adapters::{BranchGone, WorktreeGone};
 
-use crate::clean::{Cleaned, FileGone};
+use crate::clean::{Cleaned, FileGone, RecordOutcome};
 use crate::declared::{Ended, Ran};
 
 /// What one Check or Command did: its output, then how it ended.
@@ -56,11 +56,8 @@ pub fn cleaned(cleaned: &Cleaned) {
         println!("\n{} — {}", job.job_id, job.title);
         println!("  {}", worktree(&job.reclaimed.worktree));
         println!("  {}", branch(&job.reclaimed.branch));
-        if job.forgotten.existed {
-            println!(
-                "  forgotten: {} event(s), {} step(s)",
-                job.forgotten.events, job.forgotten.steps
-            );
+        if job.record.existed() {
+            println!("  {}", record(&job.record));
         }
     }
 
@@ -77,11 +74,8 @@ pub fn cleaned(cleaned: &Cleaned) {
         println!("  {}", row.why);
         println!("  {}", worktree(&row.reclaimed.worktree));
         println!("  {}", branch(&row.reclaimed.branch));
-        if row.forgotten.existed {
-            println!(
-                "  row cleared: {} event(s), {} step(s)",
-                row.forgotten.events, row.forgotten.steps
-            );
+        if row.record.existed() {
+            println!("  {}", record(&row.record));
         }
     }
     if cleaned.unreadable_elsewhere > 0 {
@@ -212,6 +206,22 @@ fn branch(gone: &BranchGone) -> String {
         BranchGone::NotDeleted { branch, why } => {
             format!("branch NOT deleted — {why}: {branch}")
         }
+    }
+}
+
+fn record(outcome: &RecordOutcome) -> String {
+    match outcome {
+        RecordOutcome::Retained(retained) => {
+            if retained.drone_process {
+                "record kept, its Drone's process row was cleared".to_string()
+            } else {
+                "record kept".to_string()
+            }
+        }
+        RecordOutcome::Forgotten(forgotten) => format!(
+            "row cleared: {} event(s), {} step(s)",
+            forgotten.events, forgotten.steps
+        ),
     }
 }
 

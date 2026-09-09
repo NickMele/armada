@@ -17,6 +17,13 @@
 //! a deletion that is not a way to stop something still running, and a reap
 //! nobody asked for.
 //!
+//! **A fifth act is not on this ladder, and belongs to a different asker.**
+//! `armada clean`'s sweep reaches [`Store::retain_job`](store::Store::retain_job)
+//! over every terminal Job it gives disk back for — the record survives,
+//! unlike [`forget_job`](Fleet::forget_job)'s, because a sweep is nobody
+//! asking for a Job to be forgotten. It is `crates/armada`'s call, not
+//! Fleet's, so it is not a rung here.
+//!
 //! **That last one needs defending, and `Ended` is the defence.** Fleet takes
 //! no process away on a judgement of its own; it takes away one whose own
 //! terminating event says its run is over.
