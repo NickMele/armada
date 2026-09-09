@@ -147,7 +147,7 @@ wire_enum! {
     Resumption, core_model::Resumption, "a resumption"
 }
 wire_enum! {
-    /// What kind of work product a step's evidence is. Six, from the
+    /// What kind of work product a step's evidence is, from the
     /// WorkflowDef schema, and **the workflow's word rather than the Drone's**:
     /// the Evidence tool has no parameter for it, so a submission is recorded
     /// under the type its frozen step declared.

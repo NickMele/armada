@@ -40,7 +40,7 @@ mod tests;
 
 pub use error::{Disagreement, Fault, LoadError, Refusal, ResolveError, UnknownCheck};
 pub use live::{Adopted, Frozen, LiveKey, Moved, Reloads};
-pub use manifest::{Check, Command, Manifest, Preparation};
+pub use manifest::{Check, Command, Harness, Manifest, Preparation};
 pub use resolve::ResolvedWorkflow;
 pub use roster::Roster;
 pub use workflow::{MechanicalCheck, Step, Structure, WorkflowDef};

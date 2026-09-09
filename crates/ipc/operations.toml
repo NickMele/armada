@@ -91,6 +91,23 @@ The split is `get_call`'s, made against the same measurement. A Check's output i
 `helm_access` is `No` for the reason `get_diff` and `observe_job` have it: a test runner's output pulled into a Helm session stays in that session for the rest of it, and the reader this exists for is a person who pressed a row.
 """
 
+[operations.get_frame]
+kind = "query"
+transport = "HTTP"
+helm_access = "No"
+description = "One frame a step's harness produced, as the file itself"
+notes = """
+**The only operation on this seam that does not answer JSON.** A frame has no window. `get_check_output` serves a tail and describes it — `from_line`, `total_lines`, `whole` — because half a log is still a log; half an image is not an image, it is a file nothing can draw. So there is no partial reading for an envelope to carry, and base64 would inflate the bytes by a third to say nothing the row did not already say. The response is the file, with a media type read off its own name and `nosniff` beside it.
+
+The split is `get_check_output`'s and made against the same measurement. `KeptFrame` — that there is a frame, what it is called, what it weighs, where it is — rides `StepDetail`, which is re-read on every event naming the open Job; a frame is hundreds of kilobytes and `/events` is one drop-oldest channel carrying every Job, so a payload that size would evict the state changes the Board is drawn from. The image is fetched once, by whoever opens one. **Nothing here is published and no event kind carries a frame.**
+
+**The id is two path segments and one name.** `get_check_output`'s `:kept` is a single file name, because `fleet::check_output` builds that name out of the row's key — step, attempt, ordinal — and it is unique within the Job by construction. A frame's name is the harness's own: the repository's spec chose it, and two steps of one Job may both have written `home.png`. What identifies a row is the run's directory in front of the name, so the route carries both and rejoins them into the `kept` the record composes.
+
+**The record is the allowlist**, which is what makes a caller-supplied value safe to open a file with. Fleet resolves the name against the frames it holds for that Job before anything is opened, so a name no row of this Job carries reaches no file at all, whatever it spells. A row whose file will not open answers the same refusal as a name that was never one — a frame's whole content is the image, so a row without it is nothing a caller can use, and a reclaimed `.armada/frames` is exactly that case.
+
+`helm_access` is `No` for the reason `get_diff`, `get_call` and `get_check_output` have it: a file this size pulled into a Helm session stays in that session for its remainder, and the viewer this exists for is a person who opened a frame.
+"""
+
 [operations.get_diff]
 kind = "query"
 transport = "HTTP"

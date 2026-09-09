@@ -150,7 +150,7 @@ pub async fn run(command: &str, worktree: &Path, budget: Duration) -> Attempt {
 /// directory as *not found*, and the two need opposite responses — install the
 /// tool, or find out what removed a running Job's checkout. The worktree is
 /// probed only on that path, so the ordinary spawn costs no extra call.
-fn not_started(error: std::io::Error, program: String, worktree: &Path) -> NeverRan {
+pub(crate) fn not_started(error: std::io::Error, program: String, worktree: &Path) -> NeverRan {
     match error.kind() {
         std::io::ErrorKind::NotFound if !worktree.is_dir() => NeverRan::WorktreeGone {
             worktree: worktree.display().to_string(),
@@ -179,7 +179,7 @@ fn ended(status: &std::process::ExitStatus) -> Exit {
 /// `SIGKILL` rather than `SIGTERM`: the budget has already expired, so a
 /// graceful shutdown window would be a second budget nobody configured.
 #[allow(unsafe_code)]
-fn end_the_group(group: Option<u32>) {
+pub(crate) fn end_the_group(group: Option<u32>) {
     let Some(group) = group else { return };
     // SAFETY: `killpg` is a plain system call taking two integers. The group
     // id is the child's own pid, made a group leader by `process_group(0)`
@@ -210,7 +210,7 @@ fn tail(bytes: &[u8]) -> String {
 /// interpreted — no variable expansion, no escapes, no globbing — because each
 /// of those is a shell feature and this is not a shell. `None` where the string
 /// holds no program at all.
-fn split(command: &str) -> Option<(String, Vec<String>)> {
+pub(crate) fn split(command: &str) -> Option<(String, Vec<String>)> {
     let mut words = Vec::new();
     let mut word = String::new();
     let mut started = false;

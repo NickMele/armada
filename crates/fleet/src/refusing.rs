@@ -254,6 +254,7 @@ where
             | Adrift::NoSuchManifest { .. }
             | Adrift::NoSuchCall { .. }
             | Adrift::NoSuchCheckOutput { .. }
+            | Adrift::NoSuchFrame { .. }
             | Adrift::Modelless
             | Adrift::NothingToPropose
             | Adrift::AttachmentUnreadable { .. } => {

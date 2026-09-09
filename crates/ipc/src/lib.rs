@@ -71,6 +71,8 @@ mod report;
 /// working. **The other axis from `spend`**, which answers the model's cost.
 mod resources;
 mod setup;
+/// What a step's harness produced, as a client is told about it.
+mod showing;
 mod turn;
 /// The two numbers both sides read, and what a mismatch between them means.
 /// `build.rs` embeds them from `protocol-version.toml`.
@@ -127,6 +129,7 @@ pub use resources::{
     Asked, Finding, Held, JobExamined, JobProcess, JobResources, Look, WorktreeOnDisk,
 };
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
+pub use showing::KeptFrame;
 pub use turn::{
     CallArguments, Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage, Voice, Withheld,
 };

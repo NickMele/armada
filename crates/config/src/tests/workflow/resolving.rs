@@ -5,13 +5,14 @@
 //! only what neither can answer alone — whether a name a step wrote is
 //! declared, and what a Check carries with it once it is.
 
-use core_model::ResolvedCheck;
+use core_model::{ResolvedCheck, StepId};
 
-use super::{bug_with, manifest, parse, BUG};
+use super::{bug_with, manifest, parse, BUG, MANIFEST};
 use crate::error::{Disagreement, ResolveError, UnknownCheck};
 use crate::manifest::Manifest;
 use crate::resolve::ResolvedWorkflow;
-use crate::tests::named;
+use crate::tests::{named, roster};
+use crate::workflow::WorkflowDef;
 
 /// The names that resolved to nothing, or a panic naming what came back
 /// instead. A refusal of the other shape here is a test that would otherwise
@@ -393,4 +394,77 @@ fn naming_checks_by_hand_does_not_read_as_gating_on_every_one() {
     let resolved = ResolvedWorkflow::resolve(&def, &manifest()).expect("every name declared");
     assert_eq!(resolved.steps()[1].checks().len(), 3);
     assert!(!resolved.steps()[1].gates_on_every_check());
+}
+
+/// A workflow with a `visual` step, met with a Manifest that declares no
+/// harness.
+const SHOWS: &str = r#"
+version: 1
+workflow_id: shows
+name: shows
+structure: linear
+steps:
+  - id: implement
+    label: Implement
+    evidence_type: diff
+    delivers: false
+    advance_gate: auto
+  - id: show
+    label: Show what it looks like
+    evidence_type: visual
+    delivers: true
+    advance_gate: auto
+"#;
+
+/// A harness section, in the shape a repository declaring one writes it.
+const AND_A_HARNESS: &str = r#"
+evidence:
+  serve: pnpm dev --port 6006
+  ready: curl -sf http://localhost:6006
+  run: pnpm exec playwright test {}
+  frames: .playwright/frames
+"#;
+
+/// **A step asking to be shown, held to a repository that can show it.**
+///
+/// Neither file can answer this alone: `evidence_type: visual` parses against
+/// no Manifest, and an `evidence:` section is declared with no workflow in
+/// sight. So it is checked here, at resolve, and refused before anything is
+/// dispatched.
+///
+/// **Refusing at dispatch is the whole argument.** The alternative is a Job
+/// that reaches the step with a worktree cut and a Drone spawned and then
+/// captures nothing — which reads as a broken harness rather than as a file
+/// that never declared one, and sends a person to fix the wrong thing.
+#[test]
+fn a_step_that_shows_its_work_is_refused_where_nothing_can_show_it() {
+    let def = WorkflowDef::parse(&named("workflows/shows.yml"), SHOWS, &roster())
+        .expect("a workflow with a visual step");
+
+    let refused = ResolvedWorkflow::resolve(&def, &manifest())
+        .expect_err("no harness is declared, so the step cannot run");
+
+    let ResolveError::ShowsWithNoHarness { steps, .. } = refused else {
+        panic!("expected a harness refusal and got: {refused}");
+    };
+    assert_eq!(
+        steps.iter().map(StepId::as_str).collect::<Vec<&str>>(),
+        ["show"],
+        "the step is named, so the message says which one to look at"
+    );
+}
+
+/// And the same workflow resolves once the repository says how it shows its
+/// work. **Absence is the refusal and not the type**, which is what keeps
+/// `visual` a step a repository can opt into rather than one nobody can write.
+#[test]
+fn a_repository_that_declares_a_harness_may_have_steps_that_show_their_work() {
+    let def = WorkflowDef::parse(&named("workflows/shows.yml"), SHOWS, &roster())
+        .expect("a workflow with a visual step");
+    let manifest = Manifest::parse(&named("armada.yml"), &format!("{MANIFEST}{AND_A_HARNESS}"))
+        .expect("a manifest with a harness");
+
+    let resolved = ResolvedWorkflow::resolve(&def, &manifest)
+        .expect("the harness is declared, so it resolves");
+    assert_eq!(resolved.steps().len(), 2);
 }

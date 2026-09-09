@@ -399,7 +399,12 @@ impl CheckFailed {
 /// clause of [`CheckFailed::produced`]'s sentence and not a message in its own
 /// right — and because it recurses through [`how`] for a prerequisite, which a
 /// `Display` would make circular to read.
-fn never_ran(why: &NeverRan) -> String {
+///
+/// **Public because a second caller arrived**, `fleet::showing`: a repository's
+/// `evidence.serve` fails to start in exactly the four ways a Check's command
+/// does, and a second rendering of those four would drift the first time one of
+/// them changed.
+pub fn never_ran(why: &NeverRan) -> String {
     match why {
         NeverRan::NothingToRun => "its command is empty".to_string(),
         NeverRan::NoSuchCommand { program } => format!("`{program}` is not installed"),
@@ -421,7 +426,10 @@ fn never_ran(why: &NeverRan) -> String {
 
 /// How a process ended, as a clause. **A prerequisite's, never a Check's** —
 /// a Check that did not run has no ending of its own to report.
-fn how(exit: &Exit) -> String {
+///
+/// Public for [`never_ran`]'s reason, and for the same second caller: a spec
+/// run ends in the same shapes a prerequisite does.
+pub fn how(exit: &Exit) -> String {
     match exit {
         Exit::Code(code) => format!("exited {code}"),
         Exit::Signalled { signal } => format!("was ended by a signal ({signal})"),

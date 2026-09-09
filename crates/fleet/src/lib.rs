@@ -127,6 +127,8 @@ pub mod scope;
 pub mod serving;
 pub mod session;
 mod settling;
+/// Running the repository's own harness, and keeping what it produced.
+pub mod showing;
 pub mod silence;
 pub mod slots;
 pub mod spawning;
@@ -198,6 +200,7 @@ pub use runtime::{
 pub use scope::{Declared, Drifting, NotDeclared};
 pub use session::{DroneSession, LiveSession, Turn};
 pub use settling::Settled;
+pub use showing::{frames_dir, show, ComingUp, NotShown, Shown};
 pub use silence::{Liveness, Poke, Quiet, Vigil};
 pub use slots::Concurrency;
 pub use sub_dispatch::NotDispatched;

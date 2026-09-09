@@ -15,7 +15,7 @@ use axum::http::StatusCode;
 use axum::response::Response;
 use ipc::JobId;
 
-use crate::answers::{answer, refused};
+use crate::answers::{answer, file, refused};
 use crate::daemon::Queries;
 use crate::routes::Served;
 
@@ -204,6 +204,41 @@ pub(crate) async fn get_check_output<D: Queries>(
         .await
     {
         Ok(output) => answer(StatusCode::OK, &output, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// One frame a step's harness produced, answered as the file itself.
+///
+/// **The one route on this seam that does not answer JSON.** An image has no
+/// window — a truncated PNG is not a shorter PNG, it is a file nothing can draw
+/// — so there is no partial reading for an envelope to describe, and base64
+/// would inflate the bytes by a third to carry nothing extra. The split is
+/// `get_check_output`'s: the row rides `StepDetail` and the image is fetched
+/// once, by whoever opens one.
+///
+/// The media type is read off the frame's own name rather than stored beside
+/// its path, and `nosniff` goes with it — `answers::file` holds both, and why.
+///
+/// 404 where the Job is unknown. 422 where the Job is known and no row of it
+/// kept a frame under that name — a reclaimed `.armada/frames`, or a name that
+/// was never one.
+/// **Two path segments and one id.** A frame's name is the harness's own, so
+/// two steps of one Job may both have written `home.png` and the file name
+/// alone identifies no row — the run's directory in front of it is what does.
+/// They are rejoined here into the `kept` the record composes, which keeps the
+/// one spelling of that identity in `showing::tail` rather than a second one
+/// here.
+pub(crate) async fn get_frame<D: Queries>(
+    State(served): State<Served<D>>,
+    Path((job_id, run, name)): Path<(String, String, String)>,
+) -> Response {
+    match served
+        .daemon()
+        .get_frame(JobId::carried(job_id), format!("{run}/{name}"))
+        .await
+    {
+        Ok((held, bytes)) => file(&held.name, bytes),
         Err(refusal) => refused(refusal),
     }
 }

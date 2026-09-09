@@ -19,8 +19,8 @@
 
 use core_model::{
     Actor, CheckOutcome, CriterionId, EscalationTrigger, EvidenceType, GamingFlag, GamingPattern,
-    Job, JudgeVerdict, Judgment, StepCheck, StepEvidence, StepId, StepLevelTrigger, StepTarget,
-    Target,
+    Job, JudgeVerdict, Judgment, StepCheck, StepEvidence, StepFrame, StepId, StepLevelTrigger,
+    StepTarget, Target,
 };
 
 use crate::tests::{at, created_at, job_id, open, top_level, TempDir};
@@ -78,10 +78,10 @@ fn moved_step(store: &mut Store, job: &Job, to: StepTarget, when: &str) -> Job {
 /// One run's worth of every kind of record, said in a way the run can be read
 /// back out of.
 ///
-/// `pub(super)` because `forget` needs a Job with rows in all four per-step
-/// tables, and the two tests should be asking about the same four: a fifth
-/// table added here reaches the forget test without anybody remembering to
-/// carry it across.
+/// `pub(super)` because `forget` needs a Job with rows in every per-step table,
+/// and the two tests should be asking about the same set: a table added here
+/// reaches the forget test without anybody remembering to carry it across.
+/// `job_step_frames` is the one that arrived that way.
 pub(super) fn record_a_whole_run(store: &mut Store, id: &str, saying: &str, when: &str) {
     let job = job_id(id);
     let step = step_id();
@@ -142,11 +142,24 @@ pub(super) fn record_a_whole_run(store: &mut Store, id: &str, saying: &str, when
             &at(when),
         )
         .expect("evidence recorded");
+    store
+        .record_step_frames(
+            &job,
+            &step,
+            &[StepFrame {
+                name: "job-detail-refused.png".to_string(),
+                path: format!(".armada/frames/{id}/fix.1/job-detail-refused.png"),
+                bytes: 41_002,
+            }],
+            &at(when),
+        )
+        .expect("frames recorded");
 }
 
-/// The whole of the issue, in one test: two runs, four tables, both survive.
+/// The whole of the issue, in one test: two runs, every per-step table, both
+/// survive.
 #[test]
-fn a_step_that_ran_twice_has_both_runs_in_all_four_tables() {
+fn a_step_that_ran_twice_has_both_runs_in_every_per_step_table() {
     let dir = TempDir::new();
     let id = "01TWICE";
     {
@@ -218,6 +231,29 @@ fn a_step_that_ran_twice_has_both_runs_in_all_four_tables() {
     assert_eq!(evidence.len(), 2, "two runs of evidence");
     assert_eq!(evidence[0].record.claimed, "the first note");
     assert_eq!(evidence[1].record.claimed, "the same note again");
+
+    // The frames go the same way, and they have to: a person comparing the run
+    // that was handed back against the one that passed is comparing two sets of
+    // screens, and a read answering with the latest would make the earlier
+    // capture unreachable while its rows were still there.
+    //
+    // **One flat list rather than one per run**, so the run each frame came
+    // from is on the row. The two frames here are two runs of one step, which
+    // is why the attempts and not the length are what is asserted.
+    let frames = store.step_frames_every_attempt(&job).expect("loads");
+    assert_eq!(frames.len(), 2, "two runs of frames");
+    assert_eq!(frames[0].attempt, 1);
+    assert_eq!(frames[1].attempt, 2);
+    assert!(
+        frames.iter().all(|held| held.step == step_id()),
+        "each row says which step it is from, rather than implying it"
+    );
+    assert_eq!(frames[0].frame.name, "job-detail-refused.png");
+    assert_eq!(frames[0].frame.bytes, 41_002);
+    assert!(
+        frames[0].frame.path.starts_with(".armada/frames/"),
+        "kept under .armada, which is not inside what `armada clean` takes"
+    );
 }
 
 /// The other half. Keeping both runs must not change what "where the step

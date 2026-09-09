@@ -57,7 +57,18 @@ impl<'a> Written<'a> {
     /// where a definition is parsed.
     pub fn of(step: &ResolvedStep, accepted: Accepted<'a>) -> Option<Written<'a>> {
         match step.evidence_type()? {
-            EvidenceType::Diff | EvidenceType::FailingTest | EvidenceType::TestSuiteRun => None,
+            // `visual` sits with these three and not with the written ones.
+            // Its `shown_by` names the spec, which is code that lands in the
+            // patch — so the submission is a claim about the change here too,
+            // and the frames Fleet captured are not a document a Judge can
+            // read. **Whether a Judge is ever shown a frame is a separate
+            // question and is not answered here**: nothing in this crate can
+            // put an image into a call, and an arm that handed the spec's path
+            // over as prose would be showing the Judge the file name.
+            EvidenceType::Diff
+            | EvidenceType::FailingTest
+            | EvidenceType::TestSuiteRun
+            | EvidenceType::Visual => None,
             // `bundle` is the accumulated evidence of prior steps, and the
             // accumulation arrives as `reference_docs` rather than here. What
             // the step itself wrote is still its deliverable.

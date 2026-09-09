@@ -53,6 +53,13 @@ pub struct Forgotten {
     pub step_gaming_flags: usize,
     /// What each run of a step submitted, one row per run.
     pub step_evidence: usize,
+    /// The frames each run of a step's harness produced, one row each.
+    ///
+    /// **The rows and not the images.** Forgetting a Job empties this table and
+    /// the copies under `.armada/frames/` are left where they are, which is
+    /// what every other kept file here does too — the record is what this
+    /// deletes, and the directory is `armada clean`'s.
+    pub step_frames: usize,
     /// The header saying a Job's footprint was recorded. One row, or none.
     pub footprint: usize,
     /// The files that footprint held, one row each.
@@ -102,6 +109,7 @@ impl Forgotten {
             "job_step_judgments" => &mut self.step_judgments,
             "job_step_gaming_flags" => &mut self.step_gaming_flags,
             "job_step_evidence" => &mut self.step_evidence,
+            "job_step_frames" => &mut self.step_frames,
             "job_footprint" => &mut self.footprint,
             "job_footprint_files" => &mut self.footprint_files,
             "job_step_plans" => &mut self.step_plans,
