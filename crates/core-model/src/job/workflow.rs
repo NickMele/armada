@@ -94,7 +94,7 @@ pub enum AdvanceGate {
     /// not is written down beside the evidence they open.
     HumanAlways,
     /// The repository's `auto_merge` policy decides whether this step's work
-    /// lands without a person. Its values are `never`, `tests-pass` and
+    /// lands without a person. Its values are `never`, `checks-pass` and
     /// `always`, and they are not gate words — what resolves them into one is
     /// `fleet::gate`.
     ManifestRuleAutoMerge,

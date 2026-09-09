@@ -420,7 +420,7 @@ where
                 // policy being honoured rather than ignored.** The question it
                 // answers is who may take the work off this gate, not whether
                 // the gate is there: under `never` a person presses
-                // `merge_pull_request`, and under `tests-pass` or `always`
+                // `merge_pull_request`, and under `checks-pass` or `always`
                 // `crate::under_review` presses it on the sweep that finds the
                 // forge green. Advancing the step here would advance past the
                 // merge without one, leaving a Job recorded as landed over a

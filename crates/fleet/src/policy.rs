@@ -32,7 +32,7 @@ impl Policies {
     /// Fold every gating Manifest's word into one answer each.
     ///
     /// **Most-restrictive-wins for both**, which `core_model` owns and this
-    /// only calls: `never` beats `tests-pass` beats `always`, `human_always`
+    /// only calls: `never` beats `checks-pass` beats `always`, `human_always`
     /// beats `auto_if_judge_passes`.
     ///
     /// It takes the pairs rather than the Manifests so that `fleet` does not
@@ -69,17 +69,17 @@ impl Policies {
     /// | Resolved | Forge | Answer |
     /// |---|---|---|
     /// | `never` | anything | no — a person presses, `crate::merging` |
-    /// | `tests-pass` | [`AllPassed`](WhatTheForgeRan::AllPassed) | yes |
-    /// | `tests-pass` | anything else | no, and ask again next sweep |
+    /// | `checks-pass` | [`AllPassed`](WhatTheForgeRan::AllPassed) | yes |
+    /// | `checks-pass` | anything else | no, and ask again next sweep |
     /// | `always` | anything, **including unreadable** | yes |
     ///
     /// **`always` does not read the forge at all**, and that is the value
     /// meaning what it says. A repository that wanted the checks consulted has
-    /// `tests-pass` to say so with; making `always` wait on a reading would
+    /// `checks-pass` to say so with; making `always` wait on a reading would
     /// leave the two values one word apart in the file and identical in
     /// behaviour on every repository whose forge runs nothing.
     ///
-    /// **`NothingRan` is not a pass under `tests-pass`**, which
+    /// **`NothingRan` is not a pass under `checks-pass`**, which
     /// `adapter_traits` decided where the variant is declared: a repository
     /// with no automation has proved nothing, and merging on the strength of an
     /// empty list is the failure that reading is worded to prevent.
@@ -90,7 +90,7 @@ impl Policies {
     pub fn a_machine_may_merge(&self, forge: &WhatTheForgeRan) -> bool {
         match self.auto_merge {
             AutoMerge::Never => false,
-            AutoMerge::TestsPass => matches!(forge, WhatTheForgeRan::AllPassed { .. }),
+            AutoMerge::ChecksPass => matches!(forge, WhatTheForgeRan::AllPassed { .. }),
             AutoMerge::Always => true,
         }
     }

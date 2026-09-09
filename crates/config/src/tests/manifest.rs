@@ -872,7 +872,7 @@ mod policies {
         let Fault::NotInTheSchema { legal, .. } = fault_at(&refused, "auto_merge") else {
             panic!("an underscore where the value is hyphenated is not in the schema");
         };
-        assert_eq!(*legal, ["never", "tests-pass", "always"]);
+        assert_eq!(*legal, ["never", "checks-pass", "always"]);
         let Fault::NotInTheSchema { legal, .. } = fault_at(&refused, "review_gate") else {
             panic!("a gate word is not a review_gate value");
         };
