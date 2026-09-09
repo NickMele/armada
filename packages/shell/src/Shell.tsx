@@ -55,7 +55,8 @@ export type ShellProps = {
   jobs: readonly JobSummary[];
   /** How full the fleet is. `null` is a Fleet that has not answered yet. */
   capacity: FleetCapacity | null;
-  title: string;
+  /** Absent draws no head — see `TheShell`. One Job read whole passes none. */
+  title?: string;
   summary?: string;
   /** The head's trailing controls. `New job` is the one primary. */
   actions?: ReactNode;

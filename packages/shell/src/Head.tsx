@@ -74,7 +74,7 @@ export function headOf({
   onCloseWorktrees,
   onReadWorktrees,
   onRefresh,
-}: HeadProps): Head {
+}: HeadProps): Head | null {
   if (clearing) {
     return {
       title: "Held worktrees",
@@ -102,19 +102,20 @@ export function headOf({
       ),
     };
   }
-  if (reading) {
-    return {
-      title: "Job Board",
-      actions: (
-        <>
-          <Button variant="ghost" size="sm" onClick={onCloseJob}>
-            Back to the list
-          </Button>
-          <Kbd>Esc</Kbd>
-        </>
-      ),
-    };
-  }
+  // **A Job read whole gets no head, and that is the one view where none is
+  // right.** The others are named by it: `Held worktrees`, `Reported in error`,
+  // `New job` are pages whose name is not written anywhere else on them. A Job
+  // is not — its own header carries the badge, the title, the id and the run's
+  // figures, and it is the thing the reader is looking at. A bar above that
+  // saying `Job Board` names the surface behind this one, which is the last
+  // thing a person reading one Job needs, and it spends the top of the window
+  // to say it.
+  //
+  // **`Back to the list` goes with it and nothing is stranded.** `Esc` is bound
+  // while a Job is open, the rail's Job Board row is lit and returns on a
+  // click, and the Job's own header is where the acts on the Job already live.
+  // What is left is the header a person wants pinned at the top, at the top.
+  if (reading) return null;
   if (composing) {
     return {
       title: "New job",
