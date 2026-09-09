@@ -226,3 +226,50 @@ fn somewhere_that_is_not_a_repository_is_left_alone() {
         RepositoryStanding::LeftAlone { .. }
     ));
 }
+
+/// **A repository takes every directory it made with it.**
+///
+/// This is the flake, written down. The fixture above clones a second checkout
+/// beside the repository — `.elsewhere`, standing in for the forge that merged
+/// — and `TempRepo::drop` removed `root` and `.remote.git` and not that one.
+/// Two thousand two hundred of them had collected in the system temp directory
+/// by the time anybody looked.
+///
+/// It matters because of how the names are built. Nextest gives each test its
+/// own process, so the counter in `armada-adapters-<pid>-<n>` is almost always
+/// zero, and a pid the operating system recycles is the whole of what keeps two
+/// runs apart. A directory left behind is one a later run can be dealt by
+/// chance — and `git clone` into an existing non-empty directory refuses, so
+/// the failure lands on whichever test drew the collision. That is why it read
+/// as several unrelated tests failing at random rather than as one bug.
+///
+/// **Asserted over the parent directory rather than over two known names**, so
+/// a fourth sibling added later is covered without anybody remembering to come
+/// back here.
+#[test]
+fn a_temporary_repository_leaves_nothing_beside_it() {
+    let (root, parent) = {
+        let repo = a_repository_behind_its_remote();
+        let root = repo.root().to_path_buf();
+        let parent = root.parent().expect("a parent").to_path_buf();
+        // The siblings really are there while it lives — otherwise this would
+        // pass against a fixture that had stopped making them, which is the
+        // tautology this shape has to avoid.
+        assert!(root.with_extension("elsewhere").exists());
+        assert!(root.with_extension("remote.git").exists());
+        (root, parent)
+    };
+
+    let mut mine = root.file_name().expect("a name").to_os_string();
+    mine.push(".");
+    let left: Vec<String> = std::fs::read_dir(&parent)
+        .expect("the temp directory reads")
+        .flatten()
+        .map(|entry| entry.file_name())
+        .filter(|name| name.as_encoded_bytes().starts_with(mine.as_encoded_bytes()))
+        .map(|name| name.to_string_lossy().into_owned())
+        .collect();
+
+    assert!(left.is_empty(), "left behind: {left:?}");
+    assert!(!root.exists(), "the repository itself is gone too");
+}
