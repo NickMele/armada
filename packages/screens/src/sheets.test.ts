@@ -15,7 +15,9 @@ import { describe, expect, it } from "vitest";
 
 import { keyFor } from "@armada/components";
 
-import { shownBy } from "./Sheets";
+import type { Diff, JobDetail as JobWhole } from "@armada/protocol";
+
+import { gaveBackTheWorktree, shownBy } from "./Sheets";
 import type { LogRow } from "./story";
 
 function row(actor: LogRow["actor"], id: string): LogRow {
@@ -83,4 +85,50 @@ describe("the detail's key captions", () => {
   // for it meanwhile is the compiler — `DetailShape` requires both sheet
   // openers now, so a screen that binds the key and passes no handler does not
   // build.
+});
+
+// Which silence the diff header names. #381.
+//
+// The Produced chapter lists what a job wrote from a record Fleet keeps, and
+// the diff reads the worktree live — so a finished job whose worktree has been
+// given back shows a file list above an empty patch, and neither surface says
+// why. The header can say it, but only where Bridge actually knows: `work`
+// absent is also a job that never got a worktree at all, and naming that one
+// `given back` would be the same false certainty pointed the other way.
+describe("whether a missing reading is a worktree that was given back", () => {
+  const JOB = "01M130Y1380016YK5S0JXBXDQ5";
+
+  /** A footprint with one file in it. Only its presence is read. */
+  const KEPT = { files: [{ path: "packages/screens/src/Sheets.tsx", change: "modified" }] };
+
+  function whole(footprint: unknown): JobWhole {
+    return { footprint } as JobWhole;
+  }
+
+  it("says so where a footprint proves there was a worktree to lose", () => {
+    expect(gaveBackTheWorktree({ state: "read", jobId: JOB }, JOB, whole(KEPT))).toBe(true);
+  });
+
+  it("stays neutral with no footprint, because that is where Bridge cannot tell", () => {
+    expect(gaveBackTheWorktree({ state: "read", jobId: JOB }, JOB, whole(undefined))).toBe(false);
+    expect(gaveBackTheWorktree({ state: "read", jobId: JOB }, JOB, null)).toBe(false);
+  });
+
+  it("says nothing about a reading that came back", () => {
+    // Present with no files is a drone that changed nothing, which is a
+    // reading and not a silence. The header counts it.
+    const read = {
+      state: "read",
+      jobId: JOB,
+      work: { files: [], plan_declared: false, measured_whole: true },
+    } as unknown as Diff;
+    expect(gaveBackTheWorktree(read, JOB, whole(KEPT))).toBe(false);
+  });
+
+  it("says nothing before a reading, or about another job's", () => {
+    expect(gaveBackTheWorktree({ state: "none" }, JOB, whole(KEPT))).toBe(false);
+    expect(gaveBackTheWorktree({ state: "reading", jobId: JOB }, JOB, whole(KEPT))).toBe(false);
+    const other = { state: "read", jobId: "01M130Y1380016YK5S0JXBXDQ6" } as Diff;
+    expect(gaveBackTheWorktree(other, JOB, whole(KEPT))).toBe(false);
+  });
 });
