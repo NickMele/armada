@@ -8,7 +8,11 @@
   height: var(--h-status-bar);
   padding: 0 var(--space-4);
   border-top: var(--border-width) solid var(--border-subtle);
-  background: var(--bg-raised);
+  /* The rail's ground, because the two are one frame: the rail down the side
+     and this along the bottom are both chrome around the working area, and
+     chrome that disagreed with itself about its own surface would read as two
+     unrelated bars. */
+  background: var(--bg-sunken);
   font-family: var(--font-sans);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);

@@ -118,11 +118,16 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  /* **Even on all four sides.** The top was zero, which was right while the
-     head above always drew and set the spacing between them; a Job read whole
-     draws no head now, so the pane started hard against the window's chrome.
-     A pane is inset from its frame on every side or it is not a pane. */
-  padding: var(--space-4);
+  /* **No padding, because a pane is a region and not an object in one.**
+     It was inset on every side so that the card inside it would not touch the
+     window's chrome. There is no card now: the panel *is* the ground, its rows
+     run to its own edges, and what separates it from the rail and the status
+     bar is those two surfaces having a ground and an edge of their own.
+     
+     A screen that wants its content held off the edge pads its own content —
+     which is the screen's decision to make, and differs between a list whose
+     rows want the full width and a document that wants a measure. */
+  padding: 0;
 }
 
 /* What the shell mounts a screen into: a column that fills the mount and lets
@@ -184,13 +189,20 @@
   flex: none;
 }
 
+/* The panel's own head: the surface's name and its one primary act.
+   
+   **It draws the edge under itself now**, because the mount stopped insetting
+   the screen and a head that ran into the rows below it would read as the
+   first of them. A hairline is what separates two regions of one pane, the
+   same way the rail and the status bar are separated from the middle. */
 .armada-screen__panel-head {
   flex: none;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-4) 0;
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border-bottom: var(--border-width) solid var(--border-subtle);
 }
 
 .armada-screen__titles {
@@ -323,10 +335,12 @@
   flex-direction: column;
   gap: var(--space-4);
   width: 100%;
+  /* **The pane's middle, not a card in it** — the Board's list made the same
+     move and for the same reason. A Job read whole fills the panel, and a
+     border a few pixels inside the pane's own edge restates a boundary that is
+     already there. The padding stays: a run tree and a story want holding off
+     the edge in a way a list row does not. */
   padding: var(--pad-card);
-  border-radius: var(--radius-md);
-  background: var(--bg-raised);
-  border: var(--border-width) solid var(--border-default);
   min-width: 0;
   /* The containing block for a trailing sheet. The layer belongs to the screen
      it was opened from — flush to this edge, this height — so the run tree
