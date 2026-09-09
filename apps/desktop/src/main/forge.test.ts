@@ -30,6 +30,7 @@ const ADDRESS = "https://forge.invalid/NickMele/armada/pull/4711";
 function summary(): JobSummary {
   return {
     id: JOB_ID,
+    handle: "12-a-job",
     title: "Coalesce concurrent token refreshes",
     status: "completed_success",
     workflow_id: "bug",

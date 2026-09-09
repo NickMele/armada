@@ -34,7 +34,7 @@ async fn a_job_waiting_on_a_peer_reads_blocked_by_dependency() {
         .propose_from("two coupled changes", None)
         .await
         .expect("a plan");
-    worktree_directory(&home, made[1].id());
+    worktree_directory(&home, &made[1]);
     dispatched(&fleet, made[1].id())
         .await
         .expect("approval lands");
@@ -59,10 +59,10 @@ async fn a_job_waiting_for_the_slot_reads_waiting_on_resources() {
     let home = TempDir::new();
     let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
     let first = fleet.propose(a_proposal("the first")).await.unwrap();
-    worktree_directory(&home, first.id());
+    worktree_directory(&home, &first);
     dispatched(&fleet, first.id()).await.unwrap();
     let second = fleet.propose(a_proposal("the second")).await.unwrap();
-    worktree_directory(&home, second.id());
+    worktree_directory(&home, &second);
     dispatched(&fleet, second.id()).await.unwrap();
 
     let summary = fleet
@@ -118,8 +118,8 @@ async fn what_the_board_says_is_what_admission_did() {
         .propose_from("two coupled changes", None)
         .await
         .expect("a plan");
-    worktree_directory(&home, made[0].id());
-    worktree_directory(&home, made[1].id());
+    worktree_directory(&home, &made[0]);
+    worktree_directory(&home, &made[1]);
     dispatched(&fleet, made[1].id())
         .await
         .expect("the dependent");

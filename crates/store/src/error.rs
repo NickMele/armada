@@ -227,6 +227,16 @@ pub enum WriteError {
     JobAlreadyExists {
         job_id: JobId,
     },
+    /// Two Jobs in one Manifest were given the same number. **Never reachable
+    /// from a live Fleet**, which allocates and inserts under one lock; it is
+    /// what the unique index says when something else wrote a number, and it
+    /// is a variant of its own because `INSERT OR IGNORE` reports the same
+    /// zero rows for this as for a Job that is already stored — and *job
+    /// 01ABC is already stored* is a false sentence to answer it with.
+    JobNumberTaken {
+        job_id: JobId,
+        number: u32,
+    },
     /// A transition was recorded against a Job that was never inserted.
     NoSuchJob {
         job_id: JobId,
@@ -406,6 +416,11 @@ display!(WriteError, |self, f| match self {
     WriteError::Database(fault) => write!(f, "{fault}"),
     WriteError::JobAlreadyExists { job_id } =>
         write!(f, "job {} is already stored", job_id.as_str()),
+    WriteError::JobNumberTaken { job_id, number } => write!(
+        f,
+        "job {} was given number {number}, which another Job in its Manifest already has",
+        job_id.as_str()
+    ),
     WriteError::NoSuchJob { job_id } => write!(f, "job {} was never inserted", job_id.as_str()),
     WriteError::NoSuchStep { job_id, step_id } => write!(
         f,

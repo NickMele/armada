@@ -56,6 +56,7 @@ impl FakeDaemon {
         let minted = self.minted.fetch_add(1, Ordering::SeqCst);
         let job = JobSummary {
             id: JobId::carried(format!("01JOB{minted}")),
+            handle: String::from("1-a-job"),
             title: proposal.title,
             // The entry status of a top-level Job. Creation is not a
             // transition, and `job.created` is what carries it — a

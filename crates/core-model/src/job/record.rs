@@ -34,6 +34,9 @@ use crate::job::fields::{
     AcceptanceCriterion, Attachment, Branch, DependencyEdge, DispatchOrigin, Facts, GateManifest,
     Origin, ScopeRevision, Subject, TopLevelOrigin, Urgency, WriteTargets,
 };
+use alloc::string::String;
+
+use crate::job::handle::{handle_of, JobNumber};
 use crate::job::ids::{
     DroneId, JobId, ManifestId, ModelName, ProposalId, StepId, Title, WorkflowId,
 };
@@ -85,6 +88,10 @@ pub struct NewJob {
     /// The reading this Job was minted by, where a proposer read one request.
     /// `None` on a Job nobody proposed. See [`ProposalId`].
     pub proposal_id: Option<ProposalId>,
+    /// What this Job is called within its Manifest, and what every path and
+    /// branch it owns is named after. **Allocated by the store**, which is the
+    /// only thing that can see what is already taken.
+    pub number: JobNumber,
     pub facts: Facts,
     /// Entry zero is the initial scope.
     pub scope_revisions: Vec<ScopeRevision>,
@@ -146,6 +153,9 @@ pub struct Job {
     /// The reading this Job was minted by. Frozen at creation, and `None` on
     /// every Job nobody proposed. See [`ProposalId`].
     proposal_id: Option<ProposalId>,
+    /// Frozen at creation, like `title` and for the same reason: the handle
+    /// derived from the two names a branch and a directory that already exist.
+    number: JobNumber,
     /// Written when the worktree is made, not at creation. `None` is a Job that
     /// has never been dispatched, and is absent rather than a name it does not
     /// yet have.
@@ -224,6 +234,7 @@ impl Job {
             dispatched_by,
             redispatched_from: new.redispatched_from,
             proposal_id: new.proposal_id,
+            number: new.number,
             // No worktree exists yet. `on_branch` is what fills this in.
             branch: None,
             // Nothing has been said to a Job that does not exist yet.
@@ -634,6 +645,18 @@ impl Job {
     /// request, which is the only thing that says so.
     pub fn proposal_id(&self) -> Option<&ProposalId> {
         self.proposal_id.as_ref()
+    }
+
+    /// What this Job is called within its Manifest.
+    pub fn number(&self) -> JobNumber {
+        self.number
+    }
+
+    /// What a person calls this Job, and what its branch, its worktree and
+    /// every path under `.armada/` are named. **Derived from the number and the
+    /// title**, both frozen at creation — see [`handle_of`](crate::handle_of).
+    pub fn handle(&self) -> String {
+        handle_of(self.number, &self.title)
     }
     /// The branch the Job's worktree is on. `None` until one is made.
     pub fn branch(&self) -> Option<&Branch> {

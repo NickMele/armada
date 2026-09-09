@@ -102,9 +102,8 @@ fn rolling_up() -> StepId {
 
 /// A file at a path inside a Job's worktree, with something in it — which is
 /// the whole of what `artifact_exists` reads.
-fn wrote(home: &TempDir, job: &JobId, at: &str, text: &str) {
-    let spec =
-        WorktreeSpec::for_job(&home.path().to_string_lossy(), job.as_str()).expect("a legal spec");
+fn wrote(home: &TempDir, handle: &str, at: &str, text: &str) {
+    let spec = WorktreeSpec::for_job(&home.path().to_string_lossy(), handle).expect("a legal spec");
     let path = std::path::Path::new(&spec.worktree_path()).join(at);
     std::fs::create_dir_all(path.parent().expect("a parent")).expect("a place for the artifact");
     std::fs::write(&path, text).expect("the artifact is written");
@@ -151,10 +150,11 @@ async fn planning_a_wave(home: &TempDir) -> (Fixture, JobId) {
         .await
         .expect("a Job at the approval gate");
     let id = job.id().clone();
-    worktree_directory(home, &id);
+    let handle = job.handle();
+    worktree_directory(home, &job);
     wrote(
         home,
-        &id,
+        &handle,
         ".armada/artifacts/plan.md",
         "# Wave 1\n\nOne piece.\n",
     );
@@ -183,7 +183,7 @@ async fn approved_the_plan(fleet: &Fixture, job: &JobId, home: &TempDir) {
         .expect("the turn puts a Drone on the dispatching step");
     wrote(
         home,
-        job,
+        &fleet.load(job).await.expect("the Job").handle(),
         ".armada/artifacts/dispatched.md",
         "# Dispatched\n\nOne Job.\n",
     );
@@ -261,7 +261,7 @@ async fn one_approval_dispatches_a_wave_and_the_parent_returns_to_roll_it_up() {
         .sub_dispatch(&job, &asking("port the parser"))
         .await
         .expect("the wave leaves");
-    worktree_directory(&home, &child);
+    worktree_directory(&home, &fleet.load(&child).await.expect("the child"));
 
     submitted_by_the_one(&fleet, note("One Job created."))
         .await
@@ -313,7 +313,7 @@ async fn a_roll_up_that_asks_for_another_wave_re_enters_the_plan() {
         .sub_dispatch(&job, &asking("port the parser"))
         .await
         .expect("the wave leaves");
-    worktree_directory(&home, &child);
+    worktree_directory(&home, &fleet.load(&child).await.expect("the child"));
     submitted_by_the_one(&fleet, note("One Job created."))
         .await
         .expect("the dispatch is reported");
@@ -327,7 +327,7 @@ async fn a_roll_up_that_asks_for_another_wave_re_enters_the_plan() {
 
     wrote(
         &home,
-        &job,
+        &fleet.load(&job).await.expect("the Job").handle(),
         ".armada/artifacts/roll-up.md",
         "# Wave 1\n\nOne Job, and it landed.\n",
     );

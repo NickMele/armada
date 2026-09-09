@@ -98,7 +98,7 @@ async fn undecided(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
         .await
         .expect("a Job at the approval gate");
     let job_id = job.id().clone();
-    worktree_directory(home, &job_id);
+    worktree_directory(home, &job);
     dispatched(&fleet, &job_id).await.expect("released to run");
     submitted_by_the_one(&fleet, diff_evidence())
         .await
@@ -334,7 +334,7 @@ async fn a_step_the_judge_refused_is_not_re_run() {
         .await
         .expect("a Job at the approval gate");
     let job_id = job.id().clone();
-    worktree_directory(&home, &job_id);
+    worktree_directory(&home, &job);
     dispatched(&fleet, &job_id).await.expect("released to run");
     submitted_by_the_one(&fleet, diff_evidence())
         .await

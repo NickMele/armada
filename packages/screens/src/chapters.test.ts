@@ -55,6 +55,7 @@ const BRIEF = [
 function job(over: Partial<JobSummary> = {}): JobSummary {
   return {
     id: "01M130Y1380016YK5S0JXBXDQ5",
+    handle: "12-a-job",
     title: "Coalesce concurrent token refreshes",
     status: "awaiting_review",
     workflow_id: "bug",

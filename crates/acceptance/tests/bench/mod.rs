@@ -349,6 +349,7 @@ impl Bench {
             write_targets: None,
             subject: None,
             redispatched_from: None,
+            number: core_model::JobNumber::carried(1),
             proposal_id: None,
             facts: Facts::new("the store's cursor reads one row past the end"),
             scope_revisions: Vec::new(),
@@ -436,7 +437,7 @@ impl Bench {
             // Where a kept deliverable would go. **Nothing is written**: no
             // step here declares an `artifact_exists`, so the gate never holds
             // a deliverable's bytes and `REPO_ROOT` is never touched.
-            &Keeping::of(REPO_ROOT, run.job.id()),
+            &Keeping::of(REPO_ROOT, &run.job.handle()),
         )
         .await;
         // What `fleet::dispatch` does with the store, done with a list: the

@@ -91,7 +91,7 @@ async fn at_the_gate_having_delivered(fleet: &Fixture, home: &TempDir) -> JobId 
         .propose(a_proposal("fix the off-by-one in the log reader"))
         .await
         .expect("a Job at the approval gate");
-    worktree_directory(home, job.id());
+    worktree_directory(home, &job);
     dispatched(fleet, job.id()).await.expect("it dispatches");
     submitted_by_the_one(fleet, diff_evidence())
         .await

@@ -21,7 +21,7 @@ use core_model::{Actor, JobStatus, Target, TransitionReason};
 use rusqlite::Connection;
 
 use crate::schema::{MIGRATIONS, SCHEMA_VERSION_KEY};
-use crate::tests::{created_at, job_id, open, top_level, TempDir};
+use crate::tests::{created_at, job_id, open, top_level_numbered, TempDir};
 use crate::{Moved, RowError, Store, KNOWN_SCHEMA_VERSION};
 
 /// A file at version 1, with `ids` Jobs on it and no title column anywhere.
@@ -76,7 +76,7 @@ fn a_job_written_before_the_workflow_was_frozen_is_named_rather_than_guessed_at(
     version_one(&dir, &["01OLDONE"]);
     let mut store = Store::open(&dir.db()).expect("migrated");
     store
-        .insert_job(&top_level("01NEWONE"), &created_at())
+        .insert_job(&top_level_numbered(&store, "01NEWONE"), &created_at())
         .expect("a Job written after the migration");
 
     match store.load_job(&job_id("01OLDONE")) {
@@ -148,7 +148,7 @@ fn reopening_a_migrated_file_does_not_rename_the_jobs_on_it() {
     version_one(&dir, &["01OLDONE"]);
     let mut store = Store::open(&dir.db()).expect("migrated");
     store
-        .insert_job(&top_level("01NEWONE"), &created_at())
+        .insert_job(&top_level_numbered(&store, "01NEWONE"), &created_at())
         .expect("a Job written after the migration");
     drop(store);
 
@@ -192,7 +192,7 @@ fn the_database_refuses_a_title_being_blanked_out() {
     let dir = TempDir::new();
     let mut store = open(&dir);
     store
-        .insert_job(&top_level("01NAMED"), &created_at())
+        .insert_job(&top_level_numbered(&store, "01NAMED"), &created_at())
         .expect("stored");
     assert!(store
         .conn
@@ -214,7 +214,7 @@ fn a_row_whose_title_is_blank_is_named_rather_than_substituted() {
     let dir = TempDir::new();
     let mut store = open(&dir);
     store
-        .insert_job(&top_level("01SCRIBBLED"), &created_at())
+        .insert_job(&top_level_numbered(&store, "01SCRIBBLED"), &created_at())
         .expect("stored");
     store
         .conn

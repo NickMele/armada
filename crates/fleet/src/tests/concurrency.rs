@@ -74,7 +74,7 @@ pub(crate) async fn approved(fleet: &Fixture, home: &TempDir, title: &str) -> Jo
         .propose(a_proposal(title))
         .await
         .expect("a proposal is drafted");
-    worktree_directory(home, job.id());
+    worktree_directory(home, &job);
     dispatched(&fleet, job.id())
         .await
         .expect("a person approves it, one by one");
@@ -326,11 +326,11 @@ async fn a_dependent_whose_upstream_failed_does_not_take_the_free_place() {
         .await
         .expect("a plan");
     // The upstream runs, which is what leaves exactly one place free.
-    worktree_directory(&home, made[0].id());
+    worktree_directory(&home, &made[0]);
     dispatched(&fleet, made[0].id())
         .await
         .expect("the upstream");
-    worktree_directory(&home, made[1].id());
+    worktree_directory(&home, &made[1]);
     dispatched(&fleet, made[1].id())
         .await
         .expect("the dependent");

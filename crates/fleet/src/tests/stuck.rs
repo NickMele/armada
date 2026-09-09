@@ -117,7 +117,7 @@ async fn started(fleet: &Fixture, home: &TempDir) -> JobId {
         .propose(a_proposal("make the parser take it"))
         .await
         .unwrap();
-    worktree_directory(home, job.id());
+    worktree_directory(home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
     settled(fleet).await;
     job.id().clone()
@@ -167,9 +167,8 @@ async fn refused(fleet: &Fixture, home: &TempDir) -> JobId {
 
 /// What somebody outside Armada does with `rm -rf`, and what `armada clean`
 /// does on purpose.
-fn delete_the_worktree(home: &TempDir, job: &JobId) {
-    let spec =
-        WorktreeSpec::for_job(&home.path().to_string_lossy(), job.as_str()).expect("a legal spec");
+fn delete_the_worktree(home: &TempDir, handle: &str) {
+    let spec = WorktreeSpec::for_job(&home.path().to_string_lossy(), handle).expect("a legal spec");
     std::fs::remove_dir_all(spec.worktree_path()).expect("a worktree that was there");
 }
 
@@ -276,7 +275,7 @@ async fn a_job_whose_worktree_is_gone_is_told_only_a_redispatch_moves_it() {
         "the worktree is there while the test sets up"
     );
 
-    delete_the_worktree(&home, &job);
+    delete_the_worktree(&home, &fleet.load(&job).await.expect("the Job").handle());
 
     let stuck = detail(&fleet, &job).await.stuck.expect("it stopped");
     assert!(
@@ -306,7 +305,7 @@ async fn a_restart_onto_a_gone_worktree_answers_409_over_the_wire() {
     let fleet = a_fleet_with(&home, a_drone_that_leaves());
     let job = refused(&fleet, &home).await;
     until_reaped(&fleet).await;
-    delete_the_worktree(&home, &job);
+    delete_the_worktree(&home, &fleet.load(&job).await.expect("the Job").handle());
 
     let refusal = api::Commands::restart_step(&fleet, ipc::JobId::from(&job), None)
         .await

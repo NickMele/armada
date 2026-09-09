@@ -88,9 +88,8 @@ const ARTIFACT: &str = ".armada/artifacts/scope.md";
 
 /// Write the step's deliverable where the Drone would have written it, which is
 /// under the worktree Fleet derives for the Job and nowhere else.
-fn deliverable_written(home: &TempDir, job: &core_model::JobId, held: &str) {
-    let spec =
-        WorktreeSpec::for_job(&home.path().to_string_lossy(), job.as_str()).expect("a legal spec");
+fn deliverable_written(home: &TempDir, handle: &str, held: &str) {
+    let spec = WorktreeSpec::for_job(&home.path().to_string_lossy(), handle).expect("a legal spec");
     let file = std::path::Path::new(&spec.worktree_path()).join(ARTIFACT);
     std::fs::create_dir_all(file.parent().expect("a parent")).expect("a directory to write in");
     std::fs::write(file, held).expect("the deliverable is written");
@@ -254,7 +253,7 @@ async fn started(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
         .propose(a_proposal("make the parser take it"))
         .await
         .unwrap();
-    worktree_directory(home, job.id());
+    worktree_directory(home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
     job.id().clone()
 }
@@ -472,7 +471,12 @@ async fn the_look_at_a_written_step_is_shown_the_file_it_was_asked_for() {
         a_written_step(),
     );
     let job = started(&fleet, &home).await;
-    deliverable_written(&home, &job, "## Boundaries\n\nsrc/log.rs and no further.\n");
+    let handle = fleet.load(&job).await.expect("the Job").handle();
+    deliverable_written(
+        &home,
+        &handle,
+        "## Boundaries\n\nsrc/log.rs and no further.\n",
+    );
     next_stage(&fleet, "looked at the step").await;
 
     let asked = judge.asked();

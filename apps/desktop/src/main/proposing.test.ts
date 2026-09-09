@@ -30,6 +30,7 @@ const A_LONG_WAIT = 20_000;
 
 const A_JOB: JobSummary = {
   id: "01M1HQZAKN001AJ5MT3PT09KKY",
+  handle: "12-a-job",
   title: "Make the parser take it",
   status: "awaiting_approval",
   workflow_id: "bug",

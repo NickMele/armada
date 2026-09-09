@@ -89,7 +89,7 @@ where
         let job = self.move_job(&job, Target::Running, Actor::Fleet).await?;
 
         let spec =
-            WorktreeSpec::for_job(&self.host().repo_root, job_id.as_str()).map_err(|cause| {
+            WorktreeSpec::for_job(&self.host().repo_root, &job.handle()).map_err(|cause| {
                 Adrift::Unworkable {
                     job: job_id.clone(),
                     cause,

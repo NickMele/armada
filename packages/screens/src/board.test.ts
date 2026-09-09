@@ -34,6 +34,7 @@ import type { WorkflowSummary } from "@armada/protocol";
 function job(over: Partial<JobSummary> = {}): JobSummary {
   return {
     id: "01M130Y1380016YK5S0JXBXDQ5",
+    handle: "12-a-job",
     title: "Coalesce concurrent token refreshes",
     status: "running",
     workflow_id: "bug",
@@ -144,6 +145,7 @@ describe("the search", () => {
     const row = job({
       title: "Coalesce concurrent token refreshes",
       id: "01M130Y1380016YK5S0JXBXDQ5",
+      handle: "12-a-job",
       branch: "armada/refresh-coalescing",
       current_step_id: "implement",
       workflow_id: "bug",

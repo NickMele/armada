@@ -57,10 +57,10 @@ impl Store {
                      dependencies, dispatched_by_job_id, dispatched_by_step_id,
                      redispatched_from, subject_kind, subject_ref, facts, scope_revisions,
                      write_targets_known, created_at, branch, workflow, redirect_waiting,
-                     cost_cap_micros, proposal_id
+                     cost_cap_micros, proposal_id, number
                  ) VALUES (
                      ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
-                     ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26
+                     ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27
                  )",
                 rusqlite::params![
                     job.id().as_str(),
@@ -108,13 +108,36 @@ impl Store {
                     // for `branch`'s reason: a Job rebuilt and reinserted keeps
                     // the reading it was minted by.
                     job.proposal_id().map(|id| id.as_str()),
+                    // Allocated by the store under this same lock, and
+                    // frozen: it is a directory, a branch and a pull request
+                    // the moment the Job is dispatched.
+                    job.number().get(),
                 ],
             )
             .map_err(fault("writing the job row"))
             .map_err(WriteError::Database)?;
         if inserted == 0 {
-            return Err(WriteError::JobAlreadyExists {
-                job_id: job.id().clone(),
+            // **`INSERT OR IGNORE` swallows both conflicts and reports the same
+            // zero rows.** Which one it was is answerable, and worth answering:
+            // a Job whose number is taken is not a Job that is already stored,
+            // and telling a caller the wrong one sends it looking for a row
+            // that is not there.
+            let stored: bool = tx
+                .query_row(
+                    "SELECT count(*) > 0 FROM jobs WHERE job_id = ?1",
+                    [job.id().as_str()],
+                    |row| row.get(0),
+                )
+                .map_err(fault("reading whether the job was already stored"))
+                .map_err(WriteError::Database)?;
+            return Err(match stored {
+                true => WriteError::JobAlreadyExists {
+                    job_id: job.id().clone(),
+                },
+                false => WriteError::JobNumberTaken {
+                    job_id: job.id().clone(),
+                    number: job.number().get(),
+                },
             });
         }
 

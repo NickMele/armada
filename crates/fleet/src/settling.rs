@@ -143,7 +143,7 @@ where
         // authenticates as Fleet, and a value that could not be built is a
         // configuration failure against this Job rather than a verdict.
         let judging = self
-            .judging(&job_id)
+            .judging(&job)
             .map_err(|cause| Adrift::NotConfigurable {
                 job: job_id.clone(),
                 cause,
@@ -198,13 +198,13 @@ where
             self.work(),
             self.budget(),
             &judging,
-            &Keeping::of(&self.host().repo_root, &job_id),
+            &Keeping::of(&self.host().repo_root, &job.handle()),
         )
         .await;
         // Before the Job or the step moves. A recorded result the transition
         // then failed to make is readable; a transition whose evidence was
         // never written down is a verdict with no trace.
-        self.recorded_checks(&job_id, &step, attempt, &ruling)
+        self.recorded_checks(&job_id, &job.handle(), &step, attempt, &ruling)
             .await?;
         // And into the step's own transcript, in Fleet's voice. **A Drone never
         // runs a Check** — that is the point of them — so nothing mechanical

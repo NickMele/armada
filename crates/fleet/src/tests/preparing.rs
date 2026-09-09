@@ -47,9 +47,9 @@ fn a_fleet_requiring(home: &TempDir, run: &str) -> Fleet<FakeHarness, FakeVcs, F
 }
 
 /// Where the Job's worktree is, derived the way Fleet derives it.
-fn worktree(home: &TempDir, job: &core_model::JobId) -> std::path::PathBuf {
+fn worktree(home: &TempDir, job: &core_model::Job) -> std::path::PathBuf {
     let spec =
-        WorktreeSpec::for_job(&home.path().to_string_lossy(), job.as_str()).expect("a legal spec");
+        WorktreeSpec::for_job(&home.path().to_string_lossy(), &job.handle()).expect("a legal spec");
     std::path::PathBuf::from(spec.worktree_path())
 }
 
@@ -69,7 +69,7 @@ async fn what_the_manifest_requires_has_run_in_the_worktree_before_any_drone() {
         .propose(a_proposal("a Job in a worktree that needs preparing"))
         .await
         .expect("proposed");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
 
     let approved = dispatched(&fleet, job.id()).await.expect("dispatch runs");
     assert_eq!(approved.status(), JobStatus::Running);
@@ -78,7 +78,7 @@ async fn what_the_manifest_requires_has_run_in_the_worktree_before_any_drone() {
         Some("implement")
     );
     assert!(
-        worktree(&home, job.id()).join("prepared").is_dir(),
+        worktree(&home, &job).join("prepared").is_dir(),
         "the required command ran, and it ran in the Job's own worktree"
     );
 }
@@ -94,7 +94,7 @@ async fn a_repository_that_requires_nothing_dispatches_exactly_as_before() {
         .propose(a_proposal("a Job needing nothing"))
         .await
         .expect("proposed");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
 
     let approved = dispatched(&fleet, job.id()).await.expect("dispatch runs");
     assert_eq!(approved.status(), JobStatus::Running);
@@ -116,7 +116,7 @@ async fn a_required_command_that_fails_escalates_the_job_and_enters_no_step() {
         .propose(a_proposal("a Job whose install will not run"))
         .await
         .expect("proposed");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
 
     let refused = dispatched(&fleet, job.id())
         .await
@@ -172,7 +172,7 @@ async fn preparation_runs_once_for_the_worktree_and_not_once_per_drone() {
         .propose(a_proposal("a Job with two steps"))
         .await
         .expect("proposed");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.expect("dispatch runs");
 
     submitted_by_the_one(&fleet, diff_evidence())
@@ -229,7 +229,7 @@ async fn the_log_names_each_command_as_it_is_attempted() {
         .propose(a_proposal("a Job whose second preparation fails"))
         .await
         .expect("proposed");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id())
         .await
         .expect_err("the second command fails");
@@ -311,10 +311,10 @@ async fn the_file_a_step_is_told_to_write_is_there_before_its_drone_is() {
         .propose(a_proposal("a Job whose first step delivers a file"))
         .await
         .expect("proposed");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.expect("dispatch runs");
 
-    let at = worktree(&home, job.id()).join(".armada/artifacts/implement.md");
+    let at = worktree(&home, &job).join(".armada/artifacts/implement.md");
     assert!(
         at.is_file(),
         "the Drone was told to write {}, and had to be able to",
@@ -342,11 +342,11 @@ async fn a_step_declaring_no_deliverable_has_nothing_made_for_it() {
         .propose(a_proposal("a Job whose second step delivers nothing"))
         .await
         .expect("proposed");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.expect("dispatch runs");
 
     assert!(
-        !worktree(&home, job.id())
+        !worktree(&home, &job)
             .join(".armada/artifacts/summarise.md")
             .exists(),
         "nothing declared that path, so nothing may create it"
@@ -370,17 +370,17 @@ async fn a_deliverable_already_written_survives_being_prepared_again() {
         .propose(a_proposal("a Job prepared twice"))
         .await
         .expect("proposed");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.expect("dispatch runs");
 
-    let at = worktree(&home, job.id()).join(".armada/artifacts/implement.md");
+    let at = worktree(&home, &job).join(".armada/artifacts/implement.md");
     std::fs::write(&at, "what the Drone found").expect("the Drone writes its finding");
 
     fleet
         .prepared(
             &fleet.load(job.id()).await.expect("readable"),
             &adapter_traits::Worktree::at(
-                worktree(&home, job.id()).to_string_lossy(),
+                worktree(&home, &job).to_string_lossy(),
                 "armada/anything",
             ),
         )

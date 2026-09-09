@@ -90,6 +90,7 @@ fn job() -> Job {
             subject: None,
             redispatched_from: None,
             proposal_id: None,
+            number: core_model::JobNumber::carried(1),
             facts: Facts::new("a secret nobody outside Fleet needs"),
             scope_revisions: Vec::new(),
             attachments: Vec::new(),

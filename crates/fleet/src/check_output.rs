@@ -54,6 +54,7 @@ where
     pub(crate) async fn recorded_checks(
         &self,
         job_id: &JobId,
+        handle: &str,
         step: &StepId,
         attempt: Attempt,
         ruling: &Ruling,
@@ -68,7 +69,7 @@ where
             .collect();
         let checks = kept(
             &self.host().repo_root,
-            job_id,
+            handle,
             step,
             attempt,
             ruling.checks(),
@@ -157,11 +158,11 @@ where
 }
 
 /// Where one step's Check output lives, under the repository it ran in.
-pub fn checks_dir(repo_root: &str, job: &JobId) -> PathBuf {
+pub fn checks_dir(repo_root: &str, handle: &str) -> PathBuf {
     Path::new(repo_root)
         .join(".armada")
         .join("checks")
-        .join(job.as_str())
+        .join(handle)
 }
 
 /// Write each Check's output and put its path on the row.
@@ -176,13 +177,13 @@ pub fn checks_dir(repo_root: &str, job: &JobId) -> PathBuf {
 /// verdict because a log file would not open would lose the verdict as well.
 pub fn kept(
     repo_root: &str,
-    job: &JobId,
+    handle: &str,
     step: &StepId,
     attempt: Attempt,
     checks: &[StepCheck],
     output: &[(String, Output)],
 ) -> Vec<StepCheck> {
-    keeping(repo_root, job, step, attempt, checks, output, RECORDED)
+    keeping(repo_root, handle, step, attempt, checks, output, RECORDED)
 }
 
 /// The same, for a run the Drone asked for rather than one the gate made.
@@ -199,13 +200,13 @@ pub fn kept(
 /// before it, the same reason the gate's own path carries the attempt.
 pub fn kept_dry(
     repo_root: &str,
-    job: &JobId,
+    handle: &str,
     step: &StepId,
     attempt: Attempt,
     checks: &[StepCheck],
     output: &[(String, Output)],
 ) -> Vec<StepCheck> {
-    keeping(repo_root, job, step, attempt, checks, output, DRY)
+    keeping(repo_root, handle, step, attempt, checks, output, DRY)
 }
 
 /// Write each Check's output for a run against a commit, and put its path on
@@ -254,14 +255,14 @@ const DRY: &str = "dry.";
 
 fn keeping(
     repo_root: &str,
-    job: &JobId,
+    handle: &str,
     step: &StepId,
     attempt: Attempt,
     checks: &[StepCheck],
     output: &[(String, Output)],
     infix: &str,
 ) -> Vec<StepCheck> {
-    let Some(dir) = writable(repo_root, job) else {
+    let Some(dir) = writable(repo_root, handle) else {
         return checks.to_vec();
     };
     checks
@@ -275,15 +276,15 @@ fn keeping(
                 return check.clone();
             };
             let mut kept = check.clone();
-            kept.output_path = write(&dir, &name, printed)
-                .then(|| format!(".armada/checks/{}/{name}", job.as_str()));
+            kept.output_path =
+                write(&dir, &name, printed).then(|| format!(".armada/checks/{}/{name}", handle));
             kept
         })
         .collect()
 }
 
-fn writable(repo_root: &str, job: &JobId) -> Option<PathBuf> {
-    let dir = checks_dir(repo_root, job);
+fn writable(repo_root: &str, handle: &str) -> Option<PathBuf> {
+    let dir = checks_dir(repo_root, handle);
     std::fs::create_dir_all(&dir).ok()?;
     Some(dir)
 }

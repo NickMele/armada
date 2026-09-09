@@ -70,7 +70,7 @@ pub async fn gate_against(
         &bench.judging,
         // [`Bench::gate`]'s note applies: inert, because no step here declares
         // a deliverable.
-        &Keeping::of(crate::bench::REPO_ROOT, run.job.id()),
+        &Keeping::of(crate::bench::REPO_ROOT, &run.job.handle()),
     )
     .await;
     let mut held = bench.recorded.borrow_mut();

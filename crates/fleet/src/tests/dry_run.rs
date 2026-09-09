@@ -173,7 +173,7 @@ async fn started(fleet: &Fixture, home: &TempDir) -> core_model::JobId {
         .propose(a_proposal("make the parser take it"))
         .await
         .expect("a proposed Job");
-    worktree_directory(home, job.id());
+    worktree_directory(home, &job);
     dispatched(&fleet, job.id()).await.expect("an approved Job");
     job.id().clone()
 }

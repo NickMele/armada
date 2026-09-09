@@ -80,7 +80,7 @@ async fn at_the_loop_s_gate(fleet: &Fixture, home: &TempDir) -> core_model::JobI
         .propose(a_proposal_for("fix the off-by-one", "fixture-loop"))
         .await
         .expect("a Job at the approval gate");
-    worktree_directory(home, job.id());
+    worktree_directory(home, &job);
     dispatched(&fleet, job.id()).await.expect("it dispatches");
     walked_to_the_gate(fleet).await;
     job.id().clone()
@@ -391,9 +391,8 @@ fn document() -> Call<'static> {
 
 /// The draft's whole gate is `artifact_exists`, and it reads the file's size —
 /// so the worktree has to hold one with something in it.
-fn wrote_the_plan(home: &TempDir, job: &core_model::JobId) {
-    let spec =
-        WorktreeSpec::for_job(&home.path().to_string_lossy(), job.as_str()).expect("a legal spec");
+fn wrote_the_plan(home: &TempDir, handle: &str) {
+    let spec = WorktreeSpec::for_job(&home.path().to_string_lossy(), handle).expect("a legal spec");
     let at = std::path::Path::new(&spec.worktree_path()).join(".armada/artifacts");
     std::fs::create_dir_all(&at).expect("a place for the artifact");
     std::fs::write(at.join("draft.md"), "# Plan\n\nMigrate, then backfill.\n")
@@ -422,8 +421,8 @@ async fn the_shipped_design_plan_goes_round_twice_and_then_stops() {
         .propose(a_proposal_for("design the migration", "design_plan"))
         .await
         .expect("a Job at the approval gate");
-    worktree_directory(&home, job.id());
-    wrote_the_plan(&home, job.id());
+    worktree_directory(&home, &job);
+    wrote_the_plan(&home, &job.handle());
     let job_id = job.id().clone();
     dispatched(&fleet, &job_id).await.expect("it dispatches");
 

@@ -99,6 +99,7 @@ fn draft() -> NewJob {
         subject: None,
         redispatched_from: None,
         proposal_id: None,
+        number: JobNumber::carried(1),
         facts: Facts::empty(),
         scope_revisions: Vec::new(),
         attachments: Vec::new(),

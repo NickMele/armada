@@ -73,7 +73,7 @@ async fn an_approval_its_caller_stops_waiting_for_still_leaves_the_job_dispatcha
         .propose(a_proposal("a Job whose approval used to time out"))
         .await
         .expect("proposed");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
 
     let answered = tokio::time::timeout(Duration::from_millis(300), fleet.approve(job.id()))
         .await
@@ -116,7 +116,7 @@ async fn a_dispatch_whose_turn_was_dropped_is_escalated_on_the_next_turn() {
         .propose(a_proposal("a Job whose dispatch is abandoned"))
         .await
         .expect("proposed");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     fleet.approve(job.id()).await.expect("released to run");
 
     // What `Turning::drop` does to the turn in flight: the wait is spent, the
@@ -196,7 +196,7 @@ async fn a_preparation_that_is_still_running_is_left_alone() {
         .propose(a_proposal("a Job with a slow install"))
         .await
         .expect("proposed");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     fleet.approve(job.id()).await.expect("released to run");
 
     // `admit_next` is what a turn ends in, called here directly so the turn
@@ -234,7 +234,7 @@ async fn a_job_whose_first_step_has_started_is_out_of_the_span() {
         .propose(a_proposal("an ordinary Job"))
         .await
         .expect("proposed");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.expect("dispatch runs");
 
     let turned = fleet.turn().await.expect("a turn");

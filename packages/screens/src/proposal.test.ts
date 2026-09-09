@@ -37,6 +37,7 @@ function seen() {
 function job(over: Partial<JobSummary> = {}): JobSummary {
   return {
     id: "job_1",
+    handle: "12-a-job",
     title: "Stop the board flickering",
     status: "awaiting_approval",
     workflow_id: "wf_bug",

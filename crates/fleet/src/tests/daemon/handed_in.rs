@@ -47,9 +47,17 @@ pub fn a_proposal(title: &str) -> ipc::ProposeJob {
 }
 
 /// Make the directory `FakeVcs` says it made. See this module's comment.
-pub fn worktree_directory(home: &TempDir, job: &core_model::JobId) {
-    let spec =
-        WorktreeSpec::for_job(&home.path().to_string_lossy(), job.as_str()).expect("a legal spec");
+/// **Takes the Job and not its id**, because a worktree is named by the handle
+/// now and the handle is derived from the number and the title. A fixture that
+/// took an id would make a directory Fleet does not look in.
+pub fn worktree_directory(home: &TempDir, job: &core_model::Job) {
+    worktree_directory_named(home, &job.handle());
+}
+
+/// The same directory, for a caller holding the handle and not the Job — an
+/// HTTP test reads it off the `JobSummary` it was answered with.
+pub fn worktree_directory_named(home: &TempDir, handle: &str) {
+    let spec = WorktreeSpec::for_job(&home.path().to_string_lossy(), handle).expect("a legal spec");
     std::fs::create_dir_all(spec.worktree_path()).expect("a directory for the Drone to run in");
 }
 

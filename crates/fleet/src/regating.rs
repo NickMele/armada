@@ -109,7 +109,7 @@ where
             });
         };
         let judging = self
-            .judging(job_id)
+            .judging(&job)
             .map_err(|cause| Adrift::NotConfigurable {
                 job: job_id.clone(),
                 cause,
@@ -151,11 +151,11 @@ where
             self.work(),
             self.budget(),
             &judging,
-            &Keeping::of(&self.host().repo_root, job_id),
+            &Keeping::of(&self.host().repo_root, &job.handle()),
         )
         .await;
 
-        self.recorded_checks(job_id, &step, attempt, &ruling)
+        self.recorded_checks(job_id, &job.handle(), &step, attempt, &ruling)
             .await?;
         self.recorded_judgments(job_id, &step, &ruling).await?;
         self.recorded_evidence(job_id, &step, &submission, &ruling)

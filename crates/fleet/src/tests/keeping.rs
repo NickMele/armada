@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use adapter_traits::{Footprint, Worktree};
 use config::ResolvedWorkflow;
-use core_model::{Attempt, JobId, StepId, Ulid};
+use core_model::{Attempt, StepId};
 use testkit::{FakeJudge, FakeWorkProduct, Gate, Sketch};
 use verification::{Lifted, Request};
 
@@ -28,9 +28,8 @@ use crate::tests::tmp::TempDir;
 const TARGET: &str = ".armada/artifacts/plan.md";
 const JOB: &str = "01J0000000000000000000JOB0";
 
-fn job_id() -> JobId {
-    JobId::carried(Ulid::carried(JOB))
-}
+/// What the Job is called, and what its deliverables directory is named after.
+const HANDLE: &str = "12-the-reader-drops-a-line";
 
 /// Somewhere a gate's copy can go, for a test whose subject is not the copy.
 ///
@@ -56,7 +55,7 @@ impl std::ops::Deref for Keeps {
 pub(super) fn keeping_nowhere() -> Keeps {
     let dir = TempDir::new();
     Keeps {
-        keeping: Keeping::of(&dir.path().to_string_lossy(), &job_id()),
+        keeping: Keeping::of(&dir.path().to_string_lossy(), HANDLE),
         _dir: dir,
     }
 }
@@ -96,7 +95,7 @@ impl Repo {
     }
 
     fn worktree_path(&self) -> PathBuf {
-        self.root().join(".armada").join("worktrees").join(JOB)
+        self.root().join(".armada").join("worktrees").join(HANDLE)
     }
 
     fn worktree(&self) -> Worktree {
@@ -122,7 +121,7 @@ impl Repo {
 
     /// Every copy kept for this Job, by file name.
     fn kept(&self) -> Vec<String> {
-        let dir = deliverables_dir(&self.root().to_string_lossy(), &job_id());
+        let dir = deliverables_dir(&self.root().to_string_lossy(), HANDLE);
         let Ok(entries) = std::fs::read_dir(dir) else {
             return Vec::new();
         };
@@ -139,7 +138,7 @@ impl Repo {
     fn reachable(&self, attempt: Attempt) -> Vec<String> {
         kept_deliverables(
             &self.root().to_string_lossy(),
-            &job_id(),
+            HANDLE,
             &StepId::new("plan"),
             attempt,
             TARGET,
@@ -147,7 +146,7 @@ impl Repo {
     }
 
     fn kept_bytes(&self, name: &str) -> String {
-        let dir = deliverables_dir(&self.root().to_string_lossy(), &job_id());
+        let dir = deliverables_dir(&self.root().to_string_lossy(), HANDLE);
         std::fs::read_to_string(dir.join(name)).expect("a kept deliverable")
     }
 
@@ -166,7 +165,7 @@ impl Repo {
             &FakeWorkProduct::changed(&[]),
             budget(),
             &judged_by_shared(judge),
-            &Keeping::of(&self.root().to_string_lossy(), &job_id()),
+            &Keeping::of(&self.root().to_string_lossy(), HANDLE),
         )
         .await
     }
@@ -296,7 +295,7 @@ async fn a_step_that_wrote_nothing_keeps_nothing() {
 #[test]
 fn a_step_id_that_would_leave_the_directory_keeps_nothing() {
     let repo = Repo::new();
-    let keeping = Keeping::of(&repo.root().to_string_lossy(), &job_id());
+    let keeping = Keeping::of(&repo.root().to_string_lossy(), HANDLE);
 
     keeping.kept(
         &StepId::new("../elsewhere"),
@@ -331,8 +330,8 @@ async fn the_reader_names_every_copy_of_one_run_oldest_first() {
     assert_eq!(
         repo.reachable(Attempt::FIRST),
         vec![
-            format!(".armada/deliverables/{JOB}/plan.1.plan.md"),
-            format!(".armada/deliverables/{JOB}/plan.1.1.plan.md"),
+            format!(".armada/deliverables/{HANDLE}/plan.1.plan.md"),
+            format!(".armada/deliverables/{HANDLE}/plan.1.1.plan.md"),
         ],
         "both documents were judged and both are reachable"
     );

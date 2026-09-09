@@ -46,7 +46,7 @@ async fn the_work_is_committed_when_the_delivering_step_is_entered() {
         .propose(a_proposal("fix the off-by-one in the log reader"))
         .await
         .unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     assert!(
@@ -66,7 +66,7 @@ async fn the_work_is_committed_when_the_delivering_step_is_entered() {
     let commit = &made[0];
     assert_eq!(
         commit.branch,
-        format!("armada/{}", job.id().as_str()),
+        format!("armada/{}", job.handle()),
         "the Job's own branch, not the repository's"
     );
 
@@ -116,7 +116,7 @@ async fn a_workflow_that_delivers_nothing_finishes_with_nothing_pushed() {
         .propose(a_proposal("write down how the queue should behave"))
         .await
         .unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
@@ -161,7 +161,7 @@ async fn a_job_that_changed_nothing_is_answered_rather_than_committed() {
         .propose(a_proposal("write down the cause"))
         .await
         .unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
@@ -213,7 +213,7 @@ async fn a_job_that_fails_mid_workflow_gets_no_commit() {
     let fleet = a_fleet_committing_through(&home, FakeWorkProduct::untouched(), FakeVcs::new());
 
     let job = fleet.propose(a_proposal("change nothing")).await.unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
@@ -252,7 +252,7 @@ async fn a_refused_commit_still_completes_the_job_and_says_so() {
         .propose(a_proposal("fix the off-by-one"))
         .await
         .unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
@@ -326,7 +326,7 @@ async fn a_job_whose_last_step_is_a_gate_cannot_end_until_a_person_answers() {
         .await
         .expect("a Job at the approval gate");
     let job_id = job.id().clone();
-    worktree_directory(&home, &job_id);
+    worktree_directory(&home, &job);
     dispatched(&fleet, &job_id).await.expect("it dispatches");
 
     // The first step is auto-gated, so the machine walks it and the turn puts a

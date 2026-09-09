@@ -85,7 +85,7 @@ fn a_full_fleet(home: &TempDir) -> Fixture {
 
 async fn approved(fleet: &Fixture, home: &TempDir, title: &str) -> JobId {
     let job = fleet.propose(a_proposal(title)).await.expect("a proposal");
-    worktree_directory(home, job.id());
+    worktree_directory(home, &job);
     dispatched(&fleet, job.id())
         .await
         .expect("a person approves it");

@@ -279,6 +279,17 @@ open_questions = ["Does a Job record write scope and gate scope separately, and 
 notes = "A Manifest's row outlives its `armada.yml`, so a historical Job keeps showing what it ran against. Work with no Manifest is not a Job: a dispatched Scan carries no worktree and no resolved toolset."
 why = "A single `manifest_id` / `manifest_ids` field is rejected: it answered ownership, gating, config resolution and Board scoping at once, and its entry count doubled as the shape discriminator. Ownership is this field; gating is `gate_manifest_ids[]`; shape is derived from `atomic` and `write_targets`."
 
+[fields.number]
+type = "int"
+table = "jobs"
+storage = "Column"
+nullable = "No"
+frozen_at = "Creation"
+purpose = "What a person calls this Job within its Manifest, and what its branch, its worktree and every path under `.armada/` are named after."
+in_code = "Yes"
+notes = "**Allocated by the store**, which is the only thing that can see what is already taken — `max + 1` within the Manifest, read under the same lock as the insert that uses it. Never reused: a killed Job keeps its number the way a closed issue keeps its own. Not global, because a person works in one repository at a time and *job 12* is shorter than anything unique across all of them. The handle a person actually reads is this and the title together, derived rather than stored — `crates/core-model/src/job/handle.rs`. A title naming a credential is carried by its number alone, because a branch is pushed to a forge and never passes the report redactor."
+why = "`job_id` is a ULID: unique, unsayable, and time-ordered — so the two Jobs hardest to tell apart are the two minted by one proposal in the same millisecond, which are exactly the two a person most needs to tell apart. A git-style short prefix was rejected for that reason; it degrades precisely where it is needed. The id stays the record's key and is what every message names."
+
 [fields.proposal_id]
 type = "id"
 table = "jobs"

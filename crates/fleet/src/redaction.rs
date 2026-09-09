@@ -31,27 +31,6 @@ const REDACTED: &str = "[redacted]";
 /// a person reads a path with, and the point is that the path stays useful.
 const TILDE: &str = "~";
 
-/// A name whose value is a credential. Matched case-insensitively as a
-/// substring, so `AWS_SECRET_ACCESS_KEY` is caught by `secret`.
-///
-/// **Deliberately narrow, and `auth` is not here.** `auth` catches `author`,
-/// and a report about a Job whose commit author was redacted is a report
-/// missing the fact somebody filed it to explain. `authorization` is the
-/// spelling that means the header.
-const CREDENTIAL_NAMES: &[&str] = &[
-    "token",
-    "secret",
-    "password",
-    "passwd",
-    "passphrase",
-    "credential",
-    "apikey",
-    "api_key",
-    "access_key",
-    "private_key",
-    "authorization",
-];
-
 /// The scrubber a report's every string passes through.
 ///
 /// It holds the home directory rather than reading one: **nothing in this crate
@@ -174,7 +153,9 @@ impl Redactor {
 /// Whether a name says its value is a credential.
 fn credential_named(name: &str) -> bool {
     let name = name.to_ascii_lowercase();
-    CREDENTIAL_NAMES.iter().any(|word| name.contains(word))
+    core_model::CREDENTIAL_NAMES
+        .iter()
+        .any(|word| name.contains(word))
 }
 
 /// The token without whatever punctuation closes it, and that punctuation.

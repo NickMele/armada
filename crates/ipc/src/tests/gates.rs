@@ -103,6 +103,7 @@ fn gated_job() -> Job {
             subject: None,
             redispatched_from: None,
             proposal_id: None,
+            number: core_model::JobNumber::carried(1),
             facts: Facts::new(""),
             scope_revisions: Vec::new(),
             attachments: Vec::new(),

@@ -50,7 +50,7 @@ async fn a_branch_that_is_not_behind_is_not_rebased_at_a_boundary() {
         .propose(a_proposal("leave a current branch alone"))
         .await
         .unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
@@ -73,7 +73,7 @@ async fn a_behind_branch_is_brought_up_to_date_at_a_step_boundary() {
         FakeVcs::new().delivering(three_commits_behind()),
     );
     let job = fleet.propose(a_proposal("catch up mid-Job")).await.unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     // The first step advances, which is a boundary and not the end.
@@ -103,11 +103,11 @@ async fn a_behind_branch_is_brought_up_to_date_at_a_step_boundary() {
         fleet.vcs().delivered(),
         vec![
             Delivered::BroughtUpToDate {
-                branch: format!("armada/{}", job.id().as_str()),
+                branch: format!("armada/{}", job.handle()),
                 base: String::from("main")
             },
             Delivered::BroughtUpToDate {
-                branch: format!("armada/{}", job.id().as_str()),
+                branch: format!("armada/{}", job.handle()),
                 base: String::from("main")
             }
         ]
@@ -139,7 +139,7 @@ async fn a_conflicting_rebase_is_handed_to_the_drone_rather_than_failing_the_job
         .propose(a_proposal("resolve what moved underneath"))
         .await
         .unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
@@ -203,7 +203,7 @@ async fn a_step_that_resolves_none_of_a_conflicted_rebase_fails_its_diff_check()
         .propose(a_proposal("fix the off-by-one in the log reader"))
         .await
         .unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     // The first step does real work and advances, which is the boundary.
@@ -265,7 +265,7 @@ async fn entering_the_delivering_step_pushes_and_opens_for_review() {
         .propose(a_proposal("fix the off-by-one in the log reader"))
         .await
         .unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
@@ -283,7 +283,7 @@ async fn entering_the_delivering_step_pushes_and_opens_for_review() {
     );
     assert!(matches!(delivered.opened, Some(Opened::PullRequest { .. })));
 
-    let branch = format!("armada/{}", job.id().as_str());
+    let branch = format!("armada/{}", job.handle());
     assert_eq!(
         fleet.vcs().delivered().first(),
         Some(&Delivered::Pushed {
@@ -311,7 +311,7 @@ async fn the_pull_request_body_is_assembled_from_what_was_checked() {
         .propose(a_proposal("fix the off-by-one in the log reader"))
         .await
         .unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
@@ -405,7 +405,7 @@ async fn a_pull_request_names_the_commits_its_base_carries_that_the_remote_has_n
         .propose(a_proposal("fix the off-by-one in the log reader"))
         .await
         .unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
@@ -442,7 +442,7 @@ async fn a_pull_request_says_when_the_base_it_rebased_onto_is_behind_the_remote(
         .propose(a_proposal("fix the off-by-one in the log reader"))
         .await
         .unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
@@ -474,7 +474,7 @@ async fn a_base_level_with_its_remote_puts_no_caveat_in_the_pull_request() {
         .propose(a_proposal("fix the off-by-one in the log reader"))
         .await
         .unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
@@ -516,7 +516,7 @@ async fn a_job_on_a_repository_with_no_remote_completes_without_a_push() {
         .propose(a_proposal("work on a repository nobody has cloned"))
         .await
         .unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
@@ -569,7 +569,7 @@ async fn the_declared_base_overrides_what_would_have_been_inferred() {
         .propose(a_proposal("merge into what the file names"))
         .await
         .unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
@@ -590,7 +590,7 @@ async fn the_declared_base_overrides_what_would_have_been_inferred() {
             .filter(|did| matches!(did, Delivered::BroughtUpToDate { .. }))
             .all(|did| did
                 == &Delivered::BroughtUpToDate {
-                    branch: format!("armada/{}", job.id().as_str()),
+                    branch: format!("armada/{}", job.handle()),
                     base: String::from("release")
                 }),
         "every rebase named the declared branch, not the inferred one: {:?}",
@@ -612,7 +612,7 @@ async fn a_declared_base_is_what_the_pull_request_merges_into() {
         .propose(a_proposal("open against what the file names"))
         .await
         .unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();

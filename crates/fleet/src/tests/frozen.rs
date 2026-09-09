@@ -71,7 +71,7 @@ async fn a_workflow_edited_under_a_job_changes_nothing_about_it() {
             .propose(a_proposal("fix the off-by-one"))
             .await
             .unwrap();
-        worktree_directory(&home, job.id());
+        worktree_directory(&home, &job);
         job.id().clone()
     };
 
@@ -211,7 +211,7 @@ async fn a_job_folds_its_drone_out_of_the_log() {
             .propose(a_proposal("fix the off-by-one"))
             .await
             .unwrap();
-        worktree_directory(&home, job.id());
+        worktree_directory(&home, &job);
         let running = dispatched(&fleet, job.id()).await.unwrap();
         assert_eq!(running.status(), JobStatus::Running);
         let drone = running
@@ -381,7 +381,7 @@ async fn a_failed_checks_output_is_readable_from_its_file_afterwards() {
         .propose(a_proposal("fix the off-by-one"))
         .await
         .unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
 
@@ -397,7 +397,7 @@ async fn a_failed_checks_output_is_readable_from_its_file_afterwards() {
         .expect("a Manifest Check that ran has a file");
     assert_eq!(
         path,
-        format!(".armada/checks/{}/implement.1.0.log", job.id().as_str()),
+        format!(".armada/checks/{}/implement.1.0.log", job.handle()),
         "the whole of the row's key — job, step, attempt, ordinal — so a second \
          run of the step cannot overwrite the first run's output while `store` \
          keeps the first run's row"
@@ -456,7 +456,7 @@ async fn a_check_that_passed_keeps_its_output_and_a_built_in_has_none() {
         .propose(a_proposal("fix the off-by-one"))
         .await
         .unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
     fleet.turn().await.unwrap();

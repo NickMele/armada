@@ -36,14 +36,14 @@ fn a_fleet_sweeping_every_turn(home: &TempDir) -> Fixture {
     Fleet::assembled(fittings)
 }
 
-fn worktree_of(home: &TempDir, job: &core_model::JobId) -> std::path::PathBuf {
-    home.path().join(".armada/worktrees").join(job.as_str())
+fn worktree_of(home: &TempDir, handle: &str) -> std::path::PathBuf {
+    home.path().join(".armada/worktrees").join(handle)
 }
 
 /// Write and commit a file inside the Job's checkout, which is what leaves a
 /// branch the base cannot reach.
-fn a_commit_nobody_has_taken(home: &TempDir, job: &core_model::JobId) {
-    let at = worktree_of(home, job);
+fn a_commit_nobody_has_taken(home: &TempDir, handle: &str) {
+    let at = worktree_of(home, handle);
     std::fs::write(at.join("work.txt"), "what the drone wrote\n").expect("a change");
     git(&at, &["add", "work.txt"]);
     commit(&at, "work nobody has taken");
@@ -62,8 +62,9 @@ async fn a_finished_jobs_worktree_comes_back_without_anybody_deciding() {
     let fleet = a_fleet_sweeping_every_turn(&home);
     a_repository(&home);
     let job_id = a_finished_job(&fleet, "sweep me").await;
-    a_worktree_for(&home, job_id.as_str());
-    assert!(worktree_of(&home, &job_id).is_dir());
+    let handle = fleet.load(&job_id).await.expect("the Job").handle();
+    a_worktree_for(&home, &handle);
+    assert!(worktree_of(&home, &handle).is_dir());
 
     let turned = fleet.turn().await.expect("a turn");
 
@@ -71,10 +72,13 @@ async fn a_finished_jobs_worktree_comes_back_without_anybody_deciding() {
     assert_eq!(took.len(), 1, "one Job's disk came back: {took:?}");
     assert_eq!(took[0].job, job_id);
     assert!(
-        !worktree_of(&home, &job_id).exists(),
+        !worktree_of(&home, &handle).exists(),
         "the directory is gone"
     );
-    assert!(!branches(home.path()).contains(&format!("armada/{}", job_id.as_str())));
+    assert!(!branches(home.path()).contains(&format!(
+        "armada/{}",
+        fleet.load(&job_id).await.expect("the Job").handle()
+    )));
     assert!(
         fleet.load(&job_id).await.is_ok(),
         "the record survives — this takes disk, and forget_job takes the row"
@@ -90,10 +94,17 @@ async fn what_the_sweep_took_is_written_into_the_jobs_own_log() {
     let fleet = a_fleet_sweeping_every_turn(&home);
     a_repository(&home);
     let job_id = a_finished_job(&fleet, "say what you took").await;
-    a_worktree_for(&home, job_id.as_str());
+    let handle = fleet.load(&job_id).await.expect("the Job").handle();
+    a_worktree_for(&home, &handle);
     let tip = git(
         home.path(),
-        &["rev-parse", &format!("armada/{}", job_id.as_str())],
+        &[
+            "rev-parse",
+            &format!(
+                "armada/{}",
+                fleet.load(&job_id).await.expect("the Job").handle()
+            ),
+        ],
     )
     .trim()
     .to_string();
@@ -121,9 +132,10 @@ async fn an_uncommitted_file_holds_a_worktree_whose_branch_reads_as_merged() {
     let fleet = a_fleet_sweeping_every_turn(&home);
     a_repository(&home);
     let job_id = a_finished_job(&fleet, "half-written").await;
-    a_worktree_for(&home, job_id.as_str());
+    let handle = fleet.load(&job_id).await.expect("the Job").handle();
+    a_worktree_for(&home, &handle);
     std::fs::write(
-        worktree_of(&home, &job_id).join("half-done.rs"),
+        worktree_of(&home, &handle).join("half-done.rs"),
         "fn main()",
     )
     .expect("a file nobody committed");
@@ -132,7 +144,7 @@ async fn an_uncommitted_file_holds_a_worktree_whose_branch_reads_as_merged() {
 
     assert!(turned.reclaimed.is_empty(), "nothing was taken");
     assert!(
-        worktree_of(&home, &job_id).is_dir(),
+        worktree_of(&home, &handle).is_dir(),
         "the only copy is here"
     );
     let held = fleet.worktrees_held().await.expect("the held list");
@@ -154,8 +166,9 @@ async fn a_branch_the_base_cannot_reach_is_held_and_says_how_much_would_go() {
     let fleet = a_fleet_sweeping_every_turn(&home);
     a_repository(&home);
     let job_id = a_finished_job(&fleet, "keep my commits").await;
-    a_worktree_for(&home, job_id.as_str());
-    a_commit_nobody_has_taken(&home, &job_id);
+    let handle = fleet.load(&job_id).await.expect("the Job").handle();
+    a_worktree_for(&home, &handle);
+    a_commit_nobody_has_taken(&home, &handle);
 
     let turned = fleet.turn().await.expect("a turn");
 
@@ -180,7 +193,7 @@ async fn a_job_that_is_still_moving_is_held_and_names_its_status() {
         .propose(a_proposal("still at the gate"))
         .await
         .expect("a Job at the gate");
-    a_worktree_for(&home, job.id().as_str());
+    a_worktree_for(&home, &job.handle());
 
     let turned = fleet.turn().await.expect("a turn");
 
@@ -207,7 +220,7 @@ async fn a_piloted_job_is_held_as_piloted_and_is_never_offered() {
         .propose(a_proposal("somebody took this one over"))
         .await
         .expect("a Job at the gate");
-    a_worktree_for(&home, job.id().as_str());
+    a_worktree_for(&home, &job.handle());
     let running = dispatched(&fleet, job.id()).await.expect("running");
     fleet
         .move_job(
@@ -241,7 +254,8 @@ async fn a_dependent_that_has_not_run_holds_the_job_it_waits_on() {
     let fleet = a_fleet_sweeping_every_turn(&home);
     a_repository(&home);
     let job_id = a_finished_job(&fleet, "the upstream").await;
-    a_worktree_for(&home, job_id.as_str());
+    let handle = fleet.load(&job_id).await.expect("the Job").handle();
+    a_worktree_for(&home, &handle);
     let mut waiting = a_proposal("the one behind it");
     waiting.dependencies = vec![ipc::DependencyEdge {
         direction: ipc::DependencyDirection::from_wire("depends_on").expect("a direction"),
@@ -274,7 +288,8 @@ async fn nothing_is_swept_before_the_interval_comes_due() {
     let fleet = Fleet::assembled(fitted);
     a_repository(&home);
     let job_id = a_finished_job(&fleet, "not yet").await;
-    a_worktree_for(&home, job_id.as_str());
+    let handle = fleet.load(&job_id).await.expect("the Job").handle();
+    a_worktree_for(&home, &handle);
 
     // The first turn stamps the sweep; the second is inside the interval and is
     // the one under test. A fixture clock advances by a tick, not by a day.
@@ -293,7 +308,8 @@ async fn a_worktree_already_given_back_is_not_swept_a_second_time() {
     let fleet = a_fleet_sweeping_every_turn(&home);
     a_repository(&home);
     let job_id = a_finished_job(&fleet, "only once").await;
-    a_worktree_for(&home, job_id.as_str());
+    let handle = fleet.load(&job_id).await.expect("the Job").handle();
+    a_worktree_for(&home, &handle);
     assert_eq!(fleet.turn().await.expect("a turn").reclaimed.len(), 1);
 
     let again = fleet.turn().await.expect("a second turn");
@@ -320,9 +336,10 @@ async fn a_worktree_failing_two_tests_carries_both_reasons() {
     let fleet = a_fleet_sweeping_every_turn(&home);
     a_repository(&home);
     let job_id = a_finished_job(&fleet, "held twice over").await;
-    a_worktree_for(&home, job_id.as_str());
-    a_commit_nobody_has_taken(&home, &job_id);
-    std::fs::write(worktree_of(&home, &job_id).join("scratch.txt"), "and this")
+    let handle = fleet.load(&job_id).await.expect("the Job").handle();
+    a_worktree_for(&home, &handle);
+    a_commit_nobody_has_taken(&home, &handle);
+    std::fs::write(worktree_of(&home, &handle).join("scratch.txt"), "and this")
         .expect("something uncommitted as well");
 
     let held = fleet.worktrees_held().await.expect("the held list");
@@ -347,9 +364,10 @@ async fn a_held_worktree_says_when_armada_last_moved_the_job() {
     let fleet = a_fleet_sweeping_every_turn(&home);
     a_repository(&home);
     let job_id = a_finished_job(&fleet, "sat for a while").await;
-    a_worktree_for(&home, job_id.as_str());
+    let handle = fleet.load(&job_id).await.expect("the Job").handle();
+    a_worktree_for(&home, &handle);
     std::fs::write(
-        worktree_of(&home, &job_id).join("scratch.txt"),
+        worktree_of(&home, &handle).join("scratch.txt"),
         "written and committed nowhere",
     )
     .expect("something uncommitted");
@@ -382,8 +400,9 @@ async fn the_held_list_names_the_checkout_the_branch_and_why() {
     let fleet = a_fleet_sweeping_every_turn(&home);
     a_repository(&home);
     let job_id = a_finished_job(&fleet, "read me over the wire").await;
-    a_worktree_for(&home, job_id.as_str());
-    a_commit_nobody_has_taken(&home, &job_id);
+    let handle = fleet.load(&job_id).await.expect("the Job").handle();
+    a_worktree_for(&home, &handle);
+    a_commit_nobody_has_taken(&home, &handle);
 
     let events = fleet.events();
     let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
@@ -396,11 +415,11 @@ async fn the_held_list_names_the_checkout_the_branch_and_why() {
     assert_eq!(one.job_id.as_str(), job_id.as_str());
     assert_eq!(one.job_title, "read me over the wire");
     assert!(
-        one.path.ends_with(job_id.as_str()),
-        "the checkout a person goes and looks at: {}",
+        one.path.ends_with(&handle),
+        "the checkout a person goes and looks at, named the way a person names it: {}",
         one.path
     );
-    assert!(one.branch.contains(job_id.as_str()), "{}", one.branch);
+    assert!(one.branch.contains(&handle), "{}", one.branch);
     assert!(
         !one.last_moved_at.as_str().is_empty(),
         "how long it has sat crosses with the rest of the row"
@@ -427,7 +446,7 @@ async fn a_piloted_jobs_checkout_is_not_served_at_all() {
         .propose(a_proposal("somebody is in this one"))
         .await
         .expect("a Job at the gate");
-    a_worktree_for(&home, job.id().as_str());
+    a_worktree_for(&home, &job.handle());
     let running = dispatched(&fleet, job.id()).await.expect("running");
     fleet
         .move_job(

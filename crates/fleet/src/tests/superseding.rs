@@ -182,8 +182,8 @@ async fn a_queued_job_whose_sibling_landed_its_work_is_superseded_rather_than_di
         ]),
     );
     let made = fleet.propose_from(TWO_ITEMS, None).await.expect("a plan");
-    worktree_directory(&home, made[0].id());
-    worktree_directory(&home, made[1].id());
+    worktree_directory(&home, &made[0]);
+    worktree_directory(&home, &made[1]);
     dispatched(&fleet, made[0].id())
         .await
         .expect("the first runs");

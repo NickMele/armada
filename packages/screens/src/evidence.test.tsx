@@ -57,6 +57,7 @@ const NOW = Date.parse("2026-09-09T10:00:00Z");
 function job(over: Partial<JobSummary> = {}): JobSummary {
   return {
     id: JOB_ID,
+    handle: "12-a-job",
     title: "Coalesce concurrent token refreshes",
     status: "escalated",
     workflow_id: "bug",

@@ -125,8 +125,20 @@ where
         let frozen = workflow.frozen();
         let outcome = enrich(failed.facts().as_str(), self.links().as_ref()).await;
         let facts = self.re_enriched(failed.facts(), &outcome);
+        // **A replacement takes a number of its own.** It is a different Job
+        // with a different branch and a different worktree, so sharing the
+        // failed one's handle would put two Jobs in one directory. The link
+        // back is `redispatched_from`, which is a field and not a name.
+        //
+        // Allocated and written under one lock, for `Fleet::proposed_job`'s
+        // reason.
+        let mut store = self.store().lock().await;
+        let number = store
+            .next_job_number(failed.owner_manifest_id())
+            .map_err(Adrift::Reading)?;
         let new = NewJob {
             id: JobId::carried(self.mint().ulid()),
+            number,
             title: failed.title().clone(),
             workflow: frozen.clone(),
             owner_manifest_id: failed.owner_manifest_id().clone(),
@@ -167,11 +179,7 @@ where
                 job: failed.id().clone(),
             })?;
         let job = Job::create_top_level(new, origin, at.clone());
-        self.store()
-            .lock()
-            .await
-            .insert_job(&job, &at)
-            .map_err(Adrift::Writing)?;
+        store.insert_job(&job, &at).map_err(Adrift::Writing)?;
         self.publish(ipc::Event::JobCreated(ipc::JobCreated {
             job: ipc::JobSummary::from(&job),
             actor: core_model::Actor::Human.into(),

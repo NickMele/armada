@@ -39,6 +39,19 @@ use crate::enums::{
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JobSummary {
     pub id: JobId,
+    /// What a person calls this Job — `12-the-drone-count-is-wrong`.
+    ///
+    /// **Beside `id`, never instead of it.** The id is what everything joins
+    /// on and what every other message names; this is what a person reads,
+    /// types, and finds in a branch name, a worktree directory and a pull
+    /// request title. A ULID is unique and unsayable, and two Jobs from one
+    /// proposal are minted in the same millisecond — so the ones hardest to
+    /// tell apart are the ones a reader most needs to.
+    ///
+    /// Derived by Fleet from the Job's number and title, both frozen at
+    /// creation. A surface renders it and never composes one.
+    #[serde(default)]
+    pub handle: String,
     /// The name a person reads in the row. **The reason the list is worth
     /// looking at** — everything else here is an id, a status or a flag, and
     /// none of them says what the Job is.
@@ -193,6 +206,7 @@ impl JobSummary {
     ) -> JobSummary {
         JobSummary {
             id: job.id().into(),
+            handle: job.handle(),
             title: job.title().as_str().to_string(),
             status: job.status().into(),
             created_at: job.created_at().into(),

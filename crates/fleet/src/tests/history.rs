@@ -19,7 +19,7 @@ use axum::http::StatusCode;
 use ipc::{JobHistory, JobSummary, Movement, RunId};
 use testkit::FakeWorkProduct;
 
-use crate::tests::daemon::{a_fleet, diff_evidence, note_evidence, worktree_directory};
+use crate::tests::daemon::{a_fleet, diff_evidence, note_evidence, worktree_directory_named};
 use crate::tests::http::call;
 use crate::tests::serving::A_PROPOSAL;
 use crate::tests::tmp::TempDir;
@@ -50,7 +50,7 @@ async fn a_finished_job_can_say_every_move_it_made() {
     assert_eq!(status, StatusCode::CREATED);
     let proposed: JobSummary = ipc::decode("a proposed Job", &body).expect("a JobSummary");
     let job_id = proposed.id.clone();
-    worktree_directory(&home, &job_id.to_domain());
+    worktree_directory_named(&home, &proposed.handle);
 
     let (status, _) = call(
         &app,

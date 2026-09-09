@@ -65,7 +65,7 @@ async fn each_step_is_spawned_as_the_model_its_own_step_named() {
         .propose(a_proposal("two steps, two models"))
         .await
         .expect("a proposal");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.expect("it is approved");
 
     let after_first = fleet.harness().configured();

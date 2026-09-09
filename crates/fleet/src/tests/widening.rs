@@ -65,7 +65,7 @@ async fn running(
     proposal.write_targets =
         scope.map(|paths| paths.iter().map(|path| (*path).to_string()).collect());
     let job = fleet.propose(proposal).await.expect("a job");
-    worktree_directory(home, job.id());
+    worktree_directory(home, &job);
     dispatched(&fleet, job.id()).await.expect("it dispatches");
     let id = job.id().clone();
     (fleet, id)
@@ -334,7 +334,7 @@ async fn the_call_carries_the_step_the_scope_the_paths_and_the_reason() {
     let mut proposal = a_proposal("fix the reader");
     proposal.write_targets = Some(vec!["crates/fleet".to_string()]);
     let job = fleet.propose(proposal).await.expect("a job");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.expect("it dispatches");
 
     asked_by_the_one(&fleet, &asking(&["crates/store/src/schema.rs"]))

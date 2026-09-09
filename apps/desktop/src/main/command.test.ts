@@ -25,6 +25,7 @@ import { JobCommands, type Board } from "./command";
 
 const A_JOB: JobSummary = {
   id: "01M1HQZAKN001AJ5MT3PT09KKY",
+  handle: "12-a-job",
   title: "Make the parser take it",
   status: "queued",
   workflow_id: "bug",

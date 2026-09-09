@@ -329,7 +329,7 @@ async fn a_gaming_finding_names_its_patterns_on_the_detail_view() {
         .await
         .expect("a Job at the gate");
     let job_id = job.id().clone();
-    worktree_directory(&home, &job_id);
+    worktree_directory(&home, &job);
     dispatched(&fleet, &job_id).await.expect("released to run");
     submitted_by_the_one(&fleet, crate::tests::daemon::diff_evidence())
         .await
@@ -400,7 +400,7 @@ async fn a_step_nothing_was_flagged_on_carries_an_empty_list() {
         .await
         .expect("a Job at the gate");
     let job_id = job.id().clone();
-    worktree_directory(&home, &job_id);
+    worktree_directory(&home, &job);
     dispatched(&fleet, &job_id).await.expect("released to run");
     let events = fleet.events();
     let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));

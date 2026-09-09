@@ -48,7 +48,10 @@ pub use fleets::{
     a_fleet_judged_by, a_fleet_minting_from, a_fleet_proposing_through,
     a_fleet_whose_manifest_declares_a_base, fitted_with, fittings,
 };
-pub use handed_in::{a_proposal, a_proposal_for, diff_evidence, note_evidence, worktree_directory};
+pub use handed_in::{
+    a_proposal, a_proposal_for, diff_evidence, note_evidence, worktree_directory,
+    worktree_directory_named,
+};
 pub use workflows::{
     manifest, one, two_steps_both_gated_on_a_diff, two_steps_gated_on_a_person, workflow_named,
     workflow_named_gated_on_diff, NEVER_QUIET, UNTRIPPABLE,
@@ -69,7 +72,7 @@ async fn a_job_is_driven_from_created_to_completed_and_survives_a_reopen() {
         .unwrap();
     assert_eq!(job.status(), JobStatus::AwaitingApproval);
     assert_eq!(job.steps().len(), 2, "the frozen workflow's steps");
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
 
     let approved = dispatched(&fleet, job.id()).await.unwrap();
     assert_eq!(approved.status(), JobStatus::Running);
@@ -153,7 +156,7 @@ async fn a_failed_check_holds_the_job_and_keeps_the_worktree() {
     let fleet = a_fleet(&home, FakeWorkProduct::untouched());
 
     let job = fleet.propose(a_proposal("change nothing")).await.unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
@@ -171,7 +174,7 @@ async fn a_failed_check_holds_the_job_and_keeps_the_worktree() {
          gets round to reading the failure"
     );
 
-    let spec = WorktreeSpec::for_job(&home.path().to_string_lossy(), job.id().as_str()).unwrap();
+    let spec = WorktreeSpec::for_job(&home.path().to_string_lossy(), &job.handle()).unwrap();
     assert!(
         std::path::Path::new(&spec.worktree_path()).exists(),
         "the worktree is kept — nothing in this workspace can remove one"
@@ -186,11 +189,11 @@ async fn a_second_approved_job_waits_while_one_is_worked() {
     let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
 
     let first = fleet.propose(a_proposal("the first")).await.unwrap();
-    worktree_directory(&home, first.id());
+    worktree_directory(&home, &first);
     dispatched(&fleet, first.id()).await.unwrap();
 
     let second = fleet.propose(a_proposal("the second")).await.unwrap();
-    worktree_directory(&home, second.id());
+    worktree_directory(&home, &second);
     let waiting = dispatched(&fleet, second.id()).await.unwrap();
 
     assert_eq!(
@@ -230,7 +233,7 @@ async fn a_running_job_with_no_drone_is_interrupted_at_startup() {
             .propose(a_proposal("interrupted mid-flight"))
             .await
             .unwrap();
-        worktree_directory(&home, job.id());
+        worktree_directory(&home, &job);
         dispatched(&fleet, job.id()).await.unwrap();
         // **Ended here rather than left to the drop.** A Drone outlives the
         // Fleet that spawned it by design, and one still in the process table
@@ -271,7 +274,7 @@ async fn a_submission_of_the_wrong_kind_moves_nothing() {
     let home = TempDir::new();
     let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
     let job = fleet.propose(a_proposal("the wrong kind")).await.unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     // The first step asks for a diff.
@@ -298,7 +301,7 @@ async fn killing_a_job_ends_it_and_frees_the_slot() {
     let home = TempDir::new();
     let fleet = a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"]));
     let job = fleet.propose(a_proposal("kill me")).await.unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     let killed = Fleet::kill_job(&fleet, job.id()).await.unwrap();
@@ -321,7 +324,7 @@ async fn a_drone_that_leaves_without_submitting_does_not_leave_the_job_running()
         .propose(a_proposal("say nothing and go"))
         .await
         .unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     let mut after = None;
@@ -369,7 +372,7 @@ async fn a_second_step_that_writes_nothing_is_not_credited_with_the_first_step_s
         .propose(a_proposal("fix the off-by-one"))
         .await
         .unwrap();
-    worktree_directory(&home, job.id());
+    worktree_directory(&home, &job);
     dispatched(&fleet, job.id()).await.unwrap();
 
     // The first step's Drone puts something on disk, then submits.

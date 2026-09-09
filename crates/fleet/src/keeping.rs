@@ -21,7 +21,7 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use core_model::{Attempt, JobId, StepId};
+use core_model::{Attempt, StepId};
 
 /// Where one Job's kept deliverables live, under the repository it ran in.
 ///
@@ -34,11 +34,11 @@ use core_model::{Attempt, JobId, StepId};
 /// path missing the attempt let a second run write over the first while both
 /// runs' rows survived, leaving the first attempt's record pointing at the
 /// second attempt's bytes.
-pub fn deliverables_dir(repo_root: &str, job: &JobId) -> PathBuf {
+pub fn deliverables_dir(repo_root: &str, handle: &str) -> PathBuf {
     Path::new(repo_root)
         .join(".armada")
         .join("deliverables")
-        .join(job.as_str())
+        .join(handle)
 }
 
 /// The copies of one step's one attempt that are on disk now, in the order they
@@ -64,19 +64,19 @@ pub fn deliverables_dir(repo_root: &str, job: &JobId) -> PathBuf {
 /// must not need it.
 pub fn kept_deliverables(
     repo_root: &str,
-    job: &JobId,
+    handle: &str,
     step: &StepId,
     attempt: Attempt,
     target: &str,
 ) -> Vec<String> {
-    let dir = deliverables_dir(repo_root, job);
+    let dir = deliverables_dir(repo_root, handle);
     (0..ROTATIONS)
         .map_while(|nth| file_name(step, attempt, target, nth))
         .take_while(|name| dir.join(name).is_file())
         // The same spelling `asked::kept` answers with, and for the same
         // reason: what crosses the wire is relative to the repository root, so
         // nothing about where the repository is reaches a client.
-        .map(|name| format!(".armada/deliverables/{}/{name}", job.as_str()))
+        .map(|name| format!(".armada/deliverables/{}/{name}", handle))
         .collect()
 }
 
@@ -119,9 +119,9 @@ pub struct Keeping {
 
 impl Keeping {
     /// Copies for one Job, under the repository it is running in.
-    pub fn of(repo_root: &str, job: &JobId) -> Keeping {
+    pub fn of(repo_root: &str, handle: &str) -> Keeping {
         Keeping {
-            dir: deliverables_dir(repo_root, job),
+            dir: deliverables_dir(repo_root, handle),
         }
     }
 

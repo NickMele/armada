@@ -131,7 +131,7 @@ async fn stopped(fleet: &Fixture, home: &TempDir) -> JobId {
         .propose(a_proposal("make the parser take it"))
         .await
         .expect("a Job at the approval gate");
-    worktree_directory(home, job.id());
+    worktree_directory(home, &job);
     dispatched(&fleet, job.id()).await.expect("released to run");
 
     let record = fleet.load(job.id()).await.expect("the Job reads");
@@ -232,7 +232,10 @@ async fn a_restart_catches_the_branch_up_before_the_new_drone_starts() {
     assert_eq!(
         fleet.vcs().delivered().split_off(before),
         vec![Delivered::BroughtUpToDate {
-            branch: format!("armada/{}", job.as_str()),
+            branch: format!(
+                "armada/{}",
+                fleet.load(&job).await.expect("the Job").handle()
+            ),
             base: String::from("main"),
         }],
         "the restarted step starts from the base as it stands, not as it was cut"

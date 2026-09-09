@@ -80,7 +80,7 @@ async fn refused(fleet: &Fixture, home: &TempDir, brief: &str) -> core_model::Jo
         .await
         .expect("a Job at the approval gate");
     let job_id = job.id().clone();
-    worktree_directory(home, &job_id);
+    worktree_directory(home, &job);
     dispatched(&fleet, &job_id).await.expect("released to run");
     submitted_by_the_one(&fleet, diff_evidence())
         .await
