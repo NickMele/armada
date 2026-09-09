@@ -43,6 +43,7 @@ import {
   openArtifact,
   openPullRequest,
   readCall,
+  readCheckOutput,
   readDiff,
   readEvidence,
   readRemarks,
@@ -345,6 +346,7 @@ export function App() {
                 onOpenArtifact={openArtifact}
                 onOpenPullRequest={openPullRequest}
                 onReadCall={readCall}
+                onReadCheckOutput={readCheckOutput}
                 onNeedMaterial={readEvidence}
                 onNeedRemarks={readRemarks}
                 watched={state.watched}

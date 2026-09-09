@@ -8,6 +8,7 @@
 import type {
   BridgeIdentity,
   CallRead,
+  CheckOutputRead,
   ClearOutcome,
   Connection,
   Diff,
@@ -530,6 +531,22 @@ export type BridgeApi = {
    */
   readCall: (jobId: string, callId: string) => Promise<CallRead>;
   /**
+   * Read one Check's own output, whole enough to read on the screen it is on.
+   *
+   * **`readCall`'s shape one record over.** `CheckRun.output_path` has always
+   * said where the file is and `openArtifact` hands it to the operating system;
+   * this is what brings the lines in, so a suite that went green for the wrong
+   * reason can be argued with without leaving the app.
+   *
+   * `kept` is the row's own file name, off `output_path`. **Nothing here
+   * composes a path** — `artifacts.ts` owns that rule — and Fleet resolves the
+   * name against its own record, so this reaches no file the record does not
+   * name.
+   *
+   * Read-only, like the reads above it.
+   */
+  readCheckOutput: (jobId: string, kept: string) => Promise<CheckOutputRead>;
+  /**
    * Read every filed report and the counts beside them, or `false` to drop it.
    *
    * **Read-only, and the only read here that names no Job.** A report is about
@@ -718,6 +735,7 @@ export const CHANNELS = {
   readDiff: "bridge:read-diff",
   readRemarks: "bridge:read-remarks",
   readCall: "bridge:read-call",
+  readCheckOutput: "bridge:read-check-output",
   readReports: "bridge:read-reports",
   readHeld: "bridge:read-held",
   approveReview: "bridge:approve-review",

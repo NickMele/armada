@@ -48,6 +48,7 @@ import { DIFF_CHAPTER, LOG_CHAPTER, namesChapter, type DetailKeys } from "./deta
 import { evidenceChaptersOf } from "./evidence";
 import { readingFor, whyNoFootprint } from "./files";
 import { Log } from "./Log";
+import type { Outputs } from "./outputs";
 import { keptOf, type KeptRead, type Opens } from "./phases";
 import { producedIn } from "./produced";
 import type { OpenSheet } from "./Sheets";
@@ -71,6 +72,7 @@ export function chaptersOf({
   transcript,
   log,
   calls,
+  outputs,
   sheet,
   opens,
   onOpenSheet,
@@ -123,6 +125,13 @@ export function chaptersOf({
    * land in either.
    */
   calls: Calls;
+  /**
+   * What each Check on this Job has printed, where somebody opened one, and how
+   * to ask for the rest. **Held for the Job, like `calls`**, and for its reason:
+   * a recorded output never moves, so it is one reader's gesture rather than
+   * state the window redraws on.
+   */
+  outputs: Outputs;
   /**
    * Which sheet is open, so the chapter behind it says so and stops offering.
    *
@@ -299,7 +308,7 @@ export function chaptersOf({
     // Chapters four and five, where the step has them. `evidence.tsx` decides
     // whether either is drawn and what its ordinal is — a step that gates on
     // nothing has neither, and one that gates on a Judge alone has one.
-    ...evidenceChaptersOf({ step, criteria, opens }),
+    ...evidenceChaptersOf({ step, criteria, opens, outputs }),
   ];
 }
 

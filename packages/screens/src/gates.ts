@@ -115,11 +115,28 @@ export function checksStand(reads: readonly CheckRead[]): string {
  * come through here, so the two cannot open different files.
  */
 export function outputOf(step: StepDetail | undefined): string | undefined {
+  return outputRunOf(step)?.output_path;
+}
+
+/**
+ * Which Check's output a reader is offered on this step, whole.
+ *
+ * **One reading behind three surfaces.** The header act opens the file, `o`
+ * opens the file, and the chapter now reads it into the panel — three ways of
+ * asking one question, and three answers to it would put a person reading one
+ * Check's output under a button that opens another's. `outputOf` is this,
+ * narrowed to the path, and exists because two callers only ever wanted that.
+ *
+ * The row rather than the path, because a reader has to say whose output it is
+ * showing: a console pane with a file name and no Check name is a transcript
+ * nobody can attribute.
+ */
+export function outputRunOf(step: StepDetail | undefined): CheckRun | undefined {
   if (step === undefined) return undefined;
   const runs = onlyCurrentAttempt(step, step.check_runs).filter(
     (run) => run.output_path !== undefined,
   );
-  return (runs.find(didNotPass) ?? runs[0])?.output_path;
+  return runs.find(didNotPass) ?? runs[0];
 }
 
 /**

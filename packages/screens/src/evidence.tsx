@@ -30,13 +30,20 @@
 // | The criterion's own words and its frozen position | `JobDetail.acceptance_criteria` |
 // | What each member quoted, and where in the brief | `Judged.cited`, since protocol 8.3 |
 // | What each member was handed, compared across the panel | `Judged.given`, since protocol 8.3 |
+// | What the suite asserted, one row per Check | `StepDetail.check_runs`, every attempt's |
+// | A Check's output, read in the app | `CheckOutput`, since protocol 9.1 |
 //
-// What the components were built for and the wire has not got — the assertion
-// set, the console viewer, the per-judge citation *sets* behind
-// `JudgeRefusal.overlap`, and `JudgeVerdicts.measured` — is not drawn. The
-// first two are a record of what a Check read; the third is a reading over
-// `Judged.cited` that nobody has written; the fourth needs a join from a
-// criterion to the Check that settled it, and none exists.
+// The last two rows were the two components with no producer, and `asserted.ts`
+// and `outputs.ts` are what they are drawn from now. **Both are served at the
+// granularity Armada's record actually keeps**, which is not the one the
+// components were drawn for: an assertion is a Check rather than a test, and
+// there is no parent-commit run to compare either against. Each file says why
+// in its own header.
+//
+// What is still built and undrawn — the per-judge citation *sets* behind
+// `JudgeRefusal.overlap`, and `JudgeVerdicts.measured` — is a reading over
+// `Judged.cited` that nobody has written, and a join from a criterion to the
+// Check that settled it, which does not exist.
 //
 // # Nothing empty is labelled
 //
@@ -57,6 +64,7 @@ import type { StepChapter } from "@armada/components";
 
 import { checksChapter } from "./checks";
 import { panelsOf } from "./gates";
+import type { Outputs } from "./outputs";
 import type { Opens } from "./phases";
 import { verdictsChapter } from "./verdicts";
 
@@ -85,17 +93,31 @@ export function evidenceChaptersOf({
   step,
   criteria,
   opens,
+  outputs,
 }: {
   step: StepDetail;
   /** The Job's frozen criteria, for the words and the position a citation names. */
   criteria: readonly Criterion[];
   /** How a record is opened, and where a refusal to open is said. */
   opens: Opens;
+  /**
+   * What each Check printed, as this window has it, and how to ask for one.
+   *
+   * **Handed in rather than fetched here**, which is `Calls`' rule one record
+   * over: what a Check printed is a reading, and fetching it is a round trip to
+   * the process holding the file. Required rather than optional, for `opens`'
+   * reason — a chapter given no way to read would go quietly back to being the
+   * fixture this file replaced.
+   */
+  outputs: Outputs;
 }): StepChapter[] {
   // Read once and drawn twice: the Checks chapter's Judge row and the Verdicts
   // grid are the same panel, and the two counts have to be one count.
   const panels = panelsOf(step, criteria);
-  const drawn = [checksChapter(step, panels, opens), verdictsChapter(step, panels, opens)].filter(
+  const drawn = [
+    checksChapter(step, panels, opens, outputs),
+    verdictsChapter(step, panels, opens),
+  ].filter(
     (chapter): chapter is Omit<StepChapter, "ordinal"> => chapter !== undefined,
   );
   return drawn.map((chapter, at) => ({ ...chapter, ordinal: AFTER_PRODUCED + at }));

@@ -26,8 +26,10 @@ import { InsideAJob } from "@armada/components";
 import type { Artifact, JobDetail, JobSummary, StepDetail } from "@armada/protocol";
 
 import { chaptersOf } from "./chapters";
+import { CHECKS_CHAPTER } from "./checks";
 import { headingOf } from "./heading";
 import { mount, unmount } from "./mounted";
+import type { Outputs } from "./outputs";
 import { phasesOf, type Opens } from "./phases";
 import { renderFor } from "./render";
 import { runOf } from "./run";
@@ -184,7 +186,17 @@ function opens(): Opens {
  * hands `InsideAJob` a chapter it wrote itself, which is the whole point of the
  * file.
  */
-function screen(showing: StepDetail, criteria = CRITERIA): void {
+function screen(
+  showing: StepDetail,
+  criteria = CRITERIA,
+  outputs?: Outputs,
+  /**
+   * Which chapter is open on mount. **Absent is the ordinary screen**, where
+   * every chapter shows its preview and none its content — so a test asserting
+   * on a chapter's body says which one it opened, the way a person would.
+   */
+  opening?: string,
+): void {
   asked = [];
   const summary = job();
   const whole: JobDetail = {
@@ -227,6 +239,7 @@ function screen(showing: StepDetail, criteria = CRITERIA): void {
       step={{
         label: showing.label,
         fields: [],
+        ...(opening === undefined ? {} : { openChapter: opening }),
         phases: phasesOf(showing, criteria, records, summary.status),
         chapters: chaptersOf({
           job: summary,
@@ -241,6 +254,7 @@ function screen(showing: StepDetail, criteria = CRITERIA): void {
           transcript: undefined,
           log: (region) => ({ region, openId: null, onOpen: () => {} }),
           calls: { of: () => undefined, fetch: () => {} },
+          outputs: outputs ?? { of: () => undefined, fetch: () => {} },
           sheet: null,
           opens: records,
           onOpenSheet: () => {},
@@ -269,6 +283,11 @@ test("the Checks chapter says what each declared Check came to", async () => {
   // `gates.ts`, two surfaces, so they cannot come to different counts.
   await expect.element(page.getByText("2 of 2 passed").first()).toBeVisible();
   expect(page.getByText("2 of 2 passed").elements().length).toBe(2);
+  // And the chapter opens onto more than its preview, which is what makes the
+  // reading below reachable rather than only built.
+  await expect
+    .element(page.getByText("Read what the Checks asserted and printed"))
+    .toBeVisible();
 });
 
 test("the Judge's row on the Checks list counts criteria, never calls", async () => {
@@ -286,6 +305,115 @@ test("a Check's output opens the file the wire named", async () => {
   screen(refusedStep());
   await page.getByRole("button", { name: "test_suite.log" }).first().click();
   expect(asked).toContainEqual({ kept: ".armada/checks/01M130/test_suite.log", what: "check" });
+});
+
+test("the assertion set tells a Check that was skipped from one that failed", async () => {
+  // **The finding the set exists for**, in Armada's own words:
+  // `check-outcomes.toml` says a step that advanced having skipped every Check
+  // verified nothing, and the record must be able to say so. `skipped` advances
+  // and is not a pass, so it is `absent` here and never `passed`.
+  screen(
+    step({
+      checks: [
+        { kind: "manifest_check", name: "check:test_suite", run: "cargo test --workspace" },
+        { kind: "manifest_check", name: "check:browser", run: "pnpm test:browser" },
+      ],
+      check_runs: [
+        { attempt: 1, name: "check:test_suite", outcome: "passed" },
+        {
+          attempt: 1,
+          name: "check:browser",
+          outcome: "skipped",
+          produced: "no changed file is under packages/",
+        },
+      ],
+    }),
+    CRITERIA,
+    undefined,
+    CHECKS_CHAPTER,
+  );
+  await expect.element(page.getByText("What the suite asserted")).toBeVisible();
+  const rows = [...document.querySelectorAll(".armada-assertions__row")];
+  expect(rows.map((row) => row.getAttribute("data-named"))).toEqual(["passed", "absent"]);
+  // The skip carries the record's own reason, which is the first thing a reader
+  // asks about a Check that did not run.
+  await expect.element(page.getByText("no changed file is under packages/")).toBeVisible();
+});
+
+test("a Check compares against its own previous attempt, never against a commit", async () => {
+  // Nothing runs a step's Checks at the commit the work branched from, so the
+  // comparison served is between runs of the step. A Check that passed on
+  // attempt 1 and was skipped on attempt 2 is a case that stopped existing, and
+  // it is the one this column is for.
+  screen(
+    step({
+      attempts: [
+        { attempt: 1, outcome: "refused", started_at: "2026-09-09T09:00:00Z" },
+        { attempt: 2, outcome: "refused", started_at: "2026-09-09T09:30:00Z" },
+      ],
+      checks: [{ kind: "manifest_check", name: "check:test_suite", run: "cargo test" }],
+      check_runs: [
+        { attempt: 1, name: "check:test_suite", outcome: "passed" },
+        {
+          attempt: 2,
+          name: "check:test_suite",
+          outcome: "skipped",
+          produced: "no changed file is under crates/",
+        },
+      ],
+    }),
+    CRITERIA,
+    undefined,
+    CHECKS_CHAPTER,
+  );
+  await expect.element(page.getByText("passed at attempt 1 · not run at attempt 2")).toBeVisible();
+});
+
+test("a Check's output is read into the chapter, not only opened elsewhere", async () => {
+  // **The audit happens on the screen the Check is on.** The row has carried
+  // `output_path` since the file did, and everything Bridge could do with it
+  // was hand it to the operating system.
+  screen(refusedStep(), CRITERIA, {
+    of: () => ({
+      state: "got",
+      output: {
+        attempt: 1,
+        name: "check:test_suite",
+        path: ".armada/checks/01M130/test_suite.log",
+        lines: ["--- stdout ---", "test parses_rfc3339_offset ... ok"],
+        from_line: 1_939,
+        total_lines: 2_180,
+        bytes: 61_204,
+        whole: false,
+      },
+    }),
+    fetch: () => {},
+  }, CHECKS_CHAPTER);
+  await expect.element(page.getByText("test parses_rfc3339_offset ... ok")).toBeVisible();
+  // The file's own numbering, not the window's: a reader citing 1,939 means the
+  // file's 1,939th line.
+  await expect.element(page.getByText("1939")).toBeVisible();
+  // A truncated reading says it is truncated, and says whose output it is.
+  await expect
+    .element(page.getByText("check:test_suite · lines 1,939–1,940 of 2,180"))
+    .toBeVisible();
+});
+
+test("a Check that recorded no output draws no reader", async () => {
+  // Not an empty console frame. A built-in assertion runs no command and a
+  // Check that never started printed nothing, and a pane offering to read
+  // either is a control that opens onto nothing.
+  screen(
+    step({
+      checks: [{ kind: "diff_nonempty" }],
+      check_runs: [{ attempt: 1, name: "diff_nonempty", outcome: "passed" }],
+    }),
+    CRITERIA,
+    undefined,
+    CHECKS_CHAPTER,
+  );
+  await expect.element(page.getByText("What the suite asserted")).toBeVisible();
+  expect(document.querySelectorAll(".armada-console").length).toBe(0);
 });
 
 test("the verdict grid draws one row per criterion and one mark per judge", async () => {

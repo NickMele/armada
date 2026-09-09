@@ -376,6 +376,9 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.readCall, (_event, jobId: string, callId: string) =>
     connection?.readCall(jobId, callId),
   );
+  ipcMain.handle(CHANNELS.readCheckOutput, (_event, jobId: string, kept: string) =>
+    connection?.readCheckOutput(jobId, kept),
+  );
   // Every report a person has filed, and the counts they are read beside. The
   // one read here that names no Job: a report outlives the Job it is about, so
   // a listing reached through one would lose the reports that most need

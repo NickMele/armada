@@ -6,9 +6,15 @@
 // is none of those. Nothing here holds state, so nothing here can drift from
 // what the socket believes.
 
-import type { CallRead, Holdings, Outcome, TransportFault } from "@armada/protocol";
+import type {
+  CallRead,
+  CheckOutputRead,
+  Holdings,
+  Outcome,
+  TransportFault,
+} from "@armada/protocol";
 import type { FleetCapacity, JobSummary, ManifestReading, WireError } from "@armada/protocol";
-import type { CallArguments } from "@armada/protocol";
+import type { CallArguments, CheckOutput } from "@armada/protocol";
 import type { ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
 import { HOST } from "./runtime-file";
 
@@ -231,4 +237,35 @@ export async function callArgumentsOf(
   );
   if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
   return { ok: true, call: answer.body as CallArguments };
+}
+
+/**
+ * One Check's own output, read into the app.
+ *
+ * **`callArgumentsOf`'s shape one record over, and for its reasons.** A
+ * recorded output cannot move, it is asked for by one reader about one Check,
+ * and it is a test runner's whole log — so it is answered to the caller rather
+ * than held by `reader.ts` and republished on every event.
+ *
+ * `kept` is the row's own file name, the last component of `CheckRun`'s
+ * `output_path`. **Nothing here composes a path**: `artifacts.ts` owns that
+ * rule, and Fleet resolves the name against its own record before it opens
+ * anything.
+ *
+ * The refusal is carried through whole. On this route it is either the Job
+ * being gone, which the panel is already saying, or no row of it holding an
+ * output under that name — the Check's own business, said inside the reading.
+ */
+export async function checkOutputOf(
+  port: number,
+  jobId: string,
+  kept: string,
+): Promise<CheckOutputRead> {
+  const answer = await ask(
+    port,
+    "GET",
+    `/jobs/${encodeURIComponent(jobId)}/checks/${encodeURIComponent(kept)}/output`,
+  );
+  if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
+  return { ok: true, output: answer.body as CheckOutput };
 }

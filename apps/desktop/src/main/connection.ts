@@ -31,7 +31,7 @@ import { identifying, NOTHING_YET } from "../shared/bridge";
 import { connectedTo } from "@armada/protocol";
 import { connects, skew } from "@armada/protocol";
 import type { BridgeState } from "../shared/bridge";
-import type { CallRead, Connection } from "@armada/protocol";
+import type { CallRead, CheckOutputRead, Connection } from "@armada/protocol";
 import type { JobHistory, Recorded } from "@armada/protocol";
 import type { JobDetail, JobExamined, JobResources, JobSummary, StreamMessage } from "@armada/protocol";
 import { JobCommands } from "./command";
@@ -40,7 +40,14 @@ import { ObserveSocket } from "./observe";
 import { JobReader } from "./reader";
 import { HeldReader } from "./holding";
 import { ReportsReader } from "./reports";
-import { ask, callArgumentsOf, capacityOf, holdingsOf, manifestReadingOf } from "./request";
+import {
+  ask,
+  callArgumentsOf,
+  capacityOf,
+  checkOutputOf,
+  holdingsOf,
+  manifestReadingOf,
+} from "./request";
 import { ReviewMaterial } from "./review";
 import { HOST, machinePath, read, startingIdentity } from "./runtime-file";
 import { takeAgain, type Again } from "./screen";
@@ -766,6 +773,20 @@ export class FleetConnection {
     const port = this.connected()?.port ?? null;
     if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
     return await callArgumentsOf(port, jobId, callId);
+  }
+
+  /**
+   * One Check's own output, for the person who opened that Check.
+   *
+   * **`readCall`'s shape, for `readCall`'s reasons.** A recorded output does
+   * not move, so nothing here is held or republished; `kept` is the row's own
+   * file name and Fleet resolves it against its record, so this passes it
+   * through and composes nothing.
+   */
+  async readCheckOutput(jobId: string, kept: string): Promise<CheckOutputRead> {
+    const port = this.connected()?.port ?? null;
+    if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
+    return await checkOutputOf(port, jobId, kept);
   }
 
   // ----------------------------------------------- every report, and the counts

@@ -14,7 +14,9 @@ import { describe, expect, it } from "vitest";
 import type { Criterion, Judged, StepDetail } from "@armada/protocol";
 
 import { citationsOf, givenTo } from "./cited";
-import { checksOf, outputOf, panelSizeOf, panelsOf } from "./gates";
+import { assertedIn } from "./asserted";
+import { checksOf, outputOf, outputRunOf, panelSizeOf, panelsOf } from "./gates";
+import { noteFor, regionOf, rowsOf } from "./outputs";
 
 function step(over: Partial<StepDetail> = {}): StepDetail {
   return {
@@ -132,6 +134,145 @@ describe("which output a press opens", () => {
     expect(outputOf(step({ check_runs: [{ attempt: 1, name: "a", outcome: "passed" }] }))).toBe(
       undefined,
     );
+  });
+
+  // The header act, the `o` key and the chapter's own reader all come through
+  // one call, so the row and the path cannot name two different Checks.
+  it("names the row as well as the path, so a reader can say whose output it is", () => {
+    const run = outputRunOf(
+      step({
+        check_runs: [
+          { attempt: 1, name: "a", outcome: "passed", output_path: "checks/a.log" },
+          { attempt: 1, name: "b", outcome: "failed", output_path: "checks/b.log" },
+        ],
+      }),
+    );
+    expect(run?.name).toBe("b");
+    expect(run?.output_path).toBe("checks/b.log");
+  });
+});
+
+describe("what a step's suite asserted", () => {
+  // `check-outcomes.toml`: a step that advanced having skipped every Check
+  // verified nothing, and the record must be able to say that. `skipped`
+  // advances and is not a pass, so it is neither `passed` nor `failed` here.
+  it("puts a skipped Check apart from a passed one and from a failed one", () => {
+    const rows = assertedIn(
+      step({
+        check_runs: [
+          { attempt: 1, name: "a", outcome: "passed" },
+          { attempt: 1, name: "b", outcome: "skipped", produced: "no changed file is under docs/" },
+          { attempt: 1, name: "c", outcome: "failed" },
+          { attempt: 1, name: "d", outcome: "never_ran" },
+        ],
+      }),
+    );
+    expect(rows.map((row) => row.named)).toEqual(["passed", "absent", "failed", "failed"]);
+  });
+
+  // The four not-passes are four different things to *do* about, which the
+  // Checks list draws. They are one thing to *read* here.
+  it("carries the record's own reason on a skip that has no earlier run", () => {
+    const rows = assertedIn(
+      step({
+        check_runs: [
+          { attempt: 1, name: "b", outcome: "skipped", produced: "no changed file is under docs/" },
+        ],
+      }),
+    );
+    expect(rows[0]?.against).toBe("no changed file is under docs/");
+  });
+
+  it("compares a Check against its own previous run of the step", () => {
+    const rows = assertedIn(
+      step({
+        attempts: TWICE,
+        check_runs: [
+          { attempt: 1, name: "build", outcome: "passed" },
+          { attempt: 2, name: "build", outcome: "skipped", produced: "nothing under crates/" },
+        ],
+      }),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.against).toBe("passed at attempt 1 · not run at attempt 2");
+  });
+
+  it("says so when nothing moved between two runs", () => {
+    const rows = assertedIn(
+      step({
+        attempts: TWICE,
+        check_runs: [
+          { attempt: 1, name: "build", outcome: "passed" },
+          { attempt: 2, name: "build", outcome: "passed" },
+        ],
+      }),
+    );
+    expect(rows[0]?.against).toBe("identical at attempt 1 and attempt 2");
+  });
+
+  // Nothing runs a step's Checks at the commit its work branched from, and no
+  // Job records a base commit — so a first run has nothing measured to compare
+  // with, and the column is absent rather than invented.
+  it("leaves the comparison off a first run that has nothing to compare with", () => {
+    const rows = assertedIn(step({ check_runs: [{ attempt: 1, name: "a", outcome: "passed" }] }));
+    expect(rows[0]?.against).toBe(undefined);
+  });
+
+  // A declared Check the gate has not reached is `queued` on the Checks list
+  // and is none of the three states an assertion has.
+  it("draws nothing for a step whose gate has not run", () => {
+    expect(assertedIn(step())).toEqual([]);
+  });
+
+  // No Manifest Check declares a description, so every row falls back to its
+  // identifier and the component says why. A sentence invented here would read
+  // as one somebody could check against the Check.
+  it("never invents a sentence a Check did not write", () => {
+    const rows = assertedIn(step({ check_runs: [{ attempt: 1, name: "a", outcome: "passed" }] }));
+    expect(rows[0]?.says).toBe(undefined);
+    expect(rows[0]?.identifier).toBe("a");
+  });
+});
+
+describe("a Check's output, as a reading", () => {
+  const window = {
+    attempt: 1,
+    name: "check:test_suite",
+    path: ".armada/checks/01M130/verify.1.0.log",
+    lines: ["--- stdout ---", "    left:  1970-01-01T00:00:00Z"],
+    from_line: 1_939,
+    total_lines: 2_180,
+    bytes: 61_204,
+    whole: false,
+  };
+
+  // A region is a window onto a file and a citation names the file, so a row
+  // numbered from one would send a reader to the wrong line.
+  it("numbers the rows as the file numbers them", () => {
+    expect(rowsOf(window).map((row) => row.at)).toEqual([1_939, 1_940]);
+  });
+
+  it("keeps a line exactly as it was written", () => {
+    const rows = rowsOf(window);
+    expect(rows[1]).toMatchObject({ row: "line", text: "    left:  1970-01-01T00:00:00Z" });
+  });
+
+  it("says the reading is truncated, and whose output it is", () => {
+    expect(regionOf(window).says).toBe("check:test_suite · lines 1,939–1,940 of 2,180");
+    expect(regionOf(window).path).toBe(".armada/checks/01M130/verify.1.0.log");
+  });
+
+  it("says the whole of a short file is the whole of it", () => {
+    const short = { ...window, from_line: 1, total_lines: 2, whole: true };
+    expect(regionOf(short).says).toBe("check:test_suite · 2 lines");
+  });
+
+  // Four states and four sentences. One sentence for all of them would tell a
+  // person a Check printed nothing when what is true is that nobody has asked.
+  it("tells a reading nobody asked for from one that came back empty", () => {
+    expect(noteFor(undefined)).not.toBe(noteFor({ state: "fetching" }));
+    expect(noteFor({ state: "got", output: { ...window, lines: [] } })).toContain("printed nothing");
+    expect(noteFor({ state: "absent", note: "gone" })).toBe("gone");
   });
 });
 

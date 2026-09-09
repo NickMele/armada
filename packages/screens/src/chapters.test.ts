@@ -155,6 +155,7 @@ function chapters(
     transcript: over.transcript,
     log: (region) => ({ region, openId: null, onOpen: () => {} }),
     calls: { of: () => undefined, fetch: () => {} },
+    outputs: { of: () => undefined, fetch: () => {} },
     sheet: null,
     opens: OPENS,
     onOpenSheet: () => {},

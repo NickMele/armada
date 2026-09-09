@@ -465,6 +465,16 @@ pub enum Adrift {
     /// — transcripts reclaimed, or a Fleet that never wrote them — and a
     /// caller told the Job does not exist would go looking for the wrong thing.
     NoSuchCall { named: String },
+    /// A request named a kept Check output no row of this Job carries.
+    ///
+    /// **The Job is there and the file is not**, which is [`NoSuchCall`]'s
+    /// distinction one record over: an id read off a row whose `.armada`
+    /// directory has since been reclaimed, or a name that was never one. It is
+    /// also what a caller naming anything else gets, because the Job's own rows
+    /// are the only thing that resolves this id to a file.
+    ///
+    /// [`NoSuchCall`]: Adrift::NoSuchCall
+    NoSuchCheckOutput { named: String },
     /// A proposal named no model and nothing configured supplies one.
     ///
     /// Refused **at creation**, which is the whole point: the same value used

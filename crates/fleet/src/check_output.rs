@@ -1,5 +1,5 @@
-//! What a Check produced, written down: the output to a file, the row to the
-//! store.
+//! What a Check produced, written down and read back: the output to a file,
+//! the row to the store, and the file to whoever opens that row.
 //!
 //! # A file, with the path on the row
 //!
@@ -20,12 +20,14 @@
 //! pointing at the second attempt's output, which is worse than pointing at
 //! nothing. A path that is the whole key cannot do that.
 
-use std::io::Write;
+use std::collections::VecDeque;
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use checks_runner::Output;
 use core_model::{Attempt, JobId, StepCheck, StepId};
+use store::Attempted;
 
 use verification::Submission;
 
@@ -337,4 +339,107 @@ fn write(dir: &Path, name: &str, printed: &Output) -> bool {
         .is_ok();
     }
     written
+}
+
+/// How many lines of a Check's output one read carries.
+///
+/// **The tail, for the reason `checks_runner` captures the tail**: a test
+/// runner prints its failures last, and a runaway command prints forever, so
+/// keeping the beginning keeps the part nobody opened the Job for.
+const A_READING: usize = 2_000;
+
+/// How many bytes of those lines one read carries.
+///
+/// A second bound beside the line count, because one line can be a whole
+/// minified bundle. The window loses its oldest lines to stay under it, which
+/// keeps this read's cost a property of the code rather than of whatever a
+/// Check printed.
+const MOST: usize = 256 * 1024;
+
+/// One Check's output, read back out of the file its row points at.
+///
+/// **Beside the writing, because both halves depend on the one shape above.**
+/// A name the writer stops producing is a name this stops resolving, and the
+/// two would drift the first time they were a crate apart.
+///
+/// **The id is the file's own name and never a path the caller composed.**
+/// `kept` is the last component of a row's `output_path`, and it is resolved
+/// against the rows this Job actually holds before anything is opened — so an
+/// id naming no row of this Job reaches no file, whatever it spells. That is
+/// what makes reading a file at a caller's word safe here: the caller does not
+/// name a file, it names a row, and Fleet says where that row's file is.
+///
+/// `None` where no row of this Job kept an output under that name: a Job whose
+/// `.armada` directory was reclaimed, an id that was never one, or a file that
+/// will not open. Not an error — the caller decides what to say about it,
+/// exactly as `transcript::arguments` leaves that decision to `serving`.
+///
+/// **The file is counted as it is read.** `total_lines` is exact even where the
+/// window is not the whole, which is what lets `from_line` be the file's own
+/// numbering rather than the window's: a reader citing line 1,940 means the
+/// file's 1,940th line.
+pub fn kept_output(
+    repo_root: &str,
+    kept: &str,
+    ran: &[Attempted<Vec<StepCheck>>],
+) -> Option<ipc::CheckOutput> {
+    let (attempt, name, path) = named(kept, ran)?;
+    let file = std::fs::File::open(Path::new(repo_root).join(&path)).ok()?;
+    let bytes = file.metadata().map(|at| at.len()).unwrap_or_default();
+
+    // A window over a stream rather than the file in memory: the oldest line
+    // goes as soon as the window is over either bound, so what this holds is
+    // bounded by the two constants above and by nothing a Check printed.
+    let mut window: VecDeque<String> = VecDeque::new();
+    let mut held = 0usize;
+    let mut total = 0u32;
+    let mut first = 1u32;
+    for line in BufReader::new(file).lines() {
+        // A line that will not decode is where the reading stops. Skipping it
+        // would renumber every line after it, and this read's whole claim is
+        // that its numbering is the file's.
+        let Ok(line) = line else { break };
+        total = total.saturating_add(1);
+        held += line.len();
+        window.push_back(line);
+        while window.len() > A_READING || (held > MOST && window.len() > 1) {
+            held -= window
+                .pop_front()
+                .map(|gone| gone.len())
+                .unwrap_or_default();
+            first = first.saturating_add(1);
+        }
+    }
+
+    Some(ipc::CheckOutput {
+        attempt,
+        name,
+        path,
+        from_line: first,
+        total_lines: total,
+        bytes,
+        whole: first == 1,
+        lines: window.into(),
+    })
+}
+
+/// Which recorded run of which Check kept a file under this name, and where.
+///
+/// **The record is the allowlist.** Nothing else decides whether a path may be
+/// opened: a row of this Job holds it or the answer is `None`, which is why
+/// there is no separate guard for `..`, for a leading separator, or for
+/// anything else a caller might spell — none of them can match a path Fleet
+/// wrote. [`one_component`] is belt on top of that, and it is the same
+/// predicate the writing half uses.
+fn named(kept: &str, ran: &[Attempted<Vec<StepCheck>>]) -> Option<(u32, String, String)> {
+    if !one_component(kept) {
+        return None;
+    }
+    ran.iter().find_map(|group| {
+        group.record.iter().find_map(|check| {
+            let path = check.output_path.as_deref()?;
+            (path.rsplit('/').next() == Some(kept))
+                .then(|| (group.attempt.number(), check.name.clone(), path.to_string()))
+        })
+    })
 }

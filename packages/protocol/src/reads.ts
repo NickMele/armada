@@ -10,6 +10,7 @@
 
 import type {
   CallArguments,
+  CheckOutput,
   JobDetail,
   JobExamined,
   JobFilesChanged,
@@ -237,6 +238,22 @@ export type Turn = {
  */
 export type CallRead =
   | { ok: true; call: CallArguments }
+  | { ok: false; outcome: Outcome };
+
+/**
+ * What one Check's output came back as.
+ *
+ * **Answered to the caller rather than published as state**, for `CallRead`'s
+ * reason and with one more behind it: a recorded output never moves, it is
+ * fetched by the person who pressed one row, and holding it in `BridgeState`
+ * would keep a test runner's whole log alive for as long as the Job is open.
+ *
+ * A refusal is the row's own. `refused` on this route is the Job standing and
+ * no row of it holding an output under that name — a reclaimed `.armada` — and
+ * that is a thing to say inside the reading, not a state for the Job.
+ */
+export type CheckOutputRead =
+  | { ok: true; output: CheckOutput }
   | { ok: false; outcome: Outcome };
 
 /** `GET /jobs/:job_id` for the open Job. */

@@ -9,9 +9,9 @@
 //! `ipc` alone.
 
 use ipc::{
-    CallArguments, FleetCapacity, JobDetail, JobDiff, JobEvidence, JobHistory, JobId, JobList,
-    JobRemarks, JobResources, ManifestReading, ManifestSummary, ModelChoices, WorkflowSummary,
-    WorktreesHeld,
+    CallArguments, CheckOutput, FleetCapacity, JobDetail, JobDiff, JobEvidence, JobHistory, JobId,
+    JobList, JobRemarks, JobResources, ManifestReading, ManifestSummary, ModelChoices,
+    WorkflowSummary, WorktreesHeld,
 };
 
 use super::FakeDaemon;
@@ -120,6 +120,25 @@ impl Queries for FakeDaemon {
             )));
         }
         Ok(shapes::call(call_id))
+    }
+
+    /// **The same two refusals one record over**: a Job that is not there, and
+    /// a name no row of the Job kept. [`shapes::THE_OUTPUT`] is the one name it
+    /// does hold, and nothing here opens a file — what the route has to prove
+    /// is the shape and the two answers, not the reading.
+    async fn get_check_output(&self, job_id: JobId, kept: String) -> Result<CheckOutput, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        if !jobs.iter().any(|job| job.id == job_id) {
+            return Err(self.no_such_job(&job_id));
+        }
+        if kept != shapes::THE_OUTPUT {
+            return Err(Refusal::Unacceptable(ipc::WireError::raised(
+                "fleet.no_such_check_output",
+                format!("no Check of this Job kept an output named `{kept}`"),
+                run_id(),
+            )));
+        }
+        Ok(shapes::check_output(kept))
     }
 
     async fn list_workflows(&self) -> Result<Vec<WorkflowSummary>, Refusal> {

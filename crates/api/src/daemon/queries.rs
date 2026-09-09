@@ -16,8 +16,8 @@ use std::future::Future;
 use crate::daemon::Refusal;
 use crate::observing::Observed;
 use ipc::{
-    CallArguments, FleetCapacity, JobDetail, JobDiff, JobEvidence, JobHistory, JobId, JobList,
-    JobRemarks, JobResources, ManifestReading, ManifestSummary, ModelChoices, ReportList,
+    CallArguments, CheckOutput, FleetCapacity, JobDetail, JobDiff, JobEvidence, JobHistory, JobId,
+    JobList, JobRemarks, JobResources, ManifestReading, ManifestSummary, ModelChoices, ReportList,
     WorkflowSummary, WorktreesHeld,
 };
 
@@ -197,6 +197,35 @@ pub trait Queries: Send + Sync + 'static {
         job_id: JobId,
         call_id: String,
     ) -> impl Future<Output = Result<CallArguments, Refusal>> + Send;
+
+    /// `get_check_output` — one Check's own output, read back into the app.
+    ///
+    /// **The other end of a path that opened nothing in Armada.**
+    /// `CheckRun::output_path` has said where a Check wrote its stdout and
+    /// stderr since the record kept them, and Bridge could only hand that path
+    /// to the operating system — so the surface built to audit a suite that
+    /// went green for the wrong reason sent a person out of the app to do it.
+    ///
+    /// The split is [`Queries::get_call`]'s, for the same reason: output is up
+    /// to two 64 KiB streams, `get_job` is re-read on every event naming the
+    /// open Job, and `/events` is one drop-oldest channel carrying every Job.
+    /// The cheap fact rides the row and the bytes are fetched, once, by the
+    /// person who pressed.
+    ///
+    /// **`kept` names a row, not a file.** It is the last component of an
+    /// `output_path`, resolved against the rows the implementation holds for
+    /// that Job before anything is opened — which is what keeps a
+    /// caller-supplied value from reaching a file the record does not name.
+    ///
+    /// [`Refusal::NoSuchJob`] where the id names no Job.
+    /// [`Refusal::Unacceptable`] where the Job is there and no row of it kept
+    /// an output under that name, which is the answer a reclaimed `.armada`
+    /// gives and is not the same as the Job being absent.
+    fn get_check_output(
+        &self,
+        job_id: JobId,
+        kept: String,
+    ) -> impl Future<Output = Result<CheckOutput, Refusal>> + Send;
 
     /// `list_workflows` — the workflows Fleet holds, with their steps.
     ///

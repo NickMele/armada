@@ -13,7 +13,8 @@ use ipc::{JobList, JobSummary, StreamMessage, WireError};
 use tower::ServiceExt;
 
 use crate::tests::fake::{at, running, FakeDaemon};
-use crate::tests::shapes::{run_id, A_PROPOSAL, THE_ARGUMENT, THE_CALL};
+use crate::tests::shapes;
+use crate::tests::shapes::{run_id, A_PROPOSAL, THE_ARGUMENT, THE_CALL, THE_OUTPUT};
 use crate::{router, Broadcaster, Next, Served, Subscription, SERVED};
 
 fn wired(daemon: FakeDaemon, events: Broadcaster) -> Router {
@@ -66,7 +67,8 @@ async fn every_operation_the_table_names_is_routed() {
         let uri = route
             .path
             .replace(":job_id", "01JOB0")
-            .replace(":call_id", THE_CALL);
+            .replace(":call_id", THE_CALL)
+            .replace(":kept", THE_OUTPUT);
         let (status, _) = call(&app, route.method, &uri, A_PROPOSAL).await;
         assert_ne!(
             status,
@@ -432,6 +434,53 @@ async fn a_call_the_record_does_not_hold_is_not_a_missing_job() {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 
     let (status, _) = call(&app, "GET", "/jobs/01NOTHERE/calls/toolu_never", "").await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "and a missing Job still is");
+}
+
+/// **The gesture that opens a Check gets its output.** The row carries where
+/// the file is; this is the route the lines come back on, verbatim and with the
+/// file's own numbering — a window that renumbered from one would send a reader
+/// citing line 1,939 to the wrong line.
+#[tokio::test]
+async fn a_checks_output_comes_back_as_a_window_that_says_it_is_one() {
+    let events = Broadcaster::new();
+    let daemon = FakeDaemon::new(events.clone());
+    running(&daemon, "01RUNNING");
+    let app = wired(daemon, events);
+
+    let uri = format!("/jobs/01RUNNING/checks/{THE_OUTPUT}/output");
+    let (status, body) = call(&app, "GET", &uri, "").await;
+    assert_eq!(status, StatusCode::OK);
+    let served: ipc::CheckOutput = ipc::decode("a check output", &body).expect("an output");
+    assert_eq!(served.lines, shapes::THE_OUTPUT_LINES);
+    assert!(
+        served.lines[2].starts_with("    "),
+        "verbatim, and never trimmed"
+    );
+    assert_eq!(
+        served.from_line, 1_939,
+        "the file's numbering, not the window's"
+    );
+    assert!(served.total_lines > served.lines.len() as u32);
+    assert!(!served.whole, "a truncated reading says it is truncated");
+    assert_eq!(served.attempt, 1, "joins back to the row that was pressed");
+}
+
+/// An output the record does not hold is **not** the Job being absent, which is
+/// `get_call`'s distinction one record over — and it is also what a caller
+/// naming anything but a row's own file gets, because the rows are the only
+/// thing that resolves this id to a file at all.
+#[tokio::test]
+async fn a_check_output_the_record_does_not_hold_is_not_a_missing_job() {
+    let events = Broadcaster::new();
+    let daemon = FakeDaemon::new(events.clone());
+    running(&daemon, "01RUNNING");
+    let app = wired(daemon, events);
+
+    let (status, _) = call(&app, "GET", "/jobs/01RUNNING/checks/never.0.log/output", "").await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    let (status, _) = call(&app, "GET", "/jobs/01NOTHERE/checks/never.0.log/output", "").await;
     assert_eq!(status, StatusCode::NOT_FOUND, "and a missing Job still is");
 }
 

@@ -479,6 +479,101 @@ async fn a_check_that_passed_keeps_its_output_and_a_built_in_has_none() {
         "a built-in assertion runs no command, so there is no file and the row \
          says so by having no path"
     );
+
+    // **And it is readable inside the app, not only on disk.** The row has
+    // carried the path since the file did; until `get_check_output` the only
+    // thing a client could do with it was hand it to the operating system, so
+    // the audit the Checks chapter exists for happened somewhere else.
+    let kept = ran[0]
+        .output_path
+        .as_ref()
+        .unwrap()
+        .rsplit('/')
+        .next()
+        .unwrap();
+    let served =
+        api::Queries::get_check_output(&fleet, ipc::JobId::from(job.id()), kept.to_string())
+            .await
+            .expect("the row's own file is served");
+    assert_eq!(
+        served.name, "suite",
+        "the row it came from, not the one asked for"
+    );
+    assert_eq!(served.attempt, 1);
+    assert!(
+        served
+            .lines
+            .iter()
+            .any(|line| line.contains("every test passed")),
+        "the lines are the file's: {:?}",
+        served.lines
+    );
+    assert_eq!(
+        served.lines.first().map(String::as_str),
+        Some("--- stdout ---"),
+        "the marker lines are lines of the file and are never stripped"
+    );
+    assert_eq!(
+        served.from_line, 1,
+        "a short file is served from its first line"
+    );
+    assert_eq!(served.total_lines, served.lines.len() as u32);
+    assert!(served.whole, "and it says it is all of it");
+    assert_eq!(served.path, *ran[0].output_path.as_ref().unwrap());
+}
+
+/// **A name no row of this Job kept reaches no file, whatever it spells.**
+///
+/// The rows are the allowlist, which is what makes an id off the wire safe to
+/// read a file with: there is no path to escape from, because the caller never
+/// names a path. A traversal, an absolute path and a plausible-looking log name
+/// all reach the same answer, and it is not the Job being absent.
+#[tokio::test]
+async fn a_check_output_is_resolved_against_the_record_and_never_against_the_filesystem() {
+    let home = TempDir::new();
+    let fleet = a_fleet_holding(
+        &home,
+        changed(),
+        testkit::resolved(&[Sketch {
+            id: "implement",
+            label: "Implement",
+            evidence_type: Some("diff"),
+            gates: &[Gate::Check {
+                name: "suite",
+                run: "/bin/sh -c 'echo every test passed'",
+                expect_exit_code: 0,
+                when: &[],
+            }],
+            judged_on: &[],
+            scope: None,
+            gaming: None,
+        }]),
+        1,
+    );
+    let job = fleet
+        .propose(a_proposal("fix the off-by-one"))
+        .await
+        .unwrap();
+    worktree_directory(&home, &job);
+    dispatched(&fleet, job.id()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
+    fleet.turn().await.unwrap();
+
+    for named in [
+        "../../../etc/passwd",
+        "/etc/passwd",
+        ".armada/checks/implement.1.0.log",
+        "implement.9.0.log",
+        "",
+    ] {
+        let refused =
+            api::Queries::get_check_output(&fleet, ipc::JobId::from(job.id()), named.to_string())
+                .await;
+        assert!(
+            refused.is_err(),
+            "`{named}` names no row of this Job and must reach no file"
+        );
+    }
 }
 
 /// **What would have caught the drafting bug.** A Fleet holding more than one

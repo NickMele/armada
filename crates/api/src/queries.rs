@@ -178,6 +178,36 @@ pub(crate) async fn get_call<D: Queries>(
     }
 }
 
+/// One Check's own output, read back into the app. **The other end of a path
+/// that opened nothing in Armada.**
+///
+/// `CheckRun::output_path` has said where a Check wrote its stdout and stderr
+/// since the record kept them, and the only thing Bridge could do with it was
+/// hand it to the operating system. This is what a person who pressed the row
+/// asks for, once, so the reading happens on the screen the Check is on.
+///
+/// **It is not the socket's job**, for the reason `get_call` is not: `/events`
+/// is one drop-oldest channel carrying every Job, and a test runner's output on
+/// it would evict the state changes the Board is drawn from.
+///
+/// 404 where the Job is unknown. 422 where the Job is known and no row of it
+/// kept an output under that name — a reclaimed `.armada`, or an id that was
+/// never one. The request is well-formed and the value in it names nothing,
+/// which is a different thing from the Job not existing.
+pub(crate) async fn get_check_output<D: Queries>(
+    State(served): State<Served<D>>,
+    Path((job_id, kept)): Path<(String, String)>,
+) -> Response {
+    match served
+        .daemon()
+        .get_check_output(JobId::carried(job_id), kept)
+        .await
+    {
+        Ok(output) => answer(StatusCode::OK, &output, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// The workflows a proposal may name. **The set Fleet will accept**, which is
 /// why it is served rather than left to a caller to know.
 pub(crate) async fn list_workflows<D: Queries>(State(served): State<Served<D>>) -> Response {
