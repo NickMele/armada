@@ -23,15 +23,15 @@
 //! It is **not** faithful about the filesystem: nothing is created, so a test
 //! that wants to read a file out of a worktree wants the real one.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
 use std::sync::Mutex;
 
 use adapter_traits::{
-    Base, BaseOnTheRemote, BroughtUpToDate, Change, CommitTime, Committed, Delivery, Landing,
-    Merged, NotDelivered, NotMerged, Opened, Pushed, Renewed, Replied, RepositoryStanding, Review,
-    Standing, UnderReview, Vcs, WhatBecameOfIt, Worktree, WorktreeSpec,
+    Base, BaseCheckout, BaseOnTheRemote, BaseSpec, BroughtUpToDate, Change, CommitTime, Committed,
+    Delivery, Landing, Merged, NotDelivered, NotMerged, Opened, Pushed, Renewed, Replied,
+    RepositoryStanding, Review, Standing, UnderReview, Vcs, WhatBecameOfIt, Worktree, WorktreeSpec,
 };
 
 use crate::work_product::Holding;
@@ -53,6 +53,9 @@ pub enum FakeVcsError {
     /// after a Job's Checks have passed, and the caller must not lose the work
     /// over it.
     NotCommitted { standing_in_for: &'static str },
+    /// No ref of that name, which is what the real one raises when `base:`
+    /// names a branch the repository does not have.
+    NoSuchRef { r#ref: String },
 }
 
 impl fmt::Display for FakeVcsError {
@@ -66,6 +69,9 @@ impl fmt::Display for FakeVcsError {
             }
             FakeVcsError::NotCommitted { standing_in_for } => {
                 write!(f, "not committed, standing in for {standing_in_for}")
+            }
+            FakeVcsError::NoSuchRef { r#ref } => {
+                write!(f, "there is no ref `{name}`", name = r#ref)
             }
         }
     }
@@ -115,6 +121,21 @@ pub struct FakeVcs {
     /// [`merging`](FakeVcs::merging)**, for that field's reason: a reply is only
     /// ever written after the Fleet holding this fake exists.
     replying: Mutex<Replying>,
+    /// What commit each ref is at. **Scripted**, for
+    /// [`commits`](FakeVcs::commits)' reason: there is no repository here to
+    /// have a history, and a fake that invented one id per name would make
+    /// *the base moved* untestable, which is the case the base checkout exists
+    /// to get right.
+    refs: Mutex<BTreeMap<String, String>>,
+    /// Every base checkout this fake has been asked for and not dropped, keyed
+    /// by commit, with whether it has been marked prepared.
+    ///
+    /// **A map rather than a list**, so asking twice for one commit answers the
+    /// same checkout — which is the property `Vcs::base_checkout` promises and
+    /// the one a caller relying on the sharing has to be able to assert.
+    bases: Mutex<BTreeMap<String, bool>>,
+    /// Every base checkout this fake has been asked to drop, in order.
+    dropped_bases: Mutex<Vec<String>>,
 }
 
 /// What this fake's forge does when asked to merge.
@@ -305,6 +326,51 @@ impl FakeVcs {
     /// entry**, for the same reason nothing removes a worktree.
     pub fn created(&self) -> Vec<Worktree> {
         self.created.lock().expect("not poisoned").clone()
+    }
+
+    /// Put a ref at a commit, so a base can be resolved without a repository.
+    ///
+    /// Called a second time with a different id, this is a base branch that
+    /// moved — which is the only way to reach the second base checkout, and so
+    /// the only way to test that a moved base does not photograph the old one.
+    pub fn with_ref_at(self, r#ref: impl Into<String>, commit: impl Into<String>) -> FakeVcs {
+        self.refs
+            .lock()
+            .expect("not poisoned")
+            .insert(r#ref.into(), commit.into());
+        self
+    }
+
+    /// Move a ref after the Fleet holding this fake exists.
+    pub fn move_ref_to(&self, r#ref: impl Into<String>, commit: impl Into<String>) {
+        self.refs
+            .lock()
+            .expect("not poisoned")
+            .insert(r#ref.into(), commit.into());
+    }
+
+    /// Every base checkout this fake is holding, by commit, with whether it has
+    /// been marked prepared.
+    pub fn bases(&self) -> BTreeMap<String, bool> {
+        self.bases.lock().expect("not poisoned").clone()
+    }
+
+    /// The commits this fake has been asked to drop a base checkout for.
+    pub fn dropped_bases(&self) -> Vec<String> {
+        self.dropped_bases.lock().expect("not poisoned").clone()
+    }
+
+    /// Say a base checkout has finished `setup.requires`, the way writing the
+    /// marker into a real one does.
+    ///
+    /// **On the fake rather than inferred from a `prepare` call**, because
+    /// nothing here runs a command: preparation is Fleet's, and what this fake
+    /// owes it is somewhere to record that it happened.
+    pub fn base_is_prepared(&self, commit: &str) {
+        self.bases
+            .lock()
+            .expect("not poisoned")
+            .insert(commit.to_string(), true);
     }
 
     /// Make every commit answer `NothingToCommit`, as a Job that wrote no file
@@ -703,6 +769,42 @@ impl Vcs for FakeVcs {
             .expect("not poisoned")
             .push(made.clone());
         Ok(made)
+    }
+
+    fn commit_at(&self, _repo_root: &str, r#ref: &str) -> Result<String, Self::Error> {
+        self.refs
+            .lock()
+            .expect("not poisoned")
+            .get(r#ref)
+            .cloned()
+            .ok_or_else(|| FakeVcsError::NoSuchRef {
+                r#ref: r#ref.to_string(),
+            })
+    }
+
+    /// **Answers the same checkout every time it is asked for one commit**,
+    /// which is the sharing the real one promises. The `prepared` flag comes
+    /// back as it was left, so a second Job on one base is told it need not
+    /// prepare again.
+    fn base_checkout(&self, spec: &BaseSpec) -> Result<BaseCheckout, Self::Error> {
+        if let Some(standing_in_for) = self.refuse_next.lock().expect("not poisoned").take() {
+            return Err(FakeVcsError::Refused { standing_in_for });
+        }
+        let mut bases = self.bases.lock().expect("not poisoned");
+        let prepared = *bases.entry(spec.commit().to_string()).or_insert(false);
+        Ok(BaseCheckout::at(spec.path(), spec.commit(), prepared))
+    }
+
+    fn drop_base_checkout(&self, spec: &BaseSpec) -> Result<(), Self::Error> {
+        self.bases
+            .lock()
+            .expect("not poisoned")
+            .remove(spec.commit());
+        self.dropped_bases
+            .lock()
+            .expect("not poisoned")
+            .push(spec.commit().to_string());
+        Ok(())
     }
 
     fn commit_all(

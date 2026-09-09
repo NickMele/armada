@@ -22,11 +22,16 @@
 //! every terminal state because nothing Fleet hands a Drone can delete one.
 //! Removal is a person's act, at `armada clean`, through
 //! [`reclaim`](crate::reclaim()).
+//!
+//! **The base checkout is not here.** It is shared between Jobs rather than
+//! made per Job, it carries no branch, and its policy on an existing directory
+//! is the opposite of this one's — see `crate::basing`. The [`Vcs`] impl below
+//! forwards to it so the trait has one implementor.
 
 use std::fs;
 use std::path::Path;
 
-use adapter_traits::{CommitTime, Committed, Vcs, Worktree, WorktreeSpec};
+use adapter_traits::{BaseCheckout, BaseSpec, CommitTime, Committed, Vcs, Worktree, WorktreeSpec};
 use git2::{BranchType, ErrorCode, Repository, WorktreeAddOptions};
 
 use crate::error::{CommitWorkError, CreateWorktreeError};
@@ -72,6 +77,18 @@ impl Vcs for GitVcs {
         })?;
 
         add(&repo, spec, &branch_name, &path)
+    }
+
+    fn commit_at(&self, repo_root: &str, r#ref: &str) -> Result<String, Self::Error> {
+        crate::basing::commit_at(repo_root, r#ref)
+    }
+
+    fn base_checkout(&self, spec: &BaseSpec) -> Result<BaseCheckout, Self::Error> {
+        crate::basing::base_checkout(spec)
+    }
+
+    fn drop_base_checkout(&self, spec: &BaseSpec) -> Result<(), Self::Error> {
+        crate::basing::drop_base_checkout(spec)
     }
 
     fn commit_all(
