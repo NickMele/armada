@@ -45,13 +45,22 @@
   overflow: hidden;
 }
 
-/* Four columns: the mark, the finding, the output control and the result. The
-   control and the result are `max-content` so a list where one row says
-   `output · 2,180 lines` and another says `verdicts` still lines its results
-   up on one right edge. */
+/* Four columns: the mark, the finding, the output control and the result.
+   
+   **The result column can shrink now, and it could not.** It was `max-content`
+   with `nowrap`, which is right for `exit 0` and wrong for the sentence a
+   skipped Check carries — `no changed file is under apps/**, packages/**, …`
+   is a reason rather than a measurement, and at `max-content` it sized the
+   grid wider than the pane, pushed itself under the finding beside it, and
+   squeezed the finding's column to nothing. `minmax(0, max-content)` keeps the
+   right edge lined up down the list and lets a long one give way.
+   
+   The finding's column takes `min-content` as its floor for the other half of
+   the same defect: at `0` it collapsed, and an identifier set to break
+   anywhere then broke every character onto its own line. */
 .armada-check-runs__row {
   display: grid;
-  grid-template-columns: var(--space-4) minmax(0, 1fr) max-content max-content;
+  grid-template-columns: var(--space-4) minmax(min-content, 1fr) max-content minmax(0, max-content);
   align-items: start;
   gap: var(--space-2);
   padding: var(--space-1) var(--space-2);
@@ -99,7 +108,12 @@
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-subtle);
-  overflow-wrap: anywhere;
+  /* **`break-word`, not `anywhere`.** The two wrap the same way and size
+     differently: `anywhere` lets a word count for nothing when the browser
+     works out how narrow the column may be, so a squeezed column took an
+     identifier down to one character a line. `break-word` still breaks a word
+     too long for its line and keeps that word as the column's floor. */
+  overflow-wrap: break-word;
 }
 
 /* The output control. Underlined in the accent rather than filled: everything
@@ -152,7 +166,16 @@
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-muted);
-  white-space: nowrap;
+  /* Wraps, where this was `nowrap`. A measurement never needs to — `exit 101`
+     has nowhere to break — and a skipped Check's reason is a sentence that has
+     to, or it runs out of the pane taking the row's other columns with it.
+     
+     Left, and it costs the short ones nothing: the column is `max-content`
+     until something forces it narrower, so `exit 101` sits at the same right
+     edge either way and only a wrapped sentence has slack to align inside.
+     Ragged-left prose is the one thing that column could get wrong. */
+  overflow-wrap: break-word;
+  text-align: left;
 }
 
 .armada-check-runs__row[data-named="passed"] .armada-check-runs__result,
