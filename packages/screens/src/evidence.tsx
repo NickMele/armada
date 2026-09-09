@@ -62,6 +62,18 @@
 import type { Criterion, StepDetail } from "@armada/protocol";
 import type { StepChapter } from "@armada/components";
 
+/**
+ * A chapter before the story has counted it.
+ *
+ * **The ordinal is the story's and never a chapter's own.** A reader navigates
+ * by the number, so it has to be the position in what was drawn — and which
+ * chapters are drawn depends on the step: one that gates on nothing has no
+ * evidence chapter, and one that shows its work has an extra chapter before
+ * Produced. A chapter that numbered itself would be right until either
+ * happened.
+ */
+export type Unnumbered = Omit<StepChapter, "ordinal">;
+
 import { checksChapter } from "./checks";
 import { panelsOf } from "./gates";
 import type { Outputs } from "./outputs";
@@ -72,18 +84,7 @@ export { CHECKS_CHAPTER } from "./checks";
 export { VERDICTS_CHAPTER } from "./verdicts";
 
 /**
- * Where the evidence starts in the story. Produced is chapter three, so the
- * Checks are four and the Verdicts are five.
- *
- * **Numbered over what is drawn, not over what could be.** A step that declares
- * no Check and asks a Judge draws one evidence chapter, and numbering it `5`
- * would leave a gap in the ordinals a reader navigates by. The order is fixed —
- * Checks always before Verdicts — and the count is not.
- */
-const AFTER_PRODUCED = 4;
-
-/**
- * Chapters four and five, or fewer, or none.
+ * The last chapters of the story, or fewer, or none.
  *
  * **A step with nothing gating it gets no chapter at all.** The phase strip
  * says what advances such a step, in words, and that sentence is the one place
@@ -110,15 +111,17 @@ export function evidenceChaptersOf({
    * fixture this file replaced.
    */
   outputs: Outputs;
-}): StepChapter[] {
+}): Unnumbered[] {
   // Read once and drawn twice: the Checks chapter's Judge row and the Verdicts
   // grid are the same panel, and the two counts have to be one count.
   const panels = panelsOf(step, criteria);
-  const drawn = [
-    checksChapter(step, panels, opens, outputs),
-    verdictsChapter(step, panels, opens),
-  ].filter(
-    (chapter): chapter is Omit<StepChapter, "ordinal"> => chapter !== undefined,
+  // **Unnumbered, because the story numbers over what is drawn.** These used
+  // to carry `4` and `5` off a constant, which was right while Produced was
+  // always chapter three. A step that shows its work has a chapter before it,
+  // and a fixed number here would put two chapters on one ordinal — so the
+  // count is the story's to make, over the list it actually built. The order
+  // is still fixed: Checks always before Verdicts.
+  return [checksChapter(step, panels, opens, outputs), verdictsChapter(step, panels, opens)].filter(
+    (chapter): chapter is Unnumbered => chapter !== undefined,
   );
-  return drawn.map((chapter, at) => ({ ...chapter, ordinal: AFTER_PRODUCED + at }));
 }

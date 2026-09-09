@@ -14,7 +14,15 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import type { Criterion, Diff, Footprint, JobSummary, StepDetail, Turn } from "@armada/protocol";
+import type {
+  Criterion,
+  Diff,
+  Footprint,
+  JobSummary,
+  KeptFrame,
+  StepDetail,
+  Turn,
+} from "@armada/protocol";
 
 // The grouping lives with the component that draws it, so the two cannot
 // disagree about where a block stops. Tested here because this is the node
@@ -23,6 +31,7 @@ import type { Criterion, Diff, Footprint, JobSummary, StepDetail, Turn } from "@
 import { briefBlocks, widenIndent } from "@armada/components";
 
 import { chaptersOf } from "./chapters";
+import { NO_FRAMES } from "./frames";
 // The phase strip, because the last describe in this file is the two surfaces
 // against each other and there is no third place both are reachable from.
 import { phasesOf, type Opens } from "./phases";
@@ -147,6 +156,7 @@ function chapters(
     step: over.step ?? step(),
     criteria: over.criteria ?? [],
     render: "reviewing",
+    frames: NO_FRAMES,
     watching: { rows: over.rows ?? [], skipped: 0 },
     footprint: { state: "none" } as Footprint,
     kept: { files: [], recorded_at: "2026-09-02T13:18:00Z", plans: [] },
@@ -448,5 +458,70 @@ describe("a step whose transcript is not being read", () => {
   it("leaves the ordinary sentence alone while the socket is reading", () => {
     const markup = renderToStaticMarkup(chapters()[1]!.preview);
     expect(markup).toContain("Nothing has happened on this step yet.");
+  });
+});
+
+// Where the frames sit in the story, and what happens to the numbers.
+//
+// **The ordinals are what a reader navigates by**, so they are the story's own
+// count over what was drawn rather than a constant per chapter. That mattered
+// the moment a chapter could appear before Produced: fixed numbers would have
+// put two chapters on `3`, and the evidence chapters would have kept `4` and
+// `5` while sitting fifth and sixth.
+describe("a step that shows its work", () => {
+  function frame(over: Partial<KeptFrame> = {}): KeptFrame {
+    return {
+      attempt: 1,
+      name: "job-detail-refused.png",
+      path: ".armada/frames/12-a-job/show.1/job-detail-refused.png",
+      bytes: 41_002,
+      kept: "show.1/job-detail-refused.png",
+      ...over,
+    };
+  }
+
+  it("has no Shown chapter where the step captured nothing", () => {
+    expect(chapters().map((chapter) => chapter.id)).toEqual(["instructions", "log", "produced"]);
+  });
+
+  it("leads with the frames, above Produced", () => {
+    const built = chapters({ step: step({ frames: [frame()] }) });
+    expect(built.map((chapter) => chapter.id)).toEqual([
+      "instructions",
+      "log",
+      "shown",
+      "produced",
+    ]);
+  });
+
+  it("numbers over what was drawn, so nothing shares an ordinal", () => {
+    const built = chapters({ step: step({ frames: [frame()] }) });
+    expect(built.map((chapter) => chapter.ordinal)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("counts the frames, and the runs only where there is more than one", () => {
+    const one = chapters({ step: step({ frames: [frame()] }) });
+    expect(one[2]!.summary).toBe("1 frame");
+
+    const retried = chapters({
+      step: step({
+        frames: [frame(), frame({ attempt: 2, kept: "show.2/job-detail-refused.png" })],
+      }),
+    });
+    // Two frames from two runs is a different thing to be looking at from two
+    // frames of one, and a collapsed chapter has to say which.
+    expect(retried[2]!.summary).toBe("2 frames · 2 runs");
+  });
+
+  it("draws the frames in the preview, so nothing has to be opened to see them", () => {
+    const built = chapters({ step: step({ frames: [frame()] }) });
+    const markup = renderToStaticMarkup(built[2]!.preview);
+    expect(markup).toContain("job-detail-refused.png");
+    // Nothing has fetched, so the plate says the wait rather than drawing a
+    // blank that would read as a frame of a blank page.
+    expect(markup).toContain("reading…");
+    // And no `content`: opening a chapter to find out that there are pictures
+    // is the gesture this exists to remove.
+    expect(built[2]!.content).toBeUndefined();
   });
 });

@@ -44,6 +44,7 @@ import {
   openPullRequest,
   readCall,
   readCheckOutput,
+  readFrame,
   readDiff,
   readEvidence,
   readRemarks,
@@ -347,6 +348,7 @@ export function App() {
                 onOpenPullRequest={openPullRequest}
                 onReadCall={readCall}
                 onReadCheckOutput={readCheckOutput}
+                onReadFrame={readFrame}
                 onNeedMaterial={readEvidence}
                 onNeedRemarks={readRemarks}
                 watched={state.watched}

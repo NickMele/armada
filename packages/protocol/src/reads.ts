@@ -256,6 +256,27 @@ export type CheckOutputRead =
   | { ok: true; output: CheckOutput }
   | { ok: false; outcome: Outcome };
 
+/**
+ * What one frame came back as: the bytes, and what they are.
+ *
+ * **Answered to the caller rather than published as state**, for
+ * `CheckOutputRead`'s reasons — a kept frame never moves, and holding one in
+ * `BridgeState` would keep hundreds of kilobytes alive for as long as the Job
+ * is open.
+ *
+ * **Bytes and not a string.** Every other read on this seam is JSON; this one
+ * is a file, and it crosses to the renderer as the array Electron's structured
+ * clone already carries. A base64 in between would inflate it by a third and
+ * would have to be undone on the other side to draw it.
+ *
+ * `type` is the media type Fleet answered with, read off the file's own name.
+ * It travels with the bytes because the renderer needs it to make a `Blob`, and
+ * nothing on that side should be parsing an extension to guess.
+ */
+export type FrameRead =
+  | { ok: true; bytes: Uint8Array; type: string }
+  | { ok: false; outcome: Outcome };
+
 /** `GET /jobs/:job_id` for the open Job. */
 export type Watched = JobRead<{ detail: JobDetail }>;
 

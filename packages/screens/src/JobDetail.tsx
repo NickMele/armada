@@ -83,6 +83,7 @@ import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
 import { heldForMoney, type ConfirmableAct } from "./Acts";
 import { useCallArguments, type ReadCall } from "./calls";
 import { useCheckOutputs, type ReadCheckOutput } from "./outputs";
+import { useFrames, type ReadFrame } from "./frames";
 import { openArtifact } from "./opening";
 import type { OpenArtifact, OpenPullRequest } from "./opening";
 import { DIFF_CHAPTER, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-keys";
@@ -183,6 +184,12 @@ export type JobDetailProps = {
    * has the file, and the screen does the reading rather than the fetching.
    */
   onReadCheckOutput: ReadCheckOutput;
+  /**
+   * Read one frame a step's harness produced. **`onReadCheckOutput`'s shape one
+   * record over** — the bytes come from the process that can reach Fleet, and
+   * the screen is handed the way to ask rather than the way to connect.
+   */
+  onReadFrame: ReadFrame;
   /** Stable, like `onReadDiff` — an effect in the decision block depends on it. */
   onNeedMaterial: (jobId: string | null) => void;
   /**
@@ -258,6 +265,7 @@ export function JobDetail({
   onOpenPullRequest,
   onReadCall,
   onReadCheckOutput,
+  onReadFrame,
   onNeedMaterial,
   onNeedRemarks,
   job,
@@ -454,6 +462,22 @@ export function JobDetail({
   // already has.
   const outputs = useCheckOutputs(onReadCheckOutput, job.id);
 
+  // The frames each step captured, for as long as this Job is open. Held for
+  // the Job for `outputs`' reason, and it owns the object URLs it mints — a
+  // `blob:` lives until it is revoked, so a person walking six Jobs would
+  // otherwise leave six sets of screenshots behind them.
+  const frames = useFrames(onReadFrame, job.id);
+
+  // **Asked for when the step is opened, not when a chapter is pressed.** The
+  // claim #209 makes is that a change whose point is not the code is reviewed
+  // by looking at it, and a panel that draws a button saying there are pictures
+  // has not led with anything. `want` is idempotent per `kept`, so this asking
+  // again on every tick of the clock sends nothing twice.
+  const shownBy = open?.frames;
+  useEffect(() => {
+    if (shownBy !== undefined && shownBy.length > 0) frames.want(shownBy);
+  }, [shownBy, frames]);
+
   const rows = watching === null || open === undefined ? [] : entriesOf(watching.rows, open.step_id);
 
   /**
@@ -505,6 +529,7 @@ export function JobDetail({
           log: keys.inLog,
           calls,
           outputs,
+          frames,
           sheet,
           // The Produced chapter opens the step's deliverable, which the phase
           // strip's Submitted tier was the only route to. Same handler, because

@@ -26,6 +26,7 @@ import { InsideAJob } from "@armada/components";
 import type { Artifact, JobDetail, JobSummary, StepDetail } from "@armada/protocol";
 
 import { chaptersOf } from "./chapters";
+import { NO_FRAMES } from "./frames";
 import { CHECKS_CHAPTER } from "./checks";
 import { headingOf } from "./heading";
 import { mount, unmount } from "./mounted";
@@ -246,6 +247,7 @@ function screen(
           step: showing,
           criteria,
           render: renderFor(summary),
+          frames: NO_FRAMES,
           watching: { rows: [], skipped: 0 },
           footprint: { state: "none" },
           kept: undefined,

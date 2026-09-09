@@ -31,7 +31,7 @@ import { identifying, NOTHING_YET } from "../shared/bridge";
 import { connectedTo } from "@armada/protocol";
 import { connects, skew } from "@armada/protocol";
 import type { BridgeState } from "../shared/bridge";
-import type { CallRead, CheckOutputRead, Connection } from "@armada/protocol";
+import type { CallRead, CheckOutputRead, Connection, FrameRead } from "@armada/protocol";
 import type { JobHistory, Recorded } from "@armada/protocol";
 import type { JobDetail, JobExamined, JobResources, JobSummary, StreamMessage } from "@armada/protocol";
 import { JobCommands } from "./command";
@@ -45,6 +45,7 @@ import {
   callArgumentsOf,
   capacityOf,
   checkOutputOf,
+  frameOf,
   holdingsOf,
   manifestReadingOf,
 } from "./request";
@@ -787,6 +788,22 @@ export class FleetConnection {
     const port = this.connected()?.port ?? null;
     if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
     return await checkOutputOf(port, jobId, kept);
+  }
+
+  /**
+   * One frame a step's harness produced, for the person who opened it.
+   *
+   * **`readCheckOutput`'s shape, and the bytes stop here.** What crosses to the
+   * renderer is an array and a media type; the renderer makes a `Blob` of it
+   * and never learns Fleet's port. That is the rule every read on this seam
+   * follows — main talks to Fleet, the renderer talks to main — and a frame is
+   * fetched through it rather than put in an `img` tag pointed at a port, so
+   * the one surface that draws a file is not also the one that opens a socket.
+   */
+  async readFrame(jobId: string, kept: string): Promise<FrameRead> {
+    const port = this.connected()?.port ?? null;
+    if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
+    return await frameOf(port, jobId, kept);
   }
 
   // ----------------------------------------------- every report, and the counts

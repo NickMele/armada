@@ -191,3 +191,6 @@
 
 /* The full reading, on the layer that summary opens. */
 @import "./compositions/JobHoldsSheet/JobHoldsSheet.css";
+
+/* What a step whose point is not the code is reviewed by. */
+@import "./compositions/FramesShown/FramesShown.css";

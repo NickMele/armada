@@ -65,6 +65,15 @@ export const DIFF_CHAPTER = "produced";
 /** Which chapter the activity log is in. */
 export const LOG_CHAPTER = "log";
 
+/**
+ * Which chapter the frames are in, where a step has them.
+ *
+ * **Named here with the other two rather than in the file that builds it**, so
+ * the one place that says which chapter a surface means stays one place. What
+ * reads it is the rule that decides which chapter the panel lands on.
+ */
+export const FRAMES_CHAPTER = "shown";
+
 /* `FLEET_LOG` was here, naming the region that drew what Fleet did to the Job
    itself. That region is gone: it and the holdings card both answered *what is
    happening on this machine right now*, so the tail moved into

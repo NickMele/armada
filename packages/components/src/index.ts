@@ -42,6 +42,7 @@ export * from "./compositions/EvidenceCard/EvidenceCard";
 export * from "./compositions/DroneTurns/DroneTurns";
 export * from "./compositions/EvidenceTrail/EvidenceTrail";
 export * from "./compositions/FailureNotice/FailureNotice";
+export * from "./compositions/FramesShown/FramesShown";
 export * from "./compositions/GamingFlags/GamingFlags";
 export * from "./compositions/JobComposer/JobComposer";
 export * from "./compositions/JobDiffSheet/JobDiffSheet";
