@@ -163,6 +163,16 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
                     produced: Some("the reader's bound widened".to_string()),
                     consequence: Some("every other caller reads one row too many".to_string()),
                     brief_path: Some(".armada/briefs/01JOB/repro.1.c1.txt".to_string()),
+                    cited: Some(vec![crate::Citation {
+                        region: "check:test_suite".to_string(),
+                        from_line: 2007,
+                        to_line: 2008,
+                    }]),
+                    given: Some(crate::Given {
+                        digest: "3f7a10c2b40de991".to_string(),
+                        size: 41_204,
+                        model: "haiku".to_string(),
+                    }),
                 },
                 Judged {
                     attempt: 1,
@@ -173,6 +183,8 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
                     produced: None,
                     consequence: None,
                     brief_path: None,
+                    cited: None,
+                    given: None,
                 },
             ],
             flagged: Vec::new(),
@@ -192,6 +204,21 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
     assert!(
         !json.contains("\"expected\":null"),
         "a no-objection cites nothing, and absent is not null: {json}"
+    );
+    assert!(
+        json.contains("\"region\":\"check:test_suite\"") && json.contains("\"from_line\":2007"),
+        "where in the brief the refusal quoted from crosses: {json}"
+    );
+    assert!(
+        json.contains("\"digest\":\"3f7a10c2b40de991\""),
+        "and what that member was handed, which is what a client compares \
+         across a panel: {json}"
+    );
+    assert!(
+        !json.contains("\"cited\":null") && !json.contains("\"given\":null"),
+        "a row nobody recorded either for sends no key at all, which is what \
+         the `?:` on the TypeScript side reads — where `[]` would have said \
+         the member quoted nothing: {json}"
     );
     assert_eq!(
         decode::<JobDetail>("a Job in full", json.as_bytes()).expect("it round-trips"),

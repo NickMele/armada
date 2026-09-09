@@ -187,6 +187,21 @@ A refusal's content is three named fields, never a formatted string:
 
 Summary prose is prompt plus mechanical lint. **Substance requirement: every Judge summary must cite a file, line or assertion that could not appear in any other job's summary.** A summary that reads plausibly under a different job has failed.
 
+### What each member read, and what each was handed
+
+Two readings per member per criterion, beside the verdict. Both are records of the *call* rather than of the answer, and both are absent on every verdict written before protocol 8.3.
+
+| Reading | What it holds | What it is for |
+| --- | --- | --- |
+| `cited[]` | Every quotation this member made that the brief holds, as the labelled part of the brief and the lines it is on — `check:test_suite`, 2007–2008 | Two members refusing off the same lines and two refusing off different ones are the same verdict and different situations |
+| `given` | A digest of the exact text this member's call was sent, its size, and its model | Rule 5 rests on the members running against identical inputs, and until this the guarantee was asserted by the shape of a loop and observable nowhere |
+
+**The citation is placed, never quoted back.** The record already carries the words in `expected` and `produced`; what it lacked was where in the brief they came from. The labels are recorded as the brief is assembled rather than recognised in it afterwards, so a citation names the part the assembler wrote and not a heading a reader matched.
+
+**`cited[]` is empty on a no-objection, and that is not a gap.** Under the answer format a `met` verdict is one line, so it writes no prose to quote out of — which is why a surface listing what each member read can only show refusals. A refusal that argues in the Judge's own words is empty for the same reason and is a complete refusal under rule 4. **Absent is a third answer** and means nobody recorded, which is not the same as either.
+
+**The digest is a comparison and never a signature.** Its whole span is the rows of one panel, written by one build in one pass. It is taken off the call that went out rather than off the brief above it: a digest read from the shared `Brief` would say the members got the same object because the loop hands them one, which is the sentence the field exists to replace.
+
 ## Configuration
 
 | Field | Purpose |

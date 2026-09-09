@@ -38,6 +38,7 @@ mod product;
 mod quoted;
 mod request;
 mod scope;
+mod shown;
 mod submission;
 mod widening;
 
@@ -61,5 +62,6 @@ pub use product::{
 };
 pub use request::Request;
 pub use scope::{drifted, InScope, Lifted, OutsideScope};
+pub use shown::digest;
 pub use submission::{Claimed, NotASubmission, NotClaimed, ShownBy, Submission};
 pub use widening::{NotWidened, Widened, WideningBrief};

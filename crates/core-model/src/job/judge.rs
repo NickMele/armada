@@ -197,4 +197,80 @@ pub struct Judgment {
     /// A verdict is still a verdict without it; what is lost is the ability to
     /// re-read it against what it was answering.
     pub brief_path: Option<String>,
+    /// Every quotation this answer made that the brief actually holds, placed
+    /// in it.
+    ///
+    /// **What one member read, which is not what the panel answered.** The
+    /// verdict and the three fields are the answer; this is the pointer back
+    /// into the material, and it is what makes a lone dissent readable — two
+    /// members refusing off the same lines and two refusing off different ones
+    /// are the same verdict and different situations.
+    ///
+    /// **Empty and absent are different facts, so this is an `Option` around
+    /// a list.** Empty is a member that quoted nothing placeable — a `Met`
+    /// answer writes no prose, and a refusal may argue in the Judge's own
+    /// words, which `Brief::read` accepts and nothing can place. Absent is a
+    /// row nobody asked the question of, which is every row written before
+    /// this field existed. A screen draws a different sentence for each.
+    pub cited: Option<Vec<Citation>>,
+    /// What this member's call was handed, as something two rows can be
+    /// compared on.
+    ///
+    /// **The evidence that a panel was a panel.** Rule 5 rests on the members
+    /// running against identical inputs, and until this the guarantee was
+    /// asserted by the shape of the loop and observable nowhere. A digest per
+    /// member is the reading that can disagree.
+    ///
+    /// **Absent means it was not recorded**, which is every row written before
+    /// this existed. It is not "the input was empty" — there is no such call.
+    pub given: Option<Given>,
+}
+
+/// One quotation an answer made, placed in the brief the call was shown.
+///
+/// **Where the words are, never the words.** The brief is a file on disk that
+/// `Judgment::brief_path` names, so a line number here is a coordinate into
+/// something a person can open — and carrying the span as well would put the
+/// quoted material on a row that already points at it.
+///
+/// **A citation of the brief, not of the repository.** `CitedAt` places a
+/// gaming flag in the patch, which is a different document and a different
+/// question. The Judge is answering about what it was shown, and what it was
+/// shown is the brief.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Citation {
+    /// Which labelled part of the brief holds it — `request`, `checks`,
+    /// `check:test_suite`, `reference:root_cause`, `deliverable`, `diff`.
+    ///
+    /// **A string rather than a closed set**, for `GamingFlag::pattern`'s
+    /// reason: half of these are named after a Check or a step, so the set is
+    /// whatever the workflow declared and no registry could hold it. It is
+    /// rendered and never matched on.
+    pub region: String,
+    /// The first line of the brief the quotation is on, counted from one.
+    pub from_line: u32,
+    /// The last. Equal to [`from_line`](Citation::from_line) where the
+    /// quotation does not cross a line break.
+    pub to_line: u32,
+}
+
+/// What one member of a panel was handed.
+///
+/// **Three readings of one object, because one of them is not enough to
+/// argue with.** A digest says two members got the same thing or did not, and
+/// says nothing about what the thing was; the size and the model are what a
+/// person reads when the digests disagree.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Given {
+    /// A digest over the exact text this member's call was sent.
+    ///
+    /// **A comparison, never a signature.** What it answers is whether two
+    /// rows of one panel hold the same object, and both were written by one
+    /// build in one pass. Nothing authenticates anything with it.
+    pub digest: String,
+    /// How long that text was, in characters.
+    pub size: u32,
+    /// The model this member's call ran on. The second thing that could differ
+    /// between members and the one a reader can act on.
+    pub model: String,
 }

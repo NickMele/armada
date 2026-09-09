@@ -118,9 +118,16 @@ export type JudgeVerdictsProps = {
    * `gates.ts` is what groups them. This block said the opposite until
    * 2026-09-09, when the grid was built into the job detail screen.
    *
-   * What still has none: the per-judge citation sets `JudgeRefusal.overlap`
-   * draws, and the input digest `JudgeInputs` draws. Both are what each judge
-   * *read*, and nothing on the wire records that.
+   * **What each judge read is on the wire too**, since 8.3: `Judged.cited`
+   * places every quotation a member made in the brief it was shown, and
+   * `Judged.given` digests what that member was handed. `JudgeCitations` and
+   * `JudgeInputs` both draw served data now.
+   *
+   * What still has none: the per-judge citation *sets* `JudgeRefusal.overlap`
+   * draws — which is where two members' citations overlap and where they do
+   * not. `cited` carries each member's list and nothing computes the
+   * intersection, so the overlap is a reading nobody has written rather than a
+   * record nobody keeps.
    */
   /** The glyphs, from the `circle-*` family the Judge owns. */
   glyphs?: Partial<Record<JudgeMark, LucideIcon>>;

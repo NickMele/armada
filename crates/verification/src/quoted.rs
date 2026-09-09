@@ -52,6 +52,20 @@ pub(crate) fn spans(cited: &str) -> Vec<String> {
         .collect()
 }
 
+/// Each side of an elision on its own.
+///
+/// **Written once for the three readings that need it.** [`invented`] checks
+/// containment across a cut, [`located`](mod@crate::located) places a gaming
+/// citation and [`shown`](mod@crate::shown) places a Judge's — and a model
+/// quoting across a cut writes `"drops X … and Y"`, so all three would fail on
+/// the whole of it. Three copies of that rule is where they would drift.
+pub(crate) fn elisions(span: &str) -> Vec<String> {
+    span.split('\u{2026}')
+        .flat_map(|part| part.split("..."))
+        .map(str::to_string)
+        .collect()
+}
+
 /// The first quoted span in `cited` that is attributed to a source and appears
 /// nowhere in `shown`.
 ///
@@ -74,12 +88,10 @@ pub(crate) fn invented(cited: &str, shown: &str) -> Option<String> {
         .filter(|quotation| attributed(&quotation.runup))
         .map(|quotation| quotation.span)
         .find(|span| {
-            span.split('\u{2026}')
-                .flat_map(|part| part.split("..."))
-                .any(|part| {
-                    let quoted = words(part);
-                    quoted.split_whitespace().count() >= A_CITATION && !material.contains(&quoted)
-                })
+            elisions(span).iter().any(|part| {
+                let quoted = words(part);
+                quoted.split_whitespace().count() >= A_CITATION && !material.contains(&quoted)
+            })
         })
 }
 

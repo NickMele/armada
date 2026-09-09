@@ -13,13 +13,22 @@
 // **What the wire has not got is not drawn.** `JudgeVerdicts` takes a
 // `measured` band for a criterion a Check settled, and nothing joins a
 // criterion to a Check — so no measured row is built, and only criteria the
-// panel actually answered get a row. `JudgeRefusal` takes the lines a judge
-// quoted and the citation sets that say where two judges differed, and `Judged`
-// records neither: it records a verdict and the three fields the refusal owes.
+// panel actually answered get a row. `JudgeRefusal.overlap` takes the citation
+// sets that say where two judges' readings met and where they parted; `cited`
+// carries each member's list and nothing computes the intersection.
+//
+// **Two regions under the grid, and each is scoped where its record is.**
+// `JudgeCitations` is one list for the step, because a row names both the judge
+// and the criterion. `JudgeInputs` is one block per criterion inside that
+// criterion's own disclosure, because a brief is per criterion — every member
+// of one panel answers one brief and two criteria answer two, so a digest
+// folded over the step would differ for a reason that says nothing.
 
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
+  JudgeCitations,
+  JudgeInputs,
   JudgeRefusal,
   JudgeVerdicts,
   type JudgeMark,
@@ -29,6 +38,7 @@ import {
 import { CRITERION_VERDICT_JUDGE } from "@armada/components";
 import type { Judged, StepDetail } from "@armada/protocol";
 
+import { citationsOf, givenTo } from "./cited";
 import { askedOf, judgesSaid, NOT_REACHED, panelSizeOf, type Panel } from "./gates";
 import { basename, howThePanelWent, openKept, type Opens } from "./phases";
 
@@ -68,17 +78,37 @@ export function verdictsChapter(
   }
 
   const refused = panels.filter((panel) => panel.verdict === "not_met").length;
+  const size = panelSizeOf(step, panels);
+  // Every pointer the panel made, across criteria. It is one list rather than
+  // one per criterion because a row names both — `j2 · 02` — and because what
+  // it is for is reading two criteria's citations against each other.
+  const citations = citationsOf(panels, size, (path) =>
+    openKept(opens, { kept: path, what: "brief" }),
+  );
   return {
     id: VERDICTS_CHAPTER,
     title: "Verdicts",
     summary: countedIn(refused, panels.length),
     // The grid is its own disclosure, so the chapter has no second one.
     preview: (
-      <JudgeVerdicts
-        judges={judgeColumns(panelSizeOf(step, panels))}
-        glyphs={GLYPHS}
-        rows={panels.map((panel) => verdictRow(panel, opens))}
-      />
+      <>
+        <JudgeVerdicts
+          judges={judgeColumns(size)}
+          glyphs={GLYPHS}
+          rows={panels.map((panel) => verdictRow(panel, size, opens))}
+        />
+        {/* Under the grid, and on two conditions. **Only where something was
+            refused**, because a panel that met every criterion wrote no prose
+            to quote out of and a note saying so under every passing step is
+            this screen explaining the veto-only contract to somebody who did
+            not ask. **And only where the record was kept**: `citationsOf`
+            answers `null` for a Fleet that recorded none, and the note below
+            is a claim about how the refusals were worded — which is a claim
+            nobody could make about rows nobody asked. */}
+        {refused === 0 || citations === null ? null : (
+          <JudgeCitations label={CITED_LABEL} rows={citations} emptyNote={QUOTED_NOTHING} />
+        )}
+      </>
     ),
   };
 }
@@ -97,8 +127,8 @@ function judgeColumns(size: number): string[] {
 }
 
 /** One criterion's row in the grid. */
-function verdictRow(panel: Panel, opens: Opens): JudgeVerdictRow {
-  const refusal = refusalOf(panel, opens);
+function verdictRow(panel: Panel, size: number, opens: Opens): JudgeVerdictRow {
+  const refusal = refusalOf(panel, size, opens);
   return {
     ...(panel.ordinal === undefined ? {} : { ordinal: panel.ordinal }),
     criterionId: panel.criterionId,
@@ -144,10 +174,11 @@ function markOf(one: Judged): JudgeMark {
  * says why: a chevron opening an empty region would promise a reading nobody
  * wrote. The marks stay, and they are the honest whole of what is known.
  */
-function refusalOf(panel: Panel, opens: Opens): ReactNode {
+function refusalOf(panel: Panel, size: number, opens: Opens): ReactNode {
   const grounds = groupedGrounds(panel.refused);
   const met = panel.members.filter((one) => one.verdict === "met");
   const panelled = panel.members.length > 1;
+  const given = givenTo(panel);
   const drawn = grounds
     .map((group, at) => {
       const first = group[0] as Judged;
@@ -193,7 +224,32 @@ function refusalOf(panel: Panel, opens: Opens): ReactNode {
       );
     })
     .filter((block) => block !== null);
-  return drawn.length === 0 ? undefined : drawn;
+  // What this criterion's panel was handed, under the grounds it produced.
+  // **Per criterion, because a brief is per criterion** — every member of one
+  // panel answers one brief and two criteria answer two, so a digest folded
+  // over the step would differ for a reason that says nothing about whether
+  // the judges agreed on their input.
+  //
+  // **No segmented control at one judge**, which is what `each` being absent
+  // draws: a control offering one segment is a promise nobody kept. The
+  // assurance goes with it — there is no panel for the objects to be identical
+  // across, and saying so would be a claim about a comparison nobody made.
+  const handed =
+    given === null ? null : (
+      <JudgeInputs
+        key="given"
+        label={size < 2 ? GIVEN_TO_ONE : GIVEN_TO_PANEL}
+        rows={given.rows}
+        {...(size < 2 ? {} : { each: given.each })}
+        {...(size < 2
+          ? {}
+          : given.identical
+            ? { identical: HANDED_ALIKE }
+            : { differed: HANDED_APART })}
+      />
+    );
+  if (drawn.length === 0 && handed === null) return undefined;
+  return [...drawn, handed];
 }
 
 /**
@@ -283,3 +339,30 @@ const BRIEF_LABEL = "What this verdict answers";
 
 /** What the brief is, in the reader's words. */
 const BRIEF_SAYS = "The whole brief the Judge was given";
+
+/** The line over the citation list. It is every pointer, not only a refusal's. */
+const CITED_LABEL = "What the panel quoted";
+
+/**
+ * What a refused step whose refusals quoted nothing says.
+ *
+ * **A fact about the refusals, not an apology for the list.** A refusal may
+ * argue in the Judge's own words, and that is a complete refusal under
+ * `docs/concepts/judge.md` rule 4 — what it is not is one a reader can follow
+ * back into the brief without reading the brief.
+ */
+const QUOTED_NOTHING =
+  "Nothing was quoted. The refusals above describe the work rather than " +
+  "quoting it, so there is nothing to point at in the brief.";
+
+/** The line over one criterion's inputs, at a panel. */
+const GIVEN_TO_PANEL = "What each judge was handed";
+
+/** The same line where one judge answered and there is nothing to compare. */
+const GIVEN_TO_ONE = "What the Judge was handed";
+
+/** That the panel was a panel. */
+const HANDED_ALIKE = "Every judge was handed the same brief";
+
+/** That it was not, which is the answer this view exists to be able to give. */
+const HANDED_APART = "The judges were not handed the same brief";

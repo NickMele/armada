@@ -13,6 +13,7 @@
 import { describe, expect, it } from "vitest";
 import type { Criterion, Judged, StepDetail } from "@armada/protocol";
 
+import { citationsOf, givenTo } from "./cited";
 import { checksOf, outputOf, panelSizeOf, panelsOf } from "./gates";
 
 function step(over: Partial<StepDetail> = {}): StepDetail {
@@ -243,5 +244,128 @@ describe("the panel's shape", () => {
       judged: [judged({ criterion_id: "c1", member: 1 }), judged({ criterion_id: "c1", member: 2 })],
     });
     expect(panelSizeOf(showing, panelsOf(showing, CRITERIA))).toBe(2);
+  });
+});
+
+// `cited.ts`'s two readings, over the same fixtures. They are the Verdicts
+// chapter's alone rather than shared, so they are not in `gates.ts` — but they
+// are read off a `Panel`, which is, and a second `step()` beside this one is
+// exactly the drift the file above exists to stop.
+
+/** What a member's call was handed, as one criterion's panel all got it. */
+const HANDED = { digest: "9c41ab0e77d25631", size: 12_880, model: "haiku" };
+
+describe("what each member of a panel quoted", () => {
+  // Absent and empty are different facts. A Fleet before 8.3 recorded no
+  // citations for anybody, and a screen drawing "nothing was quoted" for that
+  // would make a claim about how the refusals were worded.
+  it("is null where no member recorded any, and a list where one did", () => {
+    const none = panelsOf(step({ judged: [judged({ criterion_id: "c1" })] }), CRITERIA);
+    expect(citationsOf(none, 1, () => {})).toBeNull();
+
+    const some = panelsOf(
+      step({ judged: [judged({ criterion_id: "c1", cited: [] })] }),
+      CRITERIA,
+    );
+    expect(citationsOf(some, 1, () => {})).toEqual([]);
+  });
+
+  it("names the judge and the criterion at a panel, and the criterion alone at one", () => {
+    const one = panelsOf(
+      step({
+        judged: [
+          judged({
+            criterion_id: "c2",
+            cited: [{ region: "diff", from_line: 88, to_line: 90 }],
+          }),
+        ],
+      }),
+      CRITERIA,
+    );
+    const alone = citationsOf(one, 1, () => {}) ?? [];
+    expect(alone[0]?.who).toBe("02");
+    expect(alone[0]?.where).toBe("diff lines 88\u201390");
+
+    const panelled = panelsOf(
+      step({
+        judged: [
+          judged({ criterion_id: "c2", member: 1 }),
+          judged({
+            criterion_id: "c2",
+            member: 2,
+            cited: [{ region: "request", from_line: 12, to_line: 12 }],
+          }),
+        ],
+      }),
+      CRITERIA,
+    );
+    const rows = citationsOf(panelled, 2, () => {}) ?? [];
+    expect(rows.length).toBe(1);
+    expect(rows[0]?.who).toBe("j2 \u00b7 02");
+    expect(rows[0]?.where).toBe("request line 12");
+  });
+});
+
+describe("what each member of a panel was handed", () => {
+  it("is nothing at all where no member recorded it", () => {
+    const panels = panelsOf(step({ judged: [judged({ criterion_id: "c1" })] }), CRITERIA);
+    expect(givenTo(panels[0] as (typeof panels)[number])).toBeNull();
+  });
+
+  it("says the panel was a panel where every member holds the same object", () => {
+    const panels = panelsOf(
+      step({
+        judged: [
+          judged({ criterion_id: "c1", member: 1, given: HANDED }),
+          judged({ criterion_id: "c1", member: 2, given: HANDED }),
+        ],
+      }),
+      CRITERIA,
+    );
+    const handed = givenTo(panels[0] as (typeof panels)[number]);
+    expect(handed?.identical).toBe(true);
+    expect(handed?.rows.map((row) => row.value)).toEqual([
+      "9c41ab0e77d25631",
+      "12880 characters",
+      "haiku",
+    ]);
+  });
+
+  // The mark is what carries the comparison into the view that has lost it:
+  // reading j2's object alone, nothing about a digest says it is the odd one.
+  it("marks the field they were not handed alike, in the per-judge views too", () => {
+    const panels = panelsOf(
+      step({
+        judged: [
+          judged({ criterion_id: "c1", member: 1, given: HANDED }),
+          judged({
+            criterion_id: "c1",
+            member: 2,
+            given: { ...HANDED, digest: "0000000000000000" },
+          }),
+        ],
+      }),
+      CRITERIA,
+    );
+    const handed = givenTo(panels[0] as (typeof panels)[number]);
+    expect(handed?.identical).toBe(false);
+    expect(handed?.rows.map((row) => row.differs)).toEqual([true, undefined, undefined]);
+    expect(handed?.each.map((one) => one.judge)).toEqual(["j1", "j2"]);
+    expect(handed?.each.every((one) => one.rows[0]?.differs === true)).toBe(true);
+  });
+
+  // A member with no `given` beside members that have one cannot be compared,
+  // so the panel is not claimed to have been handed one object.
+  it("does not claim a panel where one member recorded nothing", () => {
+    const panels = panelsOf(
+      step({
+        judged: [
+          judged({ criterion_id: "c1", member: 1, given: HANDED }),
+          judged({ criterion_id: "c1", member: 2 }),
+        ],
+      }),
+      CRITERIA,
+    );
+    expect(givenTo(panels[0] as (typeof panels)[number])?.identical).toBe(false);
   });
 });

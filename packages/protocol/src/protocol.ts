@@ -197,7 +197,7 @@ export type CheckRun = {
 // reached the 900 lines the gate refuses again; the cut is the one
 // `crates/ipc/src/judged.rs` already draws — and it draws it for this reason,
 // having been split off `detail.rs` on the same line.
-export type { Flagged, Judged, KeptDeliverable } from "./judged";
+export type { Citation, Flagged, Given, Judged, KeptDeliverable } from "./judged";
 
 /** What a Job is about. Neither sequencing nor provenance. */
 export type Subject = { kind: string; reference: string };

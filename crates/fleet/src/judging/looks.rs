@@ -18,7 +18,8 @@
 
 use adapter_traits::{Ask, Model, Patch};
 use core_model::{
-    DeclaredPaths, GamingFlag, JudgeCheck, Judgment, RepoPath, ResolvedStep, StepEvidence, StepId,
+    DeclaredPaths, GamingFlag, Given, JudgeCheck, Judgment, RepoPath, ResolvedStep, StepEvidence,
+    StepId,
 };
 use verification::{
     Accepted, Answered, Baseline, Brief, Convergence, ConvergenceBrief, Delivered, Flagged,
@@ -118,6 +119,12 @@ pub(crate) async fn judged(
                 // convention `JudgeCheck::panel_size` already uses on the wire.
                 // A step that asks one judge records what it always recorded.
                 judgment.member = (check.panel_size() > 1).then_some(member);
+                // **Off the `Ask`, not off the `Brief`.** The two hold the same
+                // string by construction, and reading the one that was actually
+                // sent is what makes this a reading rather than a restatement
+                // of the loop above — which is the whole of what rule 5's
+                // guarantee is worth on a record.
+                judgment.given = Some(handed(&ask));
                 judgments.push(judgment);
             }
         }
@@ -156,10 +163,29 @@ pub(crate) async fn judged(
         let said = said(judging.client.as_ref(), &ask, judging.budget).await?;
         let mut judgment = brief.read(&said).map_err(CallFailed::Unreadable)?;
         judgment.brief_path = kept;
+        // Recorded on the drift look too, even though one call has nothing to
+        // be compared against. A row that carried it only where a panel ran
+        // would make an absent value mean two things.
+        judgment.given = Some(handed(&ask));
         judgments.push(judgment);
     }
     let refusals = Refusals::among(&judgments);
     Ok((judgments, refusals))
+}
+
+/// What one call was handed, as something two rows can be compared on.
+///
+/// **Read off the `Ask` and not off anything upstream of it.** `Ask::put` is
+/// the last thing that holds the question before a process does, so this is
+/// the closest a record gets to what went out — and a digest taken from the
+/// `Brief` instead would say the members were handed the same object because
+/// the code says so, which is the sentence this field exists to replace.
+fn handed(ask: &Ask) -> Given {
+    Given {
+        digest: verification::digest(ask.question()),
+        size: ask.question().chars().count() as u32,
+        model: ask.model().as_str().to_string(),
+    }
 }
 
 /// Every `reference_docs` entry this step can actually reach.

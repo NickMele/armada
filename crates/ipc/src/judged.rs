@@ -83,6 +83,88 @@ pub struct Judged {
     /// [`CheckRun::output_path`]: crate::CheckRun::output_path
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub brief_path: Option<String>,
+    /// Where in the brief this member's own words are quoted from.
+    ///
+    /// **What one member read, which the verdict does not say.** The grid says
+    /// which way each judge went and the three fields say why; this says what
+    /// each of them was looking at, which is what separates two members
+    /// refusing off one line from two refusing off different ones.
+    ///
+    /// **`[]` and absent are different answers, and both are ordinary.** `[]`
+    /// is a member that quoted nothing placeable — a `met` answer writes no
+    /// prose, and a refusal may argue in the Judge's own words. Absent is a
+    /// Fleet that recorded no citations at all, which is every row written
+    /// before 8.3. A client that folded them would tell a person the panel
+    /// described rather than quoted, about a panel nobody asked.
+    ///
+    /// Skipped rather than serialised as `null`, this crate's rule wherever an
+    /// `Option` crosses — the TypeScript side spells it `cited?:`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cited: Option<Vec<Citation>>,
+    /// What this member's call was handed.
+    ///
+    /// **The evidence that a panel was a panel.** `docs/concepts/judge.md`
+    /// rule 5 rests on the members running against identical inputs, and
+    /// nothing on this seam could be asked about it: a client comparing three
+    /// rows saw three identical keys and had to take the guarantee on the
+    /// shape of Fleet's loop. A digest per member is the reading that can
+    /// disagree.
+    ///
+    /// **Absent means nobody wrote it down** — every row a build before this
+    /// produced. It is never "the input was empty", which is not a call Fleet
+    /// can make.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub given: Option<Given>,
+}
+
+/// One quotation a verdict made, placed in the brief the call was shown.
+///
+/// **Where the words are, never the words.** [`Judged::brief_path`] names the
+/// file and this is a coordinate into it, so a client opens one artifact and
+/// scrolls — where a span on the row would put the quoted material on a wire
+/// that already carries `expected` and `produced`, twice, per member.
+///
+/// **Not [`CitedAt`], which is the same question about the patch.** A gaming
+/// flag is about the change; a Judge's citation is about what the call was
+/// shown. Two documents, two coordinates, and a client that merged them would
+/// send a reader to a file over a brief.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Citation {
+    /// Which labelled part of the brief holds it — `request`, `checks`,
+    /// `check:test_suite`, `reference:root_cause`, `deliverable`, `summary`,
+    /// `diff`, or `brief` for a line under no part.
+    ///
+    /// A string rather than a `wire_enum!`, for [`Flagged::pattern`]'s reason:
+    /// half the set is named after a Check or a step the workflow declared, so
+    /// no registry could hold it. **Rendered and never matched on**, which is
+    /// the condition `docs/practices/protocol.md` puts on an open set.
+    pub region: String,
+    /// The first line of the brief the quotation is on, counted from one.
+    pub from_line: u32,
+    /// The last. Equal to [`from_line`](Citation::from_line) where the
+    /// quotation does not cross a line break.
+    pub to_line: u32,
+}
+
+/// What one member of a panel was handed.
+///
+/// **Three readings of one object, because one is not enough to argue with.**
+/// The digest says two members got the same thing or did not and says nothing
+/// about what the thing was; the size and the model are what a person reads
+/// once the answer is no.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Given {
+    /// A digest over the exact text this member's call was sent.
+    ///
+    /// **A comparison, never a signature.** Two rows of one panel were written
+    /// by one build in one pass, which is the whole span this is compared
+    /// across. Nothing authenticates anything with it and no client should.
+    pub digest: String,
+    /// How long that text was, in characters.
+    pub size: u32,
+    /// The model this member's call ran on. The second thing that could differ
+    /// between members, and the one a person can act on.
+    pub model: String,
 }
 
 impl Judged {
@@ -101,6 +183,31 @@ impl Judged {
             produced: judgment.produced.clone(),
             consequence: judgment.consequence.clone(),
             brief_path: judgment.brief_path.clone(),
+            cited: judgment
+                .cited
+                .as_ref()
+                .map(|cited| cited.iter().map(Citation::from).collect()),
+            given: judgment.given.as_ref().map(Given::from),
+        }
+    }
+}
+
+impl From<&core_model::Citation> for Citation {
+    fn from(citation: &core_model::Citation) -> Citation {
+        Citation {
+            region: citation.region.clone(),
+            from_line: citation.from_line,
+            to_line: citation.to_line,
+        }
+    }
+}
+
+impl From<&core_model::Given> for Given {
+    fn from(given: &core_model::Given) -> Given {
+        Given {
+            digest: given.digest.clone(),
+            size: given.size,
+            model: given.model.clone(),
         }
     }
 }

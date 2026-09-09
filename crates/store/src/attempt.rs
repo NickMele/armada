@@ -133,7 +133,7 @@ impl Store {
         let rows = self
             .collect(
                 "SELECT step_id, attempt, judged_at, criterion, verdict, expected, produced,
-                        consequence, brief_path, member
+                        consequence, brief_path, member, cited, given
                  FROM job_step_judgments WHERE job_id = ?1 ORDER BY step_id, attempt, ordinal",
                 job_id,
                 "reading judgments",
@@ -406,7 +406,10 @@ fn check(row: &Row<'_>) -> Result<StepCheck, RowError> {
 
 fn judgment(row: &Row<'_>) -> Result<Judgment, RowError> {
     let verdict = string(row, "verdict")?;
+    let (cited, given) = crate::judged::what_it_read(row)?;
     Ok(Judgment {
+        cited,
+        given,
         criterion_id: CriterionId::new(string(row, "criterion")?),
         member: maybe_number(row, "member")?,
         verdict: enum_value(

@@ -24,9 +24,9 @@
 //! quietly missing it, which is the failure the version number exists for.
 
 use core_model::{
-    AcceptanceCriterion, Actor, CriteriaOwed, CriterionId, CriterionSource, DependencyDirection,
-    DependencyEdge, EscalationTrigger, JobId, PilotReason, RepoPath, ScopeRevision,
-    ScopeRevisionOutcome, StepId, Timestamp, TransitionReason, Ulid,
+    AcceptanceCriterion, Actor, Citation, CriteriaOwed, CriterionId, CriterionSource,
+    DependencyDirection, DependencyEdge, EscalationTrigger, Given, JobId, PilotReason, RepoPath,
+    ScopeRevision, ScopeRevisionOutcome, StepId, Timestamp, TransitionReason, Ulid,
 };
 use serde_json::{json, Map, Value};
 
@@ -74,6 +74,13 @@ fn texts(map: &Map<String, Value>, name: &str) -> Result<Vec<String>, Malformed>
                 .ok_or_else(|| format!("`{name}` holds a non-string entry"))
         })
         .collect()
+}
+
+fn count(map: &Map<String, Value>, name: &str) -> Result<u32, Malformed> {
+    field(map, name)?
+        .as_u64()
+        .and_then(|number| u32::try_from(number).ok())
+        .ok_or_else(|| format!("`{name}` is not a count"))
 }
 
 fn kind(value: &Value) -> &'static str {
@@ -270,6 +277,70 @@ fn read_criteria_owed(stored: &str) -> Result<TransitionReason, Malformed> {
         first,
         ids.collect(),
     )))
+}
+
+// ------------------------------------------- job_step_judgments.cited, .given
+//
+// What one member of a panel read, and what it was handed. `judged::V35` is why
+// each is a column rather than a table, and each encode is above its decode
+// like every pair in this file.
+
+/// Every quotation this member made that the brief held, placed in it.
+///
+/// **Empty writes `[]` rather than null.** A member that quoted nothing and a
+/// row written before this column existed are different facts — the first is a
+/// judgment with no quotable citation, the second is a judgment nobody asked
+/// the question of — and this column is where they are told apart.
+pub fn write_citations(cited: &[Citation]) -> String {
+    let entries: Vec<Value> = cited
+        .iter()
+        .map(|citation| {
+            json!({
+                "region": citation.region,
+                "from_line": citation.from_line,
+                "to_line": citation.to_line,
+            })
+        })
+        .collect();
+    Value::Array(entries).to_string()
+}
+
+pub fn read_citations(stored: &str) -> Result<Vec<Citation>, Malformed> {
+    array(&parse(stored)?)?
+        .iter()
+        .map(|entry| {
+            let held = object(entry)?;
+            Ok(Citation {
+                region: text(held, "region")?,
+                from_line: count(held, "from_line")?,
+                to_line: count(held, "to_line")?,
+            })
+        })
+        .collect()
+}
+
+/// What this member's call was handed.
+///
+/// **One column, so the three fields cannot arrive apart.** A digest with no
+/// size is a shape nothing writes, and three nullable columns would make it one
+/// a reader has to have an answer for.
+pub fn write_given(given: &Given) -> String {
+    json!({
+        "digest": given.digest,
+        "size": given.size,
+        "model": given.model,
+    })
+    .to_string()
+}
+
+pub fn read_given(stored: &str) -> Result<Given, Malformed> {
+    let parsed = parse(stored)?;
+    let held = object(&parsed)?;
+    Ok(Given {
+        digest: text(held, "digest")?,
+        size: count(held, "size")?,
+        model: text(held, "model")?,
+    })
 }
 
 // -------------------------------------------------------------- jobs.workflow
