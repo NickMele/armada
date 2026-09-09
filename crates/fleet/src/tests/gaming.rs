@@ -484,6 +484,70 @@ async fn a_judged_flag_carries_the_question_it_answered_and_the_call_it_came_fro
     );
 }
 
+/// **The reason has to cross the seam, not stop at the record.** A person
+/// reads a stopped Job on the detail view and nowhere else, so a question kept
+/// only in the store or only under `.armada/` leaves them exactly where the
+/// 9 Sep escalation left them: a pattern spelling, a quoted line, and the diff.
+#[tokio::test]
+async fn a_judged_flag_reaches_the_detail_view_with_the_question_it_answered() {
+    let home = TempDir::new();
+    let fleet = a_fleet_judged_by(
+        &home,
+        FakeWorkProduct::changed(&["src/retain.rs"]).showing(REWORDED),
+        one_step_watching_for_a_weakened_assertion(),
+        FakeJudge::saying("flag: yes\ncited: \"/// touch nothing that is its record\""),
+    );
+    let job = fleet
+        .propose(a_proposal("reword the retention note"))
+        .await
+        .expect("a Job at the gate");
+    let job_id = job.id().clone();
+    worktree_directory(&home, &job);
+    dispatched(&fleet, &job_id).await.expect("released to run");
+    submitted_by_the_one(&fleet, crate::tests::daemon::diff_evidence())
+        .await
+        .expect("the tool took it");
+    assert!(matches!(
+        fleet.turn().await.expect("the gate ruled").ruled(),
+        Some(Ruling::Suspect { .. })
+    ));
+
+    let events = fleet.events();
+    let app = api::router(api::Served::by(fleet, RunId::carried("01RUN"), events));
+    let (_, body) = get(&app, &format!("/jobs/{}", job_id.as_str())).await;
+    let detail: JobDetail = ipc::decode("a Job in full", &body).expect("a JobDetail");
+
+    let flagged = &detail.steps[0].flagged[0];
+    assert_eq!(
+        flagged.asked.as_deref(),
+        GamingPattern::AssertionWeakened.question(),
+        "the question is what tells a real finding from a wrong one: {flagged:?}"
+    );
+    assert!(
+        flagged
+            .brief_path
+            .as_deref()
+            .is_some_and(|path| path.ends_with(".gaming.assertion_weakened.txt")),
+        "and the whole call is one press away: {flagged:?}"
+    );
+}
+
+/// The same, watching for a pattern only a model can answer.
+fn one_step_watching_for_a_weakened_assertion() -> ResolvedWorkflow {
+    testkit::resolved(&[Sketch {
+        id: "implement",
+        label: "Implement",
+        evidence_type: Some("diff"),
+        gates: &[],
+        judged_on: &[],
+        scope: None,
+        gaming: Some(Gaming {
+            baseline: None,
+            flag_if: &["assertion_weakened"],
+        }),
+    }])
+}
+
 /// One step, gated on nothing a command runs, watching for the one pattern the
 /// diff answers. Nothing here reaches a model.
 fn one_step_watching_for_gaming() -> ResolvedWorkflow {
