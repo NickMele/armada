@@ -22,167 +22,174 @@ export type Rendering = {
   /** Badge's `status` prop: the token stem, without its `--status-` prefix. */
   readonly badgeStatus: string | null;
   readonly statusToken: string | null;
+  /**
+   * The sentence a tooltip reads for this variant, where the verb alone
+   * gives no reasoning. `null` where the registry carries none — most
+   * tables do not, and a surface renders no tooltip rather than one with
+   * an empty label.
+   */
+  readonly hint: string | null;
 };
 
 /** `job_status`, keyed by the wire value. */
 export const JOB_STATUS: Readonly<Record<string, Rendering | undefined>> = {
-  "awaiting_approval": { verb: "needs approval", icon: UserCheck, badgeStatus: "awaiting-approval", statusToken: "--status-awaiting-approval" },
-  "awaiting_attestation": { verb: "awaiting attestation", icon: Stamp, badgeStatus: "awaiting-attestation", statusToken: "--status-awaiting-attestation" },
-  "awaiting_repair": { verb: "needs repair", icon: Wrench, badgeStatus: "awaiting-repair", statusToken: "--status-awaiting-repair" },
-  "awaiting_review": { verb: "awaiting review", icon: Eye, badgeStatus: "awaiting-review", statusToken: "--status-awaiting-review" },
-  "completed_failed": { verb: "failed", icon: X, badgeStatus: "completed-failed", statusToken: "--status-completed-failed" },
-  "completed_success": { verb: "done", icon: Check, badgeStatus: "completed-success", statusToken: "--status-completed-success" },
-  "escalated": { verb: "needs you", icon: Megaphone, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "killed": { verb: "killed", icon: Power, badgeStatus: "killed", statusToken: "--status-killed" },
-  "piloted": { verb: "piloted", icon: Terminal, badgeStatus: "piloted", statusToken: "--status-piloted" },
-  "queued": { verb: "queued", icon: Clock, badgeStatus: "not-started", statusToken: "--status-not-started" },
-  "rejected": { verb: "rejected", icon: Ban, badgeStatus: "rejected", statusToken: "--status-rejected" },
-  "running": { verb: "running", icon: CircleDot, badgeStatus: "running", statusToken: "--status-running" },
-  "superseded": { verb: "superseded", icon: Archive, badgeStatus: "superseded", statusToken: "--status-superseded" },
+  "awaiting_approval": { verb: "needs approval", icon: UserCheck, badgeStatus: "awaiting-approval", statusToken: "--status-awaiting-approval", hint: null },
+  "awaiting_attestation": { verb: "awaiting attestation", icon: Stamp, badgeStatus: "awaiting-attestation", statusToken: "--status-awaiting-attestation", hint: null },
+  "awaiting_repair": { verb: "needs repair", icon: Wrench, badgeStatus: "awaiting-repair", statusToken: "--status-awaiting-repair", hint: null },
+  "awaiting_review": { verb: "awaiting review", icon: Eye, badgeStatus: "awaiting-review", statusToken: "--status-awaiting-review", hint: null },
+  "completed_failed": { verb: "failed", icon: X, badgeStatus: "completed-failed", statusToken: "--status-completed-failed", hint: null },
+  "completed_success": { verb: "done", icon: Check, badgeStatus: "completed-success", statusToken: "--status-completed-success", hint: null },
+  "escalated": { verb: "needs you", icon: Megaphone, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "killed": { verb: "killed", icon: Power, badgeStatus: "killed", statusToken: "--status-killed", hint: null },
+  "piloted": { verb: "piloted", icon: Terminal, badgeStatus: "piloted", statusToken: "--status-piloted", hint: null },
+  "queued": { verb: "queued", icon: Clock, badgeStatus: "not-started", statusToken: "--status-not-started", hint: null },
+  "rejected": { verb: "rejected", icon: Ban, badgeStatus: "rejected", statusToken: "--status-rejected", hint: null },
+  "running": { verb: "running", icon: CircleDot, badgeStatus: "running", statusToken: "--status-running", hint: null },
+  "superseded": { verb: "superseded", icon: Archive, badgeStatus: "superseded", statusToken: "--status-superseded", hint: null },
 };
 
 /** `queued_reason`, keyed by the wire value. */
 export const QUEUED_REASON: Readonly<Record<string, Rendering | undefined>> = {
-  "blocked_by_dependency": { verb: "blocked", icon: Link, badgeStatus: "not-started", statusToken: "--status-not-started" },
-  "over_budget": { verb: "over budget", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started" },
-  "waiting_on_resources": { verb: "waiting on resources", icon: Cpu, badgeStatus: "not-started", statusToken: "--status-not-started" },
+  "blocked_by_dependency": { verb: "blocked", icon: Link, badgeStatus: "not-started", statusToken: "--status-not-started", hint: null },
+  "over_budget": { verb: "over budget", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started", hint: null },
+  "waiting_on_resources": { verb: "waiting on resources", icon: Cpu, badgeStatus: "not-started", statusToken: "--status-not-started", hint: null },
 };
 
 /** `admission_hold`, keyed by the wire value. */
 export const ADMISSION_HOLD: Readonly<Record<string, Rendering | undefined>> = {
-  "concurrency_bound": { verb: "waiting on a free drone", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started" },
-  "cpu": { verb: "waiting on CPU", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started" },
-  "memory": { verb: "waiting on memory", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started" },
-  "disk": { verb: "waiting on disk", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started" },
+  "concurrency_bound": { verb: "waiting on a free drone", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started", hint: "Every drone slot the fleet allows is already in use. This starts once one finishes or is redispatched." },
+  "cpu": { verb: "waiting on CPU", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started", hint: "Fleet did not find enough spare CPU to start another drone." },
+  "memory": { verb: "waiting on memory", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started", hint: "Fleet did not find enough spare memory to start another drone." },
+  "disk": { verb: "waiting on disk", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started", hint: "Fleet did not find enough free disk space to start another drone." },
 };
 
 /** `resumption`, keyed by the wire value. */
 export const RESUMPTION: Readonly<Record<string, Rendering | undefined>> = {
-  "reviewed": { verb: "reviewed", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started" },
-  "restarted": { verb: "restarted", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started" },
-  "overruled": { verb: "overruled", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started" },
+  "reviewed": { verb: "reviewed", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started", hint: null },
+  "restarted": { verb: "restarted", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started", hint: null },
+  "overruled": { verb: "overruled", icon: null, badgeStatus: "not-started", statusToken: "--status-not-started", hint: null },
 };
 
 /** `escalation_reason`, keyed by the wire value. */
 export const ESCALATION_REASON: Readonly<Record<string, Rendering | undefined>> = {
-  "blocked_by_policy": { verb: "blocked by policy", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "check_timeout": { verb: "a check timed out", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "dependency_failed": { verb: "an upstream failed", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "drone_killed": { verb: "the Drone was ended by hand", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "evidence_suspect": { verb: "evidence disputed", icon: FileQuestionMark, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "evidence_too_large": { verb: "evidence too large", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "fan_out": { verb: "hit the sub-dispatch cap", icon: Split, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "gate_failure": { verb: "stopped at the gate", icon: CircleX, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "gate_undecided": { verb: "the gate could not decide", icon: CircleMinus, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "hatch_unbidden": { verb: "stalled", icon: OctagonAlert, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "interrupted": { verb: "interrupted", icon: Unplug, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "loop_cap": { verb: "hit the iteration cap", icon: ArrowUpToLine, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "no_report": { verb: "went quiet", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "no_worktree": { verb: "the worktree was unusable", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "not_configurable": { verb: "the Drone could not be configured", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "not_prepared": { verb: "a required command did not succeed", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "resource_exhausted": { verb: "ran out of resources", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "run_ended": { verb: "the Drone's run ended", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "scope_refused": { verb: "the scope request was refused", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "silent": { verb: "stalled", icon: OctagonAlert, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "stalled": { verb: "stalled", icon: OctagonAlert, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "thrashing": { verb: "churning", icon: RefreshCw, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "unheard": { verb: "nothing is reading this Drone", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "would_not_start": { verb: "the Drone would not start", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated" },
+  "blocked_by_policy": { verb: "blocked by policy", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "check_timeout": { verb: "a check timed out", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "dependency_failed": { verb: "an upstream failed", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "drone_killed": { verb: "the Drone was ended by hand", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "evidence_suspect": { verb: "evidence disputed", icon: FileQuestionMark, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "evidence_too_large": { verb: "evidence too large", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "fan_out": { verb: "hit the sub-dispatch cap", icon: Split, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "gate_failure": { verb: "stopped at the gate", icon: CircleX, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "gate_undecided": { verb: "the gate could not decide", icon: CircleMinus, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "hatch_unbidden": { verb: "stalled", icon: OctagonAlert, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "interrupted": { verb: "interrupted", icon: Unplug, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "loop_cap": { verb: "hit the iteration cap", icon: ArrowUpToLine, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "no_report": { verb: "went quiet", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "no_worktree": { verb: "the worktree was unusable", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "not_configurable": { verb: "the Drone could not be configured", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "not_prepared": { verb: "a required command did not succeed", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "resource_exhausted": { verb: "ran out of resources", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "run_ended": { verb: "the Drone's run ended", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "scope_refused": { verb: "the scope request was refused", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "silent": { verb: "stalled", icon: OctagonAlert, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "stalled": { verb: "stalled", icon: OctagonAlert, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "thrashing": { verb: "churning", icon: RefreshCw, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "unheard": { verb: "nothing is reading this Drone", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "would_not_start": { verb: "the Drone would not start", icon: null, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
 };
 
 /** `check_outcome`, keyed by the wire value. */
 export const CHECK_OUTCOME: Readonly<Record<string, Rendering | undefined>> = {
-  "passed": { verb: "passed", icon: ShieldCheck, badgeStatus: "completed-success", statusToken: "--status-completed-success" },
-  "failed": { verb: "failed", icon: ShieldX, badgeStatus: "completed-failed", statusToken: "--status-completed-failed" },
-  "signalled": { verb: "ended by a signal", icon: Unplug, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "timed_out": { verb: "outran its budget", icon: Clock, badgeStatus: "escalated", statusToken: "--status-escalated" },
-  "never_ran": { verb: "never started", icon: ShieldMinus, badgeStatus: "not-started", statusToken: "--status-not-started" },
-  "skipped": { verb: "not run", icon: ShieldOff, badgeStatus: "not-started", statusToken: "--status-not-started" },
+  "passed": { verb: "passed", icon: ShieldCheck, badgeStatus: "completed-success", statusToken: "--status-completed-success", hint: null },
+  "failed": { verb: "failed", icon: ShieldX, badgeStatus: "completed-failed", statusToken: "--status-completed-failed", hint: null },
+  "signalled": { verb: "ended by a signal", icon: Unplug, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "timed_out": { verb: "outran its budget", icon: Clock, badgeStatus: "escalated", statusToken: "--status-escalated", hint: null },
+  "never_ran": { verb: "never started", icon: ShieldMinus, badgeStatus: "not-started", statusToken: "--status-not-started", hint: null },
+  "skipped": { verb: "not run", icon: ShieldOff, badgeStatus: "not-started", statusToken: "--status-not-started", hint: null },
 };
 
 /** `criterion_verdict_check`, keyed by the wire value. */
 export const CRITERION_VERDICT_CHECK: Readonly<Record<string, Rendering | undefined>> = {
-  "failed": { verb: "failed", icon: null, badgeStatus: null, statusToken: null },
-  "not_reached": { verb: "not reached", icon: ShieldMinus, badgeStatus: null, statusToken: null },
-  "passed": { verb: "passed", icon: null, badgeStatus: null, statusToken: null },
+  "failed": { verb: "failed", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "not_reached": { verb: "not reached", icon: ShieldMinus, badgeStatus: null, statusToken: null, hint: null },
+  "passed": { verb: "passed", icon: null, badgeStatus: null, statusToken: null, hint: null },
 };
 
 /** `criterion_verdict_judge`, keyed by the wire value. */
 export const CRITERION_VERDICT_JUDGE: Readonly<Record<string, Rendering | undefined>> = {
-  "met": { verb: "no objection", icon: CircleCheck, badgeStatus: null, statusToken: null },
-  "not_met": { verb: "refused", icon: CircleX, badgeStatus: null, statusToken: null },
+  "met": { verb: "no objection", icon: CircleCheck, badgeStatus: null, statusToken: null, hint: null },
+  "not_met": { verb: "refused", icon: CircleX, badgeStatus: null, statusToken: null, hint: null },
 };
 
 /** `step_state`, keyed by the wire value. */
 export const STEP_STATE: Readonly<Record<string, Rendering | undefined>> = {
-  "advanced": { verb: "advanced", icon: Check, badgeStatus: null, statusToken: null },
-  "awaiting_human": { verb: "awaiting review", icon: Eye, badgeStatus: null, statusToken: null },
-  "not_started": { verb: "not started", icon: CircleDashed, badgeStatus: null, statusToken: null },
-  "retrying": { verb: "retrying", icon: RotateCw, badgeStatus: null, statusToken: null },
-  "running": { verb: "running", icon: CircleDot, badgeStatus: null, statusToken: null },
-  "stopped": { verb: "stopped", icon: Flag, badgeStatus: null, statusToken: null },
+  "advanced": { verb: "advanced", icon: Check, badgeStatus: null, statusToken: null, hint: null },
+  "awaiting_human": { verb: "awaiting review", icon: Eye, badgeStatus: null, statusToken: null, hint: null },
+  "not_started": { verb: "not started", icon: CircleDashed, badgeStatus: null, statusToken: null, hint: null },
+  "retrying": { verb: "retrying", icon: RotateCw, badgeStatus: null, statusToken: null, hint: null },
+  "running": { verb: "running", icon: CircleDot, badgeStatus: null, statusToken: null, hint: null },
+  "stopped": { verb: "stopped", icon: Flag, badgeStatus: null, statusToken: null, hint: null },
 };
 
 /** `advance_gate`, keyed by the wire value. */
 export const ADVANCE_GATE: Readonly<Record<string, Rendering | undefined>> = {
-  "auto": { verb: "the checks decide", icon: null, badgeStatus: null, statusToken: null },
-  "auto_if_judge_passes": { verb: "the checks decide, unless the Judge objects", icon: null, badgeStatus: null, statusToken: null },
-  "human_always": { verb: "a person answers", icon: null, badgeStatus: null, statusToken: null },
+  "auto": { verb: "the checks decide", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "auto_if_judge_passes": { verb: "the checks decide, unless the Judge objects", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "human_always": { verb: "a person answers", icon: null, badgeStatus: null, statusToken: null, hint: null },
 };
 
 /** `gaming_pattern`, keyed by the wire value. */
 export const GAMING_PATTERN: Readonly<Record<string, Rendering | undefined>> = {
-  "assertion_weakened": { verb: "an assertion now asserts less", icon: null, badgeStatus: null, statusToken: null },
-  "test_scope_narrowed": { verb: "the tests cover less than they did", icon: null, badgeStatus: null, statusToken: null },
-  "tautological_test": { verb: "a test that passes whatever the code does", icon: null, badgeStatus: null, statusToken: null },
-  "test_skipped": { verb: "a test that ran is now skipped", icon: null, badgeStatus: null, statusToken: null },
-  "test_deleted": { verb: "a test file was removed whole", icon: null, badgeStatus: null, statusToken: null },
-  "check_config_edited": { verb: "the change edits what a Check runs through", icon: null, badgeStatus: null, statusToken: null },
-  "no_findings_on_substantial_diff": { verb: "a review that found nothing in a substantial change", icon: null, badgeStatus: null, statusToken: null },
-  "findings_not_tied_to_changed_lines": { verb: "findings that name nothing this change touched", icon: null, badgeStatus: null, statusToken: null },
-  "findings_generic": { verb: "findings that would fit any change", icon: null, badgeStatus: null, statusToken: null },
+  "assertion_weakened": { verb: "an assertion now asserts less", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "test_scope_narrowed": { verb: "the tests cover less than they did", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "tautological_test": { verb: "a test that passes whatever the code does", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "test_skipped": { verb: "a test that ran is now skipped", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "test_deleted": { verb: "a test file was removed whole", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "check_config_edited": { verb: "the change edits what a Check runs through", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "no_findings_on_substantial_diff": { verb: "a review that found nothing in a substantial change", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "findings_not_tied_to_changed_lines": { verb: "findings that name nothing this change touched", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "findings_generic": { verb: "findings that would fit any change", icon: null, badgeStatus: null, statusToken: null, hint: null },
 };
 
 /** `evidence_type`, keyed by the wire value. */
 export const EVIDENCE_TYPE: Readonly<Record<string, Rendering | undefined>> = {
-  "diff": { verb: "a diff", icon: null, badgeStatus: null, statusToken: null },
-  "failing_test": { verb: "a failing test", icon: null, badgeStatus: null, statusToken: null },
-  "facts_note": { verb: "a note of facts", icon: null, badgeStatus: null, statusToken: null },
-  "test_suite_run": { verb: "a test suite run", icon: null, badgeStatus: null, statusToken: null },
-  "bundle": { verb: "the earlier steps' evidence, assembled", icon: null, badgeStatus: null, statusToken: null },
-  "document": { verb: "a document", icon: null, badgeStatus: null, statusToken: null },
+  "diff": { verb: "a diff", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "failing_test": { verb: "a failing test", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "facts_note": { verb: "a note of facts", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "test_suite_run": { verb: "a test suite run", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "bundle": { verb: "the earlier steps' evidence, assembled", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "document": { verb: "a document", icon: null, badgeStatus: null, statusToken: null, hint: null },
 };
 
 /** `change_kind`, keyed by the wire value. */
 export const CHANGE_KIND: Readonly<Record<string, Rendering | undefined>> = {
-  "added": { verb: "added", icon: null, badgeStatus: null, statusToken: null },
-  "modified": { verb: "modified", icon: null, badgeStatus: null, statusToken: null },
-  "deleted": { verb: "deleted", icon: null, badgeStatus: null, statusToken: null },
-  "renamed": { verb: "renamed", icon: null, badgeStatus: null, statusToken: null },
-  "copied": { verb: "copied", icon: null, badgeStatus: null, statusToken: null },
-  "type_changed": { verb: "type changed", icon: null, badgeStatus: null, statusToken: null },
-  "conflicted": { verb: "conflicted", icon: null, badgeStatus: null, statusToken: null },
-  "unreadable": { verb: "could not be read", icon: null, badgeStatus: null, statusToken: null },
+  "added": { verb: "added", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "modified": { verb: "modified", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "deleted": { verb: "deleted", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "renamed": { verb: "renamed", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "copied": { verb: "copied", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "type_changed": { verb: "type changed", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "conflicted": { verb: "conflicted", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "unreadable": { verb: "could not be read", icon: null, badgeStatus: null, statusToken: null, hint: null },
 };
 
 /** `movement_kind`, keyed by the wire value. */
 export const MOVEMENT_KIND: Readonly<Record<string, Rendering | undefined>> = {
-  "status": { verb: "status", icon: null, badgeStatus: null, statusToken: null },
-  "step": { verb: "step", icon: null, badgeStatus: null, statusToken: null },
-  "drone": { verb: "drone", icon: null, badgeStatus: null, statusToken: null },
+  "status": { verb: "status", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "step": { verb: "step", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "drone": { verb: "drone", icon: null, badgeStatus: null, statusToken: null, hint: null },
 };
 
 /** `drone_presence`, keyed by the wire value. */
 export const DRONE_PRESENCE: Readonly<Record<string, Rendering | undefined>> = {
-  "drone_spawned": { verb: "a drone started", icon: null, badgeStatus: null, statusToken: null },
-  "drone_exited": { verb: "a drone left", icon: null, badgeStatus: null, statusToken: null },
+  "drone_spawned": { verb: "a drone started", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "drone_exited": { verb: "a drone left", icon: null, badgeStatus: null, statusToken: null, hint: null },
 };
 
 /** `silence`, keyed by the wire value. */
 export const SILENCE: Readonly<Record<string, Rendering | undefined>> = {
-  "drone_ended": { verb: "the drone that was writing has finished", icon: null, badgeStatus: null, statusToken: null },
-  "nothing_writing": { verb: "no drone is writing this transcript", icon: null, badgeStatus: null, statusToken: null },
+  "drone_ended": { verb: "the drone that was writing has finished", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "nothing_writing": { verb: "no drone is writing this transcript", icon: null, badgeStatus: null, statusToken: null, hint: null },
 };
 
 /** Where a Job is in its life, from `job-statuses.toml`. Not a rendering. */
