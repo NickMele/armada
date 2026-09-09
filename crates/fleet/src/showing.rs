@@ -441,7 +441,7 @@ pub fn kept(
 /// is a path the repository named and may hold anything it also puts there; a
 /// verb that emptied it would be Armada deleting a repository's files on the
 /// strength of a config key.
-fn reaped(worktree: &Path, from: &str, frames: &[StepFrame]) {
+pub(crate) fn reaped(worktree: &Path, from: &str, frames: &[StepFrame]) {
     let dir = worktree.join(from);
     for frame in frames {
         let _ = std::fs::remove_file(dir.join(&frame.name));
@@ -465,7 +465,7 @@ fn reaped(worktree: &Path, from: &str, frames: &[StepFrame]) {
 /// Rows written before the side existed name `<step>.<attempt>` and go on
 /// resolving to it: nothing rewrites a path, and [`named`] matches whatever the
 /// record holds.
-fn run_dir(handle: &str, step: &StepId, attempt: Attempt, side: Side) -> Option<String> {
+pub(crate) fn run_dir(handle: &str, step: &StepId, attempt: Attempt, side: Side) -> Option<String> {
     let id = step.as_str();
     if !crate::check_output::one_component(handle) || !crate::check_output::one_component(id) {
         return None;
