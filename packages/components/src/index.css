@@ -194,3 +194,6 @@
 
 /* What a step whose point is not the code is reviewed by. */
 @import "./compositions/FramesShown/FramesShown.css";
+
+/* What the change did to the screen — the pairs that moved. */
+@import "./compositions/FramesPaired/FramesPaired.css";
