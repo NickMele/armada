@@ -125,24 +125,20 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
         .collect();
 
     // **Declaration order, and it is the order they run in.** `WorkflowDef` has
-    // no field for sequencing — see `config`'s own test saying so — so this list
-    // is `bug.json`'s `implement` step read top to bottom.
+    // no field for sequencing — see `config`'s own test saying so.
     //
-    // **Which file declares the sequence is moving.** While a step names its
-    // Checks, the step is where the order is written and this list is it. A step
-    // that says `every_manifest_check` instead takes `armada.yml`'s order —
-    // `checks_as_written`, asserted by the test below against the real
-    // Manifest — and the two differ: this file puts `format` third and
-    // `armada.yml` declares it last. So when these seven names come out of the
-    // shipped definitions, the fix here is `armada.yml`'s order, not a set
-    // comparison; the property both orders exist to keep is that a failure
-    // surfaces as early as it can, and a set gives that up.
+    // **The file declaring that sequence has moved, and this list moved with
+    // it.** It used to be `bug.json`'s `implement` step read top to bottom;
+    // that step says `every_manifest_check` now, so the order is
+    // `armada.yml`'s `checks_as_written` and `format` is last where the
+    // definition put it third. The property the move had to keep is that a
+    // failure surfaces as early as it can — which is why this stayed an
+    // ordered comparison rather than becoming a set.
     assert_eq!(
         resolved,
         vec![
             ("build", "cargo build --workspace --locked"),
             ("test", "cargo nextest run --workspace --exclude acceptance"),
-            ("format", "cargo fmt --all --check"),
             // **One name, not a chain.** A `run` gets no shell, so the `&&`
             // this used to hold was passed to `tsc` as an argument and the
             // Check could never pass. The chain lives in a `package.json`
@@ -154,6 +150,12 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
             // script again, and for the same reason: it chains two runners —
             // the screens' pure modules in node, then every story in a browser.
             ("bridge_test", "pnpm bridge-test"),
+            // **Last, and left there deliberately.** `#387` gave this
+            // `requires: [fmt]`, so the formatter runs before the Check reads
+            // and it now rarely fails at all — while `checking` starts four at
+            // a time, so moving it up would push `typecheck` out of the first
+            // wave for a Check that fixes itself first.
+            ("format", "cargo fmt --all --check"),
         ]
     );
 }
