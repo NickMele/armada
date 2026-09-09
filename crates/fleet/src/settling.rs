@@ -199,6 +199,7 @@ where
             self.budget(),
             &judging,
             &Keeping::of(&self.host().repo_root, &job.handle()),
+            self.gating_policies(),
         )
         .await;
         // Before the Job or the step moves. A recorded result the transition

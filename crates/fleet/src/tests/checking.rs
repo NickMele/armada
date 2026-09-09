@@ -18,6 +18,7 @@ use verification::{Lifted, Request};
 
 use crate::at_step::AtStep;
 use crate::gate::{rule_on, CheckBudget, Ruling};
+use crate::policy::Policies;
 use crate::tests::gate::{diff_evidence, judging, worktree};
 use crate::tests::keeping::keeping_nowhere;
 
@@ -58,6 +59,7 @@ async fn ruled<'a>(gates: &'a [Gate<'a>], budget: Duration, touched: &[&str]) ->
         CheckBudget::of(budget),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await
 }
@@ -246,6 +248,7 @@ async fn ruled_on_a_file(target: &str, write: impl FnOnce(&std::path::Path)) -> 
         CheckBudget::of(Duration::from_secs(5)),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await
 }

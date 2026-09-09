@@ -20,6 +20,7 @@ use crate::asked::Asked;
 use crate::at_step::AtStep;
 use crate::gate::rule_on;
 use crate::judging::{Aloft, JudgeBudget, Judging};
+use crate::policy::Policies;
 use crate::tests::gate::{budget, diff_evidence, marking, worktree};
 use crate::tests::judging::judged_workflow;
 use crate::tests::keeping::keeping_nowhere;
@@ -58,6 +59,7 @@ async fn while_judging(judge: FakeJudge, worktree: &Worktree) -> (Vec<ipc::JobJu
         budget(),
         &judging,
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
     drop(judging);

@@ -14,7 +14,7 @@
 
 use adapter_traits::Footprint;
 use core_model::{DroneId, FrozenWorkflow, StepEvidence, StepId, Timestamp, Ulid};
-use fleet::{rule_on, AtStep, Clock, Keeping, Ruling};
+use fleet::{rule_on, AtStep, Clock, Keeping, Policies, Ruling};
 use verification::{Lifted, Request, Submission};
 
 use super::{Bench, Run};
@@ -71,6 +71,7 @@ pub async fn gate_against(
         // [`Bench::gate`]'s note applies: inert, because no step here declares
         // a deliverable.
         &Keeping::of(crate::bench::REPO_ROOT, &run.job.handle()),
+        Policies::unstated(),
     )
     .await;
     let mut held = bench.recorded.borrow_mut();

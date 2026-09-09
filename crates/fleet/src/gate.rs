@@ -46,6 +46,7 @@ use crate::at_step::AtStep;
 use crate::checking;
 use crate::judging::{self, Judging};
 use crate::keeping::Keeping;
+use crate::policy::{HeldBecause, Policies};
 
 /// How long a Check may run before it is a failure.
 ///
@@ -97,6 +98,7 @@ pub use crate::ruling::Ruling;
 /// | `keeping` | Where a copy of the step's deliverable goes. The repository and the Job are the caller's to know, and a worktree path is not something to reverse-engineer either of them out of. **Not an `Option`** — every caller is gating a real Job in a real repository, and a gate that could rule without keeping what it read is the gate `#223` was filed against |
 /// | `lifted` | The excluded paths a Judge has already cleared for this Job, off its own scope revisions. **Handed in rather than derived** because this function is given a step and not a Job, and because [`Lifted`] has one constructor: a caller with a record in hand can produce one and nothing else can. A gate that re-refused a path `declare_scope` had accepted would fail the step for being the plan Fleet took, which is `#417`'s own complaint |
 /// | `entered_with` | What the worktree held when this step began, **after the boundary rebase that started it**, which is `crate::dispatch::Fleet::marked`'s to place and not this function's. `diff_nonempty` is decided by comparing it against a second reading taken here — which is what catches the step that advanced having written nothing, where the check used to read the whole branch and count an earlier step's file as this step's work |
+/// | `policies` | What this repository has said about `auto_merge` and `review_gate`, folded across the Job's gating Manifests. **Handed in and never read here**, for `lifted`'s reason and one more: both settings are `Live`, so the answer is only true at the instant it is taken, and a gate that read the file for itself would be a second reader of a value the caller has already resolved. `crate::policy` is where it is built |
 pub async fn rule_on<W>(
     at: AtStep<'_>,
     request: Request<'_>,
@@ -109,6 +111,7 @@ pub async fn rule_on<W>(
     budget: CheckBudget,
     judging: &Judging,
     keeping: &Keeping,
+    policies: Policies,
 ) -> Ruling
 where
     W: WorkProduct,
@@ -408,43 +411,50 @@ where
         // a compile error here rather than a step that quietly advances. That
         // is also why the two `manifest_rule:` forms resolve in this arm rather
         // than in a resolver of their own: one read site, and it is this one.
-        Verdict::Advance => match step.advance_gate() {
-            // **`human_always` by declaration; the other two by policy, and
-            // both policies default to asking.** `review_gate`'s default is
-            // `human_always` outright. `auto_merge`'s is `never`, which says no
-            // machine decides that work lands — the same answer reached from
-            // the other side, and `crates/fleet/src/merging.rs` is where a
-            // person's press then carries it out.
-            //
-            // **No Manifest can say otherwise yet**, because `config::Manifest`
-            // refuses both sections by name rather than reading a value nothing
-            // consumes. `#525` is what puts them in the file and resolves them
-            // most-restrictive-wins across the Job's gating Manifests, which
-            // `docs/concepts/convoy.md` already settles; until then the default
-            // is the whole resolution and it is stated here rather than
-            // inferred from a missing key.
-            AdvanceGate::HumanAlways
-            | AdvanceGate::ManifestRuleAutoMerge
-            | AdvanceGate::ManifestRuleReviewGate => Ruling::HeldForReview {
-                checks,
-                output,
-                judged,
-            },
-            AdvanceGate::Auto | AdvanceGate::AutoIfJudgePasses => match at.next() {
-                Some(next) => Ruling::Advanced {
-                    tell: OutcomeTurn::advanced(step, Some(next), Verified::of(&ran)),
+        Verdict::Advance => {
+            let held = match step.advance_gate() {
+                // A person answers, and no policy is consulted: the gate names
+                // an actor rather than a tier.
+                AdvanceGate::HumanAlways => HeldBecause::ThePolicyAsksForAPerson,
+                // **`auto_merge` holds whatever it resolved to, and that is the
+                // policy being honoured rather than ignored.** The question it
+                // answers is who may take the work off this gate, not whether
+                // the gate is there: under `never` a person presses
+                // `merge_pull_request`, and under `tests-pass` or `always`
+                // `crate::under_review` presses it on the sweep that finds the
+                // forge green. Advancing the step here would advance past the
+                // merge without one, leaving a Job recorded as landed over a
+                // branch still sitting on the forge.
+                AdvanceGate::ManifestRuleAutoMerge => HeldBecause::ThePolicyAsksForAPerson,
+                // The one gate whose answer the repository can change.
+                // `crate::policy` holds both the resolution and the rule about
+                // a step that asks the Judge nothing.
+                AdvanceGate::ManifestRuleReviewGate => policies.at_a_review_gate(step),
+                AdvanceGate::Auto | AdvanceGate::AutoIfJudgePasses => HeldBecause::Not,
+            };
+            match held.holds() {
+                true => Ruling::HeldForReview {
                     checks,
                     output,
                     judged,
+                    held,
                 },
-                None => Ruling::Finished {
-                    tell: OutcomeTurn::advanced(step, None, Verified::of(&ran)),
-                    checks,
-                    output,
-                    judged,
+                false => match at.next() {
+                    Some(next) => Ruling::Advanced {
+                        tell: OutcomeTurn::advanced(step, Some(next), Verified::of(&ran)),
+                        checks,
+                        output,
+                        judged,
+                    },
+                    None => Ruling::Finished {
+                        tell: OutcomeTurn::advanced(step, None, Verified::of(&ran)),
+                        checks,
+                        output,
+                        judged,
+                    },
                 },
-            },
-        },
+            }
+        }
         Verdict::Failed(failures) => match handed_back(step, at.spent(), &failures, &printed) {
             Some((tell, retrying)) => Ruling::HandedBack {
                 failures,

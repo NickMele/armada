@@ -15,6 +15,7 @@ use core_model::{EscalationTrigger, Judgment, StepCheck, StepLevelTrigger};
 use verification::{CheckFailed, Flagged, NotWhatTheStepAsked, OutcomeTurn, Refusals};
 
 use crate::gate::CheckOutput;
+use crate::policy::HeldBecause;
 
 /// What Fleet decided, and what follows from it.
 ///
@@ -69,33 +70,36 @@ pub enum Ruling {
         output: Vec<CheckOutput>,
         judged: Vec<Judgment>,
     },
-    /// Every tier the step declared held, and the step is gated `human_always`.
+    /// Every tier the step declared held, and the gate answers a person.
     /// **The Job reaches `awaiting_review` and the step holds at
     /// `awaiting_human`.**
     ///
     /// It is the only ruling that stops a Job without anything having gone
-    /// wrong, which is why it carries no failure of any kind: the checks, the
-    /// output and the judgments below are all passes, and they are carried
-    /// because they are the material a person opens rather than a record of a
-    /// verdict.
+    /// wrong, which is why it carries no failure: the checks, the output and
+    /// the judgments are all passes, carried because they are the material a
+    /// person opens rather than a record of a verdict.
     ///
     /// **No turn, and no Drone.** A turn here would spend the Drone's remaining
     /// tool call to say "someone is looking at this", and there is nobody to
     /// spend it: the work passed the machine gates, which is what ends a Drone,
-    /// so `crate::dispatch` stands it down and the slot goes to the next Job. A
-    /// person's review costs no fleet time.
-    ///
+    /// so `crate::dispatch` stands it down and the slot goes to the next Job.
     /// **So `request_changes` writes its note down rather than injecting it**
     /// (`#207`), and re-queues as an approval does: the slot this gave up is
     /// very often somebody else's by the time a person answers.
     ///
     /// **The step holds at `awaiting_human` and no longer at `running`**
-    /// (`#522`), so the commonest halt in the fleet stops being recorded as a
-    /// Drone at work on a step this ruling had just stood one down on.
+    /// (`#522`), so the commonest halt in the fleet is not recorded as a Drone
+    /// at work on a step this ruling had just stood one down on.
+    ///
+    /// **It carries why it held.** Two of the three reasons are not in the
+    /// workflow file: a `manifest_rule:review_gate` step holds because the
+    /// repository said so, or because it said otherwise and the step had no
+    /// Judge for that to be said about — the last being a file to fix.
     HeldForReview {
         checks: Vec<StepCheck>,
         output: Vec<CheckOutput>,
         judged: Vec<Judgment>,
+        held: HeldBecause,
     },
     /// A Check did not pass, the step's retry budget has room, and the failure
     /// goes back to the Drone that produced it.

@@ -344,8 +344,16 @@ lifetime = "Live"
 merge_strategy = "n/a — single layer"
 peer_polarity = "n/a — single layer"
 owner = "Manifest"
-read_by = "adapters, fleet"
-notes = "Explicit in brief, per-project."
+read_by = "config, fleet"
+notes = """
+Explicit in brief, per-project. Built in #525: config reads the top-level `auto_merge:` key, core-model folds it most-restrictive-wins across a Job's gating Manifests, and fleet::merging acts on it — on the sweep over an open pull request, once per pull request per process, recorded with Fleet as the actor rather than a person.
+
+`read_by` was `adapters, fleet` and no adapter ever read it. What an adapter answers is `WhatTheForgeRan`, which is the reading `tests-pass` consults; the policy itself is never seen below Fleet.
+
+**`tests-pass` is the forge's own checks and not Armada's.** Armada's ran at the gate the Job is holding at, and totalling the two would claim a gate had held that never ran. Only all-passed is a pass: a repository whose forge runs nothing has proved nothing, and a check finishing in a word this build has no name for counts as not passed (#524).
+
+**An approval is not one of the three values and is deliberately unread.** All three are about machines; whether a person approving on the forge becomes `auto_merge: approved` or a policy of its own is undecided and was not settled by #525. `always` therefore merges over an outstanding request for changes, with the forge's own branch protection as the backstop.
+"""
 
 [settings.default-model-per-job-type]
 name = "Default model per Job type"
@@ -941,9 +949,9 @@ lifetime = "Live"
 merge_strategy = "n/a — single layer"
 peer_polarity = "n/a — single layer"
 owner = "Fleet"
-read_by = "fleet"
+read_by = "config, fleet"
 notes = """
-Resolves a workflow review step's manifest_rule:review_gate. Values: human_always (default) or auto_if_judge_passes. Referenced by the Bug reference sample since it was written and had no row until Aug 21 2026, so the gate resolved against nothing. TIER UNRESOLVED as of Aug 22 2026. The Scope was set to Manifest only deliberately, to avoid the config direction rule: a per-repo override from human_always to auto_if_judge_passes loosens the rule, and the direction rule forbade a Manifest widening what Guild set. That rule is withdrawn, so the reason for the tiering is gone, and Workflow's own prose called this a Kit default with a per-repo override. Filed as an open item. Auto-merge policy rides with it by this row's own same-shape-for-the-same-reason clause. Peer resolution is unaffected: most-restrictive-wins across a Convoy's gating Manifests, human_always beating auto_if_judge_passes.
+Resolves a workflow review step's manifest_rule:review_gate. Values: human_always (default) or auto_if_judge_passes. Built in #525, together with the auto-merge row this one's same-shape clause carries; `read_by` gained `config`, which reads the top-level `review_gate:` key. A step declaring this gate and no Judge criterion is legal and holds for a person however the policy resolved — see docs/concepts/manifest.md, *A judgeless step under `auto_if_judge_passes`*. Referenced by the Bug reference sample since it was written and had no row until Aug 21 2026, so the gate resolved against nothing. TIER UNRESOLVED as of Aug 22 2026. The Scope was set to Manifest only deliberately, to avoid the config direction rule: a per-repo override from human_always to auto_if_judge_passes loosens the rule, and the direction rule forbade a Manifest widening what Guild set. That rule is withdrawn, so the reason for the tiering is gone, and Workflow's own prose called this a Kit default with a per-repo override. Filed as an open item. Auto-merge policy rides with it by this row's own same-shape-for-the-same-reason clause. Peer resolution is unaffected: most-restrictive-wins across a Convoy's gating Manifests, human_always beating auto_if_judge_passes.
 """
 
 [settings.poke-limit-poke-limit]

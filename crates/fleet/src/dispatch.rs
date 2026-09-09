@@ -25,8 +25,8 @@
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
 use core_model::{
-    Actor, Branch, EscalationTrigger, Job, JobId, StepId, StepLevelTrigger, StepState, StepTarget,
-    Target, Transitioned,
+    Actor, Branch, Component, Envelope, EscalationTrigger, FieldValue, Job, JobId, Level, StepId,
+    StepLevelTrigger, StepState, StepTarget, Target, Transitioned,
 };
 use verification::OutcomeTurn;
 
@@ -285,11 +285,20 @@ where
             // There is no Drone to give the note to, so `#207` gives it
             // somewhere to wait: the note goes onto the Job and the Drone
             // re-admission puts back on the step opens with it.
-            Ruling::HeldForReview { .. } => {
+            Ruling::HeldForReview { held, .. } => {
                 let job = self.load(job_id).await?;
                 let job = self
                     .move_step(&job, step, StepTarget::HeldForReview)
                     .await?;
+                // **Only where the hold is not the one a person expects.** A
+                // `human_always` step holding for a person is the commonest
+                // event in the fleet and says nothing; a step whose repository
+                // asked for automation and did not get it is a file somebody
+                // has to fix, and the only place that can be said is here —
+                // `crate::gate` reaches no store and writes nothing.
+                if let Some(said) = held.worth_saying() {
+                    self.noted_the_hold(&job, step, said);
+                }
                 self.applied(&job, ruling).await?;
                 self.stood_down(job_id, working).await?;
                 Ok(())
@@ -740,6 +749,35 @@ where
             ipc::JobSummary::from(&moved.job),
         )));
         Ok(moved.job)
+    }
+
+    /// The line saying why a step gated on a policy is holding, where the
+    /// reason is not the one a person would read off the workflow file.
+    ///
+    /// **[`Level::Warn`], and it is the only hold in the fleet that gets one.**
+    /// Nothing failed and the work is fine, so this is not a verdict — but the
+    /// repository asked for something it is not getting, and the fix is in a
+    /// file rather than in the Job. A line at `Info` would sit among the step's
+    /// ordinary traffic and be read by nobody.
+    ///
+    /// **A log line that will not write does not undo the hold**, for
+    /// `noticing::logged`'s reason: the Job is where it should be either way,
+    /// and this is the account of why.
+    fn noted_the_hold(&self, job: &Job, step: &StepId, said: &'static str) {
+        let envelope = Envelope::new(
+            self.now(),
+            Level::Warn,
+            Component::Fleet,
+            self.run().clone(),
+            said,
+        )
+        .in_job(job.id().as_ulid().clone())
+        .with_field("step", FieldValue::Str(step.as_str().to_string()))
+        .with_field(
+            "advance_gate",
+            FieldValue::Str("manifest_rule:review_gate".to_string()),
+        );
+        self.logged(job.id(), envelope);
     }
 }
 

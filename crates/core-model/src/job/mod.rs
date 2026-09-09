@@ -39,6 +39,7 @@ mod ids;
 mod judge;
 mod narrowing;
 mod note;
+mod policy;
 mod prerequisite;
 mod record;
 mod scope;
@@ -76,6 +77,7 @@ pub use ids::{
 pub use judge::{Citation, Given, JudgeCheck, JudgeCriterion, JudgeVerdict, Judgment};
 pub use narrowing::Narrowing;
 pub use note::{RedirectAlreadyWaiting, RedirectWaiting};
+pub use policy::{AutoMerge, ReviewGate};
 pub use prerequisite::Prerequisite;
 pub use record::{Job, NewJob, StepTransitioned, Transitioned};
 pub use scope::{under, ContextSource, DeclarePlanAt, DeclaredPaths, EvidenceScope};

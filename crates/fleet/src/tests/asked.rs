@@ -20,6 +20,7 @@ use crate::asked::Asked;
 use crate::at_step::AtStep;
 use crate::gate::{rule_on, Ruling};
 use crate::judging::{JudgeBudget, Judging, Marking};
+use crate::policy::Policies;
 use crate::tests::gate::{budget, diff_evidence, worktree};
 use crate::tests::keeping::keeping_nowhere;
 use crate::tests::tmp::TempDir;
@@ -81,6 +82,7 @@ async fn ruled(judge: Arc<FakeJudge>, asked: Asked, worktree: &Worktree) -> Ruli
         budget(),
         &judging(judge, asked),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await
 }

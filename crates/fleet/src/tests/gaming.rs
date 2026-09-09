@@ -22,6 +22,7 @@ use crate::asked::Asked;
 use crate::at_step::AtStep;
 use crate::gate::{apply, rule_on, Ruling};
 use crate::judging::{JudgeBudget, Judging, Marking};
+use crate::policy::Policies;
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_fleet_judged_by, a_proposal, worktree_directory};
 use crate::tests::detail::get;
@@ -117,6 +118,7 @@ async fn ruled(patch: &str, flag_if: &[&str], recorded: &[(StepId, StepEvidence)
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await
 }
@@ -223,6 +225,7 @@ async fn a_step_that_asks_nothing_about_gaming_is_never_looked_at() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
     assert!(ruling.advanced(), "{ruling:?}");
@@ -299,6 +302,7 @@ async fn a_flagged_step_keeps_what_the_judge_said_about_its_criteria() {
         budget(),
         &judging,
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 

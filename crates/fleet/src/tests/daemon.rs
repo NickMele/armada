@@ -43,9 +43,9 @@ mod workflows;
 
 pub use fleets::{
     a_fleet, a_fleet_committing_through, a_fleet_delivering_nothing,
-    a_fleet_gated_on_a_manifest_rule, a_fleet_gated_on_a_person,
-    a_fleet_gated_on_a_person_delivering_nothing, a_fleet_holding, a_fleet_holding_all,
-    a_fleet_judged_by, a_fleet_minting_from, a_fleet_proposing_through,
+    a_fleet_gated_on_a_manifest_rule, a_fleet_gated_on_a_manifest_rule_saying,
+    a_fleet_gated_on_a_person, a_fleet_gated_on_a_person_delivering_nothing, a_fleet_holding,
+    a_fleet_holding_all, a_fleet_judged_by, a_fleet_minting_from, a_fleet_proposing_through,
     a_fleet_whose_manifest_declares_a_base, fitted_with, fittings,
 };
 pub use handed_in::{
@@ -53,8 +53,9 @@ pub use handed_in::{
     worktree_directory_named,
 };
 pub use workflows::{
-    manifest, one, two_steps_both_gated_on_a_diff, two_steps_gated_on_a_person, workflow_named,
-    workflow_named_gated_on_diff, NEVER_QUIET, UNTRIPPABLE,
+    manifest, one, two_steps_both_gated_on_a_diff, two_steps_gated_on_a_manifest_rule,
+    two_steps_gated_on_a_person, workflow_named, workflow_named_gated_on_diff, NEVER_QUIET,
+    UNTRIPPABLE,
 };
 
 use fleets::a_fleet_whose_drone_leaves;

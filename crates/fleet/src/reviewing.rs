@@ -74,6 +74,18 @@ where
     /// Rebasing on the way *in* buys nothing: the base moves while a person
     /// reads, and a conflict would put markers into the diff being judged.
     pub async fn approve_review(&self, job_id: &JobId) -> Result<Job, Adrift> {
+        self.approved(job_id, Actor::Human).await
+    }
+
+    /// The same act, with the actor named.
+    ///
+    /// **Two roads and one of them is not a person.** `auto_merge` resolving to
+    /// `tests-pass` or `always` lets Fleet take the work off the gate itself —
+    /// `crate::merging` — and a record saying a human did that would be the one
+    /// lie the actor field exists to prevent. Everything else about the act is
+    /// identical, which is why this is one function with a parameter rather
+    /// than two that would drift.
+    pub(crate) async fn approved(&self, job_id: &JobId, by: Actor) -> Result<Job, Adrift> {
         // **A Job at a human gate has no Drone**, because the gate stood it
         // down so a person's review costs no fleet time — so ordinarily there
         // is no slot at all and this is an empty one. It is opened rather than
@@ -106,7 +118,9 @@ where
         let job = self.move_step(&job, &step, StepTarget::Advanced).await?;
         let told = OutcomeTurn::approved(&passed, next.as_ref());
         let Some(next) = next else {
-            let done = self.completed(&job, &told, job_id, &mut working).await?;
+            let done = self
+                .completed(&job, &told, job_id, &mut working, by)
+                .await?;
             // **The slot this hands back is the turn's to fill, not this
             // call's** — `#428`, and the rule is on `Fleet::admit_next`. The
             // Job admitted onto a freed slot is a *different* Job, so a client
@@ -121,8 +135,9 @@ where
         // arrives at a step already being worked.
         let entering = self.entering(&job, next.id());
         let job = self.move_step(&job, next.id(), entering).await?;
-        // The actor is **human**. A person took the Job out of the gate; Fleet
-        // only decides which turn it gets a process back.
+        // The actor is whoever took the Job out of the gate — a person almost
+        // always, and Fleet where `auto_merge` let it merge for itself. Fleet
+        // decides which turn it gets a process back either way.
         // **It answers `queued` and no longer `running`**, which is `#428`: the
         // dispatch that used to happen here ran inside the request that
         // approved the work, and a client that stopped waiting took the
@@ -134,7 +149,7 @@ where
         // process that finished it. There is nobody to tell here. That a person
         // accepted the part crosses as a block in the next Drone's opening
         // brief, built by `crate::dispatch`'s re-admission.
-        self.move_job(&job, Target::Queued, Actor::Human).await
+        self.move_job(&job, Target::Queued, by).await
     }
 
     /// Send the work back with a note. **The worktree and every step so far
@@ -487,10 +502,9 @@ where
         told: &OutcomeTurn,
         job_id: &JobId,
         working: &mut Option<crate::working::Working>,
+        by: Actor,
     ) -> Result<Job, Adrift> {
-        let job = self
-            .move_job(job, Target::CompletedSuccess, Actor::Human)
-            .await?;
+        let job = self.move_job(job, Target::CompletedSuccess, by).await?;
         let said = self.tell(job_id, told, None, working).await;
         self.end_the_drone(working).await;
         // **Admission is the caller's**, and it is not an omission: this holds

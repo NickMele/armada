@@ -252,11 +252,16 @@ pub fn reading(read: &Result<Adopted, LoadError>, file: &Path, at: Timestamp) ->
 
 /// One live key's move. Both ends travel, so a message can say what it was
 /// rather than that something was.
+///
+/// **A field-for-field copy and no conversion**, now that `config::Moved`
+/// carries the value as the file writes it: the number-to-text step that would
+/// otherwise live here is done where the value is read, so one spelling of
+/// `unset` serves the console line and the banner.
 fn moved(moved: &Moved) -> ManifestMoved {
     ManifestMoved {
         key: moved.key.as_str().to_string(),
-        before: moved.before,
-        after: moved.after,
+        before: moved.before.clone(),
+        after: moved.after.clone(),
     }
 }
 

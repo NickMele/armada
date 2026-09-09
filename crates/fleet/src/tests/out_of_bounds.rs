@@ -18,6 +18,7 @@ use verification::{CheckFailed, Lifted, Request};
 
 use crate::at_step::AtStep;
 use crate::gate::{rule_on, Ruling};
+use crate::policy::Policies;
 use crate::tests::gate::{budget, diff_evidence, judged_by, judging, worktree};
 use crate::tests::keeping::keeping_nowhere;
 use crate::tests::scope::{declared, ruled_by, scoped};
@@ -66,6 +67,7 @@ async fn a_step_that_declares_no_scope_still_cannot_write_a_secret() {
         budget(),
         &judged_by(FakeJudge::that_fails("a Judge no absolute boundary asks")),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -150,6 +152,7 @@ async fn a_step_that_declares_no_scope_gains_a_floor_and_not_a_drift_check() {
         budget(),
         &judged_by(FakeJudge::that_fails("a step with no plan asks no Judge")),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -186,6 +189,7 @@ async fn the_deliverable_a_workflow_asks_for_is_not_a_boundary() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -217,6 +221,7 @@ async fn a_step_with_no_scope_whose_worktree_will_not_open_decides_nothing() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 

@@ -32,12 +32,12 @@ use crate::tests::daemon::{
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::submitted_by_the_one;
 
-type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
+pub(super) type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 
 /// What the fake forge says a pull request is. The address the record keeps is
 /// the fake's own default for `Opened::PullRequest`, and every case asserts
 /// against this rather than against a string it wrote in itself.
-const PULL_REQUEST: &str = "https://forge.invalid/armada/pull/1";
+pub(super) const PULL_REQUEST: &str = "https://forge.invalid/armada/pull/1";
 
 /// What the base branch is on once the fast-forward has run.
 const MERGED_INTO: &str = "5b4ec82700000000000000000000000000000000";
@@ -86,7 +86,7 @@ fn proving_manifest() -> Manifest {
 /// rule and matters more here: the pull request the press acts on is the one
 /// the delivering step's entry opened, and a fixture that wrote the column by
 /// hand would be asserting against its own setup.
-async fn at_the_gate_having_delivered(fleet: &Fixture, home: &TempDir) -> JobId {
+pub(super) async fn at_the_gate_having_delivered(fleet: &Fixture, home: &TempDir) -> JobId {
     let job = fleet
         .propose(a_proposal("fix the off-by-one in the log reader"))
         .await

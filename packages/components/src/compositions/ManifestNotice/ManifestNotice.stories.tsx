@@ -37,7 +37,7 @@ export const Reloaded: Story = {
     reading: {
       path: "armada.yml",
       at: AT,
-      moved: [{ key: "drone.poke_limit", before: 3, after: 5 }],
+      moved: [{ key: "drone.poke_limit", before: "3", after: "5" }],
     },
     onDismiss: () => undefined,
   },
@@ -46,7 +46,7 @@ export const Reloaded: Story = {
 /**
  * A key that was not in the file before. **`unset` is spelled rather than left
  * blank**: an absent key is the repository deferring to what Fleet runs with,
- * which is a different fact from a number, and a gap would read as a value that
+ * which is a different fact from a value, and a gap would read as one that
  * failed to load.
  */
 export const ReloadedFromUnset: Story = {
@@ -54,7 +54,27 @@ export const ReloadedFromUnset: Story = {
     reading: {
       path: "armada.yml",
       at: AT,
-      moved: [{ key: "drone.quiet_after_seconds", after: 900 }],
+      moved: [{ key: "drone.quiet_after_seconds", after: "900" }],
+    },
+    onDismiss: () => undefined,
+  },
+};
+
+/**
+ * A policy moved, which is the reading this surface exists for most.
+ *
+ * **Neither end is ever `unset`.** `auto_merge` and `review_gate` are
+ * Manifest-only, so an absent key is the policy's own default rather than a
+ * deferral to a tier above — and the sentence names the value that was actually
+ * in force. It is the same neutral tone as any other adoption: the edit took,
+ * and Fleet is running with it.
+ */
+export const PolicyReloaded: Story = {
+  args: {
+    reading: {
+      path: "armada.yml",
+      at: AT,
+      moved: [{ key: "auto_merge", before: "never", after: "tests-pass" }],
     },
     onDismiss: () => undefined,
   },

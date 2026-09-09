@@ -101,6 +101,18 @@ pub(crate) struct Sweep {
     /// written when it changes rather than on every rotation. See
     /// [`crate::under_review`], which owns the comparison and the reasoning.
     pub(crate) reviewed: crate::under_review::Standings,
+    /// Every pull request this process has already merged for itself under
+    /// `auto_merge`, whether or not the forge accepted.
+    ///
+    /// **`nudged`'s shape and its reason**, one act along: a merge the forge
+    /// will never accept — a protected base, a required review nobody gave —
+    /// must not spawn a process and write a line every sweep for the life of
+    /// the daemon. A person can still press, and a restart tries once more.
+    ///
+    /// **A set and not a map**, unlike `nudged`: what came of it is on the
+    /// Job's record and in its log already, and a second copy here would be a
+    /// reading that outlived the fact.
+    pub(crate) merged_by_policy: std::collections::BTreeSet<String>,
 }
 
 /// What the record's state says on the wire, where it says anything.

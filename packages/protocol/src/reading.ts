@@ -45,19 +45,30 @@ export type ManifestReading = {
   refused?: ManifestRefused;
 };
 
-/** One live key that changed, carrying both ends. */
+/**
+ * One live key that changed, carrying both ends.
+ *
+ * **Both ends are text, and that cost a major bump.** They were numbers while
+ * every live key held one; `auto_merge` and `review_gate` are live too now and
+ * a policy's value is a word. What crosses is the value as `armada.yml` writes
+ * it. `crates/ipc/src/reading.rs` carries the argument.
+ */
 export type ManifestMoved = {
-  /** Its path in `armada.yml` — `drone.poke_limit` — which is what a person
-   * would search the file for. */
+  /** Its path in `armada.yml` — `drone.poke_limit`, `auto_merge` — which is
+   * what a person would search the file for. */
   key: string;
   /**
    * **Absent is a real value, not a missing one**: the key was not in the file,
    * and the repository was deferring to what Fleet runs with. A surface spells
-   * that rather than leaving a blank, which would read as a number that failed
+   * that rather than leaving a blank, which would read as a value that failed
    * to load.
+   *
+   * **A policy is never absent on either end** — `auto_merge` and `review_gate`
+   * have no tier above them to defer to, so an absent key is their own default
+   * and Fleet sends the word that was in force.
    */
-  before?: number;
-  after?: number;
+  before?: string;
+  after?: string;
 };
 
 /**

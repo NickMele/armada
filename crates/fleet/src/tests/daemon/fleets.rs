@@ -20,7 +20,7 @@ use testkit::{FakeHarness, FakeJudge, FakeLinkLookup, FakeVcs, FakeWorkProduct};
 
 use super::workflows::{
     manifest, one, two_steps, two_steps_delivering_nothing, two_steps_gated_on_a_manifest_rule,
-    two_steps_gated_on_a_person,
+    two_steps_gated_on_a_manifest_rule_judged, two_steps_gated_on_a_person,
 };
 // Through the parent's re-exports, which are what every other module in the
 // suite reaches these four by.
@@ -212,6 +212,39 @@ pub fn a_fleet_gated_on_a_manifest_rule(
 ) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
     let mut fittings = fittings(home, work);
     fittings.workflows = one(two_steps_gated_on_a_manifest_rule(gate_on, key, None));
+    Fleet::assembled(fittings)
+}
+
+/// The same, over an `armada.yml` that says something about the policy — and,
+/// where a question is given, over a step that asks the Judge it.
+///
+/// **The Manifest and the workflow move together on purpose.** What a
+/// `manifest_rule:` gate comes to is the pair, and a fixture that could set one
+/// without the other would let a case assert against half of the resolution.
+pub fn a_fleet_gated_on_a_manifest_rule_saying(
+    home: &TempDir,
+    work: FakeWorkProduct,
+    gate_on: &str,
+    key: &str,
+    says: &str,
+    question: Option<&str>,
+) -> Fleet<FakeHarness, FakeVcs, FakeWorkProduct> {
+    let mut fittings = fittings(home, work);
+    // **A Judge that objects to nothing, where there is a question at all.**
+    // What is under test is what the policy does with a step that *has* a
+    // judgment, and the default fixture Judge refuses every call — which would
+    // make the case pass for the wrong reason, on a ruling that never reached
+    // the gate.
+    fittings.judge = Arc::new(FakeJudge::with_no_objection());
+    fittings.workflows = one(match question {
+        None => two_steps_gated_on_a_manifest_rule(gate_on, key, None),
+        Some(question) => two_steps_gated_on_a_manifest_rule_judged(gate_on, key, question),
+    });
+    fittings.manifest = Manifest::parse(
+        std::path::Path::new("armada.yml"),
+        &format!("version: 1\nid: 01FIXTUREMANIFEST\n{says}"),
+    )
+    .expect("a manifest that parses");
     Fleet::assembled(fittings)
 }
 

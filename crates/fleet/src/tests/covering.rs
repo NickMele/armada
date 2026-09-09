@@ -29,6 +29,7 @@ use verification::{CheckFailed, Lifted, Request};
 
 use crate::at_step::AtStep;
 use crate::gate::{rule_on, Ruling};
+use crate::policy::Policies;
 use crate::tests::gate::{budget, diff_evidence, judging, workflow, worktree};
 use crate::tests::keeping::keeping_nowhere;
 
@@ -71,6 +72,7 @@ async fn ruling_over(work: &FakeWorkProduct) -> Ruling {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await
 }
@@ -206,6 +208,7 @@ async fn a_step_whose_checks_declare_no_paths_reads_the_diff_once_and_no_more() 
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 

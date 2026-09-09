@@ -152,6 +152,10 @@ where
             self.budget(),
             &judging,
             &Keeping::of(&self.host().repo_root, &job.handle()),
+            // Read now rather than carried from the first gating: a re-gate is
+            // a fresh reading of a live setting, and answering it with what the
+            // file said the first time would be the one thing `Live` forbids.
+            self.gating_policies(),
         )
         .await;
 

@@ -28,6 +28,7 @@ use crate::daemon::Fleet;
 use crate::evidence::Call;
 use crate::gate::{apply, rule_on, Ruling};
 use crate::judging::Judging;
+use crate::policy::Policies;
 use crate::scope::NotDeclared;
 use crate::tests::admitted::dispatched;
 use crate::tests::briefing::turns_sent;
@@ -102,6 +103,7 @@ pub(super) async fn ruled_by(
         budget(),
         judging,
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await
 }
@@ -655,6 +657,7 @@ async fn a_step_with_no_scope_is_asked_nothing_it_did_not_declare() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
 
@@ -696,6 +699,7 @@ async fn an_ungated_step_with_no_scope_advances_on_evidence_alone() {
         budget(),
         &judging(),
         &keeping_nowhere(),
+        Policies::unstated(),
     )
     .await;
     assert!(ruling.advanced(), "{ruling:?}");

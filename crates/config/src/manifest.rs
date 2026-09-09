@@ -2,10 +2,12 @@
 //!
 //! **These keys, and nothing else.** `version`, `id`, `base`; `run`,
 //! `expect_exit_code`, `when`, `requires` and `narrow` under `checks.<name>`;
-//! `run` and `destructive` under `commands.<name>`; `setup.requires`; and the
+//! `run` and `destructive` under `commands.<name>`; `setup.requires`; the
 //! three keys [`drone`] reads, the one section here that is a dial rather than
-//! a registry. Every other section the concept page describes is refused:
-//! permissions, secrets, ports, skills, budget, dispatch freeze, auto-merge.
+//! a registry; and the two policies a `manifest_rule:<key>` gate names,
+//! `auto_merge` and `review_gate`. Every other section the concept page
+//! describes is refused: permissions, secrets, ports, skills, budget, dispatch
+//! freeze.
 //!
 //! **A key nothing reads is worse than a key that is not there.** A `budget:
 //! 40` nothing consumes reads as a budget that is set, and refusing it keeps
@@ -34,9 +36,10 @@ use core_model::{
 use serde_yaml_ng::Value;
 
 mod drone;
+mod policies;
 
 use crate::error::{Fault, LoadError, Refusal};
-use crate::live::{Cell, Dials, Reloads};
+use crate::live::{Cell, InForce, Reloads};
 use crate::yaml::{self, Table};
 
 /// The keys M1 reads at the top level of an `armada.yml`.
@@ -49,6 +52,10 @@ const TOP_LEVEL: &[&str] = &[
     "setup",
     "drone",
     "after_merge",
+    // Undotted and top level, because that is what the gate names. [`policies`]
+    // carries the reasoning and the values.
+    "auto_merge",
+    "review_gate",
 ];
 /// The keys M1 reads inside `checks.<name>`. **`expect_exit_code` is spelled
 /// here as a workflow step spells it**, for the reason `drone:` below gives
@@ -61,6 +68,7 @@ const NARROW_KEYS: &[&str] = &["run", "each", "from", "under", "except"];
 const COMMAND_KEYS: &[&str] = &["run", "destructive"];
 /// The keys M1 reads inside `setup`.
 const SETUP_KEYS: &[&str] = &["requires"];
+
 /// The keys M1 reads inside `after_merge`. **`checks` and nothing else**, so
 /// the section says one thing: which of this repository's Checks are worth
 /// running against a tree a merge left behind.
@@ -272,7 +280,7 @@ impl Manifest {
     /// Fleet is answered here.** `#430`. The read is one uncontended lock over
     /// two integers and happens at a step boundary, never inside a step.
     pub fn quiet_after_seconds(&self) -> Option<u32> {
-        self.live.read().quiet_after_seconds
+        self.live.read().dials.quiet_after_seconds
     }
 
     /// How many nudges a quiet Drone gets in this repository before the Job
@@ -290,7 +298,7 @@ impl Manifest {
     /// Read through the live cell, for
     /// [`quiet_after_seconds`](Manifest::quiet_after_seconds)'s reason.
     pub fn poke_limit(&self) -> Option<u32> {
-        self.live.read().poke_limit
+        self.live.read().dials.poke_limit
     }
 
     /// What a step's work in this repository stays out of, where the step
@@ -335,11 +343,11 @@ impl Manifest {
     /// with more at stake, since the Job this refuses is refused again at every
     /// admission until the number moves.
     pub fn cost_cap_micros(&self) -> Option<u32> {
-        self.live.read().cost_cap_micros
+        self.live.read().dials.cost_cap_micros
     }
 
     /// Every live key at once, for the one caller that adopts them together.
-    pub(crate) fn dials(&self) -> Dials {
+    pub(crate) fn in_force(&self) -> InForce {
         self.live.read()
     }
 }
@@ -393,6 +401,7 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         Some(value) => drone::read(value, out),
         None => drone::Drone::unstated(),
     };
+    let (auto_merge, review_gate) = policies::read(&mut top, out);
     // After `checks` for `setup.requires`' reason, one registry along: every
     // entry resolves against it, and a file's order is never something an
     // author has to think about.
@@ -424,7 +433,11 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         prepared_by,
         proved_after_a_merge,
         exclude_paths: drone.exclude_paths,
-        live: Cell::holding(drone.dials),
+        live: Cell::holding(InForce {
+            dials: drone.dials,
+            auto_merge,
+            review_gate,
+        }),
     })
 }
 

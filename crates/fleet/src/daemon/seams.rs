@@ -35,6 +35,7 @@ use crate::holding::Reclaiming;
 use crate::judging::{Aloft, Judging, Marking};
 use crate::mint::Mint;
 use crate::noticing::{Noticing, Sweep};
+use crate::policy::Policies;
 use crate::proposal::Proposing;
 use crate::proposals::Watching;
 use crate::silence::Liveness;
@@ -72,6 +73,21 @@ where
     }
     pub(crate) fn manifest(&self) -> &Manifest {
         &self.manifest
+    }
+    /// What this repository has said about `auto_merge` and `review_gate`,
+    /// folded across the Manifests gating one Job.
+    ///
+    /// **Read fresh on every call and never held.** Both settings are `Live`,
+    /// so the answer is true at the instant it is taken and no longer — which
+    /// is why every caller asks again rather than passing one down.
+    ///
+    /// **One Manifest today, and the fold is still called.** A Fleet holds one
+    /// `armada.yml`; a Convoy is gated by several, and this is the one function
+    /// that grows when `Job::gate_manifests` can be resolved to files.
+    /// `crate::policy` carries the argument, and `docs/concepts/convoy.md` the
+    /// rule.
+    pub(crate) fn gating_policies(&self) -> Policies {
+        Policies::gating([(self.manifest.auto_merge(), self.manifest.review_gate())])
     }
     pub(crate) fn host(&self) -> &Host {
         &self.host

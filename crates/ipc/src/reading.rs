@@ -75,19 +75,39 @@ impl ManifestReading {
 
 /// One live key that changed, carrying both ends so a message can say what it
 /// was rather than that something was.
+///
+/// # Both ends are text, and that cost a major bump
+///
+/// They were `u32` while every live key held a number. `#525` made `auto_merge`
+/// and `review_gate` live, and a policy's value is a word — so the pair either
+/// retypes or is joined by a second pair for the words, which would be four
+/// fields stating one fact. What crosses is **the value as `armada.yml` writes
+/// it**, which is what the field always meant and is now able to say.
+///
+/// A retype is a major bump by `docs/practices/protocol.md`'s own table, and it
+/// is the row that says so outright: *"on the wire it's a different JSON shape
+/// and a different TS type."* Nothing on either side branches on this value —
+/// Bridge renders it into one sentence and Fleet renders it into another — so
+/// the change is mechanical, and it is still a major bump, because what decides
+/// that is the shape and not the use.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ManifestMoved {
-    /// The key's path in `armada.yml` — `drone.poke_limit` — which is what a
-    /// person would search the file for.
+    /// The key's path in `armada.yml` — `drone.poke_limit`, `auto_merge` —
+    /// which is what a person would search the file for.
     pub key: String,
     /// **Absent is a real value, not a missing one**: the key was not in the
     /// file, and the repository was deferring to what Fleet runs with. A client
-    /// spells that rather than leaving a blank, which would read as a number
+    /// spells that rather than leaving a blank, which would read as a value
     /// that failed to load.
+    ///
+    /// **A policy is never absent on either end.** `auto_merge` and
+    /// `review_gate` are `Manifest only`, so an absent key is the policy's own
+    /// default rather than a deferral, and Fleet sends the word that was in
+    /// force. Only the two `drone.` dials have a tier above them to defer to.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub before: Option<u32>,
+    pub before: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub after: Option<u32>,
+    pub after: Option<String>,
 }
 
 /// Why a read was refused, and what is running instead.

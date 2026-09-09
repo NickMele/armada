@@ -22,6 +22,7 @@ mod allowance;
 mod asked;
 mod attachments;
 mod attribution;
+mod auto_merging;
 mod boundary;
 mod bounding;
 mod briefing;

@@ -134,7 +134,9 @@ where
             // lands the work through the slot above and ends the Drone.
             let told = OutcomeTurn::approved(&passed, None);
             let job = self.move_job(&job, Target::Running, Actor::Human).await?;
-            let done = self.completed(&job, &told, job_id, &mut working).await?;
+            let done = self
+                .completed(&job, &told, job_id, &mut working, Actor::Human)
+                .await?;
             // **The freed place is the next turn's to fill** — `#428`. It is
             // one turn later than it was, and the Job that takes it is not this
             // one: admitting here meant a client that stopped waiting for an
