@@ -14,14 +14,22 @@ base: main
 
 # Checks gate advancement. A step naming one not declared here is refused.
 #
-# **The order below is load-bearing, so reordering these for tidiness changes
-# the gate.** A step that says `every_manifest_check` runs them in the order
-# this file writes them, and `fleet::checking` starts four at a time off that
-# order, refilling as each finishes — so the first four declared are the four
-# that start. The compile checks lead on purpose: a Drone that broke the build
-# should not wait on a browser to be told. There is no `order:` key to state it
-# with, for the reason a workflow's `steps[]` has none — order is already the
-# semantics, and two statements of it can disagree.
+# **The order below is the order they start in.** A step that says
+# `every_manifest_check` takes it from this file, and `fleet::checking` starts
+# four at a time off it, refilling as each finishes — so the first four declared
+# are the four that start. There is no `order:` key to state it with, for the
+# reason a workflow's `steps[]` has none: order is already the semantics, and
+# two statements of it can disagree.
+#
+# **It does not decide what a Drone is told first, and this once said it did.**
+# Nothing here stops early — `checking`'s own note is that a failing Check
+# cancels none of the others, because whoever reads a failed step wants every
+# result — and the report is written into slots sized from the declaration, so
+# what comes back is in this order however the four raced. What the order
+# actually decides is the schedule, and on that reading it is not tuned: the
+# classic answer is slowest first, which would put `bridge_test` at the top
+# rather than at the bottom. `typecheck`, `storybook` and `bridge_build` have
+# never been timed on their own, so there is nothing to tune it against yet.
 checks:
   build:
     # `--locked`: a Check that updates the lockfile changed what it measured.

@@ -131,9 +131,9 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
     // it.** It used to be `bug.json`'s `implement` step read top to bottom;
     // that step says `every_manifest_check` now, so the order is
     // `armada.yml`'s `checks_as_written` and `format` is last where the
-    // definition put it third. The property the move had to keep is that a
-    // failure surfaces as early as it can — which is why this stayed an
-    // ordered comparison rather than becoming a set.
+    // definition put it third. The property the move had to keep is that the
+    // order is a repository's to state — which is why this stayed an ordered
+    // comparison rather than becoming a set.
     assert_eq!(
         resolved,
         vec![
@@ -170,11 +170,12 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
 /// `bridge_build, bridge_test, build, …`: the same set, and the two slowest
 /// Checks leading.
 ///
-/// `armada.yml` argues the sequence in its own words on `bridge_test` — *"the
-/// order is the order they answer in — 6s, 40s, then the stories — so a failure
-/// surfaces as early as it can"* — with the figures beside it: `build` 37.6s,
-/// `test` 41s, `bridge_test` 6s then 40s. A Drone that broke the compile should
-/// not wait on a browser to be told.
+/// **What that costs is a schedule, not a report.** `fleet::checking` starts
+/// four at a time and cancels nothing when one fails, and it writes each result
+/// into a slot sized from the declaration — so a Drone is told the same seven
+/// things in the same order however they raced. The order decides which four
+/// start, which is worth pinning because it is `armada.yml`'s to decide, and
+/// not because it makes anything arrive sooner.
 ///
 /// **Asserted against the real Manifest and a definition written here**, rather
 /// than by editing a shipped file: the claim is about the expansion, and it has

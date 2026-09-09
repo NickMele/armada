@@ -197,12 +197,14 @@ impl Manifest {
     /// repository could sequence its gate, and the sequence was lost in this
     /// parse without anything saying so.
     ///
-    /// The sequence is worth keeping because a gate is read for the first
-    /// failure. `armada.yml` argues it in its own words on `bridge_test` — *"the
-    /// order is the order they answer in, so a failure surfaces as early as it
-    /// can"* — with measured figures beside it: `build` 37.6s, `test` 41s,
-    /// `bridge_test` 6s then 40s. Alphabetically the two slowest lead, and a
-    /// Drone that broke the compile waits on the browser to be told.
+    /// **The sequence is worth keeping because it is the author's, not because
+    /// it makes a failure arrive sooner.** Nothing about a gate stops early —
+    /// `fleet::checking` cancels no Check when one fails, and writes every
+    /// result into a slot sized from the declaration — so what a Drone is told,
+    /// and when, is the same whatever order the four raced in. What the order
+    /// decides is which four start first, and that is a scheduling question
+    /// this parser has no opinion about. Losing it to a `BTreeMap` was still a
+    /// regression: a repository could sequence its gate and then could not.
     ///
     /// **Not [`check_names`](Manifest::check_names)**, which is the same set
     /// sorted, for a message rather than for a run.
