@@ -1,29 +1,22 @@
-//! The two Manifest policies, resolved for one Job, and what each of them
-//! decides.
+//! The two Manifest policies, resolved for one Job, and what each decides.
 //!
-//! # Where a `manifest_rule:` gate is answered
+//! **Where a `manifest_rule:` gate is answered.** `config` carries
+//! `manifest_rule:<key>` onto the frozen step without reading it, `store`
+//! round-trips it unresolved, and this is the resolution: the repository's
+//! word, folded across the Job's gating Manifests, met with what the step
+//! declared. `crate::gate` reads [`Policies::at_a_review_gate`] at the advance
+//! gate; `crate::merging` reads [`Policies::a_machine_may_merge`] on the sweep.
 //!
-//! `config` carries `manifest_rule:<key>` onto the frozen step without reading
-//! it, `store` round-trips it unresolved, and this is the resolution: the
-//! repository's word, folded across the Job's gating Manifests, met with what
-//! the step itself declared. `crate::gate` reads [`Policies::review_gate`] at
-//! the advance gate and `crate::under_review` reads
-//! [`Policies::auto_merge`] on the sweep over an open pull request.
+//! **Resolved at the question and never onto the record.** Both settings are
+//! `Live`. A [`Policies`] is built where it is used and dropped there, so a Job
+//! whose repository changed its mind between two gates is answered twice,
+//! differently — which is the point of the lifetime.
 //!
-//! # Resolved at the question and never onto the record
-//!
-//! Both settings are `Live`. A [`Policies`] is built where it is used and
-//! dropped there — nothing holds one across a step, and nothing writes one
-//! down. A Job whose repository changed its mind between two gates is answered
-//! twice, differently, and that is the point of the lifetime.
-//!
-//! # One Manifest today, and the seam is named rather than assumed
-//!
-//! A Fleet holds one `armada.yml`. A Convoy is gated by several and
-//! `docs/concepts/convoy.md` settles the fold — most-restrictive-wins, because
-//! there is one pull request — so the fold is called here with the one Manifest
-//! there is rather than skipped. [`Policies::gating`] is the single place a
-//! second Manifest arrives.
+//! **One Manifest today, and the seam is named rather than assumed.** A Fleet
+//! holds one `armada.yml`; a Convoy is gated by several and
+//! `docs/concepts/convoy.md` settles the fold, so it is called here with the
+//! one Manifest there is rather than skipped. [`Policies::gating`] is where a
+//! second arrives.
 
 use adapter_traits::WhatTheForgeRan;
 use core_model::{AutoMerge, ResolvedStep, ReviewGate};
@@ -103,34 +96,29 @@ impl Policies {
     }
 
     /// What a step gated `manifest_rule:review_gate` comes to, against the step
-    /// itself.
+    /// itself — **including the judgeless one, which is legal and is the
+    /// hazard.**
     ///
-    /// # The judgeless step, which is legal and is the hazard
+    /// `config::workflow::step` refuses a step gated `auto_if_judge_passes`
+    /// that asks the Judge nothing: the gate names a tier the step never
+    /// declared, so it would advance on the mechanical tier alone while reading
+    /// as judged. **That rule cannot run at parse time when the gate is a
+    /// policy**, because the file does not say what the policy is — and the
+    /// designed Code Review declares exactly this shape, `"judge_checks": []`
+    /// on a `manifest_rule:review_gate` step, so refusing it there would refuse
+    /// a shape the design sanctions.
     ///
-    /// `crates/config/src/workflow/step.rs` refuses a step gated
-    /// `auto_if_judge_passes` that asks the Judge nothing — the gate names a
-    /// tier and the tier is not declared, so the step would advance on the
-    /// mechanical tier alone while reading as judged. **That rule cannot run at
-    /// parse time when the gate is a policy**, because the file does not say
-    /// what the policy is, and the designed Code Review declares exactly this
-    /// shape: `"judge_checks": []` on a `manifest_rule:review_gate` step.
-    /// Refusing it there would refuse a shape the design sanctions.
+    /// So it is refused here, and **refused means held for a person**:
     ///
-    /// So it is refused here, where both halves are in hand — and **refused
-    /// means held for a person**, not failed.
-    ///
-    /// | Answer | Why not |
+    /// | Answer | Why not that one |
     /// |---|---|
-    /// | Advance anyway | The failure the parse-time rule exists to prevent, reached by another road |
-    /// | Fail the step | The step passed every tier it declared. Nothing is wrong with the work, and a Drone would be handed back a configuration mismatch it cannot fix from a worktree |
-    /// | **Hold for a person** | The most cautious of the policy's own two values, reached by the same most-restrictive-wins principle the fold above runs on. The Job lands where every other unanswerable gate lands, on a surface that already draws it |
+    /// | Advance anyway | The failure the parse-time rule exists to prevent, by another road |
+    /// | Fail the step | The step passed every tier it declared, and a Drone cannot fix a configuration mismatch from a worktree |
+    /// | **Hold for a person** | The cautious value of the policy's own two, which is the principle the fold above already runs on |
     ///
-    /// **And it is said out loud.** A repository that asked for automation and
-    /// got a hold is owed the reason, which is why this answers a
-    /// [`HeldBecause`] rather than a `bool`: `crate::gate` carries the word onto the
-    /// ruling and `crate::dispatch` writes the line into the Job's own log.
-    /// Downgrading in silence would be the same defect one layer up — a gate
-    /// that reads as one thing and behaves as another.
+    /// **And it is said out loud**, which is why this answers a [`HeldBecause`]
+    /// rather than a `bool`: a repository that asked for automation and got a
+    /// hold is owed the reason. Silence would be this defect one layer up.
     pub fn at_a_review_gate(&self, step: &ResolvedStep) -> HeldBecause {
         match self.review_gate {
             ReviewGate::HumanAlways => HeldBecause::ThePolicyAsksForAPerson,

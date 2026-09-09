@@ -5,22 +5,19 @@
 //! `crates/config/settings.toml` files five of `armada.yml`'s keys as
 //! `lifetime = "Live"`: three under `drone:` — `quiet_after_seconds`,
 //! `poke_limit` and `cost_cap_micros_per_job` — and the two top-level policies,
-//! `auto_merge` and `review_gate`. It files the Checks and Commands registries
-//! and `drone.exclude_paths` as *Frozen for the Job*. The last sits in the same
+//! `auto_merge` and `review_gate`. The Checks and Commands registries and
+//! `drone.exclude_paths` are *Frozen for the Job*; the last sits in the same
 //! `drone:` block as three live ones, which is why [`Frozen`] names a key there
-//! and a section everywhere else: what decides is what was resolved against a
-//! value at boot. Every [`ResolvedWorkflow`] was resolved against the Checks
-//! the file declared there, and holding a `Setup` is meant to be proof the two
-//! files agree — so swapping the whole Manifest would falsify that silently.
+//! and a section everywhere else. What decides is what was resolved against a
+//! value at boot: every [`ResolvedWorkflow`] took the Checks this file declared
+//! there, so swapping the whole Manifest would falsify a `Setup` silently.
 //!
 //! So the live keys sit behind a cell every clone of one Manifest shares, and
-//! the rest is what it was when the daemon read it. **The two policies are
-//! there because they are read at a question rather than at a boot** —
-//! `fleet::gate` when a gate runs, `fleet::merging` on every sweep over an open
-//! pull request — and somebody turning `auto_merge` off because a Job is about
-//! to land is owed an answer sooner than a restart. The cost cap is live for a
-//! sharper version of that: a Job over it is refused at every admission until
-//! the number moves.
+//! the rest is what it was when the daemon read it. **Three of the five are
+//! read at a question rather than at a boot** — `auto_merge` and `review_gate`
+//! whenever a gate or a sweep asks, the cost cap at every admission of a Job
+//! over it — so somebody stopping a merge, or raising a cap under the Job it is
+//! refusing, is owed an answer sooner than a restart.
 //!
 //! **[`Reloads`] is the only thing that can write, and the live keys are all it
 //! can write.** Fleet is never handed one, so the crate holding the Manifest

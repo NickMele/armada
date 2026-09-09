@@ -9,27 +9,20 @@
 //! whether a *machine* decides; [`Fleet::merge_pull_request`] is a person, and
 //! Fleet performing it is what runs those Checks. `#523`.
 //!
-//! `tests-pass` and `always` are the other road, and it lands in the same act:
+//! `tests-pass` and `always` are the other road into the same act:
 //! [`Fleet::merged_if_the_policy_says_so`] is the sweep pressing the button
-//! nobody pressed. **The same merge, the same record, the same Checks over what
-//! merged, and a different actor** — the record says `fleet`, because a Job
-//! that read as approved by a person nobody asked would be the one lie the
-//! actor field exists to prevent. `#525`.
+//! nobody pressed. **Same merge, same record, same Checks, different actor** —
+//! the record says `fleet`, because a Job read back as approved by a person
+//! nobody asked is the lie the actor field exists to prevent. `#525`.
 //!
 //! # A fourth answer at the human gate, and not a recourse
 //!
 //! `core_model::Recourse` is what a Job that **stopped** is offered, and
 //! `Stuck::asked_of` admits no gate: a Job waiting for somebody has not
 //! stopped. So this sits beside `approve_review`, `request_changes` and
-//! `reject_job` — same status, same refusal, its own route for the reason those
-//! three have three. **It is the approval with a write to the forge in front of
-//! it**: what it adds is the merge, the record of it and the Checks over what
-//! merged, and what it does to the machines is
-//! [`approve_review`](Fleet::approve_review), called rather than restated.
-//!
-//! **Every refusal comes back to whoever pressed, and nothing retries.** A
-//! retry would be the machine deciding after all, and a quiet failure is worse
-//! than no button — so each kind the forge names carries its own wire code.
+//! `reject_job` — same status, same refusal, its own route. **It is the
+//! approval with a write to the forge in front of it**, and what it does to the
+//! machines is [`approve_review`](Fleet::approve_review), called not restated.
 
 use adapter_traits::{
     AgentHarness, Delivery, Merged, NotMerged, Vcs, WhatBecameOfIt, WhatTheForgeRan, WorkProduct,
@@ -81,6 +74,11 @@ where
     /// an auto-merge is the actor on the record and the sentence in the log;
     /// everything between — the gate check, the address, the write, the reading
     /// back, the Checks over what merged — is the same and is done once.
+    ///
+    /// **Every refusal comes back to whoever asked, and nothing retries here.**
+    /// A retry would be the machine deciding after all, and a quiet failure is
+    /// worse than no button — so each kind the forge names carries its own wire
+    /// code. What bounds the *sweep's* asking is one caller down.
     async fn merged(&self, job_id: &JobId, by: Actor, why: &'static str) -> Result<Job, Adrift> {
         let job = self.load(job_id).await?;
         // Before the forge is touched, so a Job that is not at a gate is
@@ -155,53 +153,30 @@ where
     }
 
     /// Merge this Job's pull request where the repository's `auto_merge` policy
-    /// says a machine may, and where the forge's own reading satisfies it.
-    ///
-    /// # Only a step that asked for it
+    /// says a machine may, and the forge's own reading satisfies it.
     ///
     /// **The step's gate is the first question and it is not negotiable.** A
     /// Job holding at a `human_always` step is holding for a person whatever
-    /// the repository set `auto_merge` to — the policy answers a
-    /// `manifest_rule:auto_merge` gate and nothing else, and a Fleet that read
-    /// the policy without reading the gate would merge work off a step whose
-    /// own workflow file says a person signs it.
+    /// `auto_merge` says; the policy answers a `manifest_rule:auto_merge` gate
+    /// and nothing else.
     ///
-    /// # What `tests-pass` reads, and what it does not
+    /// **`tests-pass` reads [`WhatTheForgeRan`] and nothing else** — the
+    /// forge's own automation against the branch, which is what a person means
+    /// by "tests pass" on a pull request. Armada's Checks already ran at the
+    /// gate this Job holds at, and totalling the two would claim a gate had
+    /// held that never ran. Only `AllPassed` is a pass: `NothingRan` has proved
+    /// nothing, and an unknown conclusion is `SomeFailed` by `#524`.
     ///
-    /// [`WhatTheForgeRan`] and nothing else. It is the forge's own automation
-    /// against the branch under review, which is what a person means by "tests
-    /// pass" on a pull request; Armada's Checks already ran at the gate this
-    /// Job is holding at, and totalling the two would claim a gate had held
-    /// that never ran. `AllPassed` alone is a pass — `NothingRan` is a
-    /// repository that has proved nothing, `StillWaiting` has not finished, and
-    /// a check that ended in a word this build has no name for is `SomeFailed`
-    /// by `#524`'s decision, so an unknown conclusion cannot merge.
+    /// **`WhatPeopleSaid` is deliberately unread.** `auto_merge`'s values are
+    /// about machines and none names an approval; whether one becomes a fourth
+    /// value is undecided, and reading it here would settle that by accident.
+    /// So `always` means always — and a forge requiring a review refuses the
+    /// merge, which is the backstop and is the forge's.
     ///
-    /// # What is deliberately not read
-    ///
-    /// **[`WhatPeopleSaid`](adapter_traits::WhatPeopleSaid).** `auto_merge`'s
-    /// three values are all about machines and none of them names a person's
-    /// approval; whether an approval becomes a fourth value or a policy of its
-    /// own is undecided, and reading it here would settle that by accident. So
-    /// `always` means always, including over an outstanding request for
-    /// changes.
-    ///
-    /// That is not as sharp as it sounds: a forge that requires a review
-    /// refuses the merge, and the refusal comes back through
-    /// [`NotMerged`](adapter_traits::NotMerged) and into the Job's log. Branch
-    /// protection is the backstop and it is the forge's, not Armada's.
-    ///
-    /// # Once per pull request per process
-    ///
-    /// The shape `nudged` already has in [`crate::noticing`], and for its
-    /// reason: a merge the forge will never accept — a protected base, a
-    /// required review nobody gave — must not spawn a `gh` process and a log
-    /// line every sweep for the life of the daemon. A person can still press.
-    /// It is in memory, so a restart tries once more.
-    ///
-    /// **Nothing raises and nothing is returned.** The Job is at its gate when
-    /// this runs and, if anything at all goes wrong, at its gate when it
-    /// returns. This is a sweep.
+    /// **Once per pull request per process**, the shape `noticing`'s `nudged`
+    /// has: a merge the forge will never accept must not spawn a process and a
+    /// line every sweep for the daemon's life. A person can still press, and
+    /// **nothing raises**, because this is a sweep.
     pub(crate) async fn merged_if_the_policy_says_so(
         &self,
         job_id: &JobId,

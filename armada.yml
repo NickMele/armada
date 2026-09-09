@@ -3,6 +3,12 @@
 #
 # Every section the Manifest concept page describes but this file omits is
 # refused by name: a key nothing reads is a promise the system does not keep.
+#
+# The two exceptions are `auto_merge` and `review_gate`, which have defaults
+# rather than refusals — they are `Manifest only`, so an absent key has no tier
+# above it to defer to and means `never` and `human_always`. This repository
+# writes neither, which is those two answers: no machine lands Armada's own work
+# and a person signs every review step off.
 
 version: 1
 

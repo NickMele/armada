@@ -37,6 +37,7 @@ use core_model::{
 use serde_yaml_ng::Value;
 
 mod drone;
+mod policies;
 
 use crate::error::{Fault, LoadError, Refusal};
 use crate::live::{Cell, InForce, Reloads};
@@ -71,24 +72,6 @@ const NARROW_KEYS: &[&str] = &["run", "each", "from", "under", "except"];
 const COMMAND_KEYS: &[&str] = &["run", "destructive"];
 /// The keys M1 reads inside `setup`.
 const SETUP_KEYS: &[&str] = &["requires"];
-/// The values `auto_merge` takes, paired with what each means. **Every one is
-/// carried**, so [`yaml::word`]'s deferred-value arm is unreachable here and
-/// both lists it is given are the same set — which is the honest shape when
-/// nothing is deferred.
-const AUTO_MERGE_WORDS: &[(&str, AutoMerge)] = &[
-    ("never", AutoMerge::Never),
-    ("tests-pass", AutoMerge::TestsPass),
-    ("always", AutoMerge::Always),
-];
-/// `auto_merge`'s set, spelled for a refusal.
-const AUTO_MERGE_LEGAL: &[&str] = &["never", "tests-pass", "always"];
-/// The values `review_gate` takes, for [`AUTO_MERGE_WORDS`]' reason.
-const REVIEW_GATE_WORDS: &[(&str, ReviewGate)] = &[
-    ("human_always", ReviewGate::HumanAlways),
-    ("auto_if_judge_passes", ReviewGate::AutoIfJudgePasses),
-];
-/// `review_gate`'s set, spelled for a refusal.
-const REVIEW_GATE_LEGAL: &[&str] = &["human_always", "auto_if_judge_passes"];
 
 /// The keys M1 reads inside `after_merge`. **`checks` and nothing else**, so
 /// the section says one thing: which of this repository's Checks are worth
@@ -450,36 +433,7 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         Some(value) => drone::read(value, out),
         None => drone::Drone::unstated(),
     };
-    // **Absent is the policy's own default and never a refusal.** Both are
-    // `Manifest only` in the settings registry, so a file that says nothing is
-    // a repository taking `never` and `human_always` — which is what every
-    // `armada.yml` written before these keys existed already meant.
-    let auto_merge = top
-        .optional("auto_merge")
-        .and_then(|value| {
-            yaml::word(
-                "auto_merge",
-                value,
-                AUTO_MERGE_WORDS,
-                AUTO_MERGE_LEGAL,
-                AUTO_MERGE_LEGAL,
-                out,
-            )
-        })
-        .unwrap_or_default();
-    let review_gate = top
-        .optional("review_gate")
-        .and_then(|value| {
-            yaml::word(
-                "review_gate",
-                value,
-                REVIEW_GATE_WORDS,
-                REVIEW_GATE_LEGAL,
-                REVIEW_GATE_LEGAL,
-                out,
-            )
-        })
-        .unwrap_or_default();
+    let (auto_merge, review_gate) = policies::read(&mut top, out);
     // After `checks` for `setup.requires`' reason, one registry along: every
     // entry resolves against it, and a file's order is never something an
     // author has to think about.

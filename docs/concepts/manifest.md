@@ -424,6 +424,18 @@ A false `auto_merge` result routes to Inbox > Job Reviews rather than merging.
 
 **Across a Job gated by several Manifests, most-restrictive-wins for both**: `never` beats `tests-pass` beats `always`, and `human_always` beats `auto_if_judge_passes`. There is one PR, so the most cautious gating Manifest holds.
 
+**Both are read at the question, never frozen onto a step.** A step declares `manifest_rule:auto_merge` or `manifest_rule:review_gate` and the record keeps the key rather than the answer — the settings rows call both policies *Live*, so a value written onto a Job at creation would go on stating a decision the repository had since changed. Fleet resolves `review_gate` at the advance gate and `auto_merge` on the sweep over an open pull request.
+
+**`tests-pass` is the forge's checks, not Armada's.** A Check named in `armada.yml` has already run at the gate the Job is holding at, and totalling the two would claim a gate had held that never ran. Only *every check passed* is a pass: a repository whose forge runs nothing has proved nothing, and a check that finished in a word Armada has no name for counts as not passed.
+
+**`auto_merge` does not read an approval, and `always` means always.** Its three values are all about machines; a person approving on the forge is neither, and whether that becomes a fourth value or a policy of its own is undecided. A forge that requires a review refuses the merge, so branch protection is the backstop and it is the forge's.
+
+### A judgeless step under `auto_if_judge_passes`
+
+A step may declare `manifest_rule:review_gate` and no Judge criterion — Code Review's `deliver` step does, and it is legal. **Where the policy then resolves to `auto_if_judge_passes`, the step holds for a person anyway.**
+
+The gate names a tier the step never declared, so advancing would advance on the mechanical tier alone while reading as judged. That is what a workflow file spelling `auto_if_judge_passes` outright is refused for at parse time; it cannot be refused there through a policy, because the file does not say what the policy is. So it is refused where the resolution happens, and refusing means holding rather than failing: the step passed every tier it declared, and nothing a Drone can do from a worktree would fix a configuration mismatch. Fleet writes a line into the Job's log naming the file to fix.
+
 ## Still open
 
 The engineer-facing walk from "add a new repo" to a working Manifest is designed as the Set Up a Project (Manifest) journey — tracked there, not as an open item here. The full set of dials scoped to a Manifest is a row in the Configuration Settings registry; `../contracts/configuration.md` owns the tiering rule, which is why no list of them appears in prose here.

@@ -8,13 +8,9 @@
 //! settled between them. What it costs, and how stale a reading can be, is in
 //! `docs/concepts/fleet.md`, *What Fleet knows after the merge*.
 //!
-//! **Nothing here decides anything, and one thing here acts on the decision.**
-//! No Job transitions and no gate is touched by the reading itself. What the
-//! reading is *for*, beyond the line, is `auto_merge: tests-pass`: the answer
-//! to "have the forge's checks passed" is exactly this call's, and
-//! `crate::merging` is where it meets the policy and where the merge happens.
-//! Everything about whether that is allowed — the step's own gate, the resolved
-//! policy, the once-per-process rule — is there and none of it is here.
+//! **Nothing here decides anything.** No Job transitions and no gate is touched
+//! by the reading. What it is *for*, beyond the line, is `auto_merge:
+//! tests-pass`, and every part of whether that may merge is `crate::merging`'s.
 //!
 //! **A line in the Job's log when the reading changes, and not on every ask.**
 //! The rotation returns to the same open pull request for as long as it stays

@@ -1,42 +1,27 @@
 //! The two Manifest policies a `manifest_rule:<key>` gate reads, and how
 //! several gating Manifests come to one answer.
 //!
-//! # Values, not gates
-//!
-//! [`AutoMerge`] and [`ReviewGate`] are what an `armada.yml` writes. They are
-//! not [`AdvanceGate`](crate::AdvanceGate) variants and never become one: a
-//! workflow step declares `manifest_rule:auto_merge` and the repository
-//! declares `always`, and the two together are what `fleet::gate` rules on.
-//! Folding a resolved policy back into a gate word would put the repository's
-//! answer on the frozen step, which is exactly what
+//! **Values, not gates.** [`AutoMerge`] and [`ReviewGate`] are what an
+//! `armada.yml` writes; they are not [`AdvanceGate`](crate::AdvanceGate)
+//! variants and never become one. A step declares `manifest_rule:auto_merge`
+//! and the repository declares `always`, and the two together are what
+//! `fleet::gate` rules on. Folding a resolved policy back into a gate word
+//! would put the repository's answer on the frozen step, which
 //! [`AdvanceGate::ManifestRuleReviewGate`](crate::AdvanceGate::ManifestRuleReviewGate)
-//! says must not happen — the settings rows call both policies `Live`, so the
-//! answer is only true for as long as nobody saves the file.
+//! says must not happen: both settings are `Live`, so the answer is true only
+//! until somebody saves the file.
 //!
-//! # Most-restrictive-wins, and why it is here
+//! **Most-restrictive-wins**, which `docs/concepts/convoy.md` settles and gives
+//! the reason for — there is one pull request, so the most cautious gating
+//! Manifest holds. It is spelled here rather than in `config` because a Job's
+//! gate list is a Job's field and `config` knows one file at a time.
 //!
-//! `docs/concepts/convoy.md` settles the resolution and gives the reason:
-//! **there is one pull request**, so the most cautious gating Manifest holds.
-//! `never` beats `tests-pass` beats `always`; `human_always` beats
-//! `auto_if_judge_passes`. It is spelled here rather than in `config` because a
-//! Job's gate list is a Job's field — `Job::gate_manifests` — and `config`
-//! knows about one file at a time.
-//!
-//! **Nothing to resolve is the strictest answer, not an error.** Both folds
-//! start at the default and only ever get stricter, so a Job gated by no
-//! Manifest at all comes out `never` and `human_always` — which is the same
-//! answer a repository that says nothing gets, and the only safe one to reach
-//! by accident.
-//!
-//! # No registry rows, and that is the registry's own decision
-//!
-//! `enum-verbs.toml` carries a row for each `manifest_rule:` gate and both say
-//! the same thing in as many words: the verb *"names the policy rather than
-//! what it resolved to … naming the answer here would state it in the one place
-//! that cannot know it."* Nothing renders an `AutoMerge` or a `ReviewGate`, so
-//! neither set is a vocabulary the surface speaks and neither is in
-//! `xtask::rules_enums`' list. `crates/config/settings.toml` is where the
-//! values are written down, one row each.
+//! **No registry rows, and that is the registry's own decision.**
+//! `enum-verbs.toml`'s two `manifest_rule:` rows say the verb *"names the
+//! policy rather than what it resolved to."* Nothing renders an [`AutoMerge`]
+//! or a [`ReviewGate`], so neither is a vocabulary the surface speaks and
+//! neither is in `xtask::rules_enums`' list. `crates/config/settings.toml` is
+//! where the values are written down, one row each.
 
 /// Whether a machine may land this Job's work, as one `armada.yml` says it.
 ///
