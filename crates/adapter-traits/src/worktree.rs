@@ -190,6 +190,7 @@ impl WorktreeSpec {
 pub struct Worktree {
     path: String,
     branch: String,
+    base: Option<String>,
 }
 
 impl Worktree {
@@ -199,7 +200,19 @@ impl Worktree {
         Worktree {
             path: path.into(),
             branch: branch.into(),
+            base: None,
         }
+    }
+
+    /// The branch this one is measured against — the Manifest's `base`.
+    ///
+    /// **A builder rather than a third argument**, because the reading that
+    /// needs it is one of several and every other caller of [`Worktree::at`] is
+    /// a fake or a test that has no Manifest to name. A worktree with no base
+    /// is a legal value and says so.
+    pub fn from_base(mut self, base: impl Into<String>) -> Worktree {
+        self.base = Some(base.into());
+        self
     }
 
     /// The absolute path to the checkout. This is what a Drone is given as its
@@ -211,6 +224,17 @@ impl Worktree {
     /// The branch checked out in it.
     pub fn branch(&self) -> &str {
         &self.branch
+    }
+
+    /// The branch a diff of this worktree is measured against, where the
+    /// Manifest declared one.
+    ///
+    /// **Absent is not "use the checkout's HEAD".** It is a Manifest that named
+    /// no base, and the reading that uses this says on the wire which of the
+    /// two it fell back to — a patch measured against something other than what
+    /// a person thinks is a patch that lies quietly.
+    pub fn base(&self) -> Option<&str> {
+        self.base.as_deref()
     }
 }
 

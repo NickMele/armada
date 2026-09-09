@@ -51,6 +51,25 @@ pub struct Work {
     /// The same [`ChangedFile`] a `job.files_changed` event carries, so a review
     /// screen and a live footprint are one vocabulary rather than two.
     pub files: Vec<ChangedFile>,
+    /// The ref this reading was measured against — `main`, where the Manifest
+    /// declares one.
+    ///
+    /// **A patch that measured against the wrong thing is indistinguishable
+    /// from a Job that did less work**, which is the failure this field exists
+    /// to make visible: a Job whose steps had committed seven files showed two,
+    /// and the sheet still called it the Job's patch. Absent means nothing
+    /// named a base and the reading fell back — see
+    /// [`measured_whole`](Work::measured_whole).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub measured_from: Option<String>,
+    /// Whether the reading covers the Job's whole branch.
+    ///
+    /// **False is the honest small claim**: the base could not be resolved, so
+    /// the patch is only what is uncommitted in the worktree and everything
+    /// already committed is missing from it. A surface drawing this must say so
+    /// rather than presenting a partial patch as the Job's.
+    #[serde(default = "yes")]
+    pub measured_whole: bool,
     /// Whether a step has declared a plan for [`ChangedFile::outside_plan`] to
     /// mean anything. **False is "there is no plan", not "nothing drifted"** —
     /// the same distinction `JobFilesChanged::plan_declared` draws, and it is
@@ -278,4 +297,10 @@ pub struct Overruled {
     /// the Drone: the Drone did nothing wrong, and is told only that the step
     /// was accepted.
     pub reason: String,
+}
+
+/// A reading covers the whole branch unless it says otherwise — the default a
+/// peer built before this field sent, whose readings were whole.
+fn yes() -> bool {
+    true
 }

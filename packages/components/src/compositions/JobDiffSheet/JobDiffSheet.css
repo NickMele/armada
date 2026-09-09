@@ -57,8 +57,14 @@
 /* One file. The whole row is the control, as every row in this app is. */
 .armada-diff-sheet__file {
   display: flex;
-  flex-direction: column;
-  gap: var(--border-width);
+  /* **A row, where this was a column.** The path and its line counts are one
+     fact about one file, and stacking them made every entry two lines tall for
+     a figure four characters wide — a rail of seven files read as fourteen
+     rows. The path takes the slack and truncates; the counts keep their
+     measure at the end, which is also what lets them be compared down the
+     column. */
+  align-items: baseline;
+  gap: var(--space-2);
   padding: var(--space-2);
   border: 0;
   border-left: var(--armada-rail-edge) solid transparent;
@@ -83,6 +89,7 @@
    the box with the text itself in a `bdi`, which keeps the characters in their
    own order while the overflow moves to the other end. */
 .armada-diff-sheet__path {
+  flex: 1;
   direction: rtl;
   text-align: left;
   font-family: var(--font-mono);
@@ -100,6 +107,9 @@
 }
 
 .armada-diff-sheet__counts {
+  /* Never squeezed by a long path: a figure that truncated would be a wrong
+     figure rather than a short one. */
+  flex: none;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
@@ -141,4 +151,17 @@
   font-family: var(--font-mono);
   color: var(--diff-del-fg);
   font-variant-numeric: tabular-nums;
+}
+
+/* The ref the patch was measured against — a branch name, so mono. */
+.armada-diff-sheet__base {
+  font-family: var(--font-mono);
+}
+
+/* A patch that is not the Job's whole work says so in the one channel a
+   subtitle has. `--status-escalated` rather than a failure hue: the reading
+   worked and is smaller than it claims to be, which is a thing to notice
+   rather than a thing that broke. */
+.armada-diff-sheet__partial {
+  color: var(--status-escalated);
 }

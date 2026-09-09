@@ -568,7 +568,11 @@ where
             .branch()
             .map(|branch| branch.as_str().to_string())
             .unwrap_or_else(|| spec.branch());
-        Ok(Worktree::at(spec.worktree_path(), branch))
+        let worktree = Worktree::at(spec.worktree_path(), branch);
+        Ok(match self.manifest().base() {
+            Some(base) => worktree.from_base(base),
+            None => worktree,
+        })
     }
 
     /// Why this step stopped, read off the record.

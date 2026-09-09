@@ -577,7 +577,15 @@ where
             .branch()
             .map(|branch| branch.as_str().to_string())
             .unwrap_or_else(|| spec.branch());
-        Ok(Some(Worktree::at(spec.worktree_path(), branch)))
+        // **The Manifest's base rides along**, because a patch measured against
+        // anything else is a smaller claim than the Job's work and nothing
+        // downstream can tell. `adapters` cannot read a Manifest — the layers
+        // forbid it — so the one place that holds both hands it over.
+        let worktree = Worktree::at(spec.worktree_path(), branch);
+        Ok(Some(match self.manifest().base() {
+            Some(base) => worktree.from_base(base),
+            None => worktree,
+        }))
     }
 }
 

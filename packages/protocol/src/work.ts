@@ -41,6 +41,25 @@ export type Work = {
    */
   files: ChangedFile[];
   /**
+   * The ref this reading was measured against — `main`, where the Manifest
+   * declares one. Since 7.9.
+   *
+   * **A patch measured against the wrong thing is indistinguishable from a Job
+   * that did less work.** Absent means nothing named a base and the reading
+   * fell back; see `measured_whole`.
+   */
+  measured_from?: string;
+  /**
+   * Whether the reading covers the Job's whole branch. Since 7.9, and absent
+   * reads as true — a peer built before this field sent whole readings.
+   *
+   * **False is the honest small claim**: the base could not be resolved, so the
+   * patch is only what is uncommitted and everything already committed on the
+   * branch is missing from it. A surface drawing this must say so rather than
+   * present a partial patch as the Job's.
+   */
+  measured_whole?: boolean;
+  /**
    * Whether a step has declared a plan for `outside_plan` to mean anything.
    * **False is "there is no plan", not "nothing drifted"**, and it is false on
    * every Job whose Drone is no longer holding the pen.
