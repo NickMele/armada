@@ -2,13 +2,10 @@
 //!
 //! **These keys, and nothing else.** `version`, `id`, `base`; `run`, `when`,
 //! `requires` and `narrow` under `checks.<name>`; `run` and `destructive` under
-//! `commands.<name>`; `setup.requires`; and `quiet_after_seconds` and
-//! `poke_limit` under `drone`, `#414`'s — the first section here that is a dial
-//! rather than a registry, spelled as a step spells it and named for the reason
-//! `docs/contracts/configuration.md` gives. `fleet::Liveness::at` orders its
-//! tiers and nothing else does. Every other section the concept page describes
-//! is refused: permissions, secrets, ports, skills, budget, dispatch freeze,
-//! auto-merge.
+//! `commands.<name>`; `setup.requires`; and the three keys [`drone`] reads,
+//! the one section here that is a dial rather than a registry. Every other
+//! section the concept page describes is refused: permissions, secrets, ports,
+//! skills, budget, dispatch freeze, auto-merge.
 //!
 //! **A key nothing reads is worse than a key that is not there.** A file
 //! carrying `budget: 40` that no code consumes reads to its author as a budget
@@ -27,8 +24,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use core_model::{Covers, ManifestId, Narrowing, PathPattern, Prerequisite, ResolvedCheck, Ulid};
+use core_model::{
+    Covers, ManifestId, Narrowing, PathPattern, Prerequisite, RepoPath, ResolvedCheck, Ulid,
+};
 use serde_yaml_ng::Value;
+
+mod drone;
 
 use crate::error::{Fault, LoadError, Refusal};
 use crate::live::{Cell, Patience, Reloads};
@@ -57,10 +58,6 @@ const SETUP_KEYS: &[&str] = &["requires"];
 /// the section says one thing: which of this repository's Checks are worth
 /// running against a tree a merge left behind.
 const AFTER_MERGE_KEYS: &[&str] = &["checks"];
-/// The keys M1 reads inside `drone`. **Spelled as a workflow step spells
-/// them** — `crates/config/src/workflow/step.rs`'s `STEP_KEYS` carries the same two
-/// words, because they are the same two values one tier up.
-const DRONE_KEYS: &[&str] = &["quiet_after_seconds", "poke_limit"];
 
 /// A command a change must pass to land or to advance a step.
 ///
@@ -189,6 +186,10 @@ pub struct Manifest {
     commands: BTreeMap<String, Command>,
     prepared_by: Vec<Preparation>,
     proved_after_a_merge: Vec<ResolvedCheck>,
+    /// **Not behind the cell**, because it is not live: every workflow was
+    /// resolved against it at daemon start, so a save that moves it is
+    /// reported as needing a restart rather than adopted. See [`crate::live`].
+    exclude_paths: Vec<RepoPath>,
     /// The two `lifetime = "Live"` keys, behind a cell every clone shares.
     /// See [`crate::live`] for why these and not the whole file.
     live: Cell,
@@ -355,6 +356,25 @@ impl Manifest {
         self.live.read().poke_limit
     }
 
+    /// What a step's work in this repository stays out of, where the step
+    /// does not say for itself. **`&[]` where the file declares no
+    /// `drone.exclude_paths`**, which is the repository deferring to the
+    /// default rather than a list invented here.
+    ///
+    /// **The middle of three tiers, and the only one a repository writes.**
+    /// `crate::resolve` is where the order is written and it is written
+    /// nowhere else — a step's list beats this, and this beats the compiled-in
+    /// default that file carries. The argument for the order, and for why an
+    /// inherited list replaces rather than joins the one above it, is there.
+    ///
+    /// **Read off the value, not through the live cell**, unlike the two keys
+    /// beside it in the same section: this one is frozen at daemon start
+    /// because a `ResolvedWorkflow` was built from it there, and a Job's own
+    /// record carries the resolved list it ran under.
+    pub fn exclude_paths(&self) -> &[RepoPath] {
+        &self.exclude_paths
+    }
+
     /// Both live keys at once, for the one caller that adopts them together.
     pub(crate) fn patience(&self) -> Patience {
         self.live.read()
@@ -396,9 +416,9 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         Some(value) => preparation(value, &declares, &commands, out),
         None => Vec::new(),
     };
-    let (quiet_after_seconds, poke_limit) = match top.optional("drone") {
-        Some(value) => patience(value, out),
-        None => (None, None),
+    let drone = match top.optional("drone") {
+        Some(value) => drone::read(value, out),
+        None => drone::Drone::unstated(),
     };
     // After `checks` for `setup.requires`' reason, one registry along: every
     // entry resolves against it, and a file's order is never something an
@@ -429,51 +449,9 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         commands,
         prepared_by,
         proved_after_a_merge,
-        live: Cell::holding(Patience {
-            quiet_after_seconds,
-            poke_limit,
-        }),
+        exclude_paths: drone.exclude_paths,
+        live: Cell::holding(drone.patience),
     })
-}
-
-/// `drone:`, the repository's own patience with a Drone that goes quiet.
-///
-/// **Both keys optional and the section refused when it holds neither.** A
-/// `drone:` with nothing under it says nothing, exactly as `setup:` with
-/// nothing under it does, and [`Table::close`] reports no fault for an empty
-/// table — so the emptiness has to be asked about here or it is not asked about
-/// at all.
-///
-/// **The two zeros disagree, and each key is right about its own.** This is
-/// `crates/config/src/workflow/step.rs`'s split arriving one file up: a
-/// `quiet_after_seconds: 0` pokes a Drone on its first turn and escalates it on
-/// its third, which nobody means, and a `poke_limit: 0` says the first silence
-/// past the threshold escalates, which somebody might. Both readings are the
-/// step tier's and are unchanged by being written here — one value written in
-/// two places that read it differently is the defect this whole chain exists to
-/// avoid.
-///
-/// A refused value reads as absent from here, which is safe for the reason the
-/// workflow parser gives: the refusal is already in `out`, and a file with any
-/// refusal in it does not load at all.
-fn patience(value: &Value, out: &mut Vec<Refusal>) -> (Option<u32>, Option<u32>) {
-    let Some(mut table) = Table::open("drone", value, out) else {
-        return (None, None);
-    };
-    if table.is_empty() {
-        out.push(Refusal::new("drone", Fault::Empty));
-        return (None, None);
-    }
-    let quiet_key = table.at("quiet_after_seconds");
-    let quiet_after_seconds = table
-        .optional("quiet_after_seconds")
-        .and_then(|value| yaml::positive(&quiet_key, value, out));
-    let poke_key = table.at("poke_limit");
-    let poke_limit = table
-        .optional("poke_limit")
-        .and_then(|value| yaml::counted(&poke_key, value, out));
-    table.close(DRONE_KEYS, out);
-    (quiet_after_seconds, poke_limit)
 }
 
 /// `setup.requires`, resolved against the Commands the same file declares.

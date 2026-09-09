@@ -233,3 +233,33 @@ fn a_manifest_loaded_the_ordinary_way_has_no_writer_anywhere() {
     let manifest = Manifest::load(&repository.manifest()).expect("it loads");
     assert_eq!(manifest.quiet_after_seconds(), Some(300));
 }
+
+/// **The third key in `drone:` is not live, and its neighbours are.** Every
+/// `ResolvedWorkflow` took its copy of this list at boot, so adopting a new one
+/// would leave a running Job fenced by something no record of it says. Reported
+/// as a key rather than as the section, because saying `drone` would tell a
+/// person that the `quiet_after_seconds` beside it also needs a restart.
+#[test]
+fn a_changed_fence_is_reported_as_a_key_and_the_patience_beside_it_still_moves() {
+    let repository = Repository::holding(PATIENT);
+    let (manifest, reloads) = reloadable(&repository.manifest());
+
+    repository.save(
+        &PATIENT
+            .replace("quiet_after_seconds: 300", "quiet_after_seconds: 90")
+            .replace(
+                "  poke_limit: 2",
+                "  poke_limit: 2\n  exclude_paths:\n    - vendor",
+            ),
+    );
+    let adopted = reloads.reread().expect("it reads");
+
+    assert!(manifest.exclude_paths().is_empty());
+    assert_eq!(manifest.quiet_after_seconds(), Some(90));
+    assert_eq!(adopted.at_restart(), [Frozen::DroneExcludePaths]);
+    assert_eq!(
+        adopted.at_restart()[0].as_str(),
+        "drone.exclude_paths",
+        "the key a person would search the file for, not the section it sits in"
+    );
+}

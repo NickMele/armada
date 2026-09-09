@@ -664,7 +664,7 @@ fn a_drone_section_that_declares_neither_key_is_refused() {
 }
 
 #[test]
-fn a_key_the_drone_section_does_not_read_hard_fails_and_names_the_two_it_does() {
+fn a_key_the_drone_section_does_not_read_hard_fails_and_names_the_three_it_does() {
     // `heartbeat_interval_minutes` is a real `settings.toml` row with a
     // Manifest tier and nothing reading it, so it is exactly the key this
     // refusal keeps out of a file until a reader exists.
@@ -673,7 +673,8 @@ fn a_key_the_drone_section_does_not_read_hard_fails_and_names_the_two_it_does() 
     ));
     assert!(matches!(
         fault_at(&refused, "drone.heartbeat_interval_minutes"),
-        Fault::Unknown { known } if *known == ["quiet_after_seconds", "poke_limit"]
+        Fault::Unknown { known }
+            if *known == ["quiet_after_seconds", "poke_limit", "exclude_paths"]
     ));
 }
 
