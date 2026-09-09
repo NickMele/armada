@@ -325,6 +325,7 @@ export type Outcome =
   | { ok: false; why: "already_overruling" }
   | { ok: false; why: "already_rereading" }
   | { ok: false; why: "already_raising" }
+  | { ok: false; why: "already_raising_turns" }
   | { ok: false; why: "already_reporting" }
   | { ok: false; why: "empty_instruction" }
   | { ok: false; why: "empty_reason" }
@@ -341,6 +342,14 @@ export type Outcome =
    * so this is a comparison the caller can make.
    */
   | { ok: false; why: "cap_not_raised" }
+  /**
+   * A turn raise that would not raise. The rule `cap_not_raised` states on
+   * the other ceiling, in its own arm: the two acts refuse for the same shape
+   * of reason and clear different holds, and one message naming money would
+   * send somebody to the control that cannot start this job. The cap in force
+   * is `JobSpend.turn_cap`, drawn on the same screen as the control.
+   */
+  | { ok: false; why: "turn_cap_not_raised" }
   /**
    * A press at the review gate that picked no comment off the pull request.
    * **Refused before it is sent**, for `empty_note`'s reason: an act that

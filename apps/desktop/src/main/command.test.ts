@@ -184,3 +184,40 @@ it("sends nothing at all for a cap of nothing", async () => {
   expect(answer).toEqual({ ok: false, why: "cap_not_raised" });
   expect(asked).toHaveLength(0);
 });
+
+/**
+ * **The unit does not cross, which is this act's own way of going wrong.** The
+ * cost cap converts dollars to micros and the case above pins the factor; a
+ * turn cap is a turn count on both sides, so what has to be pinned here is that
+ * nothing multiplies it. A raise to 600 sent as 600000000 is a ceiling no job
+ * ever reaches, and neither side would notice.
+ */
+it("sends the new turn cap as a turn count, on its own route", async () => {
+  const asked: Asked[] = [];
+  const commands = new JobCommands(boardOn(await fleetRecording(asked)));
+
+  const answer = await commands.raiseTurnCap(A_JOB.id, 600);
+
+  expect(answer.ok).toBe(true);
+  expect(asked[0]?.path).toBe(`/jobs/${A_JOB.id}/raise_turn_cap`);
+  expect(JSON.parse(asked[0]?.body ?? "null")).toEqual({
+    turn_cap: 600,
+    raised_by: "person",
+  });
+});
+
+/**
+ * A figure that cannot be a cap is refused before anything goes out, and it
+ * says which ceiling it was about. **Its own refusal beside `cap_not_raised`**:
+ * a message naming money would send somebody to the control that cannot start
+ * this job.
+ */
+it("sends nothing at all for a turn cap of nothing", async () => {
+  const asked: Asked[] = [];
+  const commands = new JobCommands(boardOn(await fleetRecording(asked)));
+
+  const answer = await commands.raiseTurnCap(A_JOB.id, 0);
+
+  expect(answer).toEqual({ ok: false, why: "turn_cap_not_raised" });
+  expect(asked).toHaveLength(0);
+});

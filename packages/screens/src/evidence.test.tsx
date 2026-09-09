@@ -224,12 +224,15 @@ function screen(
     onOpenPullRequest: async () => ({ ok: true }),
     onCopied: () => {},
     onSaid: () => {},
-    // The three the budget work added to `Heading`. This file draws a
-    // heading to reach the evidence beneath it and asserts nothing about
-    // raising a cap, so they are inert here.
+    // The six the budget work added to `Heading`, three per ceiling. This file
+    // draws a heading to reach the evidence beneath it and asserts nothing
+    // about raising a cap, so they are inert here.
     onRaiseCap: () => {},
     raising: false,
     onRaising: () => {},
+    onRaiseTurnCap: () => {},
+    raisingTurns: false,
+    onRaisingTurns: () => {},
   });
   if (heading === null) throw new Error("this Job draws no heading, so there is no screen");
   mount(

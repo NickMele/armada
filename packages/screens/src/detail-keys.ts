@@ -126,7 +126,9 @@ export type DetailPress =
   /** `b` — say this job failed in error. */
   | { act: "report" }
   /** `B` — give this job a higher cost ceiling. */
-  | { act: "raise" };
+  | { act: "raise" }
+  /** `T` — let this job take more turns. */
+  | { act: "raiseTurns" };
 
 /**
  * What a keypress means on job detail, or `null` for nothing.
@@ -182,6 +184,10 @@ export function detailPressOf(event: KeyboardEvent): DetailPress | null {
     // spent, and a mistyped filing key must not open a dialog about money.
     case "B":
       return { act: "raise" };
+    // Shifted, on `B`'s terms: plain `t` is unbound today and a lowercase key
+    // that opened a dialog about a ceiling would be a mistype away from one.
+    case "T":
+      return { act: "raiseTurns" };
     default:
       return null;
   }
@@ -261,6 +267,16 @@ export type DetailShape = {
    * left unswallowed rather than answered with nothing.
    */
   onRaiseCap?: () => void;
+  /**
+   * Open the turn-cap dialog — `T`. `onRaiseCap`'s shape and its rule, on the
+   * other ceiling.
+   *
+   * Absent where the job is not being held for turns, and the press is then
+   * left unswallowed rather than answered with nothing. **Never present beside
+   * `onRaiseCap`**: `budget_hold` names one ceiling, so a job answers one of
+   * these two keys and not both.
+   */
+  onRaiseTurnCap?: () => void;
 };
 
 /** The open state this file holds, in the shape the screen takes it in. */
@@ -410,6 +426,8 @@ function act(press: DetailPress, shape: DetailShape, on: Moves): boolean {
       return report(shape);
     case "raise":
       return raise(shape);
+    case "raiseTurns":
+      return raiseTurns(shape);
   }
 }
 
@@ -448,6 +466,20 @@ function report(shape: DetailShape): boolean {
 function raise(shape: DetailShape): boolean {
   if (shape.onRaiseCap === undefined) return false;
   shape.onRaiseCap();
+  return true;
+}
+
+/**
+ * `T`, from `actions.toml` — `raise_turn_cap`, scope `detail`. It confirms, and
+ * the dialog it raises is the confirmation: nothing is sent by the press.
+ *
+ * **Absent on every job that is not held for turns**, which is `raise`'s rule
+ * on the other ceiling. The two are never both present: a job over budget is
+ * over one of them, and the key that cannot start it is left unbound.
+ */
+function raiseTurns(shape: DetailShape): boolean {
+  if (shape.onRaiseTurnCap === undefined) return false;
+  shape.onRaiseTurnCap();
   return true;
 }
 

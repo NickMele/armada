@@ -18,6 +18,7 @@ import type { Outcome } from "@armada/protocol";
 import type { FileReport, JobDetail as JobWhole, JobSummary } from "@armada/protocol";
 import { ACT_LABEL, MENU_LABEL, REPORT_LABEL } from "./copy";
 import { RaiseCapControl } from "./RaiseCap";
+import { RaiseTurnCapControl } from "./RaiseTurnCap";
 import { recourseOf } from "./recovery";
 import type { Render } from "./render";
 import { ReportControl } from "./Report";
@@ -172,6 +173,9 @@ export function Acts({
   onRaiseCap,
   raising,
   onRaising,
+  onRaiseTurnCap,
+  raisingTurns,
+  onRaisingTurns,
   onCopied,
 }: {
   job: JobSummary;
@@ -209,9 +213,18 @@ export function Acts({
    * collected it is the confirmation.
    */
   onRaiseCap: (jobId: string, costCapMicros: number) => void;
-  /** Whether the raise dialog is up. Held by the screen; `B` opens it too. */
+  /** Whether the cost-cap dialog is up. Held by the screen; `B` opens it too. */
   raising: boolean;
   onRaising: (up: boolean) => void;
+  /**
+   * Let this job take more turns. **Not one of the acts**, on `onRaiseCap`'s
+   * terms and for its reason. The figure is a plain turn count — the other
+   * ceiling reads in millionths of a dollar, and neither converts to the other.
+   */
+  onRaiseTurnCap: (jobId: string, turnCap: number) => void;
+  /** Whether the turn-cap dialog is up. Held by the screen; `T` opens it too. */
+  raisingTurns: boolean;
+  onRaisingTurns: (up: boolean) => void;
   onCopied: (value: string) => void;
 }) {
   const life = JOB_LIFECYCLE[job.status];
@@ -272,12 +285,13 @@ export function Acts({
               onSelect: () => onAct(act, job.id),
             })),
         ];
-  // Whether this job is being held for money. **The wire's answer and not a
-  // comparison made here**: `queued_reason` is computed by Fleet from the same
-  // predicate admission asks, and a screen that compared the spend to the cap
-  // for itself would be a second reading — right until the two disagreed on a
-  // job Fleet was already starting.
-  const held = heldForMoney(job);
+  // Which ceiling is holding this job, if either. **The wire's answer and not a
+  // comparison made here**: `queued_reason` and `budget_hold` are computed by
+  // Fleet from the same predicate admission asks, and a screen that compared
+  // the spend to the cap for itself would be a second reading — right until the
+  // two disagreed on a job Fleet was already starting.
+  const forMoney = heldForMoney(job);
+  const forTurns = heldForTurns(job);
   return (
     <>
       {/* The one control on this header that changes what the job may spend,
@@ -288,7 +302,7 @@ export function Acts({
           decided against, so it waits for that like every other act here.
           Neutral and never a lead — a split button's face is what a stray Enter
           hits, and this one is a decision about spending. */}
-      {held && whole?.spend !== undefined ? (
+      {forMoney && whole?.spend !== undefined ? (
         <RaiseCapControl
           jobId={job.id}
           spend={whole.spend}
@@ -296,6 +310,20 @@ export function Acts({
           open={raising && !stale}
           onOpen={onRaising}
           onRaise={onRaiseCap}
+        />
+      ) : null}
+      {/* The other ceiling's control, on the same terms and never beside the
+          first: `budget_hold` says which one caught this job, and offering both
+          would put the press that cannot start it next to the press that can.
+          Neutral and never a lead, for the cost cap's reason. */}
+      {forTurns && whole?.spend !== undefined ? (
+        <RaiseTurnCapControl
+          jobId={job.id}
+          spend={whole.spend}
+          disabled={acting || stale}
+          open={raisingTurns && !stale}
+          onOpen={onRaisingTurns}
+          onRaise={onRaiseTurnCap}
         />
       ) : null}
       {/* The dialog with no button. Offered on every stopped job rather than
@@ -389,25 +417,62 @@ const REPORT_KEY = "b";
 /**
  * The one reason a queued job carries that does not clear on its own —
  * `enum-verbs.toml`'s spelling, named once rather than typed at the comparison.
- * Rename it there and the raise control stops being offered, which is visible
+ * Rename it there and the raise controls stop being offered, which is visible
  * rather than silent.
  */
 const OVER_BUDGET = "over_budget";
 
+/** `budget_hold`'s two spellings, named here for `OVER_BUDGET`'s reason. */
+const COST_CAP = "cost_cap";
+const TURN_CAP = "turn_cap";
+
 /**
- * Whether this job is stopped for money.
+ * Whether a queued job is over budget at all, on either ceiling.
  *
  * **The wire's answer and not a comparison made here.** `queued_reason` is
  * computed by Fleet from the same predicate admission asks, and a screen that
  * compared the spend to the cap for itself would be a second reading — right
  * until the two disagreed on a job Fleet was already starting.
+ */
+function overBudget(job: JobSummary): boolean {
+  return job.status === "queued" && job.queued_reason === OVER_BUDGET;
+}
+
+/**
+ * Whether this job is stopped for money.
+ *
+ * **Not every over-budget job, which is what it used to mean.** A job at its
+ * turn cap carries the same `over_budget` reason and is not started by more
+ * money, so this offered a control that could not clear the hold. `budget_hold`
+ * is what tells the two apart.
+ *
+ * **A Fleet that sends no `budget_hold` falls here**, because the cost cap is
+ * the ceiling that had a route before the field existed — an older Fleet
+ * refuses `raise_turn_cap`, so the other reading would offer a press it cannot
+ * answer. A spelling this build has never heard of falls to neither control,
+ * which is the honest answer: a third ceiling would have a third act.
  *
  * Exported because the keyboard needs the same answer: `B` opens the dialog
  * from `JobDetail.tsx`, and a binding offered where the control is not would be
  * a key that answers nothing.
  */
 export function heldForMoney(job: JobSummary): boolean {
-  return job.status === "queued" && job.queued_reason === OVER_BUDGET;
+  return overBudget(job) && (job.budget_hold === COST_CAP || job.budget_hold === undefined);
+}
+
+/**
+ * Whether this job is stopped for turns.
+ *
+ * **It reads the field and never its absence**, which is `heldForMoney`'s rule
+ * turned around: a Fleet that does not say which ceiling caught the job has no
+ * route to raise this one either, and a control offered there would be a press
+ * answered with a 404.
+ *
+ * Exported for `heldForMoney`'s reason — `T` opens the dialog from
+ * `JobDetail.tsx`.
+ */
+export function heldForTurns(job: JobSummary): boolean {
+  return overBudget(job) && job.budget_hold === TURN_CAP;
 }
 
 /**

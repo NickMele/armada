@@ -80,7 +80,7 @@ import type {
 } from "@armada/protocol";
 import type { FileReport, JobSummary, StepDetail } from "@armada/protocol";
 import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
-import { heldForMoney, type ConfirmableAct } from "./Acts";
+import { heldForMoney, heldForTurns, type ConfirmableAct } from "./Acts";
 import { useCallArguments, type ReadCall } from "./calls";
 import { useCheckOutputs, type ReadCheckOutput } from "./outputs";
 import { openArtifact } from "./opening";
@@ -148,6 +148,13 @@ export type JobDetailProps = {
    * being refused for money, and the job stays exactly where it was.
    */
   onRaiseCap: (jobId: string, costCapMicros: number) => void;
+  /**
+   * Let this job take more turns. **The other ceiling `over_budget` folds**,
+   * and it moves no part of the job either — it stops the next dispatch being
+   * refused for turns. A plain turn count: the cost cap converts and this one
+   * does not.
+   */
+  onRaiseTurnCap: (jobId: string, turnCap: number) => void;
   /** Ask the gate again on a step it could not decide. Nothing is at stake. */
   onRerun: (jobId: string) => void;
   /**
@@ -277,6 +284,7 @@ export function JobDetail({
   recorded,
   onAct,
   onRaiseCap,
+  onRaiseTurnCap,
   onRedirect,
   onAnswer,
   onOverrule,
@@ -324,6 +332,12 @@ export function JobDetail({
   // about the Job it was typed on.
   const [raising, setRaising] = useState(false);
   useEffect(() => setRaising(false), [job.id]);
+
+  // Whether the turn-cap dialog is up. Its own state beside the cost cap's:
+  // `budget_hold` offers one control or the other, never both, and one flag
+  // would open whichever dialog happened to be mounted.
+  const [raisingTurns, setRaisingTurns] = useState(false);
+  useEffect(() => setRaisingTurns(false), [job.id]);
 
   // The diff, for every Job that is open rather than only for one at review.
   // **A produced file opens to what it actually wrote**, and it did that on one
@@ -440,6 +454,9 @@ export function JobDetail({
     // Elsewhere the shape carries nothing and the press is left alone rather
     // than answered with a dialog no control on this screen is offering.
     ...(heldForMoney(job) && !stale ? { onRaiseCap: () => setRaising(true) } : {}),
+    // `T`, on the other ceiling. The two are exclusive because `budget_hold`
+    // is, so a job held for turns answers this key and not `B`.
+    ...(heldForTurns(job) && !stale ? { onRaiseTurnCap: () => setRaisingTurns(true) } : {}),
   });
 
   // The rest of any call argument the socket cut, for as long as this Job is
@@ -534,6 +551,9 @@ export function JobDetail({
     onRaiseCap,
     raising,
     onRaising: setRaising,
+    onRaiseTurnCap,
+    raisingTurns,
+    onRaisingTurns: setRaisingTurns,
     onOpenPullRequest,
     onCopied,
     onSaid,

@@ -136,6 +136,13 @@ const api: BridgeApi = {
   raiseCostCap: (jobId: string, costCapMicros: number): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.raiseCostCap, jobId, costCapMicros),
 
+  // Let one job take more turns. Its own entry beside the cost cap rather than
+  // a unit on it: the two clear different holds, and one capability taking
+  // which ceiling to move would be a press whose effect depends on an argument.
+  // The figure is a plain turn count, the unit `JobSpend` reads it in.
+  raiseTurnCap: (jobId: string, turnCap: number): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.raiseTurnCap, jobId, turnCap),
+
   // Say a job failed in error, and file its record with the reason. **Its own
   // entry and not a mode on `overrideVerdict`**: that one moves the job past a
   // verdict, and this one moves nothing at all — one capability doing both

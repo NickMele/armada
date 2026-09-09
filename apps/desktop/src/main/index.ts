@@ -341,6 +341,13 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.raiseCostCap, (_event, jobId: string, costCapMicros: number) =>
     connection?.commands.raiseCostCap(jobId, costCapMicros),
   );
+  // More turns for one job, on a channel of its own beside the cost cap's. Two
+  // routes on the wire and two channels here: a job held on turns is not
+  // started by more money, so one channel carrying either would report a
+  // success that left the job exactly where it was.
+  ipcMain.handle(CHANNELS.raiseTurnCap, (_event, jobId: string, turnCap: number) =>
+    connection?.commands.raiseTurnCap(jobId, turnCap),
+  );
   // Saying a job failed in error. Its own channel beside the override rather
   // than a flag on it: the override moves the job past a verdict and this moves
   // nothing, and the two would otherwise be one press meaning either.

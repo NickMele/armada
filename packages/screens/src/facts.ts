@@ -43,7 +43,8 @@ import { LANDED } from "./Row";
 
 /**
  * The run, in the order the drawing runs it: what workflow this is, what branch
- * it writes to, how long it has been alive, and what it has cost.
+ * it writes to, how long it has been alive, what it has cost, and how many
+ * turns it has taken.
  *
  * Elapsed is read off the row rather than off the detail. Both carry it and
  * cannot disagree — the detail's is built from the same record — and the row is
@@ -64,6 +65,7 @@ export function factsOf(
     ...landedFact(whole, address !== undefined),
     ...elapsedFact(job, now),
     ...spendFact(whole),
+    ...turnsFact(whole),
   ];
 }
 
@@ -185,6 +187,24 @@ function spendFact(whole: JobWhole | null): JobDetailField[] {
   const spend = whole?.spend;
   if (spend === undefined) return [];
   return [{ label: "Spend", value: spent(spend.cost_micros, spend.unpriced), mono: true }];
+}
+
+/**
+ * How many turns the Job has taken, against how many it may take.
+ *
+ * **Never hedged, unlike the spend beside it.** P4 hedges by source: a cost is
+ * derived from list prices and wears a tilde, and a turn is counted. Writing
+ * the two alike would lend the estimate the authority of the count.
+ *
+ * **The cap is drawn with it and not on its own line.** It is the second of the
+ * two ceilings `over_budget` folds, it stopped a job that had passed every
+ * Check, and until now nothing on this screen read either figure — so the
+ * number a person is deciding a raise against was on no surface at all.
+ */
+function turnsFact(whole: JobWhole | null): JobDetailField[] {
+  const spend = whole?.spend;
+  if (spend === undefined) return [];
+  return [{ label: "Turns", value: `${spend.turns} of ${spend.turn_cap}`, mono: true }];
 }
 
 /**
