@@ -255,15 +255,21 @@ pub(crate) async fn gaming(
 /// One call and **no panel**: the answer has no veto for a panel to make
 /// stricter, and unanimity over three opinions about "is this going anywhere"
 /// would fail loudly on a step that is merely slow.
+///
+/// `held` is what the caller read from the step's declared deliverable. A
+/// written step's product is that file and never the diff, so a look given
+/// only the patch had nothing to answer about — `verification::converging`
+/// holds the directive that produced.
 pub(crate) async fn converging(
     step: &ResolvedStep,
     patch: &Patch,
     declared: Option<&DeclaredPaths>,
     off_plan: &[RepoPath],
+    held: Option<&str>,
     judging: &Judging,
 ) -> Result<Convergence, CallFailed> {
     let model = fleets_model(step, &judging.default_model)?;
-    let brief = ConvergenceBrief::about(step, patch, declared, off_plan);
+    let brief = ConvergenceBrief::about(step, patch, declared, off_plan, held);
     let ask = Ask::put(model.clone(), brief.question(), judging.environment.clone())
         .map_err(|_| CallFailed::NothingToAsk)?;
     // **One call, and it names neither a criterion nor a pattern**, because it

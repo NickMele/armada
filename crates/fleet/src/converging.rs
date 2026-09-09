@@ -23,6 +23,7 @@
 //! **Nothing here kills a Drone.** `docs/concepts/helm.md` holds a thrashing
 //! Drone with its worktree intact, leaving a redirect available; one waiting on
 //! an answer is not thrashing at all — `crate::questioning`.
+use std::path::Path;
 use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
@@ -337,6 +338,14 @@ where
         // look, which is what makes the citation stale rather than merely old.
         // One reading, on the one turn of a step that reaches this far.
         let in_plan = self.in_plan(at_work);
+        // The step's deliverable, read at the same instant as the patch and by
+        // the gate's own reader. **An unreadable file is not a look that could
+        // not be made**: part-way through a step the ordinary case is a file
+        // not written yet, and the brief names it as an empty deliverable
+        // either way. At the gate the same `Err` stops a ruling, because there
+        // the file has already been found by a mechanical check.
+        let held = crate::gate::deliverable(declared_step, Path::new(worktree.path()))
+            .and_then(Result::ok);
         let judging = self.judging(job).map_err(|cause| Adrift::NotConfigurable {
             job: job.clone(),
             cause,
@@ -346,6 +355,7 @@ where
             &patch,
             at_work.declared(),
             at_work.off_plan(),
+            held.as_deref(),
             &judging,
         )
         .await;
