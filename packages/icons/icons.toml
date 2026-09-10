@@ -383,6 +383,13 @@
   size = "12px"
   status = "Specified"
 
+[icons.signpost]
+  means = "A post with one horizontal blade pointing off it"
+  group = "Action"
+  size = "16px"
+  status = "Specified"
+  notes = "The neutral confirmation dialog. Every neutral confirm Armada has is the same moment — a fork, one way chosen, and nothing destroyed by choosing: merging a pull request, restarting a step. A signpost is a decision point, where triangle-alert is a hazard, and the two tones needed to stop sharing one glyph. Against the Action group it joins it shares no silhouette: corner-up-right is an arrow, pause two bars, rotate-cw a circular arrow, send a plane, chevron-down a caret. Rejected: circle-help, because circle-* is reserved to Judge criterion verdicts and that reservation names generic use outright; hand, human-figure family; gavel, which reads as judgement where Judge is a reserved concept; signature, closest in meaning and sitting beside stamp's attestation, which is two marks-you-make; footprints, distinct but whimsical on an instrument panel; door-open, a rectangle at 12px where file and archive already are. **The objection to expect is flag**, a pole with a pennant reserved to a stopped step, which at 12px is a cousin of a post with a blade. It passes rule 4 because this draws at 16px in a dialog and flag is a 12px status badge in another hue group, and the contract admits collisions across hue groups — but it is the first thing somebody will say."
+
 [icons.shield-check]
   means = "A pointed-base pentagon with a check inside"
   group = "Step and Verdict"

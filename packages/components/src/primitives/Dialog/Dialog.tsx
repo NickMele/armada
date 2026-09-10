@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { TriangleAlert, X } from "lucide-react";
+import { Signpost, X } from "lucide-react";
 
 import { Kbd } from "../Kbd/Kbd";
 import { ScrollArea } from "../ScrollArea/ScrollArea";
@@ -170,8 +170,16 @@ export function Dialog({
               aria-hidden="true"
             />
           ) : (
-            <TriangleAlert
-              className="armada-dialog__glyph armada-dialog__glyph--escalated"
+            /* **A signpost, and never `triangle-alert`.** This tone exists
+               to say nothing is being destroyed, and a warning triangle said
+               the opposite louder than the word neutral said it.
+               `triangle-alert` is also Doctor's and reserved — see
+               `packages/icons/icons.toml`, which carries the rejected
+               candidates and the one objection to expect. Every neutral
+               confirm is the same moment: a fork, one way chosen, and nothing
+               destroyed by choosing. */
+            <Signpost
+              className="armada-dialog__glyph armada-dialog__glyph--neutral"
               size={16}
               strokeWidth={2}
               aria-hidden="true"

@@ -79,8 +79,11 @@
   color: var(--status-completed-failed);
 }
 
-.armada-dialog__glyph--escalated {
-  color: var(--status-escalated);
+/* **The accent, not a status token.** A dialog holds no Job state, and
+   `--status-escalated` said this one did. The accent is the colour of the
+   control that opened it, which is what the glyph is standing in for. */
+.armada-dialog__glyph--neutral {
+  color: var(--accent);
 }
 
 .armada-dialog__title {
