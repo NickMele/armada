@@ -530,8 +530,13 @@ chevron-down   disclosure only. The caret segment of a split button, and the
                one exception to "primary and secondary buttons are label-only"
                — it is the whole content of its own divided segment, structural
                rather than decorative, and never sits beside a label
-triangle-alert RELEASED 2026-08-21. Was reserved to Doctor; Doctor now draws
-               no glyphs, so this is free for generic warnings and toasts
+triangle-alert Doctor only, plus generic warnings in toasts. A release on
+               the grounds that Doctor draws no glyphs was made 21 Aug 2026 and
+               WITHDRAWN 25 Aug: the reservation holds whether or not the health
+               grid draws it, and no other surface may adopt it as its own mark.
+               This line said RELEASED until 10 Sep 2026, four days after the
+               withdrawal it was describing, and packages/icons/icons.toml has
+               carried the withdrawal the whole time
 ```
 
 ---
