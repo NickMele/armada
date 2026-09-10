@@ -5,6 +5,7 @@ import { Button } from "../../primitives/Button/Button";
 import { JobHoldsSheet } from "../../compositions/JobHoldsSheet/JobHoldsSheet";
 import { JobHoldsSummary } from "../../compositions/JobHoldsSummary/JobHoldsSummary";
 import { Refusals } from "../../compositions/Refusals/Refusals";
+import { TheAnswers } from "../HoldingAtTheGateEveryAnswerItTakes/HoldingAtTheGateEveryAnswerItTakes";
 import { InsideAJob } from "./InsideAJobOneArrangementAtEveryState";
 import {
   BRIEF,
@@ -83,10 +84,17 @@ type Story = StoryObj<typeof InsideAJob>;
  */
 const nothingPressedYet = () => {};
 
-/** The acts that end or replace the Job. Pilot lands left of Kill — #250. */
+/**
+ * The acts `Acts.tsx` draws on a Job that is not over: a Drone to kill and a
+ * Job to kill, each its own quiet button, because they differ by everything and
+ * by three characters. It read `Kill`, which is neither of them. Pilot lands
+ * left of them — #250, and a Job that *stopped* draws one split button led by
+ * `Redispatch as a new job` instead. Reported, not drawn.
+ */
 const JOB_ACTS = (
   <>
-    <Button variant="ghost">Kill</Button>
+    <Button variant="secondary">Kill drone</Button>
+    <Button variant="secondary">Kill job</Button>
   </>
 );
 
@@ -111,7 +119,10 @@ export const Running: Story = {
           />
         }
         where={WHERE}
-        whereNote="A path opens where it lives; an identifier copies. This milestone is about never needing these — they are here for when you want them anyway."
+        // `NAMED_NOT_NEEDED`, what `JobDetail` passes at every state. It read
+        // "This milestone is about never needing these" — a sentence about a
+        // milestone, on a screen a person is reading.
+        whereNote="A path opens where it lives; an identifier copies. Nothing above needs these — they are here for when you want them anyway."
         brief={BRIEF}
         step={{
           label: "Fix",
@@ -139,6 +150,12 @@ export const Running: Story = {
  * the story rather than in the header, because you make it after reading — and
  * the header is for acts that change what a Drone is doing. `Restart step`
  * stays up there; it interrupts rather than concludes.
+ *
+ * **The gate here is mid-run, so there is nothing to merge.** `Regression
+ * check` is not the step that delivers — `Land` is, and it has not started — so
+ * no branch has gone out, no pull request exists, and the group is three
+ * answers with Approve leading. The state where a fourth joins them is the
+ * sheet at *Holding at the gate — every answer it takes*.
  */
 export const WaitingOnYou: Story = {
   render: () => (
@@ -165,31 +182,24 @@ export const WaitingOnYou: Story = {
             { label: "Attempt", value: "1", mono: true },
           ],
           acts: <Button variant="secondary">Restart step</Button>,
+          // `noticeOf`'s own words for the reviewing render. It read "Nothing
+          // is wrong. The workflow asks for a person here." until #517 replaced
+          // it on 8 Sep 2026 — it opens on what is true rather than on a
+          // denial, because "nothing is wrong" answers a worry the reader had
+          // not had yet. This sheet showed the retired sentence for two days.
           notice: {
             tone: "waiting",
-            title: "Nothing is wrong. The workflow asks for a person here.",
-            children:
-              "The suite passed and the Judge met both criteria. Nothing advances until you answer.",
+            title: "This Job needs your review before it can go on.",
+            children: "Every step passed its gates. Nothing advances until you answer.",
           },
           phases: PHASES_AT_THE_GATE,
-          chapters: [
-            ...CHAPTERS,
-            {
-              id: "decision",
-              ordinal: 4,
-              title: "Your decision",
-              summary: "nothing advances until you answer",
-              preview:
-                "Approve, or send it back with a note. Send back returns it to this step; reject ends the Job. A note is optional on approve.",
-            },
-          ],
-          after: (
-            <div className="armada-screen__actions">
-              <Button variant="primary">Approve</Button>
-              <Button variant="secondary">Send back</Button>
-              <Button variant="destructive">Reject</Button>
-            </div>
-          ),
+          chapters: CHAPTERS,
+          // `ReviewDecision`, which is what the product draws — not three bare
+          // buttons and not a `Your decision` chapter, neither of which exists.
+          // `Send back` was this sheet's own word for `Request changes`, and
+          // the note it sends was missing: review and reply are one loop, so
+          // the field is on the surface with nothing to press to reach it.
+          after: <TheAnswers />,
         }}
       />
     </div>
@@ -468,7 +478,9 @@ export const Failed: Story = {
           />
         }
         where={WHERE}
-        whereNote="The worktree and the branch are left in place. Nothing was rolled back."
+        // One note at every state, whatever the Job did. "The worktree and the
+        // branch are left in place" is true and is not what this region says.
+        whereNote="A path opens where it lives; an identifier copies. Nothing above needs these — they are here for when you want them anyway."
         brief={BRIEF}
         step={{
           label: "Regression check",

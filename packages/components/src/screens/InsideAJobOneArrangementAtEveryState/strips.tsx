@@ -43,8 +43,14 @@ export const PHASES_WORKING: PhaseStripProps = {
             ],
           };
 
+/**
+ * **`noteOf`'s own sentence for a step at a human gate.** It read "The suite
+ * passed and the Judge met both criteria. Nothing is wrong; the workflow asks
+ * for a person here." — a sentence the product does not have, restating the two
+ * tiers the strip above it already draws and opening on a denial.
+ */
 export const PHASES_AT_THE_GATE: PhaseStripProps = {
-            note: "The suite passed and the Judge met both criteria. Nothing is wrong; the workflow asks for a person here.",
+            note: "Everything mechanical has cleared. The workflow asks for a person here.",
             stages: [
               { id: "instructed", label: "Instructed", state: "cleared" },
               { id: "working", label: "Working", state: "cleared" },
@@ -75,8 +81,9 @@ export const PHASES_AT_THE_GATE: PhaseStripProps = {
             ],
           };
 
+/** `noteOf`'s sentence for a step the gate has run on and handed back. */
 export const PHASES_CHECK_FAILED: PhaseStripProps = {
-            note: "The Check went back to the Drone with its output. The tiers behind it are still ahead, not cancelled.",
+            note: "The gate has run and the Drone has the step back. The tiers behind it are still ahead, not cancelled.",
             stages: [
               { id: "instructed", label: "Instructed", state: "cleared" },
               { id: "working", label: "Working", state: "current" },
