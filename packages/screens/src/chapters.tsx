@@ -46,7 +46,6 @@ import type { Criterion, Diff, Footprint, KeptFrame, Turn } from "@armada/protoc
 import type { JobSummary, StepDetail } from "@armada/protocol";
 import type { JobFootprint } from "@armada/protocol";
 import type { Calls } from "./calls";
-import { DecidedDiff } from "./Decide";
 import {
   DIFF_CHAPTER,
   FRAMES_CHAPTER,
@@ -80,7 +79,6 @@ export function chaptersOf({
   job,
   step,
   criteria,
-  render,
   watching,
   footprint,
   kept,
@@ -105,7 +103,6 @@ export function chaptersOf({
    * without it a verdict grid draws an id where the criterion's own words go.
    */
   criteria: readonly Criterion[];
-  render: string;
   watching: { rows: readonly Turn[]; skipped: number } | null;
   footprint: Footprint;
   /**

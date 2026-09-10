@@ -46,7 +46,6 @@ export type HeadProps = {
   live: boolean;
   /** A re-read in flight, so a second press does not send a second one. */
   refreshing: boolean;
-  onCloseJob: () => void;
   onCloseComposer: () => void;
   onCompose: () => void;
   onCloseReports: () => void;
@@ -66,7 +65,6 @@ export function headOf({
   clearing,
   live,
   refreshing,
-  onCloseJob,
   onCloseComposer,
   onCompose,
   onCloseReports,

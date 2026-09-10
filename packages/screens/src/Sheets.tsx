@@ -85,8 +85,6 @@ export type DetailSheetProps = {
    * the arguments for how to read a `Holds` live in `resources.ts`.
    */
   holds: Omit<JobHoldsSheetProps, "open" | "floor" | "onClose">;
-  /** Now, injected, because holding the reading records a wall clock. */
-  now: number;
   /** The window is at `--window-floor`. */
   floor: boolean;
   onClose: () => void;
@@ -105,7 +103,6 @@ export function DetailSheet({
   held,
   onHold,
   holds,
-  now,
   floor,
   onClose,
 }: DetailSheetProps) {

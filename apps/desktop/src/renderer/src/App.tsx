@@ -283,7 +283,6 @@ export function App() {
     clearing,
     live,
     refreshing: commands.refreshing,
-    onCloseJob: close,
     onCloseComposer: () => setComposing(false),
     onCompose: () => setComposing(true),
     onCloseReports: () => setAuditing(false),

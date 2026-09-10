@@ -77,7 +77,7 @@
 
 import { Button, JobRowStacked, SplitButton, StepBar } from "@armada/components";
 import type { JobRowField } from "@armada/components";
-import { GitBranch, GitPullRequest, Layers } from "lucide-react";
+import { Layers } from "lucide-react";
 
 import { JOB_LIFECYCLE } from "@armada/components";
 import type { JobSummary } from "@armada/protocol";
@@ -85,7 +85,7 @@ import type { WorkflowSummary } from "@armada/protocol";
 import { absoluteOf, span } from "./duration";
 import { activityFor } from "./frozen";
 import { ROW_VERBS, verbOf } from "./keys";
-import { leading, readingOf } from "./reading";
+import { readingOf } from "./reading";
 
 /** Whether the Job is over, from the registry that says so. */
 export function isTerminal(job: JobSummary): boolean {

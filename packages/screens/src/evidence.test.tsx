@@ -249,7 +249,6 @@ function screen(
           job: summary,
           step: showing,
           criteria,
-          render: renderFor(summary),
           frames: NO_FRAMES,
           watching: { rows: [], skipped: 0 },
           footprint: { state: "none" },

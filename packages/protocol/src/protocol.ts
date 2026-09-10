@@ -27,7 +27,6 @@
 // too. Type-only both ways, so the cycle is erased before anything runs.
 
 import type { Settled } from "./detail";
-import type { ProtocolVersion } from "./version";
 
 /** A Job, as a list row. `crates/ipc/src/job.rs`. */
 export type JobSummary = {

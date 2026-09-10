@@ -26,7 +26,7 @@
 import { afterEach, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
 
-import type { Diff, Evidence, JobSummary, Remarks } from "@armada/protocol";
+import type { Evidence, JobSummary, Remarks } from "@armada/protocol";
 import { Decide } from "./Decide";
 import { mount, unmount } from "./mounted";
 
@@ -50,7 +50,6 @@ const JOB: JobSummary = {
 
 /** Nothing read yet. The decision does not depend on either read arriving. */
 const NO_EVIDENCE: Evidence = { state: "none" };
-const NO_DIFF: Diff = { state: "none" };
 /**
  * The pull request's comments, unread. **`none` and not an empty answer**: what
  * is under test here is the four decisions, and a reading that arrived would
@@ -71,7 +70,6 @@ function gate(): Sent {
       onNeedRemarks={() => {}}
       job={JOB}
       evidence={NO_EVIDENCE}
-      diff={NO_DIFF}
       remarks={NO_REMARKS}
       stale={false}
       deciding={false}
