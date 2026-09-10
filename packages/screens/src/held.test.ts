@@ -95,7 +95,7 @@ test("the cost of a reclaim separates what ends from what survives", () => {
 
   expect(cost.checkouts).toBe(1);
   expect(filesDestroyed(cost)).toBe(2);
-  expect(cost.destroying[0].files).toEqual(["src/log.rs", "notes.md"]);
+  expect(cost.destroying[0]!.files).toEqual(["src/log.rs", "notes.md"]);
   // Not a loss, and the confirmation says so in those words: there is no force
   // on this seam, so the branch is kept and the commits stay reachable.
   expect(cost.keeping[0]).toEqual({
@@ -184,6 +184,6 @@ test("what is destroyed carries the stamp it is read against", () => {
     held({ held: [{ why: "uncommitted", files: ["src/log.rs"] }] }),
   ]);
 
-  expect(cost.destroying[0].lastMovedAt).toBe("2026-08-30T09:14:00Z");
-  expect(sitting(cost.destroying[0].lastMovedAt, NOW)).toBe("4 days");
+  expect(cost.destroying[0]!.lastMovedAt).toBe("2026-08-30T09:14:00Z");
+  expect(sitting(cost.destroying[0]!.lastMovedAt, NOW)).toBe("4 days");
 });

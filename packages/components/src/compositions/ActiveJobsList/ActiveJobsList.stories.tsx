@@ -261,7 +261,7 @@ export const Selectable: Story = {
     // touched should put it.
     await expect(rows.filter((row) => row.getAttribute("tabindex") === "0")).toEqual([rows[0]]);
 
-    rows[0].focus();
+    rows[0]!.focus();
     await userEvent.keyboard("{ArrowDown}{ArrowDown}");
     await expect(rows[2]).toHaveFocus();
 
@@ -380,7 +380,7 @@ export const OneOption: Story = {
     selectable: true,
     label: "Active jobs",
     children: [
-      cloneElement((SixStates.args?.children as ReactElement<JobRowStackedProps>[])[0], {
+      cloneElement((SixStates.args?.children as ReactElement<JobRowStackedProps>[])[0]!, {
         onOpen: () => {},
       }),
     ],

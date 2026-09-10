@@ -80,7 +80,6 @@
 import { plural } from "@armada/components";
 import type { JobSummary } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
-import { instant } from "./duration";
 import { needsYou, needsYouClause, oldest, tabOf } from "./needs-you";
 import type { BoardTab } from "./needs-you";
 

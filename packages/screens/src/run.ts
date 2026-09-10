@@ -145,7 +145,7 @@ function factsOfStep(
   // that drew only the first would render an overruled gate as a cleared one.
   if (step.overridden) facts.push({ label: "Advanced", value: "overruled by a person" });
 
-  const stands = standsFact(step, activity);
+  const stands = standsFact(activity);
   if (stands !== undefined) facts.push(stands);
 
   return facts;
@@ -324,7 +324,7 @@ function judgeFact(step: StepDetail, judged: Judged[]): RunTreeFact | undefined 
  * **Three kinds of stopped, and they never share a row.** Waiting on you is the
  * workflow working, stopped is a Drone that cannot get further, failed is over.
  */
-function standsFact(step: StepDetail, activity: StepActivity): RunTreeFact | undefined {
+function standsFact(activity: StepActivity): RunTreeFact | undefined {
   if (activity === "awaiting_human") return { label: "Waiting", value: "on you" };
   if (activity === "stopped") {
     return { label: "Held", value: "retries spent · waiting on you" };

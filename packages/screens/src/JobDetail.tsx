@@ -78,7 +78,7 @@ import type {
   Remarks,
   Watched,
 } from "@armada/protocol";
-import type { FileReport, JobSummary, StepDetail } from "@armada/protocol";
+import type { FileReport, JobSummary } from "@armada/protocol";
 import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
 import { heldForMoney, heldForTurns, type ConfirmableAct } from "./Acts";
 import { useCallArguments, type ReadCall } from "./calls";
@@ -94,7 +94,6 @@ import { span } from "./duration";
 import { Decide } from "./Decide";
 import { ordered } from "./facts";
 import { headingOf, Unrenderable } from "./heading";
-import { Log } from "./Log";
 import { detailOf, holdingOf, logOf, lookOf, turnsOf } from "./mine";
 import { phasesOf } from "./phases";
 // Which Check's output `o` opens. **The same call the Checks chapter's own act
@@ -536,7 +535,6 @@ export function JobDetail({
           // The Job's frozen criteria, for the Verdicts chapter. The same list
           // the phase strip's Judge tier joins against, from the same reading.
           criteria: whole?.acceptance_criteria ?? [],
-          render,
           watching,
           footprint: recorded.footprint,
           kept: whole?.footprint,
@@ -685,7 +683,6 @@ export function JobDetail({
                     onNeedMaterial={onNeedMaterial}
                     onNeedRemarks={onNeedRemarks}
                     evidence={recorded.evidence}
-                    diff={recorded.diff}
                     remarks={recorded.remarks}
                     stale={stale}
                     deciding={deciding}
@@ -732,7 +729,6 @@ export function JobDetail({
               nothingToAsk: nothingToAsk(resources),
               onExamine: () => onExamine(job.id),
             }}
-            now={now}
             floor={floor}
             onClose={closeSheet}
           />

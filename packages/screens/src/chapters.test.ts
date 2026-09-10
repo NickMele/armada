@@ -155,7 +155,6 @@ function chapters(
     job: job(),
     step: over.step ?? step(),
     criteria: over.criteria ?? [],
-    render: "reviewing",
     frames: NO_FRAMES,
     watching: { rows: over.rows ?? [], skipped: 0 },
     footprint: { state: "none" } as Footprint,

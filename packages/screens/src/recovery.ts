@@ -593,15 +593,6 @@ const RESTART = `The drone is gone. ${RESTART_QUEUES}`;
 const RESTART_UNHEARD =
   `The drone is still running and nothing is reading it, so restarting ends it. ${RESTART_QUEUES}`;
 
-/** What replaces a Job that nothing resumes, or that nothing replaces either. */
-function replacement(redispatch: boolean): string {
-  return redispatch
-    ? "A redispatch mints a new job from the approval gate and carries none of the work over."
-    : "Nothing replaces it either: a redispatch takes an escalated, failed or killed job whose " +
-        "workflow and request fleet still holds, and this is not one. Proposing a new job is " +
-        "what is left.";
-}
-
 /** Only the status is read, so only the status is asked for. */
 type SummaryStatus = Pick<JobSummary, "status">;
 

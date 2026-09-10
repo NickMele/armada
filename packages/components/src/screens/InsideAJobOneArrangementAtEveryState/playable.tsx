@@ -5,7 +5,7 @@ import {
   ActivityLogSheet,
   type ActivityFilter,
 } from "../../compositions/ActivityLogSheet/ActivityLogSheet";
-import { ConsoleOutput, type ConsoleRow } from "../../compositions/ConsoleOutput/ConsoleOutput";
+import { ConsoleOutput } from "../../compositions/ConsoleOutput/ConsoleOutput";
 import { EvidenceSheet, type EvidenceView } from "../../compositions/EvidenceSheet/EvidenceSheet";
 import { EvidenceStrip } from "../../compositions/EvidenceStrip/EvidenceStrip";
 import { JudgeCitations } from "../../compositions/JudgeCitations/JudgeCitations";
@@ -79,14 +79,6 @@ type Artifact = {
   opens: string;
   at: Record<string, Rendering>;
 };
-
-/**
- * The artifact the page is composed with — the one behind the contested
- * criterion, already showing. It is a chip in the strip like any other, and
- * pressing that chip is the way back: `EvidenceSheet` has no second control for
- * it, because one that sat beside `Close` could not be told apart from leaving.
- */
-const COMPOSED = { id: "chk-suite", view: "output" };
 
 function attemptLog(nth: number): Artifact {
   return {

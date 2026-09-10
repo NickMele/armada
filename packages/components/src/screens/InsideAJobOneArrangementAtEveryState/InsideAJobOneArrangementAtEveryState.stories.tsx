@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
 import { expect, within } from "storybook/test";
 import { Button } from "../../primitives/Button/Button";
-import { ActivityLog } from "../../compositions/ActivityLog/ActivityLog";
 import { JobHoldsSheet } from "../../compositions/JobHoldsSheet/JobHoldsSheet";
 import { JobHoldsSummary } from "../../compositions/JobHoldsSummary/JobHoldsSummary";
 import { Refusals } from "../../compositions/Refusals/Refusals";
@@ -12,12 +11,10 @@ import {
   CHAPTERS,
   ESCALATED_HEADING,
   escalatedHeading,
-  EXAMINED_WEDGED,
   EXAMINED_WORKING,
   FAILED_HEADING,
   HEADING,
   HOLDS_RUNNING,
-  HOLDS_WEDGED,
   OnAScreen,
   REPAIR_CHAPTERS,
   RUN_FAILED,
@@ -38,7 +35,6 @@ import {
 } from "./fixtures";
 import {
   CONSOLE_SHEET,
-  EVIDENCE_CHAPTERS,
   INPUTS_SHEET,
   QUEUED_EVIDENCE_CHAPTERS,
   aRefusedJob,

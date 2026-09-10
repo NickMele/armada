@@ -249,15 +249,15 @@ describe("the tail", () => {
   });
 
   it("names who wrote each line as a person reads it", () => {
-    expect(tailOf(rows)[0].actor).toBe("Fleet");
+    expect(tailOf(rows)[0]!.actor).toBe("Fleet");
   });
 
   // The level is already a rendering by the time it gets here: `notesOf` names
   // an error payload `failed`. Reading that answer is what keeps the tail's
   // hue and the log's hue the same hue.
   it("marks a line whose payload was written at error level", () => {
-    expect(tailOf(rows)[0].wrong).toBe(true);
-    expect(tailOf(rows)[1].wrong).toBeUndefined();
+    expect(tailOf(rows)[0]!.wrong).toBe(true);
+    expect(tailOf(rows)[1]!.wrong).toBeUndefined();
   });
 
   it("draws nothing where the log carries nothing", () => {

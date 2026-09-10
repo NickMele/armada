@@ -211,7 +211,12 @@ function scrollerFor(from: Element | null): Element | null {
 
 type Entry =
   | { of: "turn"; turn: DroneTurn }
-  | { of: "quiet"; turns: DroneTurn[] }
+  /**
+   * At least one row, always: a run is opened with the turn that started it
+   * and only ever grows. Written as a non-empty tuple so the head below is a
+   * turn rather than a lookup every caller has to assert.
+   */
+  | { of: "quiet"; turns: [DroneTurn, ...DroneTurn[]] }
   /** Keyed by the row it stands above, which is stable while rows only append. */
   | { of: "step"; step?: TurnStep; above: string };
 
@@ -268,7 +273,8 @@ const MARK_STROKE = 2;
 const CARET = 16;
 
 type QuietRunProps = {
-  turns: DroneTurn[];
+  /** Non-empty, for `Entry`'s reason: the head is what the folded line reads. */
+  turns: [DroneTurn, ...DroneTurn[]];
   working: boolean;
   open: boolean;
   onToggle: () => void;

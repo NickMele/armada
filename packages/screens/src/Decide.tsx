@@ -85,7 +85,6 @@ export type DecideProps = {
   onNeedMaterial: (jobId: string | null) => void;
   job: JobSummary;
   evidence: Evidence;
-  diff: Diff;
   /**
    * Ask the host to open or close the read of the pull request's comments, or
    * for none.
@@ -136,7 +135,6 @@ export function Decide({
   onNeedRemarks,
   job,
   evidence,
-  diff,
   remarks,
   stale,
   deciding,
