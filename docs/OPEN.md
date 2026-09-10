@@ -77,6 +77,7 @@ on purpose and makes the gate name what was waiting.
 - **[manifest-root-lockfile-ownership]** Does the root `armada.yml` *own* a shared lockfile it can gate, as opposed to merely being able to gate it? The nearest-ancestor rule settles gating and not exclusivity.
 - **[manifest-check-timeout-raise-or-lower]** May a per-Check timeout field raise the configured bound, or may it only lower it?
 - **[manifest-kit-merge-rules]** What are the Kit→Manifest merge rules for Skills, MCP and Sub agents? No merge strategy exists in the Configuration Settings registry for any of the three, and Kit and Drone disagree on Sub agents outright — Kit describes them as layered on top, Drone's Convoy table puts them under intersection.
+- **[evidence-harness-assumes-a-server]** Does a harness only fit a repository whose work is reachable over a port? `serve` starts something and `ready` probes it, which is the shape a web application has — and the case this was filed for, Armada's own job detail, is an Electron application that cannot be served at all. A driver reaches one by launching the binary and owning the process, which needs no port and inverts what `serve` assumes. What decides it: whether `evidence:` grows a second shape beside `serve` and `ready`, whether photographing a component workbench is the general answer for anything that is not a web server, and what a base run can mean for an application that has to be built before it can be launched.
 
 ## docs/concepts/observe.md
 
