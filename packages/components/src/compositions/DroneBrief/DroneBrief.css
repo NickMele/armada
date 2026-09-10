@@ -4,22 +4,56 @@
    length: the type scale belongs to docs/contracts/design-system.md, and this
    draws inside a chapter body at --text-xs. What it declares is the block
    boundary and the whitespace treatment, which is the whole of the component. */
-.armada-brief {
-  display: flex;
-  flex-direction: column;
-  /* The blank line Fleet wrote between blocks, as space rather than as an
-     empty line box. An empty element would be a gap a reader cannot tell from
-     a block that failed to render.
 
-     Back to --space-2. #306 widened it to --space-3 because the gap was the
-     only channel marking a block boundary — a heading carried no weight and no
-     colour of its own, so the sole signal took the larger step. A heading now
-     carries --fg-default and --weight-medium, so the extra space is paying for
-     a job something else is doing, and a tighter brief fits more of itself in
-     the chapter body. */
-  gap: var(--space-2);
+/* BLOCK FLOW, AND NEVER A FLEX COLUMN. A flex container is one box rather than
+   a run of line boxes, so `-webkit-line-clamp` on an ancestor counts no lines
+   in it and clamps nothing at all. `Clamped` wraps exactly this component in
+   the panel's first chapter, and while this was `display: flex` that clamp was
+   inert: a step's opening turn — the whole brief, the standing instructions and
+   the branch note — drew at full length, a screen and a half of it, above the
+   Checks and the Verdicts a person opened the panel to read.
+
+   It read as two bugs and was one. `Clamped` measures `scrollHeight` against
+   the clamped box to decide whether there is anything worth a control; with
+   nothing clamped the two are equal, so the control never drew either, and the
+   chapter's own foot control was the only thing left to press. That one swaps
+   the preview for Armada's turns — shorter than an unclamped brief — so opening
+   it looked like closing, and `Close` looked like it opened.
+
+   Storybook did not catch it because every `Clamped` story passed a string.
+   `Clamped.stories.tsx` now clamps this component, which is the shape the app
+   actually builds. */
+.armada-brief {
   min-width: 0;
   color: var(--fg-muted);
+}
+
+/* The blank line Fleet wrote between blocks, as space rather than as an empty
+   line box. An empty element would be a gap a reader cannot tell from a block
+   that failed to render.
+
+   A margin between siblings rather than `gap`, because the rule above costs
+   this element its flex container. The first block takes none, so nothing
+   collapses out through the top of the brief.
+
+   THE BLOCK AND HEADING RULES BELOW DECLARE NO MARGIN, and that is what makes
+   this one hold. `.armada-brief__block` and `.armada-brief > * + *` are both one
+   class of specificity, so a `margin: 0` down there would tie with this and win
+   on source order alone — which it did, and the brief drew with every block
+   flush against the next. Margins are this element's to set, in one place.
+
+   Back to --space-2. #306 widened it to --space-3 because the gap was the only
+   channel marking a block boundary — a heading carried no weight and no colour
+   of its own, so the sole signal took the larger step. A heading now carries
+   --fg-default and --weight-medium, so the extra space is paying for a job
+   something else is doing, and a tighter brief fits more of itself in the
+   chapter body. */
+.armada-brief > * {
+  margin: 0;
+}
+
+.armada-brief > * + * {
+  margin-top: var(--space-2);
 }
 
 /* `pre-wrap`, and it is the half of #306 that a stylesheet lost. The newlines
@@ -38,7 +72,6 @@
    off the edge, and it only breaks where the whole run does not fit — the same
    trade Prose.css takes for a fenced block. */
 .armada-brief__block {
-  margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -60,7 +93,6 @@
    text-transform and no --tracking-caps: that token is declared for 13px table
    headers, and this is not one. */
 .armada-brief__heading {
-  margin: 0;
   font-weight: var(--weight-medium);
   color: var(--fg-default);
   overflow-wrap: anywhere;

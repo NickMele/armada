@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 import { Clamped } from "./Clamped";
+import { DroneBrief, type BriefLine } from "../DroneBrief/DroneBrief";
 
 /**
  * One story per state: a passage long enough to clamp, one short enough not to,
@@ -100,3 +101,70 @@ export const NoControlOnShortText: Story = {
     await expect(canvas.queryByRole("button")).toBeNull();
   },
 };
+
+/**
+ * A step's opening turn, in the blocks `crates/fleet/src/briefing.rs` writes —
+ * headings marked as the wire marks them, by line number rather than by
+ * capitals. Long enough to pass twelve lines in the panel's width, because a
+ * fixture that fitted would assert nothing.
+ */
+const INSTRUCTION: BriefLine[] = [
+  { text: "JOB BRIEF", named: "heading" },
+  { text: "" },
+  { text: "Coalesce concurrent token refreshes" },
+  { text: "" },
+  { text: "Two requests arriving inside the refresh window each start their own refresh," },
+  { text: "and the second overwrites the first's token." },
+  { text: "" },
+  { text: "WHERE YOU ARE", named: "heading" },
+  { text: "" },
+  { text: "This task runs in 4 parts. You are on part 1." },
+  { text: "" },
+  { text: "  1. Plan the change — you are here" },
+  { text: "     STOP. Submit when this part is done, then wait." },
+  { text: "  2. Implement — not yours — do not do it" },
+  { text: "  3. Verify — not yours — do not do it" },
+  { text: "  4. Hand off — not yours — do not do it" },
+  { text: "" },
+  { text: "WHAT THIS PART DELIVERS", named: "heading" },
+  { text: "" },
+  { text: "Write this part's finding to a file, at this exact path in your worktree:" },
+  { text: "" },
+  { text: "  .armada/artifacts/coalesce-concurrent-token-refreshes-root-cause-and-plan.md" },
+  { text: "" },
+  { text: "This is the work product, not a note to yourself. This exact path is the one" },
+  { text: "that is read: an empty file or no file stops this part." },
+];
+
+/**
+ * The turn Armada opened a step with, held to the twelve lines the panel holds
+ * it to — a `DroneBrief` and not a string.
+ *
+ * **Every story above this one passes a string, and that is why the panel
+ * shipped with no clamp at all.** `-webkit-line-clamp` counts line boxes, and
+ * `DroneBrief` was a flex column, which is one box carrying none. The clamp did
+ * nothing, the overflow measured false so no control drew either, and a step's
+ * whole opening turn — brief, standing instructions and branch note, a screen
+ * and a half of it — sat above the Checks and the Verdicts. A string cannot
+ * catch that. Only the component the app actually wraps can.
+ *
+ * The assertion is the clipped height and not just the control, because the
+ * control is downstream of it: both go together, and reading only the control
+ * would leave the mechanism untested.
+ */
+export const ClampsTheComponentTheAppWraps: Story = {
+  args: {
+    lines: 12,
+    moreLabel: "Read the whole instruction",
+    children: <DroneBrief lines={INSTRUCTION} />,
+  },
+  play: async ({ canvas, canvasElement }) => {
+    const body = canvasElement.querySelector(".armada-clamped__body");
+    if (body === null) throw new Error("no clamped body to measure");
+    // The two were equal while the brief was a flex column. That equality is
+    // the whole defect: nothing clipped, so nothing to open.
+    await expect(body.scrollHeight).toBeGreaterThan(body.clientHeight);
+    await expect(canvas.getByRole("button", { name: "Read the whole instruction" })).toBeVisible();
+  },
+};
+

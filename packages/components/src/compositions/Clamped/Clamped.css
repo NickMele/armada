@@ -15,7 +15,25 @@
 
 /* The clamp. A line count rather than a height: the type scale belongs to the
    surface, and a passage cut at 64px shows three lines in one region and two
-   and a half in another. */
+   and a half in another.
+
+   WHAT IS CLAMPED HAS TO BE BLOCK FLOW. `-webkit-line-clamp` counts line boxes,
+   and a child that establishes a flex, grid or `flow-root` formatting context
+   is one box carrying none — so the clamp does nothing, silently, at any
+   length. It fails quietly twice over: the measurement above reads
+   `scrollHeight` against a box that was never clipped, finds it equal to
+   `clientHeight`, and concludes there is nothing more to show, so the control
+   does not draw either. The passage renders whole with no sign anything was
+   meant to hold it.
+
+   That is not hypothetical. `DroneBrief` was a flex column, and the panel's
+   first chapter drew a step's entire opening turn above everything a reader had
+   opened the panel for. `DroneBrief.css` carries the account. A `max-height` in
+   `lh` units was tried as a belt and is worse: where the clamp does work it cuts
+   below the last line box rather than on it, slicing the twelfth line in half.
+
+   So there is no mechanism here to make a flex child safe — there is this note,
+   and a story that clamps the real component rather than a string. */
 .armada-clamped__body {
   display: -webkit-box;
   -webkit-box-orient: vertical;
