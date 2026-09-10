@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Signpost, X } from "lucide-react";
+import { Ban, Signpost } from "lucide-react";
 
 import { Kbd } from "../Kbd/Kbd";
 import { ScrollArea } from "../ScrollArea/ScrollArea";
@@ -163,7 +163,16 @@ export function Dialog({
             edge instead, so the alignment survives the split. */}
         <div className="armada-dialog__head">
           {destructive ? (
-            <X
+            /* **`ban`, and never `x`.** `x` is reserved to system failure and
+               its own row says where a human decision goes instead: "Never a
+               human decision — that is `ban`." A confirmation is nothing but a
+               human decision. `ban`'s note carries the half that matters here
+               — "not a cross, because this is a decision and not an error" —
+               which is exactly what separates this dialog from a failure
+               state. `x`'s row does sanction one use outside its reservation,
+               the shadcn dialog close — this dialog draws no close control, so
+               that carve-out never applied here. */
+            <Ban
               className="armada-dialog__glyph armada-dialog__glyph--destructive"
               size={16}
               strokeWidth={2}
