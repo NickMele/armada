@@ -47,6 +47,35 @@ written files but not committed is on a branch with *no commits ahead of `main`*
 so it reads as fully merged, and removing it destroys work that was never
 anywhere else.
 
+## An agent that cuts no worktree takes somebody else's
+
+**A brief that says to cut one is not evidence that one was cut.** Confirmed
+2026-09-09, three times in one session: an agent told to
+`git worktree add .claude/worktrees/<name> -b <branch>` ran `git checkout -b`
+instead, inside the worktree the dispatching session was already working in. The
+dispatching session's `HEAD` moved under it mid-command, and it found out when
+`git log` printed somebody else's commits.
+
+**The first time it cost an agent everything it had not committed.** Two actors
+in one tree, and the second one's checkout reset the first one's files. That
+agent had been told to commit after every step and had not — which is why that
+instruction is in every brief, and why it is not sufficient on its own.
+
+Two rules, and the second is the one nobody thinks of:
+
+- **Verify before the first edit, not after.** `git worktree list`, and confirm
+  the path you were given is in it and is yours. One command, before anything is
+  written.
+- **A dispatching session must not assume its own worktree is still its own.**
+  Check `git rev-parse --abbrev-ref HEAD` before any command whose meaning
+  depends on which branch is checked out — a rebase, a stash, a `checkout --`.
+  The session that lost work here had been in that worktree for hours.
+
+**A harness that pins a shell to a worktree makes this worse, not better.** When
+the dispatching session moved itself out, every agent still pinned to the old
+path had its next command refused, mid-task. Moving is safe only once nothing
+else is working there.
+
 ## Sweeping when it has already got away
 
 Audit before deleting, and print what will be kept rather than what will go — the
