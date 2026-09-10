@@ -110,17 +110,24 @@ export const HEADING = {
   ...badgeOf("running", JOB_STATUS),
   headline: "Split the settings reducer so the selectors can be tested alone",
   jobId: JOB,
+  // **The run `factsOf` builds, in its own shapes.** Four of these five had
+  // drifted from what Bridge draws: the workflow is a phrase and not a labelled
+  // value — `Bug workflow`, never `Workflow Bug` — the branch is the one fact
+  // here that reads as itself and takes no label, the spend is labelled `Spend`,
+  // and `Dispatched by you` is on the Board's row and was never on this header.
+  // `Turns` is the fifth and was missing: it is the ceiling that stops a Job
+  // which passed every Check, and until it was drawn the figure a person
+  // decides a raise against was on no surface.
   fields: [
-    { label: "Workflow", value: "Bug" },
+    { value: "Bug", suffix: " workflow", copyValue: "bug" },
     {
-      label: "Branch",
       value: "fix/settings-split-selectors",
       mono: true,
       copyValue: "fix/settings-split-selectors",
     },
     { label: "Elapsed", value: "11m 03s", mono: true },
-    { label: "Spend, estimated", value: "~$1.80", mono: true },
-    { label: "Dispatched by you" },
+    { label: "Spend", value: "~$1.80", mono: true },
+    { label: "Turns", value: "18 of 40", mono: true },
   ],
 };
 
@@ -153,8 +160,14 @@ export const FAILED_HEADING = { ...HEADING, ...badgeOf("completed_failed", JOB_S
  */
 export const WAITING_HEADING = { ...HEADING, ...badgeOf("awaiting_review", JOB_STATUS) };
 
-/** The first three steps, which are the same at every state below. */
-const BEHIND: RunTreeStep[] = [
+/**
+ * The first three steps, which are the same at every state below.
+ *
+ * **Exported for the gate sheet next door**, which runs this same Job on to
+ * its delivering step. Two spellings of the two steps behind every state is
+ * exactly what one fixture file exists to prevent.
+ */
+export const BEHIND: RunTreeStep[] = [
   {
     id: "repro",
     label: "Reproduction",
@@ -500,7 +513,10 @@ export const CHAPTERS: StepChapter[] = [
     id: "instructions",
     ordinal: 1,
     title: "Drone instructions",
-    summary: "14:22:07 · 2 criteria and what it was given",
+    // The instant the step opened, and nothing else. `chapters.tsx` puts
+    // `opened.at` here bare; the criteria are what the Judge stage of the
+    // strip opens to, which is one place rather than two.
+    summary: "14:22:07",
     // Held to a few lines, like the brief above it. What a Drone was told runs
     // to whatever length the work needed, and this chapter is first in the
     // story — an unbounded one pushes the log and the diff off the screen.
@@ -524,7 +540,11 @@ export const CHAPTERS: StepChapter[] = [
     // Counted from the list, not typed beside it — the same rule
     // `changedFilesSummary` keeps below. It read `47 entries` over a stream of
     // 7, which the log sheet then contradicted in its own subtitle.
-    summary: `${WHOLE.length} entries`,
+    //
+    // **`every line opens` is the second segment and is the product's.** It is
+    // the only thing that says the rows under it are pressable, and this sheet
+    // was dropping it.
+    summary: `${WHOLE.length} entries · every line opens`,
     preview: <ActivityLog entries={PREVIEW} />,
     act: chapterAct("Open the log", "L"),
   },
@@ -557,7 +577,7 @@ export const REPAIR_CHAPTERS: StepChapter[] = [
     id: "log",
     ordinal: 2,
     title: "Activity log",
-    summary: "88 entries · ended 14:47:11",
+    summary: "88 entries · every line opens",
     act: chapterAct("Open the log", "L"),
     preview: (
       <ActivityLog
