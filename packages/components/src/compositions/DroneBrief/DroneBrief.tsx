@@ -149,7 +149,7 @@ export function briefBlocks(lines: readonly (string | BriefLine)[]): BriefBlock[
     if (held.length === 0) return;
     blocks.push({
       text: held.map((line) => line.text).join("\n"),
-      heading: held.length === 1 && held[0].named === "heading",
+      heading: held.length === 1 && held[0]?.named === "heading",
     });
     held = [];
   };

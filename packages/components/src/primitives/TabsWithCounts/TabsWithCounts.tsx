@@ -80,17 +80,18 @@ export function TabsWithCounts({
   function onKey(event: React.KeyboardEvent<HTMLDivElement>) {
     const at = items.findIndex((item) => item.id === active);
     // A tab strip with nothing in it takes no arrow key. Without this the
-    // modulo below is `% 0`, which throws rather than doing nothing.
+    // modulo below is `% 0`, which throws rather than doing nothing — and it
+    // is what makes the two lookups below in range, `at` of `-1` included.
     if (items.length === 0) {
       return;
     }
     if (event.key === "ArrowRight") {
       event.preventDefault();
-      select(items[(at + 1) % items.length].id);
+      select(items[(at + 1) % items.length]!.id);
     }
     if (event.key === "ArrowLeft") {
       event.preventDefault();
-      select(items[(at - 1 + items.length) % items.length].id);
+      select(items[(at - 1 + items.length) % items.length]!.id);
     }
   }
 

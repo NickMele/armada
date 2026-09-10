@@ -84,7 +84,7 @@ export const GreenAndMeansIt: Story = {
 export const AnAssertionThatFailed: Story = {
   args: {
     rows: [
-      held[0],
+      held[0]!,
       {
         says: "A loose-format date with spaces after it parses instead of erroring",
         identifier: "parses_loose_trailing_whitespace",

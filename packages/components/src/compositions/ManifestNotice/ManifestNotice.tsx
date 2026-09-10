@@ -125,8 +125,14 @@ function said(value: string | undefined): string {
   return value ?? "unset";
 }
 
-/** The frozen sections, listed as a person would say them. */
+/**
+ * The frozen sections, listed as a person would say them.
+ *
+ * **Never called with nothing**: the one call site draws no sentence at all for
+ * an empty list, because a sentence naming no section says nothing. That is
+ * what the two lookups below stand on.
+ */
 function sections(named: readonly string[]): string {
-  if (named.length === 1) return named[0];
-  return `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`;
+  if (named.length === 1) return named[0]!;
+  return `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]!}`;
 }

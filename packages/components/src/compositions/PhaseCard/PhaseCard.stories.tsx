@@ -165,7 +165,7 @@ export const RowsThatOpenWhatTheyProduced: Story = {
     const opens = canvas.getAllByRole("button");
     await expect(opens).toHaveLength(2);
 
-    await userEvent.click(opens[0]);
+    await userEvent.click(opens[0]!);
     await expect(args.onOpenArtifact).toHaveBeenCalledWith("chk-suite");
   },
 };

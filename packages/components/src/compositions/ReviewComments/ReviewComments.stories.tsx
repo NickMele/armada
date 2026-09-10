@@ -79,8 +79,8 @@ export const NothingSentYet: Story = {
     await expect(send).toBeDisabled();
 
     const picking = canvas.getAllByRole("checkbox", { name: "Act on this" });
-    await userEvent.click(picking[0]);
-    await userEvent.click(picking[1]);
+    await userEvent.click(picking[0]!);
+    await userEvent.click(picking[1]!);
     await expect(send).toBeEnabled();
 
     await userEvent.click(send);

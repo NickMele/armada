@@ -29,7 +29,10 @@ export interface ArmadaLockupProps
 }
 
 function make(spec: typeof HORIZONTAL, defaultHeight: number, name: string) {
-  const [, , w, h] = spec.viewBox.split(" ").map(Number);
+  // Four numbers, because every `viewBox` here is a literal written in this
+  // file. The tuple is what says so: split on a `string` cannot know its own
+  // length, and the ratio below divides by `h`.
+  const [, , w, h] = spec.viewBox.split(" ").map(Number) as [number, number, number, number];
   const C = React.forwardRef<SVGSVGElement, ArmadaLockupProps>(
     function Lockup({ height = defaultHeight, title, ...rest }, ref) {
       return (

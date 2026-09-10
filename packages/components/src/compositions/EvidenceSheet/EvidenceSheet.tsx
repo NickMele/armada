@@ -112,7 +112,7 @@ export function EvidenceSheet({
 }: EvidenceSheetProps) {
   const tabs =
     views === undefined || views.length < 2 ? undefined : (
-      <Tabs items={views} value={view ?? views[0].id} onChange={(id) => onView?.(id)} />
+      <Tabs items={views} value={view ?? views[0]!.id} onChange={(id) => onView?.(id)} />
     );
 
   return (
