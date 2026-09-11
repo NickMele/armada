@@ -42,6 +42,12 @@ const EXPECTED_RENDER: Record<string, Render> = {
   "killed — cleared from the Board, carrying no verdict": "stopped",
   "superseded — the work landed outside this Job, and there is nothing left for it to do":
     "stopped",
+  "escalated · evidence_suspect — every Check passed, and the panel refused two criteria":
+    "stopped",
+  "running — before the first Drone turn, the worktree is being prepared": "working",
+  "running — Fleet would not answer for this Job's own detail": "working",
+  "running — a Check failed and the Drone is retrying, attempt 2 of 3": "working",
+  "running — Regression check: nextest passed, the build Check is queued behind it": "working",
 };
 
 describe("each fixture's own render", () => {

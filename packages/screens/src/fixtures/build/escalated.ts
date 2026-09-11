@@ -1,7 +1,7 @@
 // `escalated` / `gate_failure` — a Check failed and ended the Job.
 //
 // **Full depth.** Three attempts of `cargo_nextest`, all the same failure,
-// retries spent — `RUN_STOPPED` in `InsideAJobOneArrangementAtEveryState`'s
+// retries spent — `RUN_STOPPED` in `InsideAJob`'s
 // fixtures draws the same shape as `RunTreeStep`s; this is its wire original.
 // The Drone stays alive and idle, which `job-statuses.toml`'s own row for
 // `escalated` states as the ordinary case where a step stopped mid-work, so

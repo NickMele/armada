@@ -3,7 +3,7 @@
 // **One narrative, not six unrelated Jobs.** The Bug workflow Job Storybook
 // already knows — "Split the settings reducer so the selectors can be tested
 // alone", branch `fix/settings-split-selectors` — from
-// `InsideAJobOneArrangementAtEveryState/fixtures.tsx`. Each state file in this
+// `packages/components/src/screens/InsideAJob/fixtures.tsx`. Each state file in this
 // directory freezes it at a different moment; sharing the id, the workflow and
 // the step labels here is what keeps a reader able to recognise the same Job
 // across the roster rather than reading six strangers.

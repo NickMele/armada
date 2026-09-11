@@ -8,6 +8,7 @@
 import { running } from "./running";
 import { review } from "./review";
 import { escalatedGateFailure } from "./escalated";
+import { escalatedEvidenceSuspect } from "./escalated-judge";
 import {
   awaitingApproval,
   awaitingAttestation,
@@ -29,11 +30,15 @@ import {
   rejected,
   superseded,
 } from "./terminal";
+import { preparing } from "./preparing";
+import { unreadable } from "./unreadable";
+import { retryingCheckFailure, runningAtGate } from "./gating";
 
 export {
   running,
   review,
   escalatedGateFailure,
+  escalatedEvidenceSuspect,
   queued,
   awaitingApproval,
   awaitingRepair,
@@ -49,12 +54,17 @@ export {
   rejected,
   killed,
   superseded,
+  preparing,
+  unreadable,
+  retryingCheckFailure,
+  runningAtGate,
 };
 
 export const FIXTURES = [
   running(),
   review(),
   escalatedGateFailure(),
+  escalatedEvidenceSuspect(),
   queued(),
   awaitingApproval(),
   awaitingRepair(),
@@ -70,4 +80,8 @@ export const FIXTURES = [
   rejected(),
   killed(),
   superseded(),
+  preparing(),
+  unreadable(),
+  retryingCheckFailure(),
+  runningAtGate(),
 ];

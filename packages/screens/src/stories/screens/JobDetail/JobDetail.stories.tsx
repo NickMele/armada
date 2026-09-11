@@ -9,6 +9,7 @@ import {
   completedFailed,
   completedSuccess,
   escalatedBlockedByPolicy,
+  escalatedEvidenceSuspect,
   escalatedGateFailure,
   escalatedInterrupted,
   escalatedLoopCap,
@@ -16,11 +17,15 @@ import {
   escalatedSilent,
   killed,
   piloted,
+  preparing,
   queued,
   rejected,
+  retryingCheckFailure,
   review,
   running,
+  runningAtGate,
   superseded,
+  unreadable,
 } from "../../../fixtures/build/index";
 import { recorded } from "../../../fixtures/recorded";
 import { JobDetailFrom } from "./JobDetail";
@@ -76,6 +81,48 @@ export const WaitingOnYourReview: Story = {
 export const ACheckFailedAndEndedIt: Story = {
   name: "A Check failed and ended it",
   render: drawing(escalatedGateFailure),
+};
+
+/**
+ * Before the first Drone turn: the worktree is being cut and the repository's
+ * preparation commands are running. Fleet's own log is the only thing there is
+ * to read, which is why the screen reads it here.
+ */
+export const Preparing: Story = { name: "Preparing, before the first Drone turn", render: drawing(preparing) };
+
+/** A Check failed on the first attempt, and the Drone is on its second. Nothing is asked of you yet. */
+export const ACheckFailedAndItIsTryingAgain: Story = {
+  name: "A Check failed, and it is trying again",
+  render: drawing(retryingCheckFailure),
+};
+
+/**
+ * At the gate: one Check has reported and the next is queued behind it, with the
+ * Judge behind both. The wire has no outcome for a Check still running — a run
+ * exists once it finished — so "in flight" is one reported and one not yet.
+ */
+export const AtTheGateOneCheckIn: Story = {
+  name: "At the gate, one Check in and the next queued",
+  render: drawing(runningAtGate),
+};
+
+/**
+ * Every Check passed, and the Judge's panel refused two criteria. The refusal
+ * is the gate working rather than the Job failing, and the verdicts say which
+ * criterion and why.
+ */
+export const ThePanelRefusedTwoCriteria: Story = {
+  name: "Every Check passed, and the panel refused two criteria",
+  render: drawing(escalatedEvidenceSuspect),
+};
+
+/**
+ * Fleet would not answer for this Job's own detail. Each region says what it
+ * cannot read rather than drawing as a Job with nothing in it.
+ */
+export const FleetWouldNotAnswer: Story = {
+  name: "Fleet would not answer for this Job",
+  render: drawing(unreadable),
 };
 
 /** Waiting for room to run, with nothing started. */
