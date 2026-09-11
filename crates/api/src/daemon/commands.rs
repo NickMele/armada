@@ -589,6 +589,28 @@ pub trait Commands: Send + Sync + 'static {
         setting: SetWhenBlocked,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
+    /// `set_model` — the model this Job's later steps spawn on, chosen by a
+    /// person, or cleared back to each step's own. **Read by the next spawn**:
+    /// the step running now keeps the model its Drone started with.
+    ///
+    /// [`Refusal::IllegalMove`] on a model this Fleet does not offer.
+    fn set_model(
+        &self,
+        job_id: JobId,
+        choice: ipc::SetModel,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `remove_allowed_command` — take back a command a person allowed for
+    /// this Job. The next reach for it is answered by the Job's setting again;
+    /// one already written into armada.yml stays there.
+    ///
+    /// [`Refusal::IllegalMove`] where the Job has no such allow.
+    fn remove_allowed_command(
+        &self,
+        job_id: JobId,
+        removing: ipc::RemoveAllowedCommand,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
     /// `start_run` — run one Check or Command in this Job's worktree, as a
     /// rehearsal: no Evidence, no Check row, nothing on the Job moves.
     ///

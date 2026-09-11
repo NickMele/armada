@@ -281,6 +281,33 @@ export function useCommands(sending: Sending) {
   }
 
   /**
+   * Choose the model the job's next step starts on, or `null` for the
+   * workflow's. On `setWhenBlocked`'s terms: nothing to confirm, and under
+   * `acting` so the panel is off while it is out.
+   */
+  async function setModel(jobId: string, model: string | null): Promise<void> {
+    setActing(jobId);
+    try {
+      setOutcome(await window.armada.setModel(jobId, model));
+    } finally {
+      setActing(null);
+    }
+  }
+
+  /**
+   * Take back a command allowed for this job. On `setWhenBlocked`'s terms — it
+   * ends nothing, and the command can be allowed again from the next refusal.
+   */
+  async function removeAllowedCommand(jobId: string, run: string): Promise<void> {
+    setActing(jobId);
+    try {
+      setOutcome(await window.armada.removeAllowedCommand(jobId, run));
+    } finally {
+      setActing(null);
+    }
+  }
+
+  /**
    * Overrule a Judge that refused the work. **Not through `act`**, for
    * `redirect`'s reason: the dialog that collected the reason was the
    * confirmation. **And not through `decide`**, which answers a gate nothing
@@ -459,6 +486,8 @@ export function useCommands(sending: Sending) {
     answer,
     answerCommand,
     setWhenBlocked,
+    setModel,
+    removeAllowedCommand,
     overrule,
     rerun,
     raiseCap,

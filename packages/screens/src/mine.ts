@@ -19,16 +19,37 @@
 // `JobDetail.tsx`; a fifth copy is how one of them ends up without the check.
 
 import type {
+  Diff,
+  Evidence,
   Examination,
+  Footprint,
   Holds,
   JobDetail as JobWhole,
   JobLog,
   JobResources,
   Journalled,
   Observed,
+  Remarks,
   Turns,
   Watched,
 } from "@armada/protocol";
+
+/**
+ * The reads the panel's own chapters draw from. `JobDetail.tsx` re-exports it,
+ * which is where every caller already imports it from; it moved here, beside
+ * the other readings of one Job, when that file reached the gate's line count.
+ */
+export type FoldedReads = {
+  footprint: Footprint;
+  evidence: Evidence;
+  diff: Diff;
+  /**
+   * What people wrote on the Job's pull request, where the decision block asked
+   * for it. **The one read in this set that costs a forge**, so nothing takes
+   * it on a timer and no event refreshes it.
+   */
+  remarks: Remarks;
+};
 
 /**
  * The look a person pressed for, once it is known to be this Job's. The `none`

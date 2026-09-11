@@ -45,6 +45,8 @@ mod manifest_snapshot;
 /// The migration list, and where a file stands against it. `V1`..`V16` stay in
 /// `schema`; this is only what had to move to keep that file under the gate.
 mod migrations;
+/// The model a person chose for a Job's later steps.
+mod model_override;
 /// The note a boundary is holding, and the column it waits in.
 mod note;
 mod numbering;

@@ -652,6 +652,20 @@ impl Job {
             .and_then(ResolvedStep::model)
             .unwrap_or(&self.model)
     }
+    /// What the Drone on `step` is spawned as where a person may have chosen
+    /// a model for the Job's later steps: `chosen`, over
+    /// [`model_at`](Job::model_at)'s answer.
+    ///
+    /// **The choice is handed in, not held.** It lives in a column of its own
+    /// and is read at the spawn, so this spells only the order — here, beside
+    /// the fallback, for that one's reason.
+    pub fn model_spawned_at<'a>(
+        &'a self,
+        step: &StepId,
+        chosen: Option<&'a ModelName>,
+    ) -> &'a ModelName {
+        chosen.unwrap_or_else(|| self.model_at(step))
+    }
     pub fn acceptance_criteria(&self) -> &[AcceptanceCriterion] {
         &self.acceptance_criteria
     }

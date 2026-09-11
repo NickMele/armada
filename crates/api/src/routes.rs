@@ -432,6 +432,16 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/jobs/:job_id/set_when_blocked",
     },
+    Route {
+        operation: "set_model",
+        method: "POST",
+        path: "/jobs/:job_id/set_model",
+    },
+    Route {
+        operation: "remove_allowed_command",
+        method: "POST",
+        path: "/jobs/:job_id/remove_allowed_command",
+    },
     // What a person says went wrong, under the Job it is about, and every
     // report filed, which is not under one — a report outlives the Job it
     // names, so a listing reachable only through a Job would lose exactly the
@@ -773,6 +783,14 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route(
             "/jobs/:job_id/set_when_blocked",
             post(set_when_blocked::<D>),
+        )
+        .route(
+            "/jobs/:job_id/set_model",
+            post(crate::commands::set_model::<D>),
+        )
+        .route(
+            "/jobs/:job_id/remove_allowed_command",
+            post(crate::commands::remove_allowed_command::<D>),
         )
         .route("/jobs/:job_id/report", post(file_report::<D>))
         .route("/reports", get(list_reports::<D>))

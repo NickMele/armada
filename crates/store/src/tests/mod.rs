@@ -24,6 +24,7 @@ mod gaming;
 mod iteration;
 mod manifest_snapshot;
 mod migrate;
+mod model_override;
 mod plan;
 mod ports;
 mod process;

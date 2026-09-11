@@ -471,6 +471,44 @@ pub(crate) async fn set_when_blocked<D: Commands>(
         Err(refusal) => refused(refusal),
     }
 }
+
+/// Choose the model this Job's later steps spawn on, or clear the choice.
+/// **The Job comes back unchanged**: the next spawn reads it.
+pub(crate) async fn set_model<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+    body: Bytes,
+) -> Response {
+    let choice: ipc::SetModel = match ipc::decode("a model choice", &body) {
+        Ok(choice) => choice,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served.daemon().set_model(job.id(), choice).await {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// Take back a command a person allowed for this Job. **The Job comes back
+/// unchanged**: the next reach for the command is asked about again.
+pub(crate) async fn remove_allowed_command<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+    body: Bytes,
+) -> Response {
+    let removing: ipc::RemoveAllowedCommand = match ipc::decode("a command to take back", &body) {
+        Ok(removing) => removing,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served
+        .daemon()
+        .remove_allowed_command(job.id(), removing)
+        .await
+    {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
 /// Put a new Drone on the worktree the last one left, and say what to do
 /// differently. **One Job comes back**, not two — this is the same Job
 /// resuming, which is the whole of what makes it different from a redispatch.

@@ -60,7 +60,7 @@ function runningSteps() {
 export const WAITING_CALL = "call_pnpm_add_1";
 
 /**
- * The same Job at Ask me, its Drone stopped inside a call to a command it was
+ * The same Job at Ask me first, its Drone stopped inside a call to a command it was
  * not given. **Still `running`**, as it is while a question is out, and the row
  * carries `asking` — the flag that lifts it into Needs you on the Board.
  */

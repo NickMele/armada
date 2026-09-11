@@ -193,6 +193,24 @@ pub struct JobDetail {
     /// [`JobDetail::of`], like `when_blocked`. See [`CommandInFlight`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub command_waiting: Option<CommandInFlight>,
+    /// The commands a person allowed for this Job, oldest first. **Since
+    /// 11.0.**
+    ///
+    /// **Empty is a Job nobody allowed anything on**, and a detail from before
+    /// the field reads the same way rather than failing. A command allowed
+    /// with [`Reach::Repository`](crate::Reach::Repository) is listed here too:
+    /// the Job holds it whichever way it was allowed. Filled after
+    /// [`JobDetail::of`], like `when_blocked`.
+    #[serde(default)]
+    pub allowed_commands: Vec<crate::AllowedCommandRow>,
+    /// The model a person chose for this Job's later steps. **Since 11.0.**
+    ///
+    /// **Absent is no choice**, and each step runs on the model its workflow
+    /// gives it. Present, the next step's Drone is spawned on it; the step
+    /// running when it was chosen keeps its own. `set_model` moves it. Filled
+    /// after [`JobDetail::of`], like `when_blocked`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_override: Option<String>,
     /// The review Fleet composed at this Job's gate — the same text a pull
     /// request carries, where this Job has one. **Since 10.11**, and absent
     /// from a Fleet older than that, which a reader draws as no review at all
@@ -549,6 +567,8 @@ impl JobDetail {
             show_again: None,
             when_blocked: None,
             command_waiting: None,
+            allowed_commands: Vec::new(),
+            model_override: None,
             review,
         }
     }

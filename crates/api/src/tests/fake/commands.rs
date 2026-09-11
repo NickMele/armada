@@ -208,6 +208,20 @@ impl Commands for FakeDaemon {
     ) -> Result<JobSummary, Refusal> {
         self.unmoved(&job_id)
     }
+    async fn set_model(
+        &self,
+        job_id: JobId,
+        _choice: ipc::SetModel,
+    ) -> Result<JobSummary, Refusal> {
+        self.unmoved(&job_id)
+    }
+    async fn remove_allowed_command(
+        &self,
+        job_id: JobId,
+        _removing: ipc::RemoveAllowedCommand,
+    ) -> Result<JobSummary, Refusal> {
+        self.unmoved(&job_id)
+    }
     async fn restart_step(
         &self,
         job_id: JobId,

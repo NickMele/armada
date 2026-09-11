@@ -29,7 +29,7 @@ import {
   superseded,
   unreadable,
 } from "../../../fixtures/build/index";
-import { JOB_ID } from "../../../fixtures/build/base";
+import { JOB_ID, spend, watchedRead } from "../../../fixtures/build/base";
 import { WAITING_CALL } from "../../../fixtures/build/running";
 import { recorded } from "../../../fixtures/recorded";
 import { JobDetailFrom } from "./JobDetail";
@@ -90,31 +90,53 @@ export const HeaderActionsOpen: Story = {
 /** Midway through Fix, before its Check has run. */
 export const Running: Story = { name: "Running", render: drawing(running) };
 
-/** What the header's setting sends. A module's spy, cleared by the play that reads it. */
+/** What the panel's choice sends. A module's spy, cleared by the play that reads it. */
 const setWhenBlocked = fn();
 
 /**
- * How a running Job meets a command its Drone was not given, changed from the
- * line under the header's facts. **Live**: what goes is the choice, and nothing
- * on the screen restarts.
- *
- * **Choosing what is already set sends nothing.** The menu cannot mark the
- * choice in force, so the trigger names it — and a second press of it is not a
- * change, which is the half of this a drawing cannot show.
+ * The running Job, changed: a model chosen for its later steps and one command
+ * allowed for it. What the header counts, and what the panel lists.
  */
-export const BlockedCommandsChanged: Story = {
-  name: "Blocked commands, changed to Ask me",
-  render: () => <JobDetailFrom fixture={running()} on={{ onSetWhenBlocked: setWhenBlocked }} />,
+function runningWithSettings(): JobFixture {
+  const fixture = running();
+  if (fixture.watched.state !== "read") return fixture;
+  return {
+    ...fixture,
+    watched: watchedRead({
+      ...fixture.watched.detail,
+      model_override: "opus",
+      allowed_commands: [
+        {
+          run: "pnpm add -D reselect@5.1.1",
+          reach: "job",
+          allowed_at: "2026-09-10T14:29:40Z",
+          by: "human",
+        },
+      ],
+    }),
+  };
+}
+
+/**
+ * **The header's way in, and the panel it opens.** The count on the button is
+ * the model and the allow; the panel says what each setting does and when a
+ * change to it takes. Nothing on the screen behind it restarts.
+ *
+ * **What goes is this Job's id and the wire's word.** The panel's own story
+ * proves a choice names `ask_me`; this proves the screen hands it on against the
+ * Job on screen, which is the half a composition cannot show. Broken once by
+ * sending the Job's handle rather than its id.
+ */
+export const JobSettingsOpen: Story = {
+  name: "Job settings open",
+  render: () => (
+    <JobDetailFrom fixture={runningWithSettings()} on={{ onSetWhenBlocked: setWhenBlocked }} />
+  ),
   play: async ({ canvas, userEvent }) => {
     setWhenBlocked.mockClear();
-    const setting = await canvas.findByRole("button", { name: "Blocked commands: Refuse and hold" });
-
-    await userEvent.click(setting);
-    await userEvent.click(await canvas.findByRole("menuitem", { name: "Refuse and hold" }));
-    await expect(setWhenBlocked).not.toHaveBeenCalled();
-
-    await userEvent.click(setting);
-    await userEvent.click(await canvas.findByRole("menuitem", { name: "Ask me" }));
+    await userEvent.click(await canvas.findByRole("button", { name: /^Job settings/ }));
+    const panel = within(await canvas.findByRole("dialog", { name: "Job settings" }));
+    await userEvent.click(panel.getByRole("radio", { name: "Ask me first" }));
     await expect(setWhenBlocked).toHaveBeenCalledWith(JOB_ID, "ask_me");
   },
 };
@@ -123,8 +145,8 @@ export const BlockedCommandsChanged: Story = {
 const answerCommand = fn();
 
 /**
- * A Job at Ask me whose Drone reached for a command it was not given, and is
- * waiting on a person — still `running`, with the header naming the setting.
+ * A Job at Ask me first whose Drone reached for a command it was not given, and
+ * is waiting on a person — still `running`.
  * The command is what is asked; the answers are the three Fleet offered, each
  * saying what it commits to.
  *
@@ -168,6 +190,55 @@ export const JudgeRefused: Story = { name: "Judge refused", render: drawing(esca
 
 /** Every Check passed and the Judge met every criterion. A person decides next. */
 export const Review: Story = { name: "Review", render: drawing(review) };
+
+/**
+ * The review moment on a Job whose names are as long as real ones get, with the
+ * spend and turns a long run reaches. The header a person reported on 11 Sep
+ * 2026: the facts wrap into an orphaned line, and the blocked-command setting
+ * reads as the screen's main button with nothing saying what pressing it does.
+ */
+function reviewWithLongNames(): JobFixture {
+  const fixture = reviewAtDelivery();
+  if (fixture.watched.state !== "read") return fixture;
+  const handle = "3-support-attaching-screenshots-and-file-sea";
+  const renamed = {
+    ...fixture.job,
+    title: "Support attaching screenshots and file search in job context",
+    handle,
+    branch: `armada/${handle}`,
+  };
+  const whole = fixture.watched.detail;
+  return {
+    ...fixture,
+    job: renamed,
+    watched: watchedRead({
+      ...whole,
+      job: renamed,
+      branch: renamed.branch,
+      spend: spend({
+        cost_micros: 29_630_000,
+        cost_cap_micros: 60_000_000,
+        unpriced: 2,
+        turns: 580,
+        turn_cap: 1000,
+      }),
+      ...(whole.delivery === undefined
+        ? {}
+        : {
+            delivery: {
+              ...whole.delivery,
+              pull_request: "https://forge.example/armada/armada/pull/660",
+            },
+          }),
+    }),
+  };
+}
+
+/** The review header with real-length names, as reported. Kept to iterate the header against. */
+export const ReviewLongNames: Story = {
+  name: "Review, long names",
+  render: drawing(reviewWithLongNames),
+};
 
 /** At review with a pull request open and comments on it. Merge becomes a fourth answer. */
 export const ReviewWithPullRequest: Story = {

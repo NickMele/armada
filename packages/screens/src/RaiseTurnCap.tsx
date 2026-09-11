@@ -67,8 +67,8 @@ export function RaiseTurnCapControl({
   open: boolean;
   onOpen: (up: boolean) => void;
   /**
-   * Whether to draw its own button. Off where the job header's one control
-   * carries the entry instead, so the header never shows two buttons.
+   * Whether to draw its own button. Off where Job settings carries the entry
+   * instead, so the header never shows a second one.
    */
   trigger?: boolean;
   /** The new ceiling, as a turn count — the unit `spend` reads it in. */

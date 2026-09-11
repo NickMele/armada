@@ -30,7 +30,7 @@ use adapter_traits::{
     AgentHarness, Delivery, DroneSpawnConfig, Grant, McpConfig, Model, Prompt, SpawnConfigRefused,
     Toolbelt, Vcs, WorkProduct, Worktree,
 };
-use core_model::{Component, DroneId, Envelope, EscalationTrigger, Job, Level, StepId};
+use core_model::{Component, DroneId, Envelope, EscalationTrigger, Job, Level, ModelName, StepId};
 
 use crate::adrift::Adrift;
 use crate::briefing::Opening;
@@ -318,6 +318,10 @@ where
     /// that it is, a step that only runs a suite and reports stops paying for
     /// one that reasons. `Job::model_at` is where absent falls back to the
     /// Job's, and this asks it rather than deciding for itself.
+    ///
+    /// **A person's choice beats both**, read here because this is the next
+    /// spawn it is promised to. A name the store will not give back as one is
+    /// no choice: the step runs as its workflow asked rather than not at all.
     async fn spawn_config(
         &self,
         job: &Job,
@@ -326,9 +330,13 @@ where
         brief: Prompt,
     ) -> Result<DroneSpawnConfig, SpawnConfigRefused> {
         let ports = self.port_env(job).await;
+        let chosen = self
+            .model_override_of(job.id())
+            .await
+            .and_then(|named| ModelName::new(&named).ok());
         Ok(DroneSpawnConfig::spawn_in(
             worktree,
-            Model::named(job.model_at(step).as_str())?,
+            Model::named(job.model_spawned_at(step, chosen.as_ref()).as_str())?,
             brief,
             McpConfig::only_these(&self.host().mcp_config)?,
             self.toolbelt(job, step).await,
