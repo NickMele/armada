@@ -32,6 +32,13 @@ directory rebuilds; a worktree that nobody removes stays forever and takes a new
 build directory with it the next time anyone touches it. Clearing `target/` and
 leaving the worktree is the move that has to be made twice.
 
+**`Directory not empty` means something is still writing there, and it is
+usually you.** After an `isolation: "worktree"` agent finishes, the dispatching
+session's working directory moves into its worktree and the session's own
+rust-analyzer starts building there. `git worktree remove --force` then
+deregisters the tree and leaves a gigabyte behind. Once the three checks below
+pass, `rm -rf` what is left. Confirmed 2026-09-11.
+
 ## Three things that must survive
 
 Check all three before removing anything. Merged-ness alone is not enough.
@@ -40,7 +47,13 @@ Check all three before removing anything. Merged-ness alone is not enough.
 |---|---|---|
 | **An agent is still working in it** | it is running, or its last report said "not committed" | Its edits are on disk and nowhere else |
 | **The tree is dirty** | `git status --porcelain` is non-empty | Uncommitted work looks identical to no work from outside |
-| **The branch is not in `main`** | `git merge-base --is-ancestor <branch> main` | Commits exist only there |
+| **The branch is not in `main`** | `git merge-base --is-ancestor <branch> main`, and where that says no, `gh pr list --head <branch> --state all` | Commits exist only there |
+
+**A PR that merged rebased leaves a branch that fails the ancestor check.**
+Confirmed 2026-09-11: two days after its PR merged, `fleet/the-check-record-on-the-wire`
+still read as unmerged. An agent reported it as work that would conflict with its
+own, and that reached the owner as a rebase still owed. `gh pr list --head`
+settled it in one line.
 
 **The dirty check is the one that catches the dangerous case.** An agent that has
 written files but not committed is on a branch with *no commits ahead of `main`* —

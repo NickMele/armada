@@ -114,6 +114,12 @@ hours that day.
 before three other merges is not describing today's `main`. `git rebase main`,
 re-run the gate, then `git merge --ff-only`.
 
+**`MERGEABLE` means no conflict, not up to date.** Confirmed 2026-09-11: #634
+merged 16 commits behind `main` on the strength of that word. Its protocol bump
+to 10.3 merged cleanly onto another branch's bump to 10.3, so two wire changes
+now share one version. **A clean merge of `protocol-version.toml` is a
+collision, not an agreement.**
+
 **Drive it to merged.** Do not stop and hand the owner a branch to merge — that
 is the step this skill owns. Never force a merge past a failing gate, a real
 conflict, or an unresolved question, and never merge a branch this session did
