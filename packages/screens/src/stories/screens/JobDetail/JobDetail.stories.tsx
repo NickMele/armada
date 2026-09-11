@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { expect, within } from "storybook/test";
 
 import type { JobFixture } from "../../../fixtures/fixture";
 import {
@@ -22,6 +22,7 @@ import {
   rejected,
   retryingCheckFailure,
   review,
+  reviewAtDelivery,
   running,
   runningAtGate,
   superseded,
@@ -31,22 +32,17 @@ import { recorded } from "../../../fixtures/recorded";
 import { JobDetailFrom } from "./JobDetail";
 
 /**
- * Job detail, one story per state a Job can be in — drawn by the app's own
- * screen from wire data.
+ * Job detail in every state a Job can be in, drawn by the app's own screen from
+ * wire data.
  *
- * **Two sources, and both are the wire's shape.** A *recorded* story is a real
- * Job, captured off a Fleet by `scripts/record-job.mjs` and replayed through the
- * fold Bridge's main process runs. A *built* one is composed in code from the
- * wire types, for the states a real Job rarely sits in long enough to catch —
- * the type checker is what keeps it honest, since a field Fleet stops sending
- * stops compiling here. Neither hand-builds the screen's props, which is what
- * the stories before these did and why they could not show a bug in deriving
- * them.
+ * A recorded story is a real Job, captured off a Fleet by
+ * `scripts/record-job.mjs` and replayed through the fold Bridge's main process
+ * runs. A built story is composed in code from the wire types, for states a
+ * real Job rarely sits in long enough to catch. The type checker keeps those
+ * honest: a field Fleet stops sending stops compiling here.
  *
- * **Every region is live.** The run, the chapters and the sheets hold their own
- * state, so a story can be clicked through the way the app can. A press that
- * would change the Job does nothing: a story is one moment, and there is no
- * Fleet behind it to act on.
+ * Every region is live, so a story can be clicked through like the app. A press
+ * that would change the Job does nothing, because there is no Fleet behind it.
  */
 const meta: Meta<typeof JobDetailFrom> = {
   title: "Screens/Job detail",
@@ -57,141 +53,149 @@ export default meta;
 
 type Story = StoryObj<typeof JobDetailFrom>;
 
-/** A story that draws one fixture, with no controls — a whole Job is not an arg. */
+/** A story that draws one fixture, with no controls. A whole Job is not an arg. */
 function drawing(fixture: () => JobFixture): Story["render"] {
   return () => <JobDetailFrom fixture={fixture()} />;
 }
 
-/** A real Job that landed, whose worktree has since been reclaimed — so no diff can be read. */
-export const RecordedDoneWithItsWorktreeGivenBack: Story = {
-  name: "Recorded — done, and its worktree given back",
+/** A real Job that landed. Its worktree was reclaimed, so there is no diff to read. */
+export const DoneRecorded: Story = {
+  name: "Done (recorded)",
   render: drawing(() => recorded("done-worktree-given-back")),
 };
 
-/** Mid-way through Fix, its Check not yet run. The state most of a Job's life is spent in. */
+/** Midway through Fix, before its Check has run. */
 export const Running: Story = { name: "Running", render: drawing(running) };
 
-/** Every Check passed and the Judge met every criterion; the gate is a person. */
-export const WaitingOnYourReview: Story = {
-  name: "Waiting on your review",
-  render: drawing(review),
-};
-
-/** A Check failed on the last attempt it had, and that ended the Job. */
-export const ACheckFailedAndEndedIt: Story = {
-  name: "A Check failed and ended it",
-  render: drawing(escalatedGateFailure),
-};
-
 /**
- * Before the first Drone turn: the worktree is being cut and the repository's
- * preparation commands are running. Fleet's own log is the only thing there is
- * to read, which is why the screen reads it here.
+ * Before the first Drone turn, while the worktree is cut and the repository's
+ * preparation commands run. Fleet's own log is all there is to read.
  */
-export const Preparing: Story = { name: "Preparing, before the first Drone turn", render: drawing(preparing) };
+export const Preparing: Story = { name: "Preparing", render: drawing(preparing) };
 
-/** A Check failed on the first attempt, and the Drone is on its second. Nothing is asked of you yet. */
-export const ACheckFailedAndItIsTryingAgain: Story = {
-  name: "A Check failed, and it is trying again",
+/** A Check failed on the first attempt, and the Drone is on its second. */
+export const CheckFailedRetrying: Story = {
+  name: "Check failed, retrying",
   render: drawing(retryingCheckFailure),
 };
 
 /**
- * At the gate: one Check has reported and the next is queued behind it, with the
- * Judge behind both. The wire has no outcome for a Check still running — a run
- * exists once it finished — so "in flight" is one reported and one not yet.
+ * One Check has reported and the next is queued behind it, with the Judge after
+ * both. The wire has no outcome for a Check still running, so this is what in
+ * flight looks like.
  */
-export const AtTheGateOneCheckIn: Story = {
-  name: "At the gate, one Check in and the next queued",
-  render: drawing(runningAtGate),
+export const AtTheGate: Story = { name: "At the gate", render: drawing(runningAtGate) };
+
+/** Every Check passed, and the Judge refused two criteria. */
+export const JudgeRefused: Story = { name: "Judge refused", render: drawing(escalatedEvidenceSuspect) };
+
+/** Every Check passed and the Judge met every criterion. A person decides next. */
+export const Review: Story = { name: "Review", render: drawing(review) };
+
+/** At review with a pull request open and comments on it. Merge becomes a fourth answer. */
+export const ReviewWithPullRequest: Story = {
+  name: "Review, pull request open",
+  render: drawing(reviewAtDelivery),
 };
 
 /**
- * Every Check passed, and the Judge's panel refused two criteria. The refusal
- * is the gate working rather than the Job failing, and the verdicts say which
- * criterion and why.
+ * Merge pressed. Cancel holds focus and Enter presses whatever holds focus, so
+ * Enter here cancels. A merge Bridge cannot take back never goes out by default.
  */
-export const ThePanelRefusedTwoCriteria: Story = {
-  name: "Every Check passed, and the panel refused two criteria",
-  render: drawing(escalatedEvidenceSuspect),
+export const MergeConfirmation: Story = {
+  name: "Merge confirmation",
+  render: drawing(reviewAtDelivery),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: /^Merge/ }));
+    const layer = within(await canvas.findByRole("dialog"));
+    await expect(layer.getByRole("button", { name: "Cancel" })).toHaveFocus();
+  },
 };
 
-/**
- * Fleet would not answer for this Job's own detail. Each region says what it
- * cannot read rather than drawing as a Job with nothing in it.
- */
-export const FleetWouldNotAnswer: Story = {
-  name: "Fleet would not answer for this Job",
-  render: drawing(unreadable),
+/** Two comments picked to send to a Drone, which makes Send live. */
+export const CommentsPicked: Story = {
+  name: "Comments picked",
+  render: drawing(reviewAtDelivery),
+  play: async ({ canvas, userEvent }) => {
+    const remarks = within(
+      await canvas.findByRole("region", { name: "Comments on the pull request" }),
+    );
+    const picks = remarks.getAllByRole("checkbox");
+    const send = remarks.getByRole("button", { name: "Send to a drone" });
+    await expect(send).toBeDisabled();
+    await userEvent.click(picks[0]!);
+    await userEvent.click(picks[1]!);
+    await expect(send).toBeEnabled();
+  },
 };
 
-/** Waiting for room to run, with nothing started. */
+/** A Check failed on its last attempt, and the Job stopped at the gate. */
+export const StoppedAtTheGate: Story = {
+  name: "Stopped at the gate",
+  render: drawing(escalatedGateFailure),
+};
+
+/** A step spent its retries and holds for a person to repair it. */
+export const NeedsRepair: Story = { name: "Needs repair", render: drawing(awaitingRepair) };
+
+/** Waiting for room to run. Nothing has started. */
 export const Queued: Story = { name: "Queued", render: drawing(queued) };
 
-/** Proposed, and waiting on a person to approve it before anything starts. */
-export const WaitingForApproval: Story = {
-  name: "Waiting for approval",
-  render: drawing(awaitingApproval),
-};
+/** Proposed, and waiting for a person to approve it. */
+export const NeedsApproval: Story = { name: "Needs approval", render: drawing(awaitingApproval) };
 
-/** A step spent its retries and is holding for a person to repair it. */
-export const OutOfAttempts: Story = { name: "Out of attempts", render: drawing(awaitingRepair) };
-
-/** Waiting on a person to attest to what the work did. */
-export const WaitingForAttestation: Story = {
-  name: "Waiting for attestation",
+/** Waiting for a person to attest to what the work did. */
+export const NeedsAttestation: Story = {
+  name: "Needs attestation",
   render: drawing(awaitingAttestation),
 };
 
 /** A person is driving the Drone directly. */
 export const Piloted: Story = { name: "Piloted", render: drawing(piloted) };
 
-/** The Drone reached for something the policy refuses, and the refusal is on the record. */
+/** The Drone reached for something the policy refuses. */
 export const BlockedByPolicy: Story = {
   name: "Blocked by policy",
   render: drawing(escalatedBlockedByPolicy),
 };
 
-/** Fleet stopped under a running step, and the Drone was gone when it came back. */
+/** Fleet stopped during a running step, and the Drone was gone when it came back. */
 export const Interrupted: Story = { name: "Interrupted", render: drawing(escalatedInterrupted) };
 
 /** The Drone stopped writing for longer than a step allows. */
-export const WentSilent: Story = { name: "Went silent", render: drawing(escalatedSilent) };
+export const Silent: Story = { name: "Silent", render: drawing(escalatedSilent) };
 
-/** The step went round more times than its cap. */
-export const HitTheLoopCap: Story = { name: "Hit the loop cap", render: drawing(escalatedLoopCap) };
+/** The step looped more times than its cap allows. */
+export const LoopCap: Story = { name: "Loop cap", render: drawing(escalatedLoopCap) };
 
 /** The Drone ended without submitting a report. */
-export const EndedWithoutAReport: Story = {
-  name: "Ended without a report",
-  render: drawing(escalatedNoReport),
-};
+export const NoReport: Story = { name: "No report", render: drawing(escalatedNoReport) };
+
+/** Fleet would not answer for this Job's detail. Each region says what it could not read. */
+export const FleetUnreachable: Story = { name: "Fleet unreachable", render: drawing(unreadable) };
 
 /** Landed. */
 export const Landed: Story = { name: "Landed", render: drawing(completedSuccess) };
 
-/** Over, and a system failure ended it. */
+/** A held or escalated Job that a person closed as failed. */
 export const Failed: Story = { name: "Failed", render: drawing(completedFailed) };
 
-/** A person declined the work. A decision, not a failure, and drawn as one. */
+/** A person declined the work. That is a decision, and it is drawn as one. */
 export const Rejected: Story = { name: "Rejected", render: drawing(rejected) };
 
-/** A person stopped it. A decision, not a failure, and drawn as one. */
+/** A person stopped it. That is a decision, and it is drawn as one. */
 export const Killed: Story = { name: "Killed", render: drawing(killed) };
 
-/** Replaced by a redispatch, which carries the work on under a new Job. */
+/** Replaced by a redispatch that carries the work on as a new Job. */
 export const Superseded: Story = { name: "Superseded", render: drawing(superseded) };
 
 /**
- * The log, open on a running Job, in the trailing sheet.
- *
- * **Opened by pressing the chapter's own control**, the way a person opens it —
- * the screen holds which sheet is open, so a story that set it would be drawing
- * a state nothing in the app can reach by that route. The control leaves the
- * chapter once its sheet is open, which is the assertion.
+ * The log, opened from its chapter's own control, the way a person opens it.
+ * The control leaves the chapter once its sheet is open, which is what this
+ * checks.
  */
-export const TheLogOpen: Story = {
-  name: "The log open",
+export const LogOpen: Story = {
+  name: "Log open",
   render: drawing(running),
   play: async ({ canvas, userEvent }) => {
     await userEvent.click(await canvas.findByRole("button", { name: /Open the log/ }));
@@ -199,48 +203,45 @@ export const TheLogOpen: Story = {
   },
 };
 
-/** The Job's patch, open in the sheet, from the chapter that says what was produced. */
-export const TheDiffOpen: Story = {
-  name: "The diff open",
+/** The Job's patch, opened from the Produced chapter. */
+export const DiffOpen: Story = {
+  name: "Diff open",
   render: drawing(running),
   play: async ({ canvas, userEvent }) => {
     await userEvent.click(await canvas.findByRole("button", { name: /Open the diff/ }));
   },
 };
 
-/**
- * The log open at `--window-floor`, the narrowest window Bridge lays out for.
- * The sheet has the least room here, and it still has to leave the run beside it.
- */
-export const TheLogOpenAtTheFloor: Story = {
-  name: "The log open, at the narrowest window",
+/** The log open at the narrowest window Bridge lays out for. */
+export const LogOpenNarrow: Story = {
+  name: "Log open, narrow window",
   render: () => <JobDetailFrom fixture={running()} width="var(--window-floor)" />,
   play: async ({ canvas, userEvent }) => {
     await userEvent.click(await canvas.findByRole("button", { name: /Open the log/ }));
   },
 };
 
-/** The log open on a Job a failed Check stopped — the reason is read beside the log. */
-export const TheLogOpenOnAStoppedJob: Story = {
-  name: "The log open, on a stopped Job",
+/** The log open on a Job a failed Check stopped. */
+export const LogOpenStopped: Story = {
+  name: "Log open, stopped",
   render: drawing(escalatedGateFailure),
   play: async ({ canvas, userEvent }) => {
     await userEvent.click(await canvas.findByRole("button", { name: /Open the log/ }));
   },
 };
 
-/** The failed Check's output, opened from the Checks chapter — the reason the Job stopped, whole. */
-export const TheFailedChecksOutputOpen: Story = {
-  name: "The failed Check's output open",
+/** The failed Check's output, opened from the Checks chapter. */
+export const CheckOutputOpen: Story = {
+  name: "Check output open",
   render: drawing(escalatedGateFailure),
   play: async ({ canvas, userEvent }) => {
     await userEvent.click(await canvas.findByRole("button", { name: /Open the output/ }));
   },
 };
 
-/** What the Job holds on the machine, read in full from the summary under the run. */
-export const TheFullReadingOpen: Story = {
-  name: "What the Job holds, read in full",
+/** What the Job holds on the machine, read in full. */
+export const FullReadingOpen: Story = {
+  name: "Full reading open",
   render: drawing(running),
   play: async ({ canvas, userEvent }) => {
     await userEvent.click(await canvas.findByRole("button", { name: /Open the full reading/ }));

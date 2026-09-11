@@ -33,12 +33,14 @@ import {
 import { preparing } from "./preparing";
 import { unreadable } from "./unreadable";
 import { retryingCheckFailure, runningAtGate } from "./gating";
+import { reviewAtDelivery } from "./delivering";
 
 export {
   running,
   review,
   escalatedGateFailure,
   escalatedEvidenceSuspect,
+  reviewAtDelivery,
   queued,
   awaitingApproval,
   awaitingRepair,
@@ -65,6 +67,7 @@ export const FIXTURES = [
   review(),
   escalatedGateFailure(),
   escalatedEvidenceSuspect(),
+  reviewAtDelivery(),
   queued(),
   awaitingApproval(),
   awaitingRepair(),
