@@ -48,7 +48,7 @@ import { TheListSixStatesOneRowShape } from "./TheList";
  * drawing rather than proof the track is filled.
  */
 const meta: Meta<typeof TheListSixStatesOneRowShape> = {
-  title: "Screens/The list",
+  title: "Drafts/The list",
   component: TheListSixStatesOneRowShape,
 };
 export default meta;

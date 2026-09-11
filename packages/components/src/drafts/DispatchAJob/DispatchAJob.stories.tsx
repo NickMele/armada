@@ -16,7 +16,7 @@ import { DispatchAJobFullWithTheM1SubsetMarked } from "./DispatchAJob";
  * `killed`** — a job you never dispatched was not stopped, it was abandoned.
  */
 const meta: Meta<typeof DispatchAJobFullWithTheM1SubsetMarked> = {
-  title: "Screens/Dispatch a job",
+  title: "Drafts/Dispatch a job",
   component: DispatchAJobFullWithTheM1SubsetMarked,
 };
 export default meta;

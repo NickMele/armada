@@ -125,6 +125,7 @@ fn verify_foundations() -> ExitCode {
         rules_icons::contract::the_contract_and_the_registry_agree_on_meaning(&root),
         rules_actions::every_action_carries_three_columns(&root),
         rules_stories::every_story_names_its_own_path(&root),
+        rules_stories::every_screen_is_one_the_app_renders(&root),
         rules_layers::every_package_imports_downward(&root),
         rules_bundled::no_workspace_package_is_left_for_node(&root),
         rules_node::the_pinned_node_satisfies_the_declared_floor(&root),

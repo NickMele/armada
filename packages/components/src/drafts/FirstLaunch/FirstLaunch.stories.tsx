@@ -14,7 +14,7 @@ import { FirstLaunch as FirstLaunchScreen } from "./FirstLaunch";
  * state can name the command rather than reporting a timeout.
  */
 const meta: Meta<typeof FirstLaunchScreen> = {
-  title: "Screens/First launch",
+  title: "Drafts/First launch",
   component: FirstLaunchScreen,
 };
 export default meta;

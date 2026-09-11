@@ -329,3 +329,19 @@ fn a_screens_story_that_disagrees_with_its_directory_is_named_too() {
         "names the screens root: {failed:?}"
     );
 }
+
+/// A component file names what it renders in its `export function` and
+/// `export const` lines, and nowhere else the rule reads.
+#[test]
+fn a_screen_names_what_it_exports() {
+    let text = "export type Props = {};\nexport function TheShell() {}\nexport const RAIL = 1;\nfunction inner() {}\n";
+    assert_eq!(exported_names(text), vec!["TheShell", "RAIL"]);
+}
+
+/// The app naming a longer identifier that starts with a screen's name is not
+/// the app rendering that screen.
+#[test]
+fn a_mention_is_a_whole_word() {
+    assert!(mentions("import { TheShell } from \"@armada/components\";", "TheShell"));
+    assert!(!mentions("const TheShellFrame = 1;", "TheShell"));
+}
