@@ -14,11 +14,6 @@
 //! file, and an empty commit would put a record of nothing onto the branch a
 //! person merges.
 //!
-//! # Some paths, built from the tip rather than the index
-//!
-//! [`commit_paths`] takes the branch tip's tree and replaces the named paths in
-//! it, so whatever else is staged stays staged and out of the commit.
-//!
 //! # The identity is Armada's own, and it is not the operator's
 //!
 //! `repo.signature()` would read the machine's git config and attribute Fleet's
@@ -52,6 +47,8 @@ pub(crate) fn commit_all(
 
 /// Commit these paths as the working directory holds them, and nothing else.
 ///
+/// **The tree is the branch tip's with these paths replaced, never the
+/// index's**, so whatever else is staged stays staged and out of the commit.
 /// Each path is staged in the real index and the tree takes its entry from
 /// there, which runs it through the filters `git add` would and leaves a
 /// person's `git status` showing it clean afterwards.
