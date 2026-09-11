@@ -17,6 +17,7 @@
 import type { BridgeState } from "../shared/bridge";
 import type { ClearOutcome, Draft, Outcome, ReclaimOutcome } from "@armada/protocol";
 import type { CapRaise, ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report, RestartRequested, TurnRaise } from "@armada/protocol";
+import type { AnswerCommand, CommandAnswer, SetWhenBlocked, WhenBlocked } from "@armada/protocol";
 import type { ProposalInFlight, Proposed, ShownAgain } from "@armada/protocol";
 import { ask, isJobSummary, MODEL_CALL_MS, NO_WAIT, route, type Answer } from "./request";
 import { Clearing } from "./clearing";
@@ -78,7 +79,8 @@ type Busy =
   | "already_raising_turns"
   | "already_reporting"
   | "already_deciding"
-  | "already_answering";
+  | "already_answering"
+  | "already_setting";
 
 /**
  * The acts, and which of them are in flight.
@@ -131,6 +133,12 @@ export class JobCommands {
    * realises none of the options was right.
    */
   private readonly answering = new Set<string>();
+  /**
+   * Jobs with a change to how they meet a blocked command in flight. Its own
+   * set: the setting moves no status and no Drone, so it is in flight beside
+   * any act that does, and only a second change to it is the same press twice.
+   */
+  private readonly setting = new Set<string>();
   /**
    * Jobs with a press out. Its own set: a press moves nothing on the Job, so it
    * is in flight beside any act that does, and Fleet refuses a second press on
@@ -415,6 +423,36 @@ export class JobCommands {
     const body: ChosenAnswer = { question_id: questionId, chose };
     return this.act(jobId, this.answering, "already_answering", (port) =>
       ask(port, "POST", route(jobId, "answer_question"), body),
+    );
+  }
+
+  /**
+   * Allow or reject a command the job's drone was not given. **One act for
+   * both places a person meets one**, because the call id already says which:
+   * a command a drone is waiting on is answered in place, and a refused row on
+   * a stopped job moves the job on.
+   *
+   * **Under `answering`, beside the question's answer.** Both hand a waiting
+   * drone a person's choice, and a drone held inside one call is not asking
+   * the other. Which answers were offered is Fleet's, so one this window
+   * believes in and Fleet does not is a 409 rather than a guess.
+   */
+  async answerCommand(jobId: string, call: string, answer: CommandAnswer): Promise<Outcome> {
+    const body: AnswerCommand = { call, answer };
+    return this.act(jobId, this.answering, "already_answering", (port) =>
+      ask(port, "POST", route(jobId, "answer_command"), body),
+    );
+  }
+
+  /**
+   * Change how the job meets a command its drone was not given. **Live, and
+   * nothing restarts** — Fleet reads it at the next command the drone reaches
+   * for, and the job comes back exactly where it was.
+   */
+  async setWhenBlocked(jobId: string, whenBlocked: WhenBlocked): Promise<Outcome> {
+    const body: SetWhenBlocked = { when_blocked: whenBlocked };
+    return this.act(jobId, this.setting, "already_setting", (port) =>
+      ask(port, "POST", route(jobId, "set_when_blocked"), body),
     );
   }
 

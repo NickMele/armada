@@ -51,9 +51,46 @@ function fixStep() {
   };
 }
 
+/** The workflow's six steps, midway through Fix. */
+function runningSteps() {
+  return [reproStep(), rootCauseStep(), fixStep(), freshStep("regression_verify", "Regression check", 4), consumersStep(), landStep()];
+}
+
+/** The call the Drone below is waiting on, which is what an answer names. */
+export const WAITING_CALL = "call_pnpm_add_1";
+
+/**
+ * The same Job at Ask me, its Drone stopped inside a call to a command it was
+ * not given. **Still `running`**, as it is while a question is out, and the row
+ * carries `asking` — the flag that lifts it into Needs you on the Board.
+ */
+export function runningWaitingOnACommand(): JobFixture {
+  const was = running();
+  const theJob = job("running", { current_step_id: "fix", asking: true });
+  const whole = detail(theJob, runningSteps(), {
+    when_blocked: "ask_me",
+    command_waiting: {
+      call: WAITING_CALL,
+      step_id: "fix",
+      asked_at: "2026-09-10T14:29:10Z",
+      tool: "Bash",
+      detail: "pnpm add -D reselect@5.1.1",
+      truncated: false,
+      length: 26,
+      offers: ["allow_for_job", "always_allow", "reject"],
+    },
+  });
+  return {
+    ...was,
+    name: "running — the drone is waiting for a person to allow a command",
+    job: theJob,
+    watched: watchedRead(whole),
+  };
+}
+
 export function running(): JobFixture {
   const theJob = job("running", { current_step_id: "fix" });
-  const steps = [reproStep(), rootCauseStep(), fixStep(), freshStep("regression_verify", "Regression check", 4), consumersStep(), landStep()];
+  const steps = runningSteps();
   const whole = detail(theJob, steps);
 
   const rows = [

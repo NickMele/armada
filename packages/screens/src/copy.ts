@@ -12,7 +12,7 @@
 
 import type { DialogTone } from "@armada/components";
 
-import type { Outcome, WorktreeReclaimed } from "@armada/protocol";
+import type { CommandAnswer, Outcome, WhenBlocked, WorktreeReclaimed } from "@armada/protocol";
 import type { ConfirmableAct, JobAct } from "./JobDetail";
 
 /** What a refusal says. Every one names what happened and what to do. */
@@ -69,6 +69,8 @@ export function said(outcome: Outcome): string {
       return "A decision on that job's work is already in flight. It was not sent twice.";
     case "already_answering":
       return "That answer is already in flight. It was not sent twice.";
+    case "already_setting":
+      return "That change to how the job meets a blocked command is already in flight. It was not sent twice.";
     case "already_showing":
       return "That job is already showing its work. It was not asked twice.";
     case "empty_note":
@@ -259,6 +261,67 @@ export const RAISE_CAP_LABEL = "Raise the cost cap";
  * reads, and raising the cost cap does not start it.
  */
 export const RAISE_TURN_CAP_LABEL = "Raise the turn cap";
+
+/**
+ * How a job meets a command its drone was not given, in the header's words,
+ * and the order its menu offers them. **The two are the whole set** — a new job
+ * starts at the first, which asks nobody to be watching.
+ */
+export const WHEN_BLOCKED: readonly WhenBlocked[] = ["refuse_and_hold", "ask_me"];
+
+export const WHEN_BLOCKED_LABEL: Record<WhenBlocked, string> = {
+  refuse_and_hold: "Refuse and hold",
+  ask_me: "Ask me",
+};
+
+/** What names the setting on its line, before the choice in force. */
+export const WHEN_BLOCKED_NAMED = "Blocked commands";
+
+/**
+ * The answers to a command a drone was not given: the words on each control,
+ * and what it commits to in one line. **Fleet offers these three and no
+ * others**, and which of them a command takes is Fleet's to say.
+ *
+ * `means` is drawn where a person picks before sending — a command the drone
+ * is waiting on. A refused row draws the label alone, beside the sentence
+ * under the list that says what allowing from a row does.
+ */
+export const COMMAND_ANSWER: Record<CommandAnswer, { label: string; means: string }> = {
+  allow_for_job: {
+    label: "Allow for this job",
+    means: "The drone runs it now, and this job can run it again without asking.",
+  },
+  always_allow: {
+    label: "Always allow in this repository",
+    means:
+      "The drone runs it now, and it is written into armada.yml under commands, as its own " +
+      "commit on this job's branch.",
+  },
+  reject: {
+    label: "Reject",
+    means: "The drone is told no, and the command does not run.",
+  },
+};
+
+/**
+ * The answers one command offers, as words, in the order Fleet sent them. **An
+ * answer from a Fleet ahead of this build is left out** rather than drawn as a
+ * control with no words on it — one control fewer is honest, a blank one is not.
+ */
+export function offeredOf(
+  offers: readonly CommandAnswer[],
+): { offer: CommandAnswer; label: string; means: string }[] {
+  const known: Partial<Record<string, { label: string; means: string }>> = COMMAND_ANSWER;
+  return offers.flatMap((offer) => {
+    const said = known[offer];
+    return said === undefined ? [] : [{ offer, ...said }];
+  });
+}
+
+/** An answer a control handed back, as the wire's word — or nothing, for one this build never drew. */
+export function answerNamed(name: string): CommandAnswer | undefined {
+  return (Object.keys(COMMAND_ANSWER) as CommandAnswer[]).find((answer) => answer === name);
+}
 
 export const ACT_LABEL: Record<JobAct, string> = {
   kill_drone: "Kill drone",

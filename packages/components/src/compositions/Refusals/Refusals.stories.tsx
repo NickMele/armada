@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { Refusals } from "./Refusals";
+import { expect, fn, within } from "storybook/test";
+import { Refusals, type RefusedAnswer } from "./Refusals";
 
 const meta: Meta<typeof Refusals> = {
   title: "Compositions/Refusals",
@@ -258,6 +259,71 @@ export const ACommandThatWasNotRecorded: Story = {
       { tool: "Bash", detail: "cargo nextest run --package ipc 2>&1 | tail -80" },
     ],
   },
+};
+
+/** The three answers Fleet offers where a Drone is still there to be told no. */
+const ANSWERS: RefusedAnswer[] = [
+  { answer: "allow_for_job", label: "Allow for this job" },
+  { answer: "always_allow", label: "Always allow in this repository" },
+  { answer: "reject", label: "Reject" },
+];
+
+/**
+ * **A command can be allowed from its row.** On a job stopped at blocked by
+ * policy, a refused command Fleet will let a person allow carries its answers
+ * under it, in the command's column — so the answer sits beside the thing it
+ * is about, and nobody edits armada.yml by hand to get past one command.
+ *
+ * **One row cannot be**, and it says why where the controls would be:
+ * armada.yml declares it destructive, and Fleet's own sentence is drawn as
+ * Fleet wrote it. A row with no answers and no reason would read as a control
+ * that failed to load.
+ *
+ * Ghost, the variant the contract gives row actions: three rows of three
+ * controls at a louder variant would be a column of fills. The sentence under
+ * the list says what an answer on a row does.
+ */
+export const AnswersOnTheRow: Story = {
+  args: {
+    said: SAID,
+    again: "A command can be allowed from its row, for this job or for every job in the repository.",
+    refused: [
+      { tool: "Bash", detail: "npm publish --access public", call: "call_npm_1", answers: ANSWERS },
+      {
+        tool: "Bash",
+        detail: "rm -rf .armada",
+        call: "call_rm_1",
+        withheld: "armada.yml declares this destructive, as reset, and no job runs it unattended.",
+      },
+      { tool: "Bash", detail: "pnpm add -D reselect@5.1.1", call: "call_pnpm_1", answers: ANSWERS },
+    ],
+    onAnswer: fn(),
+  },
+  /**
+   * **The press names its own row's call.** The last row is pressed rather
+   * than the first, so an answer that went out under whichever call happened
+   * to be first would be caught here rather than allowing the wrong command.
+   * The withheld row has no answers to press at all.
+   */
+  play: async ({ args, canvas, userEvent }) => {
+    const last = canvas.getByRole("group", { name: "Answers for pnpm add -D reselect@5.1.1" });
+    await userEvent.click(within(last).getByRole("button", { name: "Always allow in this repository" }));
+    await expect(args.onAnswer).toHaveBeenCalledWith("call_pnpm_1", "always_allow");
+    await expect(canvas.queryByRole("group", { name: "Answers for rm -rf .armada" })).toBeNull();
+  },
+};
+
+/**
+ * An answer already out. **Every row's controls are off and the list says
+ * why**, because a disabled control with no sentence beside it reads as an app
+ * that is broken rather than one that is busy.
+ */
+export const AnswersWhileOneIsOut: Story = {
+  args: {
+    ...AnswersOnTheRow.args,
+    disabled: true,
+    disabledNote: "That answer is already on its way to Fleet.",
+  } as Story["args"],
 };
 
 /**

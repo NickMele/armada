@@ -105,6 +105,18 @@ export type JobDetailHeaderActionsProps = {
   fields: JobDetailField[];
   /** The controls at the trailing edge. None on a terminal Job. */
   actions?: ReactNode;
+  /**
+   * A setting on this Job, on its own line under the facts — how it meets a
+   * command its drone was not given.
+   *
+   * **Under the facts and not among them.** A fact is read and this is
+   * pressed, and a control inside a nowrap run of readings would be the one
+   * thing in it that is not a reading. **Not at the trailing edge either**:
+   * that group ends or replaces the Job, and changing how it runs does
+   * neither. Absent draws nothing, which is an older Fleet or a Job that is
+   * over.
+   */
+  setting?: ReactNode;
   /** A clipboard write is silent, so the surface confirms it with a toast. */
   onCopied?: (value: string) => void;
   /**
@@ -124,6 +136,7 @@ export function JobDetailHeaderActions({
   jobId,
   fields,
   actions,
+  setting,
   onCopied,
   onFollowed,
 }: JobDetailHeaderActionsProps) {
@@ -216,6 +229,9 @@ export function JobDetailHeaderActions({
             </span>
           ))}
         </div>
+        {setting === undefined || setting === null ? null : (
+          <div className="armada-job-head__setting">{setting}</div>
+        )}
       </div>
       {actions ? <div className="armada-job-head__actions">{actions}</div> : null}
     </div>

@@ -8,7 +8,7 @@ import { CHANNELS, NOTHING_YET } from "../shared/bridge";
 import type { BridgeState, Summons } from "../shared/bridge";
 import type { Draft } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
-import type { Artifact } from "@armada/protocol";
+import type { Artifact, CommandAnswer, WhenBlocked } from "@armada/protocol";
 import { FleetConnection } from "./connection";
 import { openArtifact } from "./open";
 import { openPullRequest, openRemarkLink } from "./forge";
@@ -315,6 +315,14 @@ void app.whenReady().then(() => {
   // and refuses the wrong one rather than Bridge picking silently.
   ipcMain.handle(CHANNELS.answerQuestion, (_event, jobId: string, questionId: string, chose: string) =>
     connection?.commands.answerQuestion(jobId, questionId, chose),
+  );
+  // A command the drone was not given, answered where it waits or where it was refused.
+  ipcMain.handle(CHANNELS.answerCommand, (_event, jobId: string, call: string, answer: CommandAnswer) =>
+    connection?.commands.answerCommand(jobId, call, answer),
+  );
+  // How the job meets the next such command. Moves nothing on the job.
+  ipcMain.handle(CHANNELS.setWhenBlocked, (_event, jobId: string, whenBlocked: WhenBlocked) =>
+    connection?.commands.setWhenBlocked(jobId, whenBlocked),
   );
   ipcMain.handle(CHANNELS.redirectDrone, (_event, jobId: string, instruction: string) =>
     connection?.commands.redirectDrone(jobId, instruction),

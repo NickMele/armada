@@ -37,6 +37,18 @@
   background: var(--bg-hover);
 }
 
+/* Disabled is --fg-subtle text with hover suppressed, never an opacity — the
+ * global rule, and exactly what Select does with its own edge. */
+.armada-dropdown-menu__trigger:disabled {
+  color: var(--fg-subtle);
+  border-color: var(--border-subtle);
+  cursor: default;
+}
+
+.armada-dropdown-menu__trigger:disabled:hover {
+  background: var(--bg-sunken);
+}
+
 .armada-dropdown-menu__panel {
   position: absolute;
   top: calc(100% + var(--space-1));

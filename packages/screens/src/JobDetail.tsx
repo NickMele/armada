@@ -82,7 +82,7 @@ import type {
   Remarks,
   Watched,
 } from "@armada/protocol";
-import type { FileReport, JobSummary } from "@armada/protocol";
+import type { CommandAnswer, FileReport, JobSummary, WhenBlocked } from "@armada/protocol";
 import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
 import { heldForMoney, heldForTurns, type ConfirmableAct } from "./Acts";
 import { useCallArguments, type ReadCall } from "./calls";
@@ -114,13 +114,13 @@ import { verdictSlotAfterAnswer } from "./verdict-answered";
 // makes**, so the key and the control cannot open different files.
 import { outputOf } from "./gates";
 import { renderFor } from "./render";
-import { runOf } from "./run";
-import { askingOf, fieldsOf, noticeOf, questionOf } from "./step";
+import { runOf, whyNoSteps } from "./run";
+import { answeringOf, askingOf, commandOf, fieldsOf, noticeOf, questionOf, waitingOf } from "./step";
 import { StepActs } from "./StepActs";
 import { whyNoNotes } from "./notes";
 import { entriesOf, hideUnread, whyNotWatching } from "./story";
 import { LOOK_FAILED, NOTHING_HAPPENED_YET, latestOf, movesOf, nothingToAsk, summarised, whyNoReading } from "./resources";
-import { briefOf, whyNoWork, workOf } from "./work";
+import { briefOf, whyNoBrief, whyNoWork, workOf } from "./work";
 
 export type { ConfirmableAct, JobAct } from "./Acts";
 export { renderFor } from "./render";
@@ -154,6 +154,14 @@ export type JobDetailProps = {
    * dialog on top would be a third press for the ordinary path.
    */
   onAnswer: (jobId: string, questionId: string, chose: string) => void;
+  /**
+   * Allow or reject a command the drone was not given, by its call id. The
+   * same call answers a command a drone is waiting on and a refused row on a
+   * stopped job. Straight through, for `onAnswer`'s reason.
+   */
+  onAnswerCommand: (jobId: string, call: string, answer: CommandAnswer) => void;
+  /** How this job meets the next such command. Live; nothing restarts. */
+  onSetWhenBlocked: (jobId: string, whenBlocked: WhenBlocked) => void;
   /** Overrule a Judge that refused the work, with the reason. */
   onOverrule: (jobId: string, reason: string) => void;
   /**
@@ -332,6 +340,8 @@ export function JobDetail({
   onRaiseTurnCap,
   onRedirect,
   onAnswer,
+  onAnswerCommand,
+  onSetWhenBlocked,
   onOverrule,
   onRerun,
   onShowAgain,
@@ -654,6 +664,10 @@ export function JobDetail({
           ? verdictSlotFinished({ job, whole, open, render, recorded, opensRecords, now, claimed, undecided })
           : render === "finished" ? verdictSlotAfterAnswer({ job, whole, recorded, opensRecords, now, notes: noted?.notes ?? [], onOpenPullRequest }) : undefined;
 
+  // One way to answer a command the Drone was not given, for both places a
+  // person meets one: the command it is waiting on, and a refused row.
+  const answering = answeringOf(job.id, stale, acting, onAnswerCommand);
+
   // The Job header, and everything that goes in it. `heading.tsx` holds what
   // it is made of — the badge, the facts, the acts that end or replace the Job,
   // and the way out to the pull request — which is where the next thing added
@@ -678,6 +692,7 @@ export function JobDetail({
     onRaiseTurnCap,
     raisingTurns,
     onRaisingTurns: setRaisingTurns,
+    onSetWhenBlocked,
     onOpenPullRequest,
     onCopied,
     onSaid,
@@ -770,11 +785,15 @@ export function JobDetail({
               // A question outranks the render's own notice: nothing else on
               // this step is what a person is here for while one is open, and
               // the two would otherwise both claim the band.
-              notice: askingOf(whole) ?? noticeOf(job, whole, render, open, opensRecords),
+              notice: askingOf(whole) ?? noticeOf(job, whole, render, open, opensRecords, answering),
               // **The question sits where the redirect box does** — between the
               // strip and the story, because it is the same kind of thing: a
-              // box a person acts in about the step they are looking at.
-              before: questionOf(whole, job.id, now, stale, acting, onAnswer),
+              // box a person acts in about the step they are looking at. A
+              // command the Drone is waiting on is the same box, in the same place.
+              before: waitingOf(
+                questionOf(whole, job.id, now, stale, acting, onAnswer),
+                commandOf(whole, now, answering),
+              ),
               // The strip draws the stage the keyboard pinned, and hover stays
               // its own: hovering reports where the pointer is rather than what
               // a reader decided, so nothing up here holds it.
@@ -872,28 +891,3 @@ export type FoldedReads = {
    */
   remarks: Remarks;
 };
-
-/** Why the run has no rows, which is never the same sentence twice. */
-function whyNoSteps(watched: Watched, jobId: string): string | undefined {
-  if (watched.state === "read" && watched.jobId === jobId) {
-    return watched.detail.steps.length === 0
-      ? "This Job's frozen workflow has no steps."
-      : undefined;
-  }
-  if (watched.state === "failed" && watched.jobId === jobId) {
-    return "Fleet did not answer";
-  }
-  return "Reading this Job.";
-}
-
-/**
- * Why there is no brief. **Two sentences, and neither describes the wire** —
- * one is a Job that has not arrived and one is a Job Fleet would not answer
- * for, which are different things to do next.
- */
-function whyNoBrief(watched: Watched, jobId: string): string {
-  if (watched.state === "failed" && watched.jobId === jobId) {
-    return "Fleet did not answer";
-  }
-  return "Reading this job.";
-}

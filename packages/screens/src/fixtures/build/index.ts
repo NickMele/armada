@@ -5,7 +5,7 @@
 // lighter. `build.test.ts` walks `FIXTURES` rather than importing each name,
 // so a fixture added here is a fixture the proof covers without a second edit.
 
-import { running } from "./running";
+import { running, runningWaitingOnACommand } from "./running";
 import { review } from "./review";
 import { escalatedGateFailure } from "./escalated";
 import { escalatedEvidenceSuspect } from "./escalated-judge";
@@ -37,6 +37,7 @@ import { reviewAtDelivery } from "./delivering";
 
 export {
   running,
+  runningWaitingOnACommand,
   review,
   escalatedGateFailure,
   escalatedEvidenceSuspect,
@@ -87,4 +88,5 @@ export const FIXTURES = [
   unreadable(),
   retryingCheckFailure(),
   runningAtGate(),
+  runningWaitingOnACommand(),
 ];

@@ -40,6 +40,8 @@ export function propsFor(fixture: JobFixture): JobDetailProps {
     onAct: noop,
     onRedirect: noop,
     onAnswer: noop,
+    onAnswerCommand: noop,
+    onSetWhenBlocked: noop,
     onOverrule: noop,
     onRaiseCap: noop,
     onRaiseTurnCap: noop,

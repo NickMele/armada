@@ -50,6 +50,7 @@ const EXPECTED_RENDER: Record<string, Render> = {
   "running — Regression check: nextest passed, the build Check is queued behind it": "working",
   "awaiting_review — the branch is pushed, a pull request is open, and the fourth answer appears":
     "reviewing",
+  "running — the drone is waiting for a person to allow a command": "working",
 };
 
 describe("each fixture's own render", () => {

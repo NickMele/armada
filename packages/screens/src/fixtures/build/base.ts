@@ -321,6 +321,9 @@ export function detail(jobRow: JobSummary, steps: StepDetail[], over: Partial<Jo
     write_targets: ["packages/settings/src/"],
     dependencies: [],
     spend: spend(),
+    // What a 10.7 Fleet sends on every Job it serves, and where a new Job
+    // starts. A fixture drawing a Job at `ask_me` says so in `over`.
+    when_blocked: "refuse_and_hold",
     ...over,
   };
 }

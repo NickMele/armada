@@ -17,15 +17,18 @@
 // one decision: the badge is the header, so there is no partial render to fall
 // back to.
 
-import { JOB_LIFECYCLE, JOB_STATUS, type JobDetailHeading } from "@armada/components";
+import { DropdownMenu, JOB_LIFECYCLE, JOB_STATUS, type JobDetailHeading } from "@armada/components";
 import type {
   FileReport,
   JobDetail as JobWhole,
   JobSummary,
   Outcome,
+  WhenBlocked,
   WorkflowSummary,
 } from "@armada/protocol";
+import type { ReactNode } from "react";
 import { Acts, type ConfirmableAct } from "./Acts";
+import { WHEN_BLOCKED, WHEN_BLOCKED_LABEL, WHEN_BLOCKED_NAMED } from "./copy";
 import { factsOf } from "./facts";
 import { openPullRequest, type OpenPullRequest } from "./opening";
 import { leading, readingOf } from "./reading";
@@ -59,6 +62,8 @@ export type Heading = {
   /** Whether the turn-cap dialog is up. Held by the screen; `T` opens it too. */
   raisingTurns: boolean;
   onRaisingTurns: (raising: boolean) => void;
+  /** How this job meets a command its drone was not given. Live. */
+  onSetWhenBlocked: (jobId: string, whenBlocked: WhenBlocked) => void;
   onOpenPullRequest: OpenPullRequest;
   onCopied: (value: string) => void;
   /** Say a sentence to the person. Only ever a failure — see `opening.ts`. */
@@ -90,6 +95,7 @@ export function headingOf({
   onRaiseTurnCap,
   raisingTurns,
   onRaisingTurns,
+  onSetWhenBlocked,
   onOpenPullRequest,
   onCopied,
   onSaid,
@@ -135,6 +141,9 @@ export function headingOf({
         onCopied={onCopied}
       />
     ),
+    // How the Job meets a command its Drone was not given. Stale and in flight
+    // both turn it off, as they do every control that sends.
+    setting: blockedOf(job, whole, stale || acting, onSetWhenBlocked),
     // The pull request fact, followed. The address the link carries is what the
     // fact drew from; what is sent is the Job id, so the string never decides
     // what opens. `opening.ts` says why.
@@ -144,6 +153,48 @@ export function headingOf({
       });
     },
   };
+}
+
+/**
+ * How this Job meets a command its Drone was not given: one line under the
+ * facts, naming the setting in force, that opens the two choices.
+ *
+ * **Nothing where Fleet sent nothing**, which is a Fleet older than 10.7 —
+ * drawing the default there would claim a setting Fleet never said it holds.
+ * **Nothing on a Job that is over**, read off the lifecycle as `Acts` reads it:
+ * no Drone will reach for anything again, and a control changing what nothing
+ * reads is a control that does nothing.
+ *
+ * **Choosing what is already set sends nothing.** The menu has no checked item
+ * to mark the choice in force, so the trigger names it instead, and pressing
+ * it a second time is not a change. A setting this build has no words for —
+ * a Fleet ahead of it — draws the wire's spelling rather than a blank.
+ */
+function blockedOf(
+  job: JobSummary,
+  whole: JobWhole | null,
+  off: boolean,
+  onSetWhenBlocked: (jobId: string, whenBlocked: WhenBlocked) => void,
+): ReactNode {
+  const current = whole?.when_blocked;
+  if (current === undefined) return undefined;
+  if (JOB_LIFECYCLE[job.status]?.terminal !== false) return undefined;
+  const named: Partial<Record<string, string>> = WHEN_BLOCKED_LABEL;
+  return (
+    <DropdownMenu
+      triggerLabel={`${WHEN_BLOCKED_NAMED}: ${named[current] ?? current}`}
+      entries={WHEN_BLOCKED.map((when) => ({
+        kind: "item" as const,
+        id: when,
+        label: WHEN_BLOCKED_LABEL[when],
+      }))}
+      disabled={off}
+      onSelect={(id) => {
+        const chose = WHEN_BLOCKED.find((when) => when === id);
+        if (chose !== undefined && chose !== current) onSetWhenBlocked(job.id, chose);
+      }}
+    />
+  );
 }
 
 /**
