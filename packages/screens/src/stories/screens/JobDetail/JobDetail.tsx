@@ -1,4 +1,4 @@
-import { JobDetail } from "../../../JobDetail";
+import { JobDetail, type JobDetailProps } from "../../../JobDetail";
 import type { JobFixture } from "../../../fixtures/fixture";
 import { propsFor } from "../../../fixtures/props";
 
@@ -22,8 +22,15 @@ import { propsFor } from "../../../fixtures/props";
 export function JobDetailFrom({
   fixture,
   width,
+  on,
 }: {
   fixture: JobFixture;
+  /**
+   * The handlers a story listens on, in place of the no-ops. **Only for a
+   * `play` asserting what a press sends** — every other story draws a moment,
+   * and a press there has nowhere to go.
+   */
+  on?: Partial<JobDetailProps>;
   /**
    * The window's width, where a story is about a narrow one — `--window-floor`
    * is the narrowest Bridge lays out for. Absent fills the story's own width.
@@ -43,7 +50,7 @@ export function JobDetailFrom({
       }}
     >
       <div className="armada-screen__mounted">
-        <JobDetail {...propsFor(fixture)} />
+        <JobDetail {...propsFor(fixture)} {...on} />
       </div>
     </div>
   );

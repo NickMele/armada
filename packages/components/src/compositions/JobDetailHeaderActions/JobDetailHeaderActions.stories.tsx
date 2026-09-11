@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 import { Check, CircleDot, OctagonAlert, UserCheck, X } from "lucide-react";
 import { Button } from "../../primitives/Button/Button";
+import { DropdownMenu } from "../../primitives/DropdownMenu/DropdownMenu";
 import { SplitButton } from "../../primitives/SplitButton/SplitButton";
 import { JobDetailHeaderActions } from "./JobDetailHeaderActions";
 
@@ -60,6 +61,30 @@ export const ARunningJob: Story = {
         <Button variant="ghost">Watch the turns</Button>
         <Button variant="destructive">Kill job</Button>
       </>
+    ),
+  },
+};
+
+/**
+ * A running job's own setting for a command its drone was not given, on a line
+ * under the facts. **Pressed, not read**, so it is a control of its own rather
+ * than one more fact in the run, and it is not in the trailing group: that
+ * group ends or replaces the job, and this changes how it runs.
+ *
+ * The trigger names the setting that is in force. A new job starts at Refuse
+ * and hold.
+ */
+export const ARunningJobsSetting: Story = {
+  args: {
+    ...ARunningJob.args,
+    setting: (
+      <DropdownMenu
+        triggerLabel="Blocked commands: Refuse and hold"
+        entries={[
+          { kind: "item", id: "refuse_and_hold", label: "Refuse and hold" },
+          { kind: "item", id: "ask_me", label: "Ask me" },
+        ]}
+      />
     ),
   },
 };

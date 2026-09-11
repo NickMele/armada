@@ -12,7 +12,7 @@
 
 import type { DialogTone } from "@armada/components";
 
-import type { Outcome, WorktreeReclaimed } from "@armada/protocol";
+import type { Outcome, WhenBlocked, WorktreeReclaimed } from "@armada/protocol";
 import type { ConfirmableAct, JobAct } from "./JobDetail";
 
 /** What a refusal says. Every one names what happened and what to do. */
@@ -261,6 +261,21 @@ export const RAISE_CAP_LABEL = "Raise the cost cap";
  * reads, and raising the cost cap does not start it.
  */
 export const RAISE_TURN_CAP_LABEL = "Raise the turn cap";
+
+/**
+ * How a job meets a command its drone was not given, in the header's words,
+ * and the order its menu offers them. **The two are the whole set** — a new job
+ * starts at the first, which asks nobody to be watching.
+ */
+export const WHEN_BLOCKED: readonly WhenBlocked[] = ["refuse_and_hold", "ask_me"];
+
+export const WHEN_BLOCKED_LABEL: Record<WhenBlocked, string> = {
+  refuse_and_hold: "Refuse and hold",
+  ask_me: "Ask me",
+};
+
+/** What names the setting on its line, before the choice in force. */
+export const WHEN_BLOCKED_NAMED = "Blocked commands";
 
 export const ACT_LABEL: Record<JobAct, string> = {
   kill_drone: "Kill drone",

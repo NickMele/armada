@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, within } from "storybook/test";
+import { expect, fn, within } from "storybook/test";
 
 import type { JobFixture } from "../../../fixtures/fixture";
 import {
@@ -28,6 +28,7 @@ import {
   superseded,
   unreadable,
 } from "../../../fixtures/build/index";
+import { JOB_ID } from "../../../fixtures/build/base";
 import { recorded } from "../../../fixtures/recorded";
 import { JobDetailFrom } from "./JobDetail";
 
@@ -86,6 +87,35 @@ export const HeaderActionsOpen: Story = {
 
 /** Midway through Fix, before its Check has run. */
 export const Running: Story = { name: "Running", render: drawing(running) };
+
+/** What the header's setting sends. A module's spy, cleared by the play that reads it. */
+const setWhenBlocked = fn();
+
+/**
+ * How a running Job meets a command its Drone was not given, changed from the
+ * line under the header's facts. **Live**: what goes is the choice, and nothing
+ * on the screen restarts.
+ *
+ * **Choosing what is already set sends nothing.** The menu cannot mark the
+ * choice in force, so the trigger names it — and a second press of it is not a
+ * change, which is the half of this a drawing cannot show.
+ */
+export const BlockedCommandsChanged: Story = {
+  name: "Blocked commands, changed to Ask me",
+  render: () => <JobDetailFrom fixture={running()} on={{ onSetWhenBlocked: setWhenBlocked }} />,
+  play: async ({ canvas, userEvent }) => {
+    setWhenBlocked.mockClear();
+    const setting = await canvas.findByRole("button", { name: "Blocked commands: Refuse and hold" });
+
+    await userEvent.click(setting);
+    await userEvent.click(await canvas.findByRole("menuitem", { name: "Refuse and hold" }));
+    await expect(setWhenBlocked).not.toHaveBeenCalled();
+
+    await userEvent.click(setting);
+    await userEvent.click(await canvas.findByRole("menuitem", { name: "Ask me" }));
+    await expect(setWhenBlocked).toHaveBeenCalledWith(JOB_ID, "ask_me");
+  },
+};
 
 /**
  * Before the first Drone turn, while the worktree is cut and the repository's

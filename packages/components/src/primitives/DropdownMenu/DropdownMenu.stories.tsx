@@ -75,6 +75,23 @@ export const WithSectionLabels: Story = {
   },
 };
 
+/**
+ * Off, because what it would send is already out. **The trigger says so by
+ * contrast and not by fading**: `--fg-subtle` text on a `--border-subtle` edge
+ * with hover suppressed, the rule every control takes — an opacity would muddy
+ * whatever sits behind it. The menu does not open.
+ */
+export const Disabled: Story = {
+  args: {
+    triggerLabel: "Blocked commands: Refuse and hold",
+    disabled: true,
+    entries: [
+      { kind: "item", id: "refuse_and_hold", label: "Refuse and hold" },
+      { kind: "item", id: "ask_me", label: "Ask me" },
+    ],
+  },
+};
+
 const rowActions: DropdownMenuEntry[] = [
   { kind: "item", id: "worktree", label: "Open the worktree" },
   { kind: "item", id: "copy", label: "Copy job ID", shortcut: "⌘C" },

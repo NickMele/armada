@@ -23,7 +23,7 @@
 
 import type { RunTreeFact, RunTreeStep, StepActivity } from "@armada/components";
 
-import type { Turn } from "@armada/protocol";
+import type { Turn, Watched } from "@armada/protocol";
 import { CHECK_ADVANCES, CHECK_OUTCOME, CRITERION_VERDICT_CHECK, ESCALATION_REASON, STEP_STATE } from "@armada/components";
 import type {
   ChangedFile,
@@ -398,4 +398,20 @@ const ACTIVITIES: readonly StepActivity[] = [
 
 function activityOf(state: string): StepActivity {
   return ACTIVITIES.find((known) => known === state) ?? "not_started";
+}
+
+/**
+ * Why the run has no rows, which is never the same sentence twice. Beside the
+ * run it explains, out of `JobDetail.tsx` at the 900-line line.
+ */
+export function whyNoSteps(watched: Watched, jobId: string): string | undefined {
+  if (watched.state === "read" && watched.jobId === jobId) {
+    return watched.detail.steps.length === 0
+      ? "This Job's frozen workflow has no steps."
+      : undefined;
+  }
+  if (watched.state === "failed" && watched.jobId === jobId) {
+    return "Fleet did not answer";
+  }
+  return "Reading this Job.";
 }

@@ -113,13 +113,13 @@ import { neverAsksAPerson, verdictSlotAtGate, verdictSlotFinished } from "./verd
 // makes**, so the key and the control cannot open different files.
 import { outputOf } from "./gates";
 import { renderFor } from "./render";
-import { runOf } from "./run";
+import { runOf, whyNoSteps } from "./run";
 import { askingOf, fieldsOf, noticeOf, questionOf } from "./step";
 import { StepActs } from "./StepActs";
 import { whyNoNotes } from "./notes";
 import { entriesOf, hideUnread, whyNotWatching } from "./story";
 import { LOOK_FAILED, NOTHING_HAPPENED_YET, latestOf, movesOf, nothingToAsk, summarised, whyNoReading } from "./resources";
-import { briefOf, whyNoWork, workOf } from "./work";
+import { briefOf, whyNoBrief, whyNoWork, workOf } from "./work";
 
 export type { ConfirmableAct, JobAct } from "./Acts";
 export { renderFor } from "./render";
@@ -336,6 +336,7 @@ export function JobDetail({
   onRaiseTurnCap,
   onRedirect,
   onAnswer,
+  onSetWhenBlocked,
   onOverrule,
   onRerun,
   onShowAgain,
@@ -680,6 +681,7 @@ export function JobDetail({
     onRaiseTurnCap,
     raisingTurns,
     onRaisingTurns: setRaisingTurns,
+    onSetWhenBlocked,
     onOpenPullRequest,
     onCopied,
     onSaid,
@@ -874,28 +876,3 @@ export type FoldedReads = {
    */
   remarks: Remarks;
 };
-
-/** Why the run has no rows, which is never the same sentence twice. */
-function whyNoSteps(watched: Watched, jobId: string): string | undefined {
-  if (watched.state === "read" && watched.jobId === jobId) {
-    return watched.detail.steps.length === 0
-      ? "This Job's frozen workflow has no steps."
-      : undefined;
-  }
-  if (watched.state === "failed" && watched.jobId === jobId) {
-    return "Fleet did not answer";
-  }
-  return "Reading this Job.";
-}
-
-/**
- * Why there is no brief. **Two sentences, and neither describes the wire** —
- * one is a Job that has not arrived and one is a Job Fleet would not answer
- * for, which are different things to do next.
- */
-function whyNoBrief(watched: Watched, jobId: string): string {
-  if (watched.state === "failed" && watched.jobId === jobId) {
-    return "Fleet did not answer";
-  }
-  return "Reading this job.";
-}

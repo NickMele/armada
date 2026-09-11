@@ -227,6 +227,9 @@ function screen(
     onOpenPullRequest: async () => ({ ok: true }),
     onCopied: () => {},
     onSaid: () => {},
+    // The header's blocked-commands setting. Inert here, for the reason the
+    // six below are: nothing in this file asserts about it.
+    onSetWhenBlocked: () => {},
     // The six the budget work added to `Heading`, three per ceiling. This file
     // draws a heading to reach the evidence beneath it and asserts nothing
     // about raising a cap, so they are inert here.

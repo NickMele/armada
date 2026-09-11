@@ -215,3 +215,15 @@ export function whyNoWork(watched: Watched, jobId: string): string {
   }
   return "Reading this job.";
 }
+
+/**
+ * Why there is no brief. **Two sentences, and neither describes the wire** —
+ * one is a Job that has not arrived and one is a Job Fleet would not answer
+ * for, which are different things to do next.
+ */
+export function whyNoBrief(watched: Watched, jobId: string): string {
+  if (watched.state === "failed" && watched.jobId === jobId) {
+    return "Fleet did not answer";
+  }
+  return "Reading this job.";
+}

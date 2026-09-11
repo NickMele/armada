@@ -24,6 +24,13 @@ export type DropdownMenuProps = {
   triggerLabel: string;
   entries: DropdownMenuEntry[];
   defaultOpen?: boolean;
+  /**
+   * The trigger is off and the menu does not open — for a menu whose every
+   * item sends something, while a send is already out. Disabled is
+   * `--fg-subtle` text with hover suppressed, never an opacity, which is the
+   * global rule the contract gives every control.
+   */
+  disabled?: boolean;
   onSelect?: (id: string) => void;
 };
 
@@ -31,6 +38,7 @@ export function DropdownMenu({
   triggerLabel,
   entries,
   defaultOpen = false,
+  disabled = false,
   onSelect,
 }: DropdownMenuProps) {
   const [open, setOpen] = useState(defaultOpen);
@@ -59,12 +67,15 @@ export function DropdownMenu({
         type="button"
         className="armada-dropdown-menu__trigger"
         aria-haspopup="menu"
-        aria-expanded={open}
+        aria-expanded={open && !disabled}
+        disabled={disabled}
         onClick={() => setOpen((v) => !v)}
       >
         {triggerLabel}
       </button>
-      {open ? (
+      {/* A menu open when its trigger turns off stays shut rather than sending
+          from under a control that says it cannot. */}
+      {open && !disabled ? (
         <div className="armada-dropdown-menu__panel" role="menu">
           {entries.map((entry) => {
             if (entry.kind === "separator") {
