@@ -88,6 +88,29 @@
 
 .armada-brief__step {
   display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The step's own name, visible beside the mark. `StepActivityMark`'s own
+   `label` is screen-reader text only — every caller that draws a visible
+   name beside it draws that name itself, `WorkflowRail` included. */
+.armada-brief__step-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-default);
+}
+
+/* The state word — done, you are here, not yours — trailing and quiet, since
+   the mark already carries the hue and the name is what a reader scans for. */
+.armada-brief__step-said {
+  flex: none;
+  margin-inline-start: auto;
+  color: var(--fg-subtle);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
 }
 
 /* The `checks` section's structured reading — a row of chips rather than the
@@ -136,4 +159,14 @@
   gap: var(--space-2);
   padding: var(--armada-chapter-pad, var(--space-3)) 0 0;
   border-top: var(--border-width) solid var(--border-subtle);
+}
+
+/* `[hidden]` is a class selector's loser by default — a plain HTML boolean
+   attribute rendered by the UA stylesheet at the lowest specificity there is,
+   so `.armada-brief__raw-body`'s own `display: flex` above wins and the
+   words this is folding show anyway. `Chapter.css` already carries this exact
+   override for its own body; this is the same fix for the second disclosure
+   nested inside one. */
+.armada-brief__raw-body[hidden] {
+  display: none;
 }

@@ -298,12 +298,13 @@ export const ABodyLineThatLooksLikeAHeading: Story = {
 
 /**
  * The brief Fleet writes once every heading carries a `kind` — the state the
- * mock this story reconstructs was drawn against. **One section per kind, in
- * the order the headings arrive**, `about_this_job` merging Fleet's two facts
- * about the job into one foldable section, `standing` folded shut by default,
- * and `steps`/`checks` drawing the structured reading `chapters.tsx` builds
- * off data Bridge already holds — with Fleet's own words still one press away
- * under each.
+ * mock this story reconstructs was drawn against. **One section per heading,
+ * in the order they arrive**, titled with the heading's own words in sentence
+ * case — `JOB BRIEF` reads `Job brief`, never a second vocabulary's guess at
+ * what to call it. `standing` folds shut by default and says why collapsed;
+ * `steps`/`checks` draw the structured reading `chapters.tsx` builds off data
+ * Bridge already holds, with Fleet's own words still one press away, folded,
+ * underneath.
  */
 const SECTIONED_BRIEF = [
   "JOB BRIEF",
@@ -357,51 +358,82 @@ export const TheBriefInSections: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    // Four sections, in the order their headings arrived — `about_this_job`
-    // merges two of Fleet's headings into one, so this is four, not five.
-    for (const name of ["About this job", "Standing instructions", "Where you are", "What this part has to pass"]) {
+    // Five sections, one per heading, titled with the heading's own words —
+    // `about_this_job`'s two headings each keep their own section rather
+    // than merging under an invented title.
+    for (const name of [
+      "Job brief",
+      "What a person said",
+      "How to hand work in",
+      "Where you are",
+      "What this part has to pass",
+    ]) {
       canvas.getByText(name);
     }
+    // Never Fleet's own shouting, and never a `kind → label` guess either.
+    await expect(canvas.queryByText("JOB BRIEF")).toBeNull();
+    await expect(canvas.queryByText("About this job")).toBeNull();
 
     // Open by default, per `SECTION_OPEN`: every kind but `standing`.
-    const jobBrief = canvas.getByRole("heading", { name: "JOB BRIEF" });
+    const jobBrief = canvas.getByText("Coalesce concurrent token refreshes");
     await expect(jobBrief).toBeVisible();
-    const steps = canvas.getByText("Plan the change");
-    await expect(steps).toBeVisible();
+    const stepRow = canvas.getByText("Plan the change");
+    await expect(stepRow).toBeVisible();
     const checks = canvas.getByText("build");
     await expect(checks).toBeVisible();
 
-    // Folded, and muted — the same instructions on every Job. Its words are
-    // still in the DOM, `hidden` rather than gone.
+    // Every step draws its own name and its own state word, not just a mark
+    // — the defect the mock's own drawing was checked against. The state
+    // word is also the mark's own accessible name, so this reads the one the
+    // mock shows rather than either match `getByText` alone would ambiguate.
+    canvas.getByText("Implement");
+    canvas.getByText("Summarise");
+    canvas.getByText("done", { selector: ".armada-brief__step-said" });
+    canvas.getByText("you are here", { selector: ".armada-brief__step-said" });
+    canvas.getByText("not yours", { selector: ".armada-brief__step-said" });
+
+    // Folded, and muted — the same instructions on every Job, said so in its
+    // own meta rather than left silent. Its words are still in the DOM,
+    // `hidden` rather than gone.
     const standing = canvas.getByText("Report progress every step. Keep your worktree clean between attempts.");
     await expect(standing).not.toBeVisible();
+    canvas.getByText("the same on every Job");
 
     // The meta Bridge already holds, read off the header rather than typed
     // into a fixture twice.
     canvas.getByText("part 2 of 3");
     canvas.getByText("4 checks");
 
-    // Fleet's own words for `steps` are still one press away, unreplaced.
-    // Two sections carry this disclosure — `steps` and `checks` — so this
-    // takes the first, which is `steps`' own by DOM order.
-    const reveal = canvas.getAllByRole("button", { name: /Read the words Armada sent/ })[0];
-    if (reveal === undefined) throw new Error("steps carries no raw-words disclosure");
-    await userEvent.click(reveal);
-    await expect(canvas.getByText(/This task runs in 3 parts\./)).toBeVisible();
+    // Fleet's own words for `steps` and `checks` are still one press away,
+    // unreplaced — and folded by default, so the same fact is not said twice
+    // on the page before anyone has asked for it.
+    const reveals = canvas.getAllByRole("button", { name: /Read the words Armada sent/ });
+    await expect(reveals).toHaveLength(2);
+    // Present in the DOM either way — `hidden`, not unmounted — so the check
+    // is visibility, never absence.
+    const stepsWords = canvas.getByText(/This task runs in 3 parts\./);
+    await expect(stepsWords).not.toBeVisible();
+    const checksWords = canvas.getByText("Checks: build, test, format, typecheck");
+    await expect(checksWords).not.toBeVisible();
+    const [stepsReveal] = reveals;
+    if (stepsReveal === undefined) throw new Error("steps carries no raw-words disclosure");
+    await userEvent.click(stepsReveal);
+    await expect(stepsWords).toBeVisible();
 
     // Opening the folded section keeps everything else exactly where it was —
     // a fold toggling one section is not a reflow of the others.
-    const standingToggle = canvas.getByRole("button", { name: /Standing instructions/ });
+    const standingToggle = canvas.getByRole("button", { name: /How to hand work in/ });
     await userEvent.click(standingToggle);
     await expect(standing).toBeVisible();
     await expect(jobBrief).toBeVisible();
 
     // Left as it was found, so the story settles back on the state its own
     // name promises rather than on whatever its last assertion happened to
-    // leave open — three sections open, one folded, in one drawing.
+    // leave open — sections open, `standing` folded, raw words folded.
     await userEvent.click(standingToggle);
-    await userEvent.click(reveal);
+    await userEvent.click(stepsReveal);
     await expect(standing).not.toBeVisible();
+    await expect(stepsWords).not.toBeVisible();
   },
 };
 
@@ -416,7 +448,7 @@ export const AnOlderTurnWithNoKindToPair: Story = {
   args: { lines: marked(SECTIONED_BRIEF, SECTIONED_HEADINGS) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.queryByText("About this job")).toBeNull();
+    await expect(canvas.queryByText("Job brief")).toBeNull();
     await expect(canvas.getAllByRole("heading")).toHaveLength(5);
   },
 };

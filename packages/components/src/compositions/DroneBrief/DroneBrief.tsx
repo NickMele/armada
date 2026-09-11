@@ -34,18 +34,28 @@ import { StepActivityMark, type StepActivity } from "../StepActivityMark/StepAct
  * that were on the wire the entire time.
  *
  * **Since protocol 9.7, a heading also carries a `kind`**, and where every
- * heading has one this draws a section per kind rather than a flat run of
- * headings and paragraphs — a foldable "Where you are" instead of a rail
- * buried in the twentieth line of prose. **Where `kind` is absent from every
- * heading — a turn from a Fleet built before 9.7, or one with no headed
- * blocks at all — this draws exactly as it always has**, flat, because pairing
- * the first few kinds and guessing at the rest is worse than not pairing any.
+ * heading has one this draws one foldable section per heading, titled with
+ * the heading's own words, rather than a flat run of headings and paragraphs.
+ * **Where `kind` is absent from every heading — a turn from a Fleet built
+ * before 9.7, or one with no headed blocks at all — this draws exactly as it
+ * always has**, flat, because pairing the first few kinds and guessing at the
+ * rest is worse than not pairing any.
+ *
+ * **The kind decides three things, and never the title.** Whether a section
+ * opens or folds by default; whether `steps` or `checks` draws Bridge's own
+ * reading of data it already holds, in place of the section's raw text; and
+ * whether the section reads as `standing` — the same on every Job — which
+ * folds shut and says so in its meta. The title is always the heading's own
+ * words, sentence-cased. Two vocabularies for one heading is the cost a
+ * `kind → label` map would have added for no fact the heading's own text does
+ * not already carry; `sentenceCase` below is a text transform, not a second
+ * naming of the thing.
  *
  * **Sectioned or flat, nothing the Drone was told disappears.** A folded
  * section keeps its body in the DOM; the `steps` and `checks` sections draw a
  * structured reading built from data Bridge already holds, but the words Fleet
- * actually sent stay reachable underneath it, one press away — never replaced,
- * only led with.
+ * actually sent stay reachable underneath it, folded by default — never
+ * replaced, only led with.
  *
  * **No font size, for `Prose`'s reason.** The type scale belongs to
  * `docs/contracts/design-system.md`; this draws inside a chapter body at
@@ -109,7 +119,7 @@ const MARK_FOR: Record<BriefStep["position"], StepActivity> = {
   not_yours: "not_started",
 };
 
-/** `BriefStep.position` in words, for the mark's tooltip. */
+/** `BriefStep.position`, in the words the mock draws beside a step's name. */
 const SAID_FOR: Record<BriefStep["position"], string> = {
   done: "done",
   current: "you are here",
@@ -146,7 +156,7 @@ export function DroneBrief({ lines, steps, checks }: DroneBriefProps) {
   return (
     <div className="armada-brief armada-brief--sectioned">
       {sections.map((section, at) => (
-        <BriefSectionView key={at} ordinal={at + 1} section={section} steps={steps} checks={checks} />
+        <BriefSectionView key={at} section={section} steps={steps} checks={checks} />
       ))}
     </div>
   );
@@ -173,7 +183,8 @@ function FlatBrief({ lines }: { lines: readonly (string | BriefLine)[] }) {
   );
 }
 
-/** What a section's own blocks draw as, absent any structured reading. */
+/** A section's own body blocks, drawn as body — never its heading, which is
+ *  the section's title now and would otherwise read twice. */
 function BriefBody({ blocks }: { blocks: readonly BriefBlock[] }) {
   return (
     <>
@@ -193,23 +204,30 @@ function BriefBody({ blocks }: { blocks: readonly BriefBlock[] }) {
 }
 
 /**
- * The lines a heading's own words to be found where the mock's plain English
- * has replaced them. **Sentence case, per `docs/contracts/design-system.md`**
- * — Fleet's own headings are shouted (`JOB BRIEF`), which is content and stays
- * that way inside a section's body; a section's own title is Bridge's UI
- * chrome and the prose rules bind it like every other label on screen.
+ * A shouted heading, in sentence case — `JOB BRIEF` reads `Job brief`.
  *
- * **A second vocabulary, and the cost is named rather than hidden.** Fleet
- * decides which kind a heading is; this decides what a person reading Bridge
- * calls it. Two rows that decide the same word would be one place this can go
- * stale, so this map is the one place, and nothing downstream restates it.
+ * **A text transform, not a lookup.** A heading already mixed case, like
+ * `STEP: Plan the change`, is left exactly as Fleet wrote it: the design
+ * system bars ALL CAPS as UI chrome, and a heading that is not shouting in
+ * the first place is not the case this transform exists for. Testing against
+ * the string's own upper-cased form, rather than assuming every heading is
+ * shouted, is what tells the two apart without a second vocabulary deciding
+ * which headings count.
  */
-const SECTION_TITLE: Record<BlockKind, string> = {
-  about_this_job: "About this job",
-  standing: "Standing instructions",
-  steps: "Where you are",
-  checks: "What this part has to pass",
-};
+export function sentenceCase(heading: string): string {
+  if (heading !== heading.toUpperCase()) return heading;
+  const lower = heading.toLowerCase();
+  return lower.length === 0 ? lower : lower.charAt(0).toUpperCase() + lower.slice(1);
+}
+
+/** The one title used where a section has no heading of its own to draw —
+ *  the unheaded opening, read as `standing` by position. Not a `kind → label`
+ *  map: this is the single case with no words of its own to sentence-case. */
+const UNHEADED_OPENING_TITLE = "Standing instructions";
+
+/** What a folded `standing` section says collapsed — the fact Bridge holds
+ *  about every section of this kind, regardless of what its words are. */
+const STANDING_META = "the same on every Job";
 
 /** Whether a section opens by default. Every kind but `standing` does. */
 const SECTION_OPEN: Record<BlockKind, boolean> = {
@@ -219,43 +237,41 @@ const SECTION_OPEN: Record<BlockKind, boolean> = {
   checks: true,
 };
 
-/** How many lines `about_this_job`'s own prose holds before it clamps.
- *  The rest of the brief is bounded by its own fold now; this is the one
- *  section whose length is a person's or a model's, at whatever it wrote. */
+/** How many lines a heading's own prose holds before it clamps, on the one
+ *  kind left unbounded by the fold — a person's or a model's words, at
+ *  whatever length either wrote them. */
 const ABOUT_THIS_JOB_LINES = 8;
 
 function BriefSectionView({
-  ordinal,
   section,
   steps,
   checks,
 }: {
-  ordinal: number;
   section: BriefSection;
   steps: readonly BriefStep[] | undefined;
   checks: readonly string[] | undefined;
 }) {
   const kind = section.kind ?? "standing";
   const [open, setOpen] = useState(SECTION_OPEN[kind]);
+  const title = section.heading === undefined ? UNHEADED_OPENING_TITLE : sentenceCase(section.heading);
   return (
     <Chapter
-      ordinal={ordinal}
-      name={SECTION_TITLE[kind]}
+      name={title}
       meta={metaFor(kind, steps, checks)}
       tone={kind === "standing" ? "muted" : "neutral"}
       open={open}
       onToggle={() => setOpen((was) => !was)}
     >
       {kind === "steps" && steps !== undefined ? (
-        <StepsRead steps={steps} raw={section} />
+        <StepsRead steps={steps} raw={section.blocks} />
       ) : kind === "checks" && checks !== undefined ? (
-        <ChecksRead checks={checks} raw={section} />
+        <ChecksRead checks={checks} raw={section.blocks} />
       ) : kind === "about_this_job" ? (
         <Clamped lines={ABOUT_THIS_JOB_LINES}>
-          <BriefBody blocks={sectionBlocks(section)} />
+          <BriefBody blocks={section.blocks} />
         </Clamped>
       ) : (
-        <BriefBody blocks={sectionBlocks(section)} />
+        <BriefBody blocks={section.blocks} />
       )}
     </Chapter>
   );
@@ -267,6 +283,7 @@ function metaFor(
   steps: readonly BriefStep[] | undefined,
   checks: readonly string[] | undefined,
 ): string | undefined {
+  if (kind === "standing") return STANDING_META;
   if (kind === "steps" && steps !== undefined) {
     const at = steps.findIndex((step) => step.position === "current");
     return at === -1 ? undefined : `part ${at + 1} of ${steps.length}`;
@@ -274,33 +291,39 @@ function metaFor(
   if (kind === "checks" && checks !== undefined) {
     return checks.length === 1 ? "1 check" : `${checks.length} checks`;
   }
-  // `about_this_job` and `standing` carry no field Bridge holds independently
-  // of the words themselves — the section's name is what there is to say
-  // about it collapsed.
+  // `about_this_job` carries no field Bridge holds independently of its own
+  // words — the section's title is what there is to say about it collapsed.
   return undefined;
 }
 
-function StepsRead({ steps, raw }: { steps: readonly BriefStep[]; raw: BriefSection }) {
+function StepsRead({ steps, raw }: { steps: readonly BriefStep[]; raw: readonly BriefBlock[] }) {
   return (
     <>
       <ol className="armada-brief__steps">
         {steps.map((step, at) => (
-          <li key={step.id} className="armada-brief__step">
+          <li className="armada-brief__step" key={step.id}>
+            {/* The mark's own accessible name is the state, matching
+                `WorkflowRail`'s row exactly — the step's name is drawn
+                visibly beside it and would otherwise be announced twice. */}
             <StepActivityMark
               activity={MARK_FOR[step.position]}
               ordinal={at + 1}
-              label={step.label}
+              label={SAID_FOR[step.position]}
               says={`${step.label}, ${SAID_FOR[step.position]}`}
             />
+            <span className="armada-brief__step-name">{step.label}</span>
+            <span className="armada-brief__step-said" aria-hidden>
+              {SAID_FOR[step.position]}
+            </span>
           </li>
         ))}
       </ol>
-      <RawWords raw={raw} />
+      <RawWords blocks={raw} />
     </>
   );
 }
 
-function ChecksRead({ checks, raw }: { checks: readonly string[]; raw: BriefSection }) {
+function ChecksRead({ checks, raw }: { checks: readonly string[]; raw: readonly BriefBlock[] }) {
   return (
     <>
       <div className="armada-brief__checks">
@@ -308,7 +331,7 @@ function ChecksRead({ checks, raw }: { checks: readonly string[]; raw: BriefSect
           <FactChip key={`${check}-${at}`}>{check}</FactChip>
         ))}
       </div>
-      <RawWords raw={raw} />
+      <RawWords blocks={raw} />
     </>
   );
 }
@@ -320,10 +343,13 @@ function ChecksRead({ checks, raw }: { checks: readonly string[]; raw: BriefSect
  * a reading built from data Bridge already has, but what Fleet actually sent
  * is what the Drone read, and it stays in the DOM behind one more press rather
  * than being replaced by Bridge's own rendering of the same fact.
+ *
+ * **Folded by default.** The structured reading is the one this section leads
+ * with; showing both at once by default reads as the same fact said twice
+ * rather than as one led by the other.
  */
-function RawWords({ raw }: { raw: BriefSection }): ReactNode {
+function RawWords({ blocks }: { blocks: readonly BriefBlock[] }): ReactNode {
   const [open, setOpen] = useState(false);
-  const blocks = sectionBlocks(raw);
   if (blocks.length === 0) return null;
   return (
     <div className="armada-brief__raw">
@@ -342,22 +368,6 @@ function RawWords({ raw }: { raw: BriefSection }): ReactNode {
       </div>
     </div>
   );
-}
-
-/**
- * A section's own blocks, with its heading restored to the front of them.
- *
- * **The one place `heading` and `blocks` are read back together.** They are
- * split on `BriefSection` because a section's title on screen is
- * `SECTION_TITLE`, not Fleet's own words — but Fleet's words are still owed
- * somewhere, and this is where every caller that draws a section's raw
- * content puts them back at the top of it, exactly where they sat on the
- * wire.
- */
-function sectionBlocks(section: BriefSection): BriefBlock[] {
-  return section.heading === undefined
-    ? [...section.blocks]
-    : [{ text: section.heading, heading: true }, ...section.blocks];
 }
 
 /**
@@ -440,28 +450,29 @@ export function briefBlocks(lines: readonly (string | BriefLine)[]): BriefBlock[
   return blocks;
 }
 
-/** One section of a brief: a heading's own kind, its own words, and its body. */
+/** One section of a brief: one heading, its own kind, and its own body. */
 export type BriefSection = {
   /** `undefined` is the unheaded opening, read as `standing` by position. */
   kind: BlockKind | undefined;
-  /** The heading's own text, exactly as Fleet wrote it. `undefined` for the opening. */
+  /** The heading's own text, exactly as Fleet wrote it. `undefined` for the
+   *  opening, which has none — `UNHEADED_OPENING_TITLE` draws in its place. */
   heading: string | undefined;
-  /** The body blocks between this heading and the next, or before the first. */
+  /** The body blocks under this heading and before the next one. */
   blocks: readonly BriefBlock[];
 };
 
 /**
- * The payload as sections, grouped by heading, or `undefined` where the wire
+ * The payload as sections, one per heading, or `undefined` where the wire
  * gave no kind to pair with — a turn from a Fleet built before protocol 9.7,
  * or one with no headed blocks at all. **The caller draws flat in that case**,
  * which is `DroneBrief`'s own fallback, not a decision made twice.
  *
- * **Headings that share a kind share a section.** `about_this_job` covers
- * several separate facts Fleet may write as separate blocks — what was asked,
- * what a person said, what the branch looked like — and none of them is
- * information this component has to tell apart on its own; they fold and
- * unfold together, each keeping its own heading inside the one section, rather
- * than this inventing a title per occurrence for words it cannot tell apart.
+ * **One section per heading, in the order they arrived.** Two headings that
+ * share a kind — `about_this_job` covers several separate facts Fleet may
+ * write as separate blocks, what was asked and what a person said among them
+ * — draw as two sections rather than one merged under an invented title;
+ * `kind` decides how each opens and what it draws, never how many sections
+ * there are.
  */
 export function briefSections(lines: readonly (string | BriefLine)[]): BriefSection[] | undefined {
   const blocks = briefBlocks(lines);
@@ -469,42 +480,28 @@ export function briefSections(lines: readonly (string | BriefLine)[]): BriefSect
   const headingKinds = rawLines.filter((line) => line.named === "heading").map((line) => line.kind);
   if (headingKinds.length === 0 || headingKinds.some((kind) => kind === undefined)) return undefined;
 
-  const byKind = new Map<BlockKind, BriefSection>();
-  const order: BriefSection[] = [];
+  const sections: BriefSection[] = [];
+  const opening: BriefBlock[] = [];
+  let current: BriefSection | undefined;
   let headingAt = 0;
-  // The unheaded opening, held here until it is known to carry anything. **Not
-  // inserted into `order` up front** — a document with no opening prose and a
-  // `standing` heading partway through must place that section where its
-  // heading actually sits, not at the top reserved for prose that never came.
-  let current: BriefSection = { kind: "standing", heading: undefined, blocks: [] };
   let openingSettled = false;
 
   for (const block of blocks) {
     if (block.heading) {
       if (!openingSettled) {
-        if (current.blocks.length > 0) {
-          byKind.set("standing", current);
-          order.push(current);
-        }
+        if (opening.length > 0) sections.push({ kind: "standing", heading: undefined, blocks: opening });
         openingSettled = true;
       }
       const kind = headingKinds[headingAt];
       headingAt += 1;
       if (kind === undefined) continue; // unreachable given the guard above
-      const existing = byKind.get(kind);
-      if (existing === undefined) {
-        current = { kind, heading: block.text, blocks: [] };
-        byKind.set(kind, current);
-        order.push(current);
-      } else {
-        // A second heading of a kind already open joins it as another line of
-        // the same section, keeping its own words rather than losing them.
-        current = existing;
-        (current.blocks as BriefBlock[]).push({ text: block.text, heading: true });
-      }
+      current = { kind, heading: block.text, blocks: [] };
+      sections.push(current);
+    } else if (current === undefined) {
+      opening.push(block);
     } else {
       (current.blocks as BriefBlock[]).push(block);
     }
   }
-  return order;
+  return sections;
 }

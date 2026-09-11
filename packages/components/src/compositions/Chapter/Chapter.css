@@ -86,6 +86,16 @@ button.armada-chapter__head:focus-visible {
   color: var(--border-strong);
 }
 
+/* The fold arrow that stands in for the number on a chapter with nothing to
+   count — same slot, same quiet weight, so an unnumbered chapter still lines
+   up with a numbered one beside it. */
+.armada-chapter__fold {
+  display: inline-flex;
+  flex: none;
+  width: var(--space-3);
+  color: var(--border-strong);
+}
+
 .armada-chapter__name {
   min-width: 0;
   font-size: var(--text-xs);
@@ -140,7 +150,8 @@ button.armada-chapter__head:focus-visible {
   color: var(--fg-subtle);
 }
 
-.armada-chapter[data-tone="muted"] .armada-chapter__n {
+.armada-chapter[data-tone="muted"] .armada-chapter__n,
+.armada-chapter[data-tone="muted"] .armada-chapter__fold {
   color: var(--fg-subtle);
 }
 

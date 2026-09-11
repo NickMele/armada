@@ -29,7 +29,7 @@ import type {
 // disagree about where a block stops. Tested here because this is the node
 // runner: `packages/components` runs its stories in a browser, and a `play`
 // that computed this would be a unit test paying a browser's price.
-import { briefBlocks, widenIndent } from "@armada/components";
+import { briefBlocks, sentenceCase, widenIndent } from "@armada/components";
 
 import { chaptersOf } from "./chapters";
 import { NO_FRAMES } from "./frames";
@@ -266,6 +266,24 @@ describe("the rail's indent, widened for the panel", () => {
   });
 });
 
+describe("a section's title, sentence-cased from the heading's own words", () => {
+  it("lowercases a shouted heading but for its first letter", () => {
+    expect(sentenceCase("JOB BRIEF")).toBe("Job brief");
+    expect(sentenceCase("WHAT A PERSON SAID")).toBe("What a person said");
+    expect(sentenceCase("THE BRANCH YOU ARE ON")).toBe("The branch you are on");
+  });
+
+  it("leaves a heading that is not shouting exactly as Fleet wrote it", () => {
+    // Mixed case already, so this is not the case the transform exists for —
+    // a lowercase-then-capitalize pass would flatten "Plan the change".
+    expect(sentenceCase("STEP: Plan the change")).toBe("STEP: Plan the change");
+  });
+
+  it("does nothing to a single shouted word", () => {
+    expect(sentenceCase("STANDING")).toBe("Standing");
+  });
+});
+
 describe("drone instructions", () => {
   it("puts each block heading on a line of its own", () => {
     const markup = renderToStaticMarkup(chapters({ rows: [instructed(BRIEF)] })[0]!.preview);
@@ -392,7 +410,7 @@ describe("a sectioned brief, since protocol 9.7", () => {
     expect(markup).toContain("armada-brief--sectioned");
   });
 
-  it("merges headings of the same kind into one section", () => {
+  it("draws one section per heading, titled with the heading's own words", () => {
     const markup = renderToStaticMarkup(
       chapters({
         rows: [instructed(KINDED, KINDED_HEADINGS, KINDED_KINDS)],
@@ -400,27 +418,20 @@ describe("a sectioned brief, since protocol 9.7", () => {
         steps: THREE_STEPS,
       })[0]!.preview,
     );
-    // Both of Fleet's own headings survive, inside the one "About this job"
-    // section — neither is dropped and neither gets a section of its own.
-    expect(markup).toContain("About this job");
-    const about = markup
+    // Two `about_this_job` headings, two sections — never merged under an
+    // invented title, and never Fleet's own shouting either.
+    expect(markup).toContain("Job brief");
+    expect(markup).toContain("What a person said");
+    expect(markup).not.toContain("About this job");
+    expect(markup).not.toContain(">JOB BRIEF<");
+    expect(markup).not.toContain(">WHAT A PERSON SAID<");
+    // A section's own heading never repeats inside its body.
+    const jobBrief = markup
       .split('<section class="armada-chapter"')
-      .find((chunk) => chunk.includes("About this job"));
-    expect(about).toBeDefined();
-    expect(headings(about!.split("</section>")[0] ?? "")).toEqual([
-      "JOB BRIEF",
-      "WHAT A PERSON SAID",
-    ]);
-    // Nothing is dropped: every heading Fleet wrote is still somewhere on the
-    // page, either drawn directly or reachable under "Read the words Armada
-    // sent" — never lost to the section it was folded into.
-    expect(headings(markup)).toEqual([
-      "JOB BRIEF",
-      "WHAT A PERSON SAID",
-      "STANDING",
-      "WHERE YOU ARE",
-      "WHAT THIS PART HAS TO PASS",
-    ]);
+      .find((chunk) => chunk.includes(">Job brief<"));
+    expect(jobBrief).toBeDefined();
+    expect(jobBrief).not.toContain("Job brief</p>");
+    expect(headings(jobBrief!.split("</section>")[0] ?? "")).toEqual([]);
   });
 
   it("reads the step position off data Bridge holds, not off Fleet's prose", () => {
@@ -462,7 +473,7 @@ describe("a sectioned brief, since protocol 9.7", () => {
     expect(markup).toContain(">test<");
   });
 
-  it("folds the standing section shut and mutes it by default", () => {
+  it("folds the standing section shut, mutes it, and says why in its meta", () => {
     const markup = renderToStaticMarkup(
       chapters({
         rows: [instructed(KINDED, KINDED_HEADINGS, KINDED_KINDS)],
@@ -470,11 +481,17 @@ describe("a sectioned brief, since protocol 9.7", () => {
         steps: THREE_STEPS,
       })[0]!.preview,
     );
+    // `STANDING` sentence-cases to `Standing`, the heading's own word and
+    // never a `kind → label` guess.
     const section = markup
       .split('<section class="armada-chapter"')
-      .find((chunk) => chunk.includes("Standing instructions"));
+      .find((chunk) => chunk.includes(">Standing<"));
     expect(section).toBeDefined();
     expect(section).toContain('data-tone="muted"');
+    expect(section).toContain("the same on every Job");
+    // No number on a folded sub-section — a chevron stands in its place.
+    expect(section).not.toContain("armada-chapter__n\"");
+    expect(section).toContain("armada-chapter__fold");
     // Closed: `Chapter` hides the body with `hidden` rather than unmounting
     // it, so the words are still in the DOM and only the attribute differs.
     expect(section).toContain("hidden=\"\"");
