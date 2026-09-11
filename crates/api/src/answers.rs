@@ -78,7 +78,7 @@ fn media_type(name: &str) -> &'static str {
         Some(ext) if ext == "jpg" || ext == "jpeg" => "image/jpeg",
         Some(ext) if ext == "webp" => "image/webp",
         Some(ext) if ext == "gif" => "image/gif",
-        Some(ext) if ext == "txt" => "text/plain",
+        Some(ext) if ext == "txt" || ext == "log" => "text/plain",
         Some(ext) if ext == "json" => "application/json",
         Some(ext) if ext == "webm" => "video/webm",
         Some(ext) if ext == "mp4" => "video/mp4",
@@ -109,6 +109,7 @@ mod tests {
         assert_eq!(media_type("home.webp"), "image/webp");
         assert_eq!(media_type("home.gif"), "image/gif");
         assert_eq!(media_type("output.txt"), "text/plain");
+        assert_eq!(media_type("run.log"), "text/plain");
         assert_eq!(media_type("result.json"), "application/json");
         assert_eq!(media_type("session.webm"), "video/webm");
         assert_eq!(media_type("session.mp4"), "video/mp4");
