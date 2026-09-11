@@ -33,6 +33,7 @@ import type {
   StepAttempt,
   StepDetail,
 } from "@armada/protocol";
+import { isSweepMarker } from "./declared";
 import { span } from "./duration";
 import { ordered } from "./facts";
 import { checksOf, checksStand } from "./gates";
@@ -149,7 +150,7 @@ function factsOfStep(
   // that drew only the first would render an overruled gate as a cleared one.
   if (step.overridden) facts.push({ label: "Advanced", value: "overruled by a person" });
 
-  const stands = standsFact(activity);
+  const stands = standsFact(step, activity);
   if (stands !== undefined) facts.push(stands);
 
   return facts;
@@ -291,7 +292,8 @@ function checkingFact(step: StepDetail): RunTreeFact {
  */
 function checksFact(step: StepDetail, runs: CheckRun[]): RunTreeFact | undefined {
   if (step.checks === undefined) return { label: "Checks", value: "Fleet cannot say" };
-  if (step.checks.length === 0) return { label: "Checks", value: "none declared" };
+  const declared = step.checks.filter((check) => !isSweepMarker(check));
+  if (declared.length === 0) return { label: "Checks", value: "none declared" };
   // **`not reached`, never `not run`.** `not run` is `check_outcome.skipped`'s
   // own verb, and a Check the gate never got to is not one it skipped.
   if (runs.length === 0) {
@@ -299,7 +301,7 @@ function checksFact(step: StepDetail, runs: CheckRun[]): RunTreeFact | undefined
   }
   const failed = runs.filter(didNotPass);
   return failed.length === 0
-    ? { label: "Checks", value: `${runs.length} of ${step.checks.length} passed`, named: "passed" }
+    ? { label: "Checks", value: `${runs.length} of ${declared.length} passed`, named: "passed" }
     : {
         label: "Checks",
         // The Check's own verb, from the registry. A word chosen here would be
@@ -334,19 +336,34 @@ function judgeFact(step: StepDetail, judged: Judged[]): RunTreeFact | undefined 
 
 /**
  * Where the step now stands, as the drawing's last fact row: `Waiting on you`,
- * `Held retries spent`, `Job completed_failed`.
+ * `Held the gate could not decide`, `Job completed_failed`.
  *
  * **Three kinds of stopped, and they never share a row.** Waiting on you is the
  * workflow working, stopped is a Drone that cannot get further, failed is over.
  */
-function standsFact(activity: StepActivity): RunTreeFact | undefined {
+function standsFact(step: StepDetail, activity: StepActivity): RunTreeFact | undefined {
   if (activity === "awaiting_human") return { label: "Waiting", value: "on you" };
-  if (activity === "stopped") {
-    return { label: "Held", value: "retries spent · waiting on you" };
-  }
+  if (activity === "stopped") return { label: "Held", value: `${heldOn(step)} · waiting on you` };
   if (activity === "failed") return { label: "Job", value: "ended here", named: "failed" };
   if (activity === "killed") return { label: "Killed", value: "by a person" };
   return undefined;
+}
+
+/**
+ * What held a stopped step, read off the attempt that actually stopped it.
+ *
+ * **"Retries spent" only where they were.** `gate_failure` is the trigger
+ * `escalation-triggers.toml` documents as the retry limit run out; every other
+ * step-level trigger — `gate_undecided` chief among them — fires once and is
+ * never retried, so telling a person their retries are spent on attempt one is
+ * false on the record in front of them. Everything that is not `gate_failure`
+ * takes the registry's own verb for the trigger, the same fallback
+ * `verdictFact` already takes.
+ */
+function heldOn(step: StepDetail): string {
+  const why = step.attempts[step.attempts.length - 1]?.why;
+  if (why === undefined || why === "gate_failure") return "retries spent";
+  return ESCALATION_REASON[why]?.verb ?? why;
 }
 
 /**

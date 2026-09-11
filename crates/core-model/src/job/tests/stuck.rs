@@ -96,7 +96,7 @@ fn unheard_job() -> Job {
 }
 
 fn classify(job: &Job, standing: Standing) -> Stuck {
-    Stuck::of(job, None, standing, Refusals::none()).expect("a stopped Job is classified")
+    Stuck::of(job, None, standing, Refusals::none(), None).expect("a stopped Job is classified")
 }
 
 /// The absence is half the answer: a Job that has not stopped gets no
@@ -113,7 +113,7 @@ fn a_job_that_has_not_stopped_is_not_classified() {
         JobStatus::CompletedSuccess,
     ] {
         assert!(
-            Stuck::of(&reach(status), None, all_there(), Refusals::none()).is_none(),
+            Stuck::of(&reach(status), None, all_there(), Refusals::none(), None).is_none(),
             "{} is not a Job a person opens asking why it stopped",
             status.as_wire()
         );
@@ -193,8 +193,14 @@ fn an_unheard_drone_with_no_worktree_is_not_offered_the_restart() {
 #[test]
 fn a_job_level_trigger_is_read_off_the_transition_reason() {
     let reason = TransitionReason::Escalation(EscalationTrigger::Stalled);
-    let stuck =
-        Stuck::of(&stalled(), Some(&reason), all_there(), Refusals::none()).expect("escalated");
+    let stuck = Stuck::of(
+        &stalled(),
+        Some(&reason),
+        all_there(),
+        Refusals::none(),
+        None,
+    )
+    .expect("escalated");
 
     assert_eq!(stuck.stopped_by(), Some(EscalationTrigger::Stalled));
 }
@@ -517,6 +523,7 @@ fn a_classification_carries_what_the_drone_was_refused() {
         None,
         all_there(),
         Refusals::of(vec![a_refusal()], 1),
+        None,
     )
     .expect("escalated");
 
@@ -527,6 +534,32 @@ fn a_classification_carries_what_the_drone_was_refused() {
         classify(&stopped_on(EscalationTrigger::BlockedByPolicy), all_there()).recourse(),
         "the acts are decided from `Standing` alone, which is why this is not a \
          fifth field on it"
+    );
+}
+
+/// **The other piece of evidence that decides nothing.** A Judge that ran out
+/// of time carries no verdict, so the sentence explaining why rides beside the
+/// trigger exactly as a refusal does.
+#[test]
+fn a_classification_carries_what_the_gate_could_not_read() {
+    let stuck = Stuck::of(
+        &stopped_on(EscalationTrigger::GateUndecided),
+        None,
+        all_there(),
+        Refusals::none(),
+        Some(String::from("the Judge did not answer inside its budget")),
+    )
+    .expect("escalated");
+
+    assert_eq!(
+        stuck.undecided(),
+        Some("the Judge did not answer inside its budget")
+    );
+    assert_eq!(
+        stuck.recourse(),
+        classify(&stopped_on(EscalationTrigger::GateUndecided), all_there()).recourse(),
+        "the acts are decided from `Standing` alone, which is why this is not a \
+         fifth field on it either"
     );
 }
 

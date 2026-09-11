@@ -197,6 +197,8 @@ function screen(
    * on a chapter's body says which one it opened, the way a person would.
    */
   opening?: string,
+  /** Fleet's own reason the gate could not decide, for the `gate_undecided` cases. */
+  undecided?: string,
 ): void {
   asked = [];
   const summary = job();
@@ -265,6 +267,7 @@ function screen(
           onOpenSheet: () => {},
           now: NOW,
           following: { reading: { state: "none" }, picked: null, pick: () => {}, follow: () => {} },
+          undecided,
         }),
       }}
     />,
@@ -591,6 +594,80 @@ test("a panel that refused nothing draws no citation list", async () => {
   );
   await expect.element(page.getByText("Verdicts", { exact: true })).toBeVisible();
   expect(document.body.textContent).not.toContain("What the panel quoted");
+});
+
+/**
+ * The tests step of `2-refuse-a-merge-press-whose-chosen-comments` — `#633`'s
+ * own case: every Check passed, one criterion was declared and the Judge
+ * timed out before the panel answered any of it.
+ */
+function undecidedStep(): StepDetail {
+  return step({
+    checks: [
+      { kind: "every_manifest_check" },
+      { kind: "manifest_check", name: "check:build", run: "cargo build" },
+      { kind: "manifest_check", name: "check:test", run: "cargo test" },
+    ],
+    check_runs: [
+      { attempt: 1, name: "check:build", outcome: "passed" },
+      { attempt: 1, name: "check:test", outcome: "passed" },
+    ],
+    judge_checks: [{ criteria: 1, gaming_check: false }],
+    judged: [],
+    attempts: [
+      { attempt: 1, outcome: "stopped", why: "gate_undecided", started_at: "2026-09-09T09:30:00Z" },
+    ],
+    verdicts: [{ attempt: 1, named: "failed", trigger: "gate_undecided" }],
+    last_verdict: { attempt: 1, named: "failed", trigger: "gate_undecided" },
+  });
+}
+
+/** Fleet's own sentence, as it crosses the wire — lower-case, unpunctuated. */
+const UNDECIDED_RAW = "the Judge did not answer inside its budget";
+
+/** The same sentence, in this screen's own case. */
+const UNDECIDED_SAID = "The Judge did not answer inside its budget.";
+
+test("the sweep marker's row is never counted or drawn among the Checks", async () => {
+  // Collapsed, so the chapter shows its `CheckRuns` preview — the region a
+  // marker row with no run would draw into — rather than the assertion set
+  // opening it would replace.
+  screen(undecidedStep(), CRITERIA);
+  await expect.element(page.getByText("2 of 2 passed").first()).toBeVisible();
+  await expect.element(page.getByText("check:build").first()).toBeVisible();
+  expect(document.body.textContent).not.toContain("every_manifest_check");
+  expect(document.body.textContent).not.toContain("Nothing has run this Check yet.");
+});
+
+test("the Judge's row draws Fleet's own reason, sentence-cased, and not doubled", async () => {
+  screen(undecidedStep(), CRITERIA, undefined, undefined, UNDECIDED_RAW);
+  // Twice: the Judge's row on the Checks list and the Verdicts chapter's own
+  // preview, from the one reading `gates.ts` gives both.
+  await expect.element(page.getByText(UNDECIDED_SAID, { exact: false }).first()).toBeVisible();
+  expect(page.getByText(UNDECIDED_SAID, { exact: false }).elements().length).toBe(2);
+  // Fleet's sentence stands alone — it is not said twice over.
+  expect(document.body.textContent).not.toContain("did not answer. The Judge");
+  expect(document.body.textContent).not.toContain("Waiting for every Check to finish.");
+});
+
+test("the Verdicts chapter's short value is the registry's word, the sentence is in the preview", async () => {
+  screen(undecidedStep(), CRITERIA, undefined, undefined, UNDECIDED_RAW);
+  await expect.element(page.getByText("could not read the artifact")).toBeVisible();
+  expect(document.body.textContent).not.toContain("has not been asked anything on this step yet");
+});
+
+test("a Bridge behind the Fleet that sent it still says the panel did not answer", async () => {
+  // `undecided` absent is a Fleet built before the field, or a step this
+  // reader opened that `stuck` is not about — either way the shorter sentence
+  // stays true.
+  screen(undecidedStep(), CRITERIA);
+  await expect
+    .element(page.getByText("The panel was asked and did not answer.", { exact: false }).first())
+    .toBeVisible();
+  expect(
+    page.getByText("The panel was asked and did not answer.", { exact: false }).elements().length,
+  ).toBe(2);
+  expect(document.body.textContent).not.toContain(UNDECIDED_RAW);
 });
 
 test("a Fleet that served neither reading draws the grid and nothing under it", async () => {

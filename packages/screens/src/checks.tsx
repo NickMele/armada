@@ -40,6 +40,8 @@ import {
   isRunning,
   isWaiting,
   outputRunOf,
+  sentenceOf,
+  stoppedUndecided,
   type CheckRead,
   type Panel,
 } from "./gates";
@@ -74,12 +76,14 @@ export function checksChapter(
   outputs: Outputs,
   now: number,
   following: Following,
+  /** Fleet's own reason the gate could not decide. `verdictsChapter`'s own. */
+  undecided?: string,
 ): Omit<StepChapter, "ordinal"> | undefined {
   const reads = checksOf(step);
   if (reads.length === 0) return undefined;
 
   const rows = reads.map((read) => checkRow(read, now));
-  const judge = judgeRow(step, panels);
+  const judge = judgeRow(step, panels, undecided);
   if (judge !== undefined) rows.push(judge);
 
   // What each Check wrote, by the row that wrote it, so a press opens that
@@ -354,11 +358,23 @@ function iconOf(run: CheckRun | undefined): CheckRunRow["icon"] {
  * `judge_checks[]` entry on a step — so the row says what was declared, in
  * words, and claims nothing about being joinable.
  */
-function judgeRow(step: StepDetail, panels: Panel[]): CheckRunRow | undefined {
+function judgeRow(step: StepDetail, panels: Panel[], undecided?: string): CheckRunRow | undefined {
   const declared = step.judge_checks;
   if (declared === undefined || declared.length === 0) return undefined;
   const identifier = declared.map(judgeOf).join(" · ");
   if (panels.length === 0) {
+    // **Asked and silent outranks queued and running.** `gate_undecided` is a
+    // call Fleet already made and could not read back, which is a different
+    // fact from a call still out (`judging` present) or one still ahead of the
+    // step (`judging` absent) — both of those are `stoppedUndecided`'s false.
+    if (stoppedUndecided(step)) {
+      return {
+        id: JUDGE_ROW,
+        says: undecided === undefined ? ASKED_AND_SILENT : sentenceOf(undecided),
+        identifier,
+        identifierIsAName: true,
+      };
+    }
     // A call that is out right now is not the same fact as a panel nothing has
     // asked yet, and `judging` is the only thing on the wire that says so.
     return {
@@ -402,6 +418,14 @@ const NOT_ASKED_YET = "Waiting for every Check to finish.";
 
 /** What it says while a call is out. `judging` is what makes the two different. */
 const ASKING_NOW = "The panel is answering now.";
+
+/**
+ * What the Judge's row says where the gate asked and never read an answer
+ * back, and `undecided` carried nothing to say instead. **Never both**: where
+ * Fleet's own sentence is present, it stands alone — saying the panel did not
+ * answer and then saying why is the same fact twice.
+ */
+const ASKED_AND_SILENT = "The panel was asked and did not answer.";
 
 /** Where an output goes when it is pressed. Bridge has no viewer of its own. */
 const OPENS_WHERE = "Click to open this output in your editor";

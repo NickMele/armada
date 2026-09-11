@@ -97,6 +97,7 @@ export function evidenceChaptersOf({
   outputs,
   now,
   following,
+  undecided,
 }: {
   /** Now, injected, so a running Check's elapsed time moves with the clock. */
   now: number;
@@ -107,6 +108,12 @@ export function evidenceChaptersOf({
   criteria: readonly Criterion[];
   /** How a record is opened, and where a refusal to open is said. */
   opens: Opens;
+  /**
+   * Fleet's own reason the gate could not decide on this step's current
+   * attempt. `stuck.undecided`, handed down from the Job's own record rather
+   * than read here — a chapter has no route to `stuck` of its own.
+   */
+  undecided?: string;
   /**
    * What each Check printed, as this window has it, and how to ask for one.
    *
@@ -128,8 +135,8 @@ export function evidenceChaptersOf({
   // count is the story's to make, over the list it actually built. The order
   // is still fixed: Checks always before Verdicts.
   return [
-    checksChapter(step, panels, opens, outputs, now, following),
-    verdictsChapter(step, panels, opens),
+    checksChapter(step, panels, opens, outputs, now, following, undecided),
+    verdictsChapter(step, panels, opens, undecided),
   ].filter(
     (chapter): chapter is Unnumbered => chapter !== undefined,
   );

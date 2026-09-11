@@ -273,6 +273,16 @@ pub struct Stuck {
     /// refusals all fit, which is the ordinary case.
     #[serde(default)]
     pub refusals: u64,
+    /// What the gate said it could not read — *the Judge did not answer inside
+    /// its budget* — where that is why the stopped step stopped.
+    ///
+    /// **Present only where [`stopped_by`](Stuck::stopped_by) is
+    /// `gate_undecided`.** A gate that could not read what it needed carries no
+    /// verdict, so nothing else on this type says why the step is stuck —
+    /// `stopped_by` alone names the trigger and not the cause, which was
+    /// reaching Fleet's own log and nothing on the wire.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub undecided: Option<String>,
 }
 
 /// One call the Drone reached for and was refused.
@@ -368,6 +378,7 @@ impl Stuck {
             drone_unheard: stuck.standing().drone == core_model::DroneStanding::Unheard,
             refused: stuck.refused().kept().iter().map(Refusal::from).collect(),
             refusals: stuck.refused().in_all(),
+            undecided: stuck.undecided().map(str::to_string),
         }
     }
 }

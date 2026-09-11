@@ -22,7 +22,7 @@
 import type { WorkflowRailStep } from "@armada/components";
 
 import type { WorkflowStep, WorkflowSummary } from "@armada/protocol";
-import { advanceOf, commandOf, coversOf, judgeOf } from "./declared";
+import { advanceOf, commandOf, coversOf, isSweepMarker, judgeOf } from "./declared";
 
 /**
  * One workflow's steps, as a rail a proposal can be read against.
@@ -55,8 +55,12 @@ export function previewOf(workflow: WorkflowSummary | undefined): WorkflowRailSt
  * "Fleet cannot say" case here, and `undefined` means the step gates on nothing.
  */
 function gatesOf(step: WorkflowStep): WorkflowRailStep["gates"] {
-  if (step.checks.length === 0) return undefined;
-  return step.checks.map((check) => ({
+  // The sweep marker leads `declared_checks` where a step gates on everything
+  // the repository declares, and it is not a Check a preview can show a
+  // command or a coverage for — see `declared.ts`'s `isSweepMarker`.
+  const declared = step.checks.filter((check) => !isSweepMarker(check));
+  if (declared.length === 0) return undefined;
+  return declared.map((check) => ({
     command: commandOf(check),
     // The one thing a preview can say that the running rail cannot say
     // sooner: which of these Checks a Job's diff will be measured by.

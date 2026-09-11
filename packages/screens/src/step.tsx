@@ -33,6 +33,7 @@ import type { ReactNode } from "react";
 
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
 import { span } from "./duration";
+import { sentenceOf } from "./gates";
 import { Opening, openKept, type Opens } from "./phases";
 import { recourseOf } from "./recovery";
 import { refusedIn } from "./refused";
@@ -203,6 +204,11 @@ export function noticeOf(
   // `undefined` on a Job refused nothing, which is most of them.
   const refused = refusedIn(whole);
   const flagged = step.flagged;
+  // **Present only where `stopped_by` is `gate_undecided`** — `Stuck.undecided`
+  // says so, so nothing here re-checks the trigger before drawing it. Fleet
+  // writes it lower-case and unpunctuated, like a log line; `sentenceOf` is
+  // what every other reader of this same field takes to say it as a sentence.
+  const undecided = whole?.stuck?.undecided;
   return {
     // A Job that is over is red; one holding with a live Drone is not, because
     // a person deciding what happens next is not a failure.
@@ -227,6 +233,12 @@ export function noticeOf(
     ),
     children: (
       <>
+        {/* Beside the headline, ahead of everything else the band says — the
+            one fact #633 found missing was why the gate could not decide, and
+            the headline above already says only that it could not. */}
+        {undecided === undefined ? null : (
+          <span className="block">{sentenceOf(undecided)}</span>
+        )}
         {flagged.length === 0 ? null : (
           <GamingFlags
             flags={flagged.map((flag) => ({

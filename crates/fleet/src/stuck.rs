@@ -21,14 +21,18 @@
 //! detail, handed in rather than made again, and the slot and the workflow map
 //! are in memory. An open of a Job that is still going costs nothing at all —
 //! `Stuck::asked_of` answers first. The transcript read is the trigger's own
-//! evidence — see [`Fleet::refused`].
+//! evidence — see [`Fleet::refused`]. A `gate_undecided` Job costs a second
+//! read, of the Job's own log — see [`Fleet::undecided`].
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
+use api::Journal;
 use core_model::{
-    DroneStanding, Job, Refusals, Standing, StepCheck, StepId, Stuck, TransitionReason,
+    DroneStanding, EscalationTrigger, Job, Refusals, Standing, StepCheck, StepId, Stuck,
+    TransitionReason,
 };
 
 use crate::daemon::Fleet;
+use crate::settling::UNDECIDED;
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -62,10 +66,11 @@ where
             reason,
             self.standing_of(job, ran).await,
             self.refused(job).await,
+            self.undecided(job),
         )
     }
 
-    /// What this Job's Drones reached for and were refused.
+    /// What the Drone on the stopped step reached for and was refused.
     ///
     /// **Read for every stopped Job and not only a `blocked_by_policy` one.**
     /// A Drone denied the command it needed goes on to escalate as `stalled` or
@@ -73,12 +78,48 @@ where
     /// classification already named a policy would be missing from exactly the
     /// Jobs the classification got wrong.
     ///
+    /// **Scoped to the step this Job stopped on, not every step it ever ran.**
+    /// A Job's transcripts span its whole run, and a refusal on an earlier step
+    /// that passed is not evidence for why the current step is stuck —
+    /// [`stopped_step`] is the same reading [`Stuck::of`](core_model::Stuck::of)
+    /// makes of the record, so the two cannot disagree about which step this is.
+    ///
     /// **The Drone's process is long gone by the time a person opens this.**
     /// The events are not in memory and nothing on the record kept them; the
     /// file under `.armada/transcripts/` is what survives, and the Job's log is
     /// what names it.
     async fn refused(&self, job: &Job) -> Refusals {
-        crate::transcript::refusals(&self.host().repo_root, &job.handle()).await
+        crate::transcript::refusals(&self.host().repo_root, &job.handle(), stopped_step(job)).await
+    }
+
+    /// What the gate said when it could not decide, where that is why the
+    /// stopped step stopped.
+    ///
+    /// **Not in the store.** [`Fleet::noted_undecided`](crate::settling)
+    /// writes the sentence to the Job's log alone, so this is the same kind of
+    /// read `refused` makes of the transcripts — off a file, for the step that
+    /// stopped — and it costs nothing on every trigger but `gate_undecided`,
+    /// which the guard below checks first.
+    fn undecided(&self, job: &Job) -> Option<String> {
+        let (step, trigger) = job.stopped_on()?;
+        if trigger.trigger() != EscalationTrigger::GateUndecided {
+            return None;
+        }
+        let step = ipc::StepId::from(step);
+        self.job_logs()
+            .read(&job.handle(), 0)
+            .notes
+            .into_iter()
+            // The latest one: a step can be asked more than once, and this
+            // says why the attempt that is still standing could not decide.
+            .rev()
+            .find(|note| note.msg == UNDECIDED && note.step.as_ref() == Some(&step))
+            .and_then(|note| {
+                note.fields
+                    .into_iter()
+                    .find(|field| field.name == "said")
+                    .map(|field| field.value)
+            })
     }
 
     /// What Fleet knows about this Job that its record does not say.
@@ -150,4 +191,17 @@ fn checks_passed(ran: &[(StepId, Vec<StepCheck>)], step: Option<&StepId>) -> boo
         .filter(|(id, _)| id == step)
         .flat_map(|(_, checks)| checks.iter())
         .all(|check| check.outcome.advances())
+}
+
+/// The step a person opening this Job asking why it stopped is asking about.
+///
+/// `Job::stopped_on`'s step where one stopped, or the Job's current step for a
+/// Job-level escalation — `stalled` and `interrupted` stop no step, and it is
+/// still the step the Job is holding. Both `refused` and the gate's own
+/// undecided sentence read off this, so a screen's evidence and its trigger
+/// name the same step.
+fn stopped_step(job: &Job) -> Option<&StepId> {
+    job.stopped_on()
+        .map(|(step, _)| step)
+        .or_else(|| job.current_step().map(|step| step.step_id()))
 }

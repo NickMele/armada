@@ -263,6 +263,7 @@ pub struct Stuck {
     recourse: Vec<Recourse>,
     standing: Standing,
     refused: Refusals,
+    undecided: Option<String>,
 }
 
 impl Stuck {
@@ -281,16 +282,17 @@ impl Stuck {
     /// instead, because that is the reading every act already makes and a
     /// second path to one answer is how the two come to disagree.
     ///
-    /// `refused` is evidence and decides nothing here. **It is an argument
-    /// rather than a fifth field on [`Standing`]**, because every field of that
-    /// struct is read by a rule below and this one is read by none — folding it
-    /// in would make `Standing` two things at once, and would cost its `Copy`
-    /// for a value no rule consults.
+    /// `refused` and `undecided` are evidence and decide nothing here. **Both
+    /// are arguments rather than fields on [`Standing`]**, because every field
+    /// of that struct is read by a rule below and these two are read by
+    /// none — folding either in would make `Standing` two things at once, and
+    /// would cost its `Copy` for a value no rule consults.
     pub fn of(
         job: &Job,
         reason: Option<&TransitionReason>,
         standing: Standing,
         refused: Refusals,
+        undecided: Option<String>,
     ) -> Option<Stuck> {
         if !Stuck::asked_of(job.status()) {
             return None;
@@ -368,6 +370,7 @@ impl Stuck {
             recourse,
             standing,
             refused,
+            undecided,
         })
     }
 
@@ -433,6 +436,17 @@ impl Stuck {
     /// rather than offering to change it.
     pub fn refused(&self) -> &Refusals {
         &self.refused
+    }
+
+    /// What the gate said when it could not decide, where that is why the
+    /// stopped step stopped.
+    ///
+    /// **`None` on every trigger but `gate_undecided`.** A step can carry an
+    /// older "could not read" line from an attempt it later moved past on a
+    /// different trigger, and reading it regardless would give a `gate_failure`
+    /// Job a sentence about a timeout that is not why it stopped.
+    pub fn undecided(&self) -> Option<&str> {
+        self.undecided.as_deref()
     }
 
     /// Whether one act applies. **The predicate every caller wants**, so that

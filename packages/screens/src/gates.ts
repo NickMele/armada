@@ -31,7 +31,7 @@ import type {
   StepDetail,
 } from "@armada/protocol";
 
-import { nameOf } from "./declared";
+import { isSweepMarker, nameOf } from "./declared";
 import { onlyCurrentAttempt } from "./facts";
 
 /**
@@ -76,7 +76,11 @@ export type CheckRead = {
  * last ruling's rows beside Checks that are running again.
  */
 export function checksOf(step: StepDetail): CheckRead[] {
-  const declared = step.checks ?? [];
+  // The sweep marker never counts as a Check and never draws as one — it
+  // declares that the step gates on everything the repository declares, and
+  // nothing ever runs it. `run.ts`'s tier count reads this same filter, on
+  // this same list, for the reason atop this file.
+  const declared = (step.checks ?? []).filter((check) => !isSweepMarker(check));
   const runs = onlyCurrentAttempt(step, step.check_runs);
   const underway = step.checking?.checks ?? [];
   return declared.map((check) => {
@@ -270,6 +274,31 @@ export function panelsOf(step: StepDetail, criteria: readonly Criterion[]): Pane
 /** How many criteria the step's declaration says the panel will answer. */
 export function askedOf(step: StepDetail): number {
   return (step.judge_checks ?? []).reduce((sum, judge) => sum + judge.criteria, 0);
+}
+
+/**
+ * Whether this attempt's panel was asked and never answered, rather than
+ * never asked at all. Both draw `judged` empty for the current attempt, and
+ * they are not the same sentence: one is a call still ahead of the step, the
+ * other is one Fleet already made and could not read back.
+ *
+ * **`last_verdict.trigger` and not a live `judging` read**, because a step
+ * open after the Job stopped carries no in-flight call — `judging` is
+ * "right now", and there is no "now" left to name once the Job is over.
+ */
+export function stoppedUndecided(step: StepDetail): boolean {
+  return step.last_verdict?.trigger === "gate_undecided";
+}
+
+/**
+ * Fleet's own sentence, corrected to this screen's case. Fleet writes what it
+ * logged, lower-case and unpunctuated like every other log line; everywhere
+ * this crosses onto a sentence of its own the two surfaces that draw it would
+ * otherwise punctuate it two different ways.
+ */
+export function sentenceOf(said: string): string {
+  const capped = said.charAt(0).toUpperCase() + said.slice(1);
+  return /[.!?]$/.test(capped) ? capped : `${capped}.`;
 }
 
 /**

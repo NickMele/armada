@@ -186,6 +186,17 @@ export type Stuck = {
    */
   stopped_by?: string;
   /**
+   * The sentence Fleet logged when the gate could not read what it needed to
+   * rule, in Fleet's own words — e.g. "the Judge did not answer inside its
+   * budget".
+   *
+   * **Present only where `stopped_by` is `gate_undecided`.** Every other
+   * trigger names its own trouble in words this build already has, off the
+   * registry; this is the one whose cause is an artifact the gate could not
+   * obtain, and there is no closed set of those to give a row of their own.
+   */
+  undecided?: string;
+  /**
    * The step that stopped, where a step-level trigger named one. **Absent on
    * every job-level escalation**, which is what makes a restart incoherent
    * there rather than merely refused.

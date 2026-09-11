@@ -27,7 +27,7 @@
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
-use core_model::{DroneId, Refusal, Refusals, Timestamp};
+use core_model::{DroneId, Refusal, Refusals, StepId, Timestamp};
 use ipc::{CallArguments, Saw, TranscriptRow};
 use serde::Deserialize;
 use tokio::fs;
@@ -43,11 +43,11 @@ pub const HISTORY: usize = 2048;
 
 /// How many refusals a classification carries.
 ///
-/// A stopped Job's whole list, for every run anybody has looked at — the
-/// blocked run this was written against was refused once. It is a cap and not a
-/// window because past this the list has stopped being something a person
-/// reads: fifty distinct commands to unblock is a Manifest problem, not a Job
-/// one. What is left out is counted, and `Refusals::in_all` says so.
+/// The stopped step's whole list — [`refusals`] narrows to it, so a run of
+/// fifty is a step's, not the Job's. It is a cap and not a window because past
+/// this the list has stopped being something a person reads: fifty distinct
+/// commands to unblock is a Manifest problem, not a Job one. What is left out
+/// is counted, and `Refusals::in_all` says so.
 pub const REFUSALS: usize = 50;
 
 /// The `msg` the transcript path is carried on. Written by
@@ -139,30 +139,35 @@ pub async fn arguments(repo_root: &str, handle: &str, call: &str) -> Option<Call
     None
 }
 
-/// What this Job's Drones reached for and were refused.
+/// What the Drone on `step` reached for and was refused.
+///
+/// **Scoped to the step that stopped, not the whole Job** — a refusal on a
+/// step that already passed is not why the Job is stuck now. `step` is
+/// [`Job::stopped_on`](core_model::Job::stopped_on)'s step, or the Job's
+/// current step where nothing stopped (`stalled` and the like). A row from
+/// before [`TranscriptRow::step`] existed carries none and is kept regardless:
+/// dropping evidence nobody can attribute is worse than showing it stale.
 ///
 /// # The two rows are joined here and nowhere else
 ///
-/// A refusal is written down twice and neither half is the answer. The
-/// `called` row carries the tool and the command; the `refused` row carries the
-/// tool and the harness's reason, which is empty on every one observed. They
-/// share a call id and nothing joined them, so `blocked_by_policy` reached a
-/// person naming a policy and never naming what it stopped.
+/// A refusal is written down twice and neither half is the answer: the
+/// `called` row carries the tool and the command, the `refused` row carries the
+/// tool and the harness's reason (empty on every one observed). They share a
+/// call id and nothing joined them, so `blocked_by_policy` named a policy and
+/// never named what it stopped.
 ///
-/// # Two passes, and the second is paid only by a Job that has refusals
+/// **Two passes.** The first keeps the refused calls and a Drone refused
+/// nothing stops there. Only a Job with refusals pays for the second, which
+/// reads the file again for the [`REFUSALS`] call ids that need a command,
+/// stopping once every one has it — the alternative was a second copy of an
+/// unbounded file held to answer a question about fifty rows of it.
 ///
-/// The first keeps the refused calls; a Drone refused nothing stops there,
-/// which is the ordinary Job. Only where something was refused is the file read
-/// again, for the [`REFUSALS`] call ids that need a command against them, and
-/// it stops as soon as every one of them has it. **The alternative was a map of
-/// every call the Drone made** — a second copy of an unbounded file, held to
-/// answer a question about at most fifty rows of it.
-///
-/// A Job with no log, a transcript that was reclaimed and a Drone that was
-/// refused nothing all answer [`Refusals::none`]. None is an error.
-pub async fn refusals(repo_root: &str, handle: &str) -> Refusals {
+/// A Job with no log, a transcript that was reclaimed and a Drone refused
+/// nothing all answer [`Refusals::none`]. None is an error.
+pub async fn refusals(repo_root: &str, handle: &str, step: Option<&StepId>) -> Refusals {
     let files = transcripts(repo_root, handle).await;
-    let (mut kept, in_all) = refused_calls(&files).await;
+    let step = step.map(ipc::StepId::from);
+    let (mut kept, in_all) = refused_calls(&files, step.as_ref()).await;
     if kept.is_empty() {
         return Refusals::none();
     }
@@ -170,13 +175,13 @@ pub async fn refusals(repo_root: &str, handle: &str) -> Refusals {
     Refusals::of(kept, in_all)
 }
 
-/// Every refusal, counted, and the first [`REFUSALS`] of them kept without
-/// their commands.
+/// Every refusal on `step`, counted, and the first [`REFUSALS`] of them kept
+/// without their commands.
 ///
 /// **The first and not the last.** What stopped a Drone is what it reached for
 /// before it began working around being stopped; a window on the end of the
 /// list is a window on the flailing.
-async fn refused_calls(files: &[PathBuf]) -> (Vec<Refusal>, u64) {
+async fn refused_calls(files: &[PathBuf], step: Option<&ipc::StepId>) -> (Vec<Refusal>, u64) {
     let mut kept: Vec<Refusal> = Vec::new();
     let mut in_all = 0u64;
     for at in files {
@@ -196,6 +201,9 @@ async fn refused_calls(files: &[PathBuf]) -> (Vec<Refusal>, u64) {
             else {
                 continue;
             };
+            if !on_step(row.step.as_ref(), step) {
+                continue;
+            }
             in_all += 1;
             if kept.len() < REFUSALS {
                 kept.push(Refusal {
@@ -216,6 +224,17 @@ async fn refused_calls(files: &[PathBuf]) -> (Vec<Refusal>, u64) {
         }
     }
     (kept, in_all)
+}
+
+/// Whether a row belongs to the step a classification is asking about.
+///
+/// `None` on the row is a row written before `step` existed, kept regardless —
+/// see [`refusals`]. Everything else has to match exactly.
+fn on_step(row: Option<&ipc::StepId>, step: Option<&ipc::StepId>) -> bool {
+    match row {
+        None => true,
+        Some(row) => Some(row) == step,
+    }
 }
 
 /// What each refused call was on, read off the `called` row that shares its id.

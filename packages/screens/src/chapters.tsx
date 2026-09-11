@@ -100,6 +100,7 @@ export function chaptersOf({
   onOpenSheet,
   now,
   following,
+  undecided,
 }: {
   /** Now, injected, so a running Check's elapsed time moves with the clock. */
   now: number;
@@ -208,6 +209,13 @@ export function chaptersOf({
    */
   opens: Opens;
   onOpenSheet: (which: "log" | "diff") => void;
+  /**
+   * Fleet's own reason the gate could not decide on this step's current
+   * attempt, for the Verdicts chapter and the Checks chapter's Judge row.
+   * `stuck.undecided`, scoped by the caller to the step `stuck.step_id` names
+   * — a step open for any other reason gets none.
+   */
+  undecided?: string;
 }): StepChapter[] {
   const rows = watching === null ? [] : entriesOf(watching.rows, step.step_id);
   // **The turns Fleet sent, and not everything in Armada's voice.** The two
@@ -409,7 +417,7 @@ export function chaptersOf({
     // The last chapters, where the step has them. `evidence.tsx` decides
     // whether either is drawn — a step that gates on nothing has neither, and
     // one that gates on a Judge alone has one.
-    ...evidenceChaptersOf({ step, criteria, opens, outputs, now, following }),
+    ...evidenceChaptersOf({ step, criteria, opens, outputs, now, following, undecided }),
   ];
   return story.map((chapter, at) => ({ ...chapter, ordinal: at + 1 }));
 }

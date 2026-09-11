@@ -40,14 +40,21 @@ const NEVER_RAN: &str = "8-a-job-that-never-ran";
 /// The command the real Job was refused, as its transcript recorded it.
 const REFUSED: &str = "cargo nextest run --package ipc 2>&1 | tail -80";
 
+/// The step every test but the cross-step one runs its Drone on.
+const IMPLEMENT: &str = "implement";
+
 fn recording(at: &TempDir, drone: &str) -> Recording {
+    recording_on(at, drone, IMPLEMENT)
+}
+
+fn recording_on(at: &TempDir, drone: &str, step: &str) -> Recording {
     Recording::of(
         &at.path().to_string_lossy(),
         Spine {
             job: JobId::carried(Ulid::carried(JOB)),
             handle: String::from(HANDLE),
             drone: DroneId::carried(Ulid::carried(drone)),
-            step: StepId::new("implement"),
+            step: StepId::new(step),
             run: Ulid::carried(RUN),
         },
         std::sync::Arc::new(crate::tests::daemon::Ticking::from_nine()),
@@ -82,7 +89,12 @@ async fn a_refusal_names_the_command_it_was_refused_over() {
     recording.saw(&[called("toolu_01B13LL", REFUSED), refused("toolu_01B13LL")]);
     recording.settled().await;
 
-    let read = refusals(&at.path().to_string_lossy(), HANDLE).await;
+    let read = refusals(
+        &at.path().to_string_lossy(),
+        HANDLE,
+        Some(&StepId::new(IMPLEMENT)),
+    )
+    .await;
 
     assert_eq!(read.in_all(), 1);
     let [one] = read.kept() else {
@@ -115,7 +127,12 @@ async fn a_refused_heredoc_says_it_was_cut_and_how_long_it_was() {
     recording.saw(&[called("toolu_01Haa", &heredoc), refused("toolu_01Haa")]);
     recording.settled().await;
 
-    let read = refusals(&at.path().to_string_lossy(), HANDLE).await;
+    let read = refusals(
+        &at.path().to_string_lossy(),
+        HANDLE,
+        Some(&StepId::new(IMPLEMENT)),
+    )
+    .await;
 
     let [one] = read.kept() else {
         panic!("one refusal, carried: {:?}", read.kept());
@@ -144,11 +161,11 @@ async fn a_run_that_was_refused_nothing_carries_nothing() {
     recording.settled().await;
 
     let root = at.path().to_string_lossy().to_string();
-    let read = refusals(&root, HANDLE).await;
+    let read = refusals(&root, HANDLE, Some(&StepId::new(IMPLEMENT))).await;
     assert!(read.kept().is_empty());
     assert_eq!(read.in_all(), 0);
 
-    let never_ran = refusals(&root, NEVER_RAN).await;
+    let never_ran = refusals(&root, NEVER_RAN, Some(&StepId::new(IMPLEMENT))).await;
     assert!(
         never_ran.kept().is_empty() && never_ran.in_all() == 0,
         "a Job with no log is missing, not an error"
@@ -171,7 +188,12 @@ async fn a_capped_list_states_how_many_there_were() {
     }
     recording.settled().await;
 
-    let read = refusals(&at.path().to_string_lossy(), HANDLE).await;
+    let read = refusals(
+        &at.path().to_string_lossy(),
+        HANDLE,
+        Some(&StepId::new(IMPLEMENT)),
+    )
+    .await;
 
     assert_eq!(read.kept().len(), REFUSALS);
     assert_eq!(read.in_all(), over as u64, "and the rest are counted");
@@ -193,7 +215,12 @@ async fn a_refusal_with_no_call_row_names_the_tool_and_guesses_nothing() {
     recording.saw(&[refused("toolu_01Gone")]);
     recording.settled().await;
 
-    let read = refusals(&at.path().to_string_lossy(), HANDLE).await;
+    let read = refusals(
+        &at.path().to_string_lossy(),
+        HANDLE,
+        Some(&StepId::new(IMPLEMENT)),
+    )
+    .await;
 
     let [one] = read.kept() else {
         panic!("the refusal is carried even with nothing to join it to");
@@ -223,7 +250,12 @@ async fn both_attempts_refusals_are_the_one_jobs() {
         recording.settled().await;
     }
 
-    let read = refusals(&at.path().to_string_lossy(), HANDLE).await;
+    let read = refusals(
+        &at.path().to_string_lossy(),
+        HANDLE,
+        Some(&StepId::new(IMPLEMENT)),
+    )
+    .await;
 
     assert_eq!(read.in_all(), 2);
     assert_eq!(
@@ -233,6 +265,55 @@ async fn both_attempts_refusals_are_the_one_jobs() {
             .collect::<Vec<_>>(),
         ["git push --force", "curl https://example.invalid"],
         "in the order the Job's log named the transcripts"
+    );
+}
+
+/// **The defect this issue is about.** Two steps, two Drones, a refusal on
+/// each — the first step passed and the second is the one the Job stopped on,
+/// and a classification asking about the second sees only the second's.
+#[tokio::test]
+async fn refusals_are_scoped_to_the_step_that_stopped() {
+    const SCOPE: &str = "01DRONESCOPESCOPESCOPESCO";
+    const IMPL: &str = "01DRONEIMPLEMENTIMPLEMENT";
+
+    let at = TempDir::new();
+    let scope = recording_on(&at, SCOPE, "scope");
+    scope.saw(&[
+        called("toolu_scope", "git push --force"),
+        refused("toolu_scope"),
+    ]);
+    scope.settled().await;
+
+    let implement = recording_on(&at, IMPL, IMPLEMENT);
+    implement.saw(&[called("toolu_impl", REFUSED), refused("toolu_impl")]);
+    implement.settled().await;
+
+    let stopped = refusals(
+        &at.path().to_string_lossy(),
+        HANDLE,
+        Some(&StepId::new(IMPLEMENT)),
+    )
+    .await;
+    assert_eq!(stopped.in_all(), 1, "not the step that already passed");
+    let [one] = stopped.kept() else {
+        panic!("one refusal, carried: {:?}", stopped.kept());
+    };
+    assert_eq!(one.detail, REFUSED);
+
+    let earlier = refusals(
+        &at.path().to_string_lossy(),
+        HANDLE,
+        Some(&StepId::new("scope")),
+    )
+    .await;
+    assert_eq!(
+        earlier
+            .kept()
+            .iter()
+            .map(|r| r.detail.as_str())
+            .collect::<Vec<_>>(),
+        ["git push --force"],
+        "each step reads its own, not the Job's whole list"
     );
 }
 
