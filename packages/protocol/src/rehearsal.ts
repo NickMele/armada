@@ -5,6 +5,7 @@
 // and nothing here moves a Job, so no field maps onto a status colour.
 
 import type { ChangedFile } from "./events";
+import type { JobRead } from "./reads";
 import type { ProtocolVersion } from "./version";
 import type { ServerEntry } from "./servers";
 
@@ -148,3 +149,32 @@ export type RunOpened = {
   /** Older lines the opening read left out, because the window is bounded. */
   skipped: number;
 };
+
+/** `GET /jobs/:job_id/run_sheet`, in `reads.ts`'s four states. Bridge-only, not on the wire. */
+export type RunSheetRead = JobRead<{ sheet: RunSheet }>;
+
+/**
+ * The run a window is watching on `observe_run`, as main holds it.
+ *
+ * **`FollowedLog`'s shape, one subject over** — a run's own id in place of a
+ * Check's `kept`, and `RunMessage`'s four kinds in place of `OutputMessage`'s
+ * three. One at a time: the sheet shows one run's output, and opening another
+ * replaces it.
+ */
+export type RunFollowed =
+  | { state: "none" }
+  | { state: "opening"; jobId: string; runId: string }
+  | {
+      state: "following";
+      jobId: string;
+      runId: string;
+      name: string;
+      path: string;
+      /** The file's own line number of `lines[0]`, counted from one. */
+      fromLine: number;
+      /** The newest lines, oldest first, bounded. */
+      lines: string[];
+      /** Why the stream ended, or absent while it is still arriving. */
+      ended?: string;
+    }
+  | { state: "failed"; jobId: string; runId: string; detail: string };
