@@ -461,6 +461,49 @@ const SERVING: ServerState = {
 
 const openServerLink = fn(async () => ({ ok: true }) as const);
 
+/** The sheet's own reading of the Job's frozen Manifest, naming the Check
+ * `escalatedGateFailure` failed — `cargo_nextest` — so selecting it has a row
+ * to select. */
+const RUN_SHEET_READ = {
+  state: "read" as const,
+  jobId: JOB_ID,
+  sheet: {
+    job_id: JOB_ID,
+    setup: [],
+    checks: [
+      {
+        name: "cargo_nextest",
+        run: "cargo nextest run --workspace",
+        narrows: false,
+        requires: [],
+        expect_exit_code: 0,
+        destructive: false,
+        frozen: true,
+      },
+    ],
+    commands: [],
+    worktree_on_disk: true,
+    worktree_differs: false,
+    drone_working: false,
+  },
+};
+
+/** A refused Check's `Run it here` opens the run sheet with that Check selected. */
+export const RunItHere: Story = {
+  name: "Run it here selects the Check",
+  render: () => (
+    <JobDetailFrom
+      fixture={escalatedGateFailure()}
+      on={{ rehearsal: { ...propsFor(escalatedGateFailure()).rehearsal, runSheet: RUN_SHEET_READ } }}
+    />
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: "Run it here" }));
+    const dialog = within(await within(document.body).findByRole("dialog", { name: "Run" }));
+    await expect(dialog.findByRole("button", { current: true })).resolves.toHaveTextContent("cargo_nextest");
+  },
+};
+
 export const ServingRow: Story = {
   name: "Serving row, link opens the system browser",
   render: () => (
