@@ -16,6 +16,7 @@
 //! two cases, and it is a property of a process rather than of a value.
 
 mod handed;
+mod summaries;
 
 use std::sync::Arc;
 use std::time::Duration;
