@@ -15,6 +15,7 @@
 // never match what the gate actually sends.
 
 import type {
+  BlockKind,
   ChangedFile,
   CheckRun,
   Criterion,
@@ -94,13 +95,21 @@ export function workflow(): WorkflowSummary {
     version: 3,
     manifest_id: MANIFEST_ID,
     steps: [
-      { step_id: "repro", label: "Reproduction", checks: [], judge_checks: [], advance_gate: "auto" },
+      {
+        step_id: "repro",
+        label: "Reproduction",
+        checks: [],
+        judge_checks: [],
+        advance_gate: "auto",
+        delivers: false,
+      },
       {
         step_id: "root_cause",
         label: "Root cause",
         checks: [],
         judge_checks: [],
         advance_gate: "auto",
+        delivers: false,
       },
       {
         step_id: "fix",
@@ -108,6 +117,7 @@ export function workflow(): WorkflowSummary {
         checks: [BUILD_CHECK],
         judge_checks: [],
         advance_gate: "auto_if_judge_passes",
+        delivers: false,
       },
       {
         step_id: "regression_verify",
@@ -115,6 +125,7 @@ export function workflow(): WorkflowSummary {
         checks: [NEXTEST_CHECK],
         judge_checks: [{ criteria: 2, gaming_check: true }],
         advance_gate: "human_always",
+        delivers: false,
       },
       {
         step_id: "consumers",
@@ -122,8 +133,16 @@ export function workflow(): WorkflowSummary {
         checks: [BUILD_CHECK],
         judge_checks: [],
         advance_gate: "auto",
+        delivers: false,
       },
-      { step_id: "land", label: "Land", checks: [], judge_checks: [], advance_gate: "auto" },
+      {
+        step_id: "land",
+        label: "Land",
+        checks: [],
+        judge_checks: [],
+        advance_gate: "auto",
+        delivers: true,
+      },
     ],
   };
 }
@@ -317,7 +336,7 @@ export function brief(
   stepLabel: string,
   doneWhen: string,
   onPart: number,
-): { text: string; headings: number[] } {
+): { text: string; headings: number[]; kinds: BlockKind[] } {
   const lines = [
     "JOB BRIEF",
     "",
@@ -336,13 +355,21 @@ export function brief(
     "",
     "What you claim should be what the work now does, not that you finished.",
   ];
+  // Each heading with the kind `briefing.rs` gives its block: the brief and the
+  // step's own block are about this Job, and the parts rail is the steps. A
+  // heading with no kind beside it draws flat, the way a Fleet before 9.7 did.
   const headings: number[] = [];
+  const kinds: BlockKind[] = [];
   lines.forEach((line, at) => {
-    if (line === "JOB BRIEF" || line === "WHERE YOU ARE" || line.startsWith("STEP: ")) {
+    if (line === "JOB BRIEF" || line.startsWith("STEP: ")) {
       headings.push(at);
+      kinds.push("about_this_job");
+    } else if (line === "WHERE YOU ARE") {
+      headings.push(at);
+      kinds.push("steps");
     }
   });
-  return { text: lines.join("\n"), headings };
+  return { text: lines.join("\n"), headings, kinds };
 }
 
 const PARTS = [
@@ -372,7 +399,13 @@ export function instructed(step: string, ts: string, onPart: number, doneWhen: s
     seq: nextSeq(),
     step,
     by: "armada",
-    saw: { event: "instructed", occasion: "opening", text: built.text, headings: built.headings },
+    saw: {
+      event: "instructed",
+      occasion: "opening",
+      text: built.text,
+      headings: built.headings,
+      kinds: built.kinds,
+    },
   };
 }
 

@@ -98,12 +98,11 @@
   overflow-wrap: anywhere;
 }
 
-/* The sectioned brief, since protocol 9.7 — one `Chapter` per block kind
-   rather than a flat run of headings and paragraphs. Gap between sections
-   only: each `Chapter` already spaces its own head from its own body. */
-.armada-brief--sectioned {
-  gap: var(--space-2);
-}
+/* The sectioned brief, since protocol 9.7, is one `Chapter` per block kind
+   rather than a flat run of headings and paragraphs. It takes no rule of its
+   own: the sibling margin above already puts --space-2 between sections, and
+   each `Chapter` spaces its own head from its own body. A `gap` here did
+   nothing once the brief stopped being a flex column, which the clamp needs. */
 
 /* The `steps` section's structured reading — Fleet's own rail, redrawn from
    data Bridge already holds. One mark per row, in the order the workflow
