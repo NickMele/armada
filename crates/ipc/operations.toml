@@ -905,7 +905,7 @@ Refused on a Job that is not at `awaiting_review`. `awaiting_approval -> rejecte
 kind = "command"
 transport = "HTTP"
 helm_access = "No"
-description = "The comments a person picked off the pull request reach a Drone, and one reply on the pull request says which"
+description = "The comments a person picked off the pull request reach a Drone. Nothing is written back onto the pull request"
 notes = """
 **A second entrance onto the note road, not a second road.** What it does to the Job is `request_changes`, called rather than restated: the words go onto the record as `redirect_waiting`, the Job takes `awaiting_review -> queued`, and the Drone re-admission puts back on the same step opens with them. The block a Drone reads is `crossing::Redirected` either way. What is different is only where the words came from.
 
@@ -917,9 +917,7 @@ notes = """
 
 **A chosen set that would not fit the room an opening brief leaves free is refused before anything moves.** `docs/spikes/014-how-much-room-does-a-brief-leave-for-comments.md` measures that room and the bound it justifies — on the whole rendered set, never on one comment, because five medium comments are the same problem as one long one. Nothing is truncated: `fleet::remarks::quoted` still writes whatever it is given, whole. What a person gets back is which of the comments to drop to fit, largest first.
 
-**One reply on the pull request, and never one per comment.** A reply per comment turns a review thread into a conversation with a daemon. What a reviewer needs is one answer naming what was taken up and what was not, which is what this writes — after the Job has moved, so the reply says what happened rather than what was about to. It is the second thing Armada writes into a repository it does not own; the first is `merge_pull_request`.
-
-**Nothing about a comment's text reaches the forge.** The reply names logins and timestamps and quotes no body: a reviewer can already read what they wrote, and echoing it back would put somebody else's words through a second write. The two fields it does name are made safe to render at the point of use — `fleet::remarks`.
+**Nothing is written back onto the pull request.** Armada's own record — `job_remarks_taken_up` — is what tells a comment already handed to a Drone apart from one nobody has touched; the forge never hears about a press.
 
 `helm_access` is `No`, because Helm access on a command is the Intervention Ladder rung and this has none.
 """
