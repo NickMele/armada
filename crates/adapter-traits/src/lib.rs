@@ -236,6 +236,25 @@ pub trait Vcs {
         message: &str,
         at: CommitTime,
     ) -> Result<Committed, Self::CommitError>;
+
+    /// Commit only these paths, as the working directory holds them, on top of
+    /// the branch tip in a Job's worktree.
+    ///
+    /// **Everything else is left exactly as it was** — staged, modified or
+    /// untracked — and is not in the commit, which is the whole difference
+    /// from [`commit_all`](Vcs::commit_all). Paths are repository-relative, and
+    /// one the working directory no longer holds is committed as a deletion.
+    /// Each path's index entry is brought to what was committed, so `git
+    /// status` does not show it afterwards as a staged revert.
+    ///
+    /// [`Committed::NothingToCommit`] where the paths already match the tip.
+    fn commit_paths(
+        &self,
+        worktree: &Worktree,
+        paths: &[&str],
+        message: &str,
+        at: CommitTime,
+    ) -> Result<Committed, Self::CommitError>;
 }
 
 /// Credential access, brokered. A Drone never holds a secret directly, and what

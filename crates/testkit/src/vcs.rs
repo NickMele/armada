@@ -37,6 +37,11 @@ use adapter_traits::{
 
 use crate::work_product::Holding;
 
+mod commit;
+
+pub use commit::FakeCommit;
+use commit::Willing;
+
 /// Why the fake refused.
 ///
 /// One variant per split the real error draws: a name already taken, the
@@ -291,26 +296,6 @@ impl Default for Delivering {
     }
 }
 
-/// One commit this fake said it made.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FakeCommit {
-    pub branch: String,
-    pub message: String,
-    pub at: CommitTime,
-}
-
-/// What the fake does when asked to commit.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-enum Willing {
-    /// The ordinary case: a commit is made and recorded.
-    #[default]
-    Yes,
-    /// The worktree held nothing new. A `facts_note` Job's shape.
-    NothingChanged,
-    /// git refused. The work is still there and the caller has to say so.
-    No(&'static str),
-}
-
 impl FakeVcs {
     pub fn new() -> FakeVcs {
         FakeVcs::default()
@@ -384,24 +369,6 @@ impl FakeVcs {
             .lock()
             .expect("not poisoned")
             .insert(commit.to_string(), true);
-    }
-
-    /// Make every commit answer `NothingToCommit`, as a Job that wrote no file
-    /// would.
-    pub fn with_nothing_to_commit(self) -> FakeVcs {
-        *self.commits.lock().expect("not poisoned") = Willing::NothingChanged;
-        self
-    }
-
-    /// Make every commit fail as git refusing one would.
-    pub fn refusing_to_commit(self, standing_in_for: &'static str) -> FakeVcs {
-        *self.commits.lock().expect("not poisoned") = Willing::No(standing_in_for);
-        self
-    }
-
-    /// Every commit this fake said it made, in order.
-    pub fn committed(&self) -> Vec<FakeCommit> {
-        self.committed.lock().expect("not poisoned").clone()
     }
 
     /// Script what the repository looks like from the delivery side.
@@ -840,21 +807,18 @@ impl Vcs for FakeVcs {
         message: &str,
         at: CommitTime,
     ) -> Result<Committed, Self::CommitError> {
-        match *self.commits.lock().expect("not poisoned") {
-            Willing::NothingChanged => Ok(Committed::NothingToCommit),
-            Willing::No(standing_in_for) => Err(FakeVcsError::NotCommitted { standing_in_for }),
-            Willing::Yes => {
-                let mut made = self.committed.lock().expect("not poisoned");
-                made.push(FakeCommit {
-                    branch: worktree.branch().to_string(),
-                    message: message.to_string(),
-                    at,
-                });
-                Ok(Committed::Made {
-                    commit: format!("{:040x}", made.len()),
-                })
-            }
-        }
+        self.commit(worktree, None, message, at)
+    }
+
+    fn commit_paths(
+        &self,
+        worktree: &Worktree,
+        paths: &[&str],
+        message: &str,
+        at: CommitTime,
+    ) -> Result<Committed, Self::CommitError> {
+        let paths = paths.iter().map(|path| path.to_string()).collect();
+        self.commit(worktree, Some(paths), message, at)
     }
 }
 
