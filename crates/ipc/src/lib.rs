@@ -95,7 +95,7 @@ pub use attempt::{Move, StepAttempt};
 pub use capacity::{AdmissionHold, FleetCapacity};
 pub use checks::{CheckOutput, CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
-pub use commanding::{CommandAnswer, CommandInFlight, WhenBlocked};
+pub use commanding::{AnswerCommand, CommandAnswer, CommandInFlight, SetWhenBlocked, WhenBlocked};
 pub use detail::{
     Criterion, Dependency, JobDelivery, JobDetail, JobSpend, JudgeInFlight, PullRequestDetail,
     Refusal, ReviewedBy, Settled, StepDetail, StepFacts, Stuck, Verdict,
@@ -108,8 +108,8 @@ pub use enums::{
 pub use error::{RunId, WireError, WireValue};
 pub use event::{
     ChangeKind, ChangedFile, Cursor, Delivered, DroneExited, DroneSpawned, Event, JobAsking,
-    JobChecking, JobCreated, JobFilesChanged, JobJudging, JobLanded, JobStateChanged,
-    JobStepAdvanced, Missed, ProposalMoved, Reason, Resync, StreamMessage,
+    JobChecking, JobCommandWaiting, JobCreated, JobFilesChanged, JobJudging, JobLanded,
+    JobStateChanged, JobStepAdvanced, Missed, ProposalMoved, Reason, Resync, StreamMessage,
 };
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};
 pub use holding::{HeldReason, WorktreeHeld, WorktreesHeld};

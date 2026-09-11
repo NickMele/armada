@@ -172,6 +172,52 @@ fn a_changed_file_with_no_mark_reads_as_inside_the_plan() {
     assert!(!file.outside_plan);
 }
 
+/// A held command travels under the name the inventory declares, and the
+/// message that ends the wait carries nothing — that absence is the message,
+/// as it is on `job.asking`.
+#[test]
+fn a_held_command_goes_out_whole_and_comes_back_empty() {
+    let out = crate::Event::JobCommandWaiting(crate::JobCommandWaiting {
+        job_id: crate::JobId::carried("01JOB"),
+        step_id: crate::StepId::carried("repro"),
+        waiting: Some(crate::CommandInFlight {
+            call: "toolu_01".to_string(),
+            step_id: crate::StepId::carried("repro"),
+            asked_at: crate::Instant::carried("2026-09-11T09:00:00.000Z"),
+            tool: "Bash".to_string(),
+            detail: "touch x".to_string(),
+            truncated: false,
+            length: Some(7),
+            offers: vec![
+                crate::CommandAnswer::AllowForJob,
+                crate::CommandAnswer::Reject,
+            ],
+        }),
+        actor: Actor::Drone.into(),
+        at: (&at("2026-09-11T09:00:00.000Z")).into(),
+    });
+    let json = encode(&out).expect("plain data");
+    assert!(json.contains("\"kind\":\"job.command_waiting\""), "{json}");
+    assert!(
+        json.contains("\"waiting\":{\"call\":\"toolu_01\""),
+        "{json}"
+    );
+    assert_eq!(
+        decode::<crate::Event>("an event", json.as_bytes()).expect("it round-trips"),
+        out
+    );
+
+    let back = crate::Event::JobCommandWaiting(crate::JobCommandWaiting {
+        job_id: crate::JobId::carried("01JOB"),
+        step_id: crate::StepId::carried("repro"),
+        waiting: None,
+        actor: Actor::Human.into(),
+        at: (&at("2026-09-11T09:02:00.000Z")).into(),
+    });
+    let json = encode(&back).expect("plain data");
+    assert!(!json.contains("\"waiting\""), "absent, never null: {json}");
+}
+
 #[test]
 fn a_queued_transition_carries_no_reason_because_the_log_stores_none() {
     let moved = job()

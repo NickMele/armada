@@ -85,6 +85,32 @@ fn each_answer_is_spelled_as_the_operations_name_it() {
     }
 }
 
+/// The two bodies Bridge sends, read as `api` reads them — and a field a newer
+/// Bridge adds does not break the parse, which is the minor-skew rule.
+#[test]
+fn the_two_bodies_read_as_sent_and_ignore_what_they_do_not_know() {
+    let answered = decode::<crate::AnswerCommand>(
+        "an answer",
+        br#"{"call":"toolu_01","answer":"always_allow","later":true}"#,
+    )
+    .expect("an answer reads");
+    assert_eq!(
+        answered,
+        crate::AnswerCommand {
+            call: String::from("toolu_01"),
+            answer: CommandAnswer::AlwaysAllow,
+        }
+    );
+
+    let set = decode::<crate::SetWhenBlocked>("a setting", br#"{"when_blocked":"ask_me"}"#)
+        .expect("a setting reads");
+    assert_eq!(set.when_blocked, WhenBlocked::AskMe);
+    assert!(
+        decode::<crate::SetWhenBlocked>("a setting", br#"{}"#).is_err(),
+        "a body that sets nothing is refused rather than read as the default"
+    );
+}
+
 /// **Refused, not defaulted.** A peer that sent `allow` does not share this
 /// vocabulary, and guessing which of the two allows it meant is guessing
 /// whether `armada.yml` gets a commit.

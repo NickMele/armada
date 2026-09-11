@@ -106,3 +106,28 @@ pub struct CommandInFlight {
     /// that is not here is refused.
     pub offers: Vec<CommandAnswer>,
 }
+
+/// A person's answer to one refused command. The request half of
+/// `answer_command`.
+///
+/// **One body for both paths**, because the call id already says which: a call
+/// a Drone is waiting on right now is answered in place, and a refused row on a
+/// Job stopped at `blocked_by_policy` restarts the step. A second route would
+/// be a surface deciding which path a command is on, which Fleet already knows.
+///
+/// **It carries no prose**, for [`ChosenAnswer`](crate::ChosenAnswer)'s reason.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnswerCommand {
+    /// [`CommandInFlight::call`], or [`Refusal::call`](crate::Refusal::call).
+    /// An id naming nothing waiting or refused on the Job is a 409.
+    pub call: String,
+    /// One of that command's offers. Anything else is a 409.
+    pub answer: CommandAnswer,
+}
+
+/// The request half of `set_when_blocked`. **A live setting on one Job**: the
+/// next permission question reads it, and no Drone is respawned for it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetWhenBlocked {
+    pub when_blocked: WhenBlocked,
+}
