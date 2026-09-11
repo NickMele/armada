@@ -37,7 +37,7 @@ import { Tooltip } from "../../primitives/Tooltip/Tooltip";
  * What the Check came to, for the hue. Spelled as the wire spells it, so
  * nothing here is a second vocabulary — `FactChip` takes the same words.
  */
-export type CheckRunNamed = "passed" | "failed" | "refused" | "running" | "queued";
+export type CheckRunNamed = "passed" | "failed" | "refused" | "running" | "queued" | "overruled";
 
 export type CheckRun = {
   /** What a selection names. The Check's own id. */
@@ -95,6 +95,14 @@ export type CheckRun = {
    * caller has no run sheet to send the row to.
    */
   onRunHere?: () => void;
+  /**
+   * What stands under the row, full width — the one grounds a refusal a person
+   * set aside is read for. **Absent on every other row**: a Check's evidence is
+   * a file it wrote, opened by pressing `output`, and a second place to read
+   * prose would be two answers to where a row's detail lives. This is only for
+   * the row a machine's verdict no longer speaks for alone.
+   */
+  detail?: ReactNode;
 };
 
 export type CheckRunsProps = {
@@ -205,6 +213,9 @@ export function CheckRuns({
                   </span>
                 )}
               </span>
+              {row.detail === undefined ? null : (
+                <span className="armada-check-runs__detail">{row.detail}</span>
+              )}
             </li>
           );
         })}

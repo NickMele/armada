@@ -109,6 +109,7 @@ import { headingOf, Unrenderable } from "./heading";
 import { detailOf, holdingOf, logOf, lookOf, turnsOf } from "./mine";
 import { phasesOf } from "./phases";
 import { neverAsksAPerson, verdictSlotAtGate, verdictSlotFinished } from "./verdict";
+import { verdictSlotAfterAnswer } from "./verdict-answered";
 // Which Check's output `o` opens. **The same call the Checks chapter's own act
 // makes**, so the key and the control cannot open different files.
 import { outputOf } from "./gates";
@@ -651,7 +652,7 @@ export function JobDetail({
           })
         : render === "finished" && neverAsked
           ? verdictSlotFinished({ job, whole, open, render, recorded, opensRecords, now, claimed, undecided })
-          : undefined;
+          : render === "finished" ? verdictSlotAfterAnswer({ job, whole, recorded, opensRecords, now, notes: noted?.notes ?? [], onOpenPullRequest }) : undefined;
 
   // The Job header, and everything that goes in it. `heading.tsx` holds what
   // it is made of — the badge, the facts, the acts that end or replace the Job,

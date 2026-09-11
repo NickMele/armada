@@ -212,6 +212,18 @@
   color: var(--step-running);
 }
 
+/* A verdict a person set aside. **The accent, not the verdict-not-met red** —
+   a refusal that still stands is a failure, and one a person overruled is a
+   decision, so it takes the hue every other decision on this screen takes
+   rather than the one that means "wrong". `__id` carries the verdict itself on
+   a Judge's row — `Judge: not met · overruled by you` — so it takes the hue
+   too, where `__result` never holds anything on that row. */
+.armada-check-runs__row[data-named="overruled"] .armada-check-runs__result,
+.armada-check-runs__row[data-named="overruled"] .armada-check-runs__mark,
+.armada-check-runs__row[data-named="overruled"] .armada-check-runs__id {
+  color: var(--accent);
+}
+
 /* Queued. No hue at all — a Check that has not run is not a state with a
    colour, it is a position in a list, and the whole row recedes to say so. */
 .armada-check-runs__row[data-named="queued"] .armada-check-runs__says {
@@ -228,4 +240,22 @@
    the row used to draw the enum itself. */
 .armada-check-runs__id[data-name="true"] {
   font-family: var(--font-sans);
+}
+
+/* What stands under a row, full width — the grounds a refusal a person set
+   aside is read for. Its own grid row rather than a fifth column: a sentence
+   this long has nowhere in a row sized for a mark, a finding and a result.
+   Flex column rather than one block: a criterion the Judge refused carries
+   both the Judge's own grounds and, where a person overruled it, their own
+   reason — two findings answering two different questions, so each is its
+   own line rather than one paragraph running them together. */
+.armada-check-runs__detail {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-muted);
+  overflow-wrap: break-word;
 }

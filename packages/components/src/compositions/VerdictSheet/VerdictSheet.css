@@ -8,6 +8,31 @@
   gap: var(--space-4);
 }
 
+/* The record's own headline — the fifth arrangement's only region with
+   nothing shared above it. `--text-lg` is `packages/tokens`' own "panel
+   headings" size, so this reads at the same weight the panel's own header
+   would take were this page the panel and not a card inside it. */
+.armada-verdict__header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.armada-verdict__done {
+  font-family: var(--font-sans);
+  font-size: var(--text-lg);
+  line-height: var(--leading-lg);
+  font-weight: var(--weight-heading);
+  color: var(--fg-default);
+}
+
+.armada-verdict__when {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
 .armada-verdict__block {
   display: flex;
   flex-direction: column;
@@ -30,6 +55,20 @@
   line-height: var(--leading-sm);
   color: var(--fg-default);
   margin: 0;
+}
+
+/* The settled pull request's own number, followed onto the forge. `--accent`
+   is the token the design contract gives a link; the sentence beside it stays
+   `--fg-muted`, because "merged" is a fact read here and not itself a place
+   to go. */
+.armada-verdict__pr-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.armada-verdict__pr-link:hover,
+.armada-verdict__pr-link:focus-visible {
+  text-decoration: underline;
 }
 
 .armada-verdict__said {
@@ -105,11 +144,17 @@
    nothing here is a control — it is a sentence in a box, not a row of buttons
    with nothing to press. */
 .armada-verdict__record {
-  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   border: var(--border-width) dashed var(--border-default);
   border-radius: var(--radius-lg);
   font-size: var(--text-xs);
   line-height: var(--leading-xs);
   color: var(--fg-muted);
+}
+
+.armada-verdict__record p {
+  margin: 0;
 }
