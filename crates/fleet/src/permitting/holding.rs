@@ -146,8 +146,7 @@ pub fn wire_setting(when: WhenBlocked) -> ipc::WhenBlocked {
     match when {
         WhenBlocked::RefuseAndHold => ipc::WhenBlocked::RefuseAndHold,
         WhenBlocked::AskMe => ipc::WhenBlocked::AskMe,
-        // Temporary: the wire has no `allow_all` yet, and replaces this arm when it does.
-        WhenBlocked::AllowAll => ipc::WhenBlocked::RefuseAndHold,
+        WhenBlocked::AllowAll => ipc::WhenBlocked::AllowAll,
     }
 }
 
@@ -156,6 +155,7 @@ pub fn domain_setting(when: ipc::WhenBlocked) -> WhenBlocked {
     match when {
         ipc::WhenBlocked::RefuseAndHold => WhenBlocked::RefuseAndHold,
         ipc::WhenBlocked::AskMe => WhenBlocked::AskMe,
+        ipc::WhenBlocked::AllowAll => WhenBlocked::AllowAll,
     }
 }
 

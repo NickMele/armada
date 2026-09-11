@@ -225,6 +225,10 @@ pub fn detail(job: JobSummary) -> JobDetail {
         // held on a working slot too, and so is the setting a Fleet reads.
         command_waiting: None,
         when_blocked: None,
+        // Absent for the setting's reason: a person's allows and model choice
+        // are a Fleet's store, and this daemon holds none.
+        allowed_commands: Vec::new(),
+        model_override: None,
         // Absent again: a waiting note is a column on `jobs`, and this
         // daemon's Jobs are wire summaries rather than records.
         redirect_waiting: None,

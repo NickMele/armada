@@ -463,4 +463,30 @@ where
             .map_err(|why| self.refusal(why.about(&id)))?;
         self.summarised(&job).await
     }
+
+    /// The model this Job's later steps spawn on, chosen or cleared. Loaded
+    /// first for `set_when_blocked`'s reason; the refusals are
+    /// `crate::permitting::NotPermitted`'s.
+    async fn set_model(&self, job_id: JobId, choice: ipc::SetModel) -> Result<JobSummary, Refusal> {
+        let id = job_id.to_domain();
+        let job = self.load(&id).await.map_err(|why| self.refusal(why))?;
+        Fleet::set_model(self, &id, choice.model.as_deref())
+            .await
+            .map_err(|why| self.refusal(why.about(&id)))?;
+        self.summarised(&job).await
+    }
+
+    /// A command a person allowed for this Job, taken back.
+    async fn remove_allowed_command(
+        &self,
+        job_id: JobId,
+        removing: ipc::RemoveAllowedCommand,
+    ) -> Result<JobSummary, Refusal> {
+        let id = job_id.to_domain();
+        let job = self.load(&id).await.map_err(|why| self.refusal(why))?;
+        Fleet::remove_allowed_command(self, &id, &removing.run)
+            .await
+            .map_err(|why| self.refusal(why.about(&id)))?;
+        self.summarised(&job).await
+    }
 }
