@@ -257,7 +257,18 @@ frozen_at = "Never"
 purpose = "Which model the assigned Drone is using."
 in_code = "Not yet"
 open_questions = ["Does the agent harness accept a model per invocation, and report the one it actually used?"]
-notes = "The adapter passes a model string on every spawn, so `DroneSpawnConfig` carries it whether or not anything varies it. At M1 nothing varies it — no create-form field, no picker; the value comes from configuration. When a picker arrives, two homes need reconciling: `judge_check.model`, and `policy.model` in the deferred half of the `armada.yml` schema."
+notes = "The adapter passes a model string on every spawn, so `DroneSpawnConfig` carries it whether or not anything varies it. At M1 nothing varies it — no create-form field, no picker; the value comes from configuration. When a picker arrives, two homes need reconciling: `judge_check.model`, and `policy.model` in the deferred half of the `armada.yml` schema. A person's later choice is `model_override`, not an edit of this."
+
+[fields.model_override]
+type = "string"
+table = "jobs"
+storage = "Column"
+nullable = "Yes — null is nobody having chosen"
+frozen_at = "Never"
+purpose = "The model a person chose for this Job's later steps, over each step's own and over `model`."
+in_code = "Yes"
+notes = "Read at each spawn, so a choice reaches the next step's Drone and never the one already running — a session cannot change model partway. Fleet refuses a name `list_models` does not offer; the store keeps whatever it is handed. Clearing it puts each later step back on its own model, or the Job's where the step names none. No event: a choice moves no status and no step, so the column is the authority for its field the way `when_blocked` is."
+why = "Editing `model` instead would lose what the Job was proposed as, and would still lose to a step that names its own — the case a person reaching for a picker most means to override."
 
 [fields.ordinal]
 type = "int"

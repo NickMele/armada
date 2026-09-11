@@ -59,6 +59,8 @@ pub enum NotPermitted {
     NotDeclared { cause: String },
     /// The answer would not reach the Drone, or the step would not restart.
     NotDelivered { cause: String },
+    /// A model `list_models` does not offer, and what it does.
+    NoSuchModel { named: String, offered: Vec<String> },
 }
 
 impl core::fmt::Display for NotPermitted {
@@ -85,6 +87,11 @@ impl core::fmt::Display for NotPermitted {
             NotPermitted::NotDelivered { cause } => {
                 write!(out, "the answer could not reach the drone: {cause}")
             }
+            NotPermitted::NoSuchModel { named, offered } => write!(
+                out,
+                "`{named}` is not a model a job can run as here. The models offered are {}",
+                offered.join(", ")
+            ),
         }
     }
 }

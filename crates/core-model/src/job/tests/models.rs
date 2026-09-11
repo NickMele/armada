@@ -77,6 +77,31 @@ fn a_step_naming_a_model_is_run_as_that_one() {
     assert_ne!(job.model().as_str(), "the-steps-own-model");
 }
 
+/// **A person's choice beats both**: the step's own model and the Job's.
+#[test]
+fn a_chosen_model_wins_over_the_steps_own_and_the_jobs() {
+    let job = job_whose_fix_step_names_a_model();
+    let chosen = ModelName::new("a-persons-choice").expect("a model name");
+    for step in ["fix", "repro"] {
+        assert_eq!(
+            job.model_spawned_at(&StepId::new(step), Some(&chosen))
+                .as_str(),
+            "a-persons-choice",
+            "{step}"
+        );
+    }
+}
+
+/// With nothing chosen, the answer is `model_at`'s, fallback and all.
+#[test]
+fn with_nothing_chosen_each_step_runs_as_model_at_says() {
+    let job = job_whose_fix_step_names_a_model();
+    for step in ["fix", "repro"] {
+        let step = StepId::new(step);
+        assert_eq!(job.model_spawned_at(&step, None), job.model_at(&step));
+    }
+}
+
 /// A step id the workflow does not declare answers with the Job's rather than
 /// panicking or inventing one. **Not a case to rely on**: a Drone is only ever
 /// put on a step the frozen workflow names, and a caller that reached here has
