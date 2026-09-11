@@ -25,6 +25,7 @@ import type { JobFootprint } from "./footprint";
 import type { Flagged, Judged, KeptDeliverable } from "./judged";
 import type { KeptFrame, ShowAgain } from "./showing";
 import type { StepAttempt } from "./attempt";
+import type { ChecksUnderway } from "./underway";
 import type {
   CheckRun,
   DeclaredCheck,
@@ -608,6 +609,8 @@ export type StepDetail = {
    * the six values it may take are unchanged.
    */
   judging?: JudgeInFlight;
+  /** The step's Checks while the gate runs them. Since 10.3. `underway.ts`. */
+  checking?: ChecksUnderway;
   /** Entered, then moved on entering `running`. To `updated_at` is how long. */
   entered_at: string;
   updated_at: string;

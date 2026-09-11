@@ -367,6 +367,13 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.observeJob, (_event, jobId: string | null) =>
     connection?.observeJob(jobId),
   );
+  // Which running Check's log is open. A fourth socket, carrying lines only,
+  // and read-only for `observeJob`'s reason.
+  ipcMain.handle(
+    CHANNELS.followCheckOutput,
+    (_event, jobId: string | null, kept: string | null) =>
+      connection?.followCheckOutput(jobId, kept),
+  );
   // Which Job's transition history is unfolded. One HTTP read, kept current
   // while it is open, and dropped when the section closes — a history is its
   // own operation precisely so a Job opened does not pay for it.

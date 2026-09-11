@@ -64,6 +64,7 @@ async fn ruled(judge: FakeJudge, worktree: &Worktree) -> Ruling {
         &judged_by(judge),
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await
 }
@@ -166,6 +167,7 @@ async fn a_failed_check_holds_the_job_somewhere_else_than_a_refusal() {
         &judged_by(FakeJudge::with_no_objection()),
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await;
 
@@ -377,6 +379,7 @@ async fn a_step_that_declares_no_criterion_never_asks() {
         &judging,
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await;
 
@@ -430,6 +433,7 @@ async fn a_failing_check_never_reaches_the_judge() {
         &judging,
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await;
 

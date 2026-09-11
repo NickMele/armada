@@ -35,6 +35,7 @@ import type {
 } from "@armada/protocol";
 import { span } from "./duration";
 import { ordered } from "./facts";
+import { checksOf, checksStand } from "./gates";
 import { frozenBeneath } from "./frozen";
 
 /**
@@ -131,7 +132,10 @@ function factsOfStep(
   // rows now, and a flat fact drawn from all of them here would be exactly
   // the "which attempt is this" ambiguity the nesting exists to remove.
   if (!retried) {
-    const checks = checksFact(step, step.check_runs);
+    // **While the gate runs them, the fact is what is running**, in the words
+    // the Checks chapter and the phase strip use — one reading, three places.
+    const checks =
+      step.checking === undefined ? checksFact(step, step.check_runs) : checkingFact(step);
     if (checks !== undefined) facts.push(checks);
 
     const judge = judgeFact(step, step.judged);
@@ -260,6 +264,17 @@ function producedBy(rows: readonly Turn[]): Map<string, ChangedFile[]> {
     wrote.set(row.step, row.saw.files);
   }
   return wrote;
+}
+
+/**
+ * What a step's Checks stand at while the gate runs them — `2 running · 3 of 9
+ * passed`. **The gate's own count, from `gates.ts`**, so the rail cannot say a
+ * different number from the chapter four inches away.
+ */
+function checkingFact(step: StepDetail): RunTreeFact {
+  const reads = checksOf(step);
+  const failed = reads.some((read) => read.run !== undefined && didNotPass(read.run));
+  return { label: "Checks", value: checksStand(reads), named: failed ? "failed" : "running" };
 }
 
 /**

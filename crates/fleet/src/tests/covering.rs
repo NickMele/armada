@@ -73,6 +73,7 @@ async fn ruling_over(work: &FakeWorkProduct) -> Ruling {
         &judging(),
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await
 }
@@ -209,6 +210,7 @@ async fn a_step_whose_checks_declare_no_paths_reads_the_diff_once_and_no_more() 
         &judging(),
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await;
 

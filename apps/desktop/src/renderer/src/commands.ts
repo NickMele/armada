@@ -52,6 +52,8 @@ export const readRemarks = (jobId: string | null): void => void window.armada.re
 export const readCall = (jobId: string, callId: string) => window.armada.readCall(jobId, callId);
 export const readCheckOutput = (jobId: string, kept: string) =>
   window.armada.readCheckOutput(jobId, kept);
+export const followCheckOutput = (jobId: string | null, kept: string | null): void =>
+  void window.armada.followCheckOutput(jobId, kept);
 
 export const readFrame = (jobId: string, kept: string) => window.armada.readFrame(jobId, kept);
 /** Ask a Job to show its work again. Answered to the screen that pressed it. */

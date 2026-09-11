@@ -68,7 +68,7 @@ import {
 } from "./frames";
 import { readingFor, whyNoFootprint } from "./files";
 import { Log } from "./Log";
-import type { Outputs } from "./outputs";
+import type { Following, Outputs } from "./outputs";
 import { keptOf, type KeptRead, type Opens } from "./phases";
 import { producedIn } from "./produced";
 import type { OpenSheet } from "./Sheets";
@@ -98,7 +98,17 @@ export function chaptersOf({
   sheet,
   opens,
   onOpenSheet,
+  now,
+  following,
 }: {
+  /** Now, injected, so a running Check's elapsed time moves with the clock. */
+  now: number;
+  /**
+   * The running Check's log this window is following, and how to follow one —
+   * `outputs.ts`. **Held for the Job, like `outputs`**, and streamed only while
+   * somebody has the Checks chapter open on a running gate.
+   */
+  following: Following;
   job: JobSummary;
   step: StepDetail;
   /**
@@ -399,7 +409,7 @@ export function chaptersOf({
     // The last chapters, where the step has them. `evidence.tsx` decides
     // whether either is drawn — a step that gates on nothing has neither, and
     // one that gates on a Judge alone has one.
-    ...evidenceChaptersOf({ step, criteria, opens, outputs }),
+    ...evidenceChaptersOf({ step, criteria, opens, outputs, now, following }),
   ];
   return story.map((chapter, at) => ({ ...chapter, ordinal: at + 1 }));
 }

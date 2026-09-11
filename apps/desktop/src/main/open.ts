@@ -70,6 +70,9 @@ function named(state: BridgeState, jobId: string): ReadonlySet<string> {
   if (watched.state !== "read" || watched.jobId !== jobId) return new Set();
   const paths = watched.detail.steps.flatMap((step) => [
     ...step.check_runs.map((run) => run.output_path),
+    // A Check's live log, while the gate runs it. The same rule one field over:
+    // Fleet put the path on the wire, so it is on this screen to be opened.
+    ...(step.checking?.checks ?? []).map((check) => check.output_path),
     ...step.judged.map((judged) => judged.brief_path),
     // A gaming flag's brief is a fourth path on the same rule and not a fourth
     // kind of thing: it is kept under `.armada/briefs/` beside the criteria

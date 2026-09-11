@@ -23,6 +23,7 @@ use crate::enums::{AdvanceGate, StepState};
 use crate::ids::{CriterionId, Instant, StepId};
 use crate::judged::{Flagged, Judged, KeptDeliverable};
 use crate::showing::KeptFrame;
+use crate::underway::ChecksUnderway;
 
 /// What Fleet knows about one step beyond its `job_steps` row.
 ///
@@ -96,6 +97,10 @@ pub struct StepFacts {
     /// waits, and it is gone the moment the call comes back. A column for it
     /// would be a record of something that is only ever true now.
     pub judging: Option<JudgeInFlight>,
+    /// The step's Checks while the gate is running them, for `judging`'s
+    /// reason and from the same kind of slot. `None` on every step whose gate
+    /// is not between starting its Checks and writing its ruling down.
+    pub checking: Option<ChecksUnderway>,
 }
 
 /// One `job_steps` row: which step, where in the order, and where it got to.
@@ -258,6 +263,15 @@ pub struct StepDetail {
     /// thing that separates them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub judging: Option<JudgeInFlight>,
+    /// The step's Checks **right now**, while the gate runs them and until its
+    /// ruling is written down.
+    ///
+    /// **Absent is the ordinary case**, as `judging`'s absence is. It is what
+    /// separates a gate that is working through nine Checks from a step
+    /// nothing has reached, which were the same pixels: every Check reading
+    /// "nothing has run it" until they all flipped at once.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checking: Option<ChecksUnderway>,
     /// When the step was entered. Stamped at creation and moved on entering
     /// `running`, so `entered_at` to `updated_at` is how long the step took.
     pub entered_at: Instant,
@@ -389,6 +403,7 @@ impl StepDetail {
                 .map(|facts| facts.verdicts.clone())
                 .unwrap_or_default(),
             judging: facts.and_then(|facts| facts.judging.clone()),
+            checking: facts.and_then(|facts| facts.checking.clone()),
             entered_at: step.entered_at().into(),
             updated_at: step.updated_at().into(),
         }

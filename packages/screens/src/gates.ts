@@ -22,7 +22,14 @@
 // | Any single refusal refuses the criterion | `docs/concepts/judge.md`, unanimity |
 
 import { CHECK_ADVANCES, CRITERION_VERDICT_CHECK } from "@armada/components";
-import type { CheckRun, Criterion, DeclaredCheck, Judged, StepDetail } from "@armada/protocol";
+import type {
+  CheckRun,
+  CheckUnderway,
+  Criterion,
+  DeclaredCheck,
+  Judged,
+  StepDetail,
+} from "@armada/protocol";
 
 import { nameOf } from "./declared";
 import { onlyCurrentAttempt } from "./facts";
@@ -40,8 +47,19 @@ export type CheckRead = {
   name: string;
   /** The declaration, for the command and the paths it covers. */
   check: DeclaredCheck;
-  /** Absent where this attempt's gate has not reached it. */
+  /**
+   * Absent where this attempt's gate has not reached it. **While the gate is
+   * running, a finished Check's live row** — the one the ruling will write —
+   * so every surface below reads a result the moment it lands, not when the
+   * Judge answers.
+   */
   run: CheckRun | undefined;
+  /**
+   * The gate's own entry for this Check while it runs them, and absent once
+   * its ruling is written down. Whether the Check is waiting or running is read
+   * off this by [`isWaiting`] and [`isRunning`], never guessed from `run`.
+   */
+  live: CheckUnderway | undefined;
 };
 
 /**
@@ -52,14 +70,44 @@ export type CheckRead = {
  * strip's note is where they are told apart — nothing that draws a list of
  * Checks can say either of them, so this answers with no rows and lets the
  * caller draw nothing rather than an empty region.
+ *
+ * **The live set wins while it is there.** `StepDetail.checking` is what the
+ * gate is doing now; a re-gate of the same attempt would otherwise draw the
+ * last ruling's rows beside Checks that are running again.
  */
 export function checksOf(step: StepDetail): CheckRead[] {
   const declared = step.checks ?? [];
   const runs = onlyCurrentAttempt(step, step.check_runs);
+  const underway = step.checking?.checks ?? [];
   return declared.map((check) => {
     const name = nameOf(check);
-    return { name, check, run: runs.find((ran) => ran.name === name) };
+    const live = underway.find((one) => one.name === name);
+    const run = live === undefined ? runs.find((ran) => ran.name === name) : ranOf(live);
+    return { name, check, run, live };
   });
+}
+
+/**
+ * A finished live Check as the row it will be recorded as, with its live log
+ * where the recorded one will go. `undefined` while it waits or runs.
+ */
+function ranOf(live: CheckUnderway): CheckRun | undefined {
+  if (live.ran === undefined) return undefined;
+  return live.output_path === undefined ? live.ran : { ...live.ran, output_path: live.output_path };
+}
+
+/** Started, and not finished: the gate is running it right now. */
+export function isRunning(read: CheckRead): boolean {
+  return read.live?.started_at !== undefined && read.live.ran === undefined;
+}
+
+/**
+ * On the gate's list and not started — waiting for one of its slots, or for
+ * the Commands it requires. **Not the same as not reached**: the gate has
+ * reached it and is working towards it.
+ */
+export function isWaiting(read: CheckRead): boolean {
+  return read.live !== undefined && read.live.started_at === undefined && read.live.ran === undefined;
 }
 
 /** A Check that did not pass, read off the registry's own `advances`. */
@@ -95,10 +143,21 @@ export function howTheChecksWent(reads: readonly CheckRead[]): {
  */
 export function checksStand(reads: readonly CheckRead[]): string {
   const { ran, failed } = howTheChecksWent(reads);
+  const counted =
+    failed.length > 0
+      ? `${failed.length} of ${reads.length} did not pass`
+      : `${ran.length} of ${reads.length} passed`;
+  // **While the gate works through them, what is running leads**, because "is
+  // anything happening" is the question a person opened the step with. The
+  // count of what landed rides behind it once there is one.
+  const running = reads.filter(isRunning).length;
+  const waiting = reads.filter(isWaiting).length;
+  if (running > 0 || waiting > 0) {
+    const moving = running > 0 ? `${running} running` : `${waiting} waiting`;
+    return ran.length === 0 ? moving : `${moving} · ${counted}`;
+  }
   if (ran.length === 0) return NOT_REACHED;
-  return failed.length > 0
-    ? `${failed.length} of ${reads.length} did not pass`
-    : `${ran.length} of ${reads.length} passed`;
+  return counted;
 }
 
 /**

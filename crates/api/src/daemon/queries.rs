@@ -335,4 +335,23 @@ pub trait Queries: Send + Sync + 'static {
     /// already finished, and one whose Drone went with the Fleet that spawned
     /// it all reach a viewer that way.
     fn observe_job(&self, job_id: JobId) -> impl Future<Output = Result<Observed, Refusal>> + Send;
+
+    /// `observe_check_output` — one running Check's log, what it has printed
+    /// so far and then what it prints next.
+    ///
+    /// **It answers before the socket opens**, for [`Queries::observe_job`]'s
+    /// reason. `kept` is the last component of a `CheckUnderway::output_path`,
+    /// resolved against the Checks this Job's gate is running before anything
+    /// is opened — [`Queries::get_check_output`]'s rule, with the live set
+    /// standing in for the rows.
+    ///
+    /// [`Refusal::NoSuchJob`] where the id names no Job.
+    /// [`Refusal::Unacceptable`] where no running gate of this Job is writing a
+    /// log under that name — a name that was never one, or a gate whose ruling
+    /// has been written down, which is `get_check_output`'s from then on.
+    fn observe_check_output(
+        &self,
+        job_id: JobId,
+        kept: String,
+    ) -> impl Future<Output = Result<crate::LiveOutput, Refusal>> + Send;
 }

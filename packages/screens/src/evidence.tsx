@@ -76,7 +76,7 @@ export type Unnumbered = Omit<StepChapter, "ordinal">;
 
 import { checksChapter } from "./checks";
 import { panelsOf } from "./gates";
-import type { Outputs } from "./outputs";
+import type { Following, Outputs } from "./outputs";
 import type { Opens } from "./phases";
 import { verdictsChapter } from "./verdicts";
 
@@ -95,7 +95,13 @@ export function evidenceChaptersOf({
   criteria,
   opens,
   outputs,
+  now,
+  following,
 }: {
+  /** Now, injected, so a running Check's elapsed time moves with the clock. */
+  now: number;
+  /** The running Check's log this window is following, and how to follow one. */
+  following: Following;
   step: StepDetail;
   /** The Job's frozen criteria, for the words and the position a citation names. */
   criteria: readonly Criterion[];
@@ -121,7 +127,10 @@ export function evidenceChaptersOf({
   // and a fixed number here would put two chapters on one ordinal — so the
   // count is the story's to make, over the list it actually built. The order
   // is still fixed: Checks always before Verdicts.
-  return [checksChapter(step, panels, opens, outputs), verdictsChapter(step, panels, opens)].filter(
+  return [
+    checksChapter(step, panels, opens, outputs, now, following),
+    verdictsChapter(step, panels, opens),
+  ].filter(
     (chapter): chapter is Unnumbered => chapter !== undefined,
   );
 }

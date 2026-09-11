@@ -50,6 +50,7 @@ use crate::peer::{Drones, PeerOf};
 use crate::proposals::Proposals;
 use crate::silence::Liveness;
 use crate::slots::Slots;
+use crate::underway::Underway;
 
 mod answering;
 mod fittings;
@@ -80,6 +81,9 @@ pub struct Fleet<H, V, W> {
     /// state that is only ever true for as long as it takes** — it is never
     /// written down, because a record of it would outlive the fact.
     aloft: Aloft,
+    /// Each Job's gate that is running Checks right now, for `aloft`'s reason
+    /// one tier along — and, like it, never written down.
+    underway: Underway,
     /// Every proposal in flight, for the reason `aloft` exists one Job along:
     /// a call somebody could be waiting on has to be nameable while it is out.
     /// **Minted here, not a fitting** — nothing outside this crate holds one,

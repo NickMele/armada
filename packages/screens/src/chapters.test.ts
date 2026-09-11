@@ -178,6 +178,9 @@ function chapters(
     sheet: null,
     opens: OPENS,
     onOpenSheet: () => {},
+    // No gate is running on any step here, so nothing is followed or aged.
+    now: 0,
+    following: { reading: { state: "none" }, picked: null, pick: () => {}, follow: () => {} },
   });
 }
 

@@ -22,6 +22,7 @@ use crate::ids::{CriterionId, DroneId, Instant, JobId, StepId};
 use crate::job::{JobForgotten, JobList, JobSummary};
 use crate::proposing::ProposalInFlight;
 use crate::reading::ManifestReading;
+use crate::underway::ChecksUnderway;
 use crate::version::ProtocolVersion;
 use crate::waiting::QuestionInFlight;
 
@@ -101,6 +102,8 @@ pub enum Event {
     JobFilesChanged(JobFilesChanged),
     #[serde(rename = "job.judging")]
     JobJudging(JobJudging),
+    #[serde(rename = "job.checking")]
+    JobChecking(JobChecking),
     #[serde(rename = "job.asking")]
     JobAsking(JobAsking),
     #[serde(rename = "job.forgotten")]
@@ -490,6 +493,40 @@ pub struct JobJudging {
     pub judging: Option<JudgeInFlight>,
     /// Always Fleet. A Judge call authenticates as Fleet and no Drone can cause
     /// one. Carried for the reason [`DroneSpawned`] carries one.
+    pub actor: Actor,
+    pub at: Instant,
+}
+
+/// One of a step's Checks started or finished, or the gate's Checks are over.
+///
+/// **[`JobJudging`]'s shape, one tier along.** The gate used to say nothing
+/// between the Drone exiting and the ruling being written, so a step whose
+/// Checks had been running for minutes read as a step nothing had reached.
+///
+/// **A message when a Check starts and one when it finishes, and never one
+/// per second.** Each carries the whole set as it now stands, and a surface
+/// counts a running Check's elapsed time from its `started_at`. The last
+/// message carries nothing, and is sent once the ruling is written down —
+/// after `check_runs` holds the same results, so a surface re-reading on it
+/// never sees them vanish in between.
+///
+/// It names no [`JobSummary`]: nothing on the Board's row changes when a
+/// Check starts, and this is read by a detail view somebody has open.
+///
+/// # What it costs the channel, stated
+///
+/// Two messages per declared Check that runs a command, plus one as the gate
+/// starts them and one as the ruling lands. A step declaring nine is twenty at
+/// most, over however many minutes the gate takes.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobChecking {
+    pub job_id: JobId,
+    pub step_id: StepId,
+    /// The step's Checks as they now stand. **Absent because the ruling has
+    /// been written down**, and what each came to is on `check_runs` from here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checking: Option<ChecksUnderway>,
+    /// Always Fleet. A Check is Fleet's own run, never a Drone's.
     pub actor: Actor,
     pub at: Instant,
 }

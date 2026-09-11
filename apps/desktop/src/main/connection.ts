@@ -35,6 +35,7 @@ import type { CallRead, CheckOutputRead, Connection, FrameRead } from "@armada/p
 import type { JobHistory, Recorded } from "@armada/protocol";
 import type { JobDetail, JobExamined, JobResources, JobSummary, StreamMessage } from "@armada/protocol";
 import { JobCommands } from "./command";
+import { FollowSocket } from "./following";
 import { JournalSocket } from "./journal";
 import { ObserveSocket } from "./observe";
 import { JobReader } from "./reader";
@@ -138,6 +139,8 @@ export class FleetConnection {
   private readonly turns: ObserveSocket;
   /** What Fleet did to the open Job — a third socket. See `journal.ts`. */
   private readonly notes: JournalSocket;
+  /** One running Check's log, as it is written — a fourth socket. `following.ts`. */
+  private readonly follow: FollowSocket;
   /** The claims and the patch, each read when a surface asks — see `review.ts`. */
   private readonly material: ReviewMaterial;
   /**
@@ -166,6 +169,7 @@ export class FleetConnection {
     this.current = { ...NOTHING_YET, bridge: startingIdentity(wiring.home) };
     this.turns = new ObserveSocket((observed) => this.publish({ observed }));
     this.notes = new JournalSocket((journalled) => this.publish({ journalled }));
+    this.follow = new FollowSocket((followed) => this.publish({ followed }));
     this.material = new ReviewMaterial((change) => this.publish(change));
     this.watched = new JobReader<{ detail: JobDetail }>({
       route: (jobId) => `/jobs/${encodeURIComponent(jobId)}`,
@@ -262,6 +266,7 @@ export class FleetConnection {
     this.history.close();
     this.turns.close();
     this.notes.close();
+    this.follow.close();
     this.material.close();
     this.reports.close();
     this.held.close();
@@ -473,7 +478,9 @@ export class FleetConnection {
       return;
     }
 
-    if (event.kind === "job.judging") {
+    if (event.kind === "job.judging" || event.kind === "job.checking") {
+      // `job.checking` is the same answer one tier along: `StepDetail.checking`
+      // is re-read, and a running Check's elapsed time is counted, not re-read.
       // **Re-read rather than fold.** The call is served on the open Job's own
       // field, `StepDetail.judging`, which is what a Bridge opened mid-call
       // already reads — so folding it into a second copy would give one fact
@@ -486,7 +493,6 @@ export class FleetConnection {
       this.refresh(fleet.port, event.job_id);
       return;
     }
-
     if (event.kind === "job.asking") {
       // **The row does change here, unlike a Judge call, and it was not being
       // changed.** `JobSummary.asking` is the second arm of the Needs-you rule:
@@ -730,6 +736,11 @@ export class FleetConnection {
     // which is the empty panel this exists to fix, arriving by another route.
     this.reading = jobId;
     this.notes.open(port, jobId);
+  }
+
+  /** One running Check's log, as it is written, or `null` to stop. Opened by a press. */
+  followCheckOutput(jobId: string | null, kept: string | null): void {
+    this.follow.open(this.connected()?.port ?? null, jobId, kept);
   }
 
   // ------------------------------------------------- one Job's work, reviewed

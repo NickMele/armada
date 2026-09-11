@@ -21,6 +21,7 @@ import type {
   HeldWorktrees,
   History,
   Holdings,
+  FollowedLog,
   Journalled,
   Observed,
   Outcome,
@@ -169,6 +170,13 @@ export type BridgeState = {
    * exactly the moment somebody opens the panel.
    */
   journalled: Journalled;
+  /**
+   * The running Check's log somebody opened, as it is written. **Its own
+   * socket**, for `journalled`'s reason: a Check's output is a file still
+   * growing, and the event stream is bounded to keep payloads that size off
+   * it. `following.ts`.
+   */
+  followed: FollowedLog;
   /**
    * What the open Job's Drone has changed in its worktree.
    *
@@ -519,6 +527,14 @@ export type BridgeApi = {
    */
   observeJob: (jobId: string | null) => Promise<void>;
   /**
+   * Read one running Check's log as it is written, or `null` to stop.
+   *
+   * **Read-only, like `observeJob`**, and its own entry because it is its own
+   * socket. `kept` is the last component of a `CheckUnderway.output_path`, and
+   * Fleet resolves it against the Checks it is running before opening anything.
+   */
+  followCheckOutput: (jobId: string | null, kept: string | null) => Promise<void>;
+  /**
    * Read one Job's transition history, or `null` to stop.
    *
    * **Its own entry because it is its own operation.** A history is not on
@@ -739,6 +755,7 @@ export const NOTHING_YET: BridgeState = {
   watched: { state: "none" },
   observed: { state: "none" },
   journalled: { state: "none" },
+  followed: { state: "none" },
   footprint: { state: "none" },
   history: { state: "none" },
   evidence: { state: "none" },
@@ -777,6 +794,7 @@ export const CHANNELS = {
   fileReport: "bridge:file-report",
   watchJob: "bridge:watch-job",
   observeJob: "bridge:observe-job",
+  followCheckOutput: "bridge:follow-check-output",
   readHistory: "bridge:read-history",
   readEvidence: "bridge:read-evidence",
   readResources: "bridge:read-resources",
