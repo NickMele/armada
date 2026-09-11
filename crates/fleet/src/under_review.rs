@@ -101,13 +101,21 @@ impl RemarkSignature {
             remarks: read
                 .remarks
                 .iter()
-                .map(|remark| (remark.id.as_written().to_string(), hashed(remark.said.as_written())))
+                .map(|remark| {
+                    (
+                        remark.id.as_written().to_string(),
+                        hashed(remark.said.as_written()),
+                    )
+                })
                 .collect(),
             verdicts: read
                 .verdicts
                 .iter()
                 .map(|reviewed_by| {
-                    (reviewed_by.by.as_written().to_string(), reviewed_by.verdict.kind())
+                    (
+                        reviewed_by.by.as_written().to_string(),
+                        reviewed_by.verdict.kind(),
+                    )
                 })
                 .collect(),
         }
@@ -184,7 +192,9 @@ where
         let signature = RemarkSignature::of(&read);
         let commented = {
             let mut sweeping = self.sweeping().lock().await;
-            let baseline = sweeping.commented.insert(url.to_string(), signature.clone());
+            let baseline = sweeping
+                .commented
+                .insert(url.to_string(), signature.clone());
             matches!(baseline, Some(previous) if previous != signature)
         };
         if commented {
