@@ -105,7 +105,9 @@ The split is `get_check_output`'s and made against the same measurement. `KeptFr
 
 **The record is the allowlist**, which is what makes a caller-supplied value safe to open a file with. Fleet resolves the name against the frames it holds for that Job before anything is opened, so a name no row of this Job carries reaches no file at all, whatever it spells. A row whose file will not open answers the same refusal as a name that was never one — a frame's whole content is the image, so a row without it is nothing a caller can use, and a reclaimed `.armada/frames` is exactly that case.
 
-**Since 9.5 the run directory carries the side as well as the run.** A step's harness now runs twice — the base checkout serving with the branch's own spec shooting, then the branch serving and shooting — and both write into the one directory `evidence.frames` names, under whatever names the spec chose. So `implement.1/home.png` became `implement.1.base/home.png` and `implement.1.branch/home.png`, which keeps the id two segments and keeps a frame's own name the spec's word. Rows written before 9.5 carry the two-part directory and go on resolving to it; nothing rewrites a path.
+**Since 9.5 the run directory carries the side as well as the run.** From 9.5 a step's harness ran twice — the base checkout serving with the branch's own spec shooting, then the branch serving and shooting — and both wrote into the one directory `evidence.frames` names, so `implement.1/home.png` became `implement.1.base/home.png` and `implement.1.branch/home.png`. 10.0 switched the base run off: one run now, in the worktree, with its code kept. The side stays in the directory, which keeps the id two segments and keeps every row 9.5 wrote resolving; nothing rewrites a path.
+
+**Since 10.1 a person's press has run directories of its own**, `implement.again2.1.branch/home.png` beside the step's `implement.1.branch/home.png` — see `show_again`. The rows those name are the second list this resolves against, and the same allowlist rule holds for both.
 
 `helm_access` is `No` for the reason `get_diff`, `get_call` and `get_check_output` have it: a file this size pulled into a Helm session stays in that session for its remainder, and the viewer this exists for is a person who opened a frame.
 """
@@ -1026,6 +1028,57 @@ own log rather than into the record as a run the Drone never had.
 
 Helm does not reach it, for `override_verdict`'s reason: it is not on the
 Intervention Ladder.
+"""
+
+[operations.show_again]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "A person asks a Job to show its work: the repository's harness runs the last spec a Drone named, in the Job's worktree, and the frames are kept as a set of their own"
+notes = """
+**The other half of #603's "both".** A step whose evidence is `shown` runs the
+harness while it settles; this runs it when a person asks, on any Job whose
+worktree is still on disk. The mechanism is the step's own —
+`fleet::showing::show` and `kept` — called from outside settling.
+
+**It runs off the turn loop, and that is the design call.** A step's harness
+runs inside `settle`, under `turning_one`, under `turn`, which awaits each Job in
+order, so a press there would stop every Job in the Fleet for as long as the app
+takes to start and the spec to finish. Fleet spawns the run as a task of its own
+and takes no slot lock across it; the store is locked only to read the spec and
+to write the set. The request waits for the task, and a client that stops
+waiting does not stop the run — `#428` was a dispatch that died with its request.
+
+**The shape rejected is `crate::proving`'s**: spawn, answer at once, and let a
+later turn record what came back. It keeps the store write on the loop and gives
+the person nothing to wait on, and the frames would appear whenever an unrelated
+event next made Bridge re-read the Job.
+
+**A press adds a set and never replaces one.** The owner's decision on #603: the
+step's frames stay what the step produced, and each press is a set told apart by
+when it ran. So the frames go into `job_shown_again` under a press number, and
+the copies into a run directory of their own, `<step>.again<press>.<attempt>.branch`,
+beside the step's `<step>.<attempt>.branch`. `get_frame` resolves both.
+
+**Which spec.** The last `shown_by` a Drone submitted on a step whose evidence is
+`shown`. Every submission carries a `shown_by`, but only on a `shown` step does it
+name a spec; anywhere else it is a sentence pointing at a test or a file, and
+substituting that into `evidence.run` would put a Drone's words into a command
+line the repository wrote for a spec.
+
+**Refused five ways, each before anything runs, each a 409 naming what is
+missing:** the repository declares no harness; the worktree is gone; no Drone
+named a spec; the spec is no longer in the worktree; a Drone is working in the
+worktree now; a press on this Job is already out. `get_job` carries the same
+facts on `show_again`, so the control says why it cannot run rather than
+offering a press that fails.
+
+**A harness that ran and captured nothing is not a refusal.** The answer is a 200
+with `nothing` set to the sentence the Job's own log carries — `JobExamined`'s
+rule for a look that found something wrong.
+
+`helm_access` is `No` for `get_frame`'s reason: what it produces is images for a
+person to look at, and Helm reads none of them.
 """
 
 [operations.restart_fleet]

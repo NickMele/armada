@@ -26,6 +26,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::enums::Side;
+use crate::ids::{Instant, JobId, StepId};
 
 /// One frame a step's harness produced, as Fleet kept it.
 ///
@@ -79,11 +80,13 @@ pub struct KeptFrame {
     pub kept: String,
     /// Which checkout this one is a photograph of. **Since 9.5.**
     ///
-    /// **Absent is `branch`**, which is what every row written before 9.5 is:
-    /// until the base run existed, the Job's own worktree was the only place a
-    /// harness ran. A default here rather than an `Option` because there is no
-    /// third state to represent — a frame was taken somewhere — and an
-    /// `Option` would make every reader spell that out again.
+    /// **Absent is `branch`**, which is what every row written before 9.5 is,
+    /// and what every row written since 10.0 is too: the base run shipped in
+    /// 9.5 and 10.0 switched it off, so the Job's own worktree is again the
+    /// only place a harness runs. The field stays for the rows 9.5 wrote. A
+    /// default here rather than an `Option` because there is no third state to
+    /// represent — a frame was taken somewhere — and an `Option` would make
+    /// every reader spell that out again.
     #[serde(default = "on_the_branch")]
     pub side: Side,
     /// A digest of this frame's own bytes, or empty where none was taken.
@@ -110,4 +113,87 @@ pub struct KeptFrame {
 /// What a row with no `side` is. See [`KeptFrame::side`].
 fn on_the_branch() -> Side {
     Side::from(core_model::Side::Branch)
+}
+
+/// Whether a person can ask this Job to show its work again, and every time
+/// somebody did. **Since 10.1**, on [`JobDetail`](crate::JobDetail).
+///
+/// **Facts, not a verdict.** Each field is one thing Fleet checked, and the
+/// control reads them in its own order to say why it cannot run. A closed set
+/// of reasons would be a registry of its own on this seam, and every closed set
+/// here is a `core-model` key; these are five things any reader can see are
+/// true or not.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShowAgain {
+    /// Whether `armada.yml` declares an `evidence:` harness. Without one there
+    /// is nothing to run.
+    pub harness: bool,
+    /// Whether the Job's worktree is on disk. `armada clean` and reclaim take
+    /// it, and a press has nowhere to run without it.
+    pub worktree_on_disk: bool,
+    /// The spec a press reruns — the last one a Drone named on a `shown` step.
+    /// **Absent where no Drone ever named one**, which is every Job whose
+    /// workflow never asked a step to show its work.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spec: Option<NamedSpec>,
+    /// Whether a Drone is working in the worktree right now. A press is refused
+    /// while one is: it would photograph a tree mid-edit, and run beside the
+    /// step's own harness when that step submits.
+    pub drone_working: bool,
+    /// When the press that is out right now began. **Absent where none is.**
+    /// One press at a time per Job, because two would shoot into one directory.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub showing_since: Option<Instant>,
+    /// Every press this Job kept, oldest first. **Beside the step's own frames
+    /// and never in them** — [`StepDetail::frames`](crate::StepDetail) stays
+    /// what the step produced.
+    #[serde(default)]
+    pub shown: Vec<ShownSet>,
+}
+
+/// The spec a press reruns, and the run of the step that named it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NamedSpec {
+    pub step_id: StepId,
+    /// Which run of the step named it, counted from one.
+    pub attempt: u32,
+    /// The Drone's own `shown_by`, as it submitted it.
+    pub spec: String,
+    /// Whether the spec is still in the worktree. **A later run may have
+    /// renamed or deleted it**, and a press would then fail on a file that is
+    /// not there — so the control says so first.
+    pub on_disk: bool,
+}
+
+/// What one press captured.
+///
+/// **Told apart by when it ran**, which is the owner's decision on `#603`: two
+/// presses are two sets, and neither replaces the step's frames.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShownSet {
+    /// The Job's own count of presses, one-based.
+    pub press: u32,
+    pub pressed_at: Instant,
+    /// The step whose spec was rerun, and the run of it that named the spec.
+    pub step_id: StepId,
+    pub attempt: u32,
+    /// Never empty. A press that captured nothing kept no set, and said why in
+    /// its answer and in the Job's own log.
+    pub frames: Vec<KeptFrame>,
+}
+
+/// The answer to `show_again`: the set the press kept, or why there is none.
+///
+/// **Never both, and never neither.** A harness that ran and captured frames
+/// answers with the set; one that captured nothing, or would not run, answers
+/// with the sentence the Job's own log carries. That is not a refusal — the
+/// press ran — so it is a 200 with the reason in it, which is `JobExamined`'s
+/// rule for a look that found something wrong.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShownAgain {
+    pub job_id: JobId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub set: Option<ShownSet>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nothing: Option<String>,
 }

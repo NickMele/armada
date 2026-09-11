@@ -351,6 +351,7 @@ async fn opening_a_finished_job_says_whether_its_pull_request_merged() {
             commit: Some(String::from("fdc4cf46")),
             pushed: Some(String::from("origin/armada/fix-the-readers-bound")),
             pull_request: Some(address.clone()),
+            pull_request_detail: None,
             landed: Some(ipc::Settled::Merged),
         },
     );
@@ -385,6 +386,7 @@ async fn a_pull_request_nobody_has_settled_says_nothing_rather_than_open() {
             commit: Some(String::from("fdc4cf46")),
             pushed: Some(String::from("origin/armada/fix-the-readers-bound")),
             pull_request: Some(String::from("https://forge.invalid/armada/pull/1")),
+            pull_request_detail: None,
             landed: None,
         },
     );

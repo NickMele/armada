@@ -31,7 +31,7 @@ use crate::commands::{
     answer_question, approve_dispatch, approve_review, examine_job, file_report, forget_job,
     kill_drone, kill_job, merge_pull_request, override_verdict, propose_from_request, propose_job,
     raise_cost_cap, raise_turn_cap, reclaim_worktree, redirect_drone, redispatch_job, reject_job,
-    request_changes, rerun_gate, restart_step, stop_proposal, take_up_remarks,
+    request_changes, rerun_gate, restart_step, show_again, stop_proposal, take_up_remarks,
 };
 use crate::daemon::Daemon;
 use crate::journal::Journal;
@@ -274,6 +274,15 @@ pub const SERVED: &[Route] = &[
         operation: "rerun_gate",
         method: "POST",
         path: "/jobs/:job_id/rerun_gate",
+    },
+    // A person asking a Job to show its work. A POST because it runs a
+    // repository's harness and keeps what it captured, and its own route
+    // because it moves nothing on the Job — what comes back is a set of frames
+    // rather than a row.
+    Route {
+        operation: "show_again",
+        method: "POST",
+        path: "/jobs/:job_id/show_again",
     },
     // The one act on this table that changes what a Job may spend, and its own
     // route because nothing else on the Job is a number a person sets. It is
@@ -520,6 +529,14 @@ impl<D> Served<D> {
         &self.daemon
     }
 
+    /// The daemon as the `Arc` this listener holds it by, for the one command
+    /// that hands its work to a task of its own — `show_again`. A spawned task
+    /// has to own what it runs on, and a borrow of the state does not outlive
+    /// the request.
+    pub(crate) fn shared(&self) -> Arc<D> {
+        Arc::clone(&self.daemon)
+    }
+
     /// The Job log reader, where one was handed in.
     pub(crate) fn journal(&self) -> Option<Arc<dyn Journal>> {
         self.journal.clone()
@@ -577,6 +594,7 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
             post(override_verdict::<D>),
         )
         .route("/jobs/:job_id/rerun_gate", post(rerun_gate::<D>))
+        .route("/jobs/:job_id/show_again", post(show_again::<D>))
         .route(
             "/jobs/:job_id/approve_dispatch",
             post(approve_dispatch::<D>),

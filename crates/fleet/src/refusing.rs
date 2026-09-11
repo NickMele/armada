@@ -72,6 +72,11 @@ const NOTE_ALREADY_WAITING: &str = "fleet.note_already_waiting";
 /// is the caller asking for the wrong act, not Fleet breaking, and a 500 sends
 /// them to retry something that will fail identically for ever.
 const NOT_RESUMABLE: &str = "fleet.not_resumable";
+/// A person asked a Job to show its work and it cannot run: no harness, no
+/// worktree, no spec, the spec gone, a Drone working, or a press already out.
+/// A 409, and its own code because what a person does next is none of the
+/// things [`NOT_RESUMABLE`] sends them to — the message says which it is.
+const CANNOT_SHOW_AGAIN: &str = "fleet.cannot_show_again";
 /// A forget asked for on a Job that has not reached a terminal status. A 409
 /// like the other status conflicts — the machine was never asked, only the
 /// row itself, and `kill_job` is the act on a Job still in flight.
@@ -247,6 +252,15 @@ where
             | Adrift::NothingToRuleOn { job, .. } => Refusal::IllegalMove(
                 WireError::raised(NOT_RESUMABLE, said, self.run_id())
                     .about_job(ipc::JobId::from(job)),
+            ),
+            Adrift::CannotShowAgain { job, .. } => Refusal::IllegalMove(
+                WireError::raised(CANNOT_SHOW_AGAIN, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
+            ),
+            // A panic in the press's own task. Nothing about the request was
+            // wrong and pressing again is reasonable, which is a fault's 500.
+            Adrift::PressAbandoned { job } => Refusal::Fault(
+                WireError::raised(FAULT, said, self.run_id()).about_job(ipc::JobId::from(job)),
             ),
             Adrift::NotRedispatchable { job, .. }
             | Adrift::NeverRan { job }

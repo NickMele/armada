@@ -440,6 +440,17 @@ pub enum Adrift {
     /// the second reading would answer a different question from the first.
     /// `restart_step` puts a fresh Drone on the worktree the last one left.
     NotStandingThere { job: JobId },
+    /// A person asked a Job to show its work and it cannot run. **Refused
+    /// before anything runs**, and the reason names what is missing rather
+    /// than the press failing on it — `crate::showing_again`.
+    CannotShowAgain {
+        job: JobId,
+        why: crate::showing_again::Unshowable,
+    },
+    /// The task a press ran on ended without answering, which only a panic in
+    /// it does. **A fault and not a refusal**: nothing about the Job refused,
+    /// and the Job is pressable again because the hold went with the task.
+    PressAbandoned { job: JobId },
     /// The gate was asked again on a step with no evidence to be asked about.
     ///
     /// **Both halves of it**: nothing was recorded, or what was recorded will

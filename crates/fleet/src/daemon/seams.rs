@@ -267,6 +267,9 @@ where
     pub(crate) fn proving(&self) -> &Arc<Mutex<crate::proving::Proving>> {
         &self.proving
     }
+    pub(crate) fn pressing(&self) -> &crate::showing_again::Pressing {
+        &self.pressing
+    }
     pub(crate) fn noticing(&self) -> Noticing {
         self.noticing
     }

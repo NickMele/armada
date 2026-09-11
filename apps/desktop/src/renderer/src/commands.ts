@@ -54,6 +54,8 @@ export const readCheckOutput = (jobId: string, kept: string) =>
   window.armada.readCheckOutput(jobId, kept);
 
 export const readFrame = (jobId: string, kept: string) => window.armada.readFrame(jobId, kept);
+/** Ask a Job to show its work again. Answered to the screen that pressed it. */
+export const showAgain = (jobId: string) => window.armada.showAgain(jobId);
 export const openArtifact = (jobId: string, what: Artifact) => window.armada.openArtifact(jobId, what);
 export const openPullRequest = (jobId: string) => window.armada.openPullRequest(jobId);
 export const examine = (jobId: string): void => void window.armada.examineJob(jobId);

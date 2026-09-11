@@ -21,7 +21,9 @@
 //! and no other crate sees one. A word this forge has and Armada has not is
 //! silence rather than a guess — `crate::landing::read`'s own rule.
 
-use adapter_traits::{FromOutside, Remark, UnderReview, WhatPeopleSaid, WhatTheForgeRan};
+use adapter_traits::{
+    FromOutside, Remark, ReviewVerdict, ReviewedBy, UnderReview, WhatPeopleSaid, WhatTheForgeRan,
+};
 
 use crate::delivery::asked_lines;
 
@@ -37,7 +39,7 @@ const FIELDS: &str = "reviewDecision,statusCheckRollup,comments,reviews";
 
 /// The reduction, run on the forge's side.
 ///
-/// **Four streams into one `@tsv`.** In jq, `|` binds looser than `,`, so every
+/// **Five streams into one `@tsv`.** In jq, `|` binds looser than `,`, so every
 /// record built above reaches the encoder — the parentheses are for a reader
 /// rather than for the parser.
 ///
@@ -54,6 +56,10 @@ const FIELDS: &str = "reviewDecision,statusCheckRollup,comments,reviews";
 /// this reading and the pull request is read again when they press. The forge
 /// mints it and it is the only handle that survives an edit between the two
 /// reads.
+///
+/// **A review reaches this reduction twice.** Its body decides its `remark`
+/// row and its `.state` decides its `verdict` row, independently — a review
+/// may approve with no comment, or comment with no verdict this names.
 const REDUCTION: &str = "\
     ([\"said\", (.reviewDecision // \"\")]), \
     (.statusCheckRollup // [] | .[] | \
@@ -64,7 +70,10 @@ const REDUCTION: &str = "\
          (.body // \"\")]), \
     (.reviews // [] | .[] | select((.body // \"\") != \"\") | \
         [\"remark\", (.id // \"\"), (.author.login // \"\"), (.submittedAt // \"\"), \
-         (.body // \"\")]) \
+         (.body // \"\")]), \
+    (.reviews // [] | .[] | \
+        select(.state == \"APPROVED\" or .state == \"CHANGES_REQUESTED\") | \
+        [\"verdict\", (.author.login // \"\"), (.state // \"\")]) \
     | @tsv";
 
 /// Ask the forge who has looked at one pull request, what ran against it, and
@@ -88,6 +97,7 @@ pub(crate) fn folded(lines: &[String]) -> UnderReview {
     let mut people = WhatPeopleSaid::Unreadable;
     let mut checks = Checks::default();
     let mut remarks = Vec::new();
+    let mut verdicts = Vec::new();
     for line in lines {
         let mut field = line.split('\t');
         match field.next() {
@@ -116,6 +126,21 @@ pub(crate) fn folded(lines: &[String]) -> UnderReview {
                     ));
                 }
             }
+            Some("verdict") => {
+                let by = field.next().unwrap_or_default();
+                let state = field.next().unwrap_or_default();
+                // The `select` in the reduction already narrowed `.state` to
+                // the two words this reads, so `what_review_verdict` failing
+                // here means the forge printed neither — nothing this build
+                // could have asked for, and the row is dropped rather than
+                // guessed at.
+                if let Some(verdict) = what_review_verdict(state) {
+                    verdicts.push(ReviewedBy {
+                        by: FromOutside::verbatim(as_written(by)),
+                        verdict,
+                    });
+                }
+            }
             // A notice `gh` printed, or a record a later version of this
             // reduction emits and this build has no word for. Dropped rather
             // than guessed at, which is what the tag is for.
@@ -133,6 +158,7 @@ pub(crate) fn folded(lines: &[String]) -> UnderReview {
             _ => checks.totalled(),
         },
         remarks,
+        verdicts,
     }
 }
 
@@ -148,6 +174,22 @@ pub(crate) fn what_people_said(said: &str) -> WhatPeopleSaid {
         "REVIEW_REQUIRED" => WhatPeopleSaid::Awaited,
         "" => WhatPeopleSaid::NobodyHasLooked,
         _ => WhatPeopleSaid::Unreadable,
+    }
+}
+
+/// This forge's word for one reviewer's verdict, narrowed to the two this
+/// vocabulary names.
+///
+/// **`None` rather than a third variant.** The reduction's own `select`
+/// already keeps every other state — `COMMENTED`, `DISMISSED`, `PENDING` — out
+/// of this stream, so `None` here means the forge printed neither word this
+/// build asked it to, and the row is dropped exactly as an unrecognised tag
+/// is.
+pub(crate) fn what_review_verdict(state: &str) -> Option<ReviewVerdict> {
+    match state {
+        "APPROVED" => Some(ReviewVerdict::Approved),
+        "CHANGES_REQUESTED" => Some(ReviewVerdict::ChangesRequested),
+        _ => None,
     }
 }
 

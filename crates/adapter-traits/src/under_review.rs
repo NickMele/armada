@@ -233,14 +233,55 @@ impl Remark {
     }
 }
 
+/// One reviewer's verdict, apart from the forge's own rollup.
+///
+/// **[`UnderReview::people`] totals these and this does not restate the
+/// total** — a forge resolves stale approvals and dismissed reviews into one
+/// answer, and [`people`](UnderReview::people) is that answer. What is missing
+/// from it is *who*, and this is the reading that keeps that: a person
+/// deciding whether to merge wants to know it was the one reviewer the team
+/// trusts with this file, not only that somebody did.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReviewedBy {
+    /// The login of whoever left this review, as the forge spells it.
+    pub by: FromOutside,
+    pub verdict: ReviewVerdict,
+}
+
+/// The two verdicts a reviewer leaves that this vocabulary names.
+///
+/// **Not every state the forge has for a review.** A comment left without
+/// approving or requesting changes, a dismissed review and one still pending
+/// carry no verdict a person acts on differently from the pull request having
+/// no review at all — [`UnderReview::people`] already reads
+/// [`WhatPeopleSaid::NobodyHasLooked`] where nothing here would apply, so this
+/// set is the two the forge itself totals into a decision, and only those two.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReviewVerdict {
+    Approved,
+    ChangesRequested,
+}
+
+impl ReviewVerdict {
+    /// The reading as one word, for [`WhatPeopleSaid::kind`]'s reason: the
+    /// word a wire field carries and the word a log field carries must not
+    /// come to spell the same verdict two ways.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            ReviewVerdict::Approved => "approved",
+            ReviewVerdict::ChangesRequested => "changes_requested",
+        }
+    }
+}
+
 /// Everything one ask of the forge answers about a pull request nobody has
-/// merged yet. **One call and three answers**, which is the shape
+/// merged yet. **One call and four answers**, which is the shape
 /// [`crate::WhatBecameOfIt`] already has and for its reason: `gh pr view`
-/// answers all three in the same breath, and building them apart would be three
+/// answers all four in the same breath, and building them apart would be four
 /// processes where one does.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UnderReview {
-    /// What the people looking at it have said.
+    /// What the people looking at it have said, as the forge totals it.
     pub people: WhatPeopleSaid,
     /// What the forge's own checks came to.
     pub checks: WhatTheForgeRan,
@@ -253,6 +294,13 @@ pub struct UnderReview {
     /// and that is exactly the sentence [`crate::Landing`] already got wrong
     /// once.
     pub remarks: Vec<Remark>,
+    /// Every review that landed one of the two verdicts this vocabulary names,
+    /// oldest first. **[`people`](UnderReview::people)'s reason applies here
+    /// too**: empty is a pull request nobody has approved or asked changes on,
+    /// and a forge that would not answer leaves this empty as well — a caller
+    /// reads [`was_answered`](UnderReview::was_answered) first, on the same
+    /// rule `remarks` already carries.
+    pub verdicts: Vec<ReviewedBy>,
 }
 
 impl UnderReview {
@@ -265,6 +313,7 @@ impl UnderReview {
             people: WhatPeopleSaid::Unreadable,
             checks: WhatTheForgeRan::Unreadable,
             remarks: Vec::new(),
+            verdicts: Vec::new(),
         }
     }
 
@@ -343,6 +392,7 @@ mod tests {
             people: WhatPeopleSaid::NobodyHasLooked,
             checks: WhatTheForgeRan::NothingRan,
             remarks: Vec::new(),
+            verdicts: Vec::new(),
         };
         assert!(quiet.was_answered());
         assert_eq!(quiet.remarks, silent.remarks, "both carry no remarks");
@@ -364,6 +414,7 @@ mod tests {
                 checks: 3,
             },
             remarks: Vec::new(),
+            verdicts: Vec::new(),
         };
         assert_eq!(read.people_said(), "somebody has approved it");
         assert_eq!(read.checks_said(), "1 of its 3 checks did not pass");

@@ -249,3 +249,7 @@ export * from "./compositions/JobHoldsSummary/JobHoldsSummary";
 // That reading, on a trailing sheet. `JobResources` unchanged inside it — a
 // new home rather than an edit.
 export * from "./compositions/JobHoldsSheet/JobHoldsSheet";
+
+// Asking a Job to show its work again, and every set a press kept beside the
+// step's own frames. Each set is an unchanged `FramesShown`.
+export * from "./compositions/ShownAgain/ShownAgain";

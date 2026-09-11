@@ -90,8 +90,8 @@ pub use capacity::{AdmissionHold, FleetCapacity};
 pub use checks::{CheckOutput, CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
 pub use detail::{
-    Criterion, Dependency, JobDelivery, JobDetail, JobSpend, JudgeInFlight, Refusal, Settled,
-    StepDetail, StepFacts, Stuck, Verdict,
+    Criterion, Dependency, JobDelivery, JobDetail, JobSpend, JudgeInFlight, PullRequestDetail,
+    Refusal, ReviewedBy, Settled, StepDetail, StepFacts, Stuck, Verdict,
 };
 pub use enums::{
     Actor, AdvanceGate, BudgetHold, CheckOutcome, CriterionSource, DependencyDirection,
@@ -129,7 +129,7 @@ pub use resources::{
     Asked, Finding, Held, JobExamined, JobProcess, JobResources, Look, WorktreeOnDisk,
 };
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
-pub use showing::KeptFrame;
+pub use showing::{KeptFrame, NamedSpec, ShowAgain, ShownAgain, ShownSet};
 pub use turn::{
     BlockKind, CallArguments, Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage,
     Voice, Withheld,

@@ -29,12 +29,18 @@
 }
 
 /* Three columns and one grid per row rather than one grid over the list: the
-   comparison column is `max-content` and a suite where one row compares and
-   the rest do not should not carry an empty column the width of the longest
-   sentence anybody wrote. */
+   comparison column sizes to its content and a suite where one row compares
+   and the rest do not should not carry an empty column the width of the
+   longest sentence anybody wrote.
+
+   **The comparison column stops at half the row.** It was `max-content`, which
+   is right for `identical at attempt 1 and attempt 2` and wrong for the reason a
+   skipped Check carries — `no changed file is under apps/**, packages/**, …` —
+   which took the whole row and left the identifier one character a line.
+   `CheckRuns` met the same sentence first. */
 .armada-assertions__row {
   display: grid;
-  grid-template-columns: var(--space-4) minmax(0, 1fr) max-content;
+  grid-template-columns: var(--space-4) minmax(0, 1fr) fit-content(50%);
   align-items: start;
   gap: var(--space-2);
   padding: calc(var(--space-1) / 2) var(--space-2);
@@ -87,14 +93,16 @@
   color: var(--fg-subtle);
 }
 
-/* How it stood at the parent commit. Mono and set back — measured, and never
-   competing with the sentence it qualifies. */
+/* How it stood at the parent commit, or why the Check did not run. Mono and
+   set back — measured, and never competing with the sentence it qualifies. It
+   wraps, because the skip reason is a list of paths as long as a workflow
+   declares, and a path breaks inside itself only when nothing else fits. */
 .armada-assertions__against {
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-subtle);
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 
 /* A row that came out wrong, and a row that stopped existing. Both are the

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn } from "storybook/test";
+import { expect, fireEvent, fn } from "storybook/test";
 
 import { DispatchRequest } from "./DispatchRequest";
 import type { Proposal } from "./DispatchRequest";
@@ -59,7 +59,10 @@ export const NothingTyped: Story = {
     const dispatch = canvas.getByRole("button", { name: "Dispatch" });
     await expect(dispatch).toBeDisabled();
 
-    await userEvent.click(dispatch);
+    // Dispatched rather than clicked. The app's base styles take a disabled
+    // control out of pointer reach, so a pointer cannot press it at all; the
+    // event still arrives here to prove the handler is not bound either.
+    fireEvent.click(dispatch);
     await expect(args.onDispatch).not.toHaveBeenCalled();
 
     await userEvent.type(canvas.getByRole("textbox", { name: "Request" }), "Fix the flicker");
@@ -73,10 +76,13 @@ export const NothingTyped: Story = {
  */
 export const Typed: Story = {
   args: { request: REQUEST },
-  play: async ({ args, canvas, userEvent }) => {
+  play: async ({ args, canvas }) => {
     const dispatch = canvas.getByRole("button", { name: "Dispatch" });
     await expect(dispatch).toBeEnabled();
-    await userEvent.click(dispatch);
+    // Dispatched rather than clicked. The app's base styles take a disabled
+    // control out of pointer reach, so a pointer cannot press it at all; the
+    // event still arrives here to prove the handler is not bound either.
+    fireEvent.click(dispatch);
     await expect(args.onDispatch).toHaveBeenCalledOnce();
   },
 };
@@ -97,13 +103,16 @@ export const Reading: Story = {
    * Inert on every path out, which is the thing a rendering cannot show: the
    * field, the primary and the override are all dead while a call is out.
    */
-  play: async ({ args, canvas, userEvent }) => {
+  play: async ({ args, canvas }) => {
     await expect(canvas.getByRole("textbox", { name: "Request" })).toBeDisabled();
     await expect(canvas.getByRole("button", { name: "Enter by hand" })).toBeDisabled();
 
     const dispatch = canvas.getByRole("button", { name: "Reading the request" });
     await expect(dispatch).toBeDisabled();
-    await userEvent.click(dispatch);
+    // Dispatched rather than clicked. The app's base styles take a disabled
+    // control out of pointer reach, so a pointer cannot press it at all; the
+    // event still arrives here to prove the handler is not bound either.
+    fireEvent.click(dispatch);
     await expect(args.onDispatch).not.toHaveBeenCalled();
   },
 };
@@ -277,10 +286,13 @@ export const Approving: Story = {
       jobs: [{ id: "job_2d90bb", title: "Stop the board flickering on every event", workflow: "bug", status: "awaiting_approval" }],
     },
   },
-  play: async ({ args, canvas, userEvent }) => {
+  play: async ({ args, canvas }) => {
     const approving = canvas.getByRole("button", { name: /Approving/ });
     await expect(approving).toBeDisabled();
-    await userEvent.click(approving);
+    // Dispatched rather than clicked. The app's base styles take a disabled
+    // control out of pointer reach, so a pointer cannot press it at all; the
+    // event still arrives here to prove the handler is not bound either.
+    fireEvent.click(approving);
     await expect(args.onApprove).not.toHaveBeenCalled();
   },
 };

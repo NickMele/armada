@@ -159,6 +159,15 @@ pub struct JobDetail {
     /// those would offer acts against a Job nothing is wrong with.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stuck: Option<Stuck>,
+    /// Whether a person can ask this Job to show its work again, and every
+    /// time somebody did. **Since 10.1**, and absent from a Fleet older than
+    /// that — which a reader draws as no control at all rather than a refusal.
+    ///
+    /// **Filled after [`JobDetail::of`] rather than handed to it**, because it
+    /// is read off the worktree and the Manifest as well as the record, and the
+    /// constructor takes only what the record and the workflow say.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub show_again: Option<crate::showing::ShowAgain>,
 }
 
 /// Why a Job stopped, and what moves it.
@@ -450,6 +459,7 @@ impl JobDetail {
             // working it out needs every other Job's record.
             write_scope_overlaps,
             stuck: stuck.map(Stuck::of),
+            show_again: None,
         }
     }
 }
@@ -520,6 +530,25 @@ pub struct JobDelivery {
     /// The address a person clicks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pull_request: Option<String>,
+    /// Live facts about it, off Fleet's own rotation rather than this call.
+    ///
+    /// **Never fetched here.** `get_job` is read on every open of a Job, and a
+    /// forge call spent on every one of those would be a process per page
+    /// load with no bound. Fleet already asks the forge about every open pull
+    /// request on a fixed rotation, to notice a merge — `crate::noticing` in
+    /// `fleet` — and this is that same reading, cached rather than fetched
+    /// twice.
+    ///
+    /// **Absent is two different facts, told apart by
+    /// [`landed`](JobDelivery::landed).** Where `landed` is also absent,
+    /// Fleet's rotation has not reached this pull request yet; it will, within
+    /// one rotation of every open pull request this Fleet is holding. Where
+    /// `landed` is present, the pull request has settled and Fleet has
+    /// stopped asking about it — read `landed` instead of looking for this to
+    /// reappear. **Present always means `landed` is absent**: a reading taken
+    /// while the pull request was still open, stale by at most one rotation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pull_request_detail: Option<PullRequestDetail>,
     /// What became of that pull request. **Absent is unasked or still open**,
     /// which is one absence because neither is news: a pull request sits open
     /// until somebody decides, so a client that saw "still open" as a value
@@ -529,6 +558,52 @@ pub struct JobDelivery {
     /// is nothing to have settled without one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub landed: Option<Settled>,
+}
+
+/// What Fleet's rotation last read live off an open pull request.
+///
+/// **Everything here is a snapshot, not a subscription.** Nothing pushes an
+/// update when one of these changes; a client that wants a fresher one reopens
+/// the Job after Fleet's rotation has had time to come back around, the same
+/// bound `docs/practices/protocol.md`'s noticing sweep already accepts for a
+/// merge.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PullRequestDetail {
+    /// The forge's own number for it, where the forge answered one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub number: Option<u64>,
+    /// Its title, as the forge holds it right now — not the title Armada
+    /// opened it with, because a person may have edited it since.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// Whether the forge can merge it into its base as it stands.
+    ///
+    /// **`None` is not "conflicting".** It is the forge declining to say —
+    /// still computing it, or a forge that would not answer at all — and a
+    /// client that read it as a conflict would be reporting a fact nobody
+    /// found.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mergeable: Option<bool>,
+    /// Every review that has landed a verdict, oldest first.
+    ///
+    /// **Comments are not here.** `get_remarks` serves everything anybody
+    /// wrote on the pull request, and a review's note would cross twice if it
+    /// were carried on both. Empty is a pull request nobody has approved or
+    /// asked changes on, which is the ordinary case for one just opened.
+    pub reviews: Vec<ReviewedBy>,
+}
+
+/// One reviewer's verdict on a pull request.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReviewedBy {
+    /// The login of whoever reviewed it, as the forge spells it.
+    pub by: String,
+    /// One word from the forge's own vocabulary: `approved` or
+    /// `changes_requested`. A string rather than a mirrored enum, for
+    /// [`Stuck::stopped_by`]'s reason — the forge's own set is not this
+    /// registry's to widen, and it is not every state a review can be in,
+    /// only the two a person acts on.
+    pub verdict: String,
 }
 
 /// The two ends a pull request comes to, and the whole of the set.

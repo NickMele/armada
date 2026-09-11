@@ -149,6 +149,18 @@ pub struct StepDetail {
     /// frozen workflow does not declare the step.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub advance_gate: Option<AdvanceGate>,
+    /// Whether this is the step the frozen workflow sends the work out on.
+    ///
+    /// **Absent means "Fleet cannot say", exactly as `checks` above it does**
+    /// — a Job named a workflow Fleet does not hold, or one that no longer
+    /// declares the step. Present is always the frozen workflow's own answer,
+    /// so `Some(false)` is as certain as `Some(true)`: a client can say "this
+    /// workflow never opens a pull request" from this field alone, before the
+    /// step it would have delivered on is even reached — `crate::JobDelivery`
+    /// only answers once the branch has actually gone out, which for a
+    /// workflow declaring no delivering step is never.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delivers: Option<bool>,
     /// Absent until a gate has ruled on the step.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_verdict: Option<Verdict>,
@@ -351,6 +363,7 @@ impl StepDetail {
             check_runs: facts.map(|facts| facts.ran.clone()).unwrap_or_default(),
             judge_checks: declared.map(|declared| DeclaredJudge::firing(declared.judge_checks())),
             advance_gate: declared.map(|declared| declared.advance_gate().into()),
+            delivers: declared.map(core_model::ResolvedStep::delivers),
             last_verdict: step
                 .last_verdict()
                 .map(|verdict| Verdict::of(latest_closed_attempt(facts), verdict)),

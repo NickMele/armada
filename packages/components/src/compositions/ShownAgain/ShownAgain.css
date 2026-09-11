@@ -1,0 +1,48 @@
+/* Asking a Job to show its work again, and every set that came of it. A column,
+   because each set is read top to bottom in the order it was pressed. */
+.armada-again {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The control and what it will run, on one line where there is room. */
+.armada-again__control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-again__note,
+.armada-again__said {
+  margin: 0;
+  min-width: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+}
+
+/* The Drone's own words for its spec, which is a path: mono, like every other
+   path this app draws. */
+.armada-again__spec {
+  font-family: var(--font-mono);
+  color: var(--fg-default);
+}
+
+.armada-again__set {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* When the press ran. The line that tells two sets apart, so it is the set's
+   heading rather than a caption on each frame. */
+.armada-again__heading {
+  margin: 0;
+  color: var(--fg-default);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
