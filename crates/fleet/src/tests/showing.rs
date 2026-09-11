@@ -249,6 +249,56 @@ evidence:
     );
 }
 
+/// **`serve` is optional, and a repository with nothing to serve still gets a
+/// run.** A desktop app, a CLI or a library declares only `run` and `frames`,
+/// and `show` never spawns anything or waits on a port for one — it goes
+/// straight to `run`, once, in the worktree it was given.
+#[tokio::test]
+async fn a_harness_with_nothing_to_serve_still_captures_by_running_alone() {
+    let dir = TempDir::new();
+    let worktree = dir.path().join("worktree");
+    std::fs::create_dir_all(worktree.join("shots")).expect("the worktree");
+
+    let declared = harness(
+        r#"
+version: 1
+id: armada
+evidence:
+  run: sh -c 'printf %s "$0" > shots/answer.txt' {}
+  frames: shots
+"#,
+    );
+    assert_eq!(
+        declared.serve(),
+        None,
+        "nothing to serve, and nothing named"
+    );
+    assert_eq!(declared.ready(), None);
+
+    let shown = show(
+        &declared,
+        "e2e/home.spec.ts",
+        Aimed::at(&worktree),
+        Side::Branch,
+        ComingUp::of(Duration::from_secs(5)),
+        Duration::from_secs(30),
+    )
+    .await;
+
+    let Shown::Frames(frames) = shown else {
+        panic!("`run` alone is a harness, and this one wrote a file: {shown:?}");
+    };
+    assert_eq!(
+        frames.iter().map(|at| at.name.as_str()).collect::<Vec<_>>(),
+        ["answer.txt"],
+        "the spec reached the command with nobody serving anything"
+    );
+    assert!(
+        !dir.path().join(".armada/bases").exists(),
+        "one run, in the worktree it was given — nothing made a base checkout"
+    );
+}
+
 /// **A run that captured nothing is its own answer**, and not an empty list of
 /// frames. A runner that exits zero having photographed nothing was given a
 /// spec that asserts and never captures, which is a spec to read rather than a

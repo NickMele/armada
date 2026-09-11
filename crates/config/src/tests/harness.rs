@@ -1,12 +1,13 @@
 //! `evidence:` — the section a repository declares its own harness in.
 //!
-//! **Four commands and a boundary, and not one of them is Armada's.** What is
-//! checked here is that each key is read as what it is, that the three ways a
-//! `frames` path is not a directory inside the worktree are caught at load
-//! rather than after a server has been started, and that a `run` with nowhere
-//! to put the spec is refused — a template that ignores its argument runs the
-//! same command whichever spec was named, which is a capture scoped to nothing
-//! and saying so nowhere.
+//! **A run, a place to look, and a boundary — and not one of them is
+//! Armada's.** What is checked here is that each key is read as what it is,
+//! that `serve` and `ready` are a pair rather than a default, that the three
+//! ways a `frames` path is not a directory inside the worktree are caught at
+//! load rather than after a server has been started, and that a `run` with
+//! nowhere to put the spec is refused — a template that ignores its argument
+//! runs the same command whichever spec was named, which is a capture scoped
+//! to nothing and saying so nowhere.
 
 use crate::error::Fault;
 use crate::manifest::Manifest;
@@ -41,8 +42,8 @@ fn a_repository_declares_how_it_shows_its_own_work() {
     let manifest = parse(WITH_A_HARNESS).expect("a manifest with a harness");
     let harness = manifest.harness().expect("the section was declared");
 
-    assert_eq!(harness.serve(), "pnpm dev --port 6006");
-    assert_eq!(harness.ready(), "curl -sf http://localhost:6006");
+    assert_eq!(harness.serve(), Some("pnpm dev --port 6006"));
+    assert_eq!(harness.ready(), Some("curl -sf http://localhost:6006"));
     assert_eq!(harness.frames().as_str(), ".playwright/frames");
     assert_eq!(harness.never(), ["/settings", "/admin"]);
 }
@@ -63,7 +64,7 @@ fn the_spec_goes_where_the_run_template_says_it_goes() {
 }
 
 /// **Absent is not a default.** A repository that declares no harness cannot
-/// run a `visual` step, and that is refused where the workflow is resolved —
+/// run a `shown` step, and that is refused where the workflow is resolved —
 /// so absence reaches a Job as a refusal a person reads, never as a capture
 /// that quietly produced nothing.
 #[test]
@@ -142,10 +143,11 @@ evidence:
     }
 }
 
-/// Every required key is required on its own, so a section with three faults is
-/// one edit rather than three loads.
+/// `run` and `frames` are required on their own, so a section missing both is
+/// one edit rather than two loads. `serve` and `ready` are not among them —
+/// naming neither is the shape a repository with nothing to serve declares.
 #[test]
-fn each_missing_command_is_refused_on_its_own() {
+fn each_required_key_is_refused_on_its_own() {
     let refused = refusals(parse(
         r#"
 version: 1
@@ -159,15 +161,76 @@ evidence:
 "#,
     ));
 
-    for key in [
-        "evidence.serve",
-        "evidence.ready",
-        "evidence.run",
-        "evidence.frames",
-    ] {
+    for key in ["evidence.run", "evidence.frames"] {
         assert!(
             matches!(fault_at(&refused, key), Fault::Missing),
             "`{key}` is required and says so on its own"
+        );
+    }
+    assert!(
+        !crate::tests::refused(&refused, "evidence.serve"),
+        "`serve` is optional, and naming neither it nor `ready` is not a fault"
+    );
+}
+
+/// **The common denominator.** A repository with nothing to serve — a desktop
+/// app, a CLI, a library — declares only the two keys every kind of software
+/// shares.
+#[test]
+fn a_repository_with_nothing_to_serve_declares_only_run_and_frames() {
+    let manifest = parse(
+        r#"
+version: 1
+id: armada
+checks:
+  test:
+    run: cargo nextest run --workspace
+evidence:
+  run: node run-and-capture.js {}
+  frames: .armada/frames
+"#,
+    )
+    .expect("a manifest with a harness and no server");
+    let harness = manifest.harness().expect("the section was declared");
+
+    assert_eq!(harness.serve(), None);
+    assert_eq!(harness.ready(), None);
+    assert_eq!(harness.frames().as_str(), ".armada/frames");
+}
+
+/// **`serve` and `ready` are a pair, not two independent optionals.** A server
+/// nothing confirms came up is a frame of a blank page that looks exactly like
+/// one of a broken page, and a readiness probe with nothing to probe answers a
+/// question nobody asked.
+#[test]
+fn serve_and_ready_are_refused_apart() {
+    for (present, absent, written) in [
+        ("serve", "ready", "  serve: pnpm dev --port 6006\n"),
+        (
+            "ready",
+            "serve",
+            "  ready: curl -sf http://localhost:6006\n",
+        ),
+    ] {
+        let refused = refusals(parse(&format!(
+            r#"
+version: 1
+id: armada
+checks:
+  test:
+    run: cargo nextest run --workspace
+evidence:
+{written}  run: pnpm exec playwright test {{}}
+  frames: .playwright/frames
+"#
+        )));
+
+        assert!(
+            matches!(
+                fault_at(&refused, &format!("evidence.{absent}")),
+                Fault::ServeReadyMustPair { present: found } if *found == present
+            ),
+            "`{present}` alone names the key that is missing, and which one is there"
         );
     }
 }

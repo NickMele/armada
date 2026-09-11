@@ -323,7 +323,7 @@ export function chaptersOf({
     // Produced is the chapter underneath.
     //
     // **Only where there are frames.** A chapter saying a step declared no
-    // visual evidence would be on almost every step of almost every Job,
+    // shown evidence would be on almost every step of almost every Job,
     // reporting the absence of a thing nobody asked for.
     ...(shown.length === 0 ? [] : [framesChapter(shown, step.frames ?? [], pairs)]),
     {

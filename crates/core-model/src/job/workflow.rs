@@ -51,7 +51,7 @@ use crate::job::verdict::GateVerdict;
 /// among the legal values, and until that is decided it is refused by name
 /// where a definition is parsed.
 ///
-/// **[`Visual`](EvidenceType::Visual) is the seventh, and the first that needs
+/// **[`Shown`](EvidenceType::Shown) is the seventh, and the first that needs
 /// something outside this enum to mean anything.** The other six are satisfied
 /// by whatever the step's work product already is; this one is satisfied by a
 /// harness the repository declares, so a step declaring it against an
@@ -74,7 +74,7 @@ pub enum EvidenceType {
     /// no browser: Armada's own job detail needs a Job created, dispatched,
     /// approved and run before there is a screen to photograph, and nothing
     /// short of the app's own test framework gets there.
-    Visual,
+    Shown,
 }
 
 /// What it takes to advance past a step. **Five variants, of the schema's four
@@ -829,7 +829,7 @@ impl EvidenceType {
         EvidenceType::TestSuiteRun,
         EvidenceType::Bundle,
         EvidenceType::Document,
-        EvidenceType::Visual,
+        EvidenceType::Shown,
     ];
 
     /// The wire value, which is also the WorkflowDef schema's spelling.
@@ -841,7 +841,7 @@ impl EvidenceType {
             EvidenceType::TestSuiteRun => "test_suite_run",
             EvidenceType::Bundle => "bundle",
             EvidenceType::Document => "document",
-            EvidenceType::Visual => "visual",
+            EvidenceType::Shown => "shown",
         }
     }
 

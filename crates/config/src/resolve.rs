@@ -82,7 +82,7 @@ impl ResolvedWorkflow {
             });
         }
         // **Between the two, and this is the one place both files are in
-        // hand.** `evidence_type: visual` parses against no Manifest, and an
+        // hand.** `evidence_type: shown` parses against no Manifest, and an
         // `evidence:` section is declared with no workflow in sight; only here
         // can a step asking to be shown be held to a repository that can show
         // it. Refusing at dispatch is the whole argument — the alternative is a
@@ -164,7 +164,7 @@ impl ResolvedWorkflow {
 fn shown_by_a_harness(def: &WorkflowDef) -> Vec<StepId> {
     def.steps()
         .iter()
-        .filter(|step| step.evidence_type() == Some(EvidenceType::Visual))
+        .filter(|step| step.evidence_type() == Some(EvidenceType::Shown))
         .map(|step| step.id().clone())
         .collect()
 }

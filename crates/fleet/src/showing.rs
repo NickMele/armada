@@ -1,6 +1,6 @@
 //! Running the repository's own harness, and keeping what it produced.
 //!
-//! A step whose `evidence_type` is `visual` is reviewed by looking at it, and
+//! A step whose `evidence_type` is `shown` is reviewed by looking at it, and
 //! this is what there is to look at. The repository declared how — `evidence:`
 //! in `armada.yml` — and the Drone wrote the spec, which scopes the run:
 //! `shown_by` names it and is refused when empty, so a capture of nothing is
@@ -227,7 +227,8 @@ impl<'a> Aimed<'a> {
     }
 }
 
-/// Serve the thing, wait for it, run the spec against it, and end the server.
+/// Serve the thing if there is one, wait for it, run the spec, and end the
+/// server if one was started.
 ///
 /// **No error return, and the step is not failed on any of these.** A harness
 /// that will not run has established nothing about the work, exactly as a Check
@@ -235,9 +236,15 @@ impl<'a> Aimed<'a> {
 /// something to look at, not a fifth thing that can refuse a step. What comes
 /// back is a fact for a person to read, and [`NotShown`] is that fact.
 ///
-/// **The server is ended on every path**, including the ones that return early:
-/// [`Served`] signals its group on drop, so a readiness budget that expires
-/// leaves nothing holding the port.
+/// **`evidence.serve` is optional, and `run` is what every repository has.** A
+/// repository with nothing to serve — a desktop app, a CLI, a library — names
+/// no `serve`, and `config` refuses one that names it without a `ready`. So a
+/// `None` here means there is nothing to spawn or wait for, and `run` is asked
+/// to reach its own state.
+///
+/// **The server is ended on every path that started one**, including the ones
+/// that return early: [`Served`] signals its group on drop, so a readiness
+/// budget that expires leaves nothing holding the port.
 pub async fn show(
     harness: &Harness,
     spec: &str,
@@ -246,18 +253,29 @@ pub async fn show(
     coming_up: ComingUp,
     budget: Duration,
 ) -> Shown {
-    let mut serving = match Served::spawn(harness.serve(), aimed.served_from) {
-        Ok(serving) => serving,
-        Err(why) => return Shown::NotShown(NotShown::NotServed(why)),
+    let mut serving = match harness.serve() {
+        Some(serve) => match Served::spawn(serve, aimed.served_from) {
+            Ok(serving) => Some(serving),
+            Err(why) => return Shown::NotShown(NotShown::NotServed(why)),
+        },
+        None => None,
     };
-    if let Some(why) = ready(harness, aimed.served_from, coming_up, &mut serving).await {
-        return Shown::NotShown(why);
+    // `harness.ready()` is `Some` exactly when `harness.serve()` is —
+    // `config::manifest::harness::read` refuses one without the other — so a
+    // `serve` with no matching `ready` here would be a Manifest that loaded
+    // wrong rather than a case to handle.
+    if let (Some(active), Some(ready_cmd)) = (serving.as_mut(), harness.ready()) {
+        if let Some(why) = ready(ready_cmd, aimed.served_from, coming_up, active).await {
+            return Shown::NotShown(why);
+        }
     }
     // **The spec is substituted by the Harness and never composed here.** The
     // two characters that mark the hole are `config`'s, and a second place that
     // knew them would be a second spelling of the same rule.
     let ran = checks_runner::run(&harness.running(spec), aimed.shot_from, budget).await;
-    serving.end().await;
+    if let Some(active) = serving {
+        active.end().await;
+    }
     match ran.exit {
         // Zero and nothing else. A harness has no `expect_exit_code` — that key
         // is a Check's, and it exists because a linter's clean state is
@@ -276,12 +294,16 @@ pub async fn show(
 /// value to unwrap and the caller reads as a sequence of things that can stop
 /// it.
 ///
+/// **The command rather than the `Harness`**, unlike every other reader here —
+/// so a caller holding `Some(ready)` already knows there is one to ask, and
+/// this never has to re-decide whether `evidence.ready` was declared.
+///
 /// **The server is checked before every ask, not only at the start.** A serve
 /// command that dies three seconds in is the ordinary way a port conflict
 /// shows up, and a loop that only probed readiness would spend the whole budget
 /// asking a port nothing is listening on and then report a timeout.
 async fn ready(
-    harness: &Harness,
+    ready_cmd: &str,
     worktree: &Path,
     coming_up: ComingUp,
     serving: &mut Served,
@@ -299,10 +321,7 @@ async fn ready(
         if left.is_zero() {
             return Some(NotShown::NeverReady { after: waiting });
         }
-        if let Exit::Code(0) = checks_runner::run(harness.ready(), worktree, left)
-            .await
-            .exit
-        {
+        if let Exit::Code(0) = checks_runner::run(ready_cmd, worktree, left).await.exit {
             return None;
         }
         tokio::time::sleep_until((tokio::time::Instant::now() + ASKING_EVERY).min(deadline)).await;
@@ -558,7 +577,7 @@ where
     ///
     /// **Nothing happens on any other step.** The three conditions are read
     /// here rather than at the caller so there is one place that says when a
-    /// harness runs: the step declares `visual`, the repository declares a
+    /// harness runs: the step declares `shown`, the repository declares a
     /// harness, and the submission named a spec. The third cannot fail —
     /// `shown_by` is refused when empty — and is checked anyway, because the
     /// consequence of a blank one is a command with a hole in it.
@@ -588,11 +607,11 @@ where
         _job: &Job,
         worktree: &Path,
     ) -> Result<Option<NotShown>, Adrift> {
-        if declared.evidence_type() != Some(EvidenceType::Visual) {
+        if declared.evidence_type() != Some(EvidenceType::Shown) {
             return Ok(None);
         }
         // Unreachable on a Job that was resolved — `ResolvedWorkflow::resolve`
-        // refuses a `visual` step against a Manifest with no harness — and
+        // refuses a `shown` step against a Manifest with no harness — and
         // checked because the Job froze its workflow and the Manifest is read
         // live. A repository that deleted the section under a running Job
         // reaches here, and saying so beats capturing nothing quietly.

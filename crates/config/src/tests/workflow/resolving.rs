@@ -396,7 +396,7 @@ fn naming_checks_by_hand_does_not_read_as_gating_on_every_one() {
     assert!(!resolved.steps()[1].gates_on_every_check());
 }
 
-/// A workflow with a `visual` step, met with a Manifest that declares no
+/// A workflow with a `shown` step, met with a Manifest that declares no
 /// harness.
 const SHOWS: &str = r#"
 version: 1
@@ -411,7 +411,7 @@ steps:
     advance_gate: auto
   - id: show
     label: Show what it looks like
-    evidence_type: visual
+    evidence_type: shown
     delivers: true
     advance_gate: auto
 "#;
@@ -427,7 +427,7 @@ evidence:
 
 /// **A step asking to be shown, held to a repository that can show it.**
 ///
-/// Neither file can answer this alone: `evidence_type: visual` parses against
+/// Neither file can answer this alone: `evidence_type: shown` parses against
 /// no Manifest, and an `evidence:` section is declared with no workflow in
 /// sight. So it is checked here, at resolve, and refused before anything is
 /// dispatched.
@@ -439,7 +439,7 @@ evidence:
 #[test]
 fn a_step_that_shows_its_work_is_refused_where_nothing_can_show_it() {
     let def = WorkflowDef::parse(&named("workflows/shows.yml"), SHOWS, &roster())
-        .expect("a workflow with a visual step");
+        .expect("a workflow with a shown step");
 
     let refused = ResolvedWorkflow::resolve(&def, &manifest())
         .expect_err("no harness is declared, so the step cannot run");
@@ -456,11 +456,11 @@ fn a_step_that_shows_its_work_is_refused_where_nothing_can_show_it() {
 
 /// And the same workflow resolves once the repository says how it shows its
 /// work. **Absence is the refusal and not the type**, which is what keeps
-/// `visual` a step a repository can opt into rather than one nobody can write.
+/// `shown` a step a repository can opt into rather than one nobody can write.
 #[test]
 fn a_repository_that_declares_a_harness_may_have_steps_that_show_their_work() {
     let def = WorkflowDef::parse(&named("workflows/shows.yml"), SHOWS, &roster())
-        .expect("a workflow with a visual step");
+        .expect("a workflow with a shown step");
     let manifest = Manifest::parse(&named("armada.yml"), &format!("{MANIFEST}{AND_A_HARNESS}"))
         .expect("a manifest with a harness");
 

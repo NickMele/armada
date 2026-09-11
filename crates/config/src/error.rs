@@ -264,6 +264,13 @@ pub enum Fault {
     ///
     /// The list is owned rather than borrowed for the same reason.
     NoSuchModel { value: String, roster: Vec<String> },
+    /// **`evidence.serve` without `evidence.ready`, or the reverse.** A server
+    /// with no readiness command is a frame of a blank page, indistinguishable
+    /// from a frame of a broken one; a readiness command with no server is a
+    /// probe with nothing to probe. Neither half means anything alone, so the
+    /// two are one declaration made in two keys — reported at whichever key is
+    /// missing, naming the one the author did write.
+    ServeReadyMustPair { present: &'static str },
 }
 
 /// Why a step's `artifact_exists` target cannot name the one file the next step
@@ -495,6 +502,13 @@ impl fmt::Display for Fault {
                 f,
                 "is `{value}`, which cannot name the file this step writes: {why}"
             ),
+            Fault::ServeReadyMustPair { present } => write!(
+                f,
+                "is not there, and `evidence.{present}` is. `serve` starts \
+                 something and `ready` says when it is up — one without the \
+                 other is a server nothing confirms came up, or a probe with \
+                 nothing to probe. Write both, or neither"
+            ),
             Fault::GateAndJudgeDisagree { gate: "auto" } => write!(
                 f,
                 "is `auto`, which is the mechanical tier alone, and the step \
@@ -698,7 +712,7 @@ pub enum ResolveError {
         manifest: PathBuf,
         disagreements: Vec<Disagreement>,
     },
-    /// One or more steps declare `evidence_type: visual` and the Manifest
+    /// One or more steps declare `evidence_type: shown` and the Manifest
     /// declares no `evidence:` harness to capture with.
     ///
     /// **Its own variant rather than a [`Disagreement`]**, which is two files

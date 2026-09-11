@@ -837,7 +837,7 @@ vocabulary = "Evidence type"
 in_code = ""
 notes = "Design Plan's product, and the contract's table calls it `Document or mockup`. The verb takes the narrower half: a mockup is a document here, and a verb naming both would ask a reader to pick which one arrived when the type does not distinguish them. Neither glyph nor token, for `diff`'s reason."
 
-[verbs.evidence_type.visual]
+[verbs.evidence_type.shown]
 verb = "what it looks like"
 icon = ""
 status_token = ""

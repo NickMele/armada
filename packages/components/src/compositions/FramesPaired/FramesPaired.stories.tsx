@@ -155,7 +155,7 @@ export const AddedAndRemoved: Story = {
 /**
  * **Nothing moved at all**, which is a real answer and not an empty state. The
  * change touched no screen the spec photographs — worth saying plainly, because
- * on a `visual` step it is the one outcome that asks a question.
+ * on a `shown` step it is the one outcome that asks a question.
  */
 export const NothingMoved: Story = {
   args: {

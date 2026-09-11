@@ -291,7 +291,7 @@ describe("what a chapter says about two sides", () => {
     expect(of([shot("a.png", "base", "aaaa"), shot("a.png", "branch", "bbbb")])).toBe("1 frame");
   });
 
-  // A real answer, and the one outcome on a visual step that asks a question:
+  // A real answer, and the one outcome on a shown step that asks a question:
   // the change touched no screen the spec photographs.
   it("says so plainly where nothing moved at all", () => {
     expect(of([shot("a.png", "base", "aaaa"), shot("a.png", "branch", "aaaa")])).toBe(

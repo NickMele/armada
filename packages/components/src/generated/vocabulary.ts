@@ -167,7 +167,7 @@ export const EVIDENCE_TYPE: Readonly<Record<string, Rendering | undefined>> = {
   "test_suite_run": { verb: "a test suite run", icon: null, badgeStatus: null, statusToken: null, hint: null },
   "bundle": { verb: "the earlier steps' evidence, assembled", icon: null, badgeStatus: null, statusToken: null, hint: null },
   "document": { verb: "a document", icon: null, badgeStatus: null, statusToken: null, hint: null },
-  "visual": { verb: "what it looks like", icon: null, badgeStatus: null, statusToken: null, hint: null },
+  "shown": { verb: "what it looks like", icon: null, badgeStatus: null, statusToken: null, hint: null },
 };
 
 /** `change_kind`, keyed by the wire value. */
@@ -316,7 +316,7 @@ export const GAPS: readonly Gap[] = [
   { vocabulary: "evidence_type", variant: "test_suite_run", missing: ["icon", "token"] },
   { vocabulary: "evidence_type", variant: "bundle", missing: ["icon", "token"] },
   { vocabulary: "evidence_type", variant: "document", missing: ["icon", "token"] },
-  { vocabulary: "evidence_type", variant: "visual", missing: ["icon", "token"] },
+  { vocabulary: "evidence_type", variant: "shown", missing: ["icon", "token"] },
   { vocabulary: "change_kind", variant: "added", missing: ["icon", "token"] },
   { vocabulary: "change_kind", variant: "modified", missing: ["icon", "token"] },
   { vocabulary: "change_kind", variant: "deleted", missing: ["icon", "token"] },

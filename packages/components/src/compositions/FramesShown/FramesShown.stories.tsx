@@ -196,13 +196,13 @@ export const ReadOnly: Story = {
 
 /**
  * A step with no frames. **The ordinary case, and not a failure** — most steps
- * declare no `visual` evidence at all, so which silence this is belongs to the
+ * declare no `shown` evidence at all, so which silence this is belongs to the
  * caller and this draws what it is given.
  */
 export const NoneAtAll: Story = {
   args: {
     frames: [],
-    emptyNote: "This step declares no visual evidence, so its harness never ran.",
+    emptyNote: "This step declares no shown evidence, so its harness never ran.",
   },
 };
 

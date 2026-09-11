@@ -256,33 +256,37 @@ evidence:
     - /settings
 ```
 
+`run` and `frames` are the common denominator — the command that reaches the state and the directory it leaves files in. A web application also starts a server first, which is what `serve` and `ready` are for; a repository with nothing to serve — a desktop app, a CLI, a library, a data pipeline — declares only the two required keys:
+
+```yaml
+evidence:
+  run: node run-and-capture.js {}
+  frames: .armada/frames
+```
+
 | Field | What it is |
 | --- | --- |
-| `serve` | Starts the thing being shown. Long-running: held for the run, ended after it. It names its own port — Armada assigns none |
-| `ready` | Exits zero once `serve` is up. Required, and there is no sleep to fall back on |
-| `run` | Runs one spec. `{}` is where the spec's path goes, and a template without it is refused |
-| `frames` | Where the harness writes, relative to the repo root. Fleet reads it after the run and keeps what it finds |
+| `serve` | Starts the thing being shown. Long-running: held for the run, ended after it. It names its own port — Armada assigns none. Optional, and goes with `ready` |
+| `ready` | Exits zero once `serve` is up. Optional, paired with `serve` — one without the other is refused — and there is no sleep to fall back on |
+| `run` | Runs one spec. `{}` is where the spec's path goes, and a template without it is refused. Required |
+| `frames` | Where the harness writes, relative to the repo root. Fleet reads it after the run and keeps what it finds. Required |
 | `never` | Paths a spec must never visit. Optional, and Armada does not enforce it |
 
-**Four command lines and a directory, and not one of them is Armada's.** Nothing in Fleet knows what a browser is or which framework wrote the frames, the same way nothing in the Checks runner knows cargo from pnpm. Reaching a state is what an end-to-end test already does, so the repository's existing harness is the mechanism and Armada gains no capture stack of its own. A repository needing a pipeline writes a script and names the script — there is no shell, so `run` cannot pipe or chain.
+**Command lines and a directory, and not one of them is Armada's.** Nothing in Fleet knows what a browser is or which framework wrote the frames, the same way nothing in the Checks runner knows cargo from pnpm. Reaching a state is what an end-to-end test already does, so the repository's existing harness is the mechanism and Armada gains no capture stack of its own. A repository needing a pipeline writes a script and names the script — there is no shell, so `run` cannot pipe or chain.
 
-**`ready` is a command and not a duration.** A number would be a guess against a machine somebody else is using, and what it produces is a frame of a blank page that looks exactly like a frame of a broken one.
+**`ready` is a command and not a duration, where it is declared.** A number would be a guess against a machine somebody else is using, and what it produces is a frame of a blank page that looks exactly like a frame of a broken one.
 
-**This shape assumes the work is reachable over a port, and not every repository's is.** `serve` starts something and `ready` probes it, which is what a web application looks like — an Electron app, a CLI or a library has nothing to serve, and Armada's own Bridge is the first of those. Serving the component workbench rather than the application is one answer and it is not obviously the right one, because a story is a state somebody wrote by hand and reaching the state is the half an end-to-end test was supposed to cover. Open at `[evidence-harness-assumes-a-server]`.
+**Starting a server is one row's detail, not the shape.** `serve` and `ready` describe a web application; a desktop app's driver launches its own process and owns it directly, a CLI's `run` is the whole invocation, and neither needs a port — which is why Armada's own Bridge, and every other repository with nothing to serve, declares `evidence:` with `run` and `frames` alone.
 
-### The harness runs twice, and the spec never moves
+### One run, in the Job's own worktree
 
-A reviewer wants to see what *changed*, so Fleet photographs the base as well as the branch. `serve` and `ready` are run in a detached checkout of the base commit; `run` is run in the Job's own worktree, against that server. The spec is code that lands in the patch, so it does not exist at base — running it from the worktree is what makes a base run possible at all, and it means both sides are measured with one instrument.
+Fleet runs `run` once, against the Job's own worktree, and reads `frames` after — there is no comparison against a checkout of the base commit. An earlier design served the base and shot the same spec at it so a reviewer saw before and after, but the pairing only worked where Armada could serve the old code on a port, which ruled out exactly the repositories `serve` and `ready` are now optional for. That code stays on `main` — `crates/fleet/src/basing.rs`, and the base-run method `crates/fleet/src/showing.rs` no longer calls — reachable by nothing, so it returns once something can tell `run` which tree it is aimed at, which is a design of its own.
 
-What a repository has to know about this is small but real. `serve` must be startable in a tree that has had `setup.requires` run in it and nothing else; `run` must be able to reach the served thing without assuming it is the same checkout. The base checkout is shared by every Job on that commit — `.armada/bases/<commit>/`, set up once, swept when the base moves past it — so `setup.requires` is paid for a base and not for a Job.
-
-Frames come back labelled `base` or `branch` and are paired by the name the spec gave them. A name on one side only is an answer: one the change *added* has no before, one it *removed* has no after. And a spec that fails at base while succeeding on the branch is the ordinary shape of a brand-new screen, not a broken harness — Fleet tells those apart by whether the branch run worked, and says which in the Job's log.
-
-A repository that names no `base:` and has no `main` or `master` gets branch frames alone, with a line saying why. Nothing is invented to fill the other half.
+**A spec captures and never compares.** `run` writes frames into the directory `frames` names and Fleet is what keeps them. A spec that reaches instead for its own runner's snapshot comparison — Playwright's `toHaveScreenshot()` and its kin — keeps baselines of its own and fails on a first run and on any difference, which answers a different question than the one a step whose evidence is what it looks like asks.
 
 **`never` is honest about being a comment.** Nothing here drives a browser, so there is no navigation to intercept. What reads it is the block a Drone writing the spec is given, and the reviewer reading the spec against it. That is weaker than an interception, and the alternative is a key that reads as a guarantee.
 
-**A section this repository does not declare is not a default.** A workflow with a `visual` step resolved against a Manifest with no harness is refused before anything is dispatched — so it reaches a person as a sentence rather than as a Job that cut a worktree, spawned a Drone and captured nothing.
+**A section this repository does not declare is not a default.** A workflow with a `shown` step resolved against a Manifest with no harness is refused before anything is dispatched — so it reaches a person as a sentence rather than as a Job that cut a worktree, spawned a Drone and captured nothing.
 
 ### A Drone attesting to its own work
 
@@ -500,4 +504,3 @@ The engineer-facing walk from "add a new repo" to a working Manifest is designed
 - **[manifest-root-lockfile-ownership]** Does the root `armada.yml` *own* a shared lockfile it can gate, as opposed to merely being able to gate it? The nearest-ancestor rule settles gating and not exclusivity.
 - **[manifest-check-timeout-raise-or-lower]** May a per-Check timeout field raise the configured bound, or may it only lower it?
 - **[manifest-kit-merge-rules]** What are the Kit→Manifest merge rules for Skills, MCP and Sub agents? No merge strategy exists in the Configuration Settings registry for any of the three, and Kit and Drone disagree on Sub agents outright — Kit describes them as layered on top, Drone's Convoy table puts them under intersection.
-- **[evidence-harness-assumes-a-server]** Does a harness only fit a repository whose work is reachable over a port? `serve` starts something and `ready` probes it, which is the shape a web application has — and the case this was filed for, Armada's own job detail, is an Electron application that cannot be served at all. A driver reaches one by launching the binary and owning the process, which needs no port and inverts what `serve` assumes. What decides it: whether `evidence:` grows a second shape beside `serve` and `ready`, whether photographing a component workbench is the general answer for anything that is not a web server, and what a base run can mean for an application that has to be built before it can be launched.
