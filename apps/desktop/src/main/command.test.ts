@@ -221,3 +221,31 @@ it("sends nothing at all for a turn cap of nothing", async () => {
   expect(answer).toEqual({ ok: false, why: "turn_cap_not_raised" });
   expect(asked).toHaveLength(0);
 });
+
+/**
+ * **The clear is a key with nothing in it, never a missing key.** Fleet refuses
+ * a `set_model` body with no `model` rather than reading it as a clear, so a
+ * body built with `undefined` — which `JSON.stringify` drops — would earn a 422
+ * for the one press that hands the choice back to the workflow.
+ */
+it("sends a cleared model as null, with the key present", async () => {
+  const asked: Asked[] = [];
+  const commands = new JobCommands(boardOn(await fleetRecording(asked)));
+
+  const answer = await commands.setModel(A_JOB.id, null);
+
+  expect(answer.ok).toBe(true);
+  expect(asked[0]?.path).toBe(`/jobs/${A_JOB.id}/set_model`);
+  expect(asked[0]?.body).toBe('{"model":null}');
+});
+
+/** The command goes back exactly as it was allowed: it is what Fleet matches on. */
+it("names the allow it takes back by the whole command", async () => {
+  const asked: Asked[] = [];
+  const commands = new JobCommands(boardOn(await fleetRecording(asked)));
+
+  await commands.removeAllowedCommand(A_JOB.id, "pnpm add -D reselect@5.1.1");
+
+  expect(asked[0]?.path).toBe(`/jobs/${A_JOB.id}/remove_allowed_command`);
+  expect(JSON.parse(asked[0]?.body ?? "null")).toEqual({ run: "pnpm add -D reselect@5.1.1" });
+});

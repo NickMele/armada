@@ -111,6 +111,12 @@ const api: BridgeApi = {
     ipcRenderer.invoke(CHANNELS.answerCommand, jobId, call, answer),
   setWhenBlocked: (jobId: string, whenBlocked: WhenBlocked): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.setWhenBlocked, jobId, whenBlocked),
+  // The other two settings on one job. `null` crosses as `null`, which is the
+  // clear Fleet asks for by name — not `undefined`, which it would refuse.
+  setModel: (jobId: string, model: string | null): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.setModel, jobId, model),
+  removeAllowedCommand: (jobId: string, run: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.removeAllowedCommand, jobId, run),
 
   // The note is optional, and `undefined` crosses as `undefined` — a plain
   // restart sends Fleet no body at all, which is the request it took before it
@@ -259,6 +265,9 @@ const api: BridgeApi = {
 
   mergePullRequest: (jobId: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.mergePullRequest, jobId),
+
+  resolvePullRequestConflict: (jobId: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.resolvePullRequestConflict, jobId),
 
   requestChanges: (jobId: string, note: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.requestChanges, jobId, note),

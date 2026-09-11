@@ -513,13 +513,45 @@ It replaces `approve_command`, a placeholder row for confirm-before-destructive 
 kind = "command"
 transport = "HTTP"
 helm_access = "No"
-description = "Whether one Job asks a person about a command it was not given, or refuses it and holds"
+description = "Whether one Job asks a person about a command it was not given, refuses it and holds, or runs it"
 notes = """
 A live setting on one Job. The next permission question the Job's Drone raises reads it, and no Drone is respawned for it.
 
-The body is `when_blocked`: `refuse_and_hold` or `ask_me`. A new Job starts at `refuse_and_hold`, because that asks nobody to be watching; `ask_me` holds a Drone inside the call until somebody answers. `JobDetail.when_blocked` reads it back, and is absent from a Fleet older than 10.6.
+The body is `when_blocked`: `refuse_and_hold`, `ask_me` or `allow_all`. A new Job starts at `refuse_and_hold`, because that asks nobody to be watching; `ask_me` holds a Drone inside the call until somebody answers. `JobDetail.when_blocked` reads it back, and is absent from a Fleet older than 10.6.
+
+**`allow_all` runs every command without asking, except two**: one `armada.yml` declares destructive and one the harness cannot grant — a push. Those still stop for a person, so no setting on this route lets a Job push or run a destructive command unseen. It arrived at 11.0 and was a major bump, because Bridge matches on this set to choose which control to draw.
 
 `helm_access` is `No`, for `answer_command`'s reason: whether a Drone is held waiting on the owner is the owner's to decide.
+"""
+
+[operations.set_model]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Choose the model one Job's later steps run on, or clear the choice"
+notes = """
+A live setting on one Job, like `set_when_blocked`, and the answer is the Job's summary. **The next step's spawn reads it; the step running now keeps its model.** Nothing is respawned for it, so a Drone mid-step is never cut off to pick up a model.
+
+The body is `model`: a name `list_models` offers, or `null` to clear the choice so each later step runs on the model its workflow gives it. `null` is sent rather than implied — a body with no `model` key is refused, because a Bridge that dropped the field would otherwise throw a person's choice away and answer 200. `JobDetail.model_override` reads the choice back, and is absent where there is none.
+
+Refused with a 409 on a model `list_models` does not offer. The picker and the route answer from the same list, so a name only a stale window still shows is told rather than spawned.
+
+`helm_access` is `No`: which model spends a Job's budget is the owner's to decide, and a Helm that could move it could move it past what the owner priced the Job at.
+"""
+
+[operations.remove_allowed_command]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Take back a command a person allowed for one Job"
+notes = """
+The body is `run`, the command exactly as `JobDetail.allowed_commands` lists it, and the answer is the Job's summary. **The next reach for it is answered by the Job's `when_blocked` again.**
+
+**An always-allow already written into `armada.yml` stays in `armada.yml`.** A `repository` allow was two things — the row on this Job and a commit on its branch — and this takes back the row. The line in the file is an edit to `armada.yml`, not an act on a Job.
+
+Refused with a 409 where the Job holds no such allow, so a window left open across a removal is told rather than answered 200.
+
+`helm_access` is `No`, for `answer_command`'s reason: what a Drone may run is the owner's to decide.
 """
 
 [operations.approve_dispatch]
@@ -565,6 +597,23 @@ notes = """
 Refused with a 409 on a Job that is not at `awaiting_review`, sharing that refusal with the three acts beside it, and with a 409 where the Job's record holds no pull request — a workflow that declares no delivering step opened none, and the act a person wants on one of those is `approve_review`.
 
 `helm_access` is `No`, like every other act at this gate. Deciding that work lands is the owner's, and this one lands it in somebody else's repository.
+"""
+
+[operations.resolve_pull_request_conflict]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Sends the branch back for a Drone that can edit files to bring it current with main"
+notes = """
+**`#663`. A sixth thing to do at the review gate, and Fleet's own rebase — never a Drone's, because a Drone has no git.** A clean result is pushed with `--force-with-lease` and nothing else moves: the pull request updates in place, the same outcome an unattended Job already gets from the automatic sweep in `fleet::currency`.
+
+**A conflict is sent back to the step before the one that delivers**, the same `StepTarget::Returned` edge a workflow's own `verdict_routing` already uses to redo a step on purpose — `crate::reviewing::route_back` is that caller and this act is a second one, choosing its own target. `crate::spawning`'s catch-up briefs the fresh Drone with the conflict exactly as a restart already does; once its step's Checks pass, the ordinary forward walk carries the Job through the delivering step again, which is what commits, pushes and updates the pull request. The gate itself is never touched — it stays exactly where it was, waiting for the same person's answer.
+
+**Never the gate's own Drone.** #660 spent a turn on `handoff` — a step that only summarises — because a picked pull-request comment asking to resolve conflicts reached it through `take_up_remarks`; that Drone has no git and no code to edit. This act is the one road that redoes the step that can.
+
+Refused with a 409 anywhere but `awaiting_review`, sharing that with the acts beside it; with a 409 where the record holds no open pull request; and with a 409 where the frozen workflow has no step before the one that delivers — a single step doing both, which this cannot redo without redelivering onto its own conflict.
+
+`helm_access` is `No`, like every other act at this gate.
 """
 
 [operations.answer_question]

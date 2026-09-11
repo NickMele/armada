@@ -393,6 +393,11 @@ export function App() {
                 onSetWhenBlocked={(jobId, whenBlocked) =>
                   void commands.setWhenBlocked(jobId, whenBlocked)
                 }
+                onSetModel={(jobId, model) => void commands.setModel(jobId, model)}
+                onRemoveAllowedCommand={(jobId, run) =>
+                  void commands.removeAllowedCommand(jobId, run)
+                }
+                models={state.holds.models}
                 onOverrule={(jobId, reason) => void commands.overrule(jobId, reason)}
                 onRaiseCap={(jobId, micros) => void commands.raiseCap(jobId, micros)}
                 onRaiseTurnCap={(jobId, turns) => void commands.raiseTurns(jobId, turns)}
@@ -401,6 +406,9 @@ export function App() {
                 onShowAgain={showAgain}
                 onApprove={(jobId) => void commands.approve(jobId)}
                 onMergePullRequest={(jobId) => void commands.decide(jobId, "merge")}
+                onResolvePullRequestConflict={(jobId) =>
+                  void commands.resolvePullRequestConflict(jobId)
+                }
                 onApproveReview={(jobId) => void commands.decide(jobId, "approve")}
                 onRequestChanges={(jobId, note) => void commands.decide(jobId, "changes", note)}
                 onReject={(jobId) => void commands.decide(jobId, "reject")}

@@ -35,7 +35,12 @@ import type {
   Subject,
 } from "./protocol";
 import type { QuestionInFlight, RedirectInFlight, RedirectWaiting } from "./waiting";
-import type { CommandAnswer, CommandInFlight, WhenBlocked } from "./commanding";
+import type {
+  AllowedCommandRow,
+  CommandAnswer,
+  CommandInFlight,
+  WhenBlocked,
+} from "./commanding";
 
 /**
  * One Job, whole. The answer to `GET /jobs/:job_id`. `crates/ipc/src/detail.rs`.
@@ -178,6 +183,59 @@ export type JobDetail = {
    * nothing waits there, and a refused command is answered on `stuck.refused`.
    */
   command_waiting?: CommandInFlight;
+  /**
+   * The commands a person allowed for this job, oldest first. Since protocol
+   * 11.0.
+   *
+   * **Empty is a job nobody allowed anything on.** Optional for `offers`'
+   * reason: fleet reads an absent list as empty, and a reader here does the
+   * same rather than drawing a gap. A `repository` allow is listed too — the
+   * job holds it whichever way it was allowed.
+   */
+  allowed_commands?: AllowedCommandRow[];
+  /**
+   * The model a person chose for this job's later steps. Since protocol 11.0.
+   *
+   * **Absent is no choice**: each step runs on the model its workflow gives
+   * it. Present, the next step's drone is spawned on it, and the step running
+   * when it was chosen keeps its own. `set_model` moves it.
+   */
+  model_override?: string;
+  /**
+   * The review Fleet composed at this job's gate — the same text a pull
+   * request carries, where this job has one. Since protocol 10.11.
+   *
+   * **One builder.** `crates/fleet/src/review.rs` composes this and the pull
+   * request's Markdown body from the one reading of the record; the review
+   * area draws these sections instead of assembling its own copy of them —
+   * `#665`.
+   *
+   * **Absent is a job that has not reached a gate yet**, not an empty review:
+   * a job still running, or one that finished with no `human_always` step at
+   * all, carries nothing here. It is also every job read from a Fleet older
+   * than 10.11, which draws the same as one that has not reached a gate.
+   */
+  review?: JobReview;
+};
+
+/**
+ * The review Fleet composed, in the four parts it is made of. No heading
+ * crosses — a heading is how a surface draws a section, not what the section
+ * is, and the pull request's own Markdown adds its headings back at render
+ * time from the same four parts. `crates/ipc/src/detail.rs`.
+ */
+export type JobReview = {
+  /** The brief, in the requester's own words. */
+  why: string;
+  /** What the job's worktree changed, as far as a diff can say it. */
+  outcome: string;
+  /**
+   * What nothing checked, and what the base carries that this job did not
+   * write, where there was a base to ask.
+   */
+  risks: string;
+  /** Every step and every Check that ran against it, with its outcome. */
+  evidence: string;
 };
 
 /**
@@ -464,6 +522,15 @@ export type PullRequestDetail = {
    * note would cross twice if it were carried on both.
    */
   reviews: ReviewedBy[];
+  /**
+   * What the last attempt to keep this pull request's branch current against
+   * a moved base came to. Since protocol 10.10.
+   *
+   * **Absent is a branch that has never needed to move** — most of a pull
+   * request's life. This is not written until the base it merges into moves
+   * under it.
+   */
+  currency?: Currency;
 };
 
 /** One reviewer's verdict on a pull request. Since protocol 10.2. */
@@ -476,6 +543,22 @@ export type ReviewedBy = {
    * person acts on.
    */
   verdict: string;
+};
+
+/**
+ * What the last attempt to keep a pull request's branch current against a
+ * moved base came to. Since protocol 10.10.
+ */
+export type Currency = {
+  /** The base's tip this was last attempted against. */
+  rebased_onto: string;
+  rebased_at: string;
+  /**
+   * **Present, and never empty, exactly where the attempt conflicted and the
+   * branch was left exactly as it was.** Absent or empty is a clean rebase —
+   * the branch is current and nothing is owed to a person.
+   */
+  conflict_files?: string[];
 };
 
 /**

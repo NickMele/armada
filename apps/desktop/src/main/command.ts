@@ -17,7 +17,14 @@
 import type { BridgeState } from "../shared/bridge";
 import type { ClearOutcome, Draft, Outcome, ReclaimOutcome } from "@armada/protocol";
 import type { CapRaise, ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report, RestartRequested, TurnRaise } from "@armada/protocol";
-import type { AnswerCommand, CommandAnswer, SetWhenBlocked, WhenBlocked } from "@armada/protocol";
+import type {
+  AnswerCommand,
+  CommandAnswer,
+  RemoveAllowedCommand,
+  SetModel,
+  SetWhenBlocked,
+  WhenBlocked,
+} from "@armada/protocol";
 import type { ProposalInFlight, Proposed, ShownAgain } from "@armada/protocol";
 import { ask, isJobSummary, MODEL_CALL_MS, NO_WAIT, route, type Answer } from "./request";
 import { Clearing } from "./clearing";
@@ -134,9 +141,14 @@ export class JobCommands {
    */
   private readonly answering = new Set<string>();
   /**
-   * Jobs with a change to how they meet a blocked command in flight. Its own
-   * set: the setting moves no status and no Drone, so it is in flight beside
-   * any act that does, and only a second change to it is the same press twice.
+   * Jobs with a change to one of their settings in flight — how they meet a
+   * blocked command, the model their next step starts on, or an allow taken
+   * back. Its own set: a setting moves no status and no Drone, so it is in
+   * flight beside any act that does.
+   *
+   * **One set for the three, not one each.** They are one panel's controls and
+   * that panel is off while any of them is out, so a second set could only
+   * ever refuse a press the window never sends.
    */
   private readonly setting = new Set<string>();
   /**
@@ -457,6 +469,31 @@ export class JobCommands {
   }
 
   /**
+   * Choose the model this job's later steps start on, or `null` to hand the
+   * choice back to the workflow. **`null` is sent, never left out** — Fleet
+   * refuses a body with no `model` key rather than reading it as a clear. The
+   * step running now keeps its model.
+   */
+  async setModel(jobId: string, model: string | null): Promise<Outcome> {
+    const body: SetModel = { model };
+    return this.act(jobId, this.setting, "already_setting", (port) =>
+      ask(port, "POST", route(jobId, "set_model"), body),
+    );
+  }
+
+  /**
+   * Take back a command a person allowed for this job. The next reach for it
+   * is answered by the job's `when_blocked` again, and a line already in
+   * `armada.yml` stays where it is.
+   */
+  async removeAllowedCommand(jobId: string, run: string): Promise<Outcome> {
+    const body: RemoveAllowedCommand = { run };
+    return this.act(jobId, this.setting, "already_setting", (port) =>
+      ask(port, "POST", route(jobId, "remove_allowed_command"), body),
+    );
+  }
+
+  /**
    * Put a fresh Drone on the worktree the last one left, at the step that
    * stopped, carrying whatever the person said to do differently. **One Job
    * comes back**, resuming rather than replacing — the whole difference
@@ -670,6 +707,16 @@ export class JobCommands {
    */
   async mergePullRequest(jobId: string): Promise<Outcome> {
     return this.settleWork(jobId, "merge");
+  }
+
+  /**
+   * Send the branch back for a Drone that can edit files to bring it current
+   * with main. `#663`. Fleet runs the rebase itself — a Drone has no git —
+   * and only a conflict spawns one, on the step before the one that delivers,
+   * never the gate's own.
+   */
+  async resolvePullRequestConflict(jobId: string): Promise<Outcome> {
+    return this.settleWork(jobId, "resolve_pull_request_conflict");
   }
 
   /** Send it back. **`running` again**, same step, same Drone. Blank refused. */

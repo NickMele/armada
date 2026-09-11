@@ -19,10 +19,8 @@ export type JobDetailHeading = {
   headline: ReactNode;
   jobId?: ReactNode;
   fields: JobDetailField[];
-  /** The controls at the header's trailing edge. `Kill`, or a redispatch. */
+  /** The controls at the header's trailing edge. `Kill`, or a redispatch, and the way into a running Job's settings. */
   actions?: ReactNode;
-  /** A setting on the Job, on its own line under the facts. */
-  setting?: ReactNode;
   /**
    * A fact carrying an `href` was clicked, with the address it carries.
    *

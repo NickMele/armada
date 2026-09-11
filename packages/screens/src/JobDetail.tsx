@@ -69,21 +69,17 @@ import { type RunTreeStep } from "@armada/components";
 import { InsideAJob } from "./InsideAJob";
 
 import type {
-  Diff,
-  Evidence,
   Examination,
-  Footprint,
   History,
   Holds,
   FollowedLog,
   Journalled,
   Observed,
   Outcome,
-  Remarks,
   Watched,
 } from "@armada/protocol";
 import type { CommandAnswer, FileReport, JobSummary, WhenBlocked } from "@armada/protocol";
-import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
+import type { ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
 import { heldForMoney, heldForTurns, type ConfirmableAct } from "./Acts";
 import { useCallArguments, type ReadCall } from "./calls";
 import {
@@ -106,7 +102,7 @@ import { againOf, useShowAgain, type ShowAgainCall } from "./again";
 import { span } from "./duration";
 import { ordered } from "./facts";
 import { headingOf, Unrenderable } from "./heading";
-import { detailOf, holdingOf, logOf, lookOf, turnsOf } from "./mine";
+import { detailOf, holdingOf, logOf, lookOf, turnsOf, type FoldedReads } from "./mine";
 import { phasesOf } from "./phases";
 import { neverAsksAPerson, verdictSlotAtGate, verdictSlotFinished } from "./verdict";
 import { verdictSlotAfterAnswer } from "./verdict-answered";
@@ -123,6 +119,7 @@ import { LOOK_FAILED, NOTHING_HAPPENED_YET, latestOf, movesOf, nothingToAsk, sum
 import { briefOf, stillReading, whyNoBrief, workOf } from "./work";
 
 export type { ConfirmableAct, JobAct } from "./Acts";
+export type { FoldedReads } from "./mine";
 export { renderFor } from "./render";
 export type { Render } from "./render";
 
@@ -162,6 +159,12 @@ export type JobDetailProps = {
   onAnswerCommand: (jobId: string, call: string, answer: CommandAnswer) => void;
   /** How this job meets the next such command. Live; nothing restarts. */
   onSetWhenBlocked: (jobId: string, whenBlocked: WhenBlocked) => void;
+  /** The model this job's later steps start on, or `null` for the workflow's. Live. */
+  onSetModel: (jobId: string, model: string | null) => void;
+  /** Take back a command allowed for this job. A line in `armada.yml` is not touched. */
+  onRemoveAllowedCommand: (jobId: string, run: string) => void;
+  /** What `list_models` offers, for the Job settings panel. `null` until it is read. */
+  models: ModelChoices | null;
   /** Overrule a Judge that refused the work, with the reason. */
   onOverrule: (jobId: string, reason: string) => void;
   /**
@@ -245,6 +248,8 @@ export type JobDetailProps = {
    * request, which `Decide` decides from the detail rather than from a flag.
    */
   onMergePullRequest: (jobId: string) => void;
+  /** Send the branch back for a Drone that can edit files. `#663`. */
+  onResolvePullRequestConflict: (jobId: string) => void;
   onApproveReview: (jobId: string) => void;
   onRequestChanges: (jobId: string, note: string) => void;
   onReject: (jobId: string) => void;
@@ -342,12 +347,16 @@ export function JobDetail({
   onAnswer,
   onAnswerCommand,
   onSetWhenBlocked,
+  onSetModel,
+  onRemoveAllowedCommand,
+  models,
   onOverrule,
   onRerun,
   onShowAgain,
   onReport,
   onApprove,
   onMergePullRequest,
+  onResolvePullRequestConflict,
   onApproveReview,
   onRequestChanges,
   onReject,
@@ -563,7 +572,7 @@ export function JobDetail({
    * it, and opening the log takes the reading's position: from here on the tail
    * is not followed, and what arrives is counted rather than scrolled to.
    */
-  function openSheet(which: "log" | "diff" | "holds"): void {
+  function openSheet(which: Exclude<OpenSheet, null>): void {
     setSheet(which);
     if (which === "log") setHeld(holdOf(now, rows.length));
   }
@@ -661,6 +670,7 @@ export function JobDetail({
             stale,
             deciding,
             onMergePullRequest,
+            onResolvePullRequestConflict,
             onApproveReview,
             onRequestChanges,
             onReject,
@@ -702,7 +712,7 @@ export function JobDetail({
     onRaiseTurnCap,
     raisingTurns,
     onRaisingTurns: setRaisingTurns,
-    onSetWhenBlocked,
+    onOpenSettings: () => openSheet("settings"),
     onOpenPullRequest,
     onCopied,
     onSaid,
@@ -858,6 +868,11 @@ export function JobDetail({
               nothingToAsk: nothingToAsk(resources),
               onExamine: () => onExamine(job.id),
             }}
+            // Every setting a person can change on this Job, and what each sends.
+            settings={{
+              models, stale, acting, onSetWhenBlocked, onSetModel,
+              onRemoveAllowedCommand, onRaiseCap, onRaiseTurnCap,
+            }}
             floor={floor}
             onClose={closeSheet}
           />
@@ -892,16 +907,3 @@ function named(step: RunTreeStep): RunTreeStep {
     ),
   };
 }
-
-/** The reads the panel's own chapters draw from. */
-export type FoldedReads = {
-  footprint: Footprint;
-  evidence: Evidence;
-  diff: Diff;
-  /**
-   * What people wrote on the Job's pull request, where the decision block asked
-   * for it. **The one read in this set that costs a forge**, so nothing takes
-   * it on a timer and no event refreshes it.
-   */
-  remarks: Remarks;
-};

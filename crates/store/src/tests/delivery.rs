@@ -7,10 +7,10 @@
 //! was told none had been opened. Everything here is about the record outliving
 //! that turn.
 
-use crate::tests::{open, top_level, TempDir};
+use crate::tests::{created_at, open, top_level, TempDir};
 use adapter_traits::{Landing, Rendering};
 
-use crate::{Delivery, Store};
+use crate::{Currency, Delivery, Store};
 
 fn a_job(store: &mut Store, id: &str) {
     let job = top_level(id);
@@ -221,4 +221,98 @@ fn a_job_that_is_not_there_reads_as_nothing() {
         .delivery_for(&crate::tests::job_id("01DELIVERY000000000000005"))
         .expect("a missing job is not a failure");
     assert!(read.is_empty());
+}
+
+/// **`#663`'s durability**: what a rebase against a moved base came to
+/// survives the process that attempted it, the way every other delivery
+/// column does.
+#[test]
+fn what_a_rebase_came_to_is_read_back() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job(&mut store, "01CURRENCY0000000000000001");
+    let id = crate::tests::job_id("01CURRENCY0000000000000001");
+    let at = created_at();
+    store
+        .record_kept_current(&id, "abc123", &at, None)
+        .expect("a clean rebase is recorded");
+    let read = store.kept_current_for(&id).expect("it is read back");
+    assert_eq!(
+        read,
+        Currency {
+            onto: Some(String::from("abc123")),
+            at: Some(at),
+            conflict_files: None,
+        }
+    );
+    assert!(!read.conflicted_against("abc123"), "nothing conflicted");
+}
+
+/// A conflicted attempt carries its files, and a caller can tell it apart from
+/// a clean one at the same base — which is what a review panel offers a
+/// person the Drone for.
+#[test]
+fn a_conflicted_attempt_carries_its_files_and_is_told_apart_from_a_clean_one() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job(&mut store, "01CURRENCY0000000000000002");
+    let id = crate::tests::job_id("01CURRENCY0000000000000002");
+    let files = vec![String::from("src/parse.rs"), String::from("src/lex.rs")];
+    store
+        .record_kept_current(&id, "def456", &created_at(), Some(&files))
+        .expect("a conflicted attempt is recorded");
+
+    let read = store.kept_current_for(&id).expect("it is read back");
+    assert_eq!(read.conflict_files, Some(files));
+    assert!(
+        read.conflicted_against("def456"),
+        "the same base it was attempted against"
+    );
+    assert!(
+        !read.conflicted_against("a-later-base"),
+        "the base moved again, so this is not that conflict any more"
+    );
+}
+
+/// **Once per base.** A second attempt against the same base overwrites the
+/// first rather than joining it — there is only ever one outstanding answer
+/// for what the branch's currency is, the way `record_delivery` overwrites a
+/// redispatch's stale URL.
+#[test]
+fn a_second_attempt_against_a_new_base_replaces_the_first() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job(&mut store, "01CURRENCY0000000000000003");
+    let id = crate::tests::job_id("01CURRENCY0000000000000003");
+    store
+        .record_kept_current(
+            &id,
+            "first-base",
+            &created_at(),
+            Some(&[String::from("src/a.rs")]),
+        )
+        .expect("the first attempt is recorded");
+    store
+        .record_kept_current(&id, "second-base", &created_at(), None)
+        .expect("the second attempt is recorded");
+
+    let read = store.kept_current_for(&id).expect("it is read back");
+    assert_eq!(read.onto.as_deref(), Some("second-base"));
+    assert!(
+        read.conflict_files.is_none(),
+        "the second attempt was clean, and the first one's files do not survive it"
+    );
+}
+
+/// A Job that has never needed a rebase has nothing to say, and that reads as
+/// [`Currency::default`] rather than as an error.
+#[test]
+fn a_job_that_has_never_needed_a_rebase_has_nothing_to_say() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job(&mut store, "01CURRENCY0000000000000004");
+    let read = store
+        .kept_current_for(&crate::tests::job_id("01CURRENCY0000000000000004"))
+        .expect("nothing recorded is not a failure to read");
+    assert_eq!(read, Currency::default());
 }

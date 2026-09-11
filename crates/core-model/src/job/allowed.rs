@@ -20,15 +20,24 @@ pub enum WhenBlocked {
     RefuseAndHold,
     /// Put the command to a person, who allows or rejects it.
     AskMe,
+    /// Allow it without asking. **Not what `armada.yml` withholds**: a command
+    /// declared destructive, and one the harness cannot grant, are refused
+    /// under this as under the others, because no person's setting widens them.
+    AllowAll,
 }
 
 impl WhenBlocked {
-    pub const ALL: &'static [WhenBlocked] = &[WhenBlocked::RefuseAndHold, WhenBlocked::AskMe];
+    pub const ALL: &'static [WhenBlocked] = &[
+        WhenBlocked::RefuseAndHold,
+        WhenBlocked::AskMe,
+        WhenBlocked::AllowAll,
+    ];
 
     pub fn as_wire(&self) -> &'static str {
         match self {
             WhenBlocked::RefuseAndHold => "refuse_and_hold",
             WhenBlocked::AskMe => "ask_me",
+            WhenBlocked::AllowAll => "allow_all",
         }
     }
 

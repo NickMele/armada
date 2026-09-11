@@ -150,11 +150,11 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
             // script again, and for the same reason: it chains two runners —
             // the screens' pure modules in node, then every story in a browser.
             ("bridge_test", "pnpm bridge-test"),
-            // **Last, and left there deliberately.** `#387` gave this
-            // `requires: [fmt]`, so the formatter runs before the Check reads
-            // and it now rarely fails at all — while `checking` starts four at
-            // a time, so moving it up would push `typecheck` out of the first
-            // wave for a Check that fixes itself first.
+            // **Last, where `armada.yml` put it, not for any claim this test
+            // makes about scheduling.** `#387` once gave this `requires:
+            // [fmt]`, so a gate evaluation reformatted the tree before
+            // reading it and `format` could never fail — unformatted Rust
+            // merged unnoticed until that line was found and removed.
             ("format", "cargo fmt --all --check"),
         ]
     );

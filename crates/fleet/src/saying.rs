@@ -128,6 +128,17 @@ impl fmt::Display for Adrift {
                 "{} opened no pull request, so approving it is the act",
                 job.as_str()
             ),
+            Adrift::NothingToResolve { job } => write!(
+                out,
+                "{} has no open pull request to resolve a conflict against",
+                job.as_str()
+            ),
+            Adrift::NoStepToRedo { job } => write!(
+                out,
+                "{}'s frozen workflow has nothing before the step that delivers, so there \
+                 is no step to send a conflict back to",
+                job.as_str()
+            ),
             Adrift::NotMerged { job, why } => write!(
                 out,
                 "{}'s pull request was not merged and nothing retries — {}",
@@ -510,6 +521,8 @@ impl Adrift {
             | Adrift::NotCommitted { job, .. }
             | Adrift::NotDelivered { job, .. }
             | Adrift::NothingToMerge { job }
+            | Adrift::NothingToResolve { job }
+            | Adrift::NoStepToRedo { job }
             | Adrift::NotMerged { job, .. }
             | Adrift::ReviewUnreadable { job, .. }
             | Adrift::NoRemarksChosen { job }
@@ -662,6 +675,9 @@ impl Error for Adrift {
             // The two a merge makes. `NotMerged` is not an `Error` either.
             | Adrift::NothingToMerge { .. }
             | Adrift::NotMerged { .. }
+            // The two a conflict resolution makes, on the same ground.
+            | Adrift::NothingToResolve { .. }
+            | Adrift::NoStepToRedo { .. }
             // Four of a review's comments' own refusals. Each says what a
             // press could not be, and none wraps a failure underneath it —
             // `RemarksFileUnwritable`, the fifth, does and is above with the

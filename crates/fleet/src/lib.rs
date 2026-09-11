@@ -39,11 +39,13 @@ pub mod clock;
 /// `serving` holds the read half of. Three traits, three impl blocks, three
 /// files, and no delegating signature between them.
 pub mod commanding;
-pub mod converging;
 /// What an upstream's terminal status does to the Job waiting behind it — the
 /// one place a dependency edge is weighed, for both admission and the Board.
+pub mod conflict_resolution;
+pub mod converging;
 mod coupling;
 pub mod crossing;
+pub mod currency;
 pub mod daemon;
 pub mod delivery;
 pub mod detach;
@@ -66,6 +68,9 @@ pub mod headroom;
 /// What Fleet is holding disk for, and the five tests that decide whether it
 /// may give one back without asking anybody.
 pub mod holding;
+/// What a person changes on one Job from its detail: the model its later
+/// steps run as, and the commands they allowed it.
+mod job_settings;
 /// A Job's own log, read back and served. **The other side of the file every
 /// `transcript::note` call writes**, and the third voice the activity log was
 /// designed around.

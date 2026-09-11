@@ -84,7 +84,7 @@ export function askingOf(whole: JobWhole | null): StepNotice | undefined {
   if (whole?.asking !== undefined) {
     return { tone: "waiting", title: "The drone asked a question and is waiting for you." };
   }
-  // A command it was not given, on a job set to Ask me. **The same tone for the
+  // A command it was not given, on a job set to Ask me first. **The same tone for the
   // same reason**: the drone stopped to ask rather than work round a refusal,
   // and nothing moves until a person answers.
   if (whole?.command_waiting !== undefined) {
@@ -142,7 +142,8 @@ const REFUSED_SENDING = "That answer is already on its way to Fleet.";
 
 /**
  * The command a drone is waiting on a person to allow. `undefined` where
- * nothing waits, which is every job at Refuse and hold and most at Ask me.
+ * nothing waits, which is every job at Stop and wait for me or Run it, and most
+ * at Ask me first.
  *
  * **The question's own box**, because it is the same moment — a drone stopped
  * inside a call, a closed set of answers, a person who has to pick one — and a

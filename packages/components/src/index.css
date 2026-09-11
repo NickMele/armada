@@ -204,3 +204,6 @@
 /* Journey 9's rehearsal, run in the Job's own worktree — Setup, Checks and
    Commands, a control, the streamed output and what a run left behind. */
 @import "./compositions/RunSheet/RunSheet.css";
+
+/* Every setting a person can change on a running Job, on a trailing sheet. */
+@import "./compositions/JobSettings/JobSettings.css";

@@ -35,8 +35,11 @@ const OFFERED = 2;
  * `facts.ts` writes `~$2.40` because what a run cost is notional, and a ceiling
  * is a number somebody typed. Two places, because a cap is set in dollars or in
  * cents and never in fractions of a penny.
+ *
+ * Exported for the Job settings panel, which draws the same cap beside the
+ * same raise and should not spell it a second way.
  */
-function cap(micros: number): string {
+export function cap(micros: number): string {
   return `$${(micros / MICROS).toFixed(2)}`;
 }
 
@@ -86,8 +89,8 @@ export function RaiseCapControl({
   open: boolean;
   onOpen: (up: boolean) => void;
   /**
-   * Whether to draw its own button. Off where the job header's one control
-   * carries the entry instead, so the header never shows two buttons.
+   * Whether to draw its own button. Off where Job settings carries the entry
+   * instead, so the header never shows a second one.
    */
   trigger?: boolean;
   /** The new ceiling, in millionths of a dollar — the unit `spend` reads in. */
@@ -168,7 +171,7 @@ export function RaiseCapControl({
             sentence sends a person to it rather than arguing against it. */}
         <p>
           This job only. The cap every other job is held to does not move, and neither does the turn
-          cap — that ceiling has a control of its own on this header.
+          cap, which has its own Raise in Job settings.
         </p>
       </Dialog>
     </>

@@ -566,6 +566,49 @@ line of its output, for the run socket's reason. A Job's servers publish
 `server.exited` before the Job's own terminal `job.state_changed`, because they
 are torn down before its span is released.
 
+## Protocol 10.11: the review Fleet composed
+
+Job detail's review area and the pull request's description said nearly the
+same thing from two independent builders — `#665`. `ipc::JobReview`, additive
+on `get_job`'s `JobDetail`, is the fix: Fleet composes one review from the one
+reading of the record, in four parts — `why` (the brief, in the requester's
+own words), `outcome` (what the worktree changed, as far as a diff can say
+it), `risks` (what nothing checked, and what the base carries that this Job
+did not write), `evidence` (every step and every Check that ran, with its
+outcome) — and renders it two ways: the pull request's Markdown body,
+unchanged in content, and this DTO. `crates/fleet/src/review.rs` is the one
+builder both readings come from.
+
+Composed at the delivering step's entry, as before, and now also at any other
+`human_always` gate, so a workflow that never opens a pull request still
+reaches a person with the same four sections. **Absent is a Job that has not
+reached a gate yet**, not an empty review — a Job still running, or one that
+finished with no `human_always` step at all, carries nothing here, and so does
+every Job read from a Fleet older than 10.11.
+
+`VerdictSheet` draws `why` and `risks` into the existing "What you asked for"
+and "What proves it" blocks. The Drone's own claims stay their own block,
+labelled "What the Drone says it did" and "What the Drone says it left
+alone" — the pull request leaves them out on purpose, and the label is what
+keeps a Drone's self-report from reading as Fleet's own account.
+
+## Protocol 10.12: keeping a pull request current, and resolving its conflicts
+
+`#663`. Fleet stopped closing and reopening a Job's pull request when main
+moved under it — closing and reopening re-pinned the forge's comparison but
+never touched the branch, so a pull request behind its base with conflicts
+stayed that way. Fleet now rebases the branch and pushes it: clean, in place;
+conflicted, the branch is left exactly as it was and a person is told.
+
+`ipc::Currency`, additive on `PullRequestDetail`, names the base a branch was
+last brought up to (`rebased_onto`, `rebased_at`) and, where the attempt
+conflicted, the files (`conflict_files`) — absent is a branch that has never
+needed to move. `resolve_pull_request_conflict` is a new route and `Commands`
+method at the review gate: a person sends the branch back for a Drone that
+can edit files to bring it current, on the step before the one that
+delivers, never the gate's own — #660 found a picked pull-request comment
+landing on a summarising step's Drone, which has no git and no code to edit.
+
 ## Other things specific to this seam
 
 **Bridge finds Fleet through a runtime file, not a fixed port.** The file

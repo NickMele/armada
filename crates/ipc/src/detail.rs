@@ -193,6 +193,56 @@ pub struct JobDetail {
     /// [`JobDetail::of`], like `when_blocked`. See [`CommandInFlight`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub command_waiting: Option<CommandInFlight>,
+    /// The commands a person allowed for this Job, oldest first. **Since
+    /// 11.0.**
+    ///
+    /// **Empty is a Job nobody allowed anything on**, and a detail from before
+    /// the field reads the same way rather than failing. A command allowed
+    /// with [`Reach::Repository`](crate::Reach::Repository) is listed here too:
+    /// the Job holds it whichever way it was allowed. Filled after
+    /// [`JobDetail::of`], like `when_blocked`.
+    #[serde(default)]
+    pub allowed_commands: Vec<crate::AllowedCommandRow>,
+    /// The model a person chose for this Job's later steps. **Since 11.0.**
+    ///
+    /// **Absent is no choice**, and each step runs on the model its workflow
+    /// gives it. Present, the next step's Drone is spawned on it; the step
+    /// running when it was chosen keeps its own. `set_model` moves it. Filled
+    /// after [`JobDetail::of`], like `when_blocked`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_override: Option<String>,
+    /// The review Fleet composed at this Job's gate — the same text a pull
+    /// request carries, where this Job has one. **Since 10.11**, and absent
+    /// from a Fleet older than that, which a reader draws as no review at all
+    /// rather than a Job that changed nothing.
+    ///
+    /// **One builder.** `crates/fleet/src/review.rs` composes this and the
+    /// pull request's Markdown body from the one reading of the record; the
+    /// review area draws these sections instead of assembling its own copy of
+    /// them — `#665`.
+    ///
+    /// **Absent is a Job that has not reached a gate yet**, not an empty
+    /// review: a Job still running, or one that finished with no `human_always`
+    /// step at all, carries nothing here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review: Option<JobReview>,
+}
+
+/// The review Fleet composed, in the four parts it is made of. No heading
+/// crosses — a heading is how a surface draws a section, not what the section
+/// is, and the pull request's own Markdown adds its headings back at render
+/// time from the same four parts.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobReview {
+    /// The brief, in the requester's own words.
+    pub why: String,
+    /// What the Job's worktree changed, as far as a diff can say it.
+    pub outcome: String,
+    /// What nothing checked, and what the base carries that this Job did not
+    /// write, where there was a base to ask.
+    pub risks: String,
+    /// Every step and every Check that ran against it, with its outcome.
+    pub evidence: String,
 }
 
 /// Why a Job stopped, and what moves it.
@@ -450,6 +500,7 @@ impl JobDetail {
         write_scope_overlaps: Option<Vec<ScopeOverlap>>,
         delivery: Option<JobDelivery>,
         spend: Option<JobSpend>,
+        review: Option<JobReview>,
     ) -> JobDetail {
         JobDetail {
             // **`asking` from the question this call was already handed**,
@@ -516,6 +567,9 @@ impl JobDetail {
             show_again: None,
             when_blocked: None,
             command_waiting: None,
+            allowed_commands: Vec::new(),
+            model_override: None,
+            review,
         }
     }
 }
@@ -650,6 +704,35 @@ pub struct PullRequestDetail {
     /// were carried on both. Empty is a pull request nobody has approved or
     /// asked changes on, which is the ordinary case for one just opened.
     pub reviews: Vec<ReviewedBy>,
+    /// What the last attempt to keep this pull request's branch current
+    /// against a moved base came to. `#663`.
+    ///
+    /// **Absent is a branch that has never needed to move**, which is most of
+    /// a pull request's life — this is not written until the base it merges
+    /// into moves under it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub currency: Option<Currency>,
+}
+
+/// What the last attempt to keep a pull request's branch current against a
+/// moved base came to.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Currency {
+    /// The base's tip this was last attempted against.
+    pub rebased_onto: String,
+    pub rebased_at: Instant,
+    /// **Present, and never empty, exactly where the attempt conflicted and
+    /// the branch was left exactly as it was.** Absent is a clean rebase —
+    /// the branch is current and nothing is owed to a person.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conflict_files: Vec<String>,
+}
+
+impl Currency {
+    /// Whether a person can be offered the Drone to resolve this.
+    pub fn conflicted(&self) -> bool {
+        !self.conflict_files.is_empty()
+    }
 }
 
 /// One reviewer's verdict on a pull request.

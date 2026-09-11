@@ -29,8 +29,8 @@ use api::{Observed, Queries, Refusal, Resolved};
 use core_model::JobReference;
 use ipc::{
     CallArguments, FleetCapacity, JobDelivery, JobDetail, JobDiff, JobEvidence, JobHistory, JobId,
-    JobList, JobRemarks, JobResources, JobSpend, ManifestReading, ManifestSummary, ModelChoices,
-    Work, WorkflowSummary, WorktreesHeld,
+    JobList, JobRemarks, JobResources, JobReview, JobSpend, ManifestReading, ManifestSummary,
+    ModelChoices, Work, WorkflowSummary, WorktreesHeld,
 };
 use store::{LoadJobError, ResolveJobError};
 
@@ -261,6 +261,34 @@ where
                 })
             }
         };
+        // Read for every Job, like `delivery` above and for the same reason:
+        // a workflow with no delivering step still stops for a person at its
+        // own gate, and the review area wants what Fleet composed there just
+        // as much as a gate that opens a pull request does. `#665`.
+        let composed = self
+            .store()
+            .lock()
+            .await
+            .review_for(job.id())
+            .map_err(|why| self.refusal(Adrift::Reading(why)))?;
+        let review = match (
+            composed.why,
+            composed.outcome,
+            composed.risks,
+            composed.evidence,
+        ) {
+            (Some(why), Some(outcome), Some(risks), Some(evidence)) => Some(JobReview {
+                why,
+                outcome,
+                risks,
+                evidence,
+            }),
+            // **All four or none**, `store::Review::is_empty`'s own shape: a
+            // row that somehow held three of the four would still be a Job
+            // that has not reached a gate, for anything a surface could do
+            // with it.
+            _ => None,
+        };
         let queued = self.queued_reason(&job).await?;
         // **Read for every Job, unlike the footprint above.** That one is
         // absent until a Job finishes; this one is what a person watching a
@@ -320,12 +348,20 @@ where
             overlaps,
             delivery,
             spend,
+            review,
         );
         // After the constructor for `show_again`'s reason: the setting is a
         // store read, the waiting command is on the slot, and what a refused
         // row may be answered with is the Manifest's and the harness's.
         detail.when_blocked = Some(self.when_blocked_of(job.id()).await);
         detail.command_waiting = self.command_awaited(job.id()).await;
+        detail.allowed_commands = self
+            .allowed_of(job.id())
+            .await
+            .iter()
+            .map(ipc::AllowedCommandRow::from)
+            .collect();
+        detail.model_override = self.model_override_of(job.id()).await;
         if let Some(stuck) = detail.stuck.as_mut() {
             for refused in &mut stuck.refused {
                 let command = (refused.tool == "Bash").then(|| refused.detail.clone());

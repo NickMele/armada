@@ -303,6 +303,28 @@ pub trait Commands: Send + Sync + 'static {
         job_id: JobId,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
+    /// `resolve_pull_request_conflict` — a person at the review gate sends the
+    /// Job's branch back for a Drone that can edit files to bring it current
+    /// with main. `#663`.
+    ///
+    /// **Fleet runs the rebase, never a Drone — a Drone has no git.** A clean
+    /// result is pushed and nothing else moves. A conflicted one sends the Job
+    /// back to the step before the one that delivers, the same
+    /// `StepTarget::Returned` edge a workflow's own `verdict_routing` already
+    /// uses to redo a step on purpose, so a Drone that can edit files reads the
+    /// conflict as its opening brief — never the gate's own Drone, which is
+    /// very often exactly the one that cannot.
+    ///
+    /// **Refused with a 409 anywhere but `awaiting_review`**, sharing that with
+    /// the acts beside it, with a 409 where the record holds no open pull
+    /// request, and with a 409 where the frozen workflow has no step before the
+    /// one that delivers — a single step doing both, which this cannot redo
+    /// without redelivering onto its own conflict.
+    fn resolve_pull_request_conflict(
+        &self,
+        job_id: JobId,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
     /// `request_changes` — the work is not right yet, and here is what to fix.
     ///
     /// **It keeps everything**: the worktree, the branch and every step so far.
@@ -565,6 +587,28 @@ pub trait Commands: Send + Sync + 'static {
         &self,
         job_id: JobId,
         setting: SetWhenBlocked,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `set_model` — the model this Job's later steps spawn on, chosen by a
+    /// person, or cleared back to each step's own. **Read by the next spawn**:
+    /// the step running now keeps the model its Drone started with.
+    ///
+    /// [`Refusal::IllegalMove`] on a model this Fleet does not offer.
+    fn set_model(
+        &self,
+        job_id: JobId,
+        choice: ipc::SetModel,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `remove_allowed_command` — take back a command a person allowed for
+    /// this Job. The next reach for it is answered by the Job's setting again;
+    /// one already written into armada.yml stays there.
+    ///
+    /// [`Refusal::IllegalMove`] where the Job has no such allow.
+    fn remove_allowed_command(
+        &self,
+        job_id: JobId,
+        removing: ipc::RemoveAllowedCommand,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `start_run` — run one Check or Command in this Job's worktree, as a

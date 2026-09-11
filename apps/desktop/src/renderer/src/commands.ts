@@ -281,6 +281,33 @@ export function useCommands(sending: Sending) {
   }
 
   /**
+   * Choose the model the job's next step starts on, or `null` for the
+   * workflow's. On `setWhenBlocked`'s terms: nothing to confirm, and under
+   * `acting` so the panel is off while it is out.
+   */
+  async function setModel(jobId: string, model: string | null): Promise<void> {
+    setActing(jobId);
+    try {
+      setOutcome(await window.armada.setModel(jobId, model));
+    } finally {
+      setActing(null);
+    }
+  }
+
+  /**
+   * Take back a command allowed for this job. On `setWhenBlocked`'s terms — it
+   * ends nothing, and the command can be allowed again from the next refusal.
+   */
+  async function removeAllowedCommand(jobId: string, run: string): Promise<void> {
+    setActing(jobId);
+    try {
+      setOutcome(await window.armada.removeAllowedCommand(jobId, run));
+    } finally {
+      setActing(null);
+    }
+  }
+
+  /**
    * Overrule a Judge that refused the work. **Not through `act`**, for
    * `redirect`'s reason: the dialog that collected the reason was the
    * confirmation. **And not through `decide`**, which answers a gate nothing
@@ -408,6 +435,20 @@ export function useCommands(sending: Sending) {
   }
 
   /**
+   * Send the branch back for a Drone that can edit files to bring it current
+   * with main. `#663`. Under the same one-in-flight guard as `decide`, for
+   * `takeUpRemarks`'s reason: it leaves `awaiting_review` the same way.
+   */
+  async function resolvePullRequestConflict(jobId: string): Promise<void> {
+    setDeciding(jobId);
+    try {
+      setOutcome(await window.armada.resolvePullRequestConflict(jobId));
+    } finally {
+      setDeciding(null);
+    }
+  }
+
+  /**
    * Ask Fleet for current state over the connection Bridge already holds.
    *
    * **It re-reads; it does not reconnect.** The stream keeps the board current
@@ -430,6 +471,7 @@ export function useCommands(sending: Sending) {
     acting,
     deciding,
     takeUpRemarks,
+    resolvePullRequestConflict,
     givenBack,
     setGivenBack,
     refreshing,
@@ -444,6 +486,8 @@ export function useCommands(sending: Sending) {
     answer,
     answerCommand,
     setWhenBlocked,
+    setModel,
+    removeAllowedCommand,
     overrule,
     rerun,
     raiseCap,

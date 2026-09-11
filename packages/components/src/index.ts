@@ -244,6 +244,10 @@ export * from "./compositions/JobHoldsSummary/JobHoldsSummary";
 // new home rather than an edit.
 export * from "./compositions/JobHoldsSheet/JobHoldsSheet";
 
+// Every setting a person can change on a running Job, on the same layer, and
+// the header's way into it.
+export * from "./compositions/JobSettings/JobSettings";
+
 // Asking a Job to show its work again, and every set a press kept beside the
 // step's own frames. Each set is an unchanged `FramesShown`.
 export * from "./compositions/ShownAgain/ShownAgain";

@@ -406,6 +406,16 @@ export type BridgeApi = {
    */
   setWhenBlocked: (jobId: string, whenBlocked: WhenBlocked) => Promise<Outcome>;
   /**
+   * Choose the model one job's later steps start on, or `null` for the one its
+   * workflow gives each. **Live**: the step running now keeps its model.
+   */
+  setModel: (jobId: string, model: string | null) => Promise<Outcome>;
+  /**
+   * Take back a command a person allowed for one job, by the command exactly as
+   * it was allowed. A line in `armada.yml` is not touched.
+   */
+  removeAllowedCommand: (jobId: string, run: string) => Promise<Outcome>;
+  /**
    * Put a fresh Drone on the surviving worktree, at the step that stopped, and
    * say what to do differently where there is something to say.
    * **Legal only where the Drone is gone** — Fleet refuses 409 where one is
@@ -673,6 +683,12 @@ export type BridgeApi = {
    */
   mergePullRequest: (jobId: string) => Promise<Outcome>;
   /**
+   * Send the branch back for a Drone that can edit files to bring it current
+   * with main. `#663`. Fleet runs the rebase; only a conflict spawns a Drone,
+   * on the step before the one that delivers, never the gate's own.
+   */
+  resolvePullRequestConflict: (jobId: string) => Promise<Outcome>;
+  /**
    * Send the work back with a note. **The Job comes back `running`**, same step,
    * same Drone — nothing is spawned and nothing done is thrown away.
    */
@@ -817,6 +833,8 @@ export const CHANNELS = {
   answerQuestion: "bridge:answer-question",
   answerCommand: "bridge:answer-command",
   setWhenBlocked: "bridge:set-when-blocked",
+  setModel: "bridge:set-model",
+  removeAllowedCommand: "bridge:remove-allowed-command",
   restartStep: "bridge:restart-step",
   overrideVerdict: "bridge:override-verdict",
   rerunGate: "bridge:rerun-gate",
@@ -840,6 +858,7 @@ export const CHANNELS = {
   readHeld: "bridge:read-held",
   approveReview: "bridge:approve-review",
   mergePullRequest: "bridge:merge-pull-request",
+  resolvePullRequestConflict: "bridge:resolve-pull-request-conflict",
   requestChanges: "bridge:request-changes",
   rejectWork: "bridge:reject-work",
   takeUpRemarks: "bridge:take-up-remarks",

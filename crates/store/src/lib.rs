@@ -45,6 +45,8 @@ mod manifest_snapshot;
 /// The migration list, and where a file stands against it. `V1`..`V16` stay in
 /// `schema`; this is only what had to move to keep that file under the gate.
 mod migrations;
+/// The model a person chose for a Job's later steps.
+mod model_override;
 /// The note a boundary is holding, and the column it waits in.
 mod note;
 mod numbering;
@@ -70,6 +72,9 @@ mod report;
 mod resolving;
 /// Giving a Job's resources back without giving up its record.
 mod retain;
+/// The review Fleet composed at a Job's gate — the one builder's text, kept
+/// beside the Job rather than only in the pull request it may also carry.
+mod review;
 mod revision;
 mod row;
 mod schema;
@@ -86,7 +91,7 @@ mod write;
 mod tests;
 
 pub use attempt::Attempted;
-pub use delivery::{Delivery, Unsettled};
+pub use delivery::{Currency, Delivery, Unsettled};
 pub use error::{DatabaseFault, LoadAllError, LoadJobError, OpenError, RowError, WriteError};
 pub use fold::{Moved, RecordedEvent};
 pub use footprint::Footprinted;
@@ -101,6 +106,7 @@ pub use read::{Loaded, RowIdentity, StatusRepair, UnreadableRow};
 pub use report::Report;
 pub use resolving::{NamedJob, ResolveJobError};
 pub use retain::Retained;
+pub use review::Review;
 pub use showing::KeptFrame;
 pub use shown_again::{ShownAgain, SpecNamed};
 pub use spend::{DroneSpend, Spend};

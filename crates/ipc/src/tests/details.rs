@@ -624,3 +624,28 @@ fn a_gate_running_its_checks_rides_beside_the_state() {
         told
     );
 }
+
+/// **Absent is no choice**, which is also every detail from before the field —
+/// so the key is skipped rather than written `null`, and a detail without it
+/// reads back unchanged. Present, the name crosses as the person chose it.
+#[test]
+fn a_model_override_is_absent_until_a_person_chooses_one() {
+    let mut detail = detail_of(&job(), &[]);
+    let json = encode(&detail).expect("a detail is plain data");
+    assert!(
+        !json.contains("model_override"),
+        "absent, never null: {json}"
+    );
+    assert_eq!(
+        decode::<JobDetail>("a detail", json.as_bytes()).expect("an older detail reads"),
+        detail
+    );
+
+    detail.model_override = Some(String::from("model-b"));
+    let json = encode(&detail).expect("a detail is plain data");
+    assert!(json.contains("\"model_override\":\"model-b\""), "{json}");
+    assert_eq!(
+        decode::<JobDetail>("a detail", json.as_bytes()).expect("it reads back"),
+        detail
+    );
+}

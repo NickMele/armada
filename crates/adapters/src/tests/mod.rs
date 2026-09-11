@@ -16,6 +16,7 @@ mod delivery;
 mod harness;
 mod issue_lookup;
 mod judge;
+mod keeping_current;
 mod landing;
 mod mcp;
 mod reclaim;

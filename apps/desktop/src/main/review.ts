@@ -37,7 +37,12 @@ import { ask, type Answer } from "./request";
  * run — a person who merges on the forge instead waits for a sweep that asks
  * about one pull request at a time.
  */
-export type Decision = "approve_review" | "request_changes" | "reject" | "merge";
+export type Decision =
+  | "approve_review"
+  | "request_changes"
+  | "reject"
+  | "merge"
+  | "resolve_pull_request_conflict";
 
 /**
  * One Job's claims and one Job's diff, each read when a surface asks for it.

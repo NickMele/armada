@@ -66,6 +66,9 @@ impl Commands for FakeDaemon {
     async fn merge_pull_request(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
         self.fake_merge_pull_request(job_id).await
     }
+    async fn resolve_pull_request_conflict(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+        self.fake_resolve_pull_request_conflict(job_id).await
+    }
     async fn request_changes(
         &self,
         job_id: JobId,
@@ -202,6 +205,20 @@ impl Commands for FakeDaemon {
         &self,
         job_id: JobId,
         _setting: ipc::SetWhenBlocked,
+    ) -> Result<JobSummary, Refusal> {
+        self.unmoved(&job_id)
+    }
+    async fn set_model(
+        &self,
+        job_id: JobId,
+        _choice: ipc::SetModel,
+    ) -> Result<JobSummary, Refusal> {
+        self.unmoved(&job_id)
+    }
+    async fn remove_allowed_command(
+        &self,
+        job_id: JobId,
+        _removing: ipc::RemoveAllowedCommand,
     ) -> Result<JobSummary, Refusal> {
         self.unmoved(&job_id)
     }

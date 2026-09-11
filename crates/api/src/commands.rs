@@ -122,6 +122,25 @@ pub(crate) async fn merge_pull_request<D: Commands>(
     }
 }
 
+/// A person at the review gate sends the Job's branch back for a Drone that
+/// can edit files to bring it current with main. `#663`.
+///
+/// 409 anywhere but `awaiting_review`, 409 with no open pull request, and 409
+/// where the frozen workflow has no step before the one that delivers.
+pub(crate) async fn resolve_pull_request_conflict<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+) -> Response {
+    match served
+        .daemon()
+        .resolve_pull_request_conflict(job.id())
+        .await
+    {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// Send the work back with a note. **The Job comes back `running`**, at the
 /// same step, with the same Drone — nothing was thrown away and nothing was
 /// spawned.
@@ -448,6 +467,44 @@ pub(crate) async fn set_when_blocked<D: Commands>(
         Err(why) => return undecodable(&why.to_string(), served.run_id()),
     };
     match served.daemon().set_when_blocked(job.id(), setting).await {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// Choose the model this Job's later steps spawn on, or clear the choice.
+/// **The Job comes back unchanged**: the next spawn reads it.
+pub(crate) async fn set_model<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+    body: Bytes,
+) -> Response {
+    let choice: ipc::SetModel = match ipc::decode("a model choice", &body) {
+        Ok(choice) => choice,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served.daemon().set_model(job.id(), choice).await {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// Take back a command a person allowed for this Job. **The Job comes back
+/// unchanged**: the next reach for the command is asked about again.
+pub(crate) async fn remove_allowed_command<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+    body: Bytes,
+) -> Response {
+    let removing: ipc::RemoveAllowedCommand = match ipc::decode("a command to take back", &body) {
+        Ok(removing) => removing,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served
+        .daemon()
+        .remove_allowed_command(job.id(), removing)
+        .await
+    {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }

@@ -14,18 +14,17 @@
 //!
 //! # Reading is free and writing is not
 //!
-//! [`read`] and [`caught_up`] are cheap and repeatable. [`rendered_afresh`]
-//! closes and reopens a person's pull request, which everybody watching it is
-//! mailed about — so it is called once per pull request, only for a base that
-//! is provably superseded, and never on a reading this could not make.
-//! [`merge`] is louder still and is the one act here nothing decides: a person
+//! [`read`] and [`caught_up`] are cheap and repeatable. `crate::keeping_current`
+//! rebases and pushes a person's pull request where its base is provably
+//! superseded, and never on a reading this could not make. [`merge`] is louder
+//! still and is the one act here nothing decides: a person
 //! presses for it, and a refusal is classified from `mergeStateStatus` rather
 //! than from the prose `gh` printed. A sentence [`why_not`] has no word for is
 //! [`NotMerged::Refused`] carrying it verbatim, never a guess — the kinds exist
 //! to send a person somewhere, and the wrong place is worse than the sentence.
 
 use adapter_traits::{
-    Landing, Mergeable, Merged, NotMerged, Rendering, Renewed, RepositoryStanding, WhatBecameOfIt,
+    Landing, Mergeable, Merged, NotMerged, Rendering, RepositoryStanding, WhatBecameOfIt,
 };
 use git2::Repository;
 
@@ -80,28 +79,6 @@ pub(crate) fn read(in_repo: &str, pull_request: &str) -> WhatBecameOfIt {
             // build has no other name for is the same silence.
             _ => Mergeable::Unreadable,
         },
-    }
-}
-
-/// Make the forge compare a pull request against the commit its branch sits on.
-pub(crate) fn rendered_afresh(in_repo: &str, pull_request: &str) -> Renewed {
-    // **The close is allowed to fail and the reopen is not.** A pull
-    // request this already closed and could not reopen comes back here on a
-    // later sweep, and refusing to run because it is closed already would
-    // leave it closed for good.
-    let _ = run_in(in_repo, FORGE, &["pr", "close", pull_request]);
-    // Twice, because the failure this is guarding against is a blink of
-    // network between two calls that run back to back, and a second attempt
-    // costs one process where the alternative is a pull request left shut.
-    for _ in 0..2 {
-        if let Ok(run) = run_in(in_repo, FORGE, &["pr", "reopen", pull_request]) {
-            if run.status.success() {
-                return Renewed::Renewed;
-            }
-        }
-    }
-    Renewed::LeftClosed {
-        why: format!("`{FORGE} pr reopen` would not reopen {pull_request}"),
     }
 }
 

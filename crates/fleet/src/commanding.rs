@@ -110,6 +110,15 @@ where
         self.summarised(&job).await
     }
 
+    /// A person sends the branch back for a Drone that can edit files to
+    /// bring it current with main. `#663`.
+    async fn resolve_pull_request_conflict(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+        let job = Fleet::resolve_pull_request_conflict(self, &job_id.to_domain())
+            .await
+            .map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
+    }
+
     /// The work goes back with a note, to the Drone that is standing at the
     /// gate.
     ///
@@ -459,6 +468,32 @@ where
         let job = self.load(&id).await.map_err(|why| self.refusal(why))?;
         let when = crate::permitting::domain_setting(setting.when_blocked);
         Fleet::set_when_blocked(self, &id, when)
+            .await
+            .map_err(|why| self.refusal(why.about(&id)))?;
+        self.summarised(&job).await
+    }
+
+    /// The model this Job's later steps spawn on, chosen or cleared. Loaded
+    /// first for `set_when_blocked`'s reason; the refusals are
+    /// `crate::permitting::NotPermitted`'s.
+    async fn set_model(&self, job_id: JobId, choice: ipc::SetModel) -> Result<JobSummary, Refusal> {
+        let id = job_id.to_domain();
+        let job = self.load(&id).await.map_err(|why| self.refusal(why))?;
+        Fleet::set_model(self, &id, choice.model.as_deref())
+            .await
+            .map_err(|why| self.refusal(why.about(&id)))?;
+        self.summarised(&job).await
+    }
+
+    /// A command a person allowed for this Job, taken back.
+    async fn remove_allowed_command(
+        &self,
+        job_id: JobId,
+        removing: ipc::RemoveAllowedCommand,
+    ) -> Result<JobSummary, Refusal> {
+        let id = job_id.to_domain();
+        let job = self.load(&id).await.map_err(|why| self.refusal(why))?;
+        Fleet::remove_allowed_command(self, &id, &removing.run)
             .await
             .map_err(|why| self.refusal(why.about(&id)))?;
         self.summarised(&job).await
