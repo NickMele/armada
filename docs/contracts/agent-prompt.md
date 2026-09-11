@@ -560,10 +560,15 @@ answered, and from whether the command can be allowed at all.
 
 | Variant | Sent when |
 |---|---|
-| Not granted | The Job refuses and holds |
+| Not granted | The Job refuses and holds, or the call is a tool rather than a command |
 | Asked | The Job asks, and nobody answered inside the hold |
+| Already asking | The Job asks, and a person is already being asked about another call |
 | Rejected | A person said no while the call was held |
-| Withheld | The command is declared destructive, or would push |
+| Withheld | The command is declared destructive, or the harness cannot grant it |
+
+The already-asking and ungrantable forms follow the same two sentences: what
+is happening, then what not to do. Neither is a final refusal of the first
+kind — the already-asking call is not recorded as one.
 
 **Drafted wording. Not sanctioned.**
 

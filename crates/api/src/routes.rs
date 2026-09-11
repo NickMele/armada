@@ -462,6 +462,11 @@ pub const SERVED: &[Route] = &[
         path: "/events",
     },
     Route {
+        operation: "job.command_waiting",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
         operation: "job.forgotten",
         method: "GET",
         path: "/events",

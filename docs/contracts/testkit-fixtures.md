@@ -328,7 +328,10 @@ capture instead of guessed at.
 the denial, and the spawn does not have to run `dontAsk` for the denial
 to be non-blocking: under `--permission-mode default` a headless run
 denies and continues, and says so. Three independent signals, any one
-sufficient:
+sufficient, with one exception: a refusal made by Armada's own permission
+tool carries no `permission_denied` line, and Fleet writes that refusal
+itself —
+[spike 15](../spikes/015-can-a-person-answer-a-blocked-command.md).
 
 ```json
 {"type":"system","subtype":"permission_denied","tool_name":"Bash",
