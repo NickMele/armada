@@ -272,13 +272,13 @@ pub fn kept_for_a_commit(
 /// `None` where the step id is not one path component or the directory will
 /// not open, which is `keeping`'s answer to both.
 pub(crate) fn live_file(
-    repo_root: &str,
+    records_root: &str,
     handle: &str,
     step: &StepId,
     attempt: Attempt,
     ordinal: usize,
 ) -> Option<(PathBuf, String)> {
-    let dir = writable(repo_root, handle)?;
+    let dir = writable(records_root, handle)?;
     let name = file_name(step, attempt, ordinal, LIVE)?;
     Some((dir.join(&name), format!(".armada/checks/{handle}/{name}")))
 }

@@ -202,7 +202,7 @@ where
             self.underway.clone(),
             self.events.clone(),
             Arc::clone(&self.clock),
-            &self.host.repo_root,
+            &self.host.records_root,
             &job.handle(),
         )
     }
