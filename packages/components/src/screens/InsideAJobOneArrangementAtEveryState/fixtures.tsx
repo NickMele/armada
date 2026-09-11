@@ -11,12 +11,12 @@ import { badgeOf } from "../badge";
 import { Button } from "../../primitives/Button/Button";
 import { Kbd } from "../../primitives/Kbd/Kbd";
 import { ActivityLog, type ActivityEntry } from "../../compositions/ActivityLog/ActivityLog";
-import { Clamped } from "../../compositions/Clamped/Clamped";
 import {
   ChangedFiles,
   changedFilesSummary,
   type ChangedFile,
 } from "../../compositions/ChangedFiles/ChangedFiles";
+import { DroneBrief, type BriefLine, type BriefStep } from "../../compositions/DroneBrief/DroneBrief";
 import type { JobBriefProps } from "../../compositions/JobBrief/JobBrief";
 import type {
   HoldsFigures,
@@ -508,6 +508,48 @@ export function chapterAct(label: string, binding: string, onClick?: () => void)
   );
 }
 
+/**
+ * The brief Fleet opened `fix` with, one heading per fact, since protocol
+ * 9.7. **The steps and Checks it names are `BEHIND`, `RUN_RUNNING` and
+ * `CHECKS_NOT_RUN` read back**, not a second, disagreeing count typed here —
+ * this gallery's whole point is one Job drawn consistently across its
+ * regions.
+ */
+const FIX_BRIEF: BriefLine[] = [
+  { text: "JOB BRIEF", named: "heading", kind: "about_this_job" },
+  { text: "" },
+  {
+    text:
+      "Move the selector block into its own module so the tests can import it without " +
+      "constructing the store. Do not change reducer behaviour. The columns selector is " +
+      "the one that matters: it is memoised against the whole settings slice today, so any " +
+      "write to any setting invalidates it, and the board re-sorts on a change to something " +
+      "it does not read.",
+  },
+  { text: "" },
+  { text: "HOW TO HAND WORK IN", named: "heading", kind: "standing" },
+  { text: "" },
+  { text: "Report progress every step. Keep the worktree clean between attempts." },
+  { text: "" },
+  { text: "WHERE YOU ARE", named: "heading", kind: "steps" },
+  { text: "" },
+  { text: "This task runs in 6 parts. You are on part 3." },
+  { text: "" },
+  { text: "WHAT THIS PART HAS TO PASS", named: "heading", kind: "checks" },
+  { text: "" },
+  { text: "Checks: build, test" },
+];
+
+/** `fix`'s position against the six steps `BEHIND`, `fix` and `AHEAD` make. */
+const FIX_STEPS: BriefStep[] = [
+  { id: "repro", label: "Reproduction", position: "done" },
+  { id: "root_cause", label: "Root cause", position: "done" },
+  { id: "fix", label: "Fix", position: "current" },
+  { id: "regression_verify", label: "Regression check", position: "not_yours" },
+  { id: "consumers", label: "Check the consumers still compile", position: "not_yours" },
+  { id: "land", label: "Land", position: "not_yours" },
+];
+
 export const CHAPTERS: StepChapter[] = [
   {
     id: "instructions",
@@ -517,18 +559,12 @@ export const CHAPTERS: StepChapter[] = [
     // `opened.at` here bare; the criteria are what the Judge stage of the
     // strip opens to, which is one place rather than two.
     summary: "14:22:07",
-    // Held to a few lines, like the brief above it. What a Drone was told runs
-    // to whatever length the work needed, and this chapter is first in the
-    // story — an unbounded one pushes the log and the diff off the screen.
-    preview: (
-      <Clamped>
-        {"Move the selector block into its own module so the tests can import it without " +
-          "constructing the store. Do not change reducer behaviour. The columns selector is " +
-          "the one that matters: it is memoised against the whole settings slice today, so any " +
-          "write to any setting invalidates it, and the board re-sorts on a change to something " +
-          "it does not read."}
-      </Clamped>
-    ),
+    // **A real sectioned brief, not a Clamped paragraph.** `about_this_job`
+    // clamps its own prose now, `steps` and `checks` draw the structured
+    // reading `chapters.tsx` builds, and `standing` folds shut by default —
+    // see `DroneBrief.tsx`. This is the state the mock this gallery answers
+    // to was drawn against.
+    preview: <DroneBrief lines={FIX_BRIEF} steps={FIX_STEPS} checks={["build", "test"]} />,
   },
   {
     id: "log",

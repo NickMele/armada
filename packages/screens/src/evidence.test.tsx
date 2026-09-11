@@ -248,6 +248,7 @@ function screen(
         chapters: chaptersOf({
           job: summary,
           step: showing,
+          steps: [showing],
           criteria,
           frames: NO_FRAMES,
           watching: { rows: [], skipped: 0 },

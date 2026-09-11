@@ -532,6 +532,10 @@ export function JobDetail({
       : chaptersOf({
           job,
           step: open,
+          // Every step, in the frozen workflow's order, for the Drone brief's
+          // `steps` section. Same nullable read as `criteria` below: a Job
+          // whose detail has not arrived yet has no order to report.
+          steps: whole?.steps ?? [],
           // The Job's frozen criteria, for the Verdicts chapter. The same list
           // the phase strip's Judge tier joins against, from the same reading.
           criteria: whole?.acceptance_criteria ?? [],

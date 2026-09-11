@@ -33,7 +33,7 @@
 // carries no size the row says nothing about size at all — an old transcript
 // cannot recover one, and a number nobody measured is worse than no number.
 
-import type { Observed, Turn } from "@armada/protocol";
+import type { BlockKind, Observed, Turn } from "@armada/protocol";
 import type { ChangedFile, CheckRun } from "@armada/protocol";
 import { CHECK_ADVANCES, CHECK_OUTCOME, SILENCE } from "@armada/components";
 import { clock } from "./duration";
@@ -60,6 +60,13 @@ export type LogActor = "armada" | "drone" | "fleet";
 export type LogLine = {
   text: string;
   named?: "echo" | "passed" | "failed" | "meta" | "heading";
+  /**
+   * Which kind of section a `heading` line opens. **Absent means "not a
+   * heading" or "the wire did not say"**, and the two read the same to a
+   * caller — `lines()` below only ever sets this beside `named: "heading"`,
+   * and only where `headings` and `kinds` paired cleanly.
+   */
+  kind?: BlockKind;
 };
 
 /** One row of the activity log, ready for `LogEntry`. */
@@ -234,7 +241,7 @@ function rowOf(row: Turn): LogRow {
         actor,
         kind,
         message: opening(saw.occasion),
-        payload: lines(saw.text, saw.headings),
+        payload: lines(saw.text, saw.headings, saw.kinds),
       };
     case "checked":
       return {
@@ -434,12 +441,25 @@ function produced(files: ChangedFile[]): string {
  * body line that happens to be short, or shouted, is body. An index the text is
  * too short for marks nothing, which is what an older row and a mismatched
  * pair both look like.
+ *
+ * **`kinds` is read only where it is the same length as `headed`.** A turn
+ * written before protocol 9.7 carries `headed` with no `kinds` at all, and a
+ * mismatch of any other shape is the same signal read the same way: the safe
+ * answer is every heading marked exactly as `headed` alone always meant,
+ * never the first few paired and the rest guessed at.
  */
-function lines(text: string, headed: readonly number[] = []): LogLine[] {
+function lines(
+  text: string,
+  headed: readonly number[] = [],
+  kinds: readonly BlockKind[] = [],
+): LogLine[] {
   const headings = new Set(headed);
-  return text
-    .split("\n")
-    .map((line, at) => (headings.has(at) ? { text: line, named: "heading" as const } : { text: line }));
+  const paired = kinds.length === headed.length;
+  return text.split("\n").map((line, at) => {
+    if (!headings.has(at)) return { text: line };
+    const kind = paired ? kinds[headed.indexOf(at)] : undefined;
+    return { text: line, named: "heading" as const, ...(kind === undefined ? {} : { kind }) };
+  });
 }
 
 /**

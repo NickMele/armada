@@ -29,10 +29,11 @@
 // Split out of `JobDetail.tsx` at the 900-line line.
 
 import {
+  briefSections,
   Button,
   ChangedFiles,
-  DroneBrief,
   Clamped,
+  DroneBrief,
   FramesPaired,
   FramesShown,
   Kbd,
@@ -45,6 +46,7 @@ import {
 import type { Criterion, Diff, Footprint, KeptFrame, Turn } from "@armada/protocol";
 import type { JobSummary, StepDetail } from "@armada/protocol";
 import type { JobFootprint } from "@armada/protocol";
+import { briefChecksOf, briefStepsOf } from "./brief";
 import type { Calls } from "./calls";
 import {
   DIFF_CHAPTER,
@@ -78,6 +80,7 @@ import { entriesOf, NOTHING_YET_ON_THIS_STEP } from "./story";
 export function chaptersOf({
   job,
   step,
+  steps,
   criteria,
   watching,
   footprint,
@@ -95,6 +98,15 @@ export function chaptersOf({
 }: {
   job: JobSummary;
   step: StepDetail;
+  /**
+   * Every one of the Job's steps, in the frozen workflow's own order, for the
+   * Drone brief's `steps` section — `part 2 of 3`, and which of the others are
+   * done. **`JobDetail.steps`, unfiltered.** `step` above is the one open in
+   * this panel; this is the whole order it sits in, which chapter one's brief
+   * reads instead of `step` alone because "where you are" is a question about
+   * every step, not the current one.
+   */
+  steps: readonly StepDetail[];
   /**
    * The Job's frozen acceptance criteria, for chapter five.
    *
@@ -217,16 +229,33 @@ export function chaptersOf({
           // the only thing marking it, which is #318 — nothing downstream can
           // recover it, because deciding by position or by capitals is the
           // guess the marker exists to replace.
-          // **Held to a few lines, like every other long passage on this
-          // screen.** A step's opening turn is the whole brief plus the
-          // standing instructions plus the branch note — on a real Job that is
-          // a screen and a half, and it is chapter one, so it pushed the
-          // Checks, the Verdicts and everything a person opened the panel for
-          // off the bottom. The Job's own brief above it has been clamped
-          // since it was drawn; this is the same passage in the same column.
-          <Clamped lines={INSTRUCTIONS_LINES} moreLabel="Read the whole instruction">
-            <DroneBrief lines={opened.payload} />
-          </Clamped>
+          //
+          // **The outer clamp only where `DroneBrief` cannot bound itself.**
+          // A step's opening turn used to be held to twelve lines here,
+          // because the whole brief plus the standing instructions plus the
+          // branch note is a screen and a half of one passage. Since protocol
+          // 9.7 that passage is sections instead where every heading carries a
+          // kind: the standing block folds shut by default and the one
+          // section left unbounded, `about_this_job`, clamps on its own — see
+          // `DroneBrief.tsx`. A turn with no kinds on its headings — a Fleet
+          // built before 9.7, or one with no headed blocks — still draws flat,
+          // exactly as it always has, so this keeps the clamp for that case
+          // rather than assuming every turn reaching here is sectioned.
+          briefSections(opened.payload) === undefined ? (
+            <Clamped lines={INSTRUCTIONS_LINES} moreLabel="Read the whole instruction">
+              <DroneBrief
+                lines={opened.payload}
+                steps={briefStepsOf(steps, step.step_id)}
+                checks={briefChecksOf(step)}
+              />
+            </Clamped>
+          ) : (
+            <DroneBrief
+              lines={opened.payload}
+              steps={briefStepsOf(steps, step.step_id)}
+              checks={briefChecksOf(step)}
+            />
+          )
         ),
       ...(told.length <= 1
         ? {}
@@ -476,13 +505,20 @@ const PREVIEWED = 5;
 
 /** What chapter one says before Armada has opened the step. */
 /**
- * How much of a step's opening turn is drawn before it is held back.
+ * How much of a step's opening turn is drawn before it is held back, on a
+ * turn `DroneBrief` cannot section.
  *
  * **Twelve, which is the brief and not the standing instructions.** A step is
  * opened with the whole of what a Drone is told — how to report, what it may
  * write, what its branch is standing on — and the Job's brief is a few lines
  * inside that. A person opening chapter one wants the brief; the rest is the
  * same on every step of every Job and is one press away.
+ *
+ * **Since protocol 9.7, this only applies where every heading's kind is
+ * absent.** A turn whose headings carry `BlockKind` sections itself, and the
+ * standing block already folds shut, so the twelve-line clamp would be a
+ * second, redundant bound on top of one `DroneBrief` already draws — this
+ * stays for the one case that still needs it, a turn with no kinds to pair.
  */
 const INSTRUCTIONS_LINES = 12;
 

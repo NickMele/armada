@@ -15,6 +15,7 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import type {
+  BlockKind,
   Criterion,
   Diff,
   Footprint,
@@ -28,7 +29,7 @@ import type {
 // disagree about where a block stops. Tested here because this is the node
 // runner: `packages/components` runs its stories in a browser, and a `play`
 // that computed this would be a unit test paying a browser's price.
-import { briefBlocks, widenIndent } from "@armada/components";
+import { briefBlocks, sentenceCase, widenIndent } from "@armada/components";
 
 import { chaptersOf } from "./chapters";
 import { NO_FRAMES } from "./frames";
@@ -102,15 +103,22 @@ function step(over: Partial<StepDetail> = {}): StepDetail {
  *
  * `headings` is what Fleet stamps on the row — the line numbers it wrote the
  * block headings at. Omitted is a turn with no headed blocks, and a row written
- * before the field existed; the two are the same to a reader.
+ * before the field existed; the two are the same to a reader. `kinds`, since
+ * protocol 9.7, pairs one `BlockKind` per heading by position.
  */
-function instructed(text: string, headings?: number[]): Turn {
+function instructed(text: string, headings?: number[], kinds?: BlockKind[]): Turn {
   return {
     ts: "2026-09-02T13:11:00Z",
     seq: 1,
     step: "plan",
     by: "armada",
-    saw: { event: "instructed", occasion: "opening", text, ...(headings ? { headings } : {}) },
+    saw: {
+      event: "instructed",
+      occasion: "opening",
+      text,
+      ...(headings ? { headings } : {}),
+      ...(kinds ? { kinds } : {}),
+    },
   };
 }
 
@@ -147,6 +155,7 @@ function chapters(
   over: {
     rows?: Turn[];
     step?: StepDetail;
+    steps?: StepDetail[];
     transcript?: string;
     criteria?: Criterion[];
   } = {},
@@ -154,6 +163,7 @@ function chapters(
   return chaptersOf({
     job: job(),
     step: over.step ?? step(),
+    steps: over.steps ?? [over.step ?? step()],
     criteria: over.criteria ?? [],
     frames: NO_FRAMES,
     watching: { rows: over.rows ?? [], skipped: 0 },
@@ -256,6 +266,24 @@ describe("the rail's indent, widened for the panel", () => {
   });
 });
 
+describe("a section's title, sentence-cased from the heading's own words", () => {
+  it("lowercases a shouted heading but for its first letter", () => {
+    expect(sentenceCase("JOB BRIEF")).toBe("Job brief");
+    expect(sentenceCase("WHAT A PERSON SAID")).toBe("What a person said");
+    expect(sentenceCase("THE BRANCH YOU ARE ON")).toBe("The branch you are on");
+  });
+
+  it("leaves a heading that is not shouting exactly as Fleet wrote it", () => {
+    // Mixed case already, so this is not the case the transform exists for —
+    // a lowercase-then-capitalize pass would flatten "Plan the change".
+    expect(sentenceCase("STEP: Plan the change")).toBe("STEP: Plan the change");
+  });
+
+  it("does nothing to a single shouted word", () => {
+    expect(sentenceCase("STANDING")).toBe("Standing");
+  });
+});
+
 describe("drone instructions", () => {
   it("puts each block heading on a line of its own", () => {
     const markup = renderToStaticMarkup(chapters({ rows: [instructed(BRIEF)] })[0]!.preview);
@@ -332,6 +360,160 @@ describe("drone instructions", () => {
     const markup = renderToStaticMarkup(chapters({ rows: [instructed(BRIEF)] })[0]!.preview);
     const done = paragraphs(markup).find((said) => said.includes("This is done when:"));
     expect(done).toContain("\n    - two refreshes in flight make one network call");
+  });
+});
+
+describe("a sectioned brief, since protocol 9.7", () => {
+  /** Five headings, two of them the same kind, so a merge is exercised too. */
+  const KINDED = [
+    "JOB BRIEF",
+    "",
+    "Coalesce concurrent token refreshes",
+    "",
+    "WHAT A PERSON SAID",
+    "",
+    "Please also cover the retry path.",
+    "",
+    "STANDING",
+    "",
+    "Report progress every step.",
+    "",
+    "WHERE YOU ARE",
+    "",
+    "This task runs in 3 parts. You are on part 2.",
+    "",
+    "WHAT THIS PART HAS TO PASS",
+    "",
+    "Checks: build, test",
+  ].join("\n");
+  const KINDED_HEADINGS = [0, 4, 8, 12, 16];
+  const KINDED_KINDS: BlockKind[] = ["about_this_job", "about_this_job", "standing", "steps", "checks"];
+
+  // `instructed()` above stamps every row `step: "plan"`, so the step this
+  // describe block opens is named to match it rather than adding a second
+  // signature only this file would use.
+  const THREE_STEPS: StepDetail[] = [
+    step({ step_id: "draft", label: "Draft the change", ordinal: 1 }),
+    step({ step_id: "plan", label: "Plan the change", ordinal: 2 }),
+    step({ step_id: "summarise", label: "Summarise", ordinal: 3 }),
+  ];
+
+  it("draws no outer clamp, since the folded layout bounds it instead", () => {
+    const markup = renderToStaticMarkup(
+      chapters({
+        rows: [instructed(KINDED, KINDED_HEADINGS, KINDED_KINDS)],
+        step: THREE_STEPS[1],
+        steps: THREE_STEPS,
+      })[0]!.preview,
+    );
+    expect(markup).not.toContain("armada-clamped__more");
+    expect(markup).toContain("armada-brief--sectioned");
+  });
+
+  it("draws one section per heading, titled with the heading's own words", () => {
+    const markup = renderToStaticMarkup(
+      chapters({
+        rows: [instructed(KINDED, KINDED_HEADINGS, KINDED_KINDS)],
+        step: THREE_STEPS[1],
+        steps: THREE_STEPS,
+      })[0]!.preview,
+    );
+    // Two `about_this_job` headings, two sections — never merged under an
+    // invented title, and never Fleet's own shouting either.
+    expect(markup).toContain("Job brief");
+    expect(markup).toContain("What a person said");
+    expect(markup).not.toContain("About this job");
+    expect(markup).not.toContain(">JOB BRIEF<");
+    expect(markup).not.toContain(">WHAT A PERSON SAID<");
+    // A section's own heading never repeats inside its body.
+    const jobBrief = markup
+      .split('<section class="armada-chapter"')
+      .find((chunk) => chunk.includes(">Job brief<"));
+    expect(jobBrief).toBeDefined();
+    expect(jobBrief).not.toContain("Job brief</p>");
+    expect(headings(jobBrief!.split("</section>")[0] ?? "")).toEqual([]);
+  });
+
+  it("reads the step position off data Bridge holds, not off Fleet's prose", () => {
+    const markup = renderToStaticMarkup(
+      chapters({
+        rows: [instructed(KINDED, KINDED_HEADINGS, KINDED_KINDS)],
+        step: THREE_STEPS[1],
+        steps: THREE_STEPS,
+      })[0]!.preview,
+    );
+    expect(markup).toContain("Where you are");
+    expect(markup).toContain("part 2 of 3");
+    expect(markup).toContain("data-activity=\"advanced\""); // Plan the change, done
+    expect(markup).toContain("data-activity=\"running\""); // Implement, current
+    expect(markup).toContain("data-activity=\"not_started\""); // Summarise, ahead
+    // Fleet's own words are still there, reachable underneath.
+    expect(markup).toContain("Read the words Armada sent");
+    expect(markup).toContain("This task runs in 3 parts. You are on part 2.");
+  });
+
+  it("counts the declared Checks in the meta and chips their names", () => {
+    const withChecks = step({
+      step_id: "plan",
+      label: "Plan the change",
+      ordinal: 2,
+      checks: [{ kind: "manifest_check", name: "build" }, { kind: "manifest_check", name: "test" }],
+    });
+    const markup = renderToStaticMarkup(
+      chapters({
+        rows: [instructed(KINDED, KINDED_HEADINGS, KINDED_KINDS)],
+        step: withChecks,
+        steps: [THREE_STEPS[0]!, withChecks, THREE_STEPS[2]!],
+      })[0]!.preview,
+    );
+    expect(markup).toContain("What this part has to pass");
+    expect(markup).toContain("2 checks");
+    expect(markup).toContain("armada-chip");
+    expect(markup).toContain(">build<");
+    expect(markup).toContain(">test<");
+  });
+
+  it("folds the standing section shut, mutes it, and says why in its meta", () => {
+    const markup = renderToStaticMarkup(
+      chapters({
+        rows: [instructed(KINDED, KINDED_HEADINGS, KINDED_KINDS)],
+        step: THREE_STEPS[1],
+        steps: THREE_STEPS,
+      })[0]!.preview,
+    );
+    // `STANDING` sentence-cases to `Standing`, the heading's own word and
+    // never a `kind → label` guess.
+    const section = markup
+      .split('<section class="armada-chapter"')
+      .find((chunk) => chunk.includes(">Standing<"));
+    expect(section).toBeDefined();
+    expect(section).toContain('data-tone="muted"');
+    expect(section).toContain("the same on every Job");
+    // No number on a folded sub-section — a chevron stands in its place.
+    expect(section).not.toContain("armada-chapter__n\"");
+    expect(section).toContain("armada-chapter__fold");
+    // Closed: `Chapter` hides the body with `hidden` rather than unmounting
+    // it, so the words are still in the DOM and only the attribute differs.
+    expect(section).toContain("hidden=\"\"");
+    expect(section).toContain("Report progress every step.");
+  });
+
+  it("draws flat where kinds and headings do not pair, exactly as before 9.7", () => {
+    const markup = renderToStaticMarkup(
+      chapters({
+        rows: [instructed(KINDED, KINDED_HEADINGS, ["about_this_job"])],
+        step: THREE_STEPS[1],
+        steps: THREE_STEPS,
+      })[0]!.preview,
+    );
+    expect(markup).not.toContain("armada-brief--sectioned");
+    expect(headings(markup)).toEqual([
+      "JOB BRIEF",
+      "WHAT A PERSON SAID",
+      "STANDING",
+      "WHERE YOU ARE",
+      "WHAT THIS PART HAS TO PASS",
+    ]);
   });
 });
 

@@ -38,15 +38,29 @@ import { Tooltip } from "../../primitives/Tooltip/Tooltip";
  * amber a person-waited-on carries everywhere else, on the header alone. The
  * body stays neutral: the chapter is not an alert and its contents are not
  * warnings.
+ *
+ * `muted` is the one that says the same thing on every Job — the Drone
+ * brief's standing instructions, folded by default because they carry no fact
+ * specific to this Job. **Dimming is a token, not an alpha**, per
+ * `docs/contracts/design-system.md`: the name steps down to `--fg-subtle`
+ * rather than losing opacity, which would muddy the tone hues beside it.
  */
-export type ChapterTone = "neutral" | "waiting";
+export type ChapterTone = "neutral" | "waiting" | "muted";
 
 export type ChapterProps = {
   /**
    * The chapter's position in the story — 1, 2, 3. Mono and quiet, in
    * `--border-strong`: it orders the chapters and is not read for itself.
+   *
+   * **Absent draws a fold arrow in its place instead of a number.** A brief's
+   * own sections are not a numbered story of their own — they are one
+   * chapter's contents — so a caller with nothing to count passes nothing,
+   * and the slot that would have held a digit holds the open/closed state
+   * instead. `ChevronRight`/`ChevronUp` are the same pair `moreLabel` below
+   * already draws, read the same way: closed points at more to see, open
+   * points at closing it again.
    */
-  ordinal: number;
+  ordinal?: number;
   /** `Drone instructions`, `Activity log`, `Produced`, `Your decision`. */
   name: ReactNode;
   /**
@@ -135,9 +149,19 @@ export function Chapter({
 }: ChapterProps) {
   const head = (
     <>
-      <span className="armada-chapter__n" aria-hidden>
-        {ordinal}
-      </span>
+      {ordinal === undefined ? (
+        <span className="armada-chapter__fold" aria-hidden>
+          {open ? (
+            <ChevronUp size={GLYPH} strokeWidth={STROKE} />
+          ) : (
+            <ChevronRight size={GLYPH} strokeWidth={STROKE} />
+          )}
+        </span>
+      ) : (
+        <span className="armada-chapter__n" aria-hidden>
+          {ordinal}
+        </span>
+      )}
       <span className="armada-chapter__name">{name}</span>
       {meta === undefined && !live ? null : (
         <span className="armada-chapter__meta">
