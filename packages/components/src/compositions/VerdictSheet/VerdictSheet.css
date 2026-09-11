@@ -57,18 +57,16 @@
   margin: 0;
 }
 
-/* The settled pull request's own number, followed onto the forge. `--accent`
-   is the token the design contract gives a link; the sentence beside it stays
-   `--fg-muted`, because "merged" is a fact read here and not itself a place
-   to go. */
-.armada-verdict__pr-link {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-.armada-verdict__pr-link:hover,
-.armada-verdict__pr-link:focus-visible {
-  text-decoration: underline;
+/* The glyph beside an open pull request's own number — inline with the
+   number and the sentence that follows, never a line of its own above them.
+   `HeldWorktree`'s own `armada-held__tip` is the same pattern for the same
+   reason: an SVG sitting loose in a run of text breaks onto its own line, and
+   an inline-flex wrapper around the glyph and the value it marks is what
+   keeps the two read as one unit. */
+.armada-verdict__pr-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 .armada-verdict__said {

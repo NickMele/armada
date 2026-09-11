@@ -200,12 +200,13 @@ export const OneInlineAndOneOnTheConversation: Story = {
     ],
     onTakeUp: fn(),
     onOpenLink: fn(),
+    hostLabel: "git.example",
   },
   play: async ({ args, canvas, userEvent }) => {
     await expect(canvas.getByText("src/log.rs:42")).toBeVisible();
     await expect(canvas.getByText(/leaked on early return above/)).toBeVisible();
 
-    const links = canvas.getAllByRole("button", { name: /Open .*comment on the forge/ });
+    const links = canvas.getAllByRole("button", { name: /Open .*comment on git\.example/ });
     await expect(links).toHaveLength(2);
     await userEvent.click(links[0]!);
     await expect(args.onOpenLink).toHaveBeenCalledWith("PRRC_kwDOfirst");

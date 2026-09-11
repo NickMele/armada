@@ -73,7 +73,7 @@ function gate(): Sent {
       remarks={NO_REMARKS}
       stale={false}
       deciding={false}
-      pullRequest="https://forge.example/armada/pull/533"
+      pullRequest="https://git.example/armada/armada/pull/533"
       onMerge={(jobId) => sent.merged.push(jobId)}
       onApprove={(jobId) => sent.approved.push(jobId)}
       onRequestChanges={(jobId) => sent.changes.push(jobId)}

@@ -29,6 +29,7 @@ import type { DiffFile, DiffLine, EvidenceTrailEntry } from "@armada/components"
 import type { Diff, Evidence, Remarks } from "@armada/protocol";
 import type { JobDetail as JobWhole } from "@armada/protocol";
 import type { Submitted, Work } from "@armada/protocol";
+import { hostLabel } from "./facts";
 
 /**
  * How many lines of a patch are drawn before it is cut.
@@ -423,21 +424,30 @@ export const CONFIRM_REJECT = {
  * **It states the mechanism and promises no outcome**, which is the design
  * contract's rule about a confirmation. So it names where the commits land,
  * says the after-merge checks run against what landed — the whole reason Fleet
- * performs the merge rather than a person doing it on the forge — and says
- * plainly that taking it back is a revert somebody makes in the repository,
- * because Bridge has no undo to offer and a dialog implying one would be worse
- * than the reading.
+ * performs the merge rather than a person doing it on the code host themselves —
+ * and says plainly that taking it back is a revert somebody makes in the
+ * repository, because Bridge has no undo to offer and a dialog implying one
+ * would be worse than the reading.
  *
  * **It does not ask "merge this pull request?" a second time.** The button
  * already said that; a body that restates the title costs a keystroke and
  * carries nothing.
+ *
+ * **A function, not a constant, because the host is a fact about this pull
+ * request.** `hostLabel` reads it off the address the caller already holds —
+ * see `Decide.tsx`'s own `pullRequest` prop — rather than this file assuming
+ * every pull request Armada ever opens is on the same one.
  */
-export const CONFIRM_MERGE = {
-  title: "Merge this job's pull request?",
-  body:
-    "The pull request merges on the forge, so the job's commits land on the base branch and " +
-    "everybody working from it gets them on their next pull. Armada then runs the " +
-    "repository's after-merge checks against what landed — merging on the forge instead " +
-    "skips them, and running them is the reason this button exists. The job is approved with " +
-    "it. Bridge cannot take a merge back: undoing one is a revert made in the repository.",
-} as const;
+export function confirmMerge(pullRequest: string): { title: string; body: string } {
+  const host = hostLabel(pullRequest);
+  return {
+    title: "Merge this job's pull request?",
+    body:
+      `The pull request merges on ${host}, so the job's commits land on the base branch and ` +
+      "everybody working from it gets them on their next pull. Armada then runs the " +
+      `repository's after-merge checks against what landed — merging it on ${host} yourself ` +
+      "instead skips them, and running them is the reason this button exists. The job is " +
+      "approved with it. Bridge cannot take a merge back: undoing one is a revert made in the " +
+      "repository.",
+  };
+}
