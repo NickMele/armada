@@ -1,5 +1,5 @@
 # What a Job record holds — the `jobs` row, the `job_steps` row beneath it,
-# and the three things that live in tables of their own.
+# and the things that live in tables of their own.
 #
 # Authored here. Carried across from the design workspace's Job Fields
 # database, which is the record of the decision and the reasoning that
@@ -16,6 +16,7 @@
 # Fields:
 #   type           - the value's shape, as the source typed it
 #   table          - jobs | job_steps | evidence | job_manifests | job_write_targets
+#                    | job_attachments | job_allowed_commands
 #   storage        - Column | Own table | Text on the Job row | Derived — not stored
 #   nullable       - whether null is legal, and where the source qualified it, how
 #   frozen_at      - Creation | Dispatch | Never | N/A. When the value stops moving
@@ -47,6 +48,17 @@ in_code = "Not yet"
 open_questions = ["May acceptance criteria change when a Job's scope is revised?"]
 notes = "Frozen at creation; appendable only at an approved widening — you may raise the bar, not lower it. The Judge's call count is `criteria × panel_size`, and appending pushes both."
 why = "Judge citations reference a criterion by its frozen position (\"criterion 4\"), which editable or reorderable criteria would break."
+
+[fields."allowed_commands[]"]
+type = "array<{run, reach, allowed_at, by}>"
+table = "job_allowed_commands"
+storage = "Own table"
+nullable = "No — zero rows is nothing allowed"
+frozen_at = "Never"
+purpose = "Commands a person allowed for this Job, each carried by every later spawn of it. `reach` says whether the person also made it permanent in the repository's `armada.yml`."
+in_code = "Yes"
+notes = "Keyed by `(job_id, run)`, so allowing one command twice is one row. A second allow at `repository` reach raises a `job`-reach row and nothing lowers one; `allowed_at` and `by` stay the first allow's, so the list keeps the order things were allowed in. No event: an allow moves no status and no step, so the table is the authority for its rows, as `job_remarks_taken_up` is. `run` is the command text as allowed, and nothing in `core-model` or `store` interprets it."
+why = "An allow that lived only with the Drone that asked would be lost at its exit, and the next spawn of the same Job would meet the same refusal and ask again. A table rather than an array column so the key refuses a duplicate in the database, instead of every writer checking first."
 
 [fields.assigned_drone]
 type = "id"
@@ -424,6 +436,17 @@ purpose = "incident carries a checkable test — something is currently broken f
 in_code = "Not yet"
 notes = "Not a scale: retry limits, escalation thresholds and heartbeat interval belong to the Production Support Incident workflow variant instead. This field exists for what a variant cannot carry — a security bump selects no different workflow at all. It is read by scheduling and notification routing, never by an approval gate."
 why = "A scale invites triage theatre, since every Job arrives feeling urgent; gating approval on it would mean the weakest supervision path gets taken exactly when judgement is worst."
+
+[fields.when_blocked]
+type = "enum{refuse_and_hold, ask_me}"
+table = "jobs"
+storage = "Column"
+nullable = "No"
+frozen_at = "Never"
+purpose = "How this Job meets a command its Drone was not granted."
+in_code = "Yes"
+notes = "Read by the next permission question, so changing it needs no respawn. `refuse_and_hold` is the default and what every Job written before the column reads as. No event: a setting moves no status and no step, so the column is the authority for its field the way `branch` is."
+why = "Frozen at spawn, a change would reach only the next Drone, and the Drone already held on a refused command is the one the person is looking at."
 
 [fields.workflow]
 type = "object — the WorkflowDef, resolved"
