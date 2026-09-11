@@ -442,6 +442,18 @@ export type BridgeApi = {
    */
   rerunGate: (jobId: string) => Promise<Outcome>;
   /**
+   * Ask a Job to show its work: Fleet reruns the last spec a Drone named, in
+   * the Job's worktree, and keeps what it captured as a set of its own beside
+   * the step's frames. **It moves nothing on the Job.**
+   *
+   * **It answers when the press has landed**, which may be as long as the app
+   * takes to start. Fleet runs it off the turn loop and bounds it by its own
+   * Check budget, so Bridge does not add a wait of its own — see `NO_WAIT`.
+   * Fleet refuses 409 before anything runs where it cannot, naming what is
+   * missing; a press that ran and captured nothing answers with why.
+   */
+  showAgain: (jobId: string) => Promise<Outcome>;
+  /**
    * Give one job a higher cost ceiling than the tier above it allows.
    *
    * **The act the `over_budget` label has always pointed at.** A job past its
@@ -759,6 +771,7 @@ export const CHANNELS = {
   restartStep: "bridge:restart-step",
   overrideVerdict: "bridge:override-verdict",
   rerunGate: "bridge:rerun-gate",
+  showAgain: "bridge:show-again",
   raiseCostCap: "bridge:raise-cost-cap",
   raiseTurnCap: "bridge:raise-turn-cap",
   fileReport: "bridge:file-report",

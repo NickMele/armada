@@ -197,3 +197,6 @@
 
 /* What the change did to the screen — the pairs that moved. */
 @import "./compositions/FramesPaired/FramesPaired.css";
+
+/* Asking a Job to show its work again, and the sets it kept. */
+@import "./compositions/ShownAgain/ShownAgain.css";

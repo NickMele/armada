@@ -335,6 +335,9 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.rerunGate, (_event, jobId: string) =>
     connection?.commands.rerunGate(jobId),
   );
+  ipcMain.handle(CHANNELS.showAgain, (_event, jobId: string) =>
+    connection?.commands.showAgain(jobId),
+  );
   // More money for one job, on a channel of its own because nothing else here
   // sets a value on a job. It moves no status and asks for no drone: what it
   // stops is the next dispatch being refused for money.

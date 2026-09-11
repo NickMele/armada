@@ -51,6 +51,7 @@ import {
   readHeld,
   readReports,
   reclaimOne,
+  showAgain,
   stageAttachment,
   useCommands,
   useWatching,
@@ -383,6 +384,7 @@ export function App() {
                 onRaiseTurnCap={(jobId, turns) => void commands.raiseTurns(jobId, turns)}
                 onRerun={(jobId) => void commands.rerun(jobId)}
                 onReport={commands.report}
+                onShowAgain={showAgain}
                 onApprove={(jobId) => void commands.approve(jobId)}
                 onMergePullRequest={(jobId) => void commands.decide(jobId, "merge")}
                 onApproveReview={(jobId) => void commands.decide(jobId, "approve")}
