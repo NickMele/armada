@@ -216,6 +216,33 @@ where
         self.undo_rehearsal(&job_id.to_domain(), run.id).await
     }
 
+    /// A person starting a server, for a Job or the main checkout. **The `Arc`
+    /// is handed on**, so the server is a task of its own — `crate::servers`.
+    async fn start_server(
+        self: std::sync::Arc<Self>,
+        asked: ipc::StartServer,
+    ) -> Result<ipc::ServerState, Refusal> {
+        let place = match &asked.job_id {
+            Some(job_id) => crate::servers::Place::Job(
+                self.load(&job_id.to_domain())
+                    .await
+                    .map_err(|why| self.refusal(why))?,
+            ),
+            None => crate::servers::Place::MainCheckout,
+        };
+        let refusing = std::sync::Arc::clone(&self);
+        Fleet::hold_server(self, place, &asked.name, ipc::StartedBy::Person)
+            .await
+            .map(|(state, _)| state)
+            .map_err(|why| refusing.server_refusal(why, asked.job_id.as_ref()))
+    }
+
+    async fn stop_server(&self, named: ipc::NamedServer) -> Result<ipc::ServerState, Refusal> {
+        self.stopped_server(&named.id)
+            .await
+            .map_err(|why| self.server_refusal(why, None))
+    }
+
     /// More money for one Job, and nothing else changes.
     ///
     /// **The summary is re-read rather than folded from the raise.** Nothing

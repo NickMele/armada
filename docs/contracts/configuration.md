@@ -558,7 +558,8 @@ That day also closes the one gap it cannot close now. A setting nothing reads is
   `checks.<name>.expect_exit_code`, `checks.<name>.when`,
   `checks.<name>.requires`, `checks.<name>.narrow`,
   `commands.<name>.run`,
-  `commands.<name>.destructive` and `setup.requires` — with every
+  `commands.<name>.destructive`, `commands.<name>.serve`,
+  `commands.<name>.ready`, `commands.<name>.links` and `setup.requires` — with every
   other key (`permissions`, `knowledge`, `policy`,
   `commands.*.description`) hard-failing as unknown until Reach. Beyond that, what is still open: the
   file syntax for how a Check declares its command; how the Commands

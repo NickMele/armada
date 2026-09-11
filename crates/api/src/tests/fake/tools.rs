@@ -134,4 +134,18 @@ impl Tools for FakeDaemon {
             word: "01M0DISPATCHEDCHILD0000000".to_string(),
         })
     }
+
+    /// Refused while nothing works, and otherwise refused naming the server,
+    /// so a router test can tell the name arrived. **The fake holds no server**
+    /// — one instance per Job is `fleet::servers`' and tested there.
+    async fn start_server(
+        self: std::sync::Arc<Self>,
+        _caller: crate::Caller,
+        name: String,
+    ) -> Result<ipc::mcp::ServerReport, NotRecorded> {
+        self.while_working("server to be for")?;
+        Err(NotRecorded {
+            because: format!("the fake daemon starts no server, `{name}` included"),
+        })
+    }
 }

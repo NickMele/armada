@@ -552,6 +552,20 @@ and on the global stream it would evict the state the Board is drawn from.
 `/events` carries the run's end, `run.finished`, because that is a fact about a
 Job a surface may care about; it never carries a line.
 
+## The server socket: one server's output
+
+`GET /servers/:server_id/observe` is the run socket's shape per server
+instance, and `crates/api/src/watching_run.rs` relays both. It opens with what
+the server's log holds, then the lines it prints next, then `closed` once the
+server has ended. **A server that has ended opens too**, with its whole log,
+which is how one that fell over is read.
+
+`/events` carries a server's three lifecycle facts — `server.starting`,
+`server.serving`, `server.exited` — each with the whole instance, and never a
+line of its output, for the run socket's reason. A Job's servers publish
+`server.exited` before the Job's own terminal `job.state_changed`, because they
+are torn down before its span is released.
+
 ## Other things specific to this seam
 
 **Bridge finds Fleet through a runtime file, not a fixed port.** The file

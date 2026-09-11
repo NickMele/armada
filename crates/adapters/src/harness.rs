@@ -70,6 +70,13 @@ const WIDEN_TOOL: &str = "mcp__armada__request_scope";
 /// quiet. It carries on and produces work nobody chose.
 const ASK_TOOL: &str = "mcp__armada__ask_question";
 
+/// **In every toolbelt, and the only way a Drone gets a server.** A server a
+/// Drone started from its shell is one Fleet never heard of — it cannot hand
+/// it to the next step or stop it with the Job — so a Drone denied this one
+/// does not go without; it starts its own, and the next step starts another
+/// on the same port.
+const SERVER_TOOL: &str = "mcp__armada__start_server";
+
 /// **Not in the table above, because it is not in every toolbelt.** It is the
 /// one Armada tool that is granted rather than given: a Drone that may create
 /// Jobs is a Drone one approval bought several Drones' worth of spend from, so
@@ -255,6 +262,7 @@ fn allowlist(config: &DroneSpawnConfig) -> Result<String, HarnessRefused> {
         String::from(CHECKS_TOOL),
         String::from(WIDEN_TOOL),
         String::from(ASK_TOOL),
+        String::from(SERVER_TOOL),
     ];
     for grant in config.toolbelt().granted() {
         match grant {
@@ -419,6 +427,12 @@ pub fn checks_tool() -> &'static str {
 /// whose silent denial is not silence: a Drone that cannot ask guesses.
 pub fn ask_tool() -> &'static str {
     ASK_TOOL
+}
+
+/// The server tool's name. In every toolbelt with the five above: a Drone
+/// denied it starts a server from its shell instead, which Fleet never sees.
+pub fn server_tool() -> &'static str {
+    SERVER_TOOL
 }
 
 /// The dispatch tool's name, for a caller that needs to assert it is *absent*

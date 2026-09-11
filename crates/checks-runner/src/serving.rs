@@ -12,9 +12,9 @@
 //! answered by running the repository's own readiness command against it, which
 //! is `fleet::showing`'s loop and not this module's — a runner that probed a
 //! port would be Armada holding an opinion about how a thing serves itself.
-//! Output is discarded rather than captured for the same reason: nothing reads
-//! it, and a preview server left printing into a pipe nobody drains blocks on
-//! a full buffer.
+//! Output is never piped: a server left printing into a pipe nobody drains
+//! blocks on a full buffer. [`Served::spawn`] discards it, and
+//! [`Served::spawn_logging`] hands the process a log file a person reads.
 //!
 //! **Ending is not optional and does not depend on being called.** [`Drop`]
 //! signals the group, so a caller that returns early — a readiness probe that
@@ -27,15 +27,15 @@ use std::path::Path;
 use std::process::Stdio;
 
 use tokio::process::{Child, Command};
-use verification::NeverRan;
+use verification::{Exit, NeverRan};
 
-use crate::run::{end_the_group, not_started, split};
+use crate::run::{end_the_group, ended, not_started, split};
 
 /// A program that is up, and the capability to end it.
 ///
-/// **No accessor for the child and none for the group.** What a caller may do
-/// is hold one and drop it; anything more would be a handle to a process this
-/// module promises to reap.
+/// **No accessor for the child.** What a caller may do is hold one and drop
+/// it; the group's number is readable, for a record a crashed Fleet's
+/// successor reads, and a handle to the process would be more than that.
 pub struct Served {
     child: Child,
     /// The group id, which is the child's own pid. `None` where the child was
@@ -78,6 +78,70 @@ impl Served {
             .map_err(|error| not_started(error, program, worktree))?;
         let group = child.id();
         Ok(Served { child, group })
+    }
+
+    /// [`spawn`](Served::spawn), for a server a person reads: both streams
+    /// appended to `log` rather than discarded, and `env` added over Fleet's
+    /// own. **The file is the pipe**, so nothing has to drain it and a server
+    /// printing forever cannot block on a full buffer.
+    pub fn spawn_logging(
+        command: &str,
+        worktree: &Path,
+        env: &[(String, String)],
+        log: &Path,
+    ) -> Result<Served, NeverRan> {
+        let Some((program, args)) = split(command) else {
+            return Err(NeverRan::NothingToRun);
+        };
+        let opened = || {
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(log)
+        };
+        let (Ok(out), Ok(err)) = (opened(), opened()) else {
+            return Err(NeverRan::NotSpawned {
+                program,
+                kind: std::io::ErrorKind::PermissionDenied,
+            });
+        };
+        let mut spawning = Command::new(&program);
+        spawning
+            .args(&args)
+            .current_dir(worktree)
+            .envs(
+                env.iter()
+                    .map(|(name, value)| (name.as_str(), value.as_str())),
+            )
+            .stdin(Stdio::null())
+            .stdout(Stdio::from(out))
+            .stderr(Stdio::from(err))
+            .kill_on_drop(true);
+        spawning.process_group(0);
+        let child = spawning
+            .spawn()
+            .map_err(|error| not_started(error, program, worktree))?;
+        let group = child.id();
+        Ok(Served { child, group })
+    }
+
+    /// How it ended, once it has. **Cancel-safe**, so a caller can race it
+    /// against a stop and a readiness probe and ask again after either.
+    pub async fn exited(&mut self) -> Exit {
+        match self.child.wait().await {
+            Ok(status) => ended(&status),
+            Err(error) => Exit::NeverRan(NeverRan::NotSpawned {
+                program: String::from("the server"),
+                kind: error.kind(),
+            }),
+        }
+    }
+
+    /// The group's number, for a record of what to end if whoever holds this
+    /// crashes before it ends. **A number, not a handle**: while this is held,
+    /// [`end`](Served::end) and `Drop` are what end it.
+    pub fn group(&self) -> Option<u32> {
+        self.group
     }
 
     /// Whether it is still running, asked without waiting.

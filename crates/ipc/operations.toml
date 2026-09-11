@@ -477,6 +477,19 @@ Not `/events`, which carries only `run.finished`: output is the fastest thing a 
 `helm_access` is `No` for `observe_check_output`'s reason.
 """
 
+[operations.observe_server]
+kind = "query"
+transport = "WebSocket"
+helm_access = "No"
+description = "One server's output — what its log holds, then what it prints next — on a socket of its own"
+notes = """
+**`observe_run`'s shape, one subject over**: the subscription first, then the log as history, then live lines; `missed` with a count where a viewer fell behind, and `closed` once the server has ended. A server that has ended opens too, with its whole log — which is how one that fell over is read.
+
+Not `/events`, which carries only a server's three lifecycle facts, for `observe_run`'s reason.
+
+`helm_access` is `No` for `observe_check_output`'s reason.
+"""
+
 [operations.answer_command]
 kind = "command"
 transport = "HTTP"
@@ -1209,6 +1222,43 @@ notes = """
 Refused while a Drone is working in the tree, while a run is in flight, on a run already undone or with no snapshot, and where a path the run changed has moved since — writing the older version over it would take somebody's later work.
 """
 
+# Servers: a Command with `serve`, held by Fleet — `docs/concepts/fleet.md`,
+# *Servers*. `observe_server` is with the sockets and the three `server.*`
+# kinds with the events.
+
+[operations.list_servers]
+kind = "query"
+transport = "HTTP"
+helm_access = "No"
+description = "Every server Fleet holds — each Job's and the main checkout's — and the last instance of each that ended"
+notes = """
+**In Fleet's memory and nowhere else.** A server is true only while the process holding it lives, so there is no table: a Fleet that restarts holds none, having stopped every one it held on the way out — or, after a crash, ended what it left behind when it next starts. The last instance of each that ended is kept beside the live ones, so a server that fell over is still there to read — with its exit code and its log — until it is started again or its Job ends.
+
+`helm_access` is `No`: the reader is a person at the run sheet or *Where things are*.
+"""
+
+[operations.start_server]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Start a server the Manifest declares, for a Job or for the main checkout — or be handed the one already running"
+notes = """
+**A name, never a command line and never a port.** What runs is the Manifest's `run` then `serve`, with `${port.NAME}` resolved from the span it runs under: the Job's, or the main checkout's where the body names no Job. `serve` starts only if `run` exits zero, and the instance is `serving` once `ready` exits zero — polled, never a duration — or at once where there is no `ready`.
+
+**One instance per Job per server.** A second request, from a person or through a Drone's `start_server` tool, is answered with the instance already starting or serving rather than a second one on the same port.
+
+It answers at once, `starting`; `server.serving` and `server.exited` follow on `/events`, and the output is `observe_server`'s. Refused where the name declares no server, where the Job's worktree is gone or the Job has ended.
+"""
+
+[operations.stop_server]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "End a server's process group; its log keeps what printed"
+notes = """
+Answers with the instance once it has ended. A Job's servers are also stopped when the Job ends, before its span is released, and every server is stopped when Fleet stops. Refused on an id that names no running server.
+"""
+
 [operations.restart_fleet]
 kind = "command"
 transport = "HTTP"
@@ -1439,6 +1489,33 @@ helm_access = "Bridge only"
 description = "A person's run ended: its record, with exit code, duration and what it changed"
 notes = """
 Carries the whole `RunRecord` — the row `list_runs` answers — so the sheet draws the result and the changed files without a read. Published after the record is written, so a reader that re-reads on it finds the run in the history.
+"""
+
+[operations."server.starting"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "A server was started, for a Job or for the main checkout: its `run` is going, or `serve` is up and `ready` has not passed"
+notes = """
+Carries the whole `ServerState` — the row `list_servers` answers — in each of the three `server.*` kinds, so a row is replaced rather than patched. **Lifecycle facts only**: a server's output is `observe_server`'s and never this stream's.
+"""
+
+[operations."server.serving"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "A server's `ready` passed, or it started with no `ready` to wait for: its links are live"
+notes = """
+`serving_since` is what uptime counts from; nothing ticks on the wire.
+"""
+
+[operations."server.exited"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "A server ended: stopped by a person, its Job or Fleet — or on its own, which is a failure whatever its code"
+notes = """
+`stopped: false` is a server that fell over, with its exit code and a sentence; its log stays readable on `observe_server`. A Job's servers publish this before the Job's own terminal `job.state_changed`, because they are torn down before its span is released.
 """
 
 [operations."review.ready"]
