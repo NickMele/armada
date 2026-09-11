@@ -41,6 +41,7 @@ import type {
 
 import { hostLabel, money, pullRequestNumber } from "./facts";
 import { span } from "./duration";
+import { sitting } from "./held";
 import { checkRow, judgeRow, saidOf, iconOf } from "./checks";
 import { Decide } from "./Decide";
 import { checksOf, didNotPass, mechanicalRunsOf, panelsOf } from "./gates";
@@ -338,10 +339,13 @@ export function pullRequestBlockOf(
           decision card below — a person reading "changes that clash" should
           find the fix in the same glance. `#663`. Drawn only where there is a
           clash to resolve: the automatic catch-up already keeps an
-          unattended branch current, so this is not a "check now" button. */}
+          unattended branch current, so this is not a "check now" button.
+          **Primary**, because `Decide`'s own merge control is disabled in
+          exactly this state — one accent fill, and it is on the control that
+          works. */}
       {currency?.conflicted !== true || onResolveConflict === undefined ? null : (
         <Tooltip label="Sends the clash back to the step that wrote the code. Its Drone fixes the files, the Checks run again, and the pull request updates.">
-          <Button variant="secondary" disabled={disabled} onClick={onResolveConflict}>
+          <Button variant="primary" disabled={disabled} onClick={onResolveConflict}>
             Resolve conflicts
           </Button>
         </Tooltip>
@@ -387,11 +391,14 @@ export function currencyLineOf(
 ): { said: string; conflicted: boolean } | undefined {
   if (currency === undefined) return undefined;
   if (currency.conflict_files === undefined || currency.conflict_files.length === 0) {
-    const ago = span(currency.rebased_at, now);
-    return {
-      said: `Up to date with main as of ${ago === null ? "0s" : ago} ago.`,
-      conflicted: false,
-    };
+    const age = sitting(currency.rebased_at, now);
+    // "just now" does not take "ago" after it — `sitting`'s own floor,
+    // "under a minute", reads the same way for the same reason.
+    const said =
+      age === null || age === "under a minute"
+        ? "Up to date with main, checked just now."
+        : `Up to date with main, checked ${age} ago.`;
+    return { said, conflicted: false };
   }
   const files = currency.conflict_files.join(", ");
   return {
@@ -539,6 +546,7 @@ export function verdictSlotAtGate({
 }: VerdictSlotAtGateArgs): ReactNode {
   const address = whole?.delivery?.pull_request;
   const detail = whole?.delivery?.pull_request_detail;
+  const conflicted = currencyLineOf(detail?.currency, now)?.conflicted === true;
   const never = neverDelivers(whole?.steps ?? []);
   // Never `auto_merge`: approving here never merges regardless of that
   // policy, which holds a later, separate gate (`fleet::gate`, `reviewing`).
@@ -589,7 +597,7 @@ export function verdictSlotAtGate({
           remarks={recorded.remarks}
           stale={stale}
           deciding={deciding}
-          {...(address === undefined ? {} : { pullRequest: address })}
+          {...(address === undefined ? {} : { pullRequest: address, conflicted })}
           onMerge={onMergePullRequest}
           onApprove={onApproveReview}
           onRequestChanges={onRequestChanges}

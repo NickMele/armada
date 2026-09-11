@@ -107,6 +107,13 @@ export type DecideProps = {
   pullRequest?: string;
   /** Merge that pull request, then take the work. */
   onMerge: (jobId: string) => void;
+  /**
+   * The branch clashes with main and Fleet could not resolve it alone.
+   * `#663`. **Merge stays drawn and is disabled**, not hidden — a person who
+   * has not read the pull request block above should not wonder where the
+   * button went, and the reason sits right beside it.
+   */
+  conflicted?: boolean;
   onApprove: (jobId: string) => void;
   onRequestChanges: (jobId: string, note: string) => void;
   onReject: (jobId: string) => void;
@@ -147,6 +154,7 @@ export function Decide({
   deciding,
   pullRequest,
   onMerge,
+  conflicted = false,
   onApprove,
   onRequestChanges,
   onReject,
@@ -212,6 +220,7 @@ export function Decide({
                 `Merges the pull request on ${host}, then takes the work. Armada runs the ` +
                 `repository's after-merge checks against what landed; merging it on ${host} ` +
                 "yourself skips them.",
+              ...(conflicted ? { mergeBlockedReason: "Resolve the conflicts first." } : {}),
             })}
         onApprove={() => onApprove(job.id)}
         onRequestChanges={() => onRequestChanges(job.id, note)}

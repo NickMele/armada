@@ -329,3 +329,74 @@ test("Decide itself never draws Resolve conflicts — it moved beside the pull r
     .element(page.getByRole("button", { name: "Resolve conflicts" }))
     .not.toBeInTheDocument();
 });
+
+// `#663`: someone reading the conflict screen would press the biggest button
+// first. Merge must not be it, and it must not fail on the press either — it
+// stays visible, off, with the reason named beside it.
+test("merge is drawn and disabled while the branch conflicts, and the other three still work", async () => {
+  const approved: string[] = [];
+  const changed: string[] = [];
+  const rejected: string[] = [];
+  mount(
+    <Decide
+      onNeedMaterial={() => {}}
+      onNeedRemarks={() => {}}
+      job={JOB}
+      evidence={NO_EVIDENCE}
+      remarks={NO_REMARKS}
+      stale={false}
+      deciding={false}
+      pullRequest="https://forge.example/armada/pull/533"
+      onMerge={() => {}}
+      conflicted={true}
+      onApprove={(jobId) => approved.push(jobId)}
+      onRequestChanges={(jobId) => changed.push(jobId)}
+      onReject={(jobId) => rejected.push(jobId)}
+      onTakeUpRemarks={() => {}}
+      onOpenRemarkLink={() => {}}
+    />,
+  );
+
+  const merge = page.getByRole("button", { name: "Merge and take the work" });
+  await expect.element(merge).toBeDisabled();
+  await expect.element(page.getByText("Resolve the conflicts first.")).toBeVisible();
+
+  await userEvent.click(page.getByRole("button", { name: "Approve the work" }));
+  expect(approved).toEqual([JOB.id]);
+
+  await userEvent.fill(
+    page.getByRole("textbox", { name: "What should change" }),
+    "Rebase and drop the stray import.",
+  );
+  await userEvent.click(page.getByRole("button", { name: "Request changes" }));
+  expect(changed).toEqual([JOB.id]);
+
+  await userEvent.click(page.getByRole("button", { name: "Reject the work" }));
+  await userEvent.click(page.getByRole("dialog").getByRole("button", { name: "Reject the work" }));
+  expect(rejected).toEqual([JOB.id]);
+});
+
+test("merge is the primary act again once the branch is no longer conflicted", async () => {
+  mount(
+    <Decide
+      onNeedMaterial={() => {}}
+      onNeedRemarks={() => {}}
+      job={JOB}
+      evidence={NO_EVIDENCE}
+      remarks={NO_REMARKS}
+      stale={false}
+      deciding={false}
+      pullRequest="https://forge.example/armada/pull/533"
+      onMerge={() => {}}
+      onApprove={() => {}}
+      onRequestChanges={() => {}}
+      onReject={() => {}}
+      onTakeUpRemarks={() => {}}
+      onOpenRemarkLink={() => {}}
+    />,
+  );
+  await expect
+    .element(page.getByRole("button", { name: "Merge and take the work" }))
+    .not.toBeDisabled();
+  await expect.element(page.getByText("Resolve the conflicts first.")).not.toBeInTheDocument();
+});

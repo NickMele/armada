@@ -290,7 +290,7 @@ describe("the currency line a moved base leaves", () => {
     expect(currencyLineOf(undefined, NOW)).toBeUndefined();
   });
 
-  it("says the branch is up to date, with a relative time, where it caught up cleanly", () => {
+  it("says the branch is up to date, with a relative time in whole units, where it caught up cleanly", () => {
     const said = currencyLineOf(
       {
         rebased_onto: "8c2ce681000000000000000000000000000000",
@@ -300,7 +300,31 @@ describe("the currency line a moved base leaves", () => {
       NOW,
     );
     expect(said?.conflicted).toBe(false);
-    expect(said?.said).toBe("Up to date with main as of 5m 00s ago.");
+    expect(said?.said).toBe("Up to date with main, checked 5 minutes ago.");
+  });
+
+  it("says 'just now' rather than 'checked under a minute ago'", () => {
+    const said = currencyLineOf(
+      {
+        rebased_onto: "8c2ce681000000000000000000000000000000",
+        rebased_at: "2026-09-09T09:44:45Z",
+        conflict_files: [],
+      },
+      NOW,
+    );
+    expect(said?.said).toBe("Up to date with main, checked just now.");
+  });
+
+  it("says 'just now' rather than 'ago' where the timestamp will not parse", () => {
+    const said = currencyLineOf(
+      {
+        rebased_onto: "8c2ce681000000000000000000000000000000",
+        rebased_at: "not a date",
+        conflict_files: [],
+      },
+      NOW,
+    );
+    expect(said?.said).toBe("Up to date with main, checked just now.");
   });
 
   it("names the files and says the branch was left as it was where it clashed", () => {
