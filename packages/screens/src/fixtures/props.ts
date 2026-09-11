@@ -47,6 +47,7 @@ export function propsFor(fixture: JobFixture): JobDetailProps {
     onReadDiff: noop,
     onOpenArtifact: async () => UNKNOWN_JOB_OPENED,
     onOpenPullRequest: async () => UNKNOWN_JOB_FOLLOWED,
+    onOpenRemarkLink: noop,
     onReadCall: async (_jobId, callId) => fixture.calls[callId] ?? NOT_ANSWERED_CALL,
     onReadCheckOutput: async (_jobId, kept) => fixture.checkOutputs[kept] ?? NOT_ANSWERED_OUTPUT,
     onReadFrame: async (_jobId, kept) => fixture.frames[kept] ?? NOT_ANSWERED_FRAME,
