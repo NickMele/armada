@@ -87,20 +87,21 @@ export const PullRequestOpen: Story = {
   args: {
     ...AtAGate.args,
     pullRequest: (
-      <div className="flex flex-col gap-2">
-        <p className="text-xs text-fg-muted">
-          <span className="armada-verdict__pr-ref">
-            <GitPullRequest size={12} strokeWidth={2} aria-hidden />
-            <span className="mono">#4711</span>
-          </span>{" "}
-          · Declare capacity.rs and gate the next undeclared test file — open, mergeable, no
-          reviews yet.
-        </p>
-        <p className="text-2xs text-fg-subtle">
-          Read it there — this page says what Armada knows that the pull request's own page does
-          not.
-        </p>
-      </div>
+      <p className="text-xs text-fg-muted">
+        <span className="armada-verdict__pr-ref">
+          <GitPullRequest size={12} strokeWidth={2} aria-hidden />
+          <a
+            href="https://git.example/armada/armada/pull/4711"
+            title="https://git.example/armada/armada/pull/4711"
+            className="mono armada-verdict__pr-link"
+            onClick={(event) => event.preventDefault()}
+          >
+            #4711
+          </a>
+        </span>{" "}
+        · Declare capacity.rs and gate the next undeclared test file, open, mergeable, no reviews
+        yet.
+      </p>
     ),
     note: (
       <>
