@@ -1,10 +1,12 @@
-//! Which lines of a brief are block headings, and which are not.
+//! Which lines of a brief are block headings, which are not, and what kind of
+//! section each heading is.
 //!
 //! **Its own module rather than a case in `briefing`, because the subject is
 //! not the wording.** That module asserts the structure the Agent Prompt
 //! Contract requires. This asserts the one fact about the assembled text that
 //! only the assembler holds: which of its lines a reader on the far side of the
-//! wire may draw as a heading.
+//! wire may draw as a heading, and — since `ipc::BlockKind` — what kind of
+//! section it opens.
 //!
 //! **Nothing here asserts that a heading is upper case**, and the omission is
 //! the point. Capitals are one of the two guesses `ipc::Saw::Instructed`'s
@@ -16,6 +18,7 @@
 //! heading.
 
 use core_model::{EvidenceType, StepEvidence, StepId};
+use ipc::BlockKind;
 use verification::TheBaseMoved;
 
 use crate::briefing::{first_turn, resuming_turn, Brief, Opening, Stopped, BASELINE};
@@ -46,6 +49,120 @@ fn headed(brief: &Brief) -> Vec<String> {
                 .to_string()
         })
         .collect()
+}
+
+/// Every heading, paired with the kind `briefing` stamped it with, in order.
+fn kinded(brief: &Brief) -> Vec<(String, BlockKind)> {
+    headed(brief)
+        .into_iter()
+        .zip(brief.kinds().iter().copied())
+        .collect()
+}
+
+/// **The one invariant a peer decodes by.** `ipc::Saw::Instructed`'s doc says a
+/// mismatched pair of lengths is unreadable and must fall back to plain
+/// headings — this module is the one writer of both, so it never produces the
+/// pair that fallback exists for.
+#[test]
+fn every_heading_has_exactly_one_kind() {
+    for brief in [opening(), a_restart(), a_reconciled_brief()] {
+        assert_eq!(
+            brief.headings().len(),
+            brief.kinds().len(),
+            "a kind for every heading and no more: {}",
+            brief.as_str()
+        );
+    }
+}
+
+/// The rules that read the same on every Job, folded shut on Bridge's design
+/// and still present here.
+#[test]
+fn what_is_the_same_on_every_job_is_named_standing() {
+    let pairs = kinded(&opening());
+    assert_eq!(
+        pairs.first().map(|(line, kind)| (line.as_str(), *kind)),
+        Some(("FILES YOU WRITE FOR YOURSELF", BlockKind::Standing)),
+        "the first heading after the unheaded baseline is the standing rule \
+         about a Drone's own notes: {pairs:?}"
+    );
+}
+
+/// The rail — where this step sits among the workflow's — is a list Bridge
+/// already holds the data for, and is named apart from a Job's own facts.
+#[test]
+fn the_rail_is_named_as_the_step_list() {
+    let pairs = kinded(&opening());
+    assert!(
+        pairs
+            .iter()
+            .any(|(line, kind)| line == "WHERE YOU ARE" && *kind == BlockKind::Steps),
+        "the rail is `Steps`, not `AboutThisJob`: {pairs:?}"
+    );
+}
+
+/// What was asked reads as a fact about this Job, open rather than folded.
+#[test]
+fn the_job_brief_is_named_as_about_this_job() {
+    let pairs = kinded(&opening());
+    assert!(
+        pairs
+            .iter()
+            .any(|(line, kind)| line == "JOB BRIEF" && *kind == BlockKind::AboutThisJob),
+        "what was asked is a fact about this Job: {pairs:?}"
+    );
+}
+
+/// A restart's reason is a fact about this attempt, and so is the branch a
+/// rebase leaves a Drone on — never `Standing`, because neither reads the same
+/// on every Job.
+#[test]
+fn why_this_attempt_and_the_branch_are_named_as_about_this_job() {
+    let restart_pairs = kinded(&a_restart());
+    assert_eq!(
+        restart_pairs
+            .last()
+            .map(|(line, kind)| (line.as_str(), *kind)),
+        Some(("WHY THIS PART IS BEING DONE AGAIN", BlockKind::AboutThisJob)),
+        "{restart_pairs:?}"
+    );
+
+    let branch_pairs = kinded(&a_reconciled_brief());
+    assert_eq!(
+        branch_pairs
+            .last()
+            .map(|(line, kind)| (line.as_str(), *kind)),
+        Some(("THE BRANCH YOU ARE ON", BlockKind::AboutThisJob)),
+        "{branch_pairs:?}"
+    );
+}
+
+/// A restart's extra block, for [`why_this_attempt_and_the_branch_are_named_as_about_this_job`].
+fn a_restart() -> Brief {
+    resuming_turn(
+        &a_job(),
+        &a_workflow(),
+        &StepId::new("implement"),
+        &Stopped::default(),
+        &Crossed::nothing(),
+    )
+    .expect("a prompt")
+}
+
+/// The rebase's block, for the same test.
+fn a_reconciled_brief() -> Brief {
+    let moved = TheBaseMoved::BroughtUpToDate {
+        base: String::from("main"),
+        commits: 4,
+    };
+    Opening::fresh()
+        .turn(
+            &a_job(),
+            &a_workflow(),
+            &StepId::new("implement"),
+            Some(&moved),
+        )
+        .expect("a prompt")
 }
 
 /// **What makes the marking usable on the far side.** A block heading is

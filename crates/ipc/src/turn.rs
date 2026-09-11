@@ -128,6 +128,35 @@ pub enum Voice {
     Fleet,
 }
 
+/// What kind of section one heading of an opening brief is.
+///
+/// **A plain enum, like [`Voice`], for the same reason: no registry declares
+/// this set.** `fleet::briefing` decides it from which block it is writing,
+/// and a `wire_enum!` over a `core-model` type would invent a domain concept
+/// that exists only to be this field's spelling.
+///
+/// **The opening block carries no heading and so carries no kind** — there is
+/// no index in `headings` to hang one from. It is the one span every brief
+/// opens with, so a client may treat "before the first heading" as
+/// [`Standing`](BlockKind::Standing) by position, without this field saying so.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BlockKind {
+    /// A fact about this Job, this attempt, or the branch it runs on: what was
+    /// asked, what a person said, why this attempt exists, what the branch
+    /// looked like when the Drone opened it.
+    AboutThisJob,
+    /// The same wording on every Job that has this block at all: how to hand
+    /// work in, where a Drone's own files go, the scope-tool rule.
+    Standing,
+    /// The rail: where this step sits among the workflow's, and which of the
+    /// others are already done. Bridge holds the same fact as data.
+    Steps,
+    /// The Checks that gate this step, offered rather than instructed. Bridge
+    /// holds the same list as data.
+    Checks,
+}
+
 /// The row vocabulary. Tagged `event` rather than `kind`, because
 /// `Unrecognised` already carries a `kind` and a key cannot be two things.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -274,6 +303,26 @@ pub enum Saw {
         /// brief is one block of prose.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         headings: Vec<usize>,
+        /// What kind of section each heading in `headings` is, paired by
+        /// position: `kinds[i]` describes the block that opens at
+        /// `headings[i]`. Alongside `headings` rather than folded into it, so
+        /// a peer already reading `headings: Vec<usize>` keeps reading exactly
+        /// that — this is a second field, not a retyping of the first.
+        ///
+        /// **Read only where the two lengths agree.** A row from before this
+        /// field existed decodes with `kinds` empty and `headings` not, and a
+        /// row this crate writes always makes the two agree — so a mismatch
+        /// means a kind cannot be paired to its heading, and the one safe
+        /// reading is none of them can: draw every heading exactly as
+        /// `headings` alone always meant, rather than pairing the first few
+        /// and guessing at the rest.
+        ///
+        /// **Empty is two things and they read the same.** A turn with no
+        /// headed blocks has nothing to classify, and a row written before
+        /// this field existed has nothing recorded — `headings`'s own rule,
+        /// carried across.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        kinds: Vec<BlockKind>,
     },
     /// One declared Check, as Fleet ran it.
     ///

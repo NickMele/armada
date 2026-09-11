@@ -188,25 +188,31 @@ impl Opening {
             Attempted::No => assemble(job, workflow, at, &self.crossed),
             Attempted::Before(stopped) => {
                 let mut blocks = assemble(job, workflow, at, &self.crossed);
-                blocks.headed(&stopped.block());
+                blocks.headed(&stopped.block(), ipc::BlockKind::AboutThisJob);
                 blocks
             }
         };
         if let Some(moved) = moved {
-            blocks.headed(Reconciling::of(moved).text());
+            blocks.headed(Reconciling::of(moved).text(), ipc::BlockKind::AboutThisJob);
         }
         blocks.brief()
     }
 }
 
-/// A brief as it is sent: the turn, and which of its lines are block headings.
+/// A brief as it is sent: the turn, which of its lines are block headings, and
+/// what kind of section each heading opens.
 ///
-/// **The headings travel because the shape is known only where it is written.**
-/// `ipc::Saw::Instructed::headings` carries the argument, and what goes wrong
-/// for a reader that guesses instead.
+/// **The headings travel because the shape is known only where it is
+/// written.** `ipc::Saw::Instructed::headings` carries the argument, and what
+/// goes wrong for a reader that guesses instead. `kinds` travels for the same
+/// reason and beside it rather than inside it: which block a call to
+/// [`Blocks::headed`] is writing is known at that call and nowhere later, and
+/// `ipc::Saw::Instructed::kinds` is where `docs/practices/protocol.md`'s test
+/// for this seam says it is read — Bridge draws by it and never matches on it.
 pub struct Brief {
     prompt: Prompt,
     headings: Vec<usize>,
+    kinds: Vec<ipc::BlockKind>,
 }
 
 impl Brief {
@@ -218,6 +224,13 @@ impl Brief {
     /// The lines that are block headings, zero-based into the turn's lines.
     pub fn headings(&self) -> &[usize] {
         &self.headings
+    }
+
+    /// What kind of section each heading in [`headings`](Brief::headings) is,
+    /// paired by position. Always the same length as `headings` — this module
+    /// is the one writer of both and never appends one without the other.
+    pub fn kinds(&self) -> &[ipc::BlockKind] {
+        &self.kinds
     }
 
     /// The turn, for the harness that spawns on it.
@@ -234,9 +247,15 @@ impl Brief {
 /// them — and wrong about [`BASELINE`], which opens with prose, and wrong about
 /// what the part before produced, which opens with a sentence. The two
 /// constructors are the difference, stated by the call that appends.
+///
+/// **A headed block also says what kind of section it is**, from
+/// `ipc::BlockKind`'s closed set — the argument [`Blocks::headed`] takes and
+/// [`Blocks::prose`] does not, because a block with no heading has nothing for
+/// Bridge to pair a kind to either.
 struct Blocks {
     text: String,
     headings: Vec<usize>,
+    kinds: Vec<ipc::BlockKind>,
     /// Lines written so far, which is the line the next block starts on.
     lines: usize,
 }
@@ -246,6 +265,7 @@ impl Blocks {
         let mut blocks = Blocks {
             text: String::new(),
             headings: Vec::new(),
+            kinds: Vec::new(),
             lines: 0,
         };
         blocks.prose(baseline);
@@ -254,22 +274,23 @@ impl Blocks {
 
     /// A block with no heading of its own.
     fn prose(&mut self, block: &str) {
-        self.push(block, false);
+        self.push(block, None);
     }
 
-    /// A block whose first line is its heading.
-    fn headed(&mut self, block: &str) {
-        self.push(block, true);
+    /// A block whose first line is its heading, and what kind of section it is.
+    fn headed(&mut self, block: &str, kind: ipc::BlockKind) {
+        self.push(block, Some(kind));
     }
 
-    fn push(&mut self, block: &str, headed: bool) {
+    fn push(&mut self, block: &str, kind: Option<ipc::BlockKind>) {
         if !self.text.is_empty() {
             // The blank line between blocks, which is two more lines gone by.
             self.text.push_str("\n\n");
             self.lines += 2;
         }
-        if headed {
+        if let Some(kind) = kind {
             self.headings.push(self.lines);
+            self.kinds.push(kind);
         }
         self.text.push_str(block);
         self.lines += block.matches('\n').count();
@@ -281,6 +302,7 @@ impl Blocks {
         Ok(Brief {
             prompt: Prompt::assembled(&self.text)?,
             headings: self.headings,
+            kinds: self.kinds,
         })
     }
 }
@@ -323,7 +345,7 @@ pub fn resuming_turn(
     crossed: &Crossed,
 ) -> Result<Brief, SpawnConfigRefused> {
     let mut blocks = assemble(job, workflow, at, crossed);
-    blocks.headed(&stopped.block());
+    blocks.headed(&stopped.block(), ipc::BlockKind::AboutThisJob);
     blocks.brief()
 }
 
@@ -524,27 +546,30 @@ impl Stopped {
 fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed) -> Blocks {
     // The baseline is the one block with no heading of its own.
     let mut blocks = Blocks::opening(BASELINE);
-    blocks.headed(&notekeeping(job.id()));
-    blocks.headed(&job_brief(job));
-    blocks.headed(&where_you_are(workflow, at, crossed.produced()));
+    blocks.headed(&notekeeping(job.id()), ipc::BlockKind::Standing);
+    blocks.headed(&job_brief(job), ipc::BlockKind::AboutThisJob);
+    blocks.headed(
+        &where_you_are(workflow, at, crossed.produced()),
+        ipc::BlockKind::Steps,
+    );
     // **After the rail and before the step.** The rail is what establishes
     // that there is a part before this one at all, and this says that part is
     // closed — which is only meaningful once a Drone knows it exists.
     if let Some(cleared) = crossed.cleared() {
-        blocks.headed(&cleared.text());
+        blocks.headed(&cleared.text(), ipc::BlockKind::AboutThisJob);
     }
     // **Before the step and not after it.** A Drone that stops reading at the
     // step block has read the instruction, and the block itself says which of
     // the two comes first — an instruction placed after the definition it
     // overrides reads as a footnote to it.
     if let Some(redirect) = crossed.redirect() {
-        blocks.headed(&redirect.text());
+        blocks.headed(&redirect.text(), ipc::BlockKind::AboutThisJob);
     }
     // **Before the step block, with the other things the boundary carried.**
     // It is what the part is about rather than a footnote to it: a Drone after
     // a dispatch has no other way to learn that the Jobs exist.
     if let Some(dispatched) = crossed.dispatched() {
-        blocks.headed(dispatched.text());
+        blocks.headed(dispatched.text(), ipc::BlockKind::AboutThisJob);
     }
     // **After the instruction and before the step.** It is not something the
     // person asked for, so it does not come first; it is something about the
@@ -552,24 +577,24 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed
     // reads a step that may already be done. `crossing::Overtaken` says why the
     // Drone is told rather than the Job stopped.
     if let Some(overtaken) = crossed.overtaken() {
-        blocks.headed(&overtaken.text());
+        blocks.headed(&overtaken.text(), ipc::BlockKind::AboutThisJob);
     }
     if let Some(step) = workflow.steps().iter().find(|step| step.id() == at) {
-        blocks.headed(&step_block(step));
+        blocks.headed(&step_block(step), ipc::BlockKind::AboutThisJob);
         // **Before the file the part delivers**, on the one workflow where
         // both appear: what the part is for decides what goes in the file, and
         // a Drone reading the path first has already started writing.
         if let Some(splitting) = Splitting::at(workflow, at) {
-            blocks.headed(splitting.text());
+            blocks.headed(splitting.text(), ipc::BlockKind::Standing);
         }
         if let Some(delivers) = Delivering::at(step) {
-            blocks.headed(delivers.text());
+            blocks.headed(delivers.text(), ipc::BlockKind::AboutThisJob);
         }
         if let Some(asked) = Declaring::at(step) {
-            blocks.headed(asked.text());
+            blocks.headed(asked.text(), ipc::BlockKind::Standing);
         }
         if let Some(offered) = Checking::at(step) {
-            blocks.headed(offered.text());
+            blocks.headed(offered.text(), ipc::BlockKind::Checks);
         }
     }
     blocks

@@ -55,6 +55,25 @@ export type Opening = {
  */
 export type Voice = "armada" | "drone" | "fleet";
 
+/**
+ * What kind of section one heading of an opening brief is. `crates/ipc/src/turn.rs`.
+ *
+ * **A plain type, like `Voice`, for the same reason: no registry declares this
+ * set.** `fleet::briefing` decides it from which block it is writing, and
+ * stamps every heading it writes with one.
+ *
+ * - `about_this_job` — a fact about this Job, this attempt, or the branch it
+ *   runs on: what was asked, what a person said, why this attempt exists, what
+ *   the branch looked like when the Drone opened it.
+ * - `standing` — the same wording on every Job that has this block at all: how
+ *   to hand work in, where a Drone's own files go, the scope-tool rule.
+ * - `steps` — the rail: where this step sits among the workflow's, and which
+ *   of the others are done. A reader already holds the same fact as data.
+ * - `checks` — the Checks that gate this step, offered rather than
+ *   instructed. A reader already holds the same list as data.
+ */
+export type BlockKind = "about_this_job" | "standing" | "steps" | "checks";
+
 /** Nothing more is coming, and why. A socket that simply stops says nothing. */
 export type Closed = {
   /** `drone_ended` or `nothing_writing`. */
@@ -170,8 +189,29 @@ export type Saw =
    * Fleet stamped this field** — deliberately the same to a reader, because
    * what an older row draws as is what an unheaded turn draws as. Every turn
    * but the opening brief is one block of prose.
+   *
+   * `kinds` names what kind of section each heading in `headings` is, paired
+   * by position — `kinds[i]` is `headings[i]`'s kind. **Read only where the two
+   * arrays are the same length.** A row from a Fleet built before this field
+   * existed decodes with `kinds` absent or empty and `headings` not; that
+   * mismatch is the signal, and the one safe reading of it is to draw every
+   * heading exactly as `headings` alone always meant, rather than pairing the
+   * first few kinds and guessing at the rest. Since protocol 9.7.
+   *
+   * **The opening block carries no kind because it carries no heading.** The
+   * baseline is prose from its first character — `docs/contracts/agent-prompt.md`'s
+   * own rendering — so there is no index in `headings` to hang a kind from
+   * either. It is the one span every brief opens with, so a reader may treat
+   * "before the first heading" as `standing` by position, without this field
+   * saying so.
    */
-  | { event: "instructed"; occasion: string; text: string; headings?: number[] }
+  | {
+      event: "instructed";
+      occasion: string;
+      text: string;
+      headings?: number[];
+      kinds?: BlockKind[];
+    }
   /**
    * One declared Check, as Fleet ran it. **The Drone never runs these** — a
    * Drone reporting its own tests is a claim rather than a result — so a Check

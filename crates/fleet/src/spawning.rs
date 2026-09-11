@@ -134,8 +134,10 @@ where
         // until this row.
         let opened_with = brief.as_str().to_string();
         // Kept beside the text for the same reason, and it is the half no
-        // reader can recover from the text: which lines are block headings.
+        // reader can recover from the text: which lines are block headings,
+        // and what kind of section each one is.
         let headings = brief.headings().to_vec();
+        let kinds = brief.kinds().to_vec();
         let config = match self.spawn_config(job, step, &worktree, brief.prompt()) {
             Ok(config) => config,
             Err(cause) => {
@@ -220,7 +222,7 @@ where
         // Drone has said anything. It is written after the slot exists rather
         // than before because the sinks live on it.
         if let Some(at_work) = working.as_ref() {
-            at_work.briefed(&opened_with, headings);
+            at_work.briefed(&opened_with, headings, kinds);
         }
         // This step's baseline, read once the slot exists. A Job's first step
         // ordinarily starts on a worktree holding nothing, and reading it
