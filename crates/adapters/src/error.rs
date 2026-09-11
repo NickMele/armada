@@ -326,11 +326,19 @@ pub enum CommitWorkError {
         branch: String,
         cause: git2::Error,
     },
+    /// A path to commit that is absolute or climbs out with `..`. Refused
+    /// before anything is staged, so the index is as it was.
+    PathOutsideTheWorktree { worktree: String, path: String },
 }
 
 impl fmt::Display for CommitWorkError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            CommitWorkError::PathOutsideTheWorktree { worktree, path } => write!(
+                f,
+                "`{path}` is not a path inside the worktree at {worktree}, so \
+                 nothing was committed and nothing was staged"
+            ),
             CommitWorkError::WorktreeUnreadable { worktree, cause } => {
                 write!(f, "the worktree at {worktree} would not open: {cause}")
             }
@@ -358,6 +366,7 @@ impl Error for CommitWorkError {
             CommitWorkError::WorktreeUnreadable { cause, .. }
             | CommitWorkError::NotStaged { cause, .. }
             | CommitWorkError::NotCommitted { cause, .. } => Some(cause),
+            CommitWorkError::PathOutsideTheWorktree { .. } => None,
         }
     }
 }

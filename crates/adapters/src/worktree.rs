@@ -98,6 +98,16 @@ impl Vcs for GitVcs {
     ) -> Result<Committed, Self::CommitError> {
         crate::commit::commit_all(worktree, message, at)
     }
+
+    fn commit_paths(
+        &self,
+        worktree: &Worktree,
+        paths: &[&str],
+        message: &str,
+        at: CommitTime,
+    ) -> Result<Committed, Self::CommitError> {
+        crate::commit::commit_paths(worktree, paths, message, at)
+    }
 }
 
 /// **The pre-flight v1 learned to write.**
