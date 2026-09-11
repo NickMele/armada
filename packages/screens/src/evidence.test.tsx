@@ -263,6 +263,8 @@ function screen(
           sheet: null,
           opens: records,
           onOpenSheet: () => {},
+          now: NOW,
+          following: { reading: { state: "none" }, picked: null, pick: () => {}, follow: () => {} },
         }),
       }}
     />,

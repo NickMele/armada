@@ -44,6 +44,7 @@ import {
   openPullRequest,
   readCall,
   readCheckOutput,
+  followCheckOutput,
   readFrame,
   readDiff,
   readEvidence,
@@ -361,6 +362,8 @@ export function App() {
                 deciding={commands.deciding === reading.id}
                 observed={state.observed}
                 journalled={state.journalled}
+                followed={state.followed}
+                onFollowCheckOutput={followCheckOutput}
                 resources={state.resources}
                 examination={state.examination}
                 // The one act here that changes nothing. It costs no model

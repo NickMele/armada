@@ -18,10 +18,10 @@
 // pre-fetching every row that kept one would spend on the screen exactly what
 // the split was made to avoid.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ConsoleRegion, ConsoleRow } from "@armada/components";
-import type { CheckOutput, CheckOutputRead } from "@armada/protocol";
+import type { CheckOutput, CheckOutputRead, FollowedLog } from "@armada/protocol";
 
 /**
  * What one Check's output is, as this window has it.
@@ -197,6 +197,108 @@ export function noteFor(held: OutputState | undefined): string {
   if (held.state === "absent") return held.note;
   return PRINTED_NOTHING;
 }
+
+// ------------------------------------------------------ a log still growing
+//
+// **A running Check's log is the one output that moves**, so it is not held
+// here: it is streamed by main over its own socket and published, the way the
+// Job's own log is. What this half holds is which Check a person picked and how
+// to ask main to follow it — `useCheckOutputs`' shape, for a reading that is
+// not finished.
+
+/**
+ * Following one running Check's log, as the screen's caller hands it in.
+ * `null` for both stops. An argument, not a global, for `ReadCheckOutput`'s
+ * reason.
+ */
+export type FollowCheckOutput = (jobId: string | null, kept: string | null) => unknown;
+
+/** What a chapter needs to show a running Check's log as it is written. */
+export type Following = {
+  /** The log main is following for this Job, or `none`. */
+  reading: FollowedLog;
+  /** The running Check a person picked, by its log's name, or `null` for none. */
+  picked: string | null;
+  pick: (kept: string) => void;
+  /** Follow this log, or `null` to stop. */
+  follow: (kept: string | null) => void;
+};
+
+/**
+ * Hold which running Check's log a person is reading, for one Job.
+ *
+ * **Stopped when the Job changes and when the screen goes**, so a socket is
+ * never left following a log nobody is looking at.
+ */
+export function useFollowing(
+  follow: FollowCheckOutput | undefined,
+  followed: FollowedLog,
+  jobId: string,
+): Following {
+  const [picked, setPicked] = useState<string | null>(null);
+  useEffect(() => setPicked(null), [jobId]);
+  useEffect(
+    () => () => {
+      follow?.(null, null);
+    },
+    [follow, jobId],
+  );
+  const start = useCallback(
+    (kept: string | null) => {
+      follow?.(kept === null ? null : jobId, kept);
+    },
+    [follow, jobId],
+  );
+  const reading: FollowedLog =
+    followed.state !== "none" && followed.jobId === jobId ? followed : { state: "none" };
+  return useMemo(
+    () => ({ reading, picked, pick: setPicked, follow: start }),
+    [reading, picked, start],
+  );
+}
+
+/** A followed log's lines, as rows numbered the way the file numbers them. */
+export function liveRowsOf(reading: FollowedLog, kept: string): ConsoleRow[] {
+  if (reading.state !== "following" || reading.kept !== kept) return [];
+  return reading.lines.map((text, at) => ({ row: "line" as const, at: reading.fromLine + at, text }));
+}
+
+/**
+ * Where a followed log's window sits, and whose log it is. **Says it is still
+ * being written**, so a pane that has stopped moving because the Check is quiet
+ * does not read as a finished one.
+ */
+export function liveRegionOf(reading: FollowedLog, kept: string): ConsoleRegion | undefined {
+  if (reading.state !== "following" || reading.kept !== kept) return undefined;
+  const count = reading.fromLine - 1 + reading.lines.length;
+  const where = reading.ended === undefined ? "being written" : `${count.toLocaleString()} lines`;
+  return { says: `${reading.name} · ${where}`, path: reading.path };
+}
+
+/** What a followed log with no lines says, per state. */
+export function liveNoteFor(reading: FollowedLog, kept: string): string {
+  if (reading.state === "failed" && reading.kept === kept) return NOT_ANSWERED_LIVE;
+  if (reading.state !== "following" || reading.kept !== kept) return OPENING_LIVE;
+  if (reading.ended === undefined) return NOTHING_PRINTED_YET;
+  if (reading.ended === "finished") return PRINTED_NOTHING;
+  if (reading.ended === "unreadable") return UNREADABLE_LIVE;
+  return CLOSED_LIVE;
+}
+
+/** The socket is opening. */
+const OPENING_LIVE = "Opening this Check's log…";
+
+/** Following, and the Check has printed nothing so far. */
+const NOTHING_PRINTED_YET = "This Check has printed nothing yet.";
+
+/** Fleet said it could not read the file. */
+const UNREADABLE_LIVE = "Fleet could not read this Check's log.";
+
+/** The connection went without Fleet saying why. */
+const CLOSED_LIVE = "The connection to this Check's log closed.";
+
+/** Fleet did not answer the ask to follow it. */
+const NOT_ANSWERED_LIVE = "Fleet did not answer for this Check's log.";
 
 /** Before the chapter is opened. Nothing has been asked for. */
 const NOT_ASKED = "Open this chapter to read what the Check printed.";

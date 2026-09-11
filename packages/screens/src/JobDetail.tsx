@@ -72,6 +72,7 @@ import type {
   Examination,
   Footprint,
   Holds,
+  FollowedLog,
   Journalled,
   Observed,
   Outcome,
@@ -82,7 +83,15 @@ import type { FileReport, JobSummary } from "@armada/protocol";
 import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
 import { heldForMoney, heldForTurns, type ConfirmableAct } from "./Acts";
 import { useCallArguments, type ReadCall } from "./calls";
-import { useCheckOutputs, type ReadCheckOutput } from "./outputs";
+import {
+  useCheckOutputs,
+  useFollowing,
+  type FollowCheckOutput,
+  type ReadCheckOutput,
+} from "./outputs";
+
+/** What `followed` reads as where the caller hands none in. */
+const NOT_FOLLOWING: FollowedLog = { state: "none" };
 import { useFrames, type ReadFrame } from "./frames";
 import { openArtifact } from "./opening";
 import type { OpenArtifact, OpenPullRequest } from "./opening";
@@ -248,6 +257,13 @@ export type JobDetailProps = {
    */
   journalled: Journalled;
   /**
+   * The running Check's log main is following, as it is written. Optional,
+   * because a surface drawing a Job with no gate running has nothing to follow.
+   */
+  followed?: FollowedLog;
+  /** Follow one running Check's log, or `null` to stop. */
+  onFollowCheckOutput?: FollowCheckOutput;
+  /**
    * What the open Job holds on this machine. **Opened with the Job**, like the
    * two sockets above: the panel it draws answers *is this working*, which is
    * the question somebody opening a Job they suspect has wedged came with.
@@ -278,6 +294,8 @@ export function JobDetail({
   onOpenPullRequest,
   onReadCall,
   onReadCheckOutput,
+  followed,
+  onFollowCheckOutput,
   onReadFrame,
   onNeedMaterial,
   onNeedRemarks,
@@ -485,6 +503,9 @@ export function JobDetail({
   // Checks and a reader moving between them should not re-fetch a file it
   // already has.
   const outputs = useCheckOutputs(onReadCheckOutput, job.id);
+  // The running Check's log somebody is reading, for as long as this Job is
+  // open. Streamed by main, and let go when the Job changes.
+  const following = useFollowing(onFollowCheckOutput, followed ?? NOT_FOLLOWING, job.id);
 
   // The frames each step captured, for as long as this Job is open. Held for
   // the Job for `outputs`' reason, and it owns the object URLs it mints — a
@@ -572,6 +593,8 @@ export function JobDetail({
           // two would be two vocabularies for one failed open — #307.
           opens: opensRecords,
           onOpenSheet: openSheet,
+          now,
+          following,
         });
 
   // The Job header, and everything that goes in it. `heading.tsx` holds what

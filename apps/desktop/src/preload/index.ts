@@ -165,6 +165,11 @@ const api: BridgeApi = {
   observeJob: (jobId: string | null): Promise<void> =>
     ipcRenderer.invoke(CHANNELS.observeJob, jobId),
 
+  // One running Check's log, as it is written. Read-only like the entry above,
+  // and its own because it is its own socket.
+  followCheckOutput: (jobId: string | null, kept: string | null): Promise<void> =>
+    ipcRenderer.invoke(CHANNELS.followCheckOutput, jobId, kept),
+
   // One Job's transition history. Read-only like the two above it, and a
   // separate entry because it is a separate operation: a history is not a field
   // on the detail, so it is asked for when a surface unfolds rather than paid
