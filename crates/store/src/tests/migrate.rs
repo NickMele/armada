@@ -878,7 +878,10 @@ fn a_store_at_version_forty_five_migrates_forward_to_the_manifest_snapshot() {
     );
 
     store
-        .insert_job(&top_level_numbered(&store, "01AFTERTHESNAPSHOT"), &created_at())
+        .insert_job(
+            &top_level_numbered(&store, "01AFTERTHESNAPSHOT"),
+            &created_at(),
+        )
         .expect("a Job written after the migration");
     store
         .set_manifest_snapshot(&job_id("01AFTERTHESNAPSHOT"), "version: 1\nid: 01M\n")
