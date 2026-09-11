@@ -103,6 +103,14 @@
   min-width: 0;
 }
 
+/* A sheet with no controls has nothing to wrap under its titles, so the titles
+   give up their basis and the close stays on their row, at the trailing edge.
+   With the run column as their floor, a narrow sheet like Pulse wrapped its
+   close under the id, flush left. */
+.armada-sheet__head:not(:has(.armada-sheet__controls)) .armada-sheet__titles {
+  flex-basis: 0;
+}
+
 .armada-sheet__title {
   margin: 0;
   white-space: nowrap;
