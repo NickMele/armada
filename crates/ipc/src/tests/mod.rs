@@ -28,6 +28,8 @@ mod gates;
 mod history;
 mod journal;
 mod mcp;
+/// The one tool the harness calls rather than the model, and the two answers.
+mod permission;
 /// The one DTO on this seam a peer *writes*, and what it refuses.
 mod proposals;
 mod reports;
