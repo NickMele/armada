@@ -1,7 +1,7 @@
 // A reviewer's running commentary on a story, read by an agent session rather
 // than by another person — so the record is a JSON line per note, not prose.
-import { existsSync, mkdirSync, appendFileSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import type { Plugin } from "vite";
 import type { Picked } from "./picker-types.ts";
@@ -17,8 +17,9 @@ export interface NotePayload {
 
 export interface NoteRecord extends NotePayload {
   at: string;
-  // Unset until a screenshot lands beside a note. Present in the shape now so
-  // that day's route and record do not change, only this field's value does.
+  // The screenshot pasted with the note, as a path from the worktree root.
+  // The image itself lands under `.notes/shots/`, ignored with the rest of
+  // `.notes/`, and never inside the JSON line.
   shot?: string;
 }
 
@@ -73,6 +74,33 @@ function readNotesFor(file: string, story: string): NoteRecord[] {
     .filter((record) => record.story === story);
 }
 
+// A pasted screenshot as the panel sends it: a data URL, decoded here and
+// written beside the notes file.
+const SHOT = /^data:image\/(png|jpeg|webp|gif);base64,([A-Za-z0-9+/=]+)$/;
+const SHOT_LIMIT = 15 * 1024 * 1024;
+const SHOT_TYPES: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+};
+
+function shotsDir(worktreeRoot: string): string {
+  return join(worktreeRoot, ".notes", "shots");
+}
+
+function saveShot(worktreeRoot: string, dataUrl: string): string {
+  const match = SHOT.exec(dataUrl);
+  if (match === null) throw new Error("a screenshot has to be a PNG, JPEG, WebP or GIF");
+  const bytes = Buffer.from(match[2] ?? "", "base64");
+  if (bytes.length > SHOT_LIMIT) throw new Error("a screenshot has to be under 15 MB");
+  const ext = match[1] === "jpeg" ? "jpg" : (match[1] ?? "png");
+  const name = `${new Date().toISOString().replace(/[:.]/g, "-")}.${ext}`;
+  mkdirSync(shotsDir(worktreeRoot), { recursive: true });
+  writeFileSync(join(shotsDir(worktreeRoot), name), bytes);
+  return join(".notes", "shots", name);
+}
+
 function appendNote(file: string, record: NoteRecord): void {
   mkdirSync(dirname(file), { recursive: true });
   appendFileSync(file, `${JSON.stringify(record)}\n`);
@@ -90,6 +118,22 @@ export function notesPlugin(): Plugin {
         if (!req.url?.startsWith("/__notes")) return next();
         const url = new URL(req.url, "http://localhost");
 
+        // A note's screenshot, for the panel to draw under the note. A bare
+        // file name only, so nothing outside `.notes/shots/` is reachable.
+        if (req.method === "GET" && url.pathname.startsWith("/__notes/shots/")) {
+          const name = basename(url.pathname);
+          const path = join(shotsDir(root), name);
+          const type = SHOT_TYPES[name.split(".").pop() ?? ""];
+          if (!/^[\w.-]+$/.test(name) || type === undefined || !existsSync(path)) {
+            res.statusCode = 404;
+            res.end();
+            return;
+          }
+          res.setHeader("Content-Type", type);
+          res.end(readFileSync(path));
+          return;
+        }
+
         if (req.method === "GET") {
           const story = url.searchParams.get("story") ?? "";
           res.setHeader("Content-Type", "application/json");
@@ -102,7 +146,9 @@ export function notesPlugin(): Plugin {
           req.on("data", (chunk) => (body += chunk));
           req.on("end", () => {
             try {
-              const payload = JSON.parse(body) as Partial<NotePayload>;
+              const { shot, ...payload } = JSON.parse(body) as Partial<NotePayload> & {
+                shot?: unknown;
+              };
               if (
                 typeof payload.story !== "string" ||
                 typeof payload.titled !== "string" ||
@@ -112,7 +158,9 @@ export function notesPlugin(): Plugin {
                 res.end("expected { story, titled, note }");
                 return;
               }
-              appendNote(file, { ...(payload as NotePayload), at: new Date().toISOString() });
+              const record: NoteRecord = { ...(payload as NotePayload), at: new Date().toISOString() };
+              if (typeof shot === "string" && shot !== "") record.shot = saveShot(root, shot);
+              appendNote(file, record);
               res.statusCode = 204;
               res.end();
             } catch (err) {
