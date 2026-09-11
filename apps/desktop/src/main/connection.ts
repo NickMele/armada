@@ -478,14 +478,9 @@ export class FleetConnection {
       return;
     }
 
-    if (
-      event.kind === "job.judging" ||
-      event.kind === "job.checking" ||
-      event.kind === "job.command_waiting"
-    ) {
+    if (event.kind === "job.judging" || event.kind === "job.checking") {
       // `job.checking` is the same answer one tier along: `StepDetail.checking`
       // is re-read, and a running Check's elapsed time is counted, not re-read.
-      // `job.command_waiting` is the same again: `JobDetail.command_waiting`.
       // **Re-read rather than fold.** The call is served on the open Job's own
       // field, `StepDetail.judging`, which is what a Bridge opened mid-call
       // already reads — so folding it into a second copy would give one fact
@@ -498,7 +493,7 @@ export class FleetConnection {
       this.refresh(fleet.port, event.job_id);
       return;
     }
-    if (event.kind === "job.asking") {
+    if (event.kind === "job.asking" || event.kind === "job.command_waiting") {
       // **The row does change here, unlike a Judge call, and it was not being
       // changed.** `JobSummary.asking` is the second arm of the Needs-you rule:
       // a Job whose Drone has asked something is `running` with `who_is_acting`
@@ -513,12 +508,13 @@ export class FleetConnection {
       // one bit the Board needs and cannot get any other way.
       //
       // Absent `asking` is the question coming back, and `false` says so
-      // outright — the field's two readings are the same sentence.
-      const answered = event.asking !== undefined;
+      // outright. A waiting command is the same arm, `waiting` for `asking`.
+      const waiting =
+        event.kind === "job.asking" ? event.asking !== undefined : event.waiting !== undefined;
       this.publish({
         connection,
         jobs: this.current.jobs.map((job) =>
-          job.id === event.job_id ? { ...job, asking: answered } : job,
+          job.id === event.job_id ? { ...job, asking: waiting } : job,
         ),
       });
       this.refresh(fleet.port, event.job_id);
