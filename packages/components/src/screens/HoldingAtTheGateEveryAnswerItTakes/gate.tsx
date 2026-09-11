@@ -13,7 +13,7 @@ import { BEHIND, HEADING } from "../InsideAJobOneArrangementAtEveryState/fixture
 import {
   chapterAct,
   PRODUCED_FILES,
-} from "../InsideAJobOneArrangementAtEveryState/chapters";
+} from "../InsideAJob/chapters";
 
 /**
  * The two Jobs this sheet draws, and the one difference between them.

@@ -6,8 +6,8 @@ import {
 } from "../../compositions/ReviewComments/ReviewComments";
 import { ReviewDecision } from "../../compositions/ReviewDecision/ReviewDecision";
 import { VerdictSheet, type VerdictSheetProps } from "../../compositions/VerdictSheet/VerdictSheet";
-import { InsideAJob } from "../InsideAJobOneArrangementAtEveryState/InsideAJobOneArrangementAtEveryState";
-import type { InsideAJobProps } from "../InsideAJobOneArrangementAtEveryState/InsideAJobOneArrangementAtEveryState";
+import { InsideAJob } from "../InsideAJob/InsideAJob";
+import type { InsideAJobProps } from "../InsideAJob/InsideAJob";
 
 /**
  * A Job holding at a human gate, at every shape the answer takes.

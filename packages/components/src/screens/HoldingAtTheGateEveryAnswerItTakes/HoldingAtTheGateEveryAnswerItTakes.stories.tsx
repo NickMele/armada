@@ -4,7 +4,7 @@ import { expect, within } from "storybook/test";
 import { Button } from "../../primitives/Button/Button";
 import { CheckRuns } from "../../compositions/CheckRuns/CheckRuns";
 import type { VerdictSheetProps } from "../../compositions/VerdictSheet/VerdictSheet";
-import { OnAScreen, WHERE, BRIEF } from "../InsideAJobOneArrangementAtEveryState/fixtures";
+import { OnAScreen, WHERE, BRIEF } from "../InsideAJob/fixtures";
 import { HoldingAtTheGate } from "./HoldingAtTheGateEveryAnswerItTakes";
 import {
   GATE_CHAPTERS,
