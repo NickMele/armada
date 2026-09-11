@@ -779,7 +779,7 @@ export function JobDetail({
               // A question outranks the render's own notice: nothing else on
               // this step is what a person is here for while one is open, and
               // the two would otherwise both claim the band.
-              notice: askingOf(whole) ?? noticeOf(job, whole, render, open, opensRecords),
+              notice: askingOf(whole) ?? noticeOf(job, whole, render, open, opensRecords, answering),
               // **The question sits where the redirect box does** — between the
               // strip and the story, because it is the same kind of thing: a
               // box a person acts in about the step they are looking at. A

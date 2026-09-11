@@ -33,7 +33,7 @@ import type { StepNotice } from "./InsideAJob";
 import type { ReactNode } from "react";
 
 import type { CommandAnswer, JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
-import { COMMAND_ANSWER } from "./copy";
+import { answerNamed, offeredOf } from "./copy";
 import { span } from "./duration";
 import { sentenceOf } from "./gates";
 import { Opening, openKept, type Opens } from "./phases";
@@ -134,20 +134,11 @@ export function answeringOf(
   return { send: (call, answer) => onAnswerCommand(jobId, call, answer), stale, acting };
 }
 
-/**
- * The answers one command offers, as words, in the order Fleet sent them. An
- * answer from a Fleet ahead of this build is left out rather than drawn as a
- * button with no words on it.
- */
-export function offeredOf(
-  offers: readonly CommandAnswer[],
-): { offer: CommandAnswer; label: string; means: string }[] {
-  const known: Partial<Record<string, { label: string; means: string }>> = COMMAND_ANSWER;
-  return offers.flatMap((offer) => {
-    const said = known[offer];
-    return said === undefined ? [] : [{ offer, ...said }];
-  });
-}
+/** Why a refused row's answers are off, where the reading is not live. */
+const REFUSED_STALE = "This Job is not live, so nothing can be sent.";
+
+/** Why they are off, where an answer is already out. */
+const REFUSED_SENDING = "That answer is already on its way to Fleet.";
 
 /**
  * The command a drone is waiting on a person to allow. `undefined` where
@@ -275,6 +266,11 @@ export function questionOf(
  * Job had nothing saying what from. It rides on every trigger rather than that
  * one, because a Drone denied the command it needed escalates as `stalled` or
  * `silent` just as often.
+ *
+ * **A refused row Fleet offers answers on is answered there**, through
+ * `answering` — the same value the command a Drone is waiting on is answered
+ * through. Without it the rows draw their controls off, which only a test
+ * that is not about them does.
  */
 export function noticeOf(
   job: JobSummary,
@@ -282,6 +278,7 @@ export function noticeOf(
   render: string,
   step: StepDetail,
   opens: Opens,
+  answering?: Answering,
 ): StepNotice | undefined {
   if (render === "reviewing") {
     return {
@@ -383,7 +380,20 @@ export function noticeOf(
             onOpenBrief={(brief) => openKept(opens, { kept: brief, what: "brief" })}
           />
         )}
-        {refused === undefined ? null : <Refusals {...refused} again={undefined} />}
+        {refused === undefined ? null : (
+          <Refusals
+            {...refused}
+            again={undefined}
+            onAnswer={(call, name) => {
+              const chose = answerNamed(name);
+              if (chose !== undefined) answering?.send(call, chose);
+            }}
+            disabled={answering === undefined || answering.stale || answering.acting}
+            disabledNote={
+              answering?.stale ? REFUSED_STALE : answering?.acting ? REFUSED_SENDING : undefined
+            }
+          />
+        )}
         {recourse.sent === undefined ? null : <span className="block">{recourse.sent}</span>}
       </>
     ),

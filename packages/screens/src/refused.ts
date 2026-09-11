@@ -28,6 +28,7 @@
 
 import type { Refused } from "@armada/components";
 import type { JobDetail as JobWhole, Refusal } from "@armada/protocol";
+import { offeredOf } from "./copy";
 import { sizeOf } from "./story";
 
 /** The rows, and the sentences under them. */
@@ -65,6 +66,7 @@ export function refusedIn(whole: JobWhole | null): Refusals | undefined {
     // Absent rather than empty, because the row draws nothing for an absent
     // reason and `because` is empty on almost every refusal the harness sends.
     ...(one.because === "" ? {} : { because: one.because }),
+    ...answersOf(one),
   }));
   return {
     refused,
@@ -92,10 +94,48 @@ export function refusedIn(whole: JobWhole | null): Refusals | undefined {
  * so naming *which* row is undeclared would take a second read, and a match
  * wrong on one row is a false claim about a command in front of somebody. What
  * is said instead is true of every row without matching anything.
+ *
+ * **Where a row offers an answer, that is the way out, and the sentence says
+ * so** instead of sending a person to edit armada.yml by hand. Fleet offers
+ * answers only on a Job stopped at `blocked_by_policy`, so the two older
+ * sentences stand everywhere else — including every Job an older Fleet serves.
  */
 function againOf(refused: readonly Refusal[]): string {
+  if (refused.some((one) => offeredOf(one.offers ?? []).length > 0)) return ALLOWED_FROM_ITS_ROW;
   const ran = refused.some((one) => one.tool === BASH);
   return ran ? DECLARED_COMMANDS : FIXED_AT_SPAWN;
+}
+
+/**
+ * What a row's answers do, said once for the list. Both reaches are named,
+ * because the two allows differ by exactly that and the controls say it in
+ * three words each.
+ */
+const ALLOWED_FROM_ITS_ROW =
+  "A command can be allowed from its row, for this job or for every job in the repository.";
+
+/**
+ * What a person may answer about one row, and why nothing where nothing.
+ *
+ * **The row's own call rides with its answers**, because an answer names the
+ * call it is about, and a press sent under another row's would allow a
+ * different command. A row Fleet offered nothing on carries neither: an older
+ * Fleet sends no list, and a Job stopped for anything but policy an empty one.
+ *
+ * **`withheld` keeps Fleet's case.** Fleet uses the same clause mid-sentence,
+ * so it arrives lower-case and unstopped; on a line of its own it takes a full
+ * stop and not a capital, because its first word is often a file name.
+ */
+function answersOf(one: Refusal): Pick<Refused, "call" | "answers" | "withheld"> {
+  const offered = offeredOf(one.offers ?? []);
+  return {
+    ...(offered.length === 0
+      ? {}
+      : { call: one.call, answers: offered.map(({ offer, label }) => ({ answer: offer, label })) }),
+    ...(one.withheld === undefined || one.withheld === ""
+      ? {}
+      : { withheld: /[.!?]$/.test(one.withheld) ? one.withheld : `${one.withheld}.` }),
+  };
 }
 
 /**

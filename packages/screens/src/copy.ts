@@ -303,6 +303,26 @@ export const COMMAND_ANSWER: Record<CommandAnswer, { label: string; means: strin
   },
 };
 
+/**
+ * The answers one command offers, as words, in the order Fleet sent them. **An
+ * answer from a Fleet ahead of this build is left out** rather than drawn as a
+ * control with no words on it — one control fewer is honest, a blank one is not.
+ */
+export function offeredOf(
+  offers: readonly CommandAnswer[],
+): { offer: CommandAnswer; label: string; means: string }[] {
+  const known: Partial<Record<string, { label: string; means: string }>> = COMMAND_ANSWER;
+  return offers.flatMap((offer) => {
+    const said = known[offer];
+    return said === undefined ? [] : [{ offer, ...said }];
+  });
+}
+
+/** An answer a control handed back, as the wire's word — or nothing, for one this build never drew. */
+export function answerNamed(name: string): CommandAnswer | undefined {
+  return (Object.keys(COMMAND_ANSWER) as CommandAnswer[]).find((answer) => answer === name);
+}
+
 export const ACT_LABEL: Record<JobAct, string> = {
   kill_drone: "Kill drone",
   kill_job: "Kill job",

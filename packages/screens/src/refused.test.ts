@@ -15,7 +15,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { JobDetail as JobWhole, Refusal, Stuck } from "@armada/protocol";
+import type { CommandAnswer, JobDetail as JobWhole, Refusal, Stuck } from "@armada/protocol";
 import { refusedIn } from "./refused";
 
 /** One refusal, as the wire carries it: no reason, and the command on `detail`. */
@@ -219,5 +219,63 @@ describe("what a stopped job says it was refused", () => {
     const wrote = refusal({ tool: "Write", detail: "cargo/config.toml" });
     const drawn = refusedIn(whole({ refused: [wrote], refusals: 1 }));
     expect(drawn?.again).not.toContain("armada.yml");
+  });
+});
+
+describe("what a person may answer on a refused row", () => {
+  const offered: CommandAnswer[] = ["allow_for_job", "always_allow", "reject"];
+
+  it("names the row's own call beside the answers Fleet offered, in its order", () => {
+    const drawn = refusedIn(whole({ refused: [refusal({ offers: offered })], refusals: 1 }));
+    expect(drawn?.refused[0]?.call).toBe("toolu_01ANq8Yk3sWnQ2gVv7hHc4Pd");
+    expect(drawn?.refused[0]?.answers).toEqual([
+      { answer: "allow_for_job", label: "Allow for this job" },
+      { answer: "always_allow", label: "Always allow in this repository" },
+      { answer: "reject", label: "Reject" },
+    ]);
+  });
+
+  it("draws no answers where Fleet offered none", () => {
+    // An older Fleet sends no list, and a job stopped for anything but policy
+    // sends an empty one. Both are a row nothing can be done about from here.
+    for (const one of [refusal(), refusal({ offers: [] })]) {
+      const drawn = refusedIn(whole({ refused: [one], refusals: 1 }));
+      expect(drawn?.refused[0]?.answers).toBeUndefined();
+    }
+  });
+
+  it("leaves out an answer this build has no words for", () => {
+    // A Fleet ahead may offer another. A control with no words on it is worse
+    // than one control fewer, and the rest of the row still stands.
+    const ahead = refusal({ offers: ["allow_once" as CommandAnswer, "reject"] });
+    expect(refusedIn(whole({ refused: [ahead], refusals: 1 }))?.refused[0]?.answers).toEqual([
+      { answer: "reject", label: "Reject" },
+    ]);
+  });
+
+  it("says why a row cannot be allowed, in Fleet's own case, as a sentence", () => {
+    // Capitalised, the first word would rename a file.
+    const kept = refusal({
+      detail: "rm -rf .armada",
+      offers: [],
+      withheld: "armada.yml declares this destructive, as `reset`, and no task runs it unattended",
+    });
+    expect(refusedIn(whole({ refused: [kept], refusals: 1 }))?.refused[0]?.withheld).toBe(
+      "armada.yml declares this destructive, as `reset`, and no task runs it unattended.",
+    );
+  });
+
+  it("says a command can be allowed from its row where any row offers an answer", () => {
+    const drawn = refusedIn(
+      whole({ refused: [refusal({ offers: [] }), refusal({ offers: offered })], refusals: 2 }),
+    );
+    expect(drawn?.again).toBe(
+      "A command can be allowed from its row, for this job or for every job in the repository.",
+    );
+  });
+
+  it("keeps sending a person to armada.yml where no row offers one", () => {
+    const drawn = refusedIn(whole({ refused: [refusal({ offers: [] })], refusals: 1 }));
+    expect(drawn?.again).toContain("armada.yml");
   });
 });

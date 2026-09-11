@@ -1,5 +1,15 @@
 import type { ReactNode } from "react";
 
+import { Button } from "../../primitives/Button/Button";
+
+/** One answer a person may give about one refused command. */
+export type RefusedAnswer = {
+  /** What the answer is called where it is sent. Handed back on the press, never drawn. */
+  answer: string;
+  /** The words on the control. */
+  label: string;
+};
+
 /**
  * One call a job reached for and was refused.
  *
@@ -52,6 +62,26 @@ export type Refused = {
    * person already read and could not act on.
    */
   because?: string;
+  /**
+   * The call this row is, which is what an answer about it names. **Read only
+   * beside `answers`**: a row nothing can be answered on needs no handle.
+   */
+  call?: string;
+  /**
+   * What a person may answer about this command, in the order to draw them.
+   *
+   * **Offered by the caller and never assumed here.** Absent or empty draws no
+   * control, which is a row nothing can be done about from here — `withheld`
+   * says why, where anything does.
+   */
+  answers?: RefusedAnswer[];
+  /**
+   * Why this command cannot be allowed from here — declared destructive, a
+   * tool that is not a command, one no harness can grant. **On its own line
+   * under the command, where the controls would be**: a row with neither reads
+   * as a control that failed to load.
+   */
+  withheld?: ReactNode;
 };
 
 export type RefusalsProps = {
@@ -101,6 +131,18 @@ export type RefusalsProps = {
    * Absent draws nothing, which is a surface that has no reading of the rows.
    */
   again?: ReactNode;
+  /**
+   * A row's answer was pressed, with that row's call and the answer's own
+   * name. **The caller sends it**; this draws the controls and says which.
+   */
+  onAnswer?: (call: string, answer: string) => void;
+  /** Every row's answers are off — one already out, or nothing live to send over. */
+  disabled?: boolean;
+  /**
+   * Why they are off, where they are. Once, under the list, because a disabled
+   * control with no sentence beside it reads as broken rather than busy.
+   */
+  disabledNote?: ReactNode;
 };
 
 /**
@@ -128,14 +170,32 @@ export type RefusalsProps = {
  * about whether restarting meets it again — so the rows read as a diagnosis
  * and the press reads as the cure, and it is not one. What is true is a
  * mechanism rather than advice, and the caller states it.
+ *
+ * **A refused command can be answered on its row.** Where the caller offers
+ * answers, each is a control under the command, in its column — beside the
+ * thing it is about rather than in a panel of its own, so allowing one command
+ * is one press and not an edit to armada.yml by hand. Ghost, the variant the
+ * contract gives row actions, because three rows of three controls at a louder
+ * variant would be a column of fills.
  */
-export function Refusals({ refused, said, note, again }: RefusalsProps) {
+export function Refusals({
+  refused,
+  said,
+  note,
+  again,
+  onAnswer,
+  disabled = false,
+  disabledNote,
+}: RefusalsProps) {
   if (refused.length === 0) return null;
   return (
     <div className="armada-refusals">
       {said === undefined ? null : <span className="armada-refusals__said">{said}</span>}
       <ul className="armada-refusals__list">
-        {refused.map((one, at) => (
+        {refused.map((one, at) => {
+          const call = one.call;
+          const answers = one.answers ?? [];
+          return (
           // The call id is not the key: it correlates two transcript rows and a
           // job with an unreadable transcript can carry the same id twice. The
           // list is ordered and never reordered, so its position is its name.
@@ -154,10 +214,40 @@ export function Refusals({ refused, said, note, again }: RefusalsProps) {
             {one.because === undefined || one.because === "" ? null : (
               <span className="armada-refusals__because">{one.because}</span>
             )}
+            {one.withheld === undefined || one.withheld === null || one.withheld === "" ? null : (
+              <span className="armada-refusals__withheld">{one.withheld}</span>
+            )}
+            {/* Named for the command, so a row's controls are told from the
+                next row's — every row says the same three words. */}
+            {call === undefined || answers.length === 0 ? null : (
+              <div
+                className="armada-refusals__answers"
+                role="group"
+                aria-label={`Answers for ${one.detail === "" ? one.tool : one.detail}`}
+              >
+                {answers.map((offered) => (
+                  <Button
+                    key={offered.answer}
+                    variant="ghost"
+                    size="sm"
+                    disabled={disabled}
+                    onClick={() => onAnswer?.(call, offered.answer)}
+                  >
+                    {offered.label}
+                  </Button>
+                ))}
+              </div>
+            )}
           </li>
-        ))}
+          );
+        })}
       </ul>
       {note === undefined ? null : <span className="armada-refusals__note">{note}</span>}
+      {disabled && disabledNote !== undefined ? (
+        <span className="armada-refusals__off" role="note">
+          {disabledNote}
+        </span>
+      ) : null}
       {again === undefined ? null : <span className="armada-refusals__again">{again}</span>}
     </div>
   );
