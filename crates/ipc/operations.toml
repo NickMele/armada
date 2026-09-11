@@ -524,6 +524,36 @@ The body is `when_blocked`: `refuse_and_hold`, `ask_me` or `allow_all`. A new Jo
 `helm_access` is `No`, for `answer_command`'s reason: whether a Drone is held waiting on the owner is the owner's to decide.
 """
 
+[operations.set_model]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Choose the model one Job's later steps run on, or clear the choice"
+notes = """
+A live setting on one Job, like `set_when_blocked`, and the answer is the Job's summary. **The next step's spawn reads it; the step running now keeps its model.** Nothing is respawned for it, so a Drone mid-step is never cut off to pick up a model.
+
+The body is `model`: a name `list_models` offers, or `null` to clear the choice so each later step runs on the model its workflow gives it. `null` is sent rather than implied — a body with no `model` key is refused, because a Bridge that dropped the field would otherwise throw a person's choice away and answer 200. `JobDetail.model_override` reads the choice back, and is absent where there is none.
+
+Refused with a 409 on a model `list_models` does not offer. The picker and the route answer from the same list, so a name only a stale window still shows is told rather than spawned.
+
+`helm_access` is `No`: which model spends a Job's budget is the owner's to decide, and a Helm that could move it could move it past what the owner priced the Job at.
+"""
+
+[operations.remove_allowed_command]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Take back a command a person allowed for one Job"
+notes = """
+The body is `run`, the command exactly as `JobDetail.allowed_commands` lists it, and the answer is the Job's summary. **The next reach for it is answered by the Job's `when_blocked` again.**
+
+**An always-allow already written into `armada.yml` stays in `armada.yml`.** A `repository` allow was two things — the row on this Job and a commit on its branch — and this takes back the row. The line in the file is an edit to `armada.yml`, not an act on a Job.
+
+Refused with a 409 where the Job holds no such allow, so a window left open across a removal is told rather than answered 200.
+
+`helm_access` is `No`, for `answer_command`'s reason: what a Drone may run is the owner's to decide.
+"""
+
 [operations.approve_dispatch]
 kind = "command"
 transport = "HTTP"

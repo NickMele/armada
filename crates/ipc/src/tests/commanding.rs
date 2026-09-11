@@ -221,3 +221,47 @@ fn the_allowed_commands_are_stated_and_an_older_detail_reads_as_none() {
         detail
     );
 }
+
+/// `set_model`'s body: a name, or a `null` that clears. **A body with no key is
+/// refused**, never read as a clear — that would throw away a person's choice
+/// and answer 200. A field a newer Bridge adds is ignored, as on every body.
+#[test]
+fn a_model_is_set_by_name_or_cleared_by_null_and_never_by_silence() {
+    let set =
+        decode::<crate::SetModel>("a model", br#"{"model":"model-b"}"#).expect("a name reads");
+    assert_eq!(set.model.as_deref(), Some("model-b"));
+    assert_eq!(encode(&set).expect("plain data"), r#"{"model":"model-b"}"#);
+
+    let cleared =
+        decode::<crate::SetModel>("a model", br#"{"model":null}"#).expect("a clear reads");
+    assert_eq!(cleared.model, None);
+    assert_eq!(
+        encode(&cleared).expect("plain data"),
+        r#"{"model":null}"#,
+        "the clear is stated on the wire, not left out"
+    );
+
+    assert!(
+        decode::<crate::SetModel>("a model", br#"{}"#).is_err(),
+        "a body that says nothing is refused rather than read as a clear"
+    );
+    assert_eq!(
+        decode::<crate::SetModel>("a model", br#"{"model":"model-b","later":true}"#)
+            .expect("an unknown field is ignored"),
+        set
+    );
+}
+
+/// A removal names the command as the row carried it, whole.
+#[test]
+fn an_allow_is_removed_by_the_command_its_row_carries() {
+    let row = crate::AllowedCommandRow::from(&allowed());
+    let body = crate::RemoveAllowedCommand { run: row.run };
+    let json = encode(&body).expect("plain data");
+    assert_eq!(json, r#"{"run":"cargo nextest run -p ipc"}"#);
+    assert_eq!(
+        decode::<crate::RemoveAllowedCommand>("a removal", json.as_bytes()).expect("it reads back"),
+        body
+    );
+    assert!(decode::<crate::RemoveAllowedCommand>("a removal", br#"{}"#).is_err());
+}

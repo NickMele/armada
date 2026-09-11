@@ -117,3 +117,29 @@ export type AllowedCommandRow = {
   /** Who allowed it, in the envelope's spelling. Left as `string` like `actor`. */
   by: string;
 };
+
+/**
+ * The body of `set_model`. Since protocol 11.0. Answered with the job's
+ * summary.
+ *
+ * A name `list_models` offers, or `null` to clear the choice so each later
+ * step runs on the model its workflow gives it. **`null` is sent, never
+ * implied**: fleet refuses a body with no `model` key rather than reading it as
+ * a clear. The step running now keeps its model; the next step's spawn reads
+ * this. A name `list_models` does not offer is a 409.
+ */
+export type SetModel = {
+  model: string | null;
+};
+
+/**
+ * The body of `remove_allowed_command`. Since protocol 11.0. Answered with the
+ * job's summary.
+ *
+ * `run` is `AllowedCommandRow.run`, exactly. The next reach for the command is
+ * answered by the job's `when_blocked` again, and **an always-allow already in
+ * `armada.yml` stays there**. A command the job holds no allow for is a 409.
+ */
+export type RemoveAllowedCommand = {
+  run: string;
+};

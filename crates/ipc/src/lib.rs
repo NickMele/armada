@@ -102,8 +102,8 @@ pub use capacity::{AdmissionHold, FleetCapacity};
 pub use checks::{CheckOutput, CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
 pub use commanding::{
-    AllowedCommandRow, AnswerCommand, CommandAnswer, CommandInFlight, Reach, SetWhenBlocked,
-    WhenBlocked,
+    AllowedCommandRow, AnswerCommand, CommandAnswer, CommandInFlight, Reach, RemoveAllowedCommand,
+    SetModel, SetWhenBlocked, WhenBlocked,
 };
 pub use detail::{
     Criterion, Dependency, JobDelivery, JobDetail, JobSpend, JudgeInFlight, PullRequestDetail,

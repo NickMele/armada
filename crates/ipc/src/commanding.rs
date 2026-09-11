@@ -186,3 +186,41 @@ impl From<&core_model::AllowedCommand> for AllowedCommandRow {
         }
     }
 }
+
+/// The request half of `set_model`. **A live setting on one Job**, like
+/// [`SetWhenBlocked`]: the next step's spawn reads it, and the step running now
+/// keeps its model.
+///
+/// **`null` is the clear, and it is sent rather than implied.** `None` crosses
+/// as `"model":null` and each later step goes back to the model its workflow
+/// gives it. A body with no `model` key is refused, never read as a clear: a
+/// Bridge that dropped the field would otherwise throw away a person's choice
+/// and answer 200.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SetModel {
+    /// A name [`ModelChoices::models`](crate::ModelChoices::models) offers, or
+    /// `None`. A name it does not offer is a 409.
+    #[serde(deserialize_with = "stated")]
+    pub model: Option<String>,
+}
+
+/// The request half of `remove_allowed_command`.
+///
+/// The next reach for the command is answered by the Job's [`WhenBlocked`]
+/// again. **An always-allow already written into `armada.yml` stays there** —
+/// this takes back the Job's row, not the commit.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoveAllowedCommand {
+    /// [`AllowedCommandRow::run`], exactly. A command this Job holds no allow
+    /// for is a 409.
+    pub run: String,
+}
+
+/// An `Option` whose key must be present. `deserialize_with` turns off serde's
+/// rule that a missing `Option` is `None`, which is the whole point.
+fn stated<'de, D>(input: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Option::<String>::deserialize(input)
+}
