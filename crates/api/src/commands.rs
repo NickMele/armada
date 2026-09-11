@@ -122,6 +122,25 @@ pub(crate) async fn merge_pull_request<D: Commands>(
     }
 }
 
+/// A person at the review gate sends the Job's branch back for a Drone that
+/// can edit files to bring it current with main. `#663`.
+///
+/// 409 anywhere but `awaiting_review`, 409 with no open pull request, and 409
+/// where the frozen workflow has no step before the one that delivers.
+pub(crate) async fn resolve_pull_request_conflict<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+) -> Response {
+    match served
+        .daemon()
+        .resolve_pull_request_conflict(job.id())
+        .await
+    {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// Send the work back with a note. **The Job comes back `running`**, at the
 /// same step, with the same Drone — nothing was thrown away and nothing was
 /// spawned.

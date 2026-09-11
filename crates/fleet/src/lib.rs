@@ -39,11 +39,13 @@ pub mod clock;
 /// `serving` holds the read half of. Three traits, three impl blocks, three
 /// files, and no delegating signature between them.
 pub mod commanding;
-pub mod converging;
 /// What an upstream's terminal status does to the Job waiting behind it — the
 /// one place a dependency edge is weighed, for both admission and the Board.
+pub mod conflict_resolution;
+pub mod converging;
 mod coupling;
 pub mod crossing;
+pub mod currency;
 pub mod daemon;
 pub mod delivery;
 pub mod detach;

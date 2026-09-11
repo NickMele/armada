@@ -36,6 +36,17 @@ impl FakeDaemon {
     ) -> Result<JobSummary, Refusal> {
         self.move_to(&job_id, "awaiting_review", "queued", "human")
     }
+    /// The branch is sent back to be brought current with main. `#663`. **The
+    /// same two statuses as a merge or an approval**, because what the
+    /// transport can see is the re-queue; which step a fresh Drone lands on
+    /// is Fleet's own reading of the frozen workflow, which a `JobSummary`
+    /// does not carry.
+    pub(super) async fn fake_resolve_pull_request_conflict(
+        &self,
+        job_id: JobId,
+    ) -> Result<JobSummary, Refusal> {
+        self.move_to(&job_id, "awaiting_review", "queued", "human")
+    }
     /// The work goes back with a note. **A different act** from an approval —
     /// what separates them here is the note, and in Fleet it is the step that
     /// does or does not advance.

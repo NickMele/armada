@@ -194,6 +194,14 @@ pub enum Adrift {
     /// workflow that declares no delivering step is the ordinary way to get
     /// here, and the act a person wants on one of those is an approval.
     NothingToMerge { job: JobId },
+    /// A conflict resolution was asked for on a Job with no open pull request
+    /// to resolve one against. `#663`.
+    NothingToResolve { job: JobId },
+    /// A conflict resolution was asked for on a workflow whose delivering step
+    /// has nothing before it — a single step that both writes the work and
+    /// sends it out, which this cannot redo without redelivering onto its own
+    /// conflict. `#663`.
+    NoStepToRedo { job: JobId },
     /// The forge would not merge the pull request, and which kind of would-not
     /// it was.
     ///

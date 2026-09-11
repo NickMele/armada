@@ -106,7 +106,7 @@ pub use commanding::{
     SetModel, SetWhenBlocked, WhenBlocked,
 };
 pub use detail::{
-    Criterion, Dependency, JobDelivery, JobDetail, JobReview, JobSpend, JudgeInFlight,
+    Criterion, Currency, Dependency, JobDelivery, JobDetail, JobReview, JobSpend, JudgeInFlight,
     PullRequestDetail, Refusal, ReviewedBy, Settled, StepDetail, StepFacts, Stuck, Verdict,
 };
 pub use enums::{

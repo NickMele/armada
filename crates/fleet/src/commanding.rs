@@ -110,6 +110,15 @@ where
         self.summarised(&job).await
     }
 
+    /// A person sends the branch back for a Drone that can edit files to
+    /// bring it current with main. `#663`.
+    async fn resolve_pull_request_conflict(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+        let job = Fleet::resolve_pull_request_conflict(self, &job_id.to_domain())
+            .await
+            .map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
+    }
+
     /// The work goes back with a note, to the Drone that is standing at the
     /// gate.
     ///

@@ -522,6 +522,15 @@ export type PullRequestDetail = {
    * note would cross twice if it were carried on both.
    */
   reviews: ReviewedBy[];
+  /**
+   * What the last attempt to keep this pull request's branch current against
+   * a moved base came to. Since protocol 10.10.
+   *
+   * **Absent is a branch that has never needed to move** — most of a pull
+   * request's life. This is not written until the base it merges into moves
+   * under it.
+   */
+  currency?: Currency;
 };
 
 /** One reviewer's verdict on a pull request. Since protocol 10.2. */
@@ -534,6 +543,22 @@ export type ReviewedBy = {
    * person acts on.
    */
   verdict: string;
+};
+
+/**
+ * What the last attempt to keep a pull request's branch current against a
+ * moved base came to. Since protocol 10.10.
+ */
+export type Currency = {
+  /** The base's tip this was last attempted against. */
+  rebased_onto: string;
+  rebased_at: string;
+  /**
+   * **Present, and never empty, exactly where the attempt conflicted and the
+   * branch was left exactly as it was.** Absent or empty is a clean rebase —
+   * the branch is current and nothing is owed to a person.
+   */
+  conflict_files?: string[];
 };
 
 /**

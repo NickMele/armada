@@ -818,6 +818,18 @@ impl FrozenWorkflow {
         let at = self.steps.iter().position(|step| step.id() == id)?;
         self.steps.get(at + 1)
     }
+
+    /// The step that precedes one, or `None` at the first.
+    ///
+    /// [`after`](Self::after)'s mirror. `#663`.
+    pub fn before(&self, id: &StepId) -> Option<&ResolvedStep> {
+        let at = self.steps.iter().position(|step| step.id() == id)?;
+        at.checked_sub(1).and_then(|before| self.steps.get(before))
+    }
+    /// The one step whose entry sends the work out, at most one. `#663`.
+    pub fn delivering_step(&self) -> Option<&ResolvedStep> {
+        self.steps.iter().find(|step| step.delivers())
+    }
 }
 
 impl EvidenceType {

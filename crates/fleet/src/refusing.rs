@@ -119,6 +119,11 @@ const REMARKS_ALREADY_TAKEN_UP: &str = "fleet.remarks_already_taken_up";
 /// the status conflicts above: nothing was ever opened, so the act a person
 /// wants is an approval and the message says so.
 const NOTHING_TO_MERGE: &str = "fleet.nothing_to_merge";
+/// A conflict resolution asked for on a Job with no open pull request. `#663`.
+const NOTHING_TO_RESOLVE: &str = "fleet.nothing_to_resolve";
+/// A conflict resolution asked for on a workflow with no step before the one
+/// that delivers. `#663`.
+const NO_STEP_TO_REDO: &str = "fleet.no_step_to_redo";
 /// The base branch is protected. **Its own code, and the whole reason the
 /// refusal kinds are not one**: what answers this is an administrator or a
 /// rule, and nothing a person does to the Job changes it.
@@ -357,6 +362,14 @@ where
             // Nothing was ever opened, so there is no forge answer to name.
             Adrift::NothingToMerge { job } => Refusal::IllegalMove(
                 WireError::raised(NOTHING_TO_MERGE, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
+            ),
+            Adrift::NothingToResolve { job } => Refusal::IllegalMove(
+                WireError::raised(NOTHING_TO_RESOLVE, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
+            ),
+            Adrift::NoStepToRedo { job } => Refusal::IllegalMove(
+                WireError::raised(NO_STEP_TO_REDO, said, self.run_id())
                     .about_job(ipc::JobId::from(job)),
             ),
             // **One code per kind, decided from the typed kind and never from

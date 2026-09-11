@@ -324,3 +324,53 @@ fn the_branch_reaches_the_remote_under_its_own_name() {
         "the bare repository holds the Job's branch"
     );
 }
+
+/// **`#663`'s own reason `push_forcing` exists.** A branch pushed once, then
+/// rebased — main moved under it and the rebase replayed clean — is pushed
+/// again by `crate::fleet::delivery::deliver` on a redelivery, and the
+/// ordinary push git refuses over rewritten history is not that call's push to
+/// take. This is the one it takes instead, over exactly that shape.
+#[test]
+fn the_ordinary_push_is_refused_over_rewritten_history_and_the_forcing_one_is_not() {
+    let repo = TempRepo::with_a_commit();
+    repo.with_a_bare_remote();
+    let worktree = worktree_for(&repo);
+    wrote(&worktree, "answer.txt", "42");
+    GitVcs::new()
+        .commit_all(
+            &worktree,
+            "the Job's first delivery",
+            adapter_traits::CommitTime::seconds_since_epoch(1_787_734_800),
+        )
+        .expect("a commit");
+    GitVcs::new().push(&worktree).expect("the first push");
+
+    // Main moves, and the branch is rebased onto it — the shape a resolved
+    // conflict leaves behind.
+    main_moves_on(&repo, "elsewhere.txt", "one");
+    let base = Base::Inferred(String::from("main"));
+    let moved = GitVcs::new()
+        .bring_up_to_date(&worktree, &base)
+        .expect("a clean rebase");
+    assert!(matches!(moved, BroughtUpToDate::Clean { .. }));
+
+    let refused = GitVcs::new()
+        .push(&worktree)
+        .expect_err("git refuses a push behind what the remote now disagrees with");
+    let NotDelivered { said, .. } = &refused;
+    assert!(
+        said.to_lowercase().contains("reject") || said.to_lowercase().contains("non-fast-forward"),
+        "the ordinary push failed for a different reason: {said}"
+    );
+
+    let pushed = GitVcs::new()
+        .push_forcing(&worktree)
+        .expect("the forcing push takes rewritten history");
+    assert_eq!(
+        pushed,
+        Pushed::ToTheRemote {
+            remote: String::from("origin"),
+            branch: format!("armada/{JOB}")
+        }
+    );
+}

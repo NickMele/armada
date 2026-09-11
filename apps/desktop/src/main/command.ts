@@ -709,6 +709,16 @@ export class JobCommands {
     return this.settleWork(jobId, "merge");
   }
 
+  /**
+   * Send the branch back for a Drone that can edit files to bring it current
+   * with main. `#663`. Fleet runs the rebase itself — a Drone has no git —
+   * and only a conflict spawns one, on the step before the one that delivers,
+   * never the gate's own.
+   */
+  async resolvePullRequestConflict(jobId: string): Promise<Outcome> {
+    return this.settleWork(jobId, "resolve_pull_request_conflict");
+  }
+
   /** Send it back. **`running` again**, same step, same Drone. Blank refused. */
   async requestChanges(jobId: string, note: string): Promise<Outcome> {
     if (note.trim() === "") return { ok: false, why: "empty_note" };

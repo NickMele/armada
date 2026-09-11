@@ -159,9 +159,22 @@ where
             }
         }
 
+        // **`--force-with-lease`, unconditionally, not only where this call's
+        // own rebase moved anything.** `#663` is the first thing in this
+        // codebase that can reach this call a second time for one branch —
+        // `crate::conflict_resolution` sends a Job's delivering step back
+        // through here once a Drone has resolved a conflict — and by the time
+        // the delivering step is *entered* again, the rebase that rewrote its
+        // history already happened, at the earlier step's own spawn-time
+        // catch-up, not here. What a plain push refuses on is exactly the
+        // shape that redelivery leaves behind, so this is the one push and
+        // not a choice between two: `armada/*` is a namespace nothing but
+        // Fleet ever pushes to, and the lease that guards a rewrite guards an
+        // ordinary push identically to a plain one — see `adapters`' own
+        // test proving a brand-new branch's first push takes it the same way.
         let pushed = self
             .vcs()
-            .push(worktree)
+            .push_forcing(worktree)
             .map_err(|why| Adrift::from_delivery(&job_id, why))?;
         let reached_a_remote = pushed != Pushed::NoRemote;
         delivered.pushed = Some(pushed);
