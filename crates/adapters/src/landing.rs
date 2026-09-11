@@ -338,4 +338,3 @@ pub(crate) fn fields<const N: usize>(said: &str) -> Option<[&str; N]> {
         .ok()?;
     read.iter().all(|field| !field.is_empty()).then_some(read)
 }
-

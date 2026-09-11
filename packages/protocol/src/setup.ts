@@ -74,6 +74,13 @@ export type WorkflowStep = {
    * and it previewed as a step with nothing on it.
    */
   advance_gate: string;
+  /**
+   * Whether this is the step the workflow sends the work out on. Since
+   * protocol 10.2. **At most one step of a workflow says `true`** — a person
+   * can say "this workflow never opens a pull request" the moment they are
+   * looking at it, before any Job of it has even run.
+   */
+  delivers: boolean;
 };
 
 /** One Manifest Fleet holds. */
