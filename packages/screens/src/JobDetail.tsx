@@ -114,7 +114,7 @@ import { neverAsksAPerson, verdictSlotAtGate, verdictSlotFinished } from "./verd
 import { outputOf } from "./gates";
 import { renderFor } from "./render";
 import { runOf, whyNoSteps } from "./run";
-import { askingOf, fieldsOf, noticeOf, questionOf } from "./step";
+import { answeringOf, askingOf, commandOf, fieldsOf, noticeOf, questionOf, waitingOf } from "./step";
 import { StepActs } from "./StepActs";
 import { whyNoNotes } from "./notes";
 import { entriesOf, hideUnread, whyNotWatching } from "./story";
@@ -336,6 +336,7 @@ export function JobDetail({
   onRaiseTurnCap,
   onRedirect,
   onAnswer,
+  onAnswerCommand,
   onSetWhenBlocked,
   onOverrule,
   onRerun,
@@ -657,6 +658,10 @@ export function JobDetail({
           ? verdictSlotFinished({ job, whole, open, render, recorded, opensRecords, now, claimed, undecided })
           : undefined;
 
+  // One way to answer a command the Drone was not given, for both places a
+  // person meets one: the command it is waiting on, and a refused row.
+  const answering = answeringOf(job.id, stale, acting, onAnswerCommand);
+
   // The Job header, and everything that goes in it. `heading.tsx` holds what
   // it is made of — the badge, the facts, the acts that end or replace the Job,
   // and the way out to the pull request — which is where the next thing added
@@ -777,8 +782,12 @@ export function JobDetail({
               notice: askingOf(whole) ?? noticeOf(job, whole, render, open, opensRecords),
               // **The question sits where the redirect box does** — between the
               // strip and the story, because it is the same kind of thing: a
-              // box a person acts in about the step they are looking at.
-              before: questionOf(whole, job.id, now, stale, acting, onAnswer),
+              // box a person acts in about the step they are looking at. A
+              // command the Drone is waiting on is the same box, in the same place.
+              before: waitingOf(
+                questionOf(whole, job.id, now, stale, acting, onAnswer),
+                commandOf(whole, now, answering),
+              ),
               // The strip draws the stage the keyboard pinned, and hover stays
               // its own: hovering reports where the pointer is rather than what
               // a reader decided, so nothing up here holds it.

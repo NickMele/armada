@@ -32,12 +32,13 @@ import type { JobDetailField } from "@armada/components";
 import type { StepNotice } from "./InsideAJob";
 import type { ReactNode } from "react";
 
-import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
+import type { CommandAnswer, JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
+import { COMMAND_ANSWER } from "./copy";
 import { span } from "./duration";
 import { sentenceOf } from "./gates";
 import { Opening, openKept, type Opens } from "./phases";
 import { recourseOf, type Recourse } from "./recovery";
-import { refusedIn } from "./refused";
+import { refusedIn, shownOf } from "./refused";
 import { escalation } from "./render";
 import { steeringOf } from "./steering";
 import { stoppedAt } from "./stopped";
@@ -80,11 +81,134 @@ export function fieldsOf(step: StepDetail, now: number): JobDetailField[] {
  * commits to, is the box beneath: this band is scanned and that is read.
  */
 export function askingOf(whole: JobWhole | null): StepNotice | undefined {
-  if (whole?.asking === undefined) return undefined;
-  return {
-    tone: "waiting",
-    title: "The drone asked a question and is waiting for you.",
-  };
+  if (whole?.asking !== undefined) {
+    return { tone: "waiting", title: "The drone asked a question and is waiting for you." };
+  }
+  // A command it was not given, on a job set to Ask me. **The same tone for the
+  // same reason**: the drone stopped to ask rather than work round a refusal,
+  // and nothing moves until a person answers.
+  if (whole?.command_waiting !== undefined) {
+    return {
+      tone: "waiting",
+      title: "The drone wants to run a command it was not given, and is waiting for you.",
+    };
+  }
+  return undefined;
+}
+
+/** Why the answers are off, where the reading is not live. */
+const STALE_NOTE = "This Job is not live, so nothing can be sent. The drone is still waiting.";
+
+/** Why the answers are off, where one is already out. */
+const SENDING_NOTE = "That answer is already on its way to the drone.";
+
+/**
+ * What a command's answer still does when it comes late. **Fleet holds a
+ * command a little under what the harness waits**, then tells the drone to
+ * hold and carries the answer in as its next turn — so an answer is never too
+ * late, and a person deciding slowly should not rush for fear it is.
+ */
+const LATE_ANSWER =
+  "If the drone stops waiting before you answer, it is told to hold, and your answer reaches it as its next turn.";
+
+/**
+ * How a person's answer to a command the drone was not given is sent, and
+ * whether it can be. **One value for both places a person meets one** — the
+ * command a drone is waiting on and a refused row on a stopped job — because
+ * the call id is what says which, and both are off for the same two reasons.
+ */
+export type Answering = {
+  send: (call: string, answer: CommandAnswer) => void;
+  /** What is shown is not live, so nothing may be sent against it. */
+  stale: boolean;
+  /** An act on this job is already out. */
+  acting: boolean;
+};
+
+export function answeringOf(
+  jobId: string,
+  stale: boolean,
+  acting: boolean,
+  onAnswerCommand: (jobId: string, call: string, answer: CommandAnswer) => void,
+): Answering {
+  return { send: (call, answer) => onAnswerCommand(jobId, call, answer), stale, acting };
+}
+
+/**
+ * The answers one command offers, as words, in the order Fleet sent them. An
+ * answer from a Fleet ahead of this build is left out rather than drawn as a
+ * button with no words on it.
+ */
+export function offeredOf(
+  offers: readonly CommandAnswer[],
+): { offer: CommandAnswer; label: string; means: string }[] {
+  const known: Partial<Record<string, { label: string; means: string }>> = COMMAND_ANSWER;
+  return offers.flatMap((offer) => {
+    const said = known[offer];
+    return said === undefined ? [] : [{ offer, ...said }];
+  });
+}
+
+/**
+ * The command a drone is waiting on a person to allow. `undefined` where
+ * nothing waits, which is every job at Refuse and hold and most at Ask me.
+ *
+ * **The question's own box**, because it is the same moment — a drone stopped
+ * inside a call, a closed set of answers, a person who has to pick one — and a
+ * second composition would be two boxes for one kind of wait. The command is
+ * what is asked, in mono because it is what the drone sent; each answer is one
+ * Fleet offered, in its order, with what it commits to under it.
+ *
+ * **Aged here and nowhere else**, on `questionOf`'s terms, and a command cut by
+ * the wire says so on a line of its own, as a refused row does.
+ */
+export function commandOf(whole: JobWhole | null, now: number, answering: Answering): ReactNode {
+  const waiting = whole?.command_waiting;
+  if (waiting === undefined) return undefined;
+  const offered = offeredOf(waiting.offers);
+  const cut = shownOf(waiting);
+  return (
+    <DroneQuestion
+      question={
+        <>
+          {waiting.detail === "" ? (
+            `The drone wants to use ${waiting.tool}.`
+          ) : (
+            <>
+              The drone wants to run <span className="mono">{waiting.detail}</span>
+            </>
+          )}
+          {cut === undefined ? null : <span className="block">{cut.size}</span>}
+        </>
+      }
+      options={offered.map(({ label, means }) => ({ label, consequence: means }))}
+      waiting={span(waiting.asked_at, now) ?? undefined}
+      disabled={answering.stale || answering.acting}
+      disabledNote={answering.stale ? STALE_NOTE : answering.acting ? SENDING_NOTE : undefined}
+      redirectNote={LATE_ANSWER}
+      onAnswer={(label) => {
+        const chose = offered.find((one) => one.label === label);
+        if (chose !== undefined) answering.send(waiting.call, chose.offer);
+      }}
+    />
+  );
+}
+
+/**
+ * What the drone is waiting on a person for, in the slot a question takes. Its
+ * own question, a command it was not given, or both: a drone held inside a
+ * permission call is rarely asking as well, and when it is, neither box may
+ * hide the other.
+ */
+export function waitingOf(question: ReactNode, command: ReactNode): ReactNode {
+  if (command === undefined) return question;
+  if (question === undefined) return command;
+  return (
+    <>
+      {question}
+      {command}
+    </>
+  );
 }
 
 /**
@@ -115,13 +239,7 @@ export function questionOf(
       options={asking.options}
       waiting={span(asking.asked_at, now) ?? undefined}
       disabled={stale || acting}
-      disabledNote={
-        stale
-          ? "This Job is not live, so nothing can be sent. The drone is still waiting."
-          : acting
-            ? "That answer is already on its way to the drone."
-            : undefined
-      }
+      disabledNote={stale ? STALE_NOTE : acting ? SENDING_NOTE : undefined}
       onAnswer={(label) => onAnswer(jobId, asking.question_id, label)}
     />
   );

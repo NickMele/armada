@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { Button } from "../../primitives/Button/Button";
 import { Radio, RadioGroup } from "../../primitives/Radio/Radio";
@@ -48,8 +48,13 @@ import { Radio, RadioGroup } from "../../primitives/Radio/Radio";
  * the screen's own `waiting` notice takes and means "needs you, not urgent".
  */
 export type DroneQuestionProps = {
-  /** What was asked, in the drone's own words. */
-  question: string;
+  /**
+   * What was asked: the drone's own words, or the command it wants to run and
+   * was not given. **A node rather than a string** so a command can sit in
+   * mono inside the sentence around it — it is what the drone sent, and mono
+   * is how a surface says a value is the machine's.
+   */
+  question: ReactNode;
   /** The answers it will take. Two to four, each label distinct. */
   options: readonly DroneAnswer[];
   /** How long it has been waiting, already rendered. `12m`, `2h`. */
@@ -65,7 +70,11 @@ export type DroneQuestionProps = {
   disabledNote?: ReactNode;
   /** The line over the question. Sentence case, no Wh- opener. */
   label?: ReactNode;
-  /** Where the words go when none of the answers is right. */
+  /**
+   * The sentence under the control: where the words go when none of the
+   * answers is right, or — where the answers are the whole set, as they are
+   * for a command — what an answer given late still does.
+   */
   redirectNote?: ReactNode;
   answerLabel?: string;
 };
@@ -90,6 +99,10 @@ export function DroneQuestion({
   answerLabel = "Send this answer",
 }: DroneQuestionProps) {
   const [chosen, setChosen] = useState<string | null>(null);
+  // One radio group per box. A drone's question and a command it is waiting
+  // on can be open at once, and two boxes sharing a name are one group to the
+  // browser: picking in one would clear the other.
+  const group = useId();
 
   return (
     <section className="armada-question" aria-label="A question from the drone">
@@ -111,7 +124,7 @@ export function DroneQuestion({
         {options.map((option) => (
           <div className="armada-question__option" key={option.label}>
             <Radio
-              name="armada-question"
+              name={group}
               value={option.label}
               checked={chosen === option.label}
               disabled={disabled}

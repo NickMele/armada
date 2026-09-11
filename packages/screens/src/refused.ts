@@ -125,6 +125,13 @@ const DECLARED_COMMANDS =
   "under commands and do not mark it destructive.";
 
 /**
+ * One command as the wire carries it: a line, whether that line is all of it,
+ * and how long it was. **A refused row and a command a drone is waiting on**
+ * both carry exactly this, and both say how much was cut in one grammar.
+ */
+type Cut = { detail: string; truncated: boolean; length?: number };
+
+/**
  * How much of one command is on the row, where it is not all of it.
  *
  * **The same sentence the transcript's own cut arguments carry**, through the
@@ -143,7 +150,7 @@ const DECLARED_COMMANDS =
  * astral character, and a shown count larger than the total would read as
  * nonsense.
  */
-function shownOf(one: Refusal): { size: string } | undefined {
+export function shownOf(one: Cut): { size: string } | undefined {
   if (!one.truncated) return undefined;
   const shown = [...one.detail].length;
   return { size: sizeOf(shown, one.length) ?? `cut at ${shown.toLocaleString()} characters` };

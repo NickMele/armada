@@ -12,7 +12,7 @@
 
 import type { DialogTone } from "@armada/components";
 
-import type { Outcome, WhenBlocked, WorktreeReclaimed } from "@armada/protocol";
+import type { CommandAnswer, Outcome, WhenBlocked, WorktreeReclaimed } from "@armada/protocol";
 import type { ConfirmableAct, JobAct } from "./JobDetail";
 
 /** What a refusal says. Every one names what happened and what to do. */
@@ -276,6 +276,32 @@ export const WHEN_BLOCKED_LABEL: Record<WhenBlocked, string> = {
 
 /** What names the setting on its line, before the choice in force. */
 export const WHEN_BLOCKED_NAMED = "Blocked commands";
+
+/**
+ * The answers to a command a drone was not given: the words on each control,
+ * and what it commits to in one line. **Fleet offers these three and no
+ * others**, and which of them a command takes is Fleet's to say.
+ *
+ * `means` is drawn where a person picks before sending — a command the drone
+ * is waiting on. A refused row draws the label alone, beside the sentence
+ * under the list that says what allowing from a row does.
+ */
+export const COMMAND_ANSWER: Record<CommandAnswer, { label: string; means: string }> = {
+  allow_for_job: {
+    label: "Allow for this job",
+    means: "The drone runs it now, and this job can run it again without asking.",
+  },
+  always_allow: {
+    label: "Always allow in this repository",
+    means:
+      "The drone runs it now, and it is written into armada.yml under commands, as its own " +
+      "commit on this job's branch.",
+  },
+  reject: {
+    label: "Reject",
+    means: "The drone is told no, and the command does not run.",
+  },
+};
 
 export const ACT_LABEL: Record<JobAct, string> = {
   kill_drone: "Kill drone",

@@ -129,6 +129,42 @@ export const JustAsked: Story = {
 };
 
 /**
+ * **A command the drone reached for and was not given**, on a job set to Ask
+ * me. The same box, because it is the same moment: a drone stopped inside a
+ * call, a closed set of answers, and a person who has to pick one.
+ *
+ * The command is what is asked, in mono inside the sentence, because it is
+ * what the drone sent. The three answers are the whole set Fleet offers, so the
+ * line under the control is not about redirecting — it says what an answer
+ * given late still does.
+ */
+export const ACommandItWasNotGiven: Story = {
+  args: {
+    question: (
+      <>
+        The drone wants to run <span className="mono">pnpm add -D reselect@5.1.1</span>
+      </>
+    ),
+    options: [
+      {
+        label: "Allow for this job",
+        consequence: "The drone runs it now, and this job can run it again without asking.",
+      },
+      {
+        label: "Always allow in this repository",
+        consequence:
+          "The drone runs it now, and it is written into armada.yml under commands, as its own commit on this job's branch.",
+      },
+      { label: "Reject", consequence: "The drone is told no, and the command does not run." },
+    ],
+    waiting: "2m",
+    redirectNote:
+      "If the drone stops waiting before you answer, it is told to hold, and your answer reaches it as its next turn.",
+    onAnswer: () => {},
+  },
+};
+
+/**
  * An answer already in flight. **The reason is on the surface**, because a
  * disabled control with no sentence beside it reads as an app that is broken
  * rather than one that is busy.
