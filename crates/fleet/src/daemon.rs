@@ -151,6 +151,10 @@ pub struct Fleet<H, V, W> {
     /// Which Jobs have a person's run out in their worktree, and how to stop
     /// it. Never written down, for `pressing`'s reason — `crate::rehearsing`.
     rehearsals: crate::rehearsing::Rehearsals,
+    /// Which servers Fleet holds, a Job's and the main checkout's, and the last
+    /// of each that ended. Never written down, for `rehearsals`' reason —
+    /// `crate::servers`.
+    servers: crate::servers::Servers,
     /// What one Job may spend. **Held rather than read** — like every other
     /// dial here, the composition root resolves it and nothing below Fleet
     /// reads configuration.

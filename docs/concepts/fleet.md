@@ -291,6 +291,8 @@ Fleet holds a Manifest's server Commands — the ones with `serve`, which [Manif
 
 A server started with no Job runs in the main checkout and uses its span. It stops on Stop, when it exits, or when Fleet stops; the span itself is released only when Fleet stops, after teardown.
 
+**Fleet holds its servers in memory, so a Job's servers stop when Fleet stops too.** A restarted Fleet holds none, and a server that outlived the process holding it would keep its port with nothing left to hand it to the next Drone or stop it with the Job.
+
 ### Compose
 
 Armada resolves the repo's compose files, rewrites every published port into the claimed span, and feeds the whole document on stdin, never to disk. The Docker adapter does the rewrite.

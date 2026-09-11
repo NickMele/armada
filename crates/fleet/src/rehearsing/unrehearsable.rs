@@ -26,6 +26,7 @@ pub enum Unrehearsable {
     NoWorktree,
     AlreadyRunning { name: String },
     NotDeclared { name: String, declared: Vec<String> },
+    IsAServer { name: String },
     WorktreeManifest { why: String },
     DoesNotNarrow { name: String },
     NothingToNarrowTo { name: String },
@@ -55,7 +56,7 @@ impl Unrehearsable {
             | AlreadyUndone { .. }
             | NothingToUndo { .. }
             | Moved { .. } => (CANNOT_UNDO, Refusal::IllegalMove),
-            NotDeclared { .. } => (NOT_DECLARED_HERE, Refusal::Unacceptable),
+            NotDeclared { .. } | IsAServer { .. } => (NOT_DECLARED_HERE, Refusal::Unacceptable),
             WorktreeManifest { .. } => (WORKTREE_MANIFEST_UNREADABLE, Refusal::Unacceptable),
             DoesNotNarrow { .. } | NothingToNarrowTo { .. } => {
                 (NOTHING_TO_NARROW_TO, Refusal::Unacceptable)
@@ -87,6 +88,11 @@ impl fmt::Display for Unrehearsable {
                     .map(|one| format!("`{one}`"))
                     .collect::<Vec<_>>()
                     .join(", ")
+            ),
+            IsAServer { name } => write!(
+                out,
+                "`{name}` is a server — it declares `serve` and stays running — so it is \
+                 started with start_server and held for the Job, not run here"
             ),
             WorktreeManifest { why } => write!(
                 out,

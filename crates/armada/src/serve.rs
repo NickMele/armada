@@ -549,10 +549,12 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     println!("stopping: letting the turn in flight finish");
     turning.stopped().await;
 
-    // After teardown, never before it: the turn in flight has finished, so
-    // nothing this process spawned in the main checkout is still running.
-    // `docs/concepts/fleet.md`, *Servers* — held for as long as Fleet runs,
-    // released once, here.
+    // After teardown, never before it: the turn in flight has finished, and
+    // every server Fleet holds — a Job's or the main checkout's — is stopped
+    // here, since nothing after this process could hand one on or stop it.
+    // `docs/concepts/fleet.md`, *Servers* — the main checkout's span is held
+    // for as long as Fleet runs, and released once, here.
+    fleet_for_shutdown.stopped_every_server().await;
     fleet_for_shutdown.released_main_checkout_ports().await;
 
     // Dropping it removes the file, which is what makes this a clean exit. An

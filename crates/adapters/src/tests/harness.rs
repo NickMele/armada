@@ -139,17 +139,19 @@ fn armadas_own_tools_are_in_a_toolbelt_that_was_granted_nothing() {
     assert_eq!(
         allowed,
         format!(
-            "{},{},{},{},{}",
+            "{},{},{},{},{},{}",
             evidence_tool(),
             scope_tool(),
             checks_tool(),
             widen_tool(),
-            ask_tool()
+            ask_tool(),
+            crate::harness::server_tool()
         ),
         "a Drone granted nothing else still reports, still declares its scope, \
          can still ask whether its work passes, can still ask for a path the \
-         task does not name and can still ask a person, because none of the \
-         five is one of the grants — and a Drone denied one is denied silently"
+         task does not name, can still ask a person and can still get a server \
+         Fleet holds, because none of the six is one of the grants — and a \
+         Drone denied one is denied silently"
     );
 }
 
@@ -169,6 +171,7 @@ fn a_grant_becomes_the_tools_it_needs_and_armadas_own_stay_first() {
     assert_eq!(entries.get(2), Some(&checks_tool()));
     assert_eq!(entries.get(3), Some(&widen_tool()));
     assert_eq!(entries.get(4), Some(&ask_tool()));
+    assert_eq!(entries.get(5), Some(&crate::harness::server_tool()));
     assert!(entries.contains(&"Read"), "{allowed}");
     assert!(entries.contains(&"Edit"), "{allowed}");
     assert!(entries.contains(&"Bash(cargo test:*)"), "{allowed}");
