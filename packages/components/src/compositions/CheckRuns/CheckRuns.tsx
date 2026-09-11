@@ -165,47 +165,46 @@ export function CheckRuns({
               <span className="armada-check-runs__mark">
                 {row.icon ? <row.icon size={ROW_ICON} strokeWidth={ROW_STROKE} aria-hidden /> : null}
               </span>
-              <span className="armada-check-runs__what">
-                <span className="armada-check-runs__says">{row.says}</span>
+              <span className="armada-check-runs__says">{row.says}</span>
+              {row.result === undefined ? null : (
+                <span className="armada-check-runs__result">{row.result}</span>
+              )}
+              {/* The id, and the control that opens the output, on one line
+                  under the finding. A long file name takes this line's room
+                  and never the finding's. */}
+              <span className="armada-check-runs__foot">
                 <span
                   className="armada-check-runs__id"
                   data-name={row.identifierIsAName ? "true" : undefined}
                 >
                   {row.identifier}
                 </span>
+                {/* No control at all where there is nothing to show: a
+                    disabled one would be a target that refuses. */}
+                {row.output === undefined && row.onRunHere === undefined ? null : (
+                  <span className="armada-check-runs__output-group">
+                    {row.output === undefined ? null : (
+                      // `aria-pressed` carries the selection, which the
+                      // stylesheet alone told nobody who was not looking at it.
+                      <Tooltip asChild label={openSaid}>
+                        <button
+                          type="button"
+                          className="armada-check-runs__output"
+                          aria-pressed={open}
+                          onClick={() => onOpen?.(row.id)}
+                        >
+                          {row.output}
+                        </button>
+                      </Tooltip>
+                    )}
+                    {row.onRunHere === undefined ? null : (
+                      <Button variant="ghost" size="sm" ground="card" onClick={row.onRunHere}>
+                        Run it here
+                      </Button>
+                    )}
+                  </span>
+                )}
               </span>
-              {row.output === undefined && row.onRunHere === undefined ? (
-                // A Check with nothing to show keeps the column and leaves it
-                // empty. A disabled control here would be a target that
-                // refuses, which is worse than no target.
-                <span className="armada-check-runs__no-output" aria-hidden />
-              ) : (
-                <span className="armada-check-runs__output-group">
-                  {row.output === undefined ? null : (
-                    // `aria-pressed` is what carries the selection. It used to
-                    // live only in the stylesheet, which told nobody who was
-                    // not looking at it which output the viewer was showing.
-                    <Tooltip asChild label={openSaid}>
-                      <button
-                        type="button"
-                        className="armada-check-runs__output"
-                        aria-pressed={open}
-                        onClick={() => onOpen?.(row.id)}
-                      >
-                        {row.output}
-                      </button>
-                    </Tooltip>
-                  )}
-                  {row.onRunHere === undefined ? null : (
-                    <Button variant="ghost" size="sm" ground="card" onClick={row.onRunHere}>
-                      Run it here
-                    </Button>
-                  )}
-                </span>
-              )}
-              {row.result === undefined ? null : (
-                <span className="armada-check-runs__result">{row.result}</span>
-              )}
             </li>
           );
         })}

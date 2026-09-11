@@ -326,7 +326,7 @@ export function checkRow(read: CheckRead, now: number): CheckRunRow {
  * What one Check came to, in a sentence.
  *
  * The registry's verb, and what the Check was measured against where it
- * declared one — `Failed — expected exit 0`, with what it produced instead in
+ * declared one — `Failed, expected exit 0`, with what it produced instead in
  * the column beside it. Nothing here invents a word: `check-outcomes.toml` owns
  * all six.
  */
@@ -335,7 +335,7 @@ export function saidOf(run: CheckRun | undefined): string {
   const verb = CHECK_OUTCOME[run.outcome]?.verb ?? run.outcome;
   return run.expected === undefined
     ? asSentence(verb)
-    : `${asSentence(verb)} — expected ${run.expected}`;
+    : `${asSentence(verb)}, expected ${run.expected}`;
 }
 
 /**
