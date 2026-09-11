@@ -131,8 +131,10 @@ struct Bound {
     underway: Underway,
     events: api::Broadcaster,
     clock: Arc<dyn Clock>,
-    /// Where live logs go: the repository root and the Job's handle.
-    /// `None` writes no log and still reports every start and finish.
+    /// Where live logs go: Fleet's records root ([`crate::daemon::Host::records_root`],
+    /// never `repo_root` — a live log is a kept record, not a repository
+    /// artifact) and the Job's handle. `None` writes no log and still reports
+    /// every start and finish.
     logs: Option<(String, String)>,
 }
 
@@ -147,7 +149,7 @@ impl Announcing {
         underway: Underway,
         events: api::Broadcaster,
         clock: Arc<dyn Clock>,
-        repo_root: &str,
+        records_root: &str,
         handle: &str,
     ) -> Announcing {
         Announcing(Some(Bound {
@@ -157,7 +159,7 @@ impl Announcing {
             underway,
             events,
             clock,
-            logs: Some((repo_root.to_string(), handle.to_string())),
+            logs: Some((records_root.to_string(), handle.to_string())),
         }))
     }
 
@@ -209,9 +211,9 @@ impl Announcing {
     /// open — and the Check runs either way.
     pub(crate) fn log_for(&self, at: usize) -> Option<PathBuf> {
         let bound = self.0.as_ref()?;
-        let (repo_root, handle) = bound.logs.as_ref()?;
+        let (records_root, handle) = bound.logs.as_ref()?;
         let (file, _) =
-            crate::check_output::live_file(repo_root, handle, &bound.step, bound.attempt, at)?;
+            crate::check_output::live_file(records_root, handle, &bound.step, bound.attempt, at)?;
         Some(file)
     }
 
@@ -220,8 +222,8 @@ impl Announcing {
     pub(crate) fn started(&self, at: usize, log: Option<&Path>) {
         let Some(bound) = self.0.as_ref() else { return };
         let path = log.and_then(|file| {
-            let (repo_root, handle) = bound.logs.as_ref()?;
-            crate::check_output::live_file(repo_root, handle, &bound.step, bound.attempt, at)
+            let (records_root, handle) = bound.logs.as_ref()?;
+            crate::check_output::live_file(records_root, handle, &bound.step, bound.attempt, at)
                 .filter(|(named, _)| named == file)
                 .map(|(_, relative)| relative)
         });
