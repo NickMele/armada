@@ -146,30 +146,22 @@ export function pullRequestNumber(address: string): string | null {
 }
 
 /**
- * What a person calls the code host a pull request's address names —
- * `GitHub` for `github.com`, never the domain itself.
+ * What a person calls the code host a pull request's address names — its
+ * domain, read off the address itself.
  *
- * **Read off the address, every time.** Nothing here assumes Armada only
- * ever opens a pull request on one host: `crates/adapters` is the one crate
- * allowed to name a vendor, and the address already says which one this
- * pull request is on, so this reads that rather than writing the name in a
- * second place that could drift from it.
- *
- * **A host this build does not have a name for still gets one.** The domain
- * itself is a true, readable answer — better than a word this file invented
- * for a forge nobody thought of. Where the address does not even parse, the
- * fallback names what it is without pretending to know where.
+ * **Never a friendly name this file invents for one vendor over another.**
+ * `xtask/src/rules.rs`'s `no_vendor_literal_outside_adapters` holds the line
+ * that only `crates/adapters` gets to know whose API Armada is talking to —
+ * a vendor's name anywhere else, string or comment, is that boundary having
+ * leaked — and Bridge does not get to cross it just because most pull
+ * requests today happen to be on the same host. The domain a real address
+ * names is not a name this file chose; it is Fleet's own record, read back.
+ * Where the address does not even parse, the fallback names what it is
+ * without pretending to know where.
  */
-const KNOWN_HOSTS: Record<string, string> = {
-  "github.com": "GitHub",
-  "gitlab.com": "GitLab",
-  "bitbucket.org": "Bitbucket",
-};
-
 export function hostLabel(address: string): string {
   try {
-    const hostname = new URL(address).hostname;
-    return KNOWN_HOSTS[hostname] ?? hostname;
+    return new URL(address).hostname;
   } catch {
     return "the pull request's host";
   }

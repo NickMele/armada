@@ -45,7 +45,7 @@ import {
 } from "./base";
 
 /** The pull request address this Job's branch went out on. Same style as `terminal.ts`'s. */
-const PULL_REQUEST = "https://github.com/armada/settings/pull/512";
+const PULL_REQUEST = "https://git.example/armada/settings/pull/512";
 
 /**
  * What people wrote on this Job's own pull request. `Decide.tsx` draws this

@@ -435,12 +435,10 @@ export function verdictSlotAtGate({
   const never = neverDelivers(whole?.steps ?? []);
   const note =
     never === true
-      ? "Approving ends the Job here. Nothing is merged, and there is no pull request waiting " +
-        "on a decision."
+      ? "Approving ends the Job here. Nothing is merged, and no pull request is waiting on it."
       : address !== undefined
-        ? "This repository sets auto_merge: never. Merging here is Fleet acting on your " +
-          `press, and it runs the after-merge Checks. Merging it yourself on ${hostLabel(address)} ` +
-          "does not."
+        ? "This repository sets auto_merge: never. Merging here is Fleet acting on your press, " +
+          `and it runs the after-merge Checks. Merging it yourself on ${hostLabel(address)} does not.`
         : "The run tree on the left is where each step's own evidence is. This reads the Job.";
   return (
     <VerdictSheet

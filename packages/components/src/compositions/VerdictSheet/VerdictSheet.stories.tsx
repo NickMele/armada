@@ -101,7 +101,7 @@ export const PullRequestOpen: Story = {
     ),
     note:
       "This repository sets auto_merge: never. Merging here is Fleet acting on your press, and " +
-      "it runs the after-merge Checks. Merging it yourself on GitHub does not.",
+      "it runs the after-merge Checks. Merging it yourself on git.example does not.",
     actions: (
       <>
         <ReviewDecision
@@ -170,9 +170,7 @@ export const GateWithoutAPullRequest: Story = {
       { label: "Steps", value: "1 of 2 passed", mono: true },
       { label: "Pull request", value: "never, for this workflow", mono: true },
     ],
-    note:
-      "Approving ends the Job here. Nothing is merged, and there is no pull request waiting on " +
-      "a decision.",
+    note: "Approving ends the Job here. Nothing is merged, and no pull request is waiting on it.",
     actions: (
       <ReviewDecision
         note=""

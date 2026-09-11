@@ -88,7 +88,7 @@ export type ReviewCommentsProps = {
    */
   onOpenLink?: (id: string) => void;
   /**
-   * What a person calls the host these comments live on — `GitHub`. The
+   * What a person calls the host these comments live on — its domain. The
    * caller reads it off the pull request's own address, the same one this
    * surface's own note says it never holds; this is a word, never a URL.
    * Absent draws a host-agnostic word instead of guessing one.
