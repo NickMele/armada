@@ -226,7 +226,7 @@ Fleet asks about **one** pull request per sweep and rotates, because the turn in
 
 **A comment already handed to a Drone is never handed to one again.** The forge has no memory of what Armada did, so a comment stays on a pull request reading exactly the same forever, and one a Drone ran against and did not fully satisfy looks identical to one nobody has touched. Armada's own record is the only thing that tells them apart, and a press naming one is refused by name. A press naming a comment the pull request no longer has is refused whole: acting on the part of a set that survived, without saying so, is the divergence choosing exists to prevent.
 
-**One reply on the pull request, and never one per comment.** A reply per comment turns a review thread into a conversation with a daemon; what a reviewer needs is one answer naming what was taken up and what was not. It is written after the Job has moved, so it says what happened rather than what was about to, and it is the second thing Armada writes into a repository it does not own. It quotes no comment back — a reviewer can already read what they wrote, and echoing it would put somebody else's words through a second write.
+**Nothing is written back onto the pull request.** Armada's own record — `record_remarks_taken_up` — is what tells a comment already handed to a Drone apart from one nobody has touched; the forge never hears about a press.
 
 **A person presses to merge, and Fleet performs it.** That is the fourth answer at a human gate, beside approving, requesting changes and rejecting, and it is the one act Armada takes that writes into a repository Fleet did not make — so it is the loudest line in the Job's log, written before the write happens. It is not a machine deciding: `auto_merge: never` reserves that, and the press is a person. What it buys over merging on the forge is everything in the table below, at once instead of on a rotation.
 
@@ -290,6 +290,11 @@ Fleet holds a Manifest's server Commands — the ones with `serve`, which [Manif
 > Why: release is gated on teardown, and a server is an in-tree process the group kill reaches.
 
 A server started with no Job runs in the main checkout and uses its span. It stops on Stop, when it exits, or when Fleet stops; the span itself is released only when Fleet stops, after teardown.
+
+**Fleet holds its servers in memory, so a Job's servers stop when Fleet stops too.** A restarted Fleet holds none, and a server that outlived the process holding it would keep its port with nothing left to hand it to the next Drone or stop it with the Job. Beside each running server's log Fleet keeps a record of its process group, removed when the server stops.
+
+> **Rule.** After a crash, Fleet kills the servers it left running when it next starts, confirming each is still the process it recorded.
+> Why: a leftover server holds its port with nothing to stop it, and a pid the system has since given another process must never be killed.
 
 ### Compose
 

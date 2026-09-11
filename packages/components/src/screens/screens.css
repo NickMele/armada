@@ -262,6 +262,36 @@
   color: var(--fg-subtle);
 }
 
+/* An act beside a region's label, in the label's own caps: `Details ›` over
+   Pulse. A button in the band reads as a second heading; this reads as the
+   band's own way in. */
+.armada-screen__eyebrow-act {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--space-1) / 2);
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--fg-subtle);
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-screen__eyebrow-act:hover {
+  color: var(--fg-default);
+}
+
+.armada-screen__eyebrow-act:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
 .armada-screen__eyebrow[data-spaced] {
   padding-top: var(--space-2);
 }
@@ -681,19 +711,18 @@
    the rows read as one block and each still lights its own hover. The label
    column, the value and the act are `WhereRow`'s; what lives here is only what
    a single row cannot know about its neighbours. */
+/* The same card as Pulse above it, so the column reads as one list. The rows
+   carry their own --space-2 inset for their hover, so the card adds
+   --space-1 to it and the labels line up with Pulse's. No rule between
+   groups: a card and a label column already say where each fact is. */
 .armada-inside__where {
   display: flex;
   flex-direction: column;
   gap: var(--border-width);
   min-width: 0;
-}
-
-/* A row that starts a second group. Inset to the rows' own padding, so it
-   separates the values rather than cutting the column. */
-.armada-inside__where-rule {
-  height: var(--border-width);
-  margin: var(--space-1) var(--space-2);
-  background: var(--border-subtle);
+  padding: var(--space-2) var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--surface-well);
 }
 
 /* Why a path did not open, under the row it was pressed on. A failed open is

@@ -14,6 +14,7 @@ import type { JobForgotten, JobList, JobSummary, Reason } from "./protocol";
 import type { ManifestReading } from "./reading";
 import type { ProposalInFlight } from "./proposing";
 import type { RunRecord } from "./rehearsal";
+import type { ServerState } from "./servers";
 import type { ChecksUnderway } from "./underway";
 import type { QuestionInFlight } from "./waiting";
 import type { CommandInFlight } from "./commanding";
@@ -55,7 +56,10 @@ export type Event =
   | ({ kind: "job.remarks_changed" } & JobRemarksChanged)
   | ({ kind: "proposal.moved" } & ProposalMoved)
   | ({ kind: "manifest.reread" } & ManifestReading)
-  | ({ kind: "run.finished" } & RunRecord);
+  | ({ kind: "run.finished" } & RunRecord)
+  | ({ kind: "server.starting" } & ServerState)
+  | ({ kind: "server.serving" } & ServerState)
+  | ({ kind: "server.exited" } & ServerState);
 
 /**
  * A Job exists that did not before, carrying the row whole.

@@ -29,7 +29,7 @@ use std::process::{Command, Output};
 
 use adapter_traits::{
     Base, BaseOnTheRemote, BroughtUpToDate, Delivery, Merged, NotDelivered, NotMerged, Opened,
-    Pushed, Renewed, Replied, RepositoryStanding, Review, UnderReview, WhatBecameOfIt,
+    Pushed, Renewed, RepositoryStanding, Review, UnderReview, WhatBecameOfIt,
 };
 use adapter_traits::{Standing, Worktree};
 use git2::{BranchType, Repository};
@@ -206,10 +206,6 @@ impl Delivery for GitVcs {
 
     fn merge(&self, in_repo: &str, pull_request: &str) -> Result<Merged, NotMerged> {
         crate::landing::merge(in_repo, pull_request)
-    }
-
-    fn replied(&self, in_repo: &str, pull_request: &str, saying: &str) -> Replied {
-        crate::landing::replied(in_repo, pull_request, saying)
     }
 
     fn caught_the_repository_up(&self, in_repo: &str, base: &str) -> RepositoryStanding {

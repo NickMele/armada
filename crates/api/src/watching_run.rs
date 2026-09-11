@@ -1,18 +1,24 @@
-//! A person's run's output: a channel per run, and the socket that relays it.
+//! A person's run's output, and a server's: a channel per subject, and the
+//! socket that relays it.
 //!
 //! **`crate::observing`'s shape, one subject over.** Subscribe first, then read
 //! what the log already holds, then relay the lines that follow; a viewer that
 //! falls behind loses the oldest and is told how many. `/events` carries only
-//! the run's end. `docs/practices/protocol.md`, *The run socket*, is the design.
+//! the run's end, or a server's lifecycle. `docs/practices/protocol.md`, *The
+//! run socket*, is the design.
 //!
 //! **Per run, not per Job's runs.** The sheet holds a run's id from the moment
 //! it starts one, a run has an end to close on, and a Job has one run out at a
 //! time — a per-Job channel would need `observing`'s hand-over for no reader.
+//! A server is the same shape, per instance, which is why both go through
+//! [`relayed`] and differ only in the message that opens them.
 
 use axum::extract::ws::{Message, WebSocket};
 use ipc::{
-    JobId, Missed, OutputClosed, OutputEnded, OutputLines, RunMessage, RunOpened, PROTOCOL_VERSION,
+    JobId, Missed, OutputClosed, OutputEnded, OutputLines, RunMessage, RunOpened, ServerMessage,
+    ServerOpened, PROTOCOL_VERSION,
 };
+use serde::Serialize;
 use tokio::sync::broadcast;
 
 /// How many chunks a run's channel holds for a viewer not keeping up. A chunk
@@ -117,43 +123,117 @@ pub struct ObservedRun {
     pub unreadable: bool,
 }
 
-/// Serve one viewer: the log so far, then what the run prints, then why it
-/// stopped. The socket is never read from; dropping it is unsubscribing.
-pub(crate) async fn relay(mut socket: WebSocket, observed: ObservedRun) {
-    let ObservedRun {
-        job_id,
-        id,
-        name,
-        path,
+/// [`ObservedRun`]'s shape for a server. `job_id` is absent on a server
+/// started with no Job, which is the one field that differs.
+pub struct ObservedServer {
+    pub job_id: Option<JobId>,
+    pub id: String,
+    pub name: String,
+    pub path: String,
+    /// `None` where the server has ended. The history is then all of it.
+    pub live: Option<RunWatch>,
+    pub history: Vec<String>,
+    pub skipped: u64,
+    pub read_to: u64,
+    pub unreadable: bool,
+}
+
+/// The four messages a socket of this shape speaks, whichever subject opened
+/// it.
+trait Spoken: Serialize {
+    fn lines(lines: Vec<String>) -> Self;
+    fn missed(dropped: u64) -> Self;
+    fn closed(because: OutputEnded) -> Self;
+}
+
+impl Spoken for RunMessage {
+    fn lines(lines: Vec<String>) -> Self {
+        RunMessage::Lines(OutputLines { lines })
+    }
+    fn missed(dropped: u64) -> Self {
+        RunMessage::Missed(Missed { dropped })
+    }
+    fn closed(because: OutputEnded) -> Self {
+        RunMessage::Closed(OutputClosed { because })
+    }
+}
+
+impl Spoken for ServerMessage {
+    fn lines(lines: Vec<String>) -> Self {
+        ServerMessage::Lines(OutputLines { lines })
+    }
+    fn missed(dropped: u64) -> Self {
+        ServerMessage::Missed(Missed { dropped })
+    }
+    fn closed(because: OutputEnded) -> Self {
+        ServerMessage::Closed(OutputClosed { because })
+    }
+}
+
+/// Serve one viewer of a run: the log so far, then what the run prints, then
+/// why it stopped. The socket is never read from; dropping it is unsubscribing.
+pub(crate) async fn relay(socket: WebSocket, observed: ObservedRun) {
+    let opened = RunMessage::Opened(RunOpened {
+        protocol_version: PROTOCOL_VERSION,
+        job_id: observed.job_id,
+        id: observed.id,
+        name: observed.name,
+        path: observed.path,
+        live: observed.live.is_some(),
+        skipped: observed.skipped,
+    });
+    let tail = Tail {
+        live: observed.live,
+        history: observed.history,
+        read_to: observed.read_to,
+        unreadable: observed.unreadable,
+    };
+    relayed(socket, opened, tail).await;
+}
+
+/// Serve one viewer of a server, [`relay`]'s way.
+pub(crate) async fn relay_server(socket: WebSocket, observed: ObservedServer) {
+    let opened = ServerMessage::Opened(ServerOpened {
+        protocol_version: PROTOCOL_VERSION,
+        job_id: observed.job_id,
+        id: observed.id,
+        name: observed.name,
+        path: observed.path,
+        live: observed.live.is_some(),
+        skipped: observed.skipped,
+    });
+    let tail = Tail {
+        live: observed.live,
+        history: observed.history,
+        read_to: observed.read_to,
+        unreadable: observed.unreadable,
+    };
+    relayed(socket, opened, tail).await;
+}
+
+/// Everything after the opening message.
+struct Tail {
+    live: Option<RunWatch>,
+    history: Vec<String>,
+    read_to: u64,
+    unreadable: bool,
+}
+
+async fn relayed<M: Spoken>(mut socket: WebSocket, opened: M, tail: Tail) {
+    let Tail {
         live,
         history,
-        skipped,
         read_to,
         unreadable,
-    } = observed;
-    let opened = RunOpened {
-        protocol_version: PROTOCOL_VERSION,
-        job_id,
-        id,
-        name,
-        path,
-        live: live.is_some(),
-        skipped,
-    };
-    if !send(&mut socket, &RunMessage::Opened(opened)).await {
+    } = tail;
+    if !send(&mut socket, &opened).await {
         return;
     }
     if unreadable {
-        closed(&mut socket, OutputEnded::Unreadable).await;
+        send(&mut socket, &M::closed(OutputEnded::Unreadable)).await;
         return;
     }
-    if !history.is_empty()
-        && !send(
-            &mut socket,
-            &RunMessage::Lines(OutputLines { lines: history }),
-        )
-        .await
-    {
+    if !history.is_empty() && !send(&mut socket, &M::lines(history)).await {
         return;
     }
     if let Some(mut live) = live {
@@ -161,28 +241,21 @@ pub(crate) async fn relay(mut socket: WebSocket, observed: ObservedRun) {
             let delivered = match seen {
                 RunSeen::Chunk(chunk) => {
                     let lines = chunk.after(read_to);
-                    lines.is_empty()
-                        || send(&mut socket, &RunMessage::Lines(OutputLines { lines })).await
+                    lines.is_empty() || send(&mut socket, &M::lines(lines)).await
                 }
                 // Stated rather than left: a viewer that believed its lines
                 // whole would read a gap as a run that went quiet.
-                RunSeen::Missed(dropped) => {
-                    send(&mut socket, &RunMessage::Missed(Missed { dropped })).await
-                }
+                RunSeen::Missed(dropped) => send(&mut socket, &M::missed(dropped)).await,
             };
             if !delivered {
                 return;
             }
         }
     }
-    closed(&mut socket, OutputEnded::Finished).await;
+    send(&mut socket, &M::closed(OutputEnded::Finished)).await;
 }
 
-async fn closed(socket: &mut WebSocket, because: OutputEnded) {
-    send(socket, &RunMessage::Closed(OutputClosed { because })).await;
-}
-
-async fn send(socket: &mut WebSocket, message: &RunMessage) -> bool {
+async fn send<M: Serialize>(socket: &mut WebSocket, message: &M) -> bool {
     let Ok(text) = ipc::encode(message) else {
         return false;
     };

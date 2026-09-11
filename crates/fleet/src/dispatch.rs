@@ -670,13 +670,13 @@ where
         if moved.job.status().is_terminal() {
             self.kept_footprint(&moved.job).await;
             // **After teardown, never on a timer.** `docs/concepts/fleet.md`,
-            // *Teardown, then release*: everything Armada spawned in the
-            // worktree is a process-group kill that already happened by the
-            // time a Job reaches a terminal status, since nothing here is a
-            // server Fleet holds open past the Drone that started it — see
-            // `crate::ports` for the servers this will need to stop first once
-            // `serve:` exists. `escalated` is excluded by `is_terminal()`, so
-            // an interrupted Job keeps its span until a person answers it.
+            // *Teardown, then release*: the servers Fleet holds for the Job are
+            // stopped and waited for first — `crate::servers` — and everything
+            // else Armada spawned in the worktree was a process-group kill that
+            // already happened. `escalated` is excluded by `is_terminal()`, so
+            // an interrupted Job keeps its span, and its servers, until a
+            // person answers it.
+            self.stopped_servers_of(moved.job.id()).await;
             self.released_ports(&moved.job).await;
         }
         self.publish(ipc::Event::JobStateChanged((&moved.event).into()));

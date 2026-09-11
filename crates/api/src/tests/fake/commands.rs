@@ -120,6 +120,28 @@ impl Commands for FakeDaemon {
     ) -> Result<ipc::RunRecord, Refusal> {
         self.runs_nothing(&job_id)
     }
+    /// Refused, naming what was asked for, so a route test can tell the body
+    /// arrived. Holding a server is `fleet::servers`' and tested there.
+    async fn start_server(
+        self: std::sync::Arc<Self>,
+        asked: ipc::StartServer,
+    ) -> Result<ipc::ServerState, Refusal> {
+        Err(Refusal::Unacceptable(ipc::WireError::raised(
+            "fleet.not_a_server",
+            format!(
+                "the fake daemon starts no server, `{}` included",
+                asked.name
+            ),
+            crate::tests::shapes::run_id(),
+        )))
+    }
+    async fn stop_server(&self, named: ipc::NamedServer) -> Result<ipc::ServerState, Refusal> {
+        Err(Refusal::IllegalMove(ipc::WireError::raised(
+            "fleet.no_such_server",
+            format!("the fake daemon holds no server called `{}`", named.id),
+            crate::tests::shapes::run_id(),
+        )))
+    }
     async fn raise_cost_cap(
         &self,
         job_id: JobId,

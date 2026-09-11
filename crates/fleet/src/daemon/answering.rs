@@ -61,6 +61,10 @@ where
     /// and a row in the Drone's own transcript saying how long nothing was read
     /// and that nothing will be read from here.
     pub async fn reconcile(&self) -> Result<Reconciled, Adrift> {
+        // First of all: the servers a crashed Fleet left running are ended, so
+        // the ports they held are free before the probe below. See
+        // `crate::servers::left`.
+        self.reaped_left_servers().await;
         // Before anything else: a main-checkout claim a crashed Fleet left
         // behind is re-probed before this process trusts it. See
         // `crate::ports::Fleet::reconciled_main_checkout_ports`.

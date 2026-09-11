@@ -271,6 +271,13 @@ pub enum Fault {
     /// two are one declaration made in two keys — reported at whichever key is
     /// missing, naming the one the author did write.
     ServeReadyMustPair { present: &'static str },
+    /// **`ready` or `links` on a Command with no `serve`.** A Command that
+    /// exits has nothing to wait for and no address to offer, so either key is
+    /// a server someone meant to declare and did not.
+    OnlyAServerReads,
+    /// **A `requires` entry naming a server.** A server never exits, so what
+    /// was meant to run after it would wait forever.
+    RequiresAServer { value: String },
 }
 
 /// Why a step's `artifact_exists` target cannot name the one file the next step
@@ -508,6 +515,16 @@ impl fmt::Display for Fault {
                  something and `ready` says when it is up — one without the \
                  other is a server nothing confirms came up, or a probe with \
                  nothing to probe. Write both, or neither"
+            ),
+            Fault::OnlyAServerReads => f.write_str(
+                "is read only on a Command that declares `serve`. This one \
+                 declares `run` alone, so it exits and there is nothing to wait \
+                 for or open — add `serve`, or delete the key",
+            ),
+            Fault::RequiresAServer { value } => write!(
+                f,
+                "is `{value}`, which declares `serve` and stays running. \
+                 `requires` waits for a Command to exit, and a server never does"
             ),
             Fault::GateAndJudgeDisagree { gate: "auto" } => write!(
                 f,

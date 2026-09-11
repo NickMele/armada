@@ -391,4 +391,16 @@ pub trait Queries: Send + Sync + 'static {
         job_id: JobId,
         run_id: String,
     ) -> impl Future<Output = Result<crate::ObservedRun, Refusal>> + Send;
+
+    /// `list_servers` — every server Fleet holds, a Job's and the main
+    /// checkout's, and the last instance of each that ended.
+    fn list_servers(&self) -> impl Future<Output = Result<ipc::ServerList, Refusal>> + Send;
+
+    /// `observe_server` — one server's output on a socket of its own, for
+    /// [`Queries::observe_run`]'s reasons. [`Refusal::Unacceptable`] where
+    /// `server_id` names no instance Fleet holds.
+    fn observe_server(
+        &self,
+        server_id: String,
+    ) -> impl Future<Output = Result<crate::ObservedServer, Refusal>> + Send;
 }

@@ -76,6 +76,9 @@ mod report;
 /// What one Job holds on this machine, and what came of asking whether it is
 /// working. **The other axis from `spend`**, which answers the model's cost.
 mod resources;
+/// A Command that stays running, held by Fleet. **Lifecycle on `/events`,
+/// output on a socket of its own.**
+mod servers;
 mod setup;
 /// What a step's harness produced, as a client is told about it.
 mod showing;
@@ -142,6 +145,10 @@ pub use remarks::{InlineContext, JobRemarks, Remark, RemarksTakenUp};
 pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, ReportOrigin};
 pub use resources::{
     Asked, Finding, Held, JobExamined, JobProcess, JobResources, Look, WorktreeOnDisk,
+};
+pub use servers::{
+    NamedServer, ServerEntry, ServerLink, ServerList, ServerMessage, ServerOpened, ServerPhase,
+    ServerPort, ServerState, StartServer, StartedBy,
 };
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
 pub use showing::{KeptFrame, NamedSpec, ShowAgain, ShownAgain, ShownSet};

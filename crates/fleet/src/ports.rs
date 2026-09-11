@@ -413,7 +413,11 @@ where
     /// takes**: nothing was spawned, so `not_configurable` reads correctly —
     /// the Manifest's own `ports:` would not resolve to a usable span.
     pub(crate) async fn claimed_ports(&self, job: &Job) -> Result<(), Adrift> {
-        if let Err(cause) = self.try_claim(PortClaimant::Job(job.id().clone())).await {
+        // Sized from what the Job froze, so the span and the names it is later
+        // read back through are the same list — `port_map` below.
+        let (froze, _) = self.effective_manifest(job).await;
+        let claimant = PortClaimant::Job(job.id().clone());
+        if let Err(cause) = self.try_claim(claimant, &froze).await {
             self.move_job(
                 job,
                 core_model::Target::Escalated(core_model::EscalationTrigger::NotConfigurable),
@@ -436,12 +440,16 @@ where
     /// that read exactly like a Job's.
     ///
     /// [`Store::every_port_claim`]: store::Store::every_port_claim
-    async fn try_claim(&self, claimant: PortClaimant) -> Result<(), PortsRefused> {
-        let declared = self.manifest().port_names();
+    async fn try_claim(
+        &self,
+        claimant: PortClaimant,
+        manifest: &Manifest,
+    ) -> Result<(), PortsRefused> {
+        let declared = manifest.port_names();
         if declared.is_empty() {
             return Ok(());
         }
-        env_names(self.manifest())?;
+        env_names(manifest)?;
         let width = rounded_width(declared.len(), self.port_range().granule());
         let occupied: Vec<(u16, u16)> = self
             .store()
@@ -470,7 +478,12 @@ where
 
     /// This Job's declared port names, resolved to the numbers its claim
     /// holds. Empty where it declared none, or claimed none.
+    ///
+    /// **The names the Job froze** — `crate::snapshotting` — because a name's
+    /// number is its offset in the sorted list, so a `ports:` edit after the
+    /// Job was created would otherwise renumber a port a server is bound to.
     pub(crate) async fn port_map(&self, job: &Job) -> BTreeMap<String, u16> {
+        let (froze, _) = self.effective_manifest(job).await;
         let claim = self
             .store()
             .lock()
@@ -479,7 +492,7 @@ where
             .ok()
             .flatten();
         match claim {
-            Some(claim) => port_map(self.manifest(), &claim),
+            Some(claim) => port_map(&froze, &claim),
             None => BTreeMap::new(),
         }
     }
@@ -487,7 +500,8 @@ where
     /// Every variable this Job's claimed span sets: `ARMADA_PORT_<NAME>` and
     /// any declared `env`, for every process Fleet spawns in the worktree.
     pub(crate) async fn port_env(&self, job: &Job) -> Vec<(String, String)> {
-        let names = match env_names(self.manifest()) {
+        let (froze, _) = self.effective_manifest(job).await;
+        let names = match env_names(&froze) {
             Ok(names) => names,
             // Already refused at claim time, which is upstream of every spawn
             // — a Job that reached one holds a valid claim or none at all.
@@ -524,7 +538,9 @@ where
         // refuses, for `main_checkout_port_env`'s own reason — a proof run
         // with an unresolved `${port.NAME}` is diagnosable from its own log,
         // and there is no Job here to carry a `not_configurable`.
-        let _ = self.try_claim(PortClaimant::MainCheckout).await;
+        let _ = self
+            .try_claim(PortClaimant::MainCheckout, self.manifest())
+            .await;
         match self.main_checkout_claim().await {
             Some(claim) => port_map(self.manifest(), &claim),
             None => BTreeMap::new(),

@@ -40,6 +40,7 @@ mod reference;
 /// worktree, and what the runs left.
 mod rehearsing;
 mod routes;
+mod servers;
 mod sockets;
 mod stream;
 /// A person's run's output, on a socket of its own per run — never `/events`.
@@ -56,4 +57,6 @@ pub use observing::{Feed, Observed, Seen, Turns, Watch, WATCHING};
 pub use reference::Resolved;
 pub use routes::{router, Route, Served, SERVED};
 pub use stream::{Broadcaster, Next, Subscription, BACKLOG};
-pub use watching_run::{ObservedRun, RunChunk, RunFeed, RunSeen, RunWatch, RUN_BACKLOG};
+pub use watching_run::{
+    ObservedRun, ObservedServer, RunChunk, RunFeed, RunSeen, RunWatch, RUN_BACKLOG,
+};

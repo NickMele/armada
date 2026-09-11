@@ -6,6 +6,7 @@
 
 import type { ChangedFile } from "./events";
 import type { ProtocolVersion } from "./version";
+import type { ServerEntry } from "./servers";
 
 /** `GET /jobs/:job_id/run_sheet` — what can be run in this Job's worktree. */
 export type RunSheet = {
@@ -27,6 +28,11 @@ export type RunSheet = {
   drone_working: boolean;
   /** The run in flight on this Job, if one is. */
   running?: RunUnderway;
+  /**
+   * The Commands declaring `serve`, each with this Job's instance. Not in
+   * `commands`: a server is started with `start_server`. Since protocol 10.10.
+   */
+  servers?: ServerEntry[];
 };
 
 export type RunEntry = {

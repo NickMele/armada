@@ -136,7 +136,7 @@ export function ReviewComments({
   disabled = false,
   disabledNote,
   label = "Comments on the pull request",
-  note = "Pick the ones a drone should act on. It works on the same branch, so the pull request updates in place, and one reply on it says what was picked up and what was not.",
+  note = "Pick the ones a drone should act on. It works on the same branch, so the pull request updates in place.",
   emptyNote = "No comments",
   takeUpLabel = "Send to a drone",
   sentNote = "Already sent to a drone",
