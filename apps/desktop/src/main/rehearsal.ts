@@ -11,10 +11,13 @@
 
 import WebSocket from "ws";
 
-import type { NamedRun, RunFollowed, RunMessage, RunUnderway, StartRun } from "@armada/protocol";
+import type { NamedRun, RunFollowed, RunMessage, RunSheet, RunUnderway, ServerState, StartRun } from "@armada/protocol";
 import type { Outcome } from "@armada/protocol";
-import { ask, route } from "./request";
+import type { BridgeState } from "../shared/bridge";
+import { ask, route, serversOf } from "./request";
+import { JobReader } from "./reader";
 import { HOST } from "./runtime-file";
+import { ServerCommands } from "./servers";
 
 /** What starting and stopping a run needs of the connection, and no more. */
 export type RunBoard = {
@@ -175,5 +178,96 @@ export class RunSocket {
       return;
     }
     this.set({ state: "failed", jobId, runId, detail });
+  }
+}
+
+/**
+ * Journey 9 and servers, both, as one facade `connection.ts` holds one field
+ * for. **Split out of `connection.ts`**, which named the run sheet and the
+ * servers it started as its own subject once the state machine and the
+ * arrival handler had the file back at the 900-line gate — the run sheet's
+ * own reader, its output socket, its commands and the server commands all
+ * moved here together, because the four were one thing added at once and
+ * splitting them again would put one feature's wiring in four files.
+ */
+export class RehearsalConnection {
+  private readonly publish: (change: Partial<BridgeState>) => void;
+  private readonly port: () => number | null;
+  private readonly sheet: JobReader<{ sheet: RunSheet }>;
+  private readonly follow: RunSocket;
+  private readonly runs: RunCommands;
+  private readonly servers: ServerCommands;
+
+  constructor(wiring: { publish: (change: Partial<BridgeState>) => void; port: () => number | null }) {
+    this.publish = wiring.publish;
+    this.port = wiring.port;
+    this.sheet = new JobReader<{ sheet: RunSheet }>({
+      route: (jobId) => `/jobs/${encodeURIComponent(jobId)}/run_sheet`,
+      keeps: (body) => ({ sheet: body as RunSheet }),
+      publish: (runSheet) => this.publish({ runSheet }),
+    });
+    this.follow = new RunSocket((runFollowed) => this.publish({ runFollowed }));
+    this.runs = new RunCommands({
+      port: this.port,
+      follow: (port, jobId, runId) => this.follow.open(port, jobId, runId),
+      refreshSheet: (port) => this.sheet.again(port),
+    });
+    this.servers = new ServerCommands({ port: this.port });
+  }
+
+  close(): void {
+    this.sheet.close();
+    this.follow.close();
+  }
+
+  /** Every server Fleet holds. Read once per connection; `server.*` on
+   * `/events` keeps the list current from there — see `onServerEvent`. */
+  async readServers(port: number): Promise<void> {
+    const servers = await serversOf(port);
+    if (servers !== null) this.publish({ servers });
+  }
+
+  /** A run finished. A rehearsal, so only the sheet's own reading moves, and
+   * only where it is this run's Job. */
+  onRunFinished(jobId: string, port: number): void {
+    if (this.sheet.jobId === jobId) void this.sheet.again(port);
+  }
+
+  /** One `server.*` event, folded into the list it replaces a row in or joins. */
+  onServerEvent(current: readonly ServerState[], row: ServerState): ServerState[] {
+    return current.some((one) => one.id === row.id)
+      ? current.map((one) => (one.id === row.id ? row : one))
+      : [row, ...current];
+  }
+
+  /** Read the run sheet — Journey 9 — or `null` to stop. Opened by the sheet. */
+  async watchRunSheet(jobId: string | null): Promise<void> {
+    await this.sheet.want(this.port(), jobId);
+  }
+
+  /** One run's output, or `null` to stop — a run `startRun` just began, or one
+   * the sheet is reopening onto in flight. */
+  async observeRun(jobId: string | null, runId: string | null): Promise<void> {
+    this.follow.open(this.port(), jobId, runId);
+  }
+
+  /** Run one Check or Command in this Job's worktree, and start following it. */
+  startRun(jobId: string, body: StartRun): Promise<Outcome> {
+    return this.runs.startRun(jobId, body);
+  }
+
+  /** End a run's process group. Its log keeps what printed. */
+  stopRun(jobId: string, id: string): Promise<Outcome> {
+    return this.runs.stopRun(jobId, id);
+  }
+
+  /** Start a declared server, for a Job's worktree or the main checkout. */
+  startServer(name: string, jobId?: string): Promise<Outcome> {
+    return this.servers.startServer(name, jobId);
+  }
+
+  /** End a server's process group. Its log keeps what printed. */
+  stopServer(id: string): Promise<Outcome> {
+    return this.servers.stopServer(id);
   }
 }

@@ -438,29 +438,30 @@ void app.whenReady().then(() => {
     connection?.readResources(jobId),
   );
   // The run sheet, Journey 9. Opened by the sheet rather than by the Job.
+  // Every act below is `connection.rehearsal`'s — see `rehearsal.ts`.
   ipcMain.handle(CHANNELS.watchRunSheet, (_event, jobId: string | null) =>
-    connection?.watchRunSheet(jobId),
+    connection?.rehearsal.watchRunSheet(jobId),
   );
   // One run's output, `followCheckOutput`'s reason and its own socket for it.
   ipcMain.handle(CHANNELS.observeRun, (_event, jobId: string | null, runId: string | null) =>
-    connection?.observeRun(jobId, runId),
+    connection?.rehearsal.observeRun(jobId, runId),
   );
   // A rehearsal in this Job's own worktree — no Evidence, nothing on the Job
   // moves. Opens `observeRun` for the caller the moment the run exists.
   ipcMain.handle(CHANNELS.startRun, (_event, jobId: string, body: StartRun) =>
-    connection?.startRun(jobId, body),
+    connection?.rehearsal.startRun(jobId, body),
   );
   ipcMain.handle(CHANNELS.stopRun, (_event, jobId: string, runId: string) =>
-    connection?.stopRun(jobId, runId),
+    connection?.rehearsal.stopRun(jobId, runId),
   );
   // A declared server, for this Job's worktree or the main checkout where no
   // Job is named. `servers` on the published state is what keeps a *Serving*
   // row on screen after the sheet that started it closes.
   ipcMain.handle(CHANNELS.startServer, (_event, name: string, jobId?: string) =>
-    connection?.startServer(name, jobId),
+    connection?.rehearsal.startServer(name, jobId),
   );
   ipcMain.handle(CHANNELS.stopServer, (_event, serverId: string) =>
-    connection?.stopServer(serverId),
+    connection?.rehearsal.stopServer(serverId),
   );
   // The third channel that leaves this machine. The address is checked against
   // what main published for that server before anything is handed to the OS.
