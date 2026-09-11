@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, within } from "storybook/test";
 import { PathChip } from "./PathChip";
 
 const meta: Meta<typeof PathChip> = {
@@ -45,7 +46,31 @@ export const ALongPathTruncatingItsDirectory: Story = {
       <PathChip directory="packages/settings/src/" basename="index.ts" />
     </div>
   ),
+  // Geometry, because text cannot show this: the DOM holds the directory in
+  // reading order whatever the bidi algorithm draws, so a separator drawn at
+  // the front passed every text assertion.
+  play: async ({ canvas }) => {
+    const whole = within(canvas.getByTitle("packages/settings/src/selectors.ts"));
+    const directory = whole.getByText("packages/settings/src/");
+    const basename = whole.getByText("selectors.ts");
+    const separator = glyph(directory, "last").right;
+    await expect(Math.abs(separator - basename.getBoundingClientRect().left)).toBeLessThanOrEqual(1);
+
+    const clipped = canvas.getByText(".armada/artifacts/job_2d90bb/");
+    const chip = canvas.getByTitle(".armada/artifacts/job_2d90bb/root_cause.md");
+    await expect(glyph(clipped, "first").left).toBeLessThan(chip.getBoundingClientRect().left);
+  },
 };
+
+/** Where one end of an element's text is drawn. */
+function glyph(element: HTMLElement, end: "first" | "last"): DOMRect {
+  const text = document.createTreeWalker(element, NodeFilter.SHOW_TEXT).nextNode() as Text;
+  const range = document.createRange();
+  const at = end === "first" ? 0 : text.length - 1;
+  range.setStart(text, at);
+  range.setEnd(text, at + 1);
+  return range.getBoundingClientRect();
+}
 
 /**
  * A path with a note. The note is sans against the path's mono, because it is
