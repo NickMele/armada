@@ -29,6 +29,11 @@ once. **A Job it dispatches escalates rather than spending anything.**
 
 ## Starting and stopping it
 
+- **It cannot run beside the owner's Fleet.** Every Fleet binds
+  `127.0.0.1:47821`, `PROVISIONAL_PORT` in `crates/fleet/src/runtime.rs`, and
+  nothing moves it. Started while his is up, a dev Fleet stops at
+  `Address already in use` having changed nothing. For a read and nothing more,
+  the recorder's reads against his Fleet are the same ones Bridge makes.
 - **The scratch directory goes outside the repository.** The script refuses one
   inside it — a copy of the owner's transcripts is one `git add -A` from a public
   commit. Your session scratchpad is the right place.

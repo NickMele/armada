@@ -9,15 +9,16 @@
 // control that leaves a view belongs beside the view's name, not scrolled into
 // it.
 //
-// **The count sentence is not here any more.** It used to say how many Jobs
-// there were and how many were at the gate, on every view this serves. Both its
-// numbers move with the Board's filter now, so it went to the Board — beside
-// the control that changes it, rather than in a head that also serves the
-// composer, the reports and one Job read whole. The composer keeps a summary of
-// its own, which is a standing sentence rather than a count.
+// **There is no count sentence.** The Board drew one beside its filter until
+// 11 Sep 2026, when the owner cut it as prose the tab counts already say.
+//
+// **The Board's head is one control.** `New job`, with everything else the
+// Board offers in its menu. `BoardActions` says why.
 
 import type { ReactNode } from "react";
 import { Button, Kbd } from "@armada/components";
+import type { JobSummary } from "@armada/protocol";
+import { BoardActions } from "./BoardActions";
 
 /** The views one head serves, and everything each needs to draw it. */
 export type HeadProps = {
@@ -53,6 +54,10 @@ export type HeadProps = {
   onCloseWorktrees: () => void;
   onReadWorktrees: () => void;
   onRefresh: () => void;
+  /** Every Job Bridge holds, for the counts on the Board's two bulk acts. */
+  jobs: readonly JobSummary[];
+  onClearTerminal: (jobIds: readonly string[]) => void;
+  onForgetTerminal: (jobIds: readonly string[]) => void;
 };
 
 /** What the head is called, what it says beneath, and what sits at its edge. */
@@ -72,6 +77,9 @@ export function headOf({
   onCloseWorktrees,
   onReadWorktrees,
   onRefresh,
+  jobs,
+  onClearTerminal,
+  onForgetTerminal,
 }: HeadProps): Head | null {
   if (clearing) {
     return {
@@ -128,33 +136,17 @@ export function headOf({
   return {
     title: "Job Board",
     actions: (
-      <>
-        {/* Re-reads over the connection Bridge already holds. It does not
-            reconnect: dropping a working socket does not fix one that is
-            broken, and the runtime-file path already retries on its own. */}
-        <Button variant="ghost" size="sm" onClick={onRefresh} disabled={refreshing}>
-          {refreshing ? "Refreshing" : "Refresh"}
-        </Button>
-        {/* Ghost, beside Refresh and never beside the accent fill. Reading what
-            the Judge got wrong is not a decision queued on anybody — it is read
-            deliberately, which is why it is here and not on a row. */}
-        <Button variant="ghost" size="sm" onClick={onReadReports}>
-          Reported
-        </Button>
-        {/* **A second door to a place the rail now reaches**, and it stays.
-            This is the control that screen has been opened by since it
-            shipped; the rail row is a day old, and taking a learned control
-            away in the same change that moves a learned key is two changes.
-            Giving disk back is read deliberately, so it is here and never on a
-            row — the same argument that places `Reported`. */}
-        <Button variant="ghost" size="sm" onClick={onReadWorktrees}>
-          Held disk
-        </Button>
-        {/* The one accent fill on the surface. */}
-        <Button variant="primary" onClick={onCompose} disabled={!live}>
-          New job
-        </Button>
-      </>
+      <BoardActions
+        jobs={jobs}
+        live={live}
+        refreshing={refreshing}
+        onCompose={onCompose}
+        onRefresh={onRefresh}
+        onReadReports={onReadReports}
+        onReadWorktrees={onReadWorktrees}
+        onClearTerminal={onClearTerminal}
+        onForgetTerminal={onForgetTerminal}
+      />
     ),
   };
 }

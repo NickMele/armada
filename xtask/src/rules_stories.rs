@@ -36,6 +36,9 @@ const SCREENS: &str = "packages/screens/src/stories";
 /// Where the transform and the directory layout are written down.
 const SKILL: &str = ".claude/skills/armada-components/SKILL.md";
 
+/// Where the app's own code is: what renders a screen outside Storybook.
+const APP: &[&str] = &["apps/desktop/src", "packages/shell/src", "packages/screens/src"];
+
 /// Every story's title is its path, and every component has a story.
 ///
 /// Three things, and each was a way the deleted registry drifted:
@@ -69,6 +72,77 @@ pub fn every_story_names_its_own_path(root: &Path) -> Report {
         stories_are_in_a_component_directory(root, &src, base, &mut report);
     }
     report
+}
+
+/// Every `Screens` entry in the component library is one the app renders.
+///
+/// **A screen drawn from props typed in its story is a picture of the app**,
+/// and it drifts from the app the day either changes. The list did: its story
+/// typed each row's fields by hand, and the head's controls, the tab counts and
+/// the sentence Bridge drew over them were in none of it. A screen the app
+/// renders is drawn from wire data under `packages/screens/src/stories`; a
+/// design not built yet is a draft under `drafts/`, and goes when it lands.
+pub fn every_screen_is_one_the_app_renders(root: &Path) -> Report {
+    let mut report = Report::new("every Screens entry is one the app renders");
+    let screens = root.join(ROOT).join("screens");
+    if !screens.is_dir() {
+        return report;
+    }
+    let app: Vec<String> = APP
+        .iter()
+        .flat_map(|dir| files_with_ext(root, &root.join(dir), &["ts", "tsx"]))
+        .filter(|path| {
+            !path.contains("/stories/")
+                && !path.contains("/fixtures/")
+                && !path.contains(".test.")
+                && !path.contains(".stories.")
+        })
+        .filter_map(|path| fs::read_to_string(root.join(&path)).ok())
+        .collect();
+    for component in dirs_in(&screens) {
+        let file = screens.join(&component).join(format!("{component}.tsx"));
+        let Ok(text) = fs::read_to_string(file) else {
+            continue;
+        };
+        let names = exported_names(&text);
+        if names.iter().any(|name| app.iter().any(|source| mentions(source, name))) {
+            continue;
+        }
+        report.fail(format!(
+            "{ROOT}/screens/{component}/ — a Screens entry nothing in the app renders. \
+             Draw the app's own screen from wire data under {SCREENS}/screens/, \
+             or move this to {ROOT}/drafts/ while the design is unbuilt. {SKILL}"
+        ));
+    }
+    report
+}
+
+/// The values a component file exports by name: `export function` and
+/// `export const`. Types are left out, since a type renders nothing.
+fn exported_names(text: &str) -> Vec<String> {
+    text.lines()
+        .filter_map(|line| {
+            let rest = line
+                .strip_prefix("export function ")
+                .or_else(|| line.strip_prefix("export const "))?;
+            let name: String = rest.chars().take_while(|c| is_word(*c)).collect();
+            (!name.is_empty()).then_some(name)
+        })
+        .collect()
+}
+
+/// Whether `source` names `name` as a whole word, so `TheShell` is not found
+/// inside `TheShellFrame`.
+fn mentions(source: &str, name: &str) -> bool {
+    source.match_indices(name).any(|(at, _)| {
+        let before = source[..at].chars().next_back();
+        let after = source[at + name.len()..].chars().next();
+        !before.is_some_and(is_word) && !after.is_some_and(is_word)
+    })
+}
+
+fn is_word(c: char) -> bool {
+    c.is_alphanumeric() || c == '_'
 }
 
 /// One component directory: its story, its component file, and whether the

@@ -14,12 +14,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   BOARD_TABS,
-  countSentence,
   DEFAULT_SORT,
   emptiedBy,
   FIRST_TAB,
   inTab,
   matches,
+  sectionOf,
+  sectionsOf,
   needsYou,
   sorted,
   tabOf,
@@ -229,43 +230,6 @@ describe("the order", () => {
   });
 });
 
-describe("the count sentence", () => {
-  it("states both numbers, because neither says anything alone", () => {
-    expect(countSentence({ total: 15, matched: 15, needsYou: 4, query: "" })).toBe(
-      "4 jobs need you. 15 on the Board.",
-    );
-  });
-
-  it("says one job in the singular", () => {
-    expect(countSentence({ total: 15, matched: 15, needsYou: 1, query: "" })).toBe(
-      "1 job needs you. 15 on the Board.",
-    );
-  });
-
-  it("says nothing needs you rather than zero", () => {
-    expect(countSentence({ total: 15, matched: 15, needsYou: 0, query: "" })).toBe(
-      "Nothing needs you. 15 on the Board.",
-    );
-  });
-
-  it("quotes the search back, in curly quotes, against the whole Board", () => {
-    expect(countSentence({ total: 15, matched: 3, needsYou: 4, query: "auth" })).toBe(
-      "3 jobs match “auth”. 15 on the Board.",
-    );
-  });
-
-  it("says no jobs match rather than 0 jobs match", () => {
-    expect(countSentence({ total: 15, matched: 0, needsYou: 4, query: "auth" })).toBe(
-      "No jobs match “auth”. 15 on the Board.",
-    );
-  });
-
-  it("drops the needs-you count under a search, because the tab is suspended", () => {
-    const said = countSentence({ total: 15, matched: 3, needsYou: 4, query: "auth" });
-    expect(said).not.toContain("need you");
-  });
-});
-
 describe("what emptied the list", () => {
   it("names the search, not the tab, while a search is running", () => {
     expect(emptiedBy("running", "auth")).toBe("No jobs match your search.");
@@ -286,5 +250,41 @@ describe("what emptied the list", () => {
     for (const [tab, sentence] of said) {
       expect(emptiedBy(tab, ""), tab).toBe(sentence);
     }
+  });
+});
+
+describe("the All tab's sections", () => {
+  it("draws what needs you, what runs, what waits and what is over, in that order", () => {
+    const rows = [
+      job({ id: "a", status: "completed_success" }),
+      job({ id: "b", status: "queued" }),
+      job({ id: "c", status: "running" }),
+      job({ id: "d", status: "awaiting_approval" }),
+    ];
+    expect(sectionsOf(rows).map((section) => section.id)).toEqual([
+      "needs-you",
+      "running",
+      "queued",
+      "done",
+    ]);
+  });
+
+  it("puts a cleared job under Done with the finished ones", () => {
+    expect(sectionOf(job({ status: "completed_success", reclaimed_at: "2026-09-01T00:00:00Z" }))).toBe(
+      "done",
+    );
+  });
+
+  it("draws no section with nothing in it", () => {
+    expect(sectionsOf([job({ status: "running" })]).map((section) => section.id)).toEqual(["running"]);
+  });
+
+  it("keeps the order each section was handed", () => {
+    const rows = [job({ id: "second", status: "running" }), job({ id: "first", status: "running" })];
+    expect(sectionsOf(rows)[0]?.jobs.map((row) => row.id)).toEqual(["second", "first"]);
+  });
+
+  it("keeps a job no tab claims, under a label of its own", () => {
+    expect(sectionOf(job({ status: "not_a_status_the_registry_has" }))).toBe("other");
   });
 });

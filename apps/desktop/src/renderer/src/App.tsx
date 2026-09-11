@@ -293,6 +293,9 @@ export function App() {
     onCloseWorktrees: () => setClearing(false),
     onReadWorktrees: () => setClearing(true),
     onRefresh: () => void commands.refresh(),
+    jobs: state.jobs,
+    onClearTerminal: (jobIds) => void commands.clearTerminal(jobIds),
+    onForgetTerminal: (jobIds) => void commands.forgetTerminal(jobIds),
   });
 
   return (
@@ -508,8 +511,6 @@ export function App() {
                   // holds initial focus" a rule with one implementation.
                   onKill={(jobId) => setConfirming({ act: "kill_job", jobId })}
                   onCompose={() => setComposing(true)}
-                  onClearTerminal={(jobIds) => void commands.clearTerminal(jobIds)}
-                  onForgetTerminal={(jobIds) => void commands.forgetTerminal(jobIds)}
                   onCopied={setCopied}
                 />
               </Boundary>

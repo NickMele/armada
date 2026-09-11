@@ -158,3 +158,23 @@
 .armada-verdict__record p {
   margin: 0;
 }
+
+/* The pull request's number, a link to it. Marked the way the header's pull
+   request fact is, so the two read as the same door. */
+.armada-verdict__pr-link {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: none;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-verdict__pr-link:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.armada-verdict__pr-link:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}

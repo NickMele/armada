@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@armada/brand": "workspace:*",
     "@armada/protocol": "workspace:*",
     "@armada/tokens": "workspace:*",
     "lucide-react": "^0.550.0",

@@ -456,8 +456,8 @@ export function InsideAJob({
  * the vocabulary is explained. `concepts.ts` is the first.
  *
  * `asChild`, because the brief's own rule keys off the band's class: a wrapper
- * would be the `:not(.armada-screen__eyebrow)` child and take the flex meant
- * for the brief itself.
+ * would be the `:not(.armada-screen__eyebrow)` child and be styled as the
+ * brief itself.
  */
 function Eyebrow({ children, spaced }: { children: ReactNode; spaced?: boolean }) {
   const says = conceptSaid(children);

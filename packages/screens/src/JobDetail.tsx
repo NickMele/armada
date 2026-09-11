@@ -635,6 +635,8 @@ export function JobDetail({
   // reason: a reader may have navigated to a different step, and
   // `stuck.undecided` is not that step's reason for anything.
   const undecided = whole?.stuck?.step_id === open?.step_id ? whole?.stuck?.undecided : undefined;
+  const atGate = render === "reviewing";
+  const question = questionOf(whole, job.id, now, stale, acting, onAnswer);
   const verdictSlot =
     open === undefined
       ? undefined
@@ -659,6 +661,8 @@ export function JobDetail({
             onReject,
             onTakeUpRemarks,
             onOpenRemarkLink,
+            onOpenPullRequest,
+            onSaid,
           })
         : render === "finished" && neverAsked
           ? verdictSlotFinished({ job, whole, open, render, recorded, opensRecords, now, claimed, undecided })
@@ -667,6 +671,7 @@ export function JobDetail({
   // One way to answer a command the Drone was not given, for both places a
   // person meets one: the command it is waiting on, and a refused row.
   const answering = answeringOf(job.id, stale, acting, onAnswerCommand);
+  const waiting = waitingOf(question, commandOf(whole, now, answering));
 
   // The Job header, and everything that goes in it. `heading.tsx` holds what
   // it is made of — the badge, the facts, the acts that end or replace the Job,
@@ -789,11 +794,9 @@ export function JobDetail({
               // **The question sits where the redirect box does** — between the
               // strip and the story, because it is the same kind of thing: a
               // box a person acts in about the step they are looking at. A
-              // command the Drone is waiting on is the same box, in the same place.
-              before: waitingOf(
-                questionOf(whole, job.id, now, stale, acting, onAnswer),
-                commandOf(whole, now, answering),
-              ),
+              // command the Drone is waiting on is the same box, and at the gate
+              // so is the review (the owner, 11 Sep 2026).
+              before: atGate ? <>{waiting}{verdictSlot}</> : waiting,
               // The strip draws the stage the keyboard pinned, and hover stays
               // its own: hovering reports where the pointer is rather than what
               // a reader decided, so nothing up here holds it.
@@ -805,12 +808,8 @@ export function JobDetail({
               chapters,
               openChapterId: keys.openChapterId,
               onOpenChapter: keys.onOpenChapter,
-              // Review and reply are one loop: the decision is the block under
-              // the story, one scroll from the diff it is made against, never a
-              // second surface and never a second panel. The verdict sheet is
-              // what draws that block now — `Decide`'s acts sit inside it,
-              // unchanged, at `verdictSlot`'s `actions`.
-              after: verdictSlot,
+              // A finished Job's verdict sheet is a record, read after the story.
+              after: atGate ? undefined : verdictSlot,
             }
       }
       stepAbsent={whyNoSteps(watched, job.id)}

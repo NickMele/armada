@@ -33,6 +33,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import {
+  JOB_LIFECYCLE,
   plural,
   Select,
   TheShell,
@@ -40,7 +41,6 @@ import {
   type FleetState,
   type StatusBarProps,
 } from "@armada/components";
-import { ArmadaLockupHorizontal, ArmadaMark } from "@armada/brand";
 
 import type { Connection } from "@armada/protocol";
 import type { FleetCapacity, JobSummary } from "@armada/protocol";
@@ -97,32 +97,6 @@ export function Shell({
 
   return (
     <TheShell
-      // The mark is the app's name in the drag region, not a control and not a
-      // rail row — which is the one use `packages/icons/icons.toml` sanctions
-      // for it and the limit the Brand mark amendment in
-      // `docs/contracts/iconography.md` sets: the moment it means *home* or a
-      // nav destination it has become an icon and hard rule 2 applies again.
-      // Nothing here is clickable, because the drag region cannot hold
-      // anything interactive.
-      //
-      // **The lockup goes when the rail collapses, and the mark stands alone.**
-      // `packages/brand/README.md` floors the horizontal lockup at a 20px cap
-      // height, which is 26px overall on its 721×128 box; a 48px rail has no
-      // room for that, and the mark alone is still the app's name where a
-      // clipped lockup would be nothing. 20 rather than the mark's own 16 floor
-      // because the rail has the room and the README calls 16 the limit rather
-      // than the size to use.
-      //
-      // `title` is what gives either one its accessible name — without it both
-      // render `aria-hidden`, which is the right default for a mark used as
-      // decoration and the wrong one here.
-      appName={
-        collapsed ? (
-          <ArmadaMark size={20} title="Armada" />
-        ) : (
-          <ArmadaLockupHorizontal height={26} title="Armada" />
-        )
-      }
       surfaces={SURFACES.map((surface) => ({
         id: surface.id,
         label: surface.label,
@@ -131,7 +105,13 @@ export function Shell({
         // while that screen is open and not before, so a number here would be
         // right for as long as somebody was looking at it and stale after —
         // and a count nobody can trust is worse than a row with none.
-        ...(surface.id === SURFACE.board ? { count: jobs.length } : {}),
+        //
+        // **Active Jobs only.** Finished and cleared ones are the Board's
+        // record rather than its work, and the owner ruled on 11 Sep 2026
+        // that the rail counts the work. Zero draws no count, as a tab's does.
+        ...(surface.id === SURFACE.board && activeOf(jobs) > 0
+          ? { count: activeOf(jobs) }
+          : {}),
       }))}
       activeId={showing}
       onSelect={onSurface}
@@ -306,4 +286,12 @@ function useNarrow(): boolean {
   }, []);
 
   return narrow;
+}
+
+/**
+ * How many Jobs have not ended. A status the registry does not know counts,
+ * since nothing says that Job is over.
+ */
+function activeOf(jobs: readonly JobSummary[]): number {
+  return jobs.filter((job) => JOB_LIFECYCLE[job.status]?.terminal !== true).length;
 }

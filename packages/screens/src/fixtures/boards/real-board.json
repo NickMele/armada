@@ -1,0 +1,820 @@
+{
+ "jobs": [
+  {
+   "id": "01M22TYSAE0023MADDP5ZQEYGW",
+   "handle": "1-board-s-clear-button-should-reclaim-worktr",
+   "title": "Board's clear button should reclaim worktrees, not delete records",
+   "status": "completed_success",
+   "created_at": "2026-09-09T10:20:59.598Z",
+   "branch": "armada/1-board-s-clear-button-should-reclaim-worktr",
+   "workflow_id": "bug",
+   "owner_manifest_id": "armada",
+   "origin": "auto_detected",
+   "urgency": "normal",
+   "atomic": false,
+   "model": "sonnet",
+   "current_step_id": "handoff",
+   "reclaimed_at": "2026-09-10T13:36:46.993Z"
+  },
+  {
+   "id": "01M27918MN0011N9KZEV9ZWHY3",
+   "handle": "2-refuse-a-merge-press-whose-chosen-comments",
+   "title": "Refuse a merge press whose chosen comments won't fit the brief",
+   "status": "completed_success",
+   "created_at": "2026-09-11T03:43:58.613Z",
+   "branch": "armada/2-refuse-a-merge-press-whose-chosen-comments",
+   "workflow_id": "feature",
+   "owner_manifest_id": "armada",
+   "origin": "manual",
+   "urgency": "normal",
+   "atomic": true,
+   "model": "sonnet",
+   "current_step_id": "handoff",
+   "landed": "merged"
+  },
+  {
+   "id": "01M28RVVN200232YNHWF8CFFKH",
+   "handle": "3-support-attaching-screenshots-and-file-sea",
+   "title": "Support attaching screenshots and file search in job context",
+   "status": "running",
+   "created_at": "2026-09-11T17:39:53.121Z",
+   "branch": "armada/3-support-attaching-screenshots-and-file-sea",
+   "workflow_id": "feature",
+   "owner_manifest_id": "armada",
+   "origin": "auto_detected",
+   "urgency": "normal",
+   "atomic": false,
+   "model": "sonnet",
+   "current_step_id": "implement",
+   "assigned_drone": "01M28S3Q340049H3HC2VP2286S"
+  }
+ ],
+ "workflows": [
+  {
+   "id": "bug",
+   "name": "bug",
+   "version": 1,
+   "steps": [
+    {
+     "step_id": "plan",
+     "label": "Plan the change",
+     "checks": [
+      {
+       "kind": "artifact_exists",
+       "name": ".armada/artifacts/plan.md"
+      }
+     ],
+     "judge_checks": [
+      {
+       "criteria": 2,
+       "gaming_check": false
+      }
+     ],
+     "advance_gate": "auto_if_judge_passes",
+     "delivers": false
+    },
+    {
+     "step_id": "implement",
+     "label": "Implement",
+     "checks": [
+      {
+       "kind": "every_manifest_check"
+      },
+      {
+       "kind": "manifest_check",
+       "name": "build",
+       "run": "cargo build --workspace --locked",
+       "expect_exit_code": 0
+      },
+      {
+       "kind": "manifest_check",
+       "name": "test",
+       "run": "cargo nextest run --workspace --exclude acceptance",
+       "expect_exit_code": 0
+      },
+      {
+       "kind": "manifest_check",
+       "name": "typecheck",
+       "run": "pnpm typecheck",
+       "expect_exit_code": 0,
+       "when": [
+        "apps/**",
+        "packages/**",
+        "crates/core-model/domain/**",
+        "protocol-version.toml",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml"
+       ]
+      },
+      {
+       "kind": "manifest_check",
+       "name": "bridge_build",
+       "run": "pnpm -C apps/desktop build",
+       "expect_exit_code": 0,
+       "when": [
+        "apps/**",
+        "packages/**",
+        "crates/core-model/domain/**",
+        "protocol-version.toml",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml"
+       ]
+      },
+      {
+       "kind": "manifest_check",
+       "name": "storybook",
+       "run": "pnpm -C packages/components build-storybook",
+       "expect_exit_code": 0,
+       "when": [
+        "packages/**",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml"
+       ]
+      },
+      {
+       "kind": "manifest_check",
+       "name": "bridge_test",
+       "run": "pnpm bridge-test",
+       "expect_exit_code": 0,
+       "when": [
+        "apps/**",
+        "packages/**",
+        "crates/core-model/domain/**",
+        "protocol-version.toml",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml"
+       ]
+      },
+      {
+       "kind": "manifest_check",
+       "name": "format",
+       "run": "cargo fmt --all --check",
+       "expect_exit_code": 0
+      },
+      {
+       "kind": "diff_nonempty"
+      }
+     ],
+     "judge_checks": [
+      {
+       "criteria": 2,
+       "gaming_check": true
+      }
+     ],
+     "advance_gate": "auto_if_judge_passes",
+     "delivers": false
+    },
+    {
+     "step_id": "handoff",
+     "label": "Summarise",
+     "checks": [],
+     "judge_checks": [],
+     "advance_gate": "human_always",
+     "delivers": true
+    }
+   ],
+   "manifest_id": "armada"
+  },
+  {
+   "id": "code_review",
+   "name": "code_review",
+   "version": 1,
+   "steps": [
+    {
+     "step_id": "read",
+     "label": "Read the diff",
+     "checks": [
+      {
+       "kind": "artifact_exists",
+       "name": ".armada/artifacts/read.md"
+      }
+     ],
+     "judge_checks": [],
+     "advance_gate": "auto",
+     "delivers": false
+    },
+    {
+     "step_id": "assess",
+     "label": "Assess",
+     "checks": [
+      {
+       "kind": "artifact_exists",
+       "name": ".armada/artifacts/assess.md"
+      }
+     ],
+     "judge_checks": [],
+     "advance_gate": "auto",
+     "delivers": false
+    },
+    {
+     "step_id": "deliver",
+     "label": "Deliver the review",
+     "checks": [],
+     "judge_checks": [],
+     "advance_gate": "auto",
+     "delivers": false
+    }
+   ],
+   "manifest_id": "armada"
+  },
+  {
+   "id": "design_plan",
+   "name": "design_plan",
+   "version": 1,
+   "steps": [
+    {
+     "step_id": "draft",
+     "label": "Draft",
+     "checks": [
+      {
+       "kind": "artifact_exists",
+       "name": ".armada/artifacts/draft.md"
+      }
+     ],
+     "judge_checks": [],
+     "advance_gate": "auto",
+     "delivers": false
+    },
+    {
+     "step_id": "present",
+     "label": "Present",
+     "checks": [],
+     "judge_checks": [],
+     "advance_gate": "human_always",
+     "delivers": false
+    }
+   ],
+   "manifest_id": "armada"
+  },
+  {
+   "id": "epic",
+   "name": "epic",
+   "version": 1,
+   "steps": [
+    {
+     "step_id": "plan",
+     "label": "Plan the wave",
+     "checks": [
+      {
+       "kind": "artifact_exists",
+       "name": ".armada/artifacts/plan.md"
+      }
+     ],
+     "judge_checks": [
+      {
+       "criteria": 2,
+       "gaming_check": false
+      }
+     ],
+     "advance_gate": "human_always",
+     "delivers": false
+    },
+    {
+     "step_id": "dispatch",
+     "label": "Dispatch the wave",
+     "checks": [
+      {
+       "kind": "artifact_exists",
+       "name": ".armada/artifacts/dispatched.md"
+      }
+     ],
+     "judge_checks": [],
+     "advance_gate": "auto",
+     "delivers": false
+    },
+    {
+     "step_id": "roll_up",
+     "label": "Roll up the wave",
+     "checks": [
+      {
+       "kind": "artifact_exists",
+       "name": ".armada/artifacts/roll-up.md"
+      }
+     ],
+     "judge_checks": [],
+     "advance_gate": "human_always",
+     "delivers": false
+    }
+   ],
+   "manifest_id": "armada"
+  },
+  {
+   "id": "feature",
+   "name": "feature",
+   "version": 1,
+   "steps": [
+    {
+     "step_id": "scope",
+     "label": "Scope the change",
+     "checks": [
+      {
+       "kind": "artifact_exists",
+       "name": ".armada/artifacts/scope.md"
+      }
+     ],
+     "judge_checks": [
+      {
+       "criteria": 2,
+       "gaming_check": false
+      }
+     ],
+     "advance_gate": "auto_if_judge_passes",
+     "delivers": false
+    },
+    {
+     "step_id": "implement",
+     "label": "Implement",
+     "checks": [
+      {
+       "kind": "every_manifest_check"
+      },
+      {
+       "kind": "manifest_check",
+       "name": "build",
+       "run": "cargo build --workspace --locked",
+       "expect_exit_code": 0
+      },
+      {
+       "kind": "manifest_check",
+       "name": "test",
+       "run": "cargo nextest run --workspace --exclude acceptance",
+       "expect_exit_code": 0
+      },
+      {
+       "kind": "manifest_check",
+       "name": "typecheck",
+       "run": "pnpm typecheck",
+       "expect_exit_code": 0,
+       "when": [
+        "apps/**",
+        "packages/**",
+        "crates/core-model/domain/**",
+        "protocol-version.toml",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml"
+       ]
+      },
+      {
+       "kind": "manifest_check",
+       "name": "bridge_build",
+       "run": "pnpm -C apps/desktop build",
+       "expect_exit_code": 0,
+       "when": [
+        "apps/**",
+        "packages/**",
+        "crates/core-model/domain/**",
+        "protocol-version.toml",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml"
+       ]
+      },
+      {
+       "kind": "manifest_check",
+       "name": "storybook",
+       "run": "pnpm -C packages/components build-storybook",
+       "expect_exit_code": 0,
+       "when": [
+        "packages/**",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml"
+       ]
+      },
+      {
+       "kind": "manifest_check",
+       "name": "bridge_test",
+       "run": "pnpm bridge-test",
+       "expect_exit_code": 0,
+       "when": [
+        "apps/**",
+        "packages/**",
+        "crates/core-model/domain/**",
+        "protocol-version.toml",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml"
+       ]
+      },
+      {
+       "kind": "manifest_check",
+       "name": "format",
+       "run": "cargo fmt --all --check",
+       "expect_exit_code": 0
+      },
+      {
+       "kind": "diff_nonempty"
+      }
+     ],
+     "judge_checks": [
+      {
+       "criteria": 2,
+       "gaming_check": false
+      }
+     ],
+     "advance_gate": "auto_if_judge_passes",
+     "delivers": false
+    },
+    {
+     "step_id": "tests",
+     "label": "Write tests",
+     "checks": [
+      {
+       "kind": "every_manifest_check"
+      },
+      {
+       "kind": "manifest_check",
+       "name": "build",
+       "run": "cargo build --workspace --locked",
+       "expect_exit_code": 0
+      },
+      {
+       "kind": "manifest_check",
+       "name": "test",
+       "run": "cargo nextest run --workspace --exclude acceptance",
+       "expect_exit_code": 0
+      },
+      {
+       "kind": "manifest_check",
+       "name": "typecheck",
+       "run": "pnpm typecheck",
+       "expect_exit_code": 0,
+       "when": [
+        "apps/**",
+        "packages/**",
+        "crates/core-model/domain/**",
+        "protocol-version.toml",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml"
+       ]
+      },
+      {
+       "kind": "manifest_check",
+       "name": "bridge_build",
+       "run": "pnpm -C apps/desktop build",
+       "expect_exit_code": 0,
+       "when": [
+        "apps/**",
+        "packages/**",
+        "crates/core-model/domain/**",
+        "protocol-version.toml",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml"
+       ]
+      },
+      {
+       "kind": "manifest_check",
+       "name": "storybook",
+       "run": "pnpm -C packages/components build-storybook",
+       "expect_exit_code": 0,
+       "when": [
+        "packages/**",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml"
+       ]
+      },
+      {
+       "kind": "manifest_check",
+       "name": "bridge_test",
+       "run": "pnpm bridge-test",
+       "expect_exit_code": 0,
+       "when": [
+        "apps/**",
+        "packages/**",
+        "crates/core-model/domain/**",
+        "protocol-version.toml",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml"
+       ]
+      },
+      {
+       "kind": "manifest_check",
+       "name": "format",
+       "run": "cargo fmt --all --check",
+       "expect_exit_code": 0
+      },
+      {
+       "kind": "diff_nonempty"
+      }
+     ],
+     "judge_checks": [
+      {
+       "criteria": 1,
+       "gaming_check": true
+      }
+     ],
+     "advance_gate": "auto_if_judge_passes",
+     "delivers": false
+    },
+    {
+     "step_id": "handoff",
+     "label": "Summarise",
+     "checks": [],
+     "judge_checks": [],
+     "advance_gate": "human_always",
+     "delivers": true
+    }
+   ],
+   "manifest_id": "armada"
+  },
+  {
+   "id": "prototype",
+   "name": "prototype",
+   "version": 1,
+   "steps": [
+    {
+     "step_id": "frame",
+     "label": "Frame",
+     "checks": [],
+     "judge_checks": [],
+     "advance_gate": "auto",
+     "delivers": false
+    },
+    {
+     "step_id": "build",
+     "label": "Build",
+     "checks": [],
+     "judge_checks": [],
+     "advance_gate": "human_always",
+     "delivers": false
+    },
+    {
+     "step_id": "write_up",
+     "label": "Write up",
+     "checks": [],
+     "judge_checks": [],
+     "advance_gate": "auto",
+     "delivers": false
+    }
+   ],
+   "manifest_id": "armada"
+  },
+  {
+   "id": "refactor",
+   "name": "refactor",
+   "version": 1,
+   "steps": [
+    {
+     "step_id": "plan",
+     "label": "Scope the refactor",
+     "checks": [
+      {
+       "kind": "artifact_exists",
+       "name": ".armada/artifacts/plan.md"
+      }
+     ],
+     "judge_checks": [
+      {
+       "criteria": 1,
+       "gaming_check": false
+      }
+     ],
+     "advance_gate": "auto_if_judge_passes",
+     "delivers": false
+    },
+    {
+     "step_id": "implement",
+     "label": "Restructure",
+     "checks": [
+      {
+       "kind": "every_manifest_check"
+      },
+      {
+       "kind": "manifest_check",
+       "name": "build",
+       "run": "cargo build --workspace --locked",
+       "expect_exit_code": 0
+      },
+      {
+       "kind": "manifest_check",
+       "name": "test",
+       "run": "cargo nextest run --workspace --exclude acceptance",
+       "expect_exit_code": 0
+      },
+      {
+       "kind": "manifest_check",
+       "name": "typecheck",
+       "run": "pnpm typecheck",
+       "expect_exit_code": 0,
+       "when": [
+        "apps/**",
+        "packages/**",
+        "crates/core-model/domain/**",
+        "protocol-version.toml",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml"
+       ]
+      },
+      {
+       "kind": "manifest_check",
+       "name": "bridge_build",
+       "run": "pnpm -C apps/desktop build",
+       "expect_exit_code": 0,
+       "when": [
+        "apps/**",
+        "packages/**",
+        "crates/core-model/domain/**",
+        "protocol-version.toml",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml"
+       ]
+      },
+      {
+       "kind": "manifest_check",
+       "name": "storybook",
+       "run": "pnpm -C packages/components build-storybook",
+       "expect_exit_code": 0,
+       "when": [
+        "packages/**",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml"
+       ]
+      },
+      {
+       "kind": "manifest_check",
+       "name": "bridge_test",
+       "run": "pnpm bridge-test",
+       "expect_exit_code": 0,
+       "when": [
+        "apps/**",
+        "packages/**",
+        "crates/core-model/domain/**",
+        "protocol-version.toml",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml"
+       ]
+      },
+      {
+       "kind": "manifest_check",
+       "name": "format",
+       "run": "cargo fmt --all --check",
+       "expect_exit_code": 0
+      },
+      {
+       "kind": "diff_nonempty"
+      }
+     ],
+     "judge_checks": [
+      {
+       "criteria": 2,
+       "gaming_check": true
+      }
+     ],
+     "advance_gate": "auto_if_judge_passes",
+     "delivers": false
+    },
+    {
+     "step_id": "handoff",
+     "label": "Summarise",
+     "checks": [],
+     "judge_checks": [],
+     "advance_gate": "human_always",
+     "delivers": true
+    }
+   ],
+   "manifest_id": "armada"
+  },
+  {
+   "id": "revert",
+   "name": "revert",
+   "version": 1,
+   "steps": [
+    {
+     "step_id": "revert",
+     "label": "Undo the change",
+     "checks": [
+      {
+       "kind": "every_manifest_check"
+      },
+      {
+       "kind": "manifest_check",
+       "name": "build",
+       "run": "cargo build --workspace --locked",
+       "expect_exit_code": 0
+      },
+      {
+       "kind": "manifest_check",
+       "name": "test",
+       "run": "cargo nextest run --workspace --exclude acceptance",
+       "expect_exit_code": 0
+      },
+      {
+       "kind": "manifest_check",
+       "name": "typecheck",
+       "run": "pnpm typecheck",
+       "expect_exit_code": 0,
+       "when": [
+        "apps/**",
+        "packages/**",
+        "crates/core-model/domain/**",
+        "protocol-version.toml",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml"
+       ]
+      },
+      {
+       "kind": "manifest_check",
+       "name": "bridge_build",
+       "run": "pnpm -C apps/desktop build",
+       "expect_exit_code": 0,
+       "when": [
+        "apps/**",
+        "packages/**",
+        "crates/core-model/domain/**",
+        "protocol-version.toml",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml"
+       ]
+      },
+      {
+       "kind": "manifest_check",
+       "name": "storybook",
+       "run": "pnpm -C packages/components build-storybook",
+       "expect_exit_code": 0,
+       "when": [
+        "packages/**",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml"
+       ]
+      },
+      {
+       "kind": "manifest_check",
+       "name": "bridge_test",
+       "run": "pnpm bridge-test",
+       "expect_exit_code": 0,
+       "when": [
+        "apps/**",
+        "packages/**",
+        "crates/core-model/domain/**",
+        "protocol-version.toml",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml"
+       ]
+      },
+      {
+       "kind": "manifest_check",
+       "name": "format",
+       "run": "cargo fmt --all --check",
+       "expect_exit_code": 0
+      },
+      {
+       "kind": "diff_nonempty"
+      }
+     ],
+     "judge_checks": [
+      {
+       "criteria": 2,
+       "gaming_check": false
+      }
+     ],
+     "advance_gate": "auto_if_judge_passes",
+     "delivers": false
+    },
+    {
+     "step_id": "handoff",
+     "label": "Summarise",
+     "checks": [],
+     "judge_checks": [],
+     "advance_gate": "human_always",
+     "delivers": true
+    }
+   ],
+   "manifest_id": "armada"
+  }
+ ],
+ "manifests": [
+  {
+   "id": "armada",
+   "repository": "./armada.yml",
+   "path": "~/Development/armada/armada.yml",
+   "records_root": "~/Library/Application Support/Armada/repos/c24a68b690caff00c95cd44f6a6554e1c7db8d0d",
+   "version": 1,
+   "checks": [
+    "bridge_build",
+    "bridge_test",
+    "build",
+    "format",
+    "storybook",
+    "test",
+    "typecheck"
+   ]
+  }
+ ]
+}

@@ -42,7 +42,6 @@ const shell: ComponentProps<typeof TheShell> = {
   ],
   activeId: "board",
   title: "Job Board",
-  summary: "6 jobs. 1 awaiting approval.",
   actions: <Button variant="primary">New job</Button>,
   children: <div className="armada-screen__mount">The list mounts here — 1d</div>,
   status: {
