@@ -81,7 +81,7 @@ export function checksOf(step: StepDetail): CheckRead[] {
   // nothing ever runs it. `run.ts`'s tier count reads this same filter, on
   // this same list, for the reason atop this file.
   const declared = (step.checks ?? []).filter((check) => !isSweepMarker(check));
-  const runs = onlyCurrentAttempt(step, step.check_runs);
+  const runs = onlyCurrentAttempt(step.check_runs);
   const underway = step.checking?.checks ?? [];
   return declared.map((check) => {
     const name = nameOf(check);
@@ -126,7 +126,7 @@ export function isWaiting(read: CheckRead): boolean {
  */
 export function mechanicalRunsOf(step: StepDetail): CheckRun[] {
   const named = new Set(checksOf(step).map((read) => read.name));
-  return onlyCurrentAttempt(step, step.check_runs).filter((run) => !named.has(run.name));
+  return onlyCurrentAttempt(step.check_runs).filter((run) => !named.has(run.name));
 }
 
 /** A Check that did not pass, read off the registry's own `advances`. */
@@ -211,9 +211,7 @@ export function outputOf(step: StepDetail | undefined): string | undefined {
  */
 export function outputRunOf(step: StepDetail | undefined): CheckRun | undefined {
   if (step === undefined) return undefined;
-  const runs = onlyCurrentAttempt(step, step.check_runs).filter(
-    (run) => run.output_path !== undefined,
-  );
+  const runs = onlyCurrentAttempt(step.check_runs).filter((run) => run.output_path !== undefined);
   return runs.find(didNotPass) ?? runs[0];
 }
 
@@ -263,7 +261,7 @@ export type Panel = {
  */
 export function panelsOf(step: StepDetail, criteria: readonly Criterion[]): Panel[] {
   const held = new Map<string, Judged[]>();
-  for (const one of onlyCurrentAttempt(step, step.judged)) {
+  for (const one of onlyCurrentAttempt(step.judged)) {
     const already = held.get(one.criterion_id);
     if (already === undefined) held.set(one.criterion_id, [one]);
     else already.push(one);
@@ -284,6 +282,49 @@ export function panelsOf(step: StepDetail, criteria: readonly Criterion[]): Pane
       verdict: refused.length === 0 ? "met" : "not_met",
     };
   });
+}
+
+/**
+ * Which attempt the step's Checks are from, where a rerun gate or an
+ * overrule has left the step's current attempt without Checks of its own —
+ * `1` on a step now on attempt 2. `undefined` on the ordinary case: no
+ * Checks yet, or Checks already on the live attempt.
+ *
+ * **Read off `check_runs` directly, not off `checksOf`.** `checksOf` joins
+ * runs onto declared Checks, and a declared Check the gate has not reached
+ * carries no run — so the join alone cannot say which attempt answered.
+ */
+export function checksFromAttempt(step: StepDetail): number | undefined {
+  return earlierAttempt(step, onlyCurrentAttempt(step.check_runs));
+}
+
+/** The same reading for the panel's rows — `judged`'s own attempt. */
+export function judgeFromAttempt(step: StepDetail): number | undefined {
+  return earlierAttempt(step, onlyCurrentAttempt(step.judged));
+}
+
+/**
+ * The attempt a narrowed list is from, only where it is earlier than the
+ * step's own current attempt. Every row `onlyCurrentAttempt` returns carries
+ * the same attempt, so the first is enough to ask.
+ */
+function earlierAttempt<T extends { attempt: number }>(
+  step: StepDetail,
+  narrowed: readonly T[],
+): number | undefined {
+  const shown = narrowed[0]?.attempt;
+  const current = step.attempts.at(-1)?.attempt;
+  return shown !== undefined && current !== undefined && shown < current ? shown : undefined;
+}
+
+/**
+ * A tier's own sentence, with which attempt it is from appended where that is
+ * not the step's current one — `"3 of 3 passed — from attempt 1"`. Unchanged
+ * where `from` is `undefined`, which is every ordinary reading: a step worked
+ * once, and a step whose latest attempt is the one that answered.
+ */
+export function notedFrom(said: string, from: number | undefined): string {
+  return from === undefined ? said : `${said} — from attempt ${from}`;
 }
 
 /** How many criteria the step's declaration says the panel will answer. */

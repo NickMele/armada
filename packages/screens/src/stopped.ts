@@ -47,7 +47,7 @@ export type StoppedAt = {
 export function stoppedAt(whole: JobWhole): StoppedAt | undefined {
   const step = ordered(whole).find((held) => held.step_id === whole.job.current_step_id);
   if (step === undefined) return undefined;
-  const run = onlyCurrentAttempt(step, step.check_runs).find(didNotPass);
+  const run = onlyCurrentAttempt(step.check_runs).find(didNotPass);
   const said = run === undefined ? undefined : resultOf(run);
   return {
     label: step.label,

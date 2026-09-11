@@ -41,8 +41,10 @@ import type { Judged, StepDetail } from "@armada/protocol";
 import { citationsOf, givenTo } from "./cited";
 import {
   askedOf,
+  judgeFromAttempt,
   judgesSaid,
   NOT_REACHED,
+  notedFrom,
   panelSizeOf,
   sentenceOf,
   stoppedUndecided,
@@ -117,7 +119,9 @@ export function verdictsChapter(
   return {
     id: VERDICTS_CHAPTER,
     title: "Verdicts",
-    summary: countedIn(refused, panels.length),
+    // Which attempt the panel answered on, where a rerun gate left the
+    // step's current attempt without a fresh answer of its own.
+    summary: notedFrom(countedIn(refused, panels.length), judgeFromAttempt(step)),
     // The grid is its own disclosure, so the chapter has no second one.
     preview: (
       <>

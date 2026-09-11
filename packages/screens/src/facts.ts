@@ -243,18 +243,24 @@ export function ordered(whole: JobWhole | null): StepDetail[] {
 }
 
 /**
- * The rows of a step's own list — `check_runs` or `judged` — that belong to
- * its current attempt.
+ * The rows of a step's own list — `check_runs` or `judged` — from the latest
+ * attempt that has rows of that kind.
  *
- * **Since 7.0 both lists hold every attempt's rows, oldest first.** A screen
- * reading either as "where does this step stand right now" has to narrow to
- * the live attempt first — the current attempt is the last one `attempts`
- * names, or every row where nothing has run yet.
+ * **Read off the list itself, not off `step.attempts`.** A rerun gate or an
+ * overrule records a fresh attempt without re-running the Checks, and
+ * possibly before the Judge has answered again — so the step's newest
+ * attempt can hold no rows of one kind, or of either. Narrowing to
+ * `step.attempts.at(-1)` made that attempt's absence read as "nothing has
+ * run", when what had actually not run was only this attempt; narrowing to
+ * the list's own last row instead finds the latest attempt that has
+ * something to show, whichever list is asked. `check_runs` and `judged` are
+ * therefore narrowed separately, and can answer from different attempts on
+ * the same step.
+ *
+ * **Since 7.0 both lists hold every attempt's rows, oldest first**, so the
+ * latest attempt with rows of this kind is the one the last row names.
  */
-export function onlyCurrentAttempt<T extends { attempt: number }>(
-  step: StepDetail,
-  rows: T[],
-): T[] {
-  const attempt = step.attempts.at(-1)?.attempt;
+export function onlyCurrentAttempt<T extends { attempt: number }>(rows: T[]): T[] {
+  const attempt = rows.at(-1)?.attempt;
   return attempt === undefined ? rows : rows.filter((row) => row.attempt === attempt);
 }

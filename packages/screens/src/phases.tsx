@@ -44,13 +44,16 @@ import { onlyCurrentAttempt } from "./facts";
 // from answering "was this criterion refused" two ways. `gates.ts` says why.
 import {
   askedOf,
+  checksFromAttempt,
   checksOf,
   checksStand,
   didNotPass,
   howTheChecksWent,
   isRunning,
   isWaiting,
+  judgeFromAttempt,
   NOT_REACHED,
+  notedFrom,
   panelsOf,
   type CheckRead,
 } from "./gates";
@@ -319,7 +322,7 @@ function checksStage(step: StepDetail, opens: Opens): PhaseStage | undefined {
           : ran.length > 0 || moving
             ? "current"
             : "ahead",
-    stands: checksStand(reads),
+    stands: notedFrom(checksStand(reads), checksFromAttempt(step)),
     rows,
   };
 }
@@ -393,7 +396,10 @@ function judgeStage(
         : `Judge · ${refused} of ${rows.length} refused`,
     kind: "judge",
     state: refused === 0 ? "cleared" : "failed",
-    stands: refused === 0 ? `${met} of ${rows.length} met` : `${refused} refused`,
+    stands: notedFrom(
+      refused === 0 ? `${met} of ${rows.length} met` : `${refused} refused`,
+      judgeFromAttempt(step),
+    ),
     rows,
     // **A refusal is one side of a dispute, and this card drew only that side.**
     // The Judge never sees the Drone's transcript, which is what makes it
@@ -657,7 +663,7 @@ function noteOf(step: StepDetail, checks: boolean, judge: boolean): string {
       : "The Drone has submitted, the Checks have run, and the Judge is answering.";
   }
   if (step.state === "running" || step.state === "retrying") {
-    return onlyCurrentAttempt(step, step.check_runs).length === 0
+    return onlyCurrentAttempt(step.check_runs).length === 0
       ? "The Drone is working. Nothing has been submitted, so no gate has been asked anything yet."
       : "The gate has run and the Drone has the step back. The tiers behind it are still ahead, not cancelled.";
   }

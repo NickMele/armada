@@ -53,12 +53,13 @@ import { onlyCurrentAttempt } from "./facts";
  * than a labelled region with no rows in it.
  */
 export function assertedIn(step: StepDetail): Assertion[] {
-  const before = previousRuns(step);
+  const shown = onlyCurrentAttempt(step.check_runs);
+  const before = previousRuns(step, shown);
   // **The rows keep the order they ran in**, which is the order the workflow
   // declares its Checks and the order the store returns them. `AssertionSet`
   // sorts nothing: an assertion is a thing that happened at a moment, and
   // `against` is what marks a row worth reading rather than its position.
-  return onlyCurrentAttempt(step, step.check_runs).map((run) => {
+  return shown.map((run) => {
     const against = againstOf(run, before.get(run.name));
     return {
       identifier: run.name,
@@ -125,13 +126,22 @@ function verbOf(run: CheckRun): string {
 }
 
 /**
- * The last run of each Check *before* the current attempt, by name.
+ * The last run of each Check *before* the attempt `assertedIn` is showing, by
+ * name.
+ *
+ * **Before the shown attempt, not before the step's own current one.** A
+ * rerun gate can leave the step's newest attempt with no Checks at all, in
+ * which case `assertedIn` is already showing an earlier attempt's rows — and
+ * comparing those against runs before the step's *raw* current attempt would
+ * compare that attempt to itself. `shown` is `onlyCurrentAttempt`'s own
+ * answer, so this reads "before the rows on screen" whichever attempt those
+ * turned out to be.
  *
  * Later attempts overwrite earlier ones, so what is left is the most recent
  * earlier run — the one a reader means by "last time", not the first one ever.
  */
-function previousRuns(step: StepDetail): Map<string, CheckRun> {
-  const attempt = step.attempts.at(-1)?.attempt;
+function previousRuns(step: StepDetail, shown: readonly CheckRun[]): Map<string, CheckRun> {
+  const attempt = shown[0]?.attempt;
   const before = new Map<string, CheckRun>();
   if (attempt === undefined) return before;
   for (const run of step.check_runs) {
