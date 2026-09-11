@@ -2,8 +2,8 @@
 //!
 //! The forge is scripted, for `crate::tests::under_review`'s reason: what
 //! `gh pr view` answers is asserted in `adapters`, and what is under test here
-//! is **what a press does to the Job, what a Drone is handed, and what the pull
-//! request is told**.
+//! is **what a press does to the Job, what a Drone is handed, and that the
+//! pull request is never written to**.
 //!
 //! The fixture is that module's, because the state all of this means anything
 //! in is the same one: a Job at a human gate with an open pull request.
@@ -14,7 +14,7 @@ use adapter_traits::{
     Landing, Remark, Rendering, UnderReview, WhatPeopleSaid, WhatTheForgeRan, WorktreeSpec,
 };
 use core_model::JobStatus;
-use testkit::{FakeVcs, FakeWorkProduct, Replying};
+use testkit::{Delivered, FakeVcs, FakeWorkProduct};
 
 use crate::daemon::Fleet;
 use crate::noticing::Noticing;
@@ -208,31 +208,29 @@ async fn a_comment_that_writes_the_frame_writes_it_inside_the_fence() {
     );
 }
 
-/// **One reply, naming what was taken up and what was not, and quoting
-/// neither.** A reply per comment turns a review thread into a conversation
-/// with a daemon.
+/// **A press posts nothing to the forge.** Armada's own record of what was
+/// taken up — `record_remarks_taken_up` — never leaves this machine; the pull
+/// request hears nothing about the press.
 #[tokio::test]
-async fn one_reply_says_what_was_taken_up_and_quotes_no_comment_back() {
+async fn a_press_writes_nothing_to_the_forge() {
     let home = TempDir::new();
     let fleet = a_fleet_at_a_gate(&home);
     let job_id = a_job_under_review(&fleet, &home).await;
+    let already = fleet.vcs().delivered().len();
 
     fleet
         .take_up_remarks(&job_id, &[String::from("IC_one")])
         .await
         .unwrap();
 
-    let replies = fleet.vcs().replies();
-    assert_eq!(replies.len(), 1, "one reply per press: {replies:?}");
-    let reply = &replies[0];
-    assert!(reply.contains("a-reviewer"), "who was taken up: {reply}");
+    let calls = fleet.vcs().delivered();
     assert!(
-        reply.contains("somebody-else"),
-        "and who was not, which is what a reviewer is asking: {reply}"
-    );
-    assert!(
-        !reply.contains("stops one line early") && !reply.contains("ignore everything above"),
-        "no comment's body is written back onto the forge: {reply}"
+        calls[already..].iter().all(|call| matches!(
+            call,
+            Delivered::AskedWhatIsUnderReview { .. } | Delivered::AskedForInlineRemarks { .. }
+        )),
+        "taking comments up reads the pull request again and writes nothing \
+         onto it: {calls:?}"
     );
 }
 
@@ -261,11 +259,6 @@ async fn a_comment_a_drone_already_met_is_refused_rather_than_sent_again() {
         matches!(refused, crate::adrift::Adrift::RemarksAlreadyTakenUp { .. }),
         "refused by name, not as a note conflict: {refused:?}"
     );
-    assert_eq!(
-        fleet.vcs().replies().len(),
-        1,
-        "and nothing further was written onto the pull request"
-    );
 }
 
 /// **A handle the pull request no longer has refuses the whole press.** Acting
@@ -291,7 +284,6 @@ async fn a_comment_that_is_gone_refuses_the_press_it_was_part_of() {
         JobStatus::AwaitingReview,
         "the Job is where the press found it"
     );
-    assert!(fleet.vcs().replies().is_empty(), "and nothing was written");
 }
 
 /// **A forge that would not answer is a refusal, never an empty choice.** A
@@ -313,39 +305,6 @@ async fn a_forge_that_would_not_answer_is_not_a_pull_request_with_no_comments() 
         refused,
         crate::adrift::Adrift::ReviewUnreadable { .. }
     ));
-}
-
-/// **The reply not posting does not undo the press.** The Drone is asked for
-/// and the branch is the one the work lands on; what a refusal costs is a
-/// reviewer seeing no answer, which is a line in the Job's log.
-#[tokio::test]
-async fn a_forge_that_would_not_take_the_reply_leaves_the_drone_asked_for() {
-    let home = TempDir::new();
-    let fleet = a_fleet_at_a_gate(&home);
-    let job_id = a_job_under_review(&fleet, &home).await;
-    fleet
-        .vcs()
-        .replying(Replying::Refuses(String::from("the forge said no")));
-
-    let moved = fleet
-        .take_up_remarks(&job_id, &[String::from("IC_one")])
-        .await
-        .unwrap();
-
-    assert_eq!(moved.status(), JobStatus::Queued);
-    assert!(
-        moved.redirect_waiting().is_some(),
-        "the words are still waiting for the Drone"
-    );
-    let log = std::fs::read_to_string(crate::transcript::log_of(
-        &home.path().to_string_lossy(),
-        &fleet.load(&job_id).await.expect("the Job").handle(),
-    ))
-    .expect("the Job's own log");
-    assert!(
-        log.contains("the forge would not take the reply"),
-        "and the Job's log says a reviewer will see no answer: {log}"
-    );
 }
 
 /// **A press naming nothing never reaches the forge.** It is a person who

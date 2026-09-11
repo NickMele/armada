@@ -395,8 +395,8 @@ export function useCommands(sending: Sending) {
    * at a job that is no longer at the gate any of the five is legal on.
    *
    * **Nothing confirms.** What it commits to is on screen above the control —
-   * a drone on the same branch and one reply on the pull request — and the act
-   * keeps the worktree and every step so far, like `changes` beside it.
+   * a drone on the same branch, and the act keeps the worktree and every step
+   * so far, like `changes` beside it.
    */
   async function takeUpRemarks(jobId: string, remarks: string[]): Promise<void> {
     setDeciding(jobId);

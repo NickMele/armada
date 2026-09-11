@@ -47,8 +47,8 @@ pub use basing::{BaseCheckout, BaseSpec, BaseSpecRefused};
 pub use commit::{CommitTime, Committed};
 pub use delivery::{
     how_the_base_was_found, Base, BaseOnTheRemote, BroughtUpToDate, Delivery, Landing, Mergeable,
-    Merged, NotDelivered, NotMerged, Opened, Pushed, Rendering, Renewed, Replied,
-    RepositoryStanding, Review, Standing, WhatBecameOfIt,
+    Merged, NotDelivered, NotMerged, Opened, Pushed, Rendering, Renewed, RepositoryStanding,
+    Review, Standing, WhatBecameOfIt,
 };
 pub use event::{CallDetail, DroneEvent, Speaker};
 pub use harness::{

@@ -695,8 +695,8 @@ export type BridgeApi = {
    */
   readRemarks: (jobId: string | null) => Promise<void>;
   /**
-   * Hand the comments a person picked off the pull request to a Drone, and let
-   * one reply on the pull request say which.
+   * Hand the comments a person picked off the pull request to a Drone.
+   * Nothing is written back onto the pull request.
    *
    * **A fifth entry rather than a flag on `requestChanges`.** What reaches
    * Fleet is a set of handles off a forge, not a person's words — the words are

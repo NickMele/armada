@@ -328,7 +328,7 @@ pub trait Commands: Send + Sync + 'static {
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `take_up_remarks` — the comments a person picked off the pull request
-    /// reach a Drone, and one reply on the pull request says which.
+    /// reach a Drone. Nothing is written back onto the pull request.
     ///
     /// **A second entrance onto [`Commands::request_changes`]'s road, not a
     /// second road.** What it does to the Job is that act, called rather than

@@ -130,8 +130,8 @@ where
         self.summarised(&job).await
     }
 
-    /// The comments a person picked off the pull request reach a Drone, and one
-    /// reply on the pull request says which.
+    /// The comments a person picked off the pull request reach a Drone.
+    /// Nothing is written back onto the pull request.
     ///
     /// **Nothing is decoded into a note here**, unlike `request_changes`: the
     /// body carries handles and the words come off the forge inside the act. An

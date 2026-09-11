@@ -1,7 +1,6 @@
-//! A person picks comments off a pull request, they reach a Drone, and one
-//! reply on the pull request says which.
+//! A person picks comments off a pull request, and they reach a Drone.
 //!
-//! # Three things, and the middle one is a road that already exists
+//! # Two things, and the second is a road that already exists
 //!
 //! **A person chooses.** Not every comment is a change request, and a Drone
 //! handed all of them will try to satisfy all of them. `crate::under_review`
@@ -16,30 +15,22 @@
 //! way. Everything that road refuses, this refuses. **No size cap** — `#648` —
 //! a person ticked these on purpose, and a file has none.
 //!
-//! **One reply on the pull request**, written after the Job has moved.
+//! **Nothing is written back onto the pull request.** Armada's own record —
+//! `record_remarks_taken_up` — is what tells a comment already handed to a
+//! Drone apart from one nobody has touched; the forge never hears about it.
 //!
-//! # Escaping is at the point of use, and there are two of them
-//!
-//! `adapter_traits::FromOutside` is deliberately not cleaned at the boundary.
-//! [`quoted`] fences a comment for the file and [`named`] makes a login safe to
-//! render on a forge; `docs/contracts/agent-prompt.md` carries the first rule.
+//! `adapter_traits::FromOutside` is deliberately not cleaned at the boundary;
+//! [`quoted`] fences a comment for the file — `docs/contracts/agent-prompt.md`
+//! carries the rule.
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use adapter_traits::{AgentHarness, Delivery, FromOutside, Remark, Replied, Vcs, WorkProduct};
+use adapter_traits::{AgentHarness, Delivery, FromOutside, Remark, Vcs, WorkProduct};
 use core_model::{Component, Envelope, FieldValue, Job, JobId, JobStatus, Level};
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::resume::Redirection;
-
-/// How much of a login or a timestamp reaches the forge.
-///
-/// **A bound on text nobody vouched for.** A forge's login is short and a
-/// timestamp shorter, and neither has been checked by anything — a reply that
-/// rendered whatever arrived would let one field decide how long a comment
-/// Armada writes into somebody else's repository is.
-const ENOUGH_OF_A_NAME: usize = 80;
 
 /// Where the comments a person picked are written, relative to the Job's
 /// worktree.
@@ -137,8 +128,7 @@ where
         })
     }
 
-    /// Hand the comments a person picked to a Drone, and say so on the pull
-    /// request.
+    /// Hand the comments a person picked to a Drone.
     ///
     /// **The pull request is read again here.** The words a Drone is handed
     /// come from the forge on the press and never from the client that pressed,
@@ -218,17 +208,10 @@ where
         // **A loop with no pass left took the words nowhere.** `request_changes`
         // answers a spent `iteration_cap` by stopping the step and escalating
         // the Job, and no note is written on that path. Recording these as
-        // spent would lose comments nothing was told about, and a reply saying
-        // they were taken up would be false on the one surface a reviewer
-        // reads.
+        // spent would lose comments nothing was told about, and the Job's own
+        // record would say they were taken up when nothing acted on them.
         if moved.status() == JobStatus::Escalated {
-            self.said_about_the_reply(
-                &moved,
-                Level::Warn,
-                "the comments picked off the pull request reached nothing: the step \
-                 has no pass left, so the Job escalated and they are still unspent",
-                &said.pull_request,
-            );
+            self.said_the_comments_reached_nothing(&moved, &said.pull_request);
             return Ok(moved);
         }
         self.store()
@@ -236,92 +219,26 @@ where
             .await
             .record_remarks_taken_up(job_id, chosen, &self.now())
             .map_err(Adrift::Writing)?;
-        self.reply_on_the_pull_request(&moved, &said, &picked).await;
         Ok(moved)
     }
 
-    /// Write one comment on the pull request saying what was taken up.
-    ///
-    /// **Nothing here raises.** The Job has moved and the Drone is asked for; a
-    /// forge that would not take a comment does not undo either, and a person
-    /// told their press failed over it would go looking for work that is
-    /// already under way. What a refusal costs is a reviewer seeing no answer,
-    /// so it is a `Warn` in the Job's own log naming the pull request.
-    async fn reply_on_the_pull_request(
-        &self,
-        job: &Job,
-        said: &WhatWasSaid,
-        picked: &[&Remark],
-    ) -> Replied {
-        let saying = reply(said, picked);
-        // **Before the write**, for `merging::merge_pull_request`'s reason: a
-        // line written afterwards is missing on exactly the run where somebody
-        // wants to know what was attempted.
-        self.said_about_the_reply(
-            job,
-            Level::Info,
-            "writing one comment onto a pull request in a repository Fleet does not \
-             own, saying which of its comments a person picked",
-            &said.pull_request,
-        );
-        let written = self
-            .vcs()
-            .replied(&self.host().repo_root, &said.pull_request, &saying);
-        match &written {
-            Replied::Posted => self.said_about_the_reply(
-                job,
-                Level::Info,
-                "the forge took the reply, so a reviewer can see which comments were \
-                 picked up",
-                &said.pull_request,
-            ),
-            Replied::NotPosted { why } => {
-                let mut envelope = self.about_the_reply(
-                    job,
-                    Level::Warn,
-                    "the forge would not take the reply: the Drone was asked for and \
-                     nothing on the pull request says so",
-                    &said.pull_request,
-                );
-                envelope = envelope.with_field("cause", FieldValue::Str(why.clone()));
-                self.noted_in_the_log(job.id(), &envelope);
-            }
-        }
-        written
-    }
-
-    /// A line in the Job's own log about the reply.
+    /// A line in the Job's own log: the comments a person picked reached
+    /// nothing, because the step had no pass left.
     ///
     /// **A log line that will not write does not undo anything**, for
     /// `merging::said_about_the_merge`'s reason.
-    fn said_about_the_reply(
-        &self,
-        job: &Job,
-        level: Level,
-        saying: &'static str,
-        pull_request: &str,
-    ) {
-        let envelope = self.about_the_reply(job, level, saying, pull_request);
-        self.noted_in_the_log(job.id(), &envelope);
-    }
-
-    /// The envelope the two above share, so the fields cannot come to differ.
-    fn about_the_reply(
-        &self,
-        job: &Job,
-        level: Level,
-        saying: &'static str,
-        pull_request: &str,
-    ) -> Envelope {
-        Envelope::new(
+    fn said_the_comments_reached_nothing(&self, job: &Job, pull_request: &str) {
+        let envelope = Envelope::new(
             self.now(),
-            level,
+            Level::Warn,
             Component::Fleet,
             self.run().clone(),
-            saying,
+            "the comments picked off the pull request reached nothing: the step \
+             has no pass left, so the Job escalated and they are still unspent",
         )
         .in_job(job.id().as_ulid().clone())
-        .with_field("pull_request", FieldValue::Str(pull_request.to_string()))
+        .with_field("pull_request", FieldValue::Str(pull_request.to_string()));
+        self.noted_in_the_log(job.id(), &envelope);
     }
 }
 
@@ -444,77 +361,6 @@ fn pointer(picked: &[&Remark]) -> String {
     out
 }
 
-/// The one comment Armada writes onto the pull request.
-///
-/// **One reply per press, saying what was taken up and what was not.** A reply
-/// per comment turns a review thread into a conversation with a daemon; what a
-/// reviewer needs is to be able to tell, from the forge, whether the thing they
-/// wrote was picked up.
-///
-/// **No comment's body is echoed.** The author and the time are what identify a
-/// comment to the person who wrote it, and they are all this names.
-///
-/// A comment taken up on an *earlier* press is in neither list. It was taken
-/// up, and the reply for that press already said so.
-fn reply(said: &WhatWasSaid, picked: &[&Remark]) -> String {
-    let chosen: BTreeSet<&str> = picked.iter().map(|remark| remark.id.as_written()).collect();
-    let left: Vec<&Remark> = said
-        .remarks
-        .iter()
-        .filter(|remark| {
-            !chosen.contains(remark.id.as_written())
-                && !said.taken_up.contains(remark.id.as_written())
-        })
-        .collect();
-    let mut out = String::from("Armada has put an agent back on this pull request.\n\nTaken up:\n");
-    for remark in picked {
-        out.push_str(&line_for(remark));
-    }
-    if !left.is_empty() {
-        out.push_str("\nNot taken up, and nothing was changed for them:\n");
-        for remark in &left {
-            out.push_str(&line_for(remark));
-        }
-    }
-    out.push_str("\nThe work goes on the same branch, so this pull request updates in place.\n");
-    out
-}
-
-/// One line of the reply, naming one comment by who wrote it and when.
-fn line_for(remark: &Remark) -> String {
-    let mut out = String::from("- `");
-    out.push_str(&named(&remark.by));
-    out.push_str("` at `");
-    out.push_str(&named(&remark.at));
-    out.push_str("`\n");
-    out
-}
-
-/// A login or a timestamp, made safe to put in one line of a comment on
-/// somebody else's repository.
-///
-/// **Three characters go and the length is bounded.** A newline would end the
-/// line the reply built, a carriage return would put the rest of it back at the
-/// start, and a backtick would close the span that keeps whatever is left from
-/// being read as markup. [`ENOUGH_OF_A_NAME`] is what stops one field deciding
-/// how long a comment Armada writes into a repository nobody here holds.
-///
-/// **Replaced rather than dropped**, so a value that was mostly breaking
-/// characters does not come back as an empty pair of backticks that names
-/// nobody.
-fn named(from_outside: &FromOutside) -> String {
-    from_outside
-        .as_written()
-        .chars()
-        .take(ENOUGH_OF_A_NAME)
-        .map(|one| match one {
-            '\n' | '\r' | '`' => ' ',
-            other => other,
-        })
-        .collect::<String>()
-        .trim()
-        .to_string()
-}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -595,37 +441,5 @@ mod tests {
         let huge = remark("IC_huge", "alice", &"x".repeat(20_000));
         let file = file_contents(&[&huge]);
         assert!(file.len() > 20_000, "written whole: {}", file.len());
-    }
-
-    #[test]
-    fn nothing_a_reviewer_wrote_is_echoed_back_onto_the_forge() {
-        let picked = remark("IC_1", "alice", "rename the flag");
-        let left = remark("IC_2", "bob", "and a second thing nobody picked");
-        let spent = remark("IC_3", "carol", "worked on an earlier press");
-        let said = WhatWasSaid {
-            pull_request: String::from("https://forge.invalid/armada/pull/1"),
-            remarks: vec![picked.clone(), left.clone(), spent.clone()],
-            taken_up: BTreeSet::from([String::from("IC_3")]),
-        };
-        let written = reply(&said, &[&picked]);
-        assert!(written.contains("`alice`"));
-        assert!(written.contains("Not taken up"));
-        assert!(written.contains("`bob`"));
-        assert!(
-            !written.contains("rename the flag") && !written.contains("nobody picked"),
-            "no comment's body reaches the forge: {written}"
-        );
-        assert!(
-            !written.contains("`carol`"),
-            "a comment taken up on an earlier press is in neither list: {written}"
-        );
-    }
-
-    #[test]
-    fn a_login_cannot_end_the_line_the_reply_built() {
-        let forged = FromOutside::verbatim("alice`\n- `root` at `now");
-        assert_eq!(named(&forged), "alice  -  root  at  now");
-        let long = FromOutside::verbatim("a".repeat(ENOUGH_OF_A_NAME * 4));
-        assert_eq!(named(&long).chars().count(), ENOUGH_OF_A_NAME);
     }
 }
