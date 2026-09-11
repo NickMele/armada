@@ -19,11 +19,13 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@storybook/react-vite": "^10.5.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitest/browser": "4.1.11",
     "@vitest/browser-playwright": "4.1.11",
     "playwright": "1.62.1",
+    "storybook": "^10.5.0",
     "typescript": "^5.9.0",
     "vitest": "4.1.11"
   }

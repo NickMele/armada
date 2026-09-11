@@ -182,6 +182,9 @@ importers:
         specifier: ^19.2.0
         version: 19.2.8(react@19.2.8)
     devDependencies:
+      '@storybook/react-vite':
+        specifier: ^10.5.0
+        version: 10.5.10(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(esbuild@0.28.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rollup@4.62.5)(storybook@10.5.10(@types/react@19.2.18)(react@19.2.8))(typescript@5.9.3)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0))
       '@types/react':
         specifier: ^19.2.0
         version: 19.2.18
@@ -197,6 +200,9 @@ importers:
       playwright:
         specifier: 1.62.1
         version: 1.62.1
+      storybook:
+        specifier: ^10.5.0
+        version: 10.5.10(@types/react@19.2.18)(react@19.2.8)
       typescript:
         specifier: ^5.9.0
         version: 5.9.3
