@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Skeleton } from "../../primitives/Skeleton/Skeleton";
 import { Clamped } from "../Clamped/Clamped";
 
 /**
@@ -169,4 +170,26 @@ export function JobBrief({
 function Label({ children }: { children: ReactNode }) {
   if (children === null) return null;
   return <span className="armada-job-brief__label">{children}</span>;
+}
+
+/** Two lines: what a brief on job detail usually wraps to. */
+const FACTS_SKELETON_WIDTHS = ["90%", "60%"];
+
+/**
+ * The brief, before it has come back — the facts half alone, because that is
+ * the only half job detail draws (`briefOf` sends `only: "facts"`). The real
+ * `__facts` class, so nothing moves when the words land.
+ */
+export function JobBriefSkeleton() {
+  return (
+    <div className="armada-job-brief" role="status" aria-label="Reading the brief" aria-busy>
+      <div className="armada-job-brief__block">
+        <div className="armada-job-brief__facts armada-skeleton-text">
+          {FACTS_SKELETON_WIDTHS.map((width, i) => (
+            <Skeleton key={i} width={width} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }

@@ -21,9 +21,9 @@
 // its step like every other row — is the per-step answer, and it is what the
 // tree draws.
 
-import type { RunTreeFact, RunTreeStep, StepActivity } from "@armada/components";
+import type { RunTreeFact, RunTreeSkeletonStep, RunTreeStep, StepActivity } from "@armada/components";
 
-import type { Turn, Watched } from "@armada/protocol";
+import type { Turn, Watched, WorkflowSummary } from "@armada/protocol";
 import { CHECK_ADVANCES, CHECK_OUTCOME, CRITERION_VERDICT_CHECK, ESCALATION_REASON, STEP_STATE } from "@armada/components";
 import type {
   ChangedFile,
@@ -39,6 +39,19 @@ import { span } from "./duration";
 import { ordered } from "./facts";
 import { checksOf, checksStand } from "./gates";
 import { frozenBeneath } from "./frozen";
+
+/**
+ * The run before this Job's own read answers: the workflow's steps by name, in
+ * order. A Job runs the workflow frozen at dispatch, so where it was edited
+ * since these can differ, and the read corrects them when it lands.
+ */
+export function stepsAhead(workflow: WorkflowSummary | undefined): RunTreeSkeletonStep[] {
+  return (workflow?.steps ?? []).map((step) => ({
+    id: step.step_id,
+    label: step.label,
+    labelIsAnIdentifier: step.label === step.step_id || undefined,
+  }));
+}
 
 /**
  * The run.

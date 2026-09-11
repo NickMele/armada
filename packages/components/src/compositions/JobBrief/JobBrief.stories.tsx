@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { JobBrief } from "./JobBrief";
+import { JobBrief, JobBriefSkeleton } from "./JobBrief";
 
 /**
  * What the Job was told, and what done means for it — the two halves of the
@@ -104,4 +104,9 @@ export const NoteWaiting: Story = {
     factsLabel: null,
     waiting: "Delete the assertion about the old header — it is testing behaviour we replaced.",
   },
+};
+
+/** The brief while it is read — the facts half, the one job detail draws. */
+export const Reading: Story = {
+  render: () => <JobBriefSkeleton />,
 };

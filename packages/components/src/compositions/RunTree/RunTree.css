@@ -25,6 +25,17 @@
   gap: calc(var(--space-1) / 2);
 }
 
+/* Where a row's duration will land, while the run is read. */
+.armada-run__dur-skeleton {
+  width: var(--space-6);
+}
+
+/* The row you are on is --bg-hover, which is the bar's own colour, so on that
+   row alone the bar takes the step above it rather than disappearing. */
+.armada-srow[data-sel] .armada-run__dur-skeleton {
+  background: var(--border-default);
+}
+
 
 /* A fact that opens the artifact behind it.
 

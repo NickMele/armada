@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
-import { PhaseStrip } from "./PhaseStrip";
+import { PhaseStrip, PhaseStripSkeleton } from "./PhaseStrip";
 
 const meta: Meta<typeof PhaseStrip> = {
   title: "Compositions/Phase strip",
@@ -559,4 +559,9 @@ export const TheHumanTierThatCanNeverAsk: Story = {
     // "these two do not render identically" is what the story is for.
     await expect(never.textContent).not.toEqual(notReached.textContent);
   },
+};
+
+/** The strip while its step is read. Unnamed, because a node's look is its state. */
+export const Reading: Story = {
+  render: () => <PhaseStripSkeleton />,
 };

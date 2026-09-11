@@ -74,6 +74,13 @@ import { producedIn } from "./produced";
 import type { OpenSheet } from "./Sheets";
 import { entriesOf, NOTHING_YET_ON_THIS_STEP, hideUnread } from "./story";
 
+/** The chapters every step's story has, which the panel names before the step is read. */
+export const EVERY_STORY_TELLS = {
+  instructions: "Drone instructions",
+  log: "Activity log",
+  produced: "Produced",
+} as const;
+
 /**
  * The story: Drone instructions, then Activity log, then Produced. **The same
  * three chapters in the same order at every state** — what changes is which one
@@ -240,7 +247,7 @@ export function chaptersOf({
   const story: Unnumbered[] = [
     {
       id: "instructions",
-      title: "Drone instructions",
+      title: EVERY_STORY_TELLS.instructions,
       // The turn the step opened with, in the words the Drone was given.
       // Armada's own turns are on the transcript beside the Drone's, so this
       // is the same stream chapter two draws, filtered to the rows Fleet
@@ -296,7 +303,7 @@ export function chaptersOf({
     },
     {
       id: "log",
-      title: "Activity log",
+      title: EVERY_STORY_TELLS.log,
       // The dot, not the word. `StepStory` composes `Chapter` now, so the
       // running mark has its own channel and the summary carries only counts.
       live,
@@ -360,7 +367,7 @@ export function chaptersOf({
       : [framesChapter(shown, step.frames ?? [], pairs, again)]),
     {
       id: DIFF_CHAPTER,
-      title: "Produced",
+      title: EVERY_STORY_TELLS.produced,
       // The header carries the summary, so a collapsed chapter still says what
       // the step produced. `changedFilesSummary` is the one reading of it —
       // the body draws the same files from the same answer. On a finished Job

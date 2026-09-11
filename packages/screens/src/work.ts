@@ -94,8 +94,9 @@ function opener(open: OpenArtifact, jobId: string, what: Artifact, label: string
 /**
  * The rows: where the work is, and the identifiers that name it.
  *
- * `undefined` while the Job has not been read whole — the caller says why,
- * because "still reading" and "Fleet did not answer" are different sentences.
+ * **None of them waits on this Job's own read** but Overlaps. The rest come off
+ * the `JobSummary` the Board already holds and the Manifest and workflow holds
+ * loaded for every Job, so the region draws the moment the screen opens.
  */
 export function workOf(
   open: OpenArtifact,
@@ -103,14 +104,16 @@ export function workOf(
   whole: JobWhole | null,
   manifest: ManifestSummary | undefined,
   workflow: WorkflowSummary | undefined,
-): JobLogReferenceRow[] | undefined {
-  if (whole === null) return undefined;
+): JobLogReferenceRow[] {
   const repo = repoOf(manifest);
   // Only `worktree` is drawn on this screen, which never reads `records` —
   // see `artifactPath`'s own doc for which word reads which. Resolved anyway
   // so a row added here later does not have to learn where it comes from.
   const records = recordsOf(manifest) ?? "";
-  const dispatched = whole.branch !== undefined;
+  // The read's answer once it is in, and the Board's row until then. Both are
+  // Fleet's word for whether a worktree exists yet.
+  const branch = whole === null ? job.branch : whole.branch;
+  const dispatched = branch !== undefined;
   const rows: JobLogReferenceRow[] = [];
 
   if (repo !== null) {
@@ -127,14 +130,14 @@ export function workOf(
     });
   }
 
-  if (whole.branch !== undefined) {
+  if (branch !== undefined) {
     // No `open`, and none is coming. A branch is served rather than derived,
     // it is not a path, and copying it is the whole of what it is for.
     rows.push({
       icon: GitBranch,
       iconLabel: "Branch",
-      value: whole.branch,
-      copyValue: whole.branch,
+      value: branch,
+      copyValue: branch,
     });
   }
 
@@ -161,7 +164,7 @@ export function workOf(
     });
   }
 
-  rows.push(...overlapRows(whole));
+  if (whole !== null) rows.push(...overlapRows(whole));
   return rows;
 }
 
@@ -208,12 +211,15 @@ function workspaceOf(path: string): string {
 /** A file that will exist, named before it does. Never a count. */
 const NOT_WRITTEN = "not written yet";
 
-/** Why there is no region to draw, which is never the same sentence twice. */
-export function whyNoWork(watched: Watched, jobId: string): string {
-  if (watched.state === "failed" && watched.jobId === jobId) {
-    return "Fleet did not answer";
-  }
-  return "Reading this job.";
+/**
+ * Whether this Job's own read has yet to answer, `read` or `failed`. `whole` is
+ * `null` both while it has not and once Fleet refused, and only the first draws
+ * as waiting.
+ */
+export function stillReading(watched: Watched, jobId: string): boolean {
+  if (watched.state === "none") return true;
+  if (watched.jobId !== jobId) return true;
+  return watched.state !== "read" && watched.state !== "failed";
 }
 
 /**

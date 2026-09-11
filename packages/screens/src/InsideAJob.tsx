@@ -7,10 +7,15 @@ import { Unplug } from "lucide-react";
 import { Fragment, useCallback, useState } from "react";
 import {
   JobBrief,
+  JobBriefSkeleton,
   JobDetailHeaderActions,
   PhaseStrip,
+  PhaseStripSkeleton,
   RunTree,
+  RunTreeSkeleton,
+  Skeleton,
   StepStory,
+  StepStorySkeleton,
   Tooltip,
   WhereRow,
   conceptSaid,
@@ -20,6 +25,7 @@ import {
   type JobLogReferenceRow,
   type NotOpened,
   type PhaseStripProps,
+  type RunTreeSkeletonProps,
   type RunTreeStep,
   type StepChapter,
 } from "@armada/components";
@@ -131,6 +137,15 @@ export type StepNotice = {
   children?: ReactNode;
 };
 
+/** The panel while its step is read: what is already known of the step. */
+export type StepReading = {
+  /** The step's name off the workflow. Absent draws a bar in its place. */
+  label?: ReactNode;
+  labelIsAnIdentifier?: boolean;
+  /** The chapters every step's story has, by name. */
+  chapters: readonly ReactNode[];
+};
+
 export type InsideAJobProps = {
   heading: JobDetailHeading;
   /** The run, in order. One row per step of the frozen workflow. */
@@ -140,6 +155,11 @@ export type InsideAJobProps = {
   runElapsed?: ReactNode;
   /** Why there is no run to draw, where there is none. */
   runAbsent?: string;
+  /**
+   * The run, while it is read: the workflow's step names, and nothing about
+   * where any of them stands. Present takes the slot over `run`/`runAbsent`.
+   */
+  runReading?: RunTreeSkeletonProps;
   /**
    * The Job's pulse, in a few lines: the last thing anyone did on it, the process
    * count, the worktree, the disk. `JobHoldsSummary`, and the full reading is a
@@ -217,10 +237,14 @@ export type InsideAJobProps = {
   brief?: JobBriefProps;
   /** Why there is no brief, where there is none. */
   briefAbsent?: string;
+  /** The brief is being read. Takes the slot over `brief`/`briefAbsent`. */
+  briefLoading?: boolean;
   /** The step the panel is showing. */
   step?: StepPanel;
   /** Why no step is open, where none is. */
   stepAbsent?: string;
+  /** The step, while it is read. Present takes the slot over `step`/`stepAbsent`. */
+  stepReading?: StepReading;
   /**
    * Why nothing about this Job could be read, where Fleet did not answer for
    * it. **One message where the step goes, instead of an empty region per
@@ -252,6 +276,7 @@ export function InsideAJob({
   runLabel = "The run",
   runElapsed,
   runAbsent = "Steps unknown",
+  runReading,
   machine,
   machineLabel = "Pulse",
   machineAct,
@@ -268,8 +293,10 @@ export function InsideAJob({
   recordLabel = "What it left behind",
   brief,
   briefAbsent = "No brief",
+  briefLoading = false,
   step,
   stepAbsent = "Select a step in the run",
+  stepReading,
   unreachable,
   sheet,
   onCopied,
@@ -287,7 +314,9 @@ export function InsideAJob({
               <span className="armada-inside__elapsed">{runElapsed}</span>
             )}
           </div>
-          {run.length === 0 ? (
+          {runReading !== undefined ? (
+            <RunTreeSkeleton {...runReading} />
+          ) : run.length === 0 ? (
             <p className="armada-inside__absent" role="note">
               {unreachable ?? runAbsent}
             </p>
@@ -342,7 +371,9 @@ export function InsideAJob({
           {unreachable !== undefined ? null : (
             <div className="armada-inside__brief">
               <Eyebrow>Brief</Eyebrow>
-              {brief === undefined ? (
+              {briefLoading ? (
+                <JobBriefSkeleton />
+              ) : brief === undefined ? (
                 <p className="armada-inside__absent" role="note">
                   {briefAbsent}
                 </p>
@@ -352,7 +383,9 @@ export function InsideAJob({
             </div>
           )}
 
-          {unreachable !== undefined ? (
+          {stepReading !== undefined ? (
+            <StepPanelReading {...stepReading} />
+          ) : unreachable !== undefined ? (
             <div className="armada-inside__unreachable" role="status">
               <Unplug size={20} strokeWidth={1.5} aria-hidden />
               <span>{unreachable}</span>
@@ -444,6 +477,36 @@ export function InsideAJob({
 
       {sheet}
     </div>
+  );
+}
+
+/**
+ * The panel while its step is read: the step's name where the workflow gives
+ * it, and its fields, gates and story waiting. The head is the real one, so
+ * nothing moves when the step lands.
+ */
+function StepPanelReading({ label, labelIsAnIdentifier, chapters }: StepReading) {
+  return (
+    <>
+      <div className="armada-inside__step-head">
+        <div className="armada-inside__step-titles">
+          {label === undefined ? (
+            <Skeleton width="40%" />
+          ) : (
+            <span className="armada-inside__step-name" data-identifier={labelIsAnIdentifier || undefined}>
+              {label}
+            </span>
+          )}
+          <div className="armada-inside__step-fields" role="status" aria-label="Reading the step" aria-busy>
+            {/* Token widths: the row is as wide as its fields, so a percentage is of nothing. */}
+            <Skeleton width="var(--space-12)" />
+            <Skeleton width="var(--space-8)" />
+          </div>
+        </div>
+      </div>
+      <PhaseStripSkeleton />
+      <StepStorySkeleton chapters={chapters} />
+    </>
   );
 }
 

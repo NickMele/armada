@@ -289,3 +289,17 @@ button.armada-phases__node:focus-visible {
   right: 0;
 }
 
+/* The strip while its step is read: unnamed nodes on the chain's line, an edge
+   apart, with the graph's own inset so nothing moves when the graph lands. */
+.armada-phases__skeleton {
+  display: flex;
+  align-items: center;
+  gap: var(--phase-edge);
+  padding: var(--space-1);
+  margin: calc(var(--space-1) * -1);
+}
+
+.armada-phases__node-skeleton {
+  width: var(--space-12);
+}
+

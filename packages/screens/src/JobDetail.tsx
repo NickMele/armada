@@ -97,7 +97,7 @@ import type { OpenArtifact, OpenPullRequest } from "./opening";
 import { DIFF_CHAPTER, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-keys";
 import { useAtFloor } from "@armada/shell";
 import { DetailSheet, holdOf, type HeldAt, type OpenSheet } from "./Sheets";
-import { chaptersOf } from "./chapters";
+import { chaptersOf, EVERY_STORY_TELLS } from "./chapters";
 import { againOf, useShowAgain, type ShowAgainCall } from "./again";
 import { span } from "./duration";
 import { ordered } from "./facts";
@@ -110,13 +110,13 @@ import { verdictSlotAfterAnswer } from "./verdict-answered";
 // makes**, so the key and the control cannot open different files.
 import { outputOf } from "./gates";
 import { renderFor } from "./render";
-import { runOf, whyNoSteps } from "./run";
+import { runOf, stepsAhead, whyNoSteps } from "./run";
 import { answeringOf, askingOf, commandOf, fieldsOf, noticeOf, questionOf, waitingOf } from "./step";
 import { StepActs } from "./StepActs";
 import { whyNoNotes } from "./notes";
 import { entriesOf, hideUnread, whyNotWatching } from "./story";
 import { LOOK_FAILED, NOTHING_HAPPENED_YET, latestOf, movesOf, nothingToAsk, summarised, whyNoReading } from "./resources";
-import { briefOf, whyNoBrief, whyNoWork, workOf } from "./work";
+import { briefOf, stillReading, whyNoBrief, workOf } from "./work";
 
 export type { ConfirmableAct, JobAct } from "./Acts";
 export type { FoldedReads } from "./mine";
@@ -432,6 +432,11 @@ export function JobDetail({
   // its disk under this Job's panel. `mine.ts` is the one place the check is
   // written, and the counterpart to `main/reader.ts` on this side of the seam.
   const whole = detailOf(watched, job.id);
+  // What the Board already holds is drawn while this Job's own read is out: the
+  // workflow's step names, and the open step's among them.
+  const reading = stillReading(watched, job.id);
+  const ahead = stepsAhead(workflow);
+  const aheadOpen = ahead.find((step) => step.id === (selected ?? job.current_step_id));
   const watching = turnsOf(observed, job.id);
   const noted = logOf(journalled, job.id);
   const holding = holdingOf(resources, job.id);
@@ -726,6 +731,7 @@ export function JobDetail({
       run={run.map(named)}
       runElapsed={span(job.created_at, now) ?? undefined}
       runAbsent={whyNoSteps(watched, job.id)}
+      runReading={reading ? { steps: ahead, current: aheadOpen?.id } : undefined}
       unreachable={
         watched.state === "failed" && watched.jobId === job.id ? "Fleet did not answer" : undefined
       }
@@ -773,9 +779,9 @@ export function JobDetail({
       openSteps={keys.openSteps}
       onOpenStep={keys.onOpenStep}
       where={workOf(onOpenArtifact, job, whole, manifest, workflow)}
-      whereAbsent={whyNoWork(watched, job.id)}
       brief={whole === null ? undefined : briefOf(whole)}
       briefAbsent={whyNoBrief(watched, job.id)}
+      briefLoading={reading}
       step={
         open === undefined
           ? undefined
@@ -823,6 +829,15 @@ export function JobDetail({
             }
       }
       stepAbsent={whyNoSteps(watched, job.id)}
+      stepReading={
+        reading
+          ? {
+              label: aheadOpen?.label,
+              labelIsAnIdentifier: aheadOpen?.labelIsAnIdentifier,
+              chapters: Object.values(EVERY_STORY_TELLS),
+            }
+          : undefined
+      }
       sheet={
         open === undefined ? null : (
           <DetailSheet
