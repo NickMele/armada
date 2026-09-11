@@ -70,13 +70,15 @@ impl Withheld {
     /// What a person reads beside the refused row.
     pub fn reason(&self) -> String {
         match self {
+            // A person's sentence, drawn as plain text on the row: "job" as
+            // Bridge says it, and no Markdown marks for it to show literally.
             Withheld::Destructive { name } => format!(
-                "armada.yml declares this destructive, as `{name}`, and no task runs it unattended"
+                "armada.yml declares this destructive, as {name}, and no job runs it unattended"
             ),
             Withheld::NotACommand { tool } => {
                 format!("{tool} is a tool, and only a command can be allowed from here")
             }
-            Withheld::Ungrantable { why } => format!("no task can be granted this: {why}"),
+            Withheld::Ungrantable { why } => format!("no job can be granted this: {why}"),
         }
     }
 }
