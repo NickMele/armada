@@ -4,6 +4,7 @@
 //! | Module | Holds |
 //! |---|---|
 //! | [`held`] | Which servers are up, by holder and name, and the last that ended |
+//! | [`left`] | The record on disk that finds a server a crashed Fleet left running |
 //! | [`running`] | One server: `run`, `serve`, `ready`, the end |
 //! | [`unservable`] | Every refusal, and its code on the wire |
 //!
@@ -18,6 +19,7 @@
 //! left to hand it on or stop it.
 
 mod held;
+pub(crate) mod left;
 mod running;
 mod unservable;
 
@@ -348,6 +350,16 @@ where
     /// is what calls it. See `armada::serve`.
     pub async fn stopped_every_server(&self) {
         stopped_and_waited(self.servers().held_by(None)).await;
+    }
+
+    /// End what a crashed Fleet left running — **first thing at startup,
+    /// before the main checkout's span is re-probed**, so the ports those
+    /// servers held are free when it is. See [`left`].
+    pub(crate) async fn reaped_left_servers(&self) -> left::Reaped {
+        let root = self.host().records_root.clone();
+        tokio::task::spawn_blocking(move || left::reaped(&root))
+            .await
+            .unwrap_or_default()
     }
 
     pub(crate) fn server_refusal(&self, why: Unservable, job: Option<&ipc::JobId>) -> Refusal {

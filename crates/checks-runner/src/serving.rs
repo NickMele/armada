@@ -33,9 +33,9 @@ use crate::run::{end_the_group, ended, not_started, split};
 
 /// A program that is up, and the capability to end it.
 ///
-/// **No accessor for the child and none for the group.** What a caller may do
-/// is hold one and drop it; anything more would be a handle to a process this
-/// module promises to reap.
+/// **No accessor for the child.** What a caller may do is hold one and drop
+/// it; the group's number is readable, for a record a crashed Fleet's
+/// successor reads, and a handle to the process would be more than that.
 pub struct Served {
     child: Child,
     /// The group id, which is the child's own pid. `None` where the child was
@@ -135,6 +135,13 @@ impl Served {
                 kind: error.kind(),
             }),
         }
+    }
+
+    /// The group's number, for a record of what to end if whoever holds this
+    /// crashes before it ends. **A number, not a handle**: while this is held,
+    /// [`end`](Served::end) and `Drop` are what end it.
+    pub fn group(&self) -> Option<u32> {
+        self.group
     }
 
     /// Whether it is still running, asked without waiting.

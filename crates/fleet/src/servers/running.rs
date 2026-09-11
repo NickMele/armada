@@ -72,6 +72,8 @@ where
             end
         };
         let (end, ()) = tokio::join!(lived, pumped(&plan.feed, &log, finishing));
+        // Its group has been ended by now, on every road out of `lived`.
+        super::left::forgotten(&plan.dir);
         let mut state = plan.now.borrow().clone();
         state.phase = ServerPhase::Exited;
         state.ended_at = Some(ipc::Instant::from(&self.now()));
@@ -127,6 +129,7 @@ where
                 }
             }
         };
+        self.recorded_server(plan, &served).await;
         if let Some(ready) = &plan.ready {
             marked(log, &format!("--- waiting for `ready`: {ready} ---"));
             loop {
@@ -175,6 +178,27 @@ where
                 served.end().await;
                 End { exit: Exit::Signalled { signal: libc::SIGKILL }, stopped: true }
             }
+        }
+    }
+
+    /// What finds this server again if Fleet crashes before it ends —
+    /// [`super::left`]. A start time that will not read leaves no record,
+    /// because a record nothing can confirm is one startup must not act on.
+    async fn recorded_server(&self, plan: &Plan, served: &Served) {
+        let Some(group) = served.group() else {
+            return;
+        };
+        let (id, whose) = {
+            let state = plan.now.borrow();
+            let whose = match &state.job_id {
+                Some(job) => format!("job {}", job.as_str()),
+                None => String::from("main-checkout"),
+            };
+            (state.id.clone(), whose)
+        };
+        let started = tokio::task::spawn_blocking(move || crate::process::holder_of(group)).await;
+        if let Ok(Ok(crate::process::Holder::Held(started))) = started {
+            let _ = super::left::recorded(&plan.dir, &id, &whose, group, &started);
         }
     }
 

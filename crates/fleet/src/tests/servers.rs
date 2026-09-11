@@ -53,7 +53,7 @@ commands:
     run: /usr/bin/true
 "#;
 
-fn a_fleet_serving(home: &TempDir, events: &api::Broadcaster) -> Arc<Fixture> {
+pub(super) fn a_fleet_serving(home: &TempDir, events: &api::Broadcaster) -> Arc<Fixture> {
     a_fleet_holding(home, events, MANIFEST, MANIFEST)
 }
 

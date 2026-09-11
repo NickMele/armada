@@ -82,8 +82,10 @@ pub(crate) fn end_the_group(group: NonZeroU32) {
     // SAFETY: `killpg` is a plain system call over two integers, and this one
     // is the pid `libc::setsid()` in `crate::detach` made a group leader — so
     // the signal reaches that Drone and what it spawned, and stops there. Both
-    // callers hold an uncollected child on the pid, which is what stops it
-    // naming anything else.
+    // Drone callers hold an uncollected child on the pid, which is what stops
+    // it naming anything else. The third, `crate::servers::left`, holds none:
+    // it signals only after `crate::process::holder_of` finds the process at
+    // the pid started when its record says, so a reused pid is never named.
     unsafe {
         libc::killpg(group, libc::SIGKILL);
     }

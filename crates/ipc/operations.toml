@@ -1234,7 +1234,7 @@ transport = "HTTP"
 helm_access = "No"
 description = "Every server Fleet holds — each Job's and the main checkout's — and the last instance of each that ended"
 notes = """
-**In Fleet's memory and nowhere else.** A server is true only while the process holding it lives, so there is no table: a Fleet that restarts holds none, having stopped every one it held on the way out. The last instance of each that ended is kept beside the live ones, so a server that fell over is still there to read — with its exit code and its log — until it is started again or its Job ends.
+**In Fleet's memory and nowhere else.** A server is true only while the process holding it lives, so there is no table: a Fleet that restarts holds none, having stopped every one it held on the way out — or, after a crash, ended what it left behind when it next starts. The last instance of each that ended is kept beside the live ones, so a server that fell over is still there to read — with its exit code and its log — until it is started again or its Job ends.
 
 `helm_access` is `No`: the reader is a person at the run sheet or *Where things are*.
 """
