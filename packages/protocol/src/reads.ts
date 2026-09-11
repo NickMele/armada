@@ -366,6 +366,11 @@ export type Outcome =
   | { ok: false; why: "empty_report" }
   | { ok: false; why: "already_deciding" }
   | { ok: false; why: "already_answering" }
+  /**
+   * A second change to how one Job meets a blocked command, while the first is
+   * still out. Bridge's own, like the other `already_` refusals.
+   */
+  | { ok: false; why: "already_setting" }
   | { ok: false; why: "empty_note" }
   /**
    * A raise that would not raise. **Refused before it is sent**, for

@@ -34,6 +34,7 @@ import type {
 } from "@armada/protocol";
 import type { FileReport, FleetCapacity, JobSummary, ProposalInFlight, UnreadableJob } from "@armada/protocol";
 import type { ManifestReading } from "@armada/protocol";
+import type { CommandAnswer, WhenBlocked } from "@armada/protocol";
 import type { Artifact, Followed, Opened } from "@armada/protocol";
 import { spoken } from "@armada/protocol";
 
@@ -388,6 +389,22 @@ export type BridgeApi = {
     questionId: string,
     chose: string,
   ) => Promise<Outcome>;
+  /**
+   * Allow or reject a command the job's drone reached for and was not given,
+   * by the call id and one of the answers Fleet offered for it.
+   *
+   * **The call id says which of the two places it is.** A command a drone is
+   * waiting on is answered in place and the job stays `running`; a refused row
+   * on a job stopped at `blocked_by_policy` moves the job on. Fleet refuses 409
+   * where the call names nothing waiting or refused, and where the answer was
+   * not offered.
+   */
+  answerCommand: (jobId: string, call: string, answer: CommandAnswer) => Promise<Outcome>;
+  /**
+   * Change how one job meets a command its drone was not given. **Live**: the
+   * next command the drone reaches for reads it, and no drone is respawned.
+   */
+  setWhenBlocked: (jobId: string, whenBlocked: WhenBlocked) => Promise<Outcome>;
   /**
    * Put a fresh Drone on the surviving worktree, at the step that stopped, and
    * say what to do differently where there is something to say.
@@ -785,6 +802,8 @@ export const CHANNELS = {
   forgetJob: "bridge:forget-job",
   redirectDrone: "bridge:redirect-drone",
   answerQuestion: "bridge:answer-question",
+  answerCommand: "bridge:answer-command",
+  setWhenBlocked: "bridge:set-when-blocked",
   restartStep: "bridge:restart-step",
   overrideVerdict: "bridge:override-verdict",
   rerunGate: "bridge:rerun-gate",

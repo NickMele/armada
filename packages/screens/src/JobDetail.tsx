@@ -82,7 +82,7 @@ import type {
   Remarks,
   Watched,
 } from "@armada/protocol";
-import type { FileReport, JobSummary } from "@armada/protocol";
+import type { CommandAnswer, FileReport, JobSummary, WhenBlocked } from "@armada/protocol";
 import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
 import { heldForMoney, heldForTurns, type ConfirmableAct } from "./Acts";
 import { useCallArguments, type ReadCall } from "./calls";
@@ -153,6 +153,14 @@ export type JobDetailProps = {
    * dialog on top would be a third press for the ordinary path.
    */
   onAnswer: (jobId: string, questionId: string, chose: string) => void;
+  /**
+   * Allow or reject a command the drone was not given, by its call id. The
+   * same call answers a command a drone is waiting on and a refused row on a
+   * stopped job. Straight through, for `onAnswer`'s reason.
+   */
+  onAnswerCommand: (jobId: string, call: string, answer: CommandAnswer) => void;
+  /** How this job meets the next such command. Live; nothing restarts. */
+  onSetWhenBlocked: (jobId: string, whenBlocked: WhenBlocked) => void;
   /** Overrule a Judge that refused the work, with the reason. */
   onOverrule: (jobId: string, reason: string) => void;
   /**

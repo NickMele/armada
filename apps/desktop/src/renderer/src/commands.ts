@@ -29,6 +29,7 @@ import { useEffect, useState } from "react";
 
 import type { BridgeState } from "../../shared/bridge";
 import type { Artifact, Draft, FileReport, Outcome, WorktreeReclaimed } from "@armada/protocol";
+import type { CommandAnswer, WhenBlocked } from "@armada/protocol";
 import type { Answered, ConfirmableAct } from "@armada/screens";
 import { proposeRequest } from "./dispatch";
 import type { Proposing } from "./dispatch";
@@ -249,6 +250,35 @@ export function useCommands(sending: Sending) {
   }
 
   /**
+   * Allow or reject a command the drone was not given. **Not through `act`**,
+   * for `answer`'s reason: the answers are the closed set Fleet offered for
+   * that call, and none of them ends anything.
+   */
+  async function answerCommand(jobId: string, call: string, chose: CommandAnswer): Promise<void> {
+    setActing(jobId);
+    try {
+      setOutcome(await window.armada.answerCommand(jobId, call, chose));
+    } finally {
+      setActing(null);
+    }
+  }
+
+  /**
+   * Change how the job meets the next command its drone was not given. **Not
+   * through `act`** — a setting ends nothing, so there is nothing to confirm.
+   * Under `acting` all the same, so the header's own control is off while it
+   * is out rather than sending a second change over the first.
+   */
+  async function setWhenBlocked(jobId: string, whenBlocked: WhenBlocked): Promise<void> {
+    setActing(jobId);
+    try {
+      setOutcome(await window.armada.setWhenBlocked(jobId, whenBlocked));
+    } finally {
+      setActing(null);
+    }
+  }
+
+  /**
    * Overrule a Judge that refused the work. **Not through `act`**, for
    * `redirect`'s reason: the dialog that collected the reason was the
    * confirmation. **And not through `decide`**, which answers a gate nothing
@@ -410,6 +440,8 @@ export function useCommands(sending: Sending) {
     act,
     redirect,
     answer,
+    answerCommand,
+    setWhenBlocked,
     overrule,
     rerun,
     raiseCap,

@@ -15,6 +15,7 @@ import type {
 import type { FileReport } from "@armada/protocol";
 import type { Artifact, Followed, Opened } from "@armada/protocol";
 import type { ProtocolVersion } from "@armada/protocol";
+import type { CommandAnswer, WhenBlocked } from "@armada/protocol";
 import { PROTOCOL_VERSION } from "@armada/protocol";
 
 // The whole surface the renderer is allowed to see.
@@ -104,6 +105,12 @@ const api: BridgeApi = {
     chose: string,
   ): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.answerQuestion, jobId, questionId, chose),
+  // A closed set on both, like the question's answer above: the answer is one
+  // of the three Fleet offered for this call, and the setting one of two.
+  answerCommand: (jobId: string, call: string, answer: CommandAnswer): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.answerCommand, jobId, call, answer),
+  setWhenBlocked: (jobId: string, whenBlocked: WhenBlocked): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.setWhenBlocked, jobId, whenBlocked),
 
   // The note is optional, and `undefined` crosses as `undefined` — a plain
   // restart sends Fleet no body at all, which is the request it took before it

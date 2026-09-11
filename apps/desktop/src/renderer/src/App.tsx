@@ -383,6 +383,12 @@ export function App() {
                 onAnswer={(jobId, questionId, chose) =>
                   void commands.answer(jobId, questionId, chose)
                 }
+                onAnswerCommand={(jobId, call, chose) =>
+                  void commands.answerCommand(jobId, call, chose)
+                }
+                onSetWhenBlocked={(jobId, whenBlocked) =>
+                  void commands.setWhenBlocked(jobId, whenBlocked)
+                }
                 onOverrule={(jobId, reason) => void commands.overrule(jobId, reason)}
                 onRaiseCap={(jobId, micros) => void commands.raiseCap(jobId, micros)}
                 onRaiseTurnCap={(jobId, turns) => void commands.raiseTurns(jobId, turns)}
