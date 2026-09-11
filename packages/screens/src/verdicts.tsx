@@ -39,7 +39,15 @@ import { CRITERION_VERDICT_JUDGE } from "@armada/components";
 import type { Judged, StepDetail } from "@armada/protocol";
 
 import { citationsOf, givenTo } from "./cited";
-import { askedOf, judgesSaid, NOT_REACHED, panelSizeOf, type Panel } from "./gates";
+import {
+  askedOf,
+  judgesSaid,
+  NOT_REACHED,
+  panelSizeOf,
+  sentenceOf,
+  stoppedUndecided,
+  type Panel,
+} from "./gates";
 import { basename, howThePanelWent, openKept, type Opens } from "./phases";
 
 /** Which chapter the Verdicts are, so the keyboard can name it. */
@@ -59,6 +67,12 @@ export function verdictsChapter(
   step: StepDetail,
   panels: Panel[],
   opens: Opens,
+  /**
+   * Fleet's own sentence for why the gate could not decide, where this step's
+   * current attempt is the one it is about. `stuck.undecided` — see its own
+   * doc for why it is `undefined` on every other stop.
+   */
+  undecided?: string,
 ): Omit<StepChapter, "ordinal"> | undefined {
   const declared = step.judge_checks;
   if (declared === undefined || declared.length === 0) return undefined;
@@ -66,6 +80,21 @@ export function verdictsChapter(
   if (asked === 0 && panels.length === 0) return undefined;
 
   if (panels.length === 0) {
+    // **Asked and silent is not the same absence as not asked yet.** Both
+    // arrive with `judged` empty for this attempt, and only the trigger tells
+    // them apart: `gate_undecided` is a call Fleet already made and could not
+    // read back, not a call still ahead of the step.
+    if (stoppedUndecided(step)) {
+      return {
+        id: VERDICTS_CHAPTER,
+        title: "Verdicts",
+        // The registry's own word for the same mark on a single criterion row
+        // — `JudgeVerdicts`' `MEANS.gate_undecided` — kept short for the
+        // column it sits in beside "not reached" and "1 of 1 criterion met".
+        summary: COULD_NOT_READ,
+        preview: askedAndSilent(undecided),
+      };
+    }
     return {
       id: VERDICTS_CHAPTER,
       title: "Verdicts",
@@ -317,6 +346,29 @@ function notAskedYet(asked: number): string {
     `The panel has not been asked anything on this step yet. The ${counted} it will be ` +
     "asked were frozen when the Job was dispatched, and are in the brief above."
   );
+}
+
+/**
+ * The header over an asked-and-silent chapter. `JudgeVerdicts`' own word for
+ * the same mark on a single criterion row — see `MEANS.gate_undecided` —
+ * rather than a phrase invented for this column alone.
+ */
+const COULD_NOT_READ = "could not read the artifact";
+
+/**
+ * What the chapter says where the panel was asked and the gate never read an
+ * answer back — never "not asked yet", which is a call still ahead of the
+ * step rather than one already made.
+ *
+ * **Fleet's own reason stands alone where it kept one.** Saying the panel did
+ * not answer and then saying why is the same fact twice; `undecided` already
+ * names what the gate could not read, so it replaces the shorter sentence
+ * rather than following it.
+ */
+function askedAndSilent(undecided: string | undefined): string {
+  return undecided === undefined
+    ? "The panel was asked and did not answer."
+    : sentenceOf(undecided);
 }
 
 /**

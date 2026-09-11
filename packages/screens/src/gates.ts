@@ -218,6 +218,20 @@ export function askedOf(step: StepDetail): number {
 }
 
 /**
+ * Whether this attempt's panel was asked and never answered, rather than
+ * never asked at all. Both draw `judged` empty for the current attempt, and
+ * they are not the same sentence: one is a call still ahead of the step, the
+ * other is one Fleet already made and could not read back.
+ *
+ * **`last_verdict.trigger` and not a live `judging` read**, because a step
+ * open after the Job stopped carries no in-flight call — `judging` is
+ * "right now", and there is no "now" left to name once the Job is over.
+ */
+export function stoppedUndecided(step: StepDetail): boolean {
+  return step.last_verdict?.trigger === "gate_undecided";
+}
+
+/**
  * Fleet's own sentence, corrected to this screen's case. Fleet writes what it
  * logged, lower-case and unpunctuated like every other log line; everywhere
  * this crosses onto a sentence of its own the two surfaces that draw it would

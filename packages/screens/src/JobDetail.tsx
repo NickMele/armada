@@ -555,6 +555,10 @@ export function JobDetail({
           // two would be two vocabularies for one failed open — #307.
           opens: opensRecords,
           onOpenSheet: openSheet,
+          // Scoped to the step `stuck` is actually about — a reader may have
+          // navigated to a different step, and `stuck.undecided` is not that
+          // step's reason for anything.
+          undecided: whole?.stuck?.step_id === open.step_id ? whole?.stuck?.undecided : undefined,
         });
 
   // The Job header, and everything that goes in it. `heading.tsx` holds what
