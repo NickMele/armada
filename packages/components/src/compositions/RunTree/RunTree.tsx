@@ -423,17 +423,14 @@ export type RunTreeSkeletonProps = {
 /** Rows for a run whose workflow is not known either. */
 const UNNAMED_WIDTHS = ["70%", "45%", "55%"];
 
-/** The current row's facts, a label and a value each. */
-const FACT_WIDTHS = [
-  { label: "30%", value: "40%" },
-  { label: "25%", value: "20%" },
-  { label: "20%", value: "35%" },
-];
-
 /**
- * The run, before this Job's own read has answered. **The names are known and
- * drawn; where each step stands is not, and waits.** The same well and the same
- * `StepRow` grid, so nothing moves when the run lands.
+ * The run, before this Job's own read has answered.
+ *
+ * **The names, the step you are on, and one bar where the duration will go.**
+ * Nothing else: a mark per row drew a column of empty boxes, and facts under
+ * the current row guessed at how many it has. Both are what the read answers.
+ * The row keeps `StepRow`'s grid, so a name does not move when its mark and
+ * duration land beside it.
  */
 export function RunTreeSkeleton({ steps = [], current }: RunTreeSkeletonProps) {
   const rows =
@@ -445,32 +442,25 @@ export function RunTreeSkeleton({ steps = [], current }: RunTreeSkeletonProps) {
               {step.label}
             </span>
           ),
-          open: step.id === current,
+          here: step.id === current,
         }))
-      : UNNAMED_WIDTHS.map((width, at) => ({ id: String(at), name: <Skeleton width={width} />, open: false }));
+      : UNNAMED_WIDTHS.map((width, at) => ({ id: String(at), name: <Skeleton width={width} />, here: false }));
 
   return (
     <div role="status" aria-label="Reading the run" aria-busy>
       <ol className="armada-run">
         {rows.map((row) => (
           <li className="armada-run__step" key={row.id}>
+            {/* The group, because the row's own grid tracks are declared on it —
+                without it every row collapses to one column. */}
             <div className="armada-srow-group">
-              <div className="armada-srow" data-sel={row.open || undefined}>
+              <div className="armada-srow" data-sel={row.here || undefined}>
                 <span className="armada-srow__chevron" aria-hidden />
-                <Skeleton className="armada-run__mark-skeleton" />
+                {/* The mark's column, held empty. */}
+                <span aria-hidden />
                 {row.name}
                 <Skeleton className="armada-run__dur-skeleton" />
               </div>
-              {row.open ? (
-                <div className="armada-srow__facts">
-                  {FACT_WIDTHS.map((fact, at) => (
-                    <div className="armada-srow__fact" key={at}>
-                      <Skeleton width={fact.label} />
-                      <Skeleton width={fact.value} />
-                    </div>
-                  ))}
-                </div>
-              ) : null}
             </div>
           </li>
         ))}
