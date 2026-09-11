@@ -24,6 +24,7 @@ use crate::job::{JobForgotten, JobList, JobSummary};
 use crate::proposing::ProposalInFlight;
 use crate::reading::ManifestReading;
 use crate::rehearsal::RunRecord;
+use crate::servers::ServerState;
 use crate::underway::ChecksUnderway;
 use crate::version::ProtocolVersion;
 use crate::waiting::QuestionInFlight;
@@ -122,6 +123,14 @@ pub enum Event {
     ManifestReread(ManifestReading),
     #[serde(rename = "run.finished")]
     RunFinished(RunRecord),
+    // A server's three lifecycle facts, each carrying the instance whole so a
+    // row is replaced rather than patched. Its output is `observe_server`'s.
+    #[serde(rename = "server.starting")]
+    ServerStarting(ServerState),
+    #[serde(rename = "server.serving")]
+    ServerServing(ServerState),
+    #[serde(rename = "server.exited")]
+    ServerExited(ServerState),
 }
 
 // `manifest.reread` carries [`ManifestReading`] itself rather than a payload

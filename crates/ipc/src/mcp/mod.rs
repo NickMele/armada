@@ -25,6 +25,7 @@ mod ask;
 mod dispatch;
 mod permission;
 mod report;
+mod serving;
 mod tools;
 mod widening;
 
@@ -37,6 +38,7 @@ pub use ask::{AskQuestion, AskedOption, ASK_FIELDS, ASK_TOOL, FEWEST_OPTIONS, MO
 pub use dispatch::{DispatchJob, DISPATCH_FIELDS, DISPATCH_TOOL};
 pub use permission::{PermissionAsked, PERMISSION_FIELDS, PERMISSION_TOOL};
 pub use report::{CheckRan, CheckReport};
+pub use serving::{ServerReport, SERVER_FIELDS, SERVER_TOOL};
 pub use tools::{
     DeclareScope, NotAnArgument, SubmitEvidence, CHECKS_FIELDS, CHECKS_TOOL, EVIDENCE_FIELDS,
     SCOPE_FIELDS, SCOPE_TOOL, TOOL,
@@ -119,6 +121,12 @@ pub enum Incoming {
         /// run it. **Fleet reads the diff** — the Drone answers yes or no and
         /// names nothing.
         only_what_changed: bool,
+    },
+    /// A call of the server tool: one name. **Which port, which worktree and
+    /// whether one is already up are the daemon's** — this carries a name.
+    StartServer {
+        id: CallId,
+        name: String,
     },
     /// A call of the dispatch tool that read as one Job's worth of asking.
     /// **Whether that Job may exist is the daemon's answer** — this module
@@ -230,6 +238,12 @@ pub enum Answered {
     Checked {
         id: CallId,
         report: CheckReport,
+    },
+    /// Where a server is. **A success even where it fell over** — the Drone
+    /// asked where it stands, and that is the answer, for `Checked`'s reason.
+    Served {
+        id: CallId,
+        report: ServerReport,
     },
     /// A tool error: a JSON-RPC *success* carrying `isError`. That is the
     /// shape a client surfaces to its model as something to read, and a
@@ -370,6 +384,12 @@ fn called(id: CallId, params: Option<&Value>) -> Incoming {
             Err(why) => Incoming::NotASubmission { id, why },
         };
     }
+    if tool == SERVER_TOOL {
+        return match serving::asked_for(arguments) {
+            Ok(name) => Incoming::StartServer { id, name },
+            Err(why) => Incoming::NotASubmission { id, why },
+        };
+    }
     if tool == DISPATCH_TOOL {
         return match dispatch::dispatch(arguments) {
             Ok(dispatch) => Incoming::Dispatch { id, dispatch },
@@ -409,6 +429,7 @@ pub fn answer(answered: Answered) -> Result<String, Unencodable> {
         Answered::Tools { id } => result(id, json!({ "tools": tools::listed() })),
         Answered::Recorded { id, receipt } => result(id, said(&receipt.word, false)),
         Answered::Checked { id, report } => result(id, said(&report.to_string(), false)),
+        Answered::Served { id, report } => result(id, said(&report.to_string(), false)),
         Answered::Refused { id, why } => result(id, said(&why.because, true)),
         Answered::Permitted { id, input } => result(
             id,

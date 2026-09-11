@@ -40,6 +40,11 @@ pub struct RunSheet {
     /// The run in flight on this Job, if one is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub running: Option<RunUnderway>,
+    /// The Commands declaring `serve`, with this Job's instance of each. Not
+    /// in `commands`: a server is started with `start_server`, never
+    /// `start_run`. Since protocol 10.9.
+    #[serde(default)]
+    pub servers: Vec<crate::servers::ServerEntry>,
 }
 
 /// One Check or Command, as the sheet lists it.
