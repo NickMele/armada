@@ -1,0 +1,197 @@
+/* Job settings — every setting a person can change on a running Job, on a
+   trailing sheet. The layer, its header and the body's padding are `Sheet`'s;
+   what lives here is how the sections inside it are spaced and read. */
+
+.armada-job-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+/* The lead, and why the controls are off where they are — held together,
+   because both are true of every setting below rather than of one. */
+.armada-job-settings__opening {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* What every change here has in common, said once before any control. */
+.armada-job-settings__lead {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+.armada-job-settings__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* A heading, not a band — the run sheet's rail heading, for its reason: the
+   layer has no surface of its own to put a fill on, so the hairline is what
+   separates it from the rows under it. Never uppercase. */
+.armada-job-settings__heading {
+  margin: 0;
+  padding-bottom: var(--space-2);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-heading);
+  color: var(--fg-default);
+}
+
+/* One setting: its label, its control, and the lines under it. */
+.armada-job-settings__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* The label a field names itself by. The select's and the radio group's own
+   labels are this treatment, so every setting's name reads alike. */
+.armada-job-settings__label {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+/* A ceiling: what it is on the left, the one control on the right. The text
+   takes the slack, so the button holds the trailing edge at any width. */
+.armada-job-settings__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.armada-job-settings__row-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-job-settings__figures {
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+}
+
+/* Machine-derived: a cap, a spend, a turn count, a command, a Job id. Mono runs
+   one step smaller than the sans beside it. */
+.armada-job-settings__mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+/* What a setting does, under it. */
+.armada-job-settings__means {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* One answer: the radio on its own line, what it commits to under it. */
+.armada-job-settings__option {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* Indented to the radio's label edge — --space-4 the ring, --space-2 the gap
+   beside it, the arithmetic `Radio` and a drone's question both do — so the
+   sentence reads as belonging to the choice above it. */
+.armada-job-settings__option-means {
+  margin: 0;
+  margin-inline-start: calc(var(--space-4) + var(--space-2));
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  text-wrap: pretty;
+}
+
+/* That a change took, and when it applies. Neutral: a setting that took is
+   not a Job state, and status hue is never chosen. */
+.armada-job-settings__said {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+}
+
+.armada-job-settings__allowed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.armada-job-settings__empty {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-muted);
+}
+
+.armada-job-settings__commands {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  margin-top: var(--space-2);
+  padding: 0;
+  list-style: none;
+}
+
+/* One allow, with the rule a list row takes between it and the next. */
+.armada-job-settings__command {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: var(--border-width) solid var(--border-default);
+}
+
+.armada-job-settings__command-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  color: var(--fg-default);
+}
+
+/* Under Run it the list is kept and set back: a de-emphasised row steps down
+   to --border-subtle and --fg-subtle, which is the contract's dimming, and
+   never an opacity. */
+.armada-job-settings__allowed[data-dimmed] .armada-job-settings__command {
+  border-top-color: var(--border-subtle);
+}
+
+.armada-job-settings__allowed[data-dimmed] .armada-job-settings__command-text,
+.armada-job-settings__allowed[data-dimmed] .armada-job-settings__command-text .armada-job-settings__means {
+  color: var(--fg-subtle);
+}
+
+/* The header's count of what differs from a new Job. Quiet: a changed Job is
+   not a problem, so it is muted text inside the button and not a badge. */
+.armada-job-settings-button__count {
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  font-weight: var(--weight-body);
+  color: var(--fg-muted);
+}
