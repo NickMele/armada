@@ -292,9 +292,6 @@ export const WHEN_BLOCKED_MEANS: Record<WhenBlocked, string> = {
     "Armada's, and commands armada.yml marks destructive still stop for you.",
 };
 
-/** What names the setting on its line, before the choice in force. */
-export const WHEN_BLOCKED_NAMED = "Blocked commands";
-
 /**
  * The answers to a command a drone was not given: the words on each control,
  * and what it commits to in one line. **Fleet offers these three and no

@@ -6,7 +6,15 @@
 // that drew a read the proof never rendered would be the gap this package's
 // fixtures exist to close.
 
-import type { CallRead, CheckOutputRead, FrameRead, Followed, Opened, Outcome } from "@armada/protocol";
+import type {
+  CallRead,
+  CheckOutputRead,
+  FrameRead,
+  Followed,
+  ModelChoices,
+  Opened,
+  Outcome,
+} from "@armada/protocol";
 
 import type { JobDetailProps } from "../JobDetail";
 import type { JobFixture } from "./fixture";
@@ -17,6 +25,9 @@ const UNKNOWN_JOB_FOLLOWED: Followed = { ok: false, why: "unknown_job" };
 const NOT_ANSWERED_CALL: CallRead = { ok: false, outcome: NOT_CONNECTED };
 const NOT_ANSWERED_OUTPUT: CheckOutputRead = { ok: false, outcome: NOT_CONNECTED };
 const NOT_ANSWERED_FRAME: FrameRead = { ok: false, outcome: NOT_CONNECTED };
+
+/** What `list_models` answers on every fixture, in the spelling Fleet uses. */
+const MODELS: ModelChoices = { models: ["haiku", "sonnet", "opus"], default: "sonnet" };
 
 function noop(): void {}
 
@@ -42,6 +53,9 @@ export function propsFor(fixture: JobFixture): JobDetailProps {
     onAnswer: noop,
     onAnswerCommand: noop,
     onSetWhenBlocked: noop,
+    onSetModel: noop,
+    onRemoveAllowedCommand: noop,
+    models: MODELS,
     onOverrule: noop,
     onRaiseCap: noop,
     onRaiseTurnCap: noop,

@@ -35,8 +35,11 @@ const OFFERED = 2;
  * `facts.ts` writes `~$2.40` because what a run cost is notional, and a ceiling
  * is a number somebody typed. Two places, because a cap is set in dollars or in
  * cents and never in fractions of a penny.
+ *
+ * Exported for the Job settings panel, which draws the same cap beside the
+ * same raise and should not spell it a second way.
  */
-function cap(micros: number): string {
+export function cap(micros: number): string {
   return `$${(micros / MICROS).toFixed(2)}`;
 }
 

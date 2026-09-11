@@ -34,6 +34,7 @@ import { clock } from "./duration";
 import { Log } from "./Log";
 import { recourseOf } from "./recovery";
 import { drawn, WORKTREE_GIVEN_BACK } from "./review";
+import { SettingsSheet, type SettingsSheetProps } from "./settings";
 import { NOTHING_YET_ON_THIS_STEP, whyNotWatching, type LogRow } from "./story";
 
 /**
@@ -43,8 +44,13 @@ import { NOTHING_YET_ON_THIS_STEP, whyNotWatching, type LogRow } from "./story";
  * two.** They left the panel because a reading has no end; this left the run
  * column because it was the largest thing on it and the run is what a person
  * opens a Job to read. Same layer, same two exits, same one-at-a-time rule.
+ *
+ * **`settings` is the fourth, and holds no reading at all** — every setting a
+ * person can change on a running Job. It is here because the header's one line
+ * for one of them read as the screen's main button, and a layer a person
+ * already knows how to leave is where changing a Job does least to the reading.
  */
-export type OpenSheet = "log" | "diff" | "holds" | null;
+export type OpenSheet = "log" | "diff" | "holds" | "settings" | null;
 
 /**
  * Where the log's reading was held, and how much it had then.
@@ -85,6 +91,8 @@ export type DetailSheetProps = {
    * the arguments for how to read a `Holds` live in `resources.ts`.
    */
   holds: Omit<JobHoldsSheetProps, "open" | "floor" | "onClose">;
+  /** What the Job settings panel reads and sends, beyond the Job it already has. */
+  settings: Omit<SettingsSheetProps, "job" | "whole" | "floor" | "onClose">;
   /** The window is at `--window-floor`. */
   floor: boolean;
   onClose: () => void;
@@ -103,6 +111,7 @@ export function DetailSheet({
   held,
   onHold,
   holds,
+  settings,
   floor,
   onClose,
 }: DetailSheetProps) {
@@ -156,6 +165,9 @@ export function DetailSheet({
   }
   if (which === "holds") {
     return <JobHoldsSheet open floor={floor} onClose={onClose} {...holds} />;
+  }
+  if (which === "settings") {
+    return <SettingsSheet job={job} whole={whole} floor={floor} onClose={onClose} {...settings} />;
   }
   return null;
 }

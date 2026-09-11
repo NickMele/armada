@@ -393,6 +393,11 @@ export function App() {
                 onSetWhenBlocked={(jobId, whenBlocked) =>
                   void commands.setWhenBlocked(jobId, whenBlocked)
                 }
+                onSetModel={(jobId, model) => void commands.setModel(jobId, model)}
+                onRemoveAllowedCommand={(jobId, run) =>
+                  void commands.removeAllowedCommand(jobId, run)
+                }
+                models={state.holds.models}
                 onOverrule={(jobId, reason) => void commands.overrule(jobId, reason)}
                 onRaiseCap={(jobId, micros) => void commands.raiseCap(jobId, micros)}
                 onRaiseTurnCap={(jobId, turns) => void commands.raiseTurns(jobId, turns)}

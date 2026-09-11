@@ -83,11 +83,12 @@ export const WithSectionLabels: Story = {
  */
 export const Disabled: Story = {
   args: {
-    triggerLabel: "Blocked commands: Refuse and hold",
+    triggerLabel: "Stop and wait for me",
     disabled: true,
     entries: [
-      { kind: "item", id: "refuse_and_hold", label: "Refuse and hold" },
-      { kind: "item", id: "ask_me", label: "Ask me" },
+      { kind: "item", id: "refuse_and_hold", label: "Stop and wait for me" },
+      { kind: "item", id: "ask_me", label: "Ask me first" },
+      { kind: "item", id: "allow_all", label: "Run it" },
     ],
   },
 };

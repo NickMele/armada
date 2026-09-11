@@ -90,31 +90,53 @@ export const HeaderActionsOpen: Story = {
 /** Midway through Fix, before its Check has run. */
 export const Running: Story = { name: "Running", render: drawing(running) };
 
-/** What the header's setting sends. A module's spy, cleared by the play that reads it. */
+/** What the panel's choice sends. A module's spy, cleared by the play that reads it. */
 const setWhenBlocked = fn();
 
 /**
- * How a running Job meets a command its Drone was not given, changed from the
- * line under the header's facts. **Live**: what goes is the choice, and nothing
- * on the screen restarts.
- *
- * **Choosing what is already set sends nothing.** The menu cannot mark the
- * choice in force, so the trigger names it — and a second press of it is not a
- * change, which is the half of this a drawing cannot show.
+ * The running Job, changed: a model chosen for its later steps and one command
+ * allowed for it. What the header counts, and what the panel lists.
  */
-export const BlockedCommandsChanged: Story = {
-  name: "Blocked commands, changed to Ask me",
-  render: () => <JobDetailFrom fixture={running()} on={{ onSetWhenBlocked: setWhenBlocked }} />,
+function runningWithSettings(): JobFixture {
+  const fixture = running();
+  if (fixture.watched.state !== "read") return fixture;
+  return {
+    ...fixture,
+    watched: watchedRead({
+      ...fixture.watched.detail,
+      model_override: "opus",
+      allowed_commands: [
+        {
+          run: "pnpm add -D reselect@5.1.1",
+          reach: "job",
+          allowed_at: "2026-09-10T14:29:40Z",
+          by: "human",
+        },
+      ],
+    }),
+  };
+}
+
+/**
+ * **The header's way in, and the panel it opens.** The count on the button is
+ * the model and the allow; the panel says what each setting does and when a
+ * change to it takes. Nothing on the screen behind it restarts.
+ *
+ * **What goes is this Job's id and the wire's word.** The panel's own story
+ * proves a choice names `ask_me`; this proves the screen hands it on against the
+ * Job on screen, which is the half a composition cannot show. Broken once by
+ * sending the Job's handle rather than its id.
+ */
+export const JobSettingsOpen: Story = {
+  name: "Job settings open",
+  render: () => (
+    <JobDetailFrom fixture={runningWithSettings()} on={{ onSetWhenBlocked: setWhenBlocked }} />
+  ),
   play: async ({ canvas, userEvent }) => {
     setWhenBlocked.mockClear();
-    const setting = await canvas.findByRole("button", { name: "Blocked commands: Refuse and hold" });
-
-    await userEvent.click(setting);
-    await userEvent.click(await canvas.findByRole("menuitem", { name: "Refuse and hold" }));
-    await expect(setWhenBlocked).not.toHaveBeenCalled();
-
-    await userEvent.click(setting);
-    await userEvent.click(await canvas.findByRole("menuitem", { name: "Ask me" }));
+    await userEvent.click(await canvas.findByRole("button", { name: /^Job settings/ }));
+    const panel = within(await canvas.findByRole("dialog", { name: "Job settings" }));
+    await userEvent.click(panel.getByRole("radio", { name: "Ask me first" }));
     await expect(setWhenBlocked).toHaveBeenCalledWith(JOB_ID, "ask_me");
   },
 };
@@ -123,8 +145,8 @@ export const BlockedCommandsChanged: Story = {
 const answerCommand = fn();
 
 /**
- * A Job at Ask me whose Drone reached for a command it was not given, and is
- * waiting on a person — still `running`, with the header naming the setting.
+ * A Job at Ask me first whose Drone reached for a command it was not given, and
+ * is waiting on a person — still `running`.
  * The command is what is asked; the answers are the three Fleet offered, each
  * saying what it commits to.
  *

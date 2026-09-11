@@ -103,15 +103,6 @@
   color: var(--fg-default);
 }
 
-/* A setting on the Job, on a line of its own under the facts. Its trigger
-   keeps its own height and edge — it is a control, and the run above it is
-   readings — and the line holds it at the leading edge the facts start from. */
-.armada-job-head__setting {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-}
-
 /* Mono means machine-derived, and it is already at the smallest step here, so
    it takes the family alone. */
 .armada-job-head__value[data-mono] {
