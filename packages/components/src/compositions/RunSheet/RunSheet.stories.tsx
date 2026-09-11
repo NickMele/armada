@@ -22,7 +22,13 @@ const meta: Meta<typeof RunSheet> = {
   component: RunSheet,
   decorators: [
     (Story) => (
-      <div style={{ position: "relative", height: "640px", background: "var(--bg-base)" }}>
+      <div
+        style={{
+          position: "relative",
+          height: "var(--palette-max-height)",
+          background: "var(--bg-base)",
+        }}
+      >
         <Story />
       </div>
     ),
