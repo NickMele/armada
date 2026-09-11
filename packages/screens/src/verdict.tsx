@@ -20,7 +20,9 @@ import { openPullRequest, type OpenPullRequest } from "./opening";
 import type { ReactNode } from "react";
 import { GitPullRequest, Minus } from "lucide-react";
 import {
+  Button,
   CheckRuns,
+  Tooltip,
   VerdictSheet,
   type CheckRun as CheckRunRow,
   type VerdictFigure,
@@ -299,12 +301,15 @@ function tookOf(job: JobSummary, whole: JobWhole | null, now: number): string | 
 export function pullRequestBlockOf(
   address: string | undefined,
   detail: PullRequestDetail | undefined,
+  now: number,
   onOpen?: () => void,
+  onResolveConflict?: () => void,
+  disabled?: boolean,
 ): ReactNode | undefined {
   if (address === undefined) return undefined;
   const number =
     detail?.number === undefined ? (pullRequestNumber(address) ?? "Pull request") : `#${detail.number}`;
-  const currency = currencyLineOf(detail?.currency);
+  const currency = currencyLineOf(detail?.currency, now);
   return (
     <div className="armada-verdict__pr">
       <p className="text-xs text-fg-muted">
@@ -328,6 +333,18 @@ export function pullRequestBlockOf(
         <p className={currency.conflicted ? "text-xs text-fg-default" : "text-2xs text-fg-subtle"}>
           {currency.said}
         </p>
+      )}
+      {/* Sits directly under the sentence it answers, never after the
+          decision card below — a person reading "changes that clash" should
+          find the fix in the same glance. `#663`. Drawn only where there is a
+          clash to resolve: the automatic catch-up already keeps an
+          unattended branch current, so this is not a "check now" button. */}
+      {currency?.conflicted !== true || onResolveConflict === undefined ? null : (
+        <Tooltip label="Sends the clash back to the step that wrote the code. Its Drone fixes the files, the Checks run again, and the pull request updates.">
+          <Button variant="secondary" disabled={disabled} onClick={onResolveConflict}>
+            Resolve conflicts
+          </Button>
+        </Tooltip>
       )}
     </div>
   );
@@ -359,18 +376,26 @@ function pullRequestReadOf(detail: PullRequestDetail): string {
  * **`undefined` is the ordinary case.** Most of a pull request's life the
  * branch has never needed to move, and this block says nothing about it —
  * silence here is not a gap, it is the base never having moved.
+ *
+ * **Plain words, and none of Fleet's own.** The owner rejects mechanism on
+ * screen — no commit id, no "rebase", no "push", no "forge" — so this says
+ * what changed for a person, not what Fleet ran.
  */
 export function currencyLineOf(
   currency: PullRequestDetail["currency"],
+  now: number,
 ): { said: string; conflicted: boolean } | undefined {
   if (currency === undefined) return undefined;
-  const onto = currency.rebased_onto.slice(0, 7);
   if (currency.conflict_files === undefined || currency.conflict_files.length === 0) {
-    return { said: `Rebased onto \`${onto}\` and pushed — the branch is current with main.`, conflicted: false };
+    const ago = span(currency.rebased_at, now);
+    return {
+      said: `Up to date with main as of ${ago === null ? "0s" : ago} ago.`,
+      conflicted: false,
+    };
   }
   const files = currency.conflict_files.join(", ");
   return {
-    said: `Behind \`${onto}\` with conflicts Fleet could not resolve on its own: ${files}.`,
+    said: `Main has changes that clash with this branch in ${files}. Fleet left the branch as it was.`,
     conflicted: true,
   };
 }
@@ -391,6 +416,10 @@ export type VerdictArgs = {
     address: string | undefined;
     detail: PullRequestDetail | undefined;
     onOpen?: () => void;
+    /** Send the clash back to a Drone that can edit files. `#663`. */
+    onResolveConflict?: () => void;
+    /** Off while nothing here can be sent — the same reading `Decide` gets. */
+    resolveConflictDisabled?: boolean;
   };
   /** Fleet's own reason the gate could not decide, scoped to this step. */
   undecided?: string;
@@ -429,7 +458,16 @@ export function verdictOf({
     ...(never === true && kept.length > 0 ? { deliverable: kept[0]?.opening } : {}),
     ...(pullRequest === undefined
       ? {}
-      : { pullRequest: pullRequestBlockOf(pullRequest.address, pullRequest.detail, pullRequest.onOpen) }),
+      : {
+          pullRequest: pullRequestBlockOf(
+            pullRequest.address,
+            pullRequest.detail,
+            now,
+            pullRequest.onOpen,
+            pullRequest.onResolveConflict,
+            pullRequest.resolveConflictDisabled,
+          ),
+        }),
     provesIt: <CheckRuns rows={provesItOf(step, whole?.acceptance_criteria ?? [], now, undecided, reason)} />,
     ...(provesItNoteOf(step, render) === undefined
       ? {}
@@ -501,10 +539,6 @@ export function verdictSlotAtGate({
 }: VerdictSlotAtGateArgs): ReactNode {
   const address = whole?.delivery?.pull_request;
   const detail = whole?.delivery?.pull_request_detail;
-  // **Offered whenever there is a pull request to send back**, not only where
-  // a conflict is already known — the base may have moved since Fleet's own
-  // rotation last read it, and the press itself is what asks Fleet to look.
-  const canResolveConflict = address !== undefined;
   const never = neverDelivers(whole?.steps ?? []);
   // Never `auto_merge`: approving here never merges regardless of that
   // policy, which holds a later, separate gate (`fleet::gate`, `reviewing`).
@@ -540,6 +574,8 @@ export function verdictSlotAtGate({
             void openPullRequest(onOpenPullRequest, job.id).then((because) => {
               if (because !== null) onSaid(because);
             }),
+          onResolveConflict: () => onResolvePullRequestConflict(job.id),
+          resolveConflictDisabled: stale || deciding,
         },
         undecided,
       })}
@@ -555,7 +591,6 @@ export function verdictSlotAtGate({
           deciding={deciding}
           {...(address === undefined ? {} : { pullRequest: address })}
           onMerge={onMergePullRequest}
-          {...(canResolveConflict ? { onResolveConflict: onResolvePullRequestConflict } : {})}
           onApprove={onApproveReview}
           onRequestChanges={onRequestChanges}
           onReject={onReject}

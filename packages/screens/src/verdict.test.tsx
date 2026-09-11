@@ -5,9 +5,11 @@
 // that only checked the two-value shortcut would have missed the one the
 // wire actually calls "cannot say".
 
-import { describe, expect, it } from "vitest";
-import type { JobDetail as JobWhole, StepDetail, Submitted } from "@armada/protocol";
+import { describe, expect, it, test } from "vitest";
+import { page, userEvent } from "vitest/browser";
+import type { JobDetail as JobWhole, PullRequestDetail, StepDetail, Submitted } from "@armada/protocol";
 
+import { mount, unmount } from "./mounted";
 import {
   briefOf,
   cameBackOf,
@@ -17,6 +19,7 @@ import {
   neverDelivers,
   provesItNoteOf,
   provesItOf,
+  pullRequestBlockOf,
   risksOf,
 } from "./verdict";
 
@@ -280,40 +283,115 @@ describe("what proves it, where the step carries an overruled verdict", () => {
 });
 
 // `#663`: what the last attempt to keep a pull request's branch current
-// against a moved base says.
-describe("the currency line a rebase against a moved base leaves", () => {
+// against a moved base says. Plain words, settled 2026-09-11: no commit id,
+// no "rebase", no "push", no "forge".
+describe("the currency line a moved base leaves", () => {
   it("is undefined where the base has never moved", () => {
-    expect(currencyLineOf(undefined)).toBeUndefined();
+    expect(currencyLineOf(undefined, NOW)).toBeUndefined();
   });
 
-  it("says the branch is current where the rebase was clean", () => {
-    const said = currencyLineOf({
-      rebased_onto: "8c2ce681000000000000000000000000000000",
-      rebased_at: "2026-09-11T19:41:00Z",
-      conflict_files: [],
-    });
+  it("says the branch is up to date, with a relative time, where it caught up cleanly", () => {
+    const said = currencyLineOf(
+      {
+        rebased_onto: "8c2ce681000000000000000000000000000000",
+        rebased_at: "2026-09-09T09:40:00Z",
+        conflict_files: [],
+      },
+      NOW,
+    );
     expect(said?.conflicted).toBe(false);
-    expect(said?.said).toContain("8c2ce68");
-    expect(said?.said).toMatch(/current with main/);
+    expect(said?.said).toBe("Up to date with main as of 5m 00s ago.");
   });
 
-  it("names the files and says nothing was resolved where the rebase conflicted", () => {
-    const said = currencyLineOf({
-      rebased_onto: "8c2ce681000000000000000000000000000000",
-      rebased_at: "2026-09-11T19:41:00Z",
-      conflict_files: ["src/parse.rs", "src/lex.rs"],
-    });
+  it("names the files and says the branch was left as it was where it clashed", () => {
+    const said = currencyLineOf(
+      {
+        rebased_onto: "8c2ce681000000000000000000000000000000",
+        rebased_at: "2026-09-09T09:40:00Z",
+        conflict_files: ["src/parse.rs", "src/lex.rs"],
+      },
+      NOW,
+    );
     expect(said?.conflicted).toBe(true);
-    expect(said?.said).toContain("src/parse.rs");
-    expect(said?.said).toContain("src/lex.rs");
-    expect(said?.said).toMatch(/conflicts/);
+    expect(said?.said).toBe(
+      "Main has changes that clash with this branch in src/parse.rs, src/lex.rs. Fleet left the branch as it was.",
+    );
   });
 
   it("is not conflicted where `conflict_files` is absent", () => {
-    const said = currencyLineOf({
-      rebased_onto: "8c2ce681000000000000000000000000000000",
-      rebased_at: "2026-09-11T19:41:00Z",
-    });
+    const said = currencyLineOf(
+      {
+        rebased_onto: "8c2ce681000000000000000000000000000000",
+        rebased_at: "2026-09-09T09:40:00Z",
+      },
+      NOW,
+    );
     expect(said?.conflicted).toBe(false);
+  });
+});
+
+// `#663`: the control sits with the pull request block, directly under the
+// sentence naming the clash — never after the decision card, and never where
+// nothing has clashed.
+describe("the pull request block's own resolve-conflicts control", () => {
+  const ADDRESS = "https://forge.example/armada/pull/533";
+  const now = Date.parse("2026-09-09T09:45:00Z");
+
+  function detail(currency: PullRequestDetail["currency"]): PullRequestDetail {
+    return { number: 533, reviews: [], currency };
+  }
+
+  test("is offered under the clash sentence, and sends on the press", async () => {
+    const sent: string[] = [];
+    mount(
+      <>
+        {pullRequestBlockOf(
+          ADDRESS,
+          detail({
+            rebased_onto: "8c2ce681000000000000000000000000000000",
+            rebased_at: "2026-09-09T09:40:00Z",
+            conflict_files: ["src/parse.rs"],
+          }),
+          now,
+          undefined,
+          () => sent.push("resolved"),
+        )}
+      </>,
+    );
+    await expect
+      .element(page.getByText("Main has changes that clash with this branch in src/parse.rs."))
+      .toBeVisible();
+    await userEvent.click(page.getByRole("button", { name: "Resolve conflicts" }));
+    expect(sent).toEqual(["resolved"]);
+    unmount();
+  });
+
+  test("is not offered where the branch is current", async () => {
+    mount(
+      <>
+        {pullRequestBlockOf(
+          ADDRESS,
+          detail({
+            rebased_onto: "8c2ce681000000000000000000000000000000",
+            rebased_at: "2026-09-09T09:40:00Z",
+          }),
+          now,
+          undefined,
+          () => {},
+        )}
+      </>,
+    );
+    await expect
+      .element(page.getByRole("button", { name: "Resolve conflicts" }))
+      .not.toBeInTheDocument();
+    unmount();
+  });
+
+  test("is not offered where the base has never moved, even with a handler given", async () => {
+    mount(<>{pullRequestBlockOf(ADDRESS, detail(undefined), now, undefined, () => {})}</>);
+    await expect
+      .element(page.getByRole("button", { name: "Resolve conflicts" }))
+      .not.toBeInTheDocument();
+    unmount();
   });
 });

@@ -303,10 +303,10 @@ test("a conversation comment an older Fleet sent with null fields still renders"
     .toBeVisible();
 });
 
-// `#663`: Fleet's own rebase, offered as its own control rather than folded
-// into `ReviewDecision`'s four — it is not a verdict on the work.
-test("resolve conflicts is offered beside the pull request, and sends on the press with no dialog", async () => {
-  const sent: string[] = [];
+// `#663`: "Resolve conflicts" sits with the pull request block now, directly
+// under the sentence naming the clash — `verdict.test.tsx` covers it there.
+// `Decide` no longer draws it.
+test("Decide itself never draws Resolve conflicts — it moved beside the pull request", async () => {
   mount(
     <Decide
       onNeedMaterial={() => {}}
@@ -318,32 +318,6 @@ test("resolve conflicts is offered beside the pull request, and sends on the pre
       deciding={false}
       pullRequest="https://forge.example/armada/pull/533"
       onMerge={() => {}}
-      onResolveConflict={(jobId) => sent.push(jobId)}
-      onApprove={() => {}}
-      onRequestChanges={() => {}}
-      onReject={() => {}}
-      onTakeUpRemarks={() => {}}
-      onOpenRemarkLink={() => {}}
-    />,
-  );
-
-  await userEvent.click(page.getByRole("button", { name: "Resolve conflicts with main" }));
-
-  expect(sent).toEqual([JOB.id]);
-  await expect.element(page.getByRole("dialog")).not.toBeInTheDocument();
-});
-
-test("resolve conflicts draws nothing where the caller gave no handler", async () => {
-  mount(
-    <Decide
-      onNeedMaterial={() => {}}
-      onNeedRemarks={() => {}}
-      job={JOB}
-      evidence={NO_EVIDENCE}
-      remarks={NO_REMARKS}
-      stale={false}
-      deciding={false}
-      onMerge={() => {}}
       onApprove={() => {}}
       onRequestChanges={() => {}}
       onReject={() => {}}
@@ -352,6 +326,6 @@ test("resolve conflicts draws nothing where the caller gave no handler", async (
     />,
   );
   await expect
-    .element(page.getByRole("button", { name: "Resolve conflicts with main" }))
+    .element(page.getByRole("button", { name: "Resolve conflicts" }))
     .not.toBeInTheDocument();
 });
