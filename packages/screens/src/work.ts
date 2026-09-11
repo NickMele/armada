@@ -94,8 +94,16 @@ function opener(open: OpenArtifact, jobId: string, what: Artifact, label: string
 /**
  * The rows: where the work is, and the identifiers that name it.
  *
- * `undefined` while the Job has not been read whole — the caller says why,
- * because "still reading" and "Fleet did not answer" are different sentences.
+ * **Never `undefined`, because four of five rows never needed `whole` to
+ * begin with.** Worktree is derived from `job.id`/`job.assigned_drone` and
+ * the independently-loaded `manifests` hold; Manifest and Workflow fall back
+ * to `job.owner_manifest_id`/`job.workflow_id` the instant those holds are
+ * not there yet, and Drone is `job.assigned_drone` — all on `JobSummary`,
+ * which is the board row already in memory when this screen opens, not a
+ * second read. **Branch is the one row this Job's own detail read actually
+ * answers**, and Overlaps is read off the same place, so those two alone
+ * wait for `whole` and appear once it lands rather than holding the other
+ * three back until it does.
  */
 export function workOf(
   open: OpenArtifact,
@@ -103,14 +111,16 @@ export function workOf(
   whole: JobWhole | null,
   manifest: ManifestSummary | undefined,
   workflow: WorkflowSummary | undefined,
-): JobLogReferenceRow[] | undefined {
-  if (whole === null) return undefined;
+): JobLogReferenceRow[] {
   const repo = repoOf(manifest);
   // Only `worktree` is drawn on this screen, which never reads `records` —
   // see `artifactPath`'s own doc for which word reads which. Resolved anyway
   // so a row added here later does not have to learn where it comes from.
   const records = recordsOf(manifest) ?? "";
-  const dispatched = whole.branch !== undefined;
+  // `undefined` here is "not yet known", not "no" — a worktree row drawn
+  // before the read lands must not claim the file exists yet, and must not
+  // claim it doesn't either.
+  const dispatched = whole === null ? undefined : whole.branch !== undefined;
   const rows: JobLogReferenceRow[] = [];
 
   if (repo !== null) {
@@ -123,11 +133,11 @@ export function workOf(
       value: where,
       copyValue: where,
       open: opener(open, job.id, "worktree", "Open the worktree"),
-      meta: dispatched ? undefined : NOT_WRITTEN,
+      meta: dispatched === false ? NOT_WRITTEN : undefined,
     });
   }
 
-  if (whole.branch !== undefined) {
+  if (whole !== null && whole.branch !== undefined) {
     // No `open`, and none is coming. A branch is served rather than derived,
     // it is not a path, and copying it is the whole of what it is for.
     rows.push({
@@ -161,7 +171,7 @@ export function workOf(
     });
   }
 
-  rows.push(...overlapRows(whole));
+  if (whole !== null) rows.push(...overlapRows(whole));
   return rows;
 }
 
