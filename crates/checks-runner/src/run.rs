@@ -22,12 +22,20 @@
 //! and returned to the caller; no branch in this file looks at a byte of it.
 //! Deciding which lines were the failure is a Judge's question answered by
 //! reading the diff, and a runner that grepped stdout would answer it badly.
+//!
+//! **What a Check prints can also be written down as it arrives.**
+//! [`run_writing`] appends every chunk to a file the moment it is read, so a
+//! person watching a Check that takes minutes can read what it has printed so
+//! far. That file is a view of the run and nothing decides on it: the
+//! [`Attempt`] handed back is captured exactly as [`run`] captures it.
 
+use std::io::Write;
 use std::path::Path;
 use std::process::Stdio;
+use std::sync::Mutex;
 use std::time::Duration;
 
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Command;
 use verification::{Exit, NeverRan};
 
@@ -37,6 +45,18 @@ use verification::{Exit, NeverRan};
 /// runaway command prints forever — so keeping the beginning would keep the
 /// part nobody needs and grow without bound doing it.
 const CAPTURE_LIMIT: usize = 64 * 1024;
+
+/// How much of a Check's output is written to the live file before it stops.
+///
+/// **A bound on the disk, not on what the gate keeps.** The tail the record
+/// keeps is [`CAPTURE_LIMIT`] and is unaffected. This stops a runaway command
+/// filling a disk with a file whose only reader is a person watching it, and
+/// the file says where it stopped rather than simply ending.
+const LIVE_LIMIT: u64 = 8 * 1024 * 1024;
+
+/// What the live file says where it stops being written.
+const LIVE_CUT: &[u8] =
+    b"\n--- the rest was not written here; the Check log recorded at the ruling keeps its tail ---\n";
 
 /// What a Check printed, for a person to read.
 ///
@@ -76,6 +96,27 @@ impl Attempt {
 /// here that means *the Check has not been decided* — a Check that could not be
 /// started is a Check that failed.
 pub async fn run(command: &str, worktree: &Path, budget: Duration) -> Attempt {
+    run_writing(command, worktree, budget, None).await
+}
+
+/// [`run`], and every chunk of output appended to `live` as it is read.
+///
+/// **Both streams go into one file, in the order they arrived.** That is what
+/// a terminal shows, and it is the only order there is while the Check is
+/// still running. The recorded Check log keeps the two apart behind markers,
+/// because by then each has been captured whole; this file cannot, and does
+/// not pretend to.
+///
+/// **A file that will not open costs the Check nothing.** It runs, and is
+/// ruled on, exactly as it would have with `None`: what is lost is a person's
+/// view of it, and refusing to run a Check because a log would not open would
+/// lose the verdict as well.
+pub async fn run_writing(
+    command: &str,
+    worktree: &Path,
+    budget: Duration,
+    live: Option<&Path>,
+) -> Attempt {
     let Some((program, args)) = split(command) else {
         return Attempt::never(NeverRan::NothingToRun);
     };
@@ -109,11 +150,12 @@ pub async fn run(command: &str, worktree: &Path, budget: Duration) -> Attempt {
 
     let mut out = Vec::new();
     let mut err = Vec::new();
+    let live = Mutex::new(live.and_then(Live::create));
     let finished = {
         let reading = async {
             let (_, _, status) = tokio::try_join!(
-                stdout.read_to_end(&mut out),
-                stderr.read_to_end(&mut err),
+                pumped(&mut stdout, &mut out, &live),
+                pumped(&mut stderr, &mut err, &live),
                 child.wait(),
             )?;
             Ok::<std::process::ExitStatus, std::io::Error>(status)
@@ -140,6 +182,71 @@ pub async fn run(command: &str, worktree: &Path, budget: Duration) -> Attempt {
                 exit: Exit::TimedOut { after: budget },
                 output: captured(&out, &err),
             }
+        }
+    }
+}
+
+/// Read one stream to its end, keeping every byte and writing each chunk on.
+///
+/// **The same bytes `read_to_end` would have kept**, in the same buffer, so
+/// what [`captured`] makes of them does not depend on whether anybody was
+/// watching. The chunk is written to the live file after it is kept, and a
+/// write that fails is dropped rather than returned: the stream is the Check's
+/// and the file is a person's.
+async fn pumped<R: AsyncRead + Unpin>(
+    from: &mut R,
+    into: &mut Vec<u8>,
+    live: &Mutex<Option<Live>>,
+) -> std::io::Result<()> {
+    let mut chunk = [0u8; 8 * 1024];
+    loop {
+        let read = from.read(&mut chunk).await?;
+        if read == 0 {
+            return Ok(());
+        }
+        into.extend_from_slice(&chunk[..read]);
+        // Never held across an `.await`: the lock covers one `write` call on a
+        // file, and the other stream waits for that and nothing longer.
+        if let Ok(mut held) = live.lock() {
+            if let Some(file) = held.as_mut() {
+                file.wrote(&chunk[..read]);
+            }
+        }
+    }
+}
+
+/// The file a Check's output is written to while it runs, and how much of it
+/// has been.
+struct Live {
+    file: std::fs::File,
+    written: u64,
+    cut: bool,
+}
+
+impl Live {
+    /// Truncated rather than appended to: a gate run again on the same attempt
+    /// writes the same name, and a file holding two runs would read as one.
+    fn create(path: &Path) -> Option<Live> {
+        std::fs::File::create(path).ok().map(|file| Live {
+            file,
+            written: 0,
+            cut: false,
+        })
+    }
+
+    /// Unbuffered on purpose: a `BufWriter` here would hold back exactly the
+    /// last few lines a person watching is waiting for.
+    fn wrote(&mut self, chunk: &[u8]) {
+        if self.cut {
+            return;
+        }
+        if self.written + chunk.len() as u64 > LIVE_LIMIT {
+            self.cut = true;
+            let _ = self.file.write_all(LIVE_CUT);
+            return;
+        }
+        if self.file.write_all(chunk).is_ok() {
+            self.written += chunk.len() as u64;
         }
     }
 }
