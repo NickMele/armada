@@ -84,6 +84,14 @@ const DISPATCH_TOOL: &str = "mcp__armada__dispatch_job";
 /// measured, so it is not a tool the Drone has.
 const PERMISSION_TOOL: &str = "mcp__armada__permission";
 
+/// The CLI's name for how long it waits on one MCP tool call, in milliseconds.
+///
+/// **Measured: over HTTP the CLI abandons a tool call after about sixty
+/// seconds without it**, which a question held for a person outlasts; with it
+/// set, a ninety-second hold was answered. It is every MCP call's wait, not
+/// only the permission tool's.
+const TOOL_WAIT: &str = "MCP_TOOL_TIMEOUT";
+
 /// The program name `crates/config/settings.toml` gives as the default for the
 /// AgentHarness binary path: `claude (on PATH)`.
 ///
@@ -220,7 +228,9 @@ impl AgentHarness for HeadlessAgent {
         args.push("--allowedTools".into());
         args.push(allowlist(config)?);
 
-        Ok(Launch::rendered(config, &self.program, args))
+        Launch::rendered(config, &self.program, args)
+            .waiting_on_permission(TOOL_WAIT)
+            .map_err(HarnessRefused::PermissionWaitNotSet)
     }
 
     fn read(&self, line: &str) -> Vec<DroneEvent> {
@@ -327,11 +337,21 @@ pub enum HarnessRefused {
     CommandNotExpressibleAsARule { run: String, found: char },
     /// A declared command that would push. **Refused, never granted quietly.**
     CommandWouldPush { run: String },
+    /// The config's environment already names the variable the permission
+    /// wait goes in. Fleet cannot spell it, so this is a Fleet bug.
+    PermissionWaitNotSet(adapter_traits::SpawnConfigRefused),
 }
 
 impl fmt::Display for HarnessRefused {
     fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            HarnessRefused::PermissionWaitNotSet(cause) => write!(
+                out,
+                "the Drone could not be told how long to wait on a permission \
+                 answer: {}. Without it the harness gives up on a held question \
+                 after a minute",
+                cause.said()
+            ),
             HarnessRefused::CommandEmpty => {
                 out.write_str("a declared command is empty, so nothing can be allowed for it")
             }

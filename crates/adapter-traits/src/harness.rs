@@ -397,7 +397,7 @@ pub enum SpawnConfigRefused {
 /// It takes its environment and its directory from the [`DroneSpawnConfig`]
 /// rather than from its own caller, so an implementation cannot render a Drone
 /// into a different directory or a different environment than the one it was
-/// given.
+/// given — bar [`Launch::waiting_on_permission`], whose value is fixed here.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Launch {
     program: String,
@@ -421,6 +421,19 @@ impl Launch {
             directory: String::from(config.worktree().path()),
             environment: config.environment().clone(),
         }
+    }
+
+    /// Add the harness's own name for how long it waits on a permission
+    /// answer, set to [`PERMISSION_WAIT`] in milliseconds.
+    ///
+    /// **The one variable a harness adds, and the value is not the harness's
+    /// to choose.** It goes onto the config's environment, which started at
+    /// [`Environment::nothing`], and a name already there is refused rather
+    /// than overwritten.
+    pub fn waiting_on_permission(mut self, variable: &str) -> Result<Launch, SpawnConfigRefused> {
+        let millis = PERMISSION_WAIT.as_millis().to_string();
+        self.environment = self.environment.and(variable, &millis)?;
+        Ok(self)
     }
 
     pub fn program(&self) -> &str {

@@ -262,14 +262,62 @@ fn nothing_readable_is_on_the_argument_list() {
 #[test]
 fn the_launch_takes_its_directory_and_environment_from_the_config() {
     // Not from the harness. An implementation has no parameter through which it
-    // could put a Drone somewhere else or hand it something else.
+    // could put a Drone somewhere else or hand it something else — the one
+    // variable it adds is the permission wait, and that value is not its own.
     let launch = HeadlessAgent::at("/usr/local/bin/agent")
         .render(&config(Toolbelt::evidence_only()))
         .expect("a legal configuration renders");
 
     assert_eq!(launch.program(), "/usr/local/bin/agent");
     assert_eq!(launch.directory(), worktree().path());
-    assert_eq!(launch.environment(), &environment());
+    let given = environment();
+    let (from_the_config, added) = launch.environment().vars().split_at(given.vars().len());
+    assert_eq!(from_the_config, given.vars());
+    assert_eq!(added.len(), 1, "one variable past the config's: {added:?}");
+}
+
+/// Over HTTP the CLI abandons a tool call after about a minute unless told
+/// otherwise, measured, and a question held for a person takes longer.
+#[test]
+fn the_drone_waits_on_a_permission_answer_longer_than_fleet_holds_one() {
+    let launch = HeadlessAgent::at("/usr/local/bin/agent")
+        .render(&config(Toolbelt::evidence_only()))
+        .expect("a legal configuration renders");
+
+    let wait = launch
+        .environment()
+        .vars()
+        .iter()
+        .find(|(name, _)| name == "MCP_TOOL_TIMEOUT")
+        .map(|(_, value)| value.clone());
+    assert_eq!(
+        wait,
+        Some(adapter_traits::PERMISSION_WAIT.as_millis().to_string())
+    );
+    assert_eq!(wait.as_deref(), Some("1800000"), "thirty minutes");
+}
+
+/// Which of two values wins is a rule nobody would find, so a config that
+/// already names the wait is refused at render rather than overwritten.
+#[test]
+fn a_config_that_already_names_the_wait_is_refused() {
+    let already = Environment::nothing()
+        .and("MCP_TOOL_TIMEOUT", "1")
+        .expect("a legal name");
+    let config = DroneSpawnConfig::spawn_in(
+        &worktree(),
+        Model::named("a-model").expect("a named model"),
+        Prompt::assembled(SECRET_LOOKING_TASK).expect("an assembled prompt"),
+        McpConfig::only_these("/var/armada/01AAA/mcp.json").expect("an absolute path"),
+        Toolbelt::evidence_only(),
+        already,
+    );
+
+    let refused = HeadlessAgent::at("/usr/local/bin/agent").render(&config);
+    assert!(
+        matches!(refused, Err(HarnessRefused::PermissionWaitNotSet(_))),
+        "{refused:?}"
+    );
 }
 
 #[test]
