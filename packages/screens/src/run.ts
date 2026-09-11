@@ -190,7 +190,13 @@ function verdictFact(verdict: { named: string; trigger?: string }): RunTreeFact 
  * gate rows off a running second one.
  */
 function attemptFact(step: StepDetail, attempt: StepAttempt): RunTreeFact {
-  const outcome = STEP_STATE[attempt.outcome]?.verb ?? attempt.outcome;
+  // **An attempt that was retried is over, so it does not say `retrying`.**
+  // That is the step's word while the next attempt runs; on the attempt it
+  // read as a Drone still working on a run the step had already moved past.
+  const outcome =
+    attempt.outcome === "retrying"
+      ? HANDED_BACK
+      : (STEP_STATE[attempt.outcome]?.verb ?? attempt.outcome);
   const advanced = attempt.outcome === "advanced";
   const children: RunTreeFact[] = [];
 
@@ -216,6 +222,9 @@ function attemptFact(step: StepDetail, attempt: StepAttempt): RunTreeFact {
     children: children.length === 0 ? undefined : children,
   };
 }
+
+/** What an attempt the gate returned to its Drone came to. The strip's word for the same loop. */
+const HANDED_BACK = "handed back";
 
 /**
  * What this step wrote, as a count. The files themselves are the Produced
