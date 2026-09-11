@@ -212,6 +212,42 @@ async fn ask_me_holds_the_call_until_a_person_allows_it() {
     );
 }
 
+/// **Allow all asks nobody.** A command and a tool outside the toolbelt are
+/// both allowed at once, nothing is written down as allowed, and no refusal
+/// reaches the fold.
+#[tokio::test]
+async fn allow_all_allows_the_call_and_asks_nobody() {
+    let home = TempDir::new();
+    let fleet = a_fleet_with(&home, a_drone_that_reached_for("c1"));
+    let job = started(&fleet, &home).await;
+    fleet
+        .set_when_blocked(&job, WhenBlocked::AllowAll)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        fleet
+            .permission(&job, &asked("Bash", "npm publish", "c1"))
+            .await,
+        PermissionAnswer::Allow
+    );
+    assert_eq!(
+        fleet
+            .permission(&job, &asked("WebFetch", "https://example.com", "c2"))
+            .await,
+        PermissionAnswer::Allow
+    );
+    assert!(fleet.command_awaited(&job).await.is_none(), "nobody asked");
+    assert!(!refused(&heard(&fleet).await, "c1"));
+    assert!(fleet
+        .store()
+        .lock()
+        .await
+        .allowed_commands(&job)
+        .unwrap()
+        .is_empty());
+}
+
 /// A person saying no is the call's answer, and it is a refusal the fold sees.
 #[tokio::test]
 async fn a_rejected_command_is_refused_and_the_fold_sees_it() {

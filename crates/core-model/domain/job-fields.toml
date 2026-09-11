@@ -438,7 +438,7 @@ notes = "Not a scale: retry limits, escalation thresholds and heartbeat interval
 why = "A scale invites triage theatre, since every Job arrives feeling urgent; gating approval on it would mean the weakest supervision path gets taken exactly when judgement is worst."
 
 [fields.when_blocked]
-type = "enum{refuse_and_hold, ask_me}"
+type = "enum{refuse_and_hold, ask_me, allow_all}"
 table = "jobs"
 storage = "Column"
 nullable = "No"
