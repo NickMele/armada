@@ -8,7 +8,7 @@
 use core_model::{JobStatus, StepState, Timestamp};
 use testkit::{Delivered, FakeVcs, FakeWorkProduct};
 
-use api::Journal;
+use api::{Journal, Queries};
 use ipc::NoteLevel;
 
 use crate::gate::Ruling;
@@ -383,5 +383,73 @@ async fn a_job_whose_last_step_is_a_gate_cannot_end_until_a_person_answers() {
     assert_eq!(
         done.step(&last).map(|step| step.state()),
         Some(StepState::Advanced)
+    );
+}
+
+/// **The defect, stated as a test.** A workflow's delivering step commits,
+/// pushes and opens the pull request when the step is *entered*, and then
+/// holds for a person — this file's own module doc, `#520`. `get_job` used to
+/// serve `delivery` only for a terminal Job, so a person sitting at exactly
+/// that gate, with the pull request already open, read `delivery: null` and
+/// concluded they were asked to review before one existed.
+///
+/// The Job here never reaches a terminal status at all: `AwaitingReview` is
+/// where it holds.
+#[tokio::test]
+async fn a_job_held_at_its_handoff_gate_serves_its_delivery() {
+    let home = TempDir::new();
+    let fleet = a_fleet_gated_on_a_person(
+        &home,
+        FakeWorkProduct::changed(&["src/log.rs"]),
+        "summarise",
+        FakeVcs::new(),
+    );
+    let job = fleet
+        .propose(a_proposal("fix the off-by-one in the log reader"))
+        .await
+        .expect("a Job at the approval gate");
+    let job_id = job.id().clone();
+    worktree_directory(&home, &job);
+    dispatched(&fleet, &job_id).await.expect("it dispatches");
+
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
+    fleet.turn().await.expect("the first gate runs");
+    submitted_by_the_one(&fleet, note_evidence()).await.unwrap();
+    let turned = fleet.turn().await.expect("the last gate runs");
+    assert!(
+        matches!(turned.ruled(), Some(Ruling::HeldForReview { .. })),
+        "the last step is a person's: {:?}",
+        turned.ruled()
+    );
+
+    let held = fleet.load(&job_id).await.expect("the Job is there");
+    assert_eq!(
+        held.status(),
+        JobStatus::AwaitingReview,
+        "holding for a person, not finished"
+    );
+    assert!(
+        !held.status().is_terminal(),
+        "the property under test: this Job has not finished, and delivery must \
+         still be served"
+    );
+
+    let detail = fleet
+        .get_job(ipc::JobId::from(&job_id))
+        .await
+        .expect("the Job is served");
+    let delivery = detail.delivery.expect(
+        "the branch is already pushed and the pull request already open — \
+         the person at the gate is reading exactly this",
+    );
+    assert_eq!(
+        delivery.pushed.as_deref(),
+        Some("origin/armada/a-job"),
+        "where the branch went"
+    );
+    assert_eq!(
+        delivery.pull_request.as_deref(),
+        Some("https://forge.invalid/armada/pull/1"),
+        "the pull request a person is meant to review"
     );
 }
