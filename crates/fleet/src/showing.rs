@@ -18,11 +18,10 @@
 //! exactly like one of the right state, and what makes a frame checkable is the
 //! spec — code, in the diff. It names one, Fleet runs it, Fleet owns the frames.
 //!
-//! **Two runs, and the spec never moves.** `#209` asks for the base as well as
-//! the branch, so [`show`] takes an [`Aimed`]: the base checkout serves and the
-//! branch's own spec shoots, because that spec is code in the patch and does
-//! not exist at base. `crate::basing` holds where the base checkout comes from
-//! and how the two sets read as pairs.
+//! **One run, in the Job's own worktree, and no base checkout.** `#209` shipped
+//! a base run too, served from a checkout of the old code — `#602` switches it
+//! off, because nothing tells a spec which tree it is aimed at. `before_this_job`
+//! below says why it stays rather than being deleted.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -573,12 +572,11 @@ where
     /// is one drop-oldest channel carrying every Job — the split
     /// `get_check_output` was made on, and `ipc::showing` holds the argument.
     ///
-    /// **Two runs, base first**, and the order is not arbitrary: both write
-    /// into the one directory `evidence.frames` names, so the earlier run has
-    /// to be kept and reaped before the later one is listed. The base run is
-    /// skipped and never faked — each way it can be missing is said in the
-    /// Job's log by `WhyNoPair::said`, and a pair with an invented half would
-    /// be worse than no pair.
+    /// **One run, branch only.** `#602` retired the base run this once made
+    /// first into the same `evidence.frames` directory — see the module doc.
+    /// `job` is still taken and not read: every other caller of a Fleet method
+    /// on a settling Job passes it, and `before_this_job` below is the reader
+    /// that will want it back.
     pub(crate) async fn showed(
         &self,
         job_id: &JobId,
@@ -587,7 +585,7 @@ where
         declared: &ResolvedStep,
         attempt: Attempt,
         submission: &Submission,
-        job: &Job,
+        _job: &Job,
         worktree: &Path,
     ) -> Result<Option<NotShown>, Adrift> {
         if declared.evidence_type() != Some(EvidenceType::Visual) {
@@ -617,9 +615,6 @@ where
         // worktree, and both of these are that. `ComingUp` stays a type of its
         // own so a dial has somewhere to land without moving a call site.
         let budget = self.budget().duration();
-        let before = self
-            .before_this_job(job, harness, spec, worktree, attempt, step, handle, budget)
-            .await;
         let shown = show(
             harness,
             spec,
@@ -629,12 +624,7 @@ where
             budget,
         )
         .await;
-        let (after, refused) = match shown {
-            // **The branch run's refusal is what is returned, and the base
-            // run's frames are still written.** A base set with no after is a
-            // legible thing — every frame in it is `Pairing::Removed` — and
-            // throwing it away because the second run failed would spend the
-            // minutes and keep nothing.
+        let (frames, refused) = match shown {
             Shown::NotShown(why) => (Vec::new(), Some(why)),
             Shown::Nothing => (Vec::new(), None),
             Shown::Frames(frames) => (
@@ -651,22 +641,17 @@ where
                 None,
             ),
         };
-        // **One write for both sides**, because `record_step_frames` replaces
-        // the whole run: two calls would have the second clear the first, and
-        // the ordinals are a single sequence over the pair.
-        let both: Vec<StepFrame> = before.frames.into_iter().chain(after).collect();
         self.store()
             .lock()
             .await
-            .record_step_frames(job_id, step, &both, &self.now())
+            .record_step_frames(job_id, step, &frames, &self.now())
             .map_err(Adrift::Writing)?;
-        self.noted_paired(
-            job_id,
-            step,
-            &both,
-            before.instead.as_ref(),
-            refused.is_none(),
-        );
+        // **No `instead` to report.** `#602` switched off the run that would
+        // have produced one — see the module doc — so there is never a pair to
+        // read and never a `WhyNoPair` to log. What `paired` counts on a
+        // branch-only set is honest besides: every frame reads as `Added`,
+        // which is the true state of a set with no before.
+        self.noted_paired(job_id, step, &frames, None, refused.is_none());
         Ok(refused)
     }
 
@@ -676,7 +661,12 @@ where
     /// design: the spec is code in the patch and does not exist at base, so the
     /// only way to run it against the old code is to serve the old code and
     /// shoot from the new checkout.
-    #[allow(clippy::too_many_arguments)]
+    ///
+    /// **Unreachable, on purpose.** `#602` stopped `showed` calling this — see
+    /// the module doc for why. Kept rather than deleted: it is the hardest part
+    /// of `#209` to get right, and it comes back once something can tell a spec
+    /// which tree it is aimed at.
+    #[allow(dead_code, clippy::too_many_arguments)]
     async fn before_this_job(
         &self,
         job: &Job,
