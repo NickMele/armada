@@ -304,6 +304,7 @@ where
             self.resumption(&job),
             &step_facts(
                 self.aloft(),
+                self.underway(),
                 &self.host().repo_root,
                 &job,
                 ran_every_attempt,

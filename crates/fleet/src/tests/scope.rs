@@ -104,6 +104,7 @@ pub(super) async fn ruled_by(
         judging,
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await
 }
@@ -658,6 +659,7 @@ async fn a_step_with_no_scope_is_asked_nothing_it_did_not_declare() {
         &judging(),
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await;
 
@@ -700,6 +702,7 @@ async fn an_ungated_step_with_no_scope_advances_on_evidence_alone() {
         &judging(),
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await;
     assert!(ruling.advanced(), "{ruling:?}");

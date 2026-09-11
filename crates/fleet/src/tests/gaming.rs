@@ -119,6 +119,7 @@ async fn ruled(patch: &str, flag_if: &[&str], recorded: &[(StepId, StepEvidence)
         &judging(),
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await
 }
@@ -226,6 +227,7 @@ async fn a_step_that_asks_nothing_about_gaming_is_never_looked_at() {
         &judging(),
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await;
     assert!(ruling.advanced(), "{ruling:?}");
@@ -303,6 +305,7 @@ async fn a_flagged_step_keeps_what_the_judge_said_about_its_criteria() {
         &judging,
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await;
 
@@ -438,6 +441,7 @@ async fn a_judged_flag_carries_the_question_it_answered_and_the_call_it_came_fro
         },
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await;
 

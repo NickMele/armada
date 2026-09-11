@@ -249,11 +249,38 @@ pub fn kept_for_a_commit(
         .collect()
 }
 
+/// Where one Check writes its log while the gate runs it, as the absolute file
+/// and the repository-relative path a surface is handed.
+///
+/// **A third name beside the recorded one and the dry run's**, for `kept_dry`'s
+/// reason: the recorded file is written from the ruling and its row points at
+/// it, and a live log written under that name would be overwritten by it — or,
+/// on a gate that never ruled, left where a row would take it for the record.
+/// The attempt and the ordinal are in it for the reason they are in both of
+/// the others, so a re-gate of one attempt writes over its own live logs and
+/// never over another run's.
+///
+/// `None` where the step id is not one path component or the directory will
+/// not open, which is `keeping`'s answer to both.
+pub(crate) fn live_file(
+    repo_root: &str,
+    handle: &str,
+    step: &StepId,
+    attempt: Attempt,
+    ordinal: usize,
+) -> Option<(PathBuf, String)> {
+    let dir = writable(repo_root, handle)?;
+    let name = file_name(step, attempt, ordinal, LIVE)?;
+    Some((dir.join(&name), format!(".armada/checks/{handle}/{name}")))
+}
+
 /// What a gate run's file name carries between the step and the ordinal:
 /// nothing.
 const RECORDED: &str = "";
 /// What a dry run's carries.
 const DRY: &str = "dry.";
+/// What a live log's carries.
+const LIVE: &str = "live.";
 
 fn keeping(
     repo_root: &str,

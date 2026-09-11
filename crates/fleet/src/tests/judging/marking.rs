@@ -60,6 +60,7 @@ async fn while_judging(judge: FakeJudge, worktree: &Worktree) -> (Vec<ipc::JobJu
         &judging,
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await;
     drop(judging);

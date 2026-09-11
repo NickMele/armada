@@ -72,6 +72,7 @@ pub async fn gate_against(
         // a deliverable.
         &Keeping::of(crate::bench::REPO_ROOT, &run.job.handle()),
         Policies::unstated(),
+        &fleet::Announcing::nowhere(),
     )
     .await;
     let mut held = bench.recorded.borrow_mut();

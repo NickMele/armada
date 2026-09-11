@@ -68,6 +68,7 @@ async fn a_step_that_declares_no_scope_still_cannot_write_a_secret() {
         &judged_by(FakeJudge::that_fails("a Judge no absolute boundary asks")),
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await;
 
@@ -153,6 +154,7 @@ async fn a_step_that_declares_no_scope_gains_a_floor_and_not_a_drift_check() {
         &judged_by(FakeJudge::that_fails("a step with no plan asks no Judge")),
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await;
 
@@ -190,6 +192,7 @@ async fn the_deliverable_a_workflow_asks_for_is_not_a_boundary() {
         &judging(),
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await;
 
@@ -222,6 +225,7 @@ async fn a_step_with_no_scope_whose_worktree_will_not_open_decides_nothing() {
         &judging(),
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await;
 

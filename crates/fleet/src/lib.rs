@@ -152,6 +152,7 @@ mod unattended;
 /// What the forge says about a pull request nobody has merged yet, read on the
 /// sweep `noticing` already runs.
 mod under_review;
+pub mod underway;
 pub mod watch;
 pub mod widening;
 /// The redactions the `Queries` and `Commands` impls call by hand. Split out to
@@ -214,5 +215,6 @@ pub use slots::Concurrency;
 pub use sub_dispatch::NotDispatched;
 pub use transcript::{history, log_of, transcript_of, Live, Recording, Spine, Tap, Taps};
 pub use turning::{keep_turning, Turned, Turning, Worked};
+pub use underway::{Announcing, LiveLog, Underway};
 pub use watch::{Drained, Progress, Watching};
 pub use widening::{NotWidened, Widening};

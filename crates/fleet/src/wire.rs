@@ -23,6 +23,7 @@ use store::{Attempted, LoadJobError, Moved, RecordedEvent, Store};
 use crate::adrift::Adrift;
 use crate::evidence::NotSubmitted;
 use crate::judging::Aloft;
+use crate::underway::Underway;
 
 /// The wire shape of one declared Check.
 ///
@@ -376,10 +377,12 @@ fn narrowed(events: &[RecordedEvent]) -> Vec<StepMove> {
 /// step, which this crate cannot produce — kept because "Fleet cannot say" and
 /// "the step declares nothing" are different sentences on the wire.
 ///
-/// [`Aloft`] rather than the daemon, because the one thing here that is not a
-/// row is the Judge call in flight.
+/// [`Aloft`] and [`Underway`] rather than the daemon, because the two things
+/// here that are not rows are the Judge call in flight and the Checks running.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn step_facts(
     aloft: &Aloft,
+    underway: &Underway,
     repo_root: &str,
     job: &Job,
     ran: Vec<Attempted<Vec<core_model::StepCheck>>>,
@@ -476,7 +479,9 @@ pub(crate) fn step_facts(
                 // The one fact here that is not a row. Read from the live slot
                 // as the answer is assembled, because nothing writes it down.
                 judging: aloft.on(&ipc::JobId::from(job.id()), &StepId::from(step.step_id())),
-                checking: None,
+                // Read from the live slot for `judging`'s reason, and gone the
+                // moment the ruling's rows are written.
+                checking: underway.on(&ipc::JobId::from(job.id()), &StepId::from(step.step_id())),
             }
         })
         .collect()

@@ -60,6 +60,7 @@ async fn ruled<'a>(gates: &'a [Gate<'a>], budget: Duration, touched: &[&str]) ->
         &judging(),
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await
 }
@@ -249,6 +250,7 @@ async fn ruled_on_a_file(target: &str, write: impl FnOnce(&std::path::Path)) -> 
         &judging(),
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await
 }

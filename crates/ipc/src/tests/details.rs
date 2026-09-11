@@ -489,8 +489,7 @@ fn a_gate_running_its_checks_rides_beside_the_state() {
             },
         ],
     };
-    let running =
-        encode(&detail_of(&job, &[facts(Some(underway.clone()))])).expect("plain data");
+    let running = encode(&detail_of(&job, &[facts(Some(underway.clone()))])).expect("plain data");
     assert!(running.contains("\"checking\":{\"attempt\":2"), "{running}");
     assert!(
         running.contains("{\"name\":\"test\"}"),

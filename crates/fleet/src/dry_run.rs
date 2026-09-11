@@ -358,6 +358,9 @@ where
             narrow,
             Path::new(plan.worktree.path()),
             self.budget().duration(),
+            // A Drone asking about its own change is not a gate a person is
+            // watching, and a live log here would sit beside the gate's own.
+            &crate::underway::Announcing::nowhere(),
         )
         .await
         {

@@ -23,6 +23,14 @@
 //!
 //! A failing Check cancels none of the others. Someone reading a failed step
 //! wants every result, and the second failure often explains the first.
+//!
+//! # Each Check is said to start and to finish as it does
+//!
+//! [`Announcing`] is told when the batch begins, when each Check is spawned and
+//! when each is joined — so a person watching sees a Check waiting for a slot,
+//! running since a given instant, and finished with its result, rather than
+//! nothing until the ruling. **It is told and never asked**: nothing here reads
+//! it back, and the vector this returns is built exactly as it was before.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -32,6 +40,8 @@ use core_model::{Prerequisite, ResolvedCheck};
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 use verification::{Artifact, Exit, NeverRan, Observed};
+
+use crate::underway::Announcing;
 
 /// How many of a step's Checks may run at once.
 ///
@@ -58,7 +68,7 @@ use verification::{Artifact, Exit, NeverRan, Observed};
 /// default because what they bound is policy a person owns; this bounds how
 /// many processes one machine should host, which nobody has asked to set. It
 /// becomes a `Fittings` field the first time a machine disagrees with it.
-const AT_ONCE: usize = 4;
+pub(crate) const AT_ONCE: usize = 4;
 
 /// Whether the gate declines to run this Check, and what it writes down when it
 /// does.
@@ -286,6 +296,8 @@ fn looked_for(worktree: &Path, target: &str) -> Artifact {
 /// the work product, which is fallible and belongs where the caller's error
 /// path already is. Reading it before rather than during also means no Check's
 /// output can be part of what the diff sees.
+///
+/// `announcing` is told as each Check starts and finishes; see the module.
 pub(crate) async fn ran(
     checks: &[ResolvedCheck],
     touched: &[String],
@@ -293,6 +305,7 @@ pub(crate) async fn ran(
     narrow: bool,
     worktree: &Path,
     budget: Duration,
+    announcing: &Announcing,
 ) -> Vec<Completed> {
     let mut planned: Vec<Planned> = checks
         .iter()
@@ -309,6 +322,19 @@ pub(crate) async fn ran(
             },
         })
         .collect();
+
+    // **Before the prerequisites**, so a Check waiting behind `migrate` reads
+    // as waiting rather than as nothing. What is already answered is said now;
+    // a Check a prerequisite goes on to block is said below, once it is.
+    let settled: Vec<Option<&Observed>> = planned
+        .iter()
+        .map(|plan| match plan {
+            Planned::Already(observed) => Some(observed),
+            Planned::Blocked { observed, .. } => Some(observed),
+            Planned::Command { .. } => None,
+        })
+        .collect();
+    announcing.began(checks, &settled);
 
     // Every prerequisite of every Check that is actually going to run, in the
     // order the Manifest named them, before anything is spawned. `beforehand`
@@ -336,9 +362,11 @@ pub(crate) async fn ran(
                 .iter()
                 .any(|needed| !met.iter().any(|had| had == needed.name()));
             if let (true, Planned::Command { name, .. }) = (unmet, &*plan) {
+                let observed = failed.blocked();
+                announcing.finished(at, &checks[at], &observed, Duration::ZERO);
                 *plan = Planned::Blocked {
                     name: name.clone(),
-                    observed: failed.blocked(),
+                    observed,
                 };
             }
         }
@@ -368,16 +396,26 @@ pub(crate) async fn ran(
                 break;
             };
             let worktree: PathBuf = worktree.clone();
+            let log = announcing.log_for(at);
+            let writing = log.clone();
             running.spawn(async move {
                 let began = Instant::now();
-                let attempt = checks_runner::run(&run, &worktree, budget).await;
+                let attempt =
+                    checks_runner::run_writing(&run, &worktree, budget, writing.as_deref()).await;
                 (at, attempt, began.elapsed())
             });
+            announcing.started(at, log.as_deref());
         }
         let Some(joined) = running.join_next().await else {
             break;
         };
         if let Ok((at, attempt, took)) = joined {
+            announcing.finished(
+                at,
+                &checks[at],
+                &Observed::Command(attempt.exit.clone()),
+                took,
+            );
             done[at] = Some((attempt, took));
         }
     }
@@ -420,15 +458,21 @@ pub(crate) async fn ran(
                 // because dropping it is the short list `Ran::of` refuses, and
                 // a Check nobody can account for must not read as one that
                 // passed.
-                None => Completed {
-                    observed: Observed::Command(Exit::NeverRan(NeverRan::NotSpawned {
+                None => {
+                    let observed = Observed::Command(Exit::NeverRan(NeverRan::NotSpawned {
                         program: run,
                         kind: std::io::ErrorKind::Interrupted,
-                    })),
-                    narrowed_to,
-                    printed: Some((name, Output::default())),
-                    took: Duration::ZERO,
-                },
+                    }));
+                    // Said as finished too, or a Check nobody can account for
+                    // would read as running until the ruling came down.
+                    announcing.finished(at, &checks[at], &observed, Duration::ZERO);
+                    Completed {
+                        observed,
+                        narrowed_to,
+                        printed: Some((name, Output::default())),
+                        took: Duration::ZERO,
+                    }
+                }
             },
         });
     }
