@@ -93,6 +93,13 @@ export type ManifestSummary = {
    */
   repository: string;
   path: string;
+  /**
+   * Where this repository's Job records live: a Judge's brief, a Drone's
+   * transcript, a Job's log, a Check's output, a kept deliverable. **Never
+   * under `path`'s directory** — join a `Kept` path or a Job's log against
+   * this, never against `path`'s parent.
+   */
+  records_root: string;
   version: number;
   checks: string[];
 };

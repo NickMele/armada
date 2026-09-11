@@ -215,8 +215,9 @@ usually an argv the allowlist declined, so this is the first section to read.
 
 **It reads two sources and says which answered each section.** Fleet holds the
 Job record — the steps, the verdicts, the Judge's findings, the spend — and is
-asked for it over HTTP on the loopback port in the runtime file. `.armada/`
-holds the Drone transcripts and the Job's log, which no route serves.
+asked for it over HTTP on the loopback port in the runtime file. The
+repository's own share of Fleet's data directory holds the Drone transcripts
+and the Job's log, which no route serves.
 
 | Fleet | What you still get |
 |---|---|
@@ -224,9 +225,13 @@ holds the Drone transcripts and the Job's log, which no route serves.
 | Running, and does not hold it — `armada clean` took it, or it was forgotten | The transitions from the Job's log, the refusals, what the run cost. It says which of these two happened |
 | Not running | The same, and the header says Fleet could not be reached |
 
-**With Fleet down, all three forms still resolve**, off `.armada/logs/` — which
-is named by the handle, like every other directory under `.armada/`. A number
-matching more than one is refused there too.
+**With Fleet down, all three forms still resolve**, off `.armada/logs/` under
+the repository's records — named by the handle, like every other directory
+there. `records_root` in `scripts/job` computes the same directory
+`fleet::records::root` does, from the same repository root and the same
+digest, so a post-mortem with the daemon down still finds what a running Fleet
+would have answered from its store. A number matching more than one is refused
+there too.
 
 So a post-mortem works with Fleet down, which is usually when one is done.
 
@@ -241,8 +246,13 @@ So a post-mortem works with Fleet down, which is usually when one is done.
 `.armada/` of its own holding only the tracked workflows, so the default is the
 main checkout rather than the directory you are in.
 
-**`armada clean` deletes what this reads.** The transcripts and the log go with
-the Job, so a Job worth understanding is one to read before clearing up.
+**`armada clean` does not touch what this reads.** A Job's log, its Drones'
+transcripts, its Checks' output and its kept deliverables outlive the worktree
+`armada clean` reclaims — `crates/armada/src/clean.rs` is where that is
+argued — so nothing here needs reading before clearing up. `--all` removes the
+machine's store as well, which forgets the row that named these files; the
+files themselves are still on disk, still readable by `scripts/job`, and
+findable by nothing that asks Fleet.
 
 **It is not a Rust verb, and that was decided rather than deferred.**
 `crates/armada` may not call `serde_json::from_*` — `xtask` rule five and the

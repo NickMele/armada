@@ -112,6 +112,9 @@ pub mod readopting;
 mod reclaiming;
 /// What the boot read found and what the reconciliation did about it.
 mod reconciled;
+/// Where one repository's records live, off the checkout — the per-repository
+/// key and the one-time move of what an older Fleet wrote under it.
+pub mod records;
 pub mod redaction;
 pub mod redispatch;
 mod refusing;

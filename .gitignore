@@ -95,3 +95,7 @@ __screenshots__/
 # ignored, so no commit does either. `fleet::keeping` holds the reasoning.
 .armada/*
 !.armada/workflows/
+
+# Python bytecode cache, produced by `python3 -m py_compile` or an import
+# while testing `scripts/job` by hand.
+__pycache__/

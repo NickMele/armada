@@ -43,24 +43,24 @@ pub const NOTES: usize = 512;
 
 /// The Job logs, read where Fleet keeps them.
 ///
-/// Holds the repository root and nothing else. It is handed to the listener at
-/// startup and is the only thing on that side that knows `.armada/logs/`
-/// exists.
+/// Holds this repository's records root and nothing else. It is handed to
+/// the listener at startup and is the only thing on that side that knows
+/// `.armada/logs/` exists.
 pub struct JobLogs {
-    repo_root: String,
+    records_root: String,
 }
 
 impl JobLogs {
-    pub fn under(repo_root: impl Into<String>) -> JobLogs {
+    pub fn under(records_root: impl Into<String>) -> JobLogs {
         JobLogs {
-            repo_root: repo_root.into(),
+            records_root: records_root.into(),
         }
     }
 }
 
 impl Journal for JobLogs {
     fn read(&self, handle: &str, from: u64) -> Reading {
-        read_from(&self.repo_root, handle, from)
+        read_from(&self.records_root, handle, from)
     }
 }
 
@@ -69,8 +69,8 @@ impl Journal for JobLogs {
 /// **A log that is not there is nothing at `from`**, not a fault. A Job at the
 /// approval gate has written no line, and neither has one proposed before any
 /// of this existed.
-fn read_from(repo_root: &str, handle: &str, from: u64) -> Reading {
-    let at = log_of(repo_root, handle);
+fn read_from(records_root: &str, handle: &str, from: u64) -> Reading {
+    let at = log_of(records_root, handle);
     let Ok(mut file) = File::open(&at) else {
         return nothing(from);
     };
@@ -264,6 +264,6 @@ where
     /// crate learns that `.armada/logs/` is where they are — which is the same
     /// line [`crate::serving`] holds for every other answer Fleet gives.
     pub fn job_logs(&self) -> JobLogs {
-        JobLogs::under(&self.host().repo_root)
+        JobLogs::under(&self.host().records_root)
     }
 }

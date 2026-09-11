@@ -291,7 +291,7 @@ where
         step: &StepId,
     ) -> Result<Taps, std::io::Error> {
         Taps::opening(
-            &self.host().repo_root,
+            &self.host().records_root,
             Spine {
                 job: job.id().clone(),
                 handle: job.handle(),

@@ -27,6 +27,10 @@ import type { JobSummary, StepDetail } from "@armada/protocol";
 const JOB_ID = "01M22TYSAE0023MADDP5ZQEYGW";
 const MANIFEST = "01M1CNPKTV0018H2M1CXDNBK06";
 const BRIEF = ".armada/briefs/12-the-job/regression_verify.1.gaming.assertion_weakened.txt";
+// Deliberately not under the repository: proving a kept record resolves
+// against `records_root` and not against `repo` is the whole subject of the
+// two cases below, and the two would agree by coincidence if these matched.
+const RECORDS_ROOT = "/Users/user/Library/Application Support/Armada/repos/a-repo-key";
 
 function summary(): JobSummary {
   return {
@@ -80,6 +84,7 @@ function holding(): BridgeState {
           id: MANIFEST,
           repository: "armada",
           path: "/Users/user/code/armada/armada.yml",
+          records_root: RECORDS_ROOT,
           version: 1,
           checks: [],
         },
@@ -107,7 +112,7 @@ describe("the records a stopped Job names", () => {
     // this the press answers "not on the reading of this job Bridge is
     // holding" — a dead control on the one surface that explains the stop.
     await expect(openArtifact(holding(), JOB_ID, { kept: BRIEF, what: "brief" })).resolves.toEqual(
-      { ok: false, why: "not_there", path: `/Users/user/code/armada/${BRIEF}` },
+      { ok: false, why: "not_there", path: `${RECORDS_ROOT}/${BRIEF}` },
     );
     expect(openPath).not.toHaveBeenCalled();
   });
@@ -119,7 +124,7 @@ describe("the records a stopped Job names", () => {
     ).resolves.toEqual({
       ok: false,
       why: "not_named",
-      path: `/Users/user/code/armada/${other}`,
+      path: `${RECORDS_ROOT}/${other}`,
     });
     expect(openPath).not.toHaveBeenCalled();
   });

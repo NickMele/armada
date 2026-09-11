@@ -1,17 +1,19 @@
 //! What the Judge was asked, written down beside what it answered.
 //!
-//! # A file under the repository, with the path on the row
+//! # A file off the checkout, with the path on the row
 //!
 //! `crate::check_output`'s shape and its reason: a brief carries the request,
 //! the criteria, the references, the deliverable and the whole branch diff, so
 //! it is a large artifact with its own retention profile. A column holding the
 //! bytes would put the diff on every row of every panel.
 //!
-//! `<repo_root>/.armada/briefs/`, beside `transcript::transcript_of` and
-//! `check_output::checks_dir`. `armada clean` removes `.armada/worktrees/` and
-//! forgets the Job's rows and does not touch the repository root, so the brief
-//! outlives the record pointing at it — which is the right way round, because a
-//! verdict argued about weeks later is argued about after somebody cleaned.
+//! `<records_root>/briefs/`, beside `transcript::transcript_of` and
+//! `check_output::checks_dir` — `crate::records::root` is what resolves
+//! `records_root`, and it is never the repository. `armada clean` removes
+//! `.armada/worktrees/` and forgets the Job's rows and does not touch either
+//! the repository root or the data directory, so the brief outlives the record
+//! pointing at it — which is the right way round, because a verdict argued
+//! about weeks later is argued about after somebody cleaned.
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -19,18 +21,18 @@ use core_model::{Attempt, CriterionId, GamingPattern, StepId};
 
 use crate::check_output::one_component;
 
-/// Where one Job's briefs live, under the repository the Job is being worked
-/// in.
+/// Where one Job's briefs live, under this repository's own share of Fleet's
+/// data directory.
 ///
 /// # What expires, and where that will be enforced
 ///
 /// **Nothing expires yet, and nothing here prunes.** `#69` owns retention for
-/// every artifact under `.armada/` — transcripts, logs, Check output and now
-/// briefs — and one sweep that knows all four is the only kind that can be
-/// reasoned about. A rule invented here would be a fifth answer nobody could
-/// find. What this owes `#69` is the bound: one file per criterion **and one
-/// per judged gaming pattern** per attempt per step, a panel sharing one, each
-/// roughly the branch diff plus the deliverable
+/// every artifact under [`crate::records::root`] — transcripts, logs, Check
+/// output and now briefs — and one sweep that knows all four is the only kind
+/// that can be reasoned about. A rule invented here would be a fifth answer
+/// nobody could find. What this owes `#69` is the bound: one file per
+/// criterion **and one per judged gaming pattern** per attempt per step, a
+/// panel sharing one, each roughly the branch diff plus the deliverable
 /// (`verification::A_DELIVERABLE`, 16 KiB) plus the Check tails. So a Job's
 /// briefs grow with its criteria and its declared patterns times its re-runs,
 /// with the diff in every one.
@@ -41,8 +43,8 @@ use crate::check_output::one_component;
 ///
 /// Until `#69` lands, `armada clean --all` and deleting this directory by hand
 /// are the only prunes, and both are a person's act.
-pub fn briefs_dir(repo_root: &str, handle: &str) -> PathBuf {
-    Path::new(repo_root)
+pub fn briefs_dir(records_root: &str, handle: &str) -> PathBuf {
+    Path::new(records_root)
         .join(".armada")
         .join("briefs")
         .join(handle)
@@ -66,16 +68,19 @@ pub struct Asked(Option<Under>);
 
 #[derive(Clone)]
 struct Under {
-    repo_root: String,
+    records_root: String,
     /// **The handle, not the id.** A brief sits beside the worktree and the
     /// deliverables, and all three are named by what a person calls the Job.
     handle: String,
 }
 
 impl Asked {
-    /// Keep this Job's briefs under this repository.
-    pub fn under(repo_root: String, handle: String) -> Asked {
-        Asked(Some(Under { repo_root, handle }))
+    /// Keep this Job's briefs under this repository's records.
+    pub fn under(records_root: String, handle: String) -> Asked {
+        Asked(Some(Under {
+            records_root,
+            handle,
+        }))
     }
 
     /// Keep nothing. See the type's own note.
@@ -133,7 +138,7 @@ impl Asked {
 
     fn written(&self, name: String, question: &str) -> Option<String> {
         let under = self.0.as_ref()?;
-        let dir = briefs_dir(&under.repo_root, &under.handle);
+        let dir = briefs_dir(&under.records_root, &under.handle);
         std::fs::create_dir_all(&dir).ok()?;
         let mut file = std::fs::File::create(dir.join(&name)).ok()?;
         file.write_all(question.as_bytes()).ok()?;

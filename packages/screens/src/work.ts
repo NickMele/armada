@@ -38,7 +38,7 @@ import { File, Folder, GitBranch } from "lucide-react";
 import type { JobBriefProps, JobLogReferenceRow, NotOpened } from "@armada/components";
 
 import type { Watched } from "@armada/protocol";
-import { artifactPath, repoOf } from "@armada/protocol";
+import { artifactPath, recordsOf, repoOf } from "@armada/protocol";
 import type { Artifact } from "@armada/protocol";
 import { openArtifact, type OpenArtifact } from "./opening";
 import type { JobDetail as JobWhole, JobSummary } from "@armada/protocol";
@@ -106,11 +106,15 @@ export function workOf(
 ): JobLogReferenceRow[] | undefined {
   if (whole === null) return undefined;
   const repo = repoOf(manifest);
+  // Only `worktree` is drawn on this screen, which never reads `records` —
+  // see `artifactPath`'s own doc for which word reads which. Resolved anyway
+  // so a row added here later does not have to learn where it comes from.
+  const records = recordsOf(manifest) ?? "";
   const dispatched = whole.branch !== undefined;
   const rows: JobLogReferenceRow[] = [];
 
   if (repo !== null) {
-    const where = artifactPath("worktree", repo, job.id, job.assigned_drone);
+    const where = artifactPath("worktree", repo, records, job.id, job.assigned_drone);
     rows.push({
       // `folder` means "workspace" in the registry and this is not one; there
       // is no row for it. Reported, and no glyph is invented.

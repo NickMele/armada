@@ -271,7 +271,7 @@ where
         let (frames, nothing): (Vec<StepFrame>, Option<String>) = match shown {
             Shown::Frames(frames) => {
                 let copied = kept(
-                    &self.host().repo_root,
+                    &self.host().records_root,
                     &job.handle(),
                     &again(&named.step, press),
                     named.attempt,

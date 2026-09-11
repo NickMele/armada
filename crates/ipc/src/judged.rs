@@ -9,7 +9,9 @@
 //! separate a bad Judge from a bad brief**, which is why all three cross rather
 //! than only the ones that already did.
 //!
-//! Every one of them is a **path relative to the repository root, never bytes**.
+//! Every one of them is a **path relative to `ManifestSummary::records_root`,
+//! never bytes** — never to the repository, which none of the three sits
+//! under any more.
 //! A brief carries the request, the deliverable and the whole branch diff, and
 //! `get_job` is read on every event naming the open Job.
 //!
@@ -230,7 +232,8 @@ impl From<&core_model::Given> for Given {
 pub struct KeptDeliverable {
     /// Which run of the step wrote it, counted from one.
     pub attempt: u32,
-    /// Where the copy is, relative to the repository root.
+    /// Where the copy is, relative to `ManifestSummary::records_root` — never
+    /// to the repository.
     ///
     /// **Fleet checked it was there when the answer was built**, which is the
     /// one thing no client can check for itself: nothing on the far side of

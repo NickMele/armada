@@ -78,7 +78,7 @@ where
             return Ok(Recovered::Interrupted);
         };
         let last_heard = crate::transcript::last_heard(
-            &self.host().repo_root,
+            &self.host().records_root,
             &job.handle(),
             &recorded.drone_id,
         )

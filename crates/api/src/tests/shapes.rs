@@ -526,6 +526,7 @@ pub fn manifests() -> Vec<ManifestSummary> {
         id: ManifestId::carried("01MF"),
         repository: "a-repository".to_string(),
         path: "/a-repository/armada.yml".to_string(),
+        records_root: "/records/a-repository-key".to_string(),
         version: 1,
         checks: vec!["build".to_string()],
     }]

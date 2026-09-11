@@ -130,28 +130,30 @@ impl StepLabel {
 /// Where one Job's transcripts live: a directory per Job, a file per Drone.
 ///
 /// **Named by the handle, like the four beside it** — `asked::briefs_dir`,
-/// `check_output::checks_dir`, `keeping::deliverables_dir` and the worktree. A
-/// Job has more than one Drone over its life, so the Drone stays the file name
-/// and the Job becomes the directory; keyed by the Drone's own minted id alone,
-/// nothing here could be reached from the one id a person can read.
-pub fn transcripts_dir(repo_root: &str, handle: &str) -> PathBuf {
-    Path::new(repo_root)
+/// `check_output::checks_dir`, `keeping::deliverables_dir` and the worktree
+/// (the worktree alone stays under the repository; the other four, and this,
+/// are under `crate::records::root`). A Job has more than one Drone over its
+/// life, so the Drone stays the file name and the Job becomes the directory;
+/// keyed by the Drone's own minted id alone, nothing here could be reached
+/// from the one id a person can read.
+pub fn transcripts_dir(records_root: &str, handle: &str) -> PathBuf {
+    Path::new(records_root)
         .join(".armada")
         .join("transcripts")
         .join(handle)
 }
 
 /// Where a Drone's rows land, under the Job it is working.
-pub fn transcript_of(repo_root: &str, handle: &str, drone: &DroneId) -> PathBuf {
-    transcripts_dir(repo_root, handle).join(format!("{}.jsonl", drone.as_str()))
+pub fn transcript_of(records_root: &str, handle: &str, drone: &DroneId) -> PathBuf {
+    transcripts_dir(records_root, handle).join(format!("{}.jsonl", drone.as_str()))
 }
 
 /// Where a Job's log lines land. The path `docs/concepts/log-envelope.md`
 /// names, and until now nothing wrote it.
 ///
 /// **The handle, not the id**, for [`transcripts_dir`]'s reason.
-pub fn log_of(repo_root: &str, handle: &str) -> PathBuf {
-    Path::new(repo_root)
+pub fn log_of(records_root: &str, handle: &str) -> PathBuf {
+    Path::new(records_root)
         .join(".armada")
         .join("logs")
         .join(format!("{handle}.jsonl"))
@@ -179,13 +181,13 @@ impl Recording {
     /// which will not hold the record fails at dispatch — where the Job can
     /// still be escalated for a person — rather than in a task nobody awaits.
     pub fn of(
-        repo_root: &str,
+        records_root: &str,
         spine: Spine,
         clock: Arc<dyn Clock>,
     ) -> Result<Recording, io::Error> {
-        let at = transcript_of(repo_root, &spine.handle, &spine.drone);
+        let at = transcript_of(records_root, &spine.handle, &spine.drone);
         let transcript = appending(&at)?;
-        let mut log = appending(&log_of(repo_root, &spine.handle))?;
+        let mut log = appending(&log_of(records_root, &spine.handle))?;
         // Written before any row, and the only thing that makes a file named
         // by a minted id findable from the Job it belongs to.
         write_line(&mut log, &opened(&spine, clock.now(), &at))?;
@@ -281,12 +283,12 @@ impl Taps {
     /// The view cannot fail: a channel nobody is watching is a channel that
     /// drops.
     pub fn opening(
-        repo_root: &str,
+        records_root: &str,
         spine: Spine,
         clock: Arc<dyn Clock>,
         feed: api::Feed,
     ) -> Result<Taps, io::Error> {
-        let recording = Recording::of(repo_root, spine, Arc::clone(&clock))?;
+        let recording = Recording::of(records_root, spine, Arc::clone(&clock))?;
         let step = recording.label();
         Ok(Taps {
             each: vec![Arc::new(recording), Arc::new(Live { feed, clock, step })],
@@ -406,8 +408,8 @@ fn envelope(spine: &Spine, step: &StepId, at: Timestamp, msg: &str) -> Envelope 
 /// The Job log is otherwise written by the transcript's own writer task. This
 /// is the other author: something Fleet observed about a Job that no Drone
 /// event carries — a step editing outside its declared scope is the first.
-pub fn note(repo_root: &str, handle: &str, envelope: &Envelope) -> Result<(), io::Error> {
-    let mut log = appending(&log_of(repo_root, handle))?;
+pub fn note(records_root: &str, handle: &str, envelope: &Envelope) -> Result<(), io::Error> {
+    let mut log = appending(&log_of(records_root, handle))?;
     write_line(&mut log, envelope)
 }
 

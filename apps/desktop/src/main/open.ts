@@ -28,7 +28,7 @@ import { shell } from "electron";
 import { stat } from "node:fs/promises";
 
 import type { BridgeState } from "../shared/bridge";
-import { artifactPath, isKept, repoOf } from "@armada/protocol";
+import { artifactPath, isKept, recordsOf, repoOf } from "@armada/protocol";
 import type { Artifact, Opened } from "@armada/protocol";
 import { chooseEditor, startEditor, whereIs } from "./editor";
 import type { Editor } from "./editor";
@@ -49,7 +49,7 @@ function jobOf(state: BridgeState, jobId: string): JobSummary | undefined {
 }
 
 /**
- * Every repo-relative path this Job's detail names, as one set.
+ * Every `records_root`-relative path this Job's detail names, as one set.
  *
  * **Read off `watched` alone, and that is the whole of the rule.** `jobs` is
  * the Board's summaries and carries no step, so a Job that is not the one open
@@ -60,8 +60,8 @@ function jobOf(state: BridgeState, jobId: string): JobSummary | undefined {
  *
  * **Reachability is therefore keyed on the row, exactly as the row is.** The
  * files outlive the rows — `armada clean` forgets a Job and leaves its briefs
- * and deliverables under the repository root — and nothing here tries to reach
- * one whose row is gone. A cleaned Job has no screen either, so no path is
+ * and deliverables under `records_root` — and nothing here tries to reach one
+ * whose row is gone. A cleaned Job has no screen either, so no path is
  * named-and-unreachable; what a person keeps is a directory they can open by
  * hand. Retention over all four artifact kinds is `#69`.
  */
@@ -130,12 +130,12 @@ export async function openArtifact(
   const job = jobOf(state, jobId);
   if (job === undefined) return { ok: false, why: "unknown_job" };
 
-  const repo = repoOf(
-    state.holds.manifests.find((manifest) => manifest.id === job.owner_manifest_id),
-  );
-  if (repo === null) return { ok: false, why: "no_repository" };
+  const manifest = state.holds.manifests.find((manifest) => manifest.id === job.owner_manifest_id);
+  const repo = repoOf(manifest);
+  const records = recordsOf(manifest);
+  if (repo === null || records === null) return { ok: false, why: "no_repository" };
 
-  const path = artifactPath(what, repo, job.id, job.assigned_drone);
+  const path = artifactPath(what, repo, records, job.id, job.assigned_drone);
   // Membership before the filesystem, and before the path is spoken to anything
   // outside this process. `not_there` would be the wrong answer here: it says
   // Fleet named a file and the file is gone, and this says nothing named it.

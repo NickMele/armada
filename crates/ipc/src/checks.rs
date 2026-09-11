@@ -215,7 +215,8 @@ pub struct CheckOutput {
     pub attempt: u32,
     /// The Check whose output this is, spelled as [`CheckRun::name`] spells it.
     pub name: String,
-    /// Where it was read from, relative to the repository root. **What
+    /// Where it was read from, relative to `ManifestSummary::records_root`,
+    /// never to the repository. **What
     /// [`CheckRun::output_path`] already said**, echoed so a reader drawing the
     /// path beside the reading takes it off the answer rather than composing it
     /// from the row and hoping the two agree.

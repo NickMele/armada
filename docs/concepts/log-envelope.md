@@ -6,7 +6,7 @@
 
 **Kind:** Policy.
 
-Armada emits log lines from three independent emitters into sinks that already exist — per-Job `.armada/logs/<handle>.jsonl`, machine-level `audit.jsonl`, and the WebSocket event stream. Nothing currently guarantees a line from Bridge can be joined to a line from Fleet or a Drone. This document is that guarantee.
+Armada emits log lines from three independent emitters into sinks that already exist — per-Job `.armada/logs/<handle>.jsonl` under this repository's own share of Fleet's data directory, machine-level `audit.jsonl`, and the WebSocket event stream. Nothing currently guarantees a line from Bridge can be joined to a line from Fleet or a Drone. This document is that guarantee.
 
 **This document owns field names, their types, and which emitter is allowed to mint them.** It does not own sink paths, retention or redaction — those live in `../contracts/system-architecture.md` sections 7 and 8.
 
@@ -70,9 +70,9 @@ The envelope is the line shape. The sinks and their retention are already decide
 
 | Sink | Carries the envelope | Owned by |
 | --- | --- | --- |
-| `<repo>/.armada/logs/<handle>.jsonl` | Yes, in full | `../contracts/system-architecture.md` section 7 |
-| `<repo>/.armada/transcripts/<handle>/<drone-id>.jsonl` | No. A separate artifact, joined by `drone_id` | [Observe](observe.md) |
-| `<repo>/.armada/checks/<handle>/<step-id>.<n>.log` | No. What one Check printed, referenced from its `job_step_checks` row | `../contracts/system-architecture.md` section 7 |
+| `<records>/.armada/logs/<handle>.jsonl` | Yes, in full | `../contracts/system-architecture.md` section 7 |
+| `<records>/.armada/transcripts/<handle>/<drone-id>.jsonl` | No. A separate artifact, joined by `drone_id` | [Observe](observe.md) |
+| `<records>/.armada/checks/<handle>/<step-id>.<n>.log` | No. What one Check printed, referenced from its `job_step_checks` row | `../contracts/system-architecture.md` section 7 |
 | `~/Library/Application Support/Armada/audit.jsonl` | Yes, plus `actor` | `../contracts/system-architecture.md` section 7 |
 | WebSocket event stream | The ID fields only. Events are typed, not log lines | `../contracts/system-architecture.md` section 6 |
 | `job_events` in SQLite | The ID fields as columns | `../contracts/system-architecture.md` section 5 |
@@ -81,11 +81,11 @@ The envelope is the line shape. The sinks and their retention are already decide
 
 ## A Drone's transcript is a separate artifact
 
-**A transcript is not wrapped into the envelope line by line.** It is written to `<repo>/.armada/transcripts/<handle>/<drone-id>.jsonl`, one row per line, and the Job log keeps its envelope unchanged.
+**A transcript is not wrapped into the envelope line by line.** It is written to `<records>/.armada/transcripts/<handle>/<drone-id>.jsonl`, one row per line, and the Job log keeps its envelope unchanged.
 
 Why: the transcript is far larger than everything else a Job emits and carries its own retention question, so wrapping it would make the Job log neither readable nor greppable — and a `jq` filter on `job_id` would return mostly turns.
 
-**A retry is a second `drone_id` under one `job_id`, so a retry gets its own file** rather than interleaving with the first. Nothing appends to a transcript whose Drone is gone. Both files under one Job's directory is what makes the whole of `.armada/` reachable from the one id a person can read — the handle — which is `crates/core-model/src/job/handle.rs`'s claim and was false for these two until `#573`.
+**A retry is a second `drone_id` under one `job_id`, so a retry gets its own file** rather than interleaving with the first. Nothing appends to a transcript whose Drone is gone. Both files under one Job's directory is what makes the whole of this repository's records reachable from the one id a person can read — the handle — which is `crates/core-model/src/job/handle.rs`'s claim and was false for these two until `#573`.
 
 **The join is both a column and a line, and they answer different questions.** `assigned_drone` on the step's row names which Drone is on that step — folded from the `drone.spawned` and `drone.exited` rows in `job_events`, each of which carries the step it is about, so it is null again once the Drone is gone. The Job log line names the *file*, which the column does not: it carries `job_id`, `drone_id`, `step_id` and the transcript's path in `fields`, and it is what survives after the column has been cleared.
 

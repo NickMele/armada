@@ -70,7 +70,7 @@ where
             .map(|kept| (kept.check.clone(), kept.output.clone()))
             .collect();
         let checks = kept(
-            &self.host().repo_root,
+            &self.host().records_root,
             handle,
             step,
             attempt,
@@ -159,9 +159,10 @@ where
     }
 }
 
-/// Where one step's Check output lives, under the repository it ran in.
-pub fn checks_dir(repo_root: &str, handle: &str) -> PathBuf {
-    Path::new(repo_root)
+/// Where one step's Check output lives, under this repository's own share
+/// of Fleet's data directory.
+pub fn checks_dir(records_root: &str, handle: &str) -> PathBuf {
+    Path::new(records_root)
         .join(".armada")
         .join("checks")
         .join(handle)
@@ -178,14 +179,22 @@ pub fn checks_dir(repo_root: &str, handle: &str) -> PathBuf {
 /// ruling. The output is what a person reads afterwards; refusing to record a
 /// verdict because a log file would not open would lose the verdict as well.
 pub fn kept(
-    repo_root: &str,
+    records_root: &str,
     handle: &str,
     step: &StepId,
     attempt: Attempt,
     checks: &[StepCheck],
     output: &[(String, Output)],
 ) -> Vec<StepCheck> {
-    keeping(repo_root, handle, step, attempt, checks, output, RECORDED)
+    keeping(
+        records_root,
+        handle,
+        step,
+        attempt,
+        checks,
+        output,
+        RECORDED,
+    )
 }
 
 /// The same, for a run the Drone asked for rather than one the gate made.
@@ -201,14 +210,14 @@ pub fn kept(
 /// every ask — and what keeps a reattempt's dry runs apart from the ones
 /// before it, the same reason the gate's own path carries the attempt.
 pub fn kept_dry(
-    repo_root: &str,
+    records_root: &str,
     handle: &str,
     step: &StepId,
     attempt: Attempt,
     checks: &[StepCheck],
     output: &[(String, Output)],
 ) -> Vec<StepCheck> {
-    keeping(repo_root, handle, step, attempt, checks, output, DRY)
+    keeping(records_root, handle, step, attempt, checks, output, DRY)
 }
 
 /// Write each Check's output for a run against a commit, and put its path on
@@ -224,13 +233,13 @@ pub fn kept_dry(
 /// the ordinal and nothing else: there is no step here, and no attempt — a
 /// commit is proved once.
 pub fn kept_for_a_commit(
-    repo_root: &str,
+    records_root: &str,
     at_commit: &str,
     checks: &[StepCheck],
     output: &[(String, Output)],
 ) -> Vec<StepCheck> {
     let relative = format!(".armada/checks/commits/{at_commit}");
-    let dir = Path::new(repo_root).join(&relative);
+    let dir = Path::new(records_root).join(&relative);
     if !one_component(at_commit) || std::fs::create_dir_all(&dir).is_err() {
         return checks.to_vec();
     }
@@ -283,7 +292,7 @@ const DRY: &str = "dry.";
 const LIVE: &str = "live.";
 
 fn keeping(
-    repo_root: &str,
+    records_root: &str,
     handle: &str,
     step: &StepId,
     attempt: Attempt,
@@ -291,7 +300,7 @@ fn keeping(
     output: &[(String, Output)],
     infix: &str,
 ) -> Vec<StepCheck> {
-    let Some(dir) = writable(repo_root, handle) else {
+    let Some(dir) = writable(records_root, handle) else {
         return checks.to_vec();
     };
     checks
@@ -312,8 +321,8 @@ fn keeping(
         .collect()
 }
 
-fn writable(repo_root: &str, handle: &str) -> Option<PathBuf> {
-    let dir = checks_dir(repo_root, handle);
+fn writable(records_root: &str, handle: &str) -> Option<PathBuf> {
+    let dir = checks_dir(records_root, handle);
     std::fs::create_dir_all(&dir).ok()?;
     Some(dir)
 }
@@ -406,12 +415,12 @@ const MOST: usize = 256 * 1024;
 /// numbering rather than the window's: a reader citing line 1,940 means the
 /// file's 1,940th line.
 pub fn kept_output(
-    repo_root: &str,
+    records_root: &str,
     kept: &str,
     ran: &[Attempted<Vec<StepCheck>>],
 ) -> Option<ipc::CheckOutput> {
     let (attempt, name, path) = named(kept, ran)?;
-    let file = std::fs::File::open(Path::new(repo_root).join(&path)).ok()?;
+    let file = std::fs::File::open(Path::new(records_root).join(&path)).ok()?;
     let bytes = file.metadata().map(|at| at.len()).unwrap_or_default();
 
     // A window over a stream rather than the file in memory: the oldest line

@@ -129,6 +129,7 @@ where
             job.clone(),
             checks.to_vec(),
             self.host().repo_root.clone(),
+            self.host().records_root.clone(),
             self.budget().duration(),
             at_commit.to_string(),
             base,
@@ -223,6 +224,7 @@ fn spawn_the_run(
     job: JobId,
     checks: Vec<ResolvedCheck>,
     repo_root: String,
+    records_root: String,
     budget: Duration,
     at_commit: String,
     base: String,
@@ -253,7 +255,7 @@ fn spawn_the_run(
             .collect();
         let rows = Ran::against(&checks, &observed)
             .ok()
-            .map(|ran| kept_for_a_commit(&repo_root, &at_commit, &ran.recorded(), &printed));
+            .map(|ran| kept_for_a_commit(&records_root, &at_commit, &ran.recorded(), &printed));
         let mut proving = proving.lock().await;
         proving.running = None;
         if let Some(checks) = rows {
