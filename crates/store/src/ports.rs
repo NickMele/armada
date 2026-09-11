@@ -19,10 +19,8 @@ use crate::open::Store;
 use crate::row::column;
 
 /// Version 45 — the port span a Job's worktree holds, or the main checkout
-/// holds.
-///
-/// Beside the table it creates, like every migration since [`V17`
-/// docs](crate::report::V17) — `schema.rs` is at the 900 lines the gate
+/// holds. Beside the table it creates, like every migration since
+/// [`V17`](crate::report::V17) — `schema.rs` is at the 900 lines the gate
 /// refuses at.
 ///
 /// **`job_id` and `main_checkout` are both nullable and the `CHECK` admits
@@ -31,10 +29,10 @@ use crate::row::column;
 /// crate did not write. Same argument as `job_events_hold_one_whole_shape`.
 ///
 /// **One claim per Job and at most one for the main checkout**, each its own
-/// partial unique index. `main_checkout` is `1` or absent rather than a
-/// boolean column with no `WHERE` on the index: a `UNIQUE` index over a column
-/// most rows hold `NULL` in already ignores those rows, so the one value the
-/// column is ever given is what the index has to make singular.
+/// partial unique index. `main_checkout` is `1` or absent rather than a plain
+/// boolean: a `UNIQUE` index over a column most rows hold `NULL` in already
+/// ignores those rows, so the one value the column is ever given is what the
+/// index has to make singular.
 ///
 /// **The foreign key on `job_id` is what makes this table one
 /// [`tables_pointing_at_a_job`](crate::migrations::tables_pointing_at_a_job)
