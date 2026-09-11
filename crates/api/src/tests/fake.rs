@@ -66,6 +66,9 @@ pub struct FakeDaemon {
     /// When set, every call answers with a fault. The stream closing on a
     /// daemon that cannot answer is a behaviour worth a test.
     pub mute: Mutex<bool>,
+    /// The one running Check's log `observe_check_output` resolves, by the
+    /// name it answers to. Planted by a test, whose reader it drives.
+    pub live: Mutex<Option<(String, crate::LiveOutput)>>,
 }
 
 impl FakeDaemon {
@@ -87,6 +90,7 @@ impl FakeDaemon {
             reports: Mutex::new(Vec::new()),
             held: Mutex::new(Vec::new()),
             mute: Mutex::new(false),
+            live: Mutex::new(None),
         }
     }
 

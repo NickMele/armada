@@ -548,6 +548,35 @@ where
             .ok_or_else(|| self.refusal(Adrift::NoSuchCheckOutput { named: kept }))
     }
 
+    /// One running Check's log, as it is written.
+    ///
+    /// **The live set is the allowlist**, which is `get_check_output`'s rule
+    /// with the Checks the gate is running standing in for the rows: `kept`
+    /// resolves through `Underway::log` or not at all, so a caller cannot name
+    /// a file no running gate of this Job wrote.
+    async fn observe_check_output(
+        &self,
+        job_id: JobId,
+        kept: String,
+    ) -> Result<api::LiveOutput, Refusal> {
+        let id = job_id.to_domain();
+        self.load(&id).await.map_err(|why| self.refusal(why))?;
+        let Some(log) = self.underway().log(&job_id, &kept) else {
+            return Err(self.refusal(Adrift::NoSuchCheckOutput { named: kept }));
+        };
+        Ok(api::LiveOutput {
+            name: log.name,
+            attempt: log.attempt,
+            path: log.path,
+            follow: std::sync::Arc::new(crate::following::LiveFollow {
+                file: log.file,
+                job: job_id,
+                kept,
+                underway: self.underway().clone(),
+            }),
+        })
+    }
+
     /// One frame a step's harness produced, as the file itself.
     ///
     /// **The rows are the allowlist**, which is `get_check_output`'s rule and

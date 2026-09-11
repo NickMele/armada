@@ -57,6 +57,8 @@ pub mod evidence;
 /// Going and looking at a Job now, because somebody suspects it is wedged.
 /// **The rung below intervene**, and it costs no model call.
 mod examining;
+/// A running Check's log, read for `observe_check_output` as it grows.
+mod following;
 pub mod footprint;
 mod gate;
 mod group;

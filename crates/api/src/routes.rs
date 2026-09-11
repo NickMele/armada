@@ -40,7 +40,7 @@ use crate::queries::{
     get_job_events, get_job_resources, get_manifest_reading, get_remarks, list_jobs,
     list_manifests, list_models, list_reports, list_workflows, list_worktrees,
 };
-use crate::sockets::{events, job_log, observe_job};
+use crate::sockets::{events, job_log, observe_check_output, observe_job};
 use crate::stream::Broadcaster;
 
 /// One operation, and where it is served.
@@ -388,6 +388,14 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/jobs/:job_id/log",
     },
+    // One running Check's log, as it is written. `get_check_output`'s `:kept`
+    // one route over, resolved against the Checks the Job's gate is running
+    // rather than against the rows; a socket for `observe_job_log`'s reason.
+    Route {
+        operation: "observe_check_output",
+        method: "GET",
+        path: "/jobs/:job_id/checks/:kept/observe",
+    },
     // Every event kind is served on the one socket, and every one is named:
     // `SERVED` is what a rule compares to the inventory, so a kind published
     // and not listed here is a kind no rule can see. The rule also compares
@@ -622,6 +630,10 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/worktrees", get(list_worktrees::<D>))
         .route("/jobs/:job_id/observe", get(observe_job::<D>))
         .route("/jobs/:job_id/log", get(job_log::<D>))
+        .route(
+            "/jobs/:job_id/checks/:kept/observe",
+            get(observe_check_output::<D>),
+        )
         .route("/events", get(events::<D>))
         // The Evidence endpoint, on the same listener and deliberately not in
         // `SERVED`: it is the Fleet/Drone seam rather than the Fleet/Bridge
