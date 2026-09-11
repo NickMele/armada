@@ -13,7 +13,8 @@
 //! Unlike [`crate::enums`], and for [`Settled`](crate::Settled)'s reason: these
 //! are this seam's own closed sets with no registry behind them, so the
 //! spelling is declared here once. Bridge matches on both to choose which
-//! controls to draw, so a third value in either is a major bump.
+//! controls to draw, so a new value in either is a major bump —
+//! [`WhenBlocked::AllowAll`] was one, and is why the protocol is at 11.
 
 use serde::{Deserialize, Serialize};
 
@@ -31,6 +32,10 @@ pub enum WhenBlocked {
     /// `running` while it waits, and an allow lets it carry on in the same
     /// session.
     AskMe,
+    /// Run every command the Drone reaches for without asking. **Except two**,
+    /// which still stop for a person: one `armada.yml` declares destructive, and
+    /// one the harness cannot grant — a push. **Since 11.0.**
+    AllowAll,
 }
 
 /// What a person may answer about one refused command.

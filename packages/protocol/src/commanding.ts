@@ -19,8 +19,14 @@
  * `refuse_and_hold` refuses the call and stops the job at `blocked_by_policy`
  * — **where every job starts**, because it asks nobody to be watching.
  * `ask_me` holds the drone inside the call and asks a person now.
+ * `allow_all`, since protocol 11.0, runs every command without asking
+ * **except two**, which still stop for a person: one `armada.yml` declares
+ * destructive, and one the harness cannot grant — a push.
+ *
+ * **A third value was a major bump**, because a `switch` or a
+ * `Record<WhenBlocked, …>` over this union is how a surface picks its control.
  */
-export type WhenBlocked = "refuse_and_hold" | "ask_me";
+export type WhenBlocked = "refuse_and_hold" | "ask_me" | "allow_all";
 
 /**
  * What a person may answer about one refused command. Since protocol 10.7.

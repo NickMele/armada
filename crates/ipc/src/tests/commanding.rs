@@ -61,6 +61,7 @@ fn each_setting_is_spelled_as_the_operations_name_it() {
     for (setting, spelled) in [
         (WhenBlocked::RefuseAndHold, "\"refuse_and_hold\""),
         (WhenBlocked::AskMe, "\"ask_me\""),
+        (WhenBlocked::AllowAll, "\"allow_all\""),
     ] {
         assert_eq!(encode(&setting).expect("plain data"), spelled);
         assert_eq!(
@@ -68,6 +69,21 @@ fn each_setting_is_spelled_as_the_operations_name_it() {
             setting
         );
     }
+}
+
+/// The third setting reaches `set_when_blocked` as the other two do. **An older
+/// peer cannot read it**, which is what made it a major bump: a setting it has
+/// no arm for is refused, never read as the nearest one it knows.
+#[test]
+fn allow_all_is_a_setting_a_person_sends_like_the_other_two() {
+    let set = decode::<crate::SetWhenBlocked>("a setting", br#"{"when_blocked":"allow_all"}"#)
+        .expect("a setting reads");
+    assert_eq!(set.when_blocked, WhenBlocked::AllowAll);
+    assert_eq!(
+        encode(&set).expect("plain data"),
+        r#"{"when_blocked":"allow_all"}"#
+    );
+    assert!(decode::<WhenBlocked>("a setting", b"\"allow\"").is_err());
 }
 
 #[test]

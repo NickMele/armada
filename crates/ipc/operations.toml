@@ -513,11 +513,13 @@ It replaces `approve_command`, a placeholder row for confirm-before-destructive 
 kind = "command"
 transport = "HTTP"
 helm_access = "No"
-description = "Whether one Job asks a person about a command it was not given, or refuses it and holds"
+description = "Whether one Job asks a person about a command it was not given, refuses it and holds, or runs it"
 notes = """
 A live setting on one Job. The next permission question the Job's Drone raises reads it, and no Drone is respawned for it.
 
-The body is `when_blocked`: `refuse_and_hold` or `ask_me`. A new Job starts at `refuse_and_hold`, because that asks nobody to be watching; `ask_me` holds a Drone inside the call until somebody answers. `JobDetail.when_blocked` reads it back, and is absent from a Fleet older than 10.6.
+The body is `when_blocked`: `refuse_and_hold`, `ask_me` or `allow_all`. A new Job starts at `refuse_and_hold`, because that asks nobody to be watching; `ask_me` holds a Drone inside the call until somebody answers. `JobDetail.when_blocked` reads it back, and is absent from a Fleet older than 10.6.
+
+**`allow_all` runs every command without asking, except two**: one `armada.yml` declares destructive and one the harness cannot grant — a push. Those still stop for a person, so no setting on this route lets a Job push or run a destructive command unseen. It arrived at 11.0 and was a major bump, because Bridge matches on this set to choose which control to draw.
 
 `helm_access` is `No`, for `answer_command`'s reason: whether a Drone is held waiting on the owner is the owner's to decide.
 """
