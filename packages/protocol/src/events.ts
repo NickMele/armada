@@ -13,7 +13,7 @@ import type { JudgeInFlight, Settled } from "./detail";
 import type { JobForgotten, JobList, JobSummary, Reason } from "./protocol";
 import type { ManifestReading } from "./reading";
 import type { ProposalInFlight } from "./proposing";
-import type { RunOutputLines, RunRecord } from "./rehearsal";
+import type { RunRecord } from "./rehearsal";
 import type { ChecksUnderway } from "./underway";
 import type { QuestionInFlight } from "./waiting";
 import type { ProtocolVersion } from "./version";
@@ -52,7 +52,6 @@ export type Event =
   | ({ kind: "job.landed" } & JobLanded)
   | ({ kind: "proposal.moved" } & ProposalMoved)
   | ({ kind: "manifest.reread" } & ManifestReading)
-  | ({ kind: "run.output" } & RunOutputLines)
   | ({ kind: "run.finished" } & RunRecord);
 
 /**

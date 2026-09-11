@@ -131,6 +131,61 @@ pub(crate) fn swept(root: &str, handle: &str, now: &Timestamp, forget: impl Fn(&
     }
 }
 
+/// The lines a log holds after byte `from`, each with the offset just past it,
+/// and where the next pass starts. **Whole lines only unless `to_the_end`**;
+/// a log not made yet is nothing yet. `None` where it will not read.
+pub(crate) fn lines_from(
+    log: &Path,
+    from: u64,
+    to_the_end: bool,
+) -> Option<(Vec<(u64, String)>, u64)> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = match std::fs::File::open(log) {
+        Ok(file) => file,
+        Err(why) if why.kind() == std::io::ErrorKind::NotFound => return Some((Vec::new(), from)),
+        Err(_) => return None,
+    };
+    let mut bytes = Vec::new();
+    file.seek(SeekFrom::Start(from)).ok()?;
+    file.read_to_end(&mut bytes).ok()?;
+    let upto = match to_the_end {
+        true => bytes.len(),
+        false => bytes
+            .iter()
+            .rposition(|byte| *byte == b'\n')
+            .map_or(0, |at| at + 1),
+    };
+    let (mut lines, mut start) = (Vec::new(), 0usize);
+    while start < upto {
+        let end = bytes[start..upto]
+            .iter()
+            .position(|byte| *byte == b'\n')
+            .map_or(upto, |at| start + at);
+        let next = (end + 1).min(upto);
+        let text = String::from_utf8_lossy(&bytes[start..end]).into_owned();
+        lines.push((from + next as u64, text));
+        start = next;
+    }
+    Some((lines, from + upto as u64))
+}
+
+/// What a viewer opening a run's socket is sent first: the log's tail, how
+/// many older lines it left out, and the byte it read to. `None` where the log
+/// will not read.
+pub(crate) fn history(log: &Path, to_the_end: bool) -> Option<(Vec<String>, u64, u64)> {
+    let (lines, read_to) = lines_from(log, 0, to_the_end)?;
+    let mut window: VecDeque<String> = lines.into_iter().map(|(_, line)| line).collect();
+    let (mut held, mut skipped): (usize, u64) = (window.iter().map(String::len).sum(), 0);
+    while window.len() > A_READING || (held > MOST && window.len() > 1) {
+        held -= window
+            .pop_front()
+            .map(|gone| gone.len())
+            .unwrap_or_default();
+        skipped += 1;
+    }
+    Some((window.into(), skipped, read_to))
+}
+
 /// The tail of one run's log, and a statement of how much of it this is.
 ///
 /// **Lossy on bytes that are not text** rather than stopping at them: a

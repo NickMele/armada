@@ -5,6 +5,7 @@
 // and nothing here moves a Job, so no field maps onto a status colour.
 
 import type { ChangedFile } from "./events";
+import type { ProtocolVersion } from "./version";
 
 /** `GET /jobs/:job_id/run_sheet` — what can be run in this Job's worktree. */
 export type RunSheet = {
@@ -119,11 +120,25 @@ export type RunOutput = {
 /** `stop_run`'s and `undo_run`'s body. */
 export type NamedRun = { id: string };
 
-/** `run.output` — whole lines printed since the last message, capped. */
-export type RunOutputLines = {
+/**
+ * One message on a run's socket, `GET /jobs/:job_id/runs/:run_id/observe`.
+ * `observe_job`'s shape: the log so far, then new lines, a count where the
+ * bound dropped some, and why it stopped. Output never rides `/events`.
+ */
+export type RunMessage =
+  | ({ message: "opened" } & RunOpened)
+  | ({ message: "lines" } & { lines: string[] })
+  | ({ message: "missed" } & { dropped: number })
+  | ({ message: "closed" } & { because: string });
+
+export type RunOpened = {
+  protocol_version: ProtocolVersion;
   job_id: string;
   id: string;
-  lines: string[];
-  /** Lines this message left out to stay under its cap. The log keeps them. */
+  name: string;
+  path: string;
+  /** The run was still going when this opened. `false`: the history is all of it. */
+  live: boolean;
+  /** Older lines the opening read left out, because the window is bounded. */
   skipped: number;
 };

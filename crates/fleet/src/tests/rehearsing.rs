@@ -4,6 +4,10 @@
 //! **A real repository in the Job's worktree**, because what Undo protects is
 //! what git would call the Drone's uncommitted work. The commands are `sh`
 //! one-liners, and what they print or write is the assertion.
+//!
+//! **Over 500 lines and one file**, for `headroom`'s reason: every case stands
+//! on the one fixture above — a repository, its Manifest, the workflow that
+//! froze it — and split files would each import it to assert one subject.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -11,7 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use adapter_traits::WorktreeSpec;
-use api::{Next, Queries, Subscription};
+use api::{Next, Queries, RunSeen, Subscription};
 use core_model::{Job, JobStatus};
 use ipc::{ChangeKind, Event, RunRecord, StartRun};
 use testkit::{FakeHarness, FakeVcs, FakeWorkProduct};
@@ -175,6 +179,79 @@ async fn finished(watching: &mut Subscription, id: &str) -> RunRecord {
     record
 }
 
+/// Every line a viewer of this run is sent — the history, then the live feed
+/// past it — until `wanted` is among them.
+async fn seen(observed: &mut api::ObservedRun, wanted: &str) -> Vec<String> {
+    let mut lines = std::mem::take(&mut observed.history);
+    let read_to = observed.read_to;
+    let live = observed.live.as_mut().expect("the run is still going");
+    tokio::time::timeout(Duration::from_secs(30), async {
+        while !lines.iter().any(|line| line == wanted) {
+            match live.next().await {
+                Some(RunSeen::Chunk(chunk)) => lines.extend(chunk.after(read_to)),
+                Some(RunSeen::Missed(_)) => {}
+                None => panic!("the run ended before `{wanted}` was sent"),
+            }
+        }
+    })
+    .await
+    .expect("the line arrived");
+    lines
+}
+
+/// Output rides the run's own socket, once, and `/events` is told only that
+/// the run ended — `docs/practices/protocol.md`, *The run socket*.
+#[tokio::test]
+async fn the_run_socket_carries_the_output_and_events_carries_only_the_end() {
+    let home = TempDir::new();
+    let events = api::Broadcaster::new();
+    let fleet = a_fleet_rehearsing(&home, &events);
+    let (job, _) = a_job_with_work_in_it(&fleet, &home).await;
+    let mut watching = events.subscribe();
+
+    let underway = Arc::clone(&fleet)
+        .start_rehearsal(job.id(), asked("test", true))
+        .await
+        .expect("underway");
+    let mut observed = fleet
+        .observe_rehearsal(job.id(), underway.id.clone())
+        .await
+        .expect("the run's socket");
+    assert_eq!(
+        seen(&mut observed, "narrowed").await,
+        vec!["narrowed".to_string()],
+        "sent once — never in both the history and the feed"
+    );
+    fleet
+        .stop_rehearsal(job.id(), underway.id.clone())
+        .await
+        .expect("stopped");
+    let mut live = observed.live.take().expect("it was live");
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while live.next().await.is_some() {}
+    })
+    .await
+    .expect("the feed ends with the run");
+
+    let mut published = Vec::new();
+    while let Ok(Some(Next::Send(delivered))) =
+        tokio::time::timeout(Duration::from_millis(300), watching.next()).await
+    {
+        published.push(delivered.event);
+    }
+    assert!(
+        matches!(published.as_slice(), [Event::RunFinished(record)] if record.id == underway.id),
+        "{published:?}"
+    );
+
+    let after = fleet
+        .observe_rehearsal(job.id(), underway.id)
+        .await
+        .expect("a finished run still opens");
+    assert!(after.live.is_none());
+    assert_eq!(after.history, vec!["narrowed".to_string()]);
+}
+
 /// **The first half of the definition of done.** `test`, narrowed, prints
 /// while it runs; Stop ends it; the history holds it with its log beside a
 /// whole run with its exit code — and no Check row or Evidence was written.
@@ -196,16 +273,14 @@ async fn a_narrowed_test_streams_is_stopped_and_is_in_the_history_with_no_verdic
         "narrowed to what the Job changed"
     );
 
-    let Event::RunOutput(output) = next_event(
-        &mut watching,
-        |event| matches!(event, Event::RunOutput(lines) if !lines.lines.is_empty()),
-    )
-    .await
-    else {
-        unreachable!("the filter admits only output");
-    };
-    assert_eq!(output.id, underway.id);
-    assert_eq!(output.lines, vec!["narrowed".to_string()]);
+    let mut observed = fleet
+        .observe_rehearsal(job.id(), underway.id.clone())
+        .await
+        .expect("the run's socket");
+    assert_eq!(
+        seen(&mut observed, "narrowed").await,
+        vec!["narrowed".to_string()]
+    );
 
     let stopped = fleet
         .stop_rehearsal(job.id(), underway.id.clone())

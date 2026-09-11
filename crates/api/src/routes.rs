@@ -40,7 +40,9 @@ use crate::queries::{
     get_job_events, get_job_resources, get_manifest_reading, get_remarks, list_jobs,
     list_manifests, list_models, list_reports, list_workflows, list_worktrees,
 };
-use crate::rehearsing::{get_run_output, get_run_sheet, list_runs, start_run, stop_run, undo_run};
+use crate::rehearsing::{
+    get_run_output, get_run_sheet, list_runs, observe_run, start_run, stop_run, undo_run,
+};
 use crate::sockets::{events, job_log, observe_check_output, observe_job};
 use crate::stream::Broadcaster;
 
@@ -430,6 +432,13 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/jobs/:job_id/checks/:kept/observe",
     },
+    // One person's run, as it prints: a socket per run, for `observe_job`'s
+    // reason — output on `/events` would evict the state the Board is drawn from.
+    Route {
+        operation: "observe_run",
+        method: "GET",
+        path: "/jobs/:job_id/runs/:run_id/observe",
+    },
     // Every event kind is served on the one socket, and every one is named:
     // `SERVED` is what a rule compares to the inventory, so a kind published
     // and not listed here is a kind no rule can see. The rule also compares
@@ -506,13 +515,8 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/events",
     },
-    // A person's run, streaming and then ending. Both name a Job and move
-    // nothing on it.
-    Route {
-        operation: "run.output",
-        method: "GET",
-        path: "/events",
-    },
+    // A person's run ending. It names a Job and moves nothing on it; what the
+    // run prints is `observe_run`'s, never this stream's.
     Route {
         operation: "run.finished",
         method: "GET",
@@ -660,6 +664,7 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
             "/jobs/:job_id/runs/:run_id/output",
             get(get_run_output::<D>),
         )
+        .route("/jobs/:job_id/runs/:run_id/observe", get(observe_run::<D>))
         .route("/jobs/:job_id/start_run", post(start_run::<D>))
         .route("/jobs/:job_id/stop_run", post(stop_run::<D>))
         .route("/jobs/:job_id/undo_run", post(undo_run::<D>))

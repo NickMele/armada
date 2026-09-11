@@ -3,8 +3,9 @@
 use core_model::Timestamp;
 
 use crate::{
-    decode, encode, ChangeKind, ChangedFile, Cursor, Delivered, Event, Instant, JobId,
-    RunOutputLines, RunRecord, StreamMessage,
+    decode, encode, ChangeKind, ChangedFile, Cursor, Delivered, Event, Instant, JobId, Missed,
+    OutputClosed, OutputEnded, OutputLines, RunMessage, RunOpened, RunRecord, StreamMessage,
+    PROTOCOL_VERSION,
 };
 
 fn at(text: &str) -> Instant {
@@ -49,16 +50,35 @@ fn delivered(event: Event) -> String {
     .expect("plain data")
 }
 
+/// The run socket speaks `observe_job`'s four messages, spelled the same way.
 #[test]
-fn a_runs_output_and_its_end_travel_under_the_names_the_inventory_declares() {
-    let output = delivered(Event::RunOutput(RunOutputLines {
+fn a_runs_socket_speaks_the_four_messages_the_other_sockets_do() {
+    let spelled = |message: RunMessage| encode(&message).expect("plain data");
+    let opened = spelled(RunMessage::Opened(RunOpened {
+        protocol_version: PROTOCOL_VERSION,
         job_id: JobId::carried("01JOB"),
         id: "01RUN".to_string(),
-        lines: vec!["Compiling ipc".to_string()],
+        name: "test".to_string(),
+        path: ".armada/runs/1-job/01RUN/output.log".to_string(),
+        live: true,
         skipped: 0,
     }));
-    assert!(output.contains("\"kind\":\"run.output\""), "{output}");
+    assert!(opened.contains("\"message\":\"opened\""), "{opened}");
+    let lines = spelled(RunMessage::Lines(OutputLines {
+        lines: vec!["Compiling ipc".to_string()],
+    }));
+    assert!(lines.contains("\"message\":\"lines\""), "{lines}");
+    let missed = spelled(RunMessage::Missed(Missed { dropped: 4 }));
+    assert!(missed.contains("\"dropped\":4"), "{missed}");
+    let closed = spelled(RunMessage::Closed(OutputClosed {
+        because: OutputEnded::Finished,
+    }));
+    assert!(closed.contains("\"because\":\"finished\""), "{closed}");
+}
 
+/// `/events` carries a run's end and never its output.
+#[test]
+fn a_runs_end_travels_under_the_name_the_inventory_declares() {
     let finished = delivered(Event::RunFinished(a_record()));
     assert!(finished.contains("\"kind\":\"run.finished\""), "{finished}");
     let back: StreamMessage = decode("a stream message", finished.as_bytes()).expect("it reads");

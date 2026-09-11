@@ -379,4 +379,16 @@ pub trait Queries: Send + Sync + 'static {
         job_id: JobId,
         run_id: String,
     ) -> impl Future<Output = Result<RunOutput, Refusal>> + Send;
+
+    /// `observe_run` — one run's output on a socket of its own: what its log
+    /// holds, then what it prints next.
+    ///
+    /// **It answers before the socket opens**, for [`Queries::observe_job`]'s
+    /// reason, with the subscription opened before the log is read.
+    /// [`Refusal::Unacceptable`] where `run_id` names no run of this Job.
+    fn observe_run(
+        &self,
+        job_id: JobId,
+        run_id: String,
+    ) -> impl Future<Output = Result<crate::ObservedRun, Refusal>> + Send;
 }

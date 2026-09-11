@@ -563,10 +563,6 @@ export class FleetConnection {
       return;
     }
 
-    if (event.kind === "run.output" || event.kind === "run.finished") {
-      this.publish({ connection }); // a person's run moves nothing on the Board
-      return;
-    }
     if (event.kind === "manifest.reread") {
       // **Above the tail below, because there is no Job to find.** The tail
       // reads `event.job_id` and treats a Job it does not hold as a missed
@@ -581,6 +577,11 @@ export class FleetConnection {
       return;
     }
 
+    if (event.kind !== "job.state_changed") {
+      // A newer Fleet's kind, or one that moves no row: never folded as a move.
+      this.publish({ connection });
+      return;
+    }
     const held = this.current.jobs.find((job) => job.id === event.job_id);
     if (held === undefined) {
       // `job.created` covers the ordinary case, so a move about a Job this

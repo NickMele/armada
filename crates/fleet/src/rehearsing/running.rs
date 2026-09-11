@@ -1,28 +1,23 @@
 //! The run itself, on its own task: the snapshot, a Check's prerequisites,
-//! the command, its output onto the stream, and the record it leaves.
+//! the command, its output onto the run's own channel, and the record.
 //!
-//! **Output rides `/events`, bounded twice**: at most one `run.output` a
-//! quarter-second, each capped by lines and bytes and saying what it left out.
-//! The log keeps everything, so a dropped message costs a live line only.
+//! **Output goes to `observe_run`'s channel and never to `/events`**, which
+//! carries only `run.finished`. Each pass over the log offers the whole lines
+//! it found with their byte offsets; the log keeps every one of them.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use checks_runner::Writing;
 use core_model::{Component, Envelope, FieldValue, Job, JobStatus, Level, Timestamp};
-use ipc::{RunOutputLines, RunRecord};
+use ipc::RunRecord;
 use tokio::sync::watch;
 use verification::{Exit, NeverRan};
 
 use super::entries::Entry;
 use super::{records, Held, Tree};
 use crate::daemon::Fleet;
-
-const PUMPED_EVERY: Duration = Duration::from_millis(250);
-const MOST_LINES: usize = 200;
-const MOST_BYTES: usize = 32 * 1024;
 
 /// Everything a run needs, decided before it was spawned.
 pub(crate) struct Plan {
@@ -32,6 +27,9 @@ pub(crate) struct Plan {
     pub(crate) underway: ipc::RunUnderway,
     pub(crate) dir: PathBuf,
     pub(crate) worktree_version: bool,
+    /// Where the run's output goes. Dropped when the run returns, which with
+    /// [`Held`] going is what tells every viewer the run finished.
+    pub(crate) feed: api::RunFeed,
 }
 
 struct Outcome {
@@ -79,7 +77,7 @@ where
             let _ = finished.send(true);
             outcome
         };
-        let (outcome, ()) = tokio::join!(ran, self.pumped(&plan, &log, finishing));
+        let (outcome, ()) = tokio::join!(ran, pumped(&plan.feed, &log, finishing));
         let ended = self.now();
         let (changed, changed_unreadable, reference) = match snapshot {
             Ok(Ok(taken)) => settled(&plan.tree.path, taken, seconds(&ended)).await,
@@ -191,53 +189,6 @@ where
         }
     }
 
-    /// Read what the log has grown by and publish it, until the run is over
-    /// and the last of it has gone out.
-    async fn pumped(&self, plan: &Plan, log: &Path, mut finishing: watch::Receiver<bool>) {
-        let mut from = 0u64;
-        loop {
-            let last = *finishing.borrow();
-            let read = crate::following::read_from(log, from, last);
-            from = read.from;
-            self.streamed(plan, read.lines, read.skipped);
-            if last {
-                return;
-            }
-            tokio::select! {
-                () = tokio::time::sleep(PUMPED_EVERY) => {}
-                _ = finishing.changed() => {}
-            }
-        }
-    }
-
-    fn streamed(&self, plan: &Plan, mut lines: Vec<String>, skipped: u64) {
-        if lines.is_empty() && skipped == 0 {
-            return;
-        }
-        let mut held: usize = lines.iter().map(String::len).sum();
-        let mut first = 0;
-        while lines.len() - first > MOST_LINES || (held > MOST_BYTES && lines.len() - first > 1) {
-            held -= lines[first].len();
-            first += 1;
-        }
-        lines.drain(..first);
-        // One line longer than a whole message keeps its start, cut on a
-        // character boundary.
-        if let Some(only) = lines.first_mut().filter(|line| line.len() > MOST_BYTES) {
-            let mut cut = MOST_BYTES;
-            while !only.is_char_boundary(cut) {
-                cut -= 1;
-            }
-            only.truncate(cut);
-        }
-        self.publish(ipc::Event::RunOutput(RunOutputLines {
-            job_id: plan.underway.job_id.clone(),
-            id: plan.underway.id.clone(),
-            lines,
-            skipped: skipped + first as u64,
-        }));
-    }
-
     /// Write the run into the Job's own log. **Fields, never an interpolated
     /// message**, for `crate::dry_run`'s reason.
     fn noted_rehearsal(&self, job: &Job, record: &RunRecord, not_kept: Option<std::io::Error>) {
@@ -278,6 +229,26 @@ where
         .with_field("run", FieldValue::Str(record.id.clone()))
         .with_field("restored", FieldValue::Int(record.changed.len() as i64));
         self.noted_in_the_log(job.id(), &envelope);
+    }
+}
+
+/// Offer what the log has grown by, a pass every [`api::FOLLOW`], until the
+/// run is over and its last line has gone out.
+async fn pumped(feed: &api::RunFeed, log: &Path, mut finishing: watch::Receiver<bool>) {
+    let mut from = 0u64;
+    loop {
+        let last = *finishing.borrow();
+        if let Some((lines, next)) = records::lines_from(log, from, last) {
+            from = next;
+            feed.offer(api::RunChunk { lines });
+        }
+        if last {
+            return;
+        }
+        tokio::select! {
+            () = tokio::time::sleep(api::FOLLOW) => {}
+            _ = finishing.changed() => {}
+        }
     }
 }
 

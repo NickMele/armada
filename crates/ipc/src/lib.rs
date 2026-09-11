@@ -130,8 +130,8 @@ pub use raising::{CapRaise, RaisedBy, TurnRaise};
 pub use reading::{ManifestFault, ManifestMoved, ManifestReading, ManifestRefused};
 pub use reclaimed::{ReclaimedBranch, ReclaimedWorktree, WorktreeReclaimed};
 pub use rehearsal::{
-    NamedRun, RunEntry, RunList, RunOutput, RunOutputLines, RunRecord, RunSheet, RunUnderway,
-    StartRun, UnreadableRun,
+    NamedRun, RunEntry, RunList, RunMessage, RunOpened, RunOutput, RunRecord, RunSheet,
+    RunUnderway, StartRun, UnreadableRun,
 };
 pub use remarks::{JobRemarks, Remark, RemarksTakenUp};
 pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, ReportOrigin};

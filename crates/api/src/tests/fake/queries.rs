@@ -214,6 +214,14 @@ impl Queries for FakeDaemon {
         self.runs_nothing(&job_id)
     }
 
+    async fn observe_run(
+        &self,
+        job_id: JobId,
+        _run_id: String,
+    ) -> Result<crate::ObservedRun, Refusal> {
+        self.runs_nothing(&job_id)
+    }
+
     /// **The same two refusals again**, and nothing here opens a file: what the
     /// route has to prove is that the bytes come back as themselves, under a
     /// media type read off the name, and that a name the record does not hold

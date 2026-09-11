@@ -642,6 +642,14 @@ where
         self.rehearsal_output(&job_id.to_domain(), run_id).await
     }
 
+    async fn observe_run(
+        &self,
+        job_id: JobId,
+        run_id: String,
+    ) -> Result<api::ObservedRun, Refusal> {
+        self.observe_rehearsal(&job_id.to_domain(), run_id).await
+    }
+
     /// Every workflow this Fleet holds, so a caller can name one that will not
     /// be refused.
     async fn list_workflows(&self) -> Result<Vec<WorkflowSummary>, Refusal> {

@@ -7,8 +7,10 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::event::ChangedFile;
+use crate::event::{ChangedFile, Missed};
 use crate::ids::{Instant, JobId};
+use crate::underway::{OutputClosed, OutputLines};
+use crate::version::ProtocolVersion;
 
 /// `get_run_sheet`: what can be run in this Job's worktree, and the facts the
 /// sheet's header and notices draw from.
@@ -169,16 +171,34 @@ pub struct NamedRun {
     pub id: String,
 }
 
-/// `run.output`: whole lines a running run printed since the last message.
+/// One message on a run's socket, `observe_run`.
 ///
-/// **Bounded twice**, because this rides `/events` beside every Job's state: at
-/// most one message a quarter-second per run, and a message longer than its
-/// cap keeps the tail and says how many lines it left out. The log keeps all.
+/// **`observe_job`'s shape, one subject over**: what the log holds, then what
+/// the run prints next, a count where the bound dropped some, and a sentence
+/// saying why it stopped. Output never rides `/events`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RunOutputLines {
+#[serde(tag = "message", rename_all = "snake_case")]
+pub enum RunMessage {
+    Opened(RunOpened),
+    Lines(OutputLines),
+    /// The viewer fell behind and this many live messages were dropped. The
+    /// log keeps them; `get_run_output` reads it.
+    Missed(Missed),
+    Closed(OutputClosed),
+}
+
+/// The first message: whose run this is, and what the opening read left out.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RunOpened {
+    pub protocol_version: ProtocolVersion,
     pub job_id: JobId,
     pub id: String,
-    pub lines: Vec<String>,
-    /// Lines this message left out to stay under its cap.
+    pub name: String,
+    /// The log, relative to `ManifestSummary::records_root`.
+    pub path: String,
+    /// Whether the run was still going when this opened. `false` is a run
+    /// that has ended, and the history is all of it.
+    pub live: bool,
+    /// Older lines the opening read left out, because the window is bounded.
     pub skipped: u64,
 }

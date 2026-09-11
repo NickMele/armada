@@ -1,4 +1,4 @@
-//! Which Jobs have a run out, and how to stop it.
+//! Which Jobs have a run out, how to stop it, and where its output goes.
 //!
 //! **In memory and never written down**, for `crate::showing_again::Pressing`'s
 //! reason: a run is true only as long as the process running it lives. One per
@@ -23,6 +23,9 @@ struct InFlight {
     underway: ipc::RunUnderway,
     stop: Arc<watch::Sender<bool>>,
     done: watch::Receiver<Option<ipc::RunRecord>>,
+    /// The run's own channel, held here so a viewer can subscribe to it. The
+    /// run holds the other end; both going is what tells a viewer it ended.
+    feed: api::RunFeed,
 }
 
 impl Rehearsals {
@@ -37,6 +40,7 @@ impl Rehearsals {
         underway: &ipc::RunUnderway,
         stop: watch::Sender<bool>,
         done: watch::Receiver<Option<ipc::RunRecord>>,
+        feed: api::RunFeed,
     ) -> Option<Held> {
         let mut out = self.held();
         if out.contains_key(job) {
@@ -48,6 +52,7 @@ impl Rehearsals {
                 underway: underway.clone(),
                 stop: Arc::new(stop),
                 done,
+                feed,
             },
         );
         Some(Held {
@@ -63,6 +68,15 @@ impl Rehearsals {
             .get(job)
             .filter(|out| out.underway.id == id)
             .map(|out| (Arc::clone(&out.stop), out.done.clone()))
+    }
+
+    /// A subscription to the run `id`'s output, with its name — only while it
+    /// is the one out on this Job.
+    pub(super) fn watching(&self, job: &JobId, id: &str) -> Option<(String, api::RunWatch)> {
+        self.held()
+            .get(job)
+            .filter(|out| out.underway.id == id)
+            .map(|out| (out.underway.name.clone(), out.feed.watch()))
     }
 
     fn held(&self) -> MutexGuard<'_, BTreeMap<JobId, InFlight>> {

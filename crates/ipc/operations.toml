@@ -462,6 +462,21 @@ It ends with a sentence: `finished` once the Check has exited and every line it 
 `helm_access` is `No` for `get_check_output`'s reason.
 """
 
+[operations.observe_run]
+kind = "query"
+transport = "WebSocket"
+helm_access = "No"
+description = "One person's run from the run sheet — what its log holds, then what it prints next — on a socket of its own"
+notes = """
+**`observe_job`'s shape, one subject over**; `docs/practices/protocol.md`, *The run socket*, is the design. The subscription is opened before the log is read, the log is the history, and the lines that follow are relayed. A viewer that falls behind loses the oldest and is sent `missed` with the count, and `closed` says why it stopped. Each live line carries the byte offset past it, so a line the opening read sent is not sent twice.
+
+**Per run, not per Job's runs.** The sheet holds the id `start_run` answered with, a run has an end to close on, and a Job has one run out at a time — a per-Job channel would need `observe_job`'s hand-over between runs for a reader nobody has.
+
+Not `/events`, which carries only `run.finished`: output is the fastest thing a run makes, and on the one drop-oldest channel carrying every Job it would evict the state the Board is drawn from.
+
+`helm_access` is `No` for `observe_check_output`'s reason.
+"""
+
 [operations.approve_command]
 kind = "command"
 transport = "HTTP"
@@ -1098,8 +1113,9 @@ rule for a look that found something wrong.
 person to look at, and Helm reads none of them.
 """
 
-# Journey 9, *Running one inside a Job*: the run sheet's six operations, kept
-# together because they are one subject. The two events are with the events.
+# Journey 9, *Running one inside a Job*: the run sheet's operations, kept
+# together because they are one subject. `observe_run` is with the sockets and
+# `run.finished` with the events.
 
 [operations.get_run_sheet]
 kind = "query"
@@ -1144,7 +1160,7 @@ description = "Run one Check or Command in a Job's worktree, narrowed or whole �
 notes = """
 **The request names an entry, never a command line.** What runs is what the Job froze, or the worktree's `armada.yml` where `worktree_version` asks for it, and a Check's `requires` run first into the same log. **No shell**: `checks_runner` spawns the program directly, in a process group of its own. **No verdict**: no Evidence, no `job_step_checks` row, and nothing on the Job moves.
 
-It answers at once with the run underway; output arrives as `run.output` and the end as `run.finished`. The run is a task of its own, so a client that goes away does not stop it — `stop_run` does. A snapshot of the tree is taken first, so what the run changed can be named and put back.
+It answers at once with the run underway; output arrives on `observe_run` and the end as `run.finished` on `/events`. The run is a task of its own, so a client that goes away does not stop it — `stop_run` does. A snapshot of the tree is taken first, so what the run changed can be named and put back.
 
 Refused where the worktree is gone, where a run is already out on this Job, where nothing declares the name, and where a narrowed run has nothing to narrow to. A Drone working in the tree is not a refusal: nothing locks, and the sheet says the run shares the tree.
 """
@@ -1356,17 +1372,6 @@ It carries `ManifestReading` itself rather than a payload wrapping one, which is
 No actor and no `at` on the envelope. `at` would be a second copy of the reading's own, and an actor would have to claim either that Fleet decided something — it read a file — or that a person did, when nobody pressed anything in Armada at all.
 
 It publishes at the rate somebody saves a file, behind a settle window, so it costs the shared backlog nothing worth stating. A save that moved nothing Fleet reads live is still published: the reading is what Fleet now holds, and a client asks `worth_saying` whether it is news rather than being told only about the readings somebody else judged interesting.
-"""
-
-[operations."run.output"]
-kind = "event"
-transport = "WebSocket"
-helm_access = "Bridge only"
-description = "Whole lines a person's run printed since the last message"
-notes = """
-**On `/events`, and bounded twice there**, because output is the fastest thing this stream carries: at most one message a quarter-second per run, each capped by lines and bytes, keeping the tail and saying how many lines it left out. The log keeps everything and `get_run_output` reads it, so a drop costs a live line and never the record. `docs/practices/protocol.md` keeps Drone-speed rows off this stream for eviction's sake; this bound is what makes one run's output tolerable beside it.
-
-Names a Job and moves nothing on it.
 """
 
 [operations."run.finished"]

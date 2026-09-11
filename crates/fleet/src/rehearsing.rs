@@ -127,7 +127,11 @@ where
         };
         let (stop, stopped) = watch::channel(false);
         let (done, ended) = watch::channel(None);
-        let Some(held) = self.rehearsals().take(job_id, &underway, stop, ended) else {
+        let feed = api::RunFeed::new();
+        let Some(held) = self
+            .rehearsals()
+            .take(job_id, &underway, stop, ended, feed.clone())
+        else {
             return Err(refused(Unrehearsable::AlreadyRunning { name: entry.name }));
         };
         let (root, handle) = (&self.host().records_root, job.handle());
@@ -146,6 +150,7 @@ where
             underway: underway.clone(),
             dir,
             worktree_version: asked.worktree_version,
+            feed,
         };
         let this = Arc::clone(&self);
         tokio::spawn(async move { this.rehearsed(plan, held, stopped, done).await });
@@ -291,6 +296,44 @@ where
         };
         name.and_then(|name| records::output(root, &handle, &id, name))
             .ok_or_else(|| self.run_refusal(job_id, Unrehearsable::NoSuchRun { id: id.clone() }))
+    }
+
+    /// A run's socket, resolved before it opens: **the subscription first,
+    /// then the log as history**, for `observe_job`'s reason. A finished run
+    /// opens too, with its whole log and nothing live.
+    pub(crate) async fn observe_rehearsal(
+        &self,
+        job_id: &JobId,
+        id: String,
+    ) -> Result<api::ObservedRun, Refusal> {
+        let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
+        let (root, handle) = (&self.host().records_root, job.handle());
+        let no_such = || self.run_refusal(job_id, Unrehearsable::NoSuchRun { id: id.clone() });
+        let (name, live) = match self.rehearsals().watching(job_id, &id) {
+            Some((name, watch)) => (name, Some(watch)),
+            None => match records::read(root, &handle, &id) {
+                Some(Ok(record)) => (record.name, None),
+                _ => return Err(no_such()),
+            },
+        };
+        let log = records::dir_of(root, &handle, &id)
+            .ok_or_else(no_such)?
+            .join(records::LOG);
+        let (history, skipped, read_to, unreadable) = match records::history(&log, live.is_none()) {
+            Some((history, skipped, read_to)) => (history, skipped, read_to, false),
+            None => (Vec::new(), 0, 0, true),
+        };
+        Ok(api::ObservedRun {
+            job_id: ipc::JobId::from(job_id),
+            path: records::relative_log(&handle, &id),
+            id,
+            name,
+            live,
+            history,
+            skipped,
+            read_to,
+            unreadable,
+        })
     }
 
     fn run_refusal(&self, job: &JobId, why: Unrehearsable) -> Refusal {

@@ -4,6 +4,7 @@
 //! reader of one needs the other; `crate::routes` still holds the table.
 
 use axum::body::Bytes;
+use axum::extract::ws::WebSocketUpgrade;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::Response;
@@ -48,6 +49,23 @@ pub(crate) async fn get_run_output<D: Queries>(
 ) -> Response {
     match served.daemon().get_run_output(job.id(), run_id).await {
         Ok(output) => answer(StatusCode::OK, &output, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// One run's output, as it prints. **A socket per run**, `crate::watching_run`;
+/// the daemon is asked before the upgrade, so an id naming no run of this Job
+/// is a refusal read at the moment it was asked.
+pub(crate) async fn observe_run<D: Queries>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+    Path(Ran { run_id }): Path<Ran>,
+    upgrade: WebSocketUpgrade,
+) -> Response {
+    match served.daemon().observe_run(job.id(), run_id).await {
+        Ok(observed) => {
+            upgrade.on_upgrade(move |socket| crate::watching_run::relay(socket, observed))
+        }
         Err(refusal) => refused(refusal),
     }
 }
