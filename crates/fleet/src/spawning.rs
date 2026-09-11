@@ -331,7 +331,7 @@ where
             Model::named(job.model_at(step).as_str())?,
             brief,
             McpConfig::only_these(&self.host().mcp_config)?,
-            self.toolbelt(job, step),
+            self.toolbelt(job, step).await,
             environment(
                 HostPaths {
                     path: &self.host().path,
@@ -363,12 +363,19 @@ where
     /// `Dispatching::at` is the same predicate the tool call itself is refused
     /// by, so a Drone's allowlist and Fleet's answer cannot disagree — and both
     /// read the frozen workflow, which is what a person approved.
-    fn toolbelt(&self, job: &Job, step: &StepId) -> Toolbelt {
+    ///
+    /// **Off the Job's own Manifest snapshot, never Fleet's live one.**
+    /// `crate::snapshotting::effective_manifest` is what makes this the
+    /// registry the Job froze at creation — `docs/concepts/drone.md`'s "a
+    /// Drone that could write itself a Command could grant itself one" —
+    /// rather than whatever `armada.yml` says the moment a Drone is spawned.
+    async fn toolbelt(&self, job: &Job, step: &StepId) -> Toolbelt {
+        let (manifest, _) = self.effective_manifest(job).await;
         let mut belt = Toolbelt::evidence_only()
             .and(Grant::ReadTheWorktree)
             .and(Grant::ChangeTheWorktree);
-        for name in self.manifest().command_names() {
-            match self.manifest().command(&name) {
+        for name in manifest.command_names() {
+            match manifest.command(&name) {
                 Some(command) if !command.is_destructive() => {
                     belt = belt.and(Grant::RunADeclaredCommand(command.run().to_string()));
                 }

@@ -80,7 +80,12 @@ where
         // much.
         self.deliverables_awaited(job, Path::new(worktree.path()));
 
-        let required = self.manifest().prepared_by();
+        // **The Job's own Manifest snapshot, never Fleet's live one.** Setup
+        // is part of what `#650` freezes at Job creation, so an
+        // `armada.yml` edit made while this Job is between steps must not
+        // change what its worktree gets prepared with.
+        let (manifest, _) = self.effective_manifest(job).await;
+        let required = manifest.prepared_by();
         if required.is_empty() {
             return Ok(());
         }

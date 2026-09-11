@@ -148,6 +148,10 @@ pub mod showing;
 mod showing_again;
 pub mod silence;
 pub mod slots;
+/// The Manifest a Job actually sees — what was snapshotted at its creation,
+/// resolved by every reader `#650` named rather than by `Fleet::manifest`
+/// directly.
+mod snapshotting;
 pub mod spawning;
 mod stuck;
 pub mod sub_dispatch;

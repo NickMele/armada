@@ -64,7 +64,8 @@ where
     pub(crate) async fn run_sheet(&self, job_id: &JobId) -> Result<ipc::RunSheet, Refusal> {
         let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
         let tree = self.tree_of(&job);
-        let listed = entries::frozen(&job, self.manifest());
+        let (manifest, has_snapshot) = self.effective_manifest(&job).await;
+        let listed = entries::frozen(&job, &manifest, has_snapshot);
         let changed = tree
             .as_ref()
             .map(|tree| self.changed_in(tree))
@@ -104,7 +105,10 @@ where
             return Err(refused(Unrehearsable::AlreadyRunning { name: out.name }));
         }
         let entry = match asked.worktree_version {
-            false => entries::frozen(&job, self.manifest()).named(&asked.name),
+            false => {
+                let (manifest, has_snapshot) = self.effective_manifest(&job).await;
+                entries::frozen(&job, &manifest, has_snapshot).named(&asked.name)
+            }
             true => {
                 let theirs = self
                     .theirs(&tree)

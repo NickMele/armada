@@ -170,6 +170,7 @@ where
         let job = Job::create_top_level(new, origin, at.clone());
         store.insert_job(&job, &at).map_err(Adrift::Writing)?;
         self.learn_the_name(&job);
+        self.manifest_snapshotted(&mut store, &job).await;
         drop(store);
         // After the write, never before: a client told about a row the store
         // then refused would hold a Job that does not exist, and a resync would

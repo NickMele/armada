@@ -181,6 +181,7 @@ where
         let job = Job::create_top_level(new, origin, at.clone());
         store.insert_job(&job, &at).map_err(Adrift::Writing)?;
         self.learn_the_name(&job);
+        self.manifest_snapshotted(&mut store, &job).await;
         self.publish(ipc::Event::JobCreated(ipc::JobCreated {
             job: ipc::JobSummary::from(&job),
             actor: core_model::Actor::Human.into(),
