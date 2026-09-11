@@ -406,6 +406,16 @@ export type BridgeApi = {
    */
   setWhenBlocked: (jobId: string, whenBlocked: WhenBlocked) => Promise<Outcome>;
   /**
+   * Choose the model one job's later steps start on, or `null` for the one its
+   * workflow gives each. **Live**: the step running now keeps its model.
+   */
+  setModel: (jobId: string, model: string | null) => Promise<Outcome>;
+  /**
+   * Take back a command a person allowed for one job, by the command exactly as
+   * it was allowed. A line in `armada.yml` is not touched.
+   */
+  removeAllowedCommand: (jobId: string, run: string) => Promise<Outcome>;
+  /**
    * Put a fresh Drone on the surviving worktree, at the step that stopped, and
    * say what to do differently where there is something to say.
    * **Legal only where the Drone is gone** — Fleet refuses 409 where one is
@@ -817,6 +827,8 @@ export const CHANNELS = {
   answerQuestion: "bridge:answer-question",
   answerCommand: "bridge:answer-command",
   setWhenBlocked: "bridge:set-when-blocked",
+  setModel: "bridge:set-model",
+  removeAllowedCommand: "bridge:remove-allowed-command",
   restartStep: "bridge:restart-step",
   overrideVerdict: "bridge:override-verdict",
   rerunGate: "bridge:rerun-gate",

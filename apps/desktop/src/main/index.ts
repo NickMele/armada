@@ -357,6 +357,14 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.setWhenBlocked, (_event, jobId: string, whenBlocked: WhenBlocked) =>
     connection?.commands.setWhenBlocked(jobId, whenBlocked),
   );
+  // The model the job's next step starts on, and an allow taken back. Neither
+  // moves anything on the job.
+  ipcMain.handle(CHANNELS.setModel, (_event, jobId: string, model: string | null) =>
+    connection?.commands.setModel(jobId, model),
+  );
+  ipcMain.handle(CHANNELS.removeAllowedCommand, (_event, jobId: string, run: string) =>
+    connection?.commands.removeAllowedCommand(jobId, run),
+  );
   ipcMain.handle(CHANNELS.redirectDrone, (_event, jobId: string, instruction: string) =>
     connection?.commands.redirectDrone(jobId, instruction),
   );

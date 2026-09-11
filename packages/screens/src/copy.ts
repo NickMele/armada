@@ -70,7 +70,7 @@ export function said(outcome: Outcome): string {
     case "already_answering":
       return "That answer is already in flight. It was not sent twice.";
     case "already_setting":
-      return "That change to how the job meets a blocked command is already in flight. It was not sent twice.";
+      return "A change to this job's settings is already in flight. It was not sent twice.";
     case "already_showing":
       return "That job is already showing its work. It was not asked twice.";
     case "empty_note":
@@ -263,15 +263,33 @@ export const RAISE_CAP_LABEL = "Raise the cost cap";
 export const RAISE_TURN_CAP_LABEL = "Raise the turn cap";
 
 /**
- * How a job meets a command its drone was not given, in the header's words,
- * and the order its menu offers them. **The two are the whole set** — a new job
- * starts at the first, which asks nobody to be watching.
+ * How a job meets a command its drone was not given, in the Job settings
+ * panel's words, and the order it offers them. **The three are the whole set**
+ * — a new job starts at the first, which asks nobody to be watching.
+ *
+ * The labels say what happens to the person, not to the call: *refuse and
+ * hold* named Fleet's side of it, and what somebody choosing needs to know is
+ * whether the job will stop for them, ask them, or not bother them at all.
  */
-export const WHEN_BLOCKED: readonly WhenBlocked[] = ["refuse_and_hold", "ask_me"];
+export const WHEN_BLOCKED: readonly WhenBlocked[] = ["refuse_and_hold", "ask_me", "allow_all"];
 
 export const WHEN_BLOCKED_LABEL: Record<WhenBlocked, string> = {
-  refuse_and_hold: "Refuse and hold",
-  ask_me: "Ask me",
+  refuse_and_hold: "Stop and wait for me",
+  ask_me: "Ask me first",
+  allow_all: "Run it",
+};
+
+/**
+ * What each choice commits to, drawn under it. **Run it names its two
+ * exceptions** because they are what makes it safe to choose: a push stays
+ * Armada's, and what armada.yml marks destructive still stops for a person.
+ */
+export const WHEN_BLOCKED_MEANS: Record<WhenBlocked, string> = {
+  refuse_and_hold: "It's refused, and the job stops until you allow or reject it.",
+  ask_me: "The drone waits while you decide, then carries on. The job shows under Needs you.",
+  allow_all:
+    "Any command runs without asking, so the job finishes however it can. Pushing stays " +
+    "Armada's, and commands armada.yml marks destructive still stop for you.",
 };
 
 /** What names the setting on its line, before the choice in force. */
