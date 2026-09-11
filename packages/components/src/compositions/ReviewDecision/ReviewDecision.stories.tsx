@@ -77,6 +77,23 @@ export const APullRequestToMerge: Story = {
 };
 
 /**
+ * `#663`: the branch clashes with main, so Fleet would refuse the merge.
+ * **Merge stays drawn and takes no fill** — a disabled control has no variant
+ * left to express — **with the reason beside it**, never folded into
+ * `disabledNote`, which belongs to the whole group and is not in play here:
+ * Approve, Request changes and Reject all still work. The caller's own
+ * conflict control is what fixes the branch; this one only says why it
+ * cannot be pressed yet.
+ */
+export const TheBranchConflicts: Story = {
+  args: {
+    note: "",
+    onMerge: () => {},
+    mergeBlockedReason: "Resolve the conflicts first.",
+  },
+};
+
+/**
  * The same, with a decision already in flight. Every control is off, including
  * the merge — the one act here that writes into a repository Armada does not
  * own, and the last one that should be pressable twice.

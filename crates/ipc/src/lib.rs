@@ -103,7 +103,7 @@ pub use checks::{CheckOutput, CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
 pub use commanding::{AnswerCommand, CommandAnswer, CommandInFlight, SetWhenBlocked, WhenBlocked};
 pub use detail::{
-    Criterion, Dependency, JobDelivery, JobDetail, JobReview, JobSpend, JudgeInFlight,
+    Criterion, Currency, Dependency, JobDelivery, JobDetail, JobReview, JobSpend, JudgeInFlight,
     PullRequestDetail, Refusal, ReviewedBy, Settled, StepDetail, StepFacts, Stuck, Verdict,
 };
 pub use enums::{

@@ -66,6 +66,9 @@ impl Commands for FakeDaemon {
     async fn merge_pull_request(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
         self.fake_merge_pull_request(job_id).await
     }
+    async fn resolve_pull_request_conflict(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
+        self.fake_resolve_pull_request_conflict(job_id).await
+    }
     async fn request_changes(
         &self,
         job_id: JobId,

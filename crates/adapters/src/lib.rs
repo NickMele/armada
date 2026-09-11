@@ -45,6 +45,7 @@ mod harness;
 mod inline_comments;
 mod issue_lookup;
 mod judge;
+mod keeping_current;
 mod landing;
 mod mcp;
 mod reclaim;

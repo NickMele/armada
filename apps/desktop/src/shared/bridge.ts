@@ -673,6 +673,12 @@ export type BridgeApi = {
    */
   mergePullRequest: (jobId: string) => Promise<Outcome>;
   /**
+   * Send the branch back for a Drone that can edit files to bring it current
+   * with main. `#663`. Fleet runs the rebase; only a conflict spawns a Drone,
+   * on the step before the one that delivers, never the gate's own.
+   */
+  resolvePullRequestConflict: (jobId: string) => Promise<Outcome>;
+  /**
    * Send the work back with a note. **The Job comes back `running`**, same step,
    * same Drone — nothing is spawned and nothing done is thrown away.
    */
@@ -840,6 +846,7 @@ export const CHANNELS = {
   readHeld: "bridge:read-held",
   approveReview: "bridge:approve-review",
   mergePullRequest: "bridge:merge-pull-request",
+  resolvePullRequestConflict: "bridge:resolve-pull-request-conflict",
   requestChanges: "bridge:request-changes",
   rejectWork: "bridge:reject-work",
   takeUpRemarks: "bridge:take-up-remarks",

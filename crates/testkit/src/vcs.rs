@@ -30,8 +30,9 @@ use std::sync::Mutex;
 
 use adapter_traits::{
     Base, BaseCheckout, BaseOnTheRemote, BaseSpec, BroughtUpToDate, Change, CommitTime, Committed,
-    Delivery, Landing, Mergeable, Merged, NotDelivered, NotMerged, Opened, Pushed, Remark, Renewed,
-    RepositoryStanding, Review, Standing, UnderReview, Vcs, WhatBecameOfIt, Worktree, WorktreeSpec,
+    Delivery, KeptCurrent, Landing, Mergeable, Merged, NotDelivered, NotMerged, Opened, Pushed,
+    Remark, RepositoryStanding, Review, Standing, UnderReview, Vcs, WhatBecameOfIt, Worktree,
+    WorktreeSpec,
 };
 
 use crate::work_product::Holding;
@@ -163,6 +164,9 @@ pub enum Delivered {
     BroughtUpToDate { branch: String, base: String },
     /// The branch was pushed.
     Pushed { branch: String },
+    /// The branch was pushed `--force-with-lease`, over history this fake was
+    /// told had been rewritten.
+    PushedForcing { branch: String },
     /// A pull request was opened, carrying this.
     OpenedForReview { base: String, review: Review },
     /// The forge was asked what became of the branch's pull request. **Counted
@@ -180,11 +184,12 @@ pub enum Delivered {
     /// The forge was asked for inline diff comments. Counted apart from
     /// [`AskedWhatIsUnderReview`]: the sweep must never pay for this call.
     AskedForInlineRemarks { pull_request: String },
-    /// The forge was asked to compare a pull request afresh. **Counted for
-    /// [`AskedWhatBecameOfIt`](Delivered::AskedWhatBecameOfIt)'s reason and
-    /// then some**: this one closes and reopens a person's pull request, so a
+    /// The branch was asked to be kept current against a base that moved —
+    /// `Delivery::kept_current`, in place of the close-and-reopen this
+    /// replaced. **Counted for
+    /// [`AskedWhatBecameOfIt`](Delivered::AskedWhatBecameOfIt)'s reason**: a
     /// test that could not see it could not tell once from every sweep.
-    AskedToRenderAfresh { pull_request: String },
+    KeptCurrent { handle: String, base: String },
     /// The repository every worktree is cut from was asked to catch up.
     CaughtTheRepositoryUp { base: String },
     /// The forge was asked to merge a pull request. **The one write to a
@@ -232,9 +237,10 @@ pub struct Delivering {
     /// The forge's answer for inline diff comments. Empty by default, and
     /// never inferred from `under_review` — a real forge does not either.
     pub inline_remarks: Vec<Remark>,
-    /// What closing and reopening comes to. Renewed by default, because the
-    /// case a test has to write out is the one where it was left closed.
-    pub renewed: Renewed,
+    /// What keeping the branch current comes to. A clean rebase by default,
+    /// because the case a test has to write out is the one where it conflicted
+    /// or found no branch.
+    pub kept_current: KeptCurrent,
     /// What catching the repository up comes to.
     pub repository: RepositoryStanding,
 }
@@ -263,7 +269,10 @@ impl Default for Delivering {
             mergeable: Mergeable::Yes,
             under_review: UnderReview::unreadable(),
             inline_remarks: Vec::new(),
-            renewed: Renewed::Renewed,
+            kept_current: KeptCurrent::Rebased {
+                onto: String::from("5b4ec82700000000000000000000000000000000"),
+                commits: 1,
+            },
             repository: RepositoryStanding::AlreadyHadIt {
                 base: String::from("main"),
                 // A commit-shaped string, because `#474` keys a proof by it and
@@ -413,15 +422,24 @@ impl FakeVcs {
         self.counted(|it| matches!(it, Delivered::Merged { .. }))
     }
 
-    /// Say that closing and reopening the pull request will leave it closed.
+    /// Say what keeping the branch current will come to.
     ///
-    /// `&self` for [`now_landed`](FakeVcs::now_landed)'s reason, and the one
-    /// outcome worth scripting: the renewal that works changes nothing a
-    /// caller can see, and the one that fails is the case the guard exists for.
-    pub fn unable_to_reopen(&self) {
-        self.delivery.lock().expect("not poisoned").renewed = Renewed::LeftClosed {
-            why: String::from("the forge would not reopen it"),
-        };
+    /// `&self` for [`now_landed`](FakeVcs::now_landed)'s reason: nothing keeps
+    /// a branch current until the Job that opened its pull request has
+    /// finished, by which time the fake is inside a Fleet.
+    pub fn now_kept_current(&self, outcome: KeptCurrent) {
+        self.delivery.lock().expect("not poisoned").kept_current = outcome;
+    }
+
+    /// Say what a spawn's own catch-up — `standing` and `bring_up_to_date` —
+    /// answers from here on. `&self`, for [`now_landed`](FakeVcs::now_landed)'s
+    /// reason: a test carrying a Job past a resolved conflict needs the
+    /// ordinary catch-up to answer differently once the Fleet holding this
+    /// fake exists.
+    pub fn now_behind(&self, standing: Standing, rebase: Option<BroughtUpToDate>) {
+        let mut delivery = self.delivery.lock().expect("not poisoned");
+        delivery.standing = standing;
+        delivery.rebase = rebase;
     }
 
     /// Say what bringing the repository up to the merged branch comes to.
@@ -429,11 +447,12 @@ impl FakeVcs {
         self.delivery.lock().expect("not poisoned").repository = standing;
     }
 
-    /// How many times the forge has been asked to compare a pull request
-    /// afresh. **The one call here a person sees happen**, so a test that
-    /// asserts once is asserting the whole of the rule.
-    pub fn times_asked_to_render_afresh(&self) -> usize {
-        self.counted(|it| matches!(it, Delivered::AskedToRenderAfresh { .. }))
+    /// How many times a branch has been asked to be kept current against a
+    /// base that moved. **The one call here a person watching the pull
+    /// request's branch sees happen**, so a test that asserts once is
+    /// asserting the whole of the rule.
+    pub fn times_kept_current(&self) -> usize {
+        self.counted(|it| matches!(it, Delivered::KeptCurrent { .. }))
     }
 
     /// Every branch the repository was asked to catch up to, in order.
@@ -591,6 +610,19 @@ impl Delivery for FakeVcs {
         Ok(pushed)
     }
 
+    fn push_forcing(&self, worktree: &Worktree) -> Result<Pushed, NotDelivered> {
+        let pushed = self.delivery.lock().expect("not poisoned").push.clone();
+        if pushed != Pushed::NoRemote {
+            self.delivered
+                .lock()
+                .expect("not poisoned")
+                .push(Delivered::PushedForcing {
+                    branch: worktree.branch().to_string(),
+                });
+        }
+        Ok(pushed)
+    }
+
     fn open_for_review(
         &self,
         _worktree: &Worktree,
@@ -669,14 +701,23 @@ impl Delivery for FakeVcs {
         }
     }
 
-    fn rendered_afresh(&self, _in_repo: &str, pull_request: &str) -> Renewed {
+    fn base_tip(&self, _in_repo: &str, base: &str) -> Option<String> {
+        self.refs.lock().expect("not poisoned").get(base).cloned()
+    }
+
+    fn kept_current(&self, _in_repo: &str, handle: &str, base: &str) -> KeptCurrent {
         self.delivered
             .lock()
             .expect("not poisoned")
-            .push(Delivered::AskedToRenderAfresh {
-                pull_request: pull_request.to_string(),
+            .push(Delivered::KeptCurrent {
+                handle: handle.to_string(),
+                base: base.to_string(),
             });
-        self.delivery.lock().expect("not poisoned").renewed.clone()
+        self.delivery
+            .lock()
+            .expect("not poisoned")
+            .kept_current
+            .clone()
     }
 
     fn caught_the_repository_up(&self, _in_repo: &str, base: &str) -> RepositoryStanding {

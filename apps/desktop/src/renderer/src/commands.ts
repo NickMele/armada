@@ -408,6 +408,20 @@ export function useCommands(sending: Sending) {
   }
 
   /**
+   * Send the branch back for a Drone that can edit files to bring it current
+   * with main. `#663`. Under the same one-in-flight guard as `decide`, for
+   * `takeUpRemarks`'s reason: it leaves `awaiting_review` the same way.
+   */
+  async function resolvePullRequestConflict(jobId: string): Promise<void> {
+    setDeciding(jobId);
+    try {
+      setOutcome(await window.armada.resolvePullRequestConflict(jobId));
+    } finally {
+      setDeciding(null);
+    }
+  }
+
+  /**
    * Ask Fleet for current state over the connection Bridge already holds.
    *
    * **It re-reads; it does not reconnect.** The stream keeps the board current
@@ -430,6 +444,7 @@ export function useCommands(sending: Sending) {
     acting,
     deciding,
     takeUpRemarks,
+    resolvePullRequestConflict,
     givenBack,
     setGivenBack,
     refreshing,

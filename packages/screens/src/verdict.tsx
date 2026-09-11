@@ -20,7 +20,9 @@ import { openPullRequest, type OpenPullRequest } from "./opening";
 import type { ReactNode } from "react";
 import { GitPullRequest, Minus } from "lucide-react";
 import {
+  Button,
   CheckRuns,
+  Tooltip,
   VerdictSheet,
   type CheckRun as CheckRunRow,
   type VerdictFigure,
@@ -39,6 +41,7 @@ import type {
 
 import { hostLabel, money, pullRequestNumber } from "./facts";
 import { span } from "./duration";
+import { sitting } from "./held";
 import { checkRow, judgeRow, saidOf, iconOf } from "./checks";
 import { Decide } from "./Decide";
 import { checksOf, didNotPass, mechanicalRunsOf, panelsOf } from "./gates";
@@ -299,11 +302,15 @@ function tookOf(job: JobSummary, whole: JobWhole | null, now: number): string | 
 export function pullRequestBlockOf(
   address: string | undefined,
   detail: PullRequestDetail | undefined,
+  now: number,
   onOpen?: () => void,
+  onResolveConflict?: () => void,
+  disabled?: boolean,
 ): ReactNode | undefined {
   if (address === undefined) return undefined;
   const number =
     detail?.number === undefined ? (pullRequestNumber(address) ?? "Pull request") : `#${detail.number}`;
+  const currency = currencyLineOf(detail?.currency, now);
   return (
     <div className="armada-verdict__pr">
       <p className="text-xs text-fg-muted">
@@ -323,6 +330,26 @@ export function pullRequestBlockOf(
         </span>
         {detail === undefined ? null : pullRequestReadOf(detail)}
       </p>
+      {currency === undefined ? null : (
+        <p className={currency.conflicted ? "text-xs text-fg-default" : "text-2xs text-fg-subtle"}>
+          {currency.said}
+        </p>
+      )}
+      {/* Sits directly under the sentence it answers, never after the
+          decision card below — a person reading "changes that clash" should
+          find the fix in the same glance. `#663`. Drawn only where there is a
+          clash to resolve: the automatic catch-up already keeps an
+          unattended branch current, so this is not a "check now" button.
+          **Primary**, because `Decide`'s own merge control is disabled in
+          exactly this state — one accent fill, and it is on the control that
+          works. */}
+      {currency?.conflicted !== true || onResolveConflict === undefined ? null : (
+        <Tooltip label="Sends the clash back to the step that wrote the code. Its Drone fixes the files, the Checks run again, and the pull request updates.">
+          <Button variant="primary" disabled={disabled} onClick={onResolveConflict}>
+            Resolve conflicts
+          </Button>
+        </Tooltip>
+      )}
     </div>
   );
 }
@@ -346,6 +373,40 @@ function pullRequestReadOf(detail: PullRequestDetail): string {
   return `${title}, open, ${mergeable}, ${reviewed}.`;
 }
 
+/**
+ * What the last attempt to keep this pull request's branch current against a
+ * moved base says, where main has ever moved under it. `#663`.
+ *
+ * **`undefined` is the ordinary case.** Most of a pull request's life the
+ * branch has never needed to move, and this block says nothing about it —
+ * silence here is not a gap, it is the base never having moved.
+ *
+ * **Plain words, and none of Fleet's own.** The owner rejects mechanism on
+ * screen — no commit id, no "rebase", no "push", no "forge" — so this says
+ * what changed for a person, not what Fleet ran.
+ */
+export function currencyLineOf(
+  currency: PullRequestDetail["currency"],
+  now: number,
+): { said: string; conflicted: boolean } | undefined {
+  if (currency === undefined) return undefined;
+  if (currency.conflict_files === undefined || currency.conflict_files.length === 0) {
+    const age = sitting(currency.rebased_at, now);
+    // "just now" does not take "ago" after it — `sitting`'s own floor,
+    // "under a minute", reads the same way for the same reason.
+    const said =
+      age === null || age === "under a minute"
+        ? "Up to date with main, checked just now."
+        : `Up to date with main, checked ${age} ago.`;
+    return { said, conflicted: false };
+  }
+  const files = currency.conflict_files.join(", ");
+  return {
+    said: `Main has changes that clash with this branch in ${files}. Fleet left the branch as it was.`,
+    conflicted: true,
+  };
+}
+
 /** What `verdictOf` is built from — the panel's own reading of one Job and its open step. */
 export type VerdictArgs = {
   job: JobSummary;
@@ -362,6 +423,10 @@ export type VerdictArgs = {
     address: string | undefined;
     detail: PullRequestDetail | undefined;
     onOpen?: () => void;
+    /** Send the clash back to a Drone that can edit files. `#663`. */
+    onResolveConflict?: () => void;
+    /** Off while nothing here can be sent — the same reading `Decide` gets. */
+    resolveConflictDisabled?: boolean;
   };
   /** Fleet's own reason the gate could not decide, scoped to this step. */
   undecided?: string;
@@ -400,7 +465,16 @@ export function verdictOf({
     ...(never === true && kept.length > 0 ? { deliverable: kept[0]?.opening } : {}),
     ...(pullRequest === undefined
       ? {}
-      : { pullRequest: pullRequestBlockOf(pullRequest.address, pullRequest.detail, pullRequest.onOpen) }),
+      : {
+          pullRequest: pullRequestBlockOf(
+            pullRequest.address,
+            pullRequest.detail,
+            now,
+            pullRequest.onOpen,
+            pullRequest.onResolveConflict,
+            pullRequest.resolveConflictDisabled,
+          ),
+        }),
     provesIt: <CheckRuns rows={provesItOf(step, whole?.acceptance_criteria ?? [], now, undecided, reason)} />,
     ...(provesItNoteOf(step, render) === undefined
       ? {}
@@ -430,6 +504,8 @@ export type VerdictSlotAtGateArgs = {
   stale: boolean;
   deciding: boolean;
   onMergePullRequest: (jobId: string) => void;
+  /** Send the branch back for a Drone that can edit files. `#663`. */
+  onResolvePullRequestConflict: (jobId: string) => void;
   onApproveReview: (jobId: string) => void;
   onRequestChanges: (jobId: string, note: string) => void;
   onReject: (jobId: string) => void;
@@ -459,6 +535,7 @@ export function verdictSlotAtGate({
   stale,
   deciding,
   onMergePullRequest,
+  onResolvePullRequestConflict,
   onApproveReview,
   onRequestChanges,
   onReject,
@@ -469,6 +546,7 @@ export function verdictSlotAtGate({
 }: VerdictSlotAtGateArgs): ReactNode {
   const address = whole?.delivery?.pull_request;
   const detail = whole?.delivery?.pull_request_detail;
+  const conflicted = currencyLineOf(detail?.currency, now)?.conflicted === true;
   const never = neverDelivers(whole?.steps ?? []);
   // Never `auto_merge`: approving here never merges regardless of that
   // policy, which holds a later, separate gate (`fleet::gate`, `reviewing`).
@@ -504,6 +582,8 @@ export function verdictSlotAtGate({
             void openPullRequest(onOpenPullRequest, job.id).then((because) => {
               if (because !== null) onSaid(because);
             }),
+          onResolveConflict: () => onResolvePullRequestConflict(job.id),
+          resolveConflictDisabled: stale || deciding,
         },
         undecided,
       })}
@@ -517,7 +597,7 @@ export function verdictSlotAtGate({
           remarks={recorded.remarks}
           stale={stale}
           deciding={deciding}
-          {...(address === undefined ? {} : { pullRequest: address })}
+          {...(address === undefined ? {} : { pullRequest: address, conflicted })}
           onMerge={onMergePullRequest}
           onApprove={onApproveReview}
           onRequestChanges={onRequestChanges}

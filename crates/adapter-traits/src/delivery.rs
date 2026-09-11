@@ -385,22 +385,29 @@ impl NotMerged {
     }
 }
 
-/// What came of asking the forge to compare a pull request afresh.
+/// What came of bringing a pull request's branch up to a base that moved,
+/// **in place of** closing and reopening it — `#663`.
 ///
-/// **No `Result`**, for [`Delivery::landed`]'s reason: a caller does nothing
-/// differently about a forge that would not answer than about one that refused,
-/// and both mean try again on a later sweep.
+/// **Every conflict leaves the branch exactly as it was.** Nothing is reading
+/// the result the way a Drone reads [`BroughtUpToDate::Conflicted`]: the Job
+/// is already done, so a conflict here is answered by restoring the branch
+/// untouched and telling a person, never by leaving markers in a checkout
+/// nobody is about to open.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Renewed {
-    /// It is open again and comparing against the right commit.
-    Renewed,
-    /// **It is closed and this call could not reopen it**, which is the one
-    /// outcome that leaves a pull request worse than it found it.
-    ///
-    /// A caller that sees this must not read the next `CLOSED` off the forge as
-    /// somebody turning the work down — it is this call's own leavings. See
-    /// `fleet::noticing`, which holds that guard.
-    LeftClosed { why: String },
+pub enum KeptCurrent {
+    /// The branch was rebased onto `onto` — the base's tip at the moment of
+    /// the attempt — and pushed with `--force-with-lease`.
+    Rebased { onto: String, commits: usize },
+    /// The rebase conflicted, so the branch was left exactly as it was.
+    /// `onto` is the base's tip this was attempted against, carried so a
+    /// caller can tell "already tried this base and it conflicted" from "the
+    /// base moved again" without retrying on every sweep.
+    Conflicted { onto: String, files: Vec<String> },
+    /// The branch this pull request derived is gone — nothing to rebase, and
+    /// nothing this call can do about it.
+    NoBranch,
+    /// A tool would not run.
+    NotDelivered(NotDelivered),
 }
 
 /// Where the repository every worktree is cut from stands, after a merge was
@@ -563,6 +570,16 @@ pub trait Delivery {
     /// Put the branch on the remote, under its own name.
     fn push(&self, worktree: &Worktree) -> Result<Pushed, NotDelivered>;
 
+    /// The same push, `--force-with-lease`. **The one call this trait makes
+    /// that may overwrite what is on the remote**, and the only one that may:
+    /// every other write here either creates something that was not there —
+    /// the ordinary [`push`](Delivery::push), a pull request — or is refused
+    /// where history would move under it. This exists for the one case where
+    /// moving it is the point — [`bring_up_to_date`](Delivery::bring_up_to_date)
+    /// rewrote the branch, and the remote's own copy is what it is rewriting.
+    /// `#663`.
+    fn push_forcing(&self, worktree: &Worktree) -> Result<Pushed, NotDelivered>;
+
     /// Open a pull request from the branch into the base.
     fn open_for_review(
         &self,
@@ -655,23 +672,42 @@ pub trait Delivery {
     /// reclaimed long before anybody merges its work.
     fn merge(&self, in_repo: &str, pull_request: &str) -> Result<Merged, NotMerged>;
 
-    /// Make the forge compare a pull request against the commit its branch
-    /// actually sits on.
+    /// Rebase a Job's branch onto a base that has moved, and push the result —
+    /// in place of closing and reopening the pull request. `#663`.
     ///
-    /// **Closing and reopening it, because nothing else moves it.** `#427`
-    /// measured the alternatives: the compare endpoint answered the right file
-    /// count the whole time and the pull request did not, pushing the base
-    /// corrected the repository and not the render, and a sentence in the body
-    /// changes nothing a person is shown. An empty commit does move it, and
-    /// puts a commit nobody wrote into the history a reviewer reads.
+    /// **Not `#427`'s close-and-reopen.** That measured the alternatives for
+    /// *rendering* a pull request afresh without changing what it carries; this
+    /// changes what it carries, which is the fix for the finding that motivated
+    /// it in the first place — a branch behind its base with conflicts, which
+    /// only a rebase resolves.
+    ///
+    /// **Works whether or not a Job's own worktree is still there.** A finished
+    /// Job's worktree is very often reclaimed before its pull request is
+    /// merged, so this derives one from `handle` — the same worktree if it is
+    /// still on disk, or a scratch checkout onto the same branch, attached and
+    /// detached inside this one call, where it is not.
     ///
     /// **Called only for [`Rendering::FromASupersededBase`]**, and at most once
-    /// per pull request, because this is the one method here that a person
-    /// watching the forge sees happen.
+    /// per base — see `fleet::currency`, which holds that guard durably rather
+    /// than in memory, because losing it on a restart is `#663`'s own finding.
+    ///
+    /// `in_repo` is the repository every worktree was cut from, `handle` is the
+    /// Job's own — which is what a worktree and a branch are both derived from
+    /// — and `base` is the branch the forge named as what this merges into.
+    fn kept_current(&self, in_repo: &str, handle: &str, base: &str) -> KeptCurrent;
+
+    /// The local commit a base branch is on, read without a worktree.
+    ///
+    /// **The cheap half of [`kept_current`](Delivery::kept_current)**, asked
+    /// first so that a base which has not moved past what was already tried
+    /// costs one process rather than a scratch checkout and a rebase. `None`
+    /// is a base this could not read — no such branch, an unreadable
+    /// repository — and a caller answers that the same as never having seen
+    /// it, never as agreement.
     ///
     /// `in_repo` is the repository every worktree was cut from, for
     /// [`landed`](Delivery::landed)'s reason.
-    fn rendered_afresh(&self, in_repo: &str, pull_request: &str) -> Renewed;
+    fn base_tip(&self, in_repo: &str, base: &str) -> Option<String>;
 
     /// Bring the repository every worktree is cut from up to the branch that
     /// just merged.

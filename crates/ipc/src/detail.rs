@@ -684,6 +684,35 @@ pub struct PullRequestDetail {
     /// were carried on both. Empty is a pull request nobody has approved or
     /// asked changes on, which is the ordinary case for one just opened.
     pub reviews: Vec<ReviewedBy>,
+    /// What the last attempt to keep this pull request's branch current
+    /// against a moved base came to. `#663`.
+    ///
+    /// **Absent is a branch that has never needed to move**, which is most of
+    /// a pull request's life — this is not written until the base it merges
+    /// into moves under it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub currency: Option<Currency>,
+}
+
+/// What the last attempt to keep a pull request's branch current against a
+/// moved base came to.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Currency {
+    /// The base's tip this was last attempted against.
+    pub rebased_onto: String,
+    pub rebased_at: Instant,
+    /// **Present, and never empty, exactly where the attempt conflicted and
+    /// the branch was left exactly as it was.** Absent is a clean rebase —
+    /// the branch is current and nothing is owed to a person.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub conflict_files: Vec<String>,
+}
+
+impl Currency {
+    /// Whether a person can be offered the Drone to resolve this.
+    pub fn conflicted(&self) -> bool {
+        !self.conflict_files.is_empty()
+    }
 }
 
 /// One reviewer's verdict on a pull request.

@@ -12,7 +12,8 @@
 
 use std::time::Duration;
 
-use adapter_traits::{Landing, Rendering, RepositoryStanding};
+use adapter_traits::{KeptCurrent, Landing, Rendering, RepositoryStanding};
+use api::Queries;
 use testkit::{FakeVcs, FakeWorkProduct};
 
 use crate::daemon::Fleet;
@@ -229,10 +230,13 @@ fn open_against_a_base_that_moved() -> Landing {
     }
 }
 
-/// The whole of #427: the base moved under an open pull request, so the forge
-/// is asked to compare it afresh rather than told about it in the body.
+/// **`#663`, in place of `#427`'s close-and-reopen.** The base moved under an
+/// open pull request, so the branch is rebased onto it and pushed, rather
+/// than the pull request being closed and reopened over it — an act that no
+/// longer exists to reach for: [`adapter_traits::Delivery::kept_current`] is
+/// the only path from here to the forge's own copy of this branch.
 #[tokio::test]
-async fn a_pull_request_whose_base_moved_is_compared_afresh() {
+async fn a_pull_request_whose_base_moved_is_kept_current() {
     let home = TempDir::new();
     let fleet = a_fleet_asking_every_turn(&home);
     a_finished_job(&fleet, &home).await;
@@ -245,9 +249,9 @@ async fn a_pull_request_whose_base_moved_is_compared_afresh() {
         "a stale render is not news about a landing"
     );
     assert_eq!(
-        fleet.vcs().times_asked_to_render_afresh(),
+        fleet.vcs().times_kept_current(),
         1,
-        "the forge was nudged, which is the one thing that moves it"
+        "the branch was rebased onto the base that moved"
     );
     assert!(
         fleet
@@ -261,15 +265,23 @@ async fn a_pull_request_whose_base_moved_is_compared_afresh() {
     );
 }
 
-/// **Once, and then never again.** Closing and reopening is visible to
-/// everybody watching the pull request, so a base this cannot re-pin must not
-/// do it on every sweep for the life of the process.
+/// **Once per base, and then never again until it moves further.** A
+/// conflicted attempt is not retried on every sweep — `Store::kept_current_for`
+/// is read back and compared against the base's tip before another is tried,
+/// which is what makes this durable rather than the in-memory guard `#663`
+/// found lost on a restart.
 #[tokio::test]
-async fn a_pull_request_is_only_ever_compared_afresh_once() {
+async fn a_conflicted_rebase_is_not_retried_against_the_same_base() {
     let home = TempDir::new();
     let fleet = a_fleet_asking_every_turn(&home);
     a_finished_job(&fleet, &home).await;
 
+    let onto = "8c2ce681000000000000000000000000000000";
+    fleet.vcs().move_ref_to("main", onto);
+    fleet.vcs().now_kept_current(KeptCurrent::Conflicted {
+        onto: String::from(onto),
+        files: vec![String::from("src/parse.rs")],
+    });
     fleet.vcs().now_landed(open_against_a_base_that_moved());
     for _ in 0..5 {
         fleet.turn().await.unwrap();
@@ -280,9 +292,9 @@ async fn a_pull_request_is_only_ever_compared_afresh_once() {
         "the pull request is still asked about, because it is still open"
     );
     assert_eq!(
-        fleet.vcs().times_asked_to_render_afresh(),
+        fleet.vcs().times_kept_current(),
         1,
-        "and it is closed and reopened exactly once"
+        "the same conflict against the same base is not retried every sweep"
     );
 }
 
@@ -303,52 +315,11 @@ async fn a_render_that_is_right_or_unreadable_is_never_touched() {
         fleet.turn().await.unwrap();
 
         assert_eq!(
-            fleet.vcs().times_asked_to_render_afresh(),
+            fleet.vcs().times_kept_current(),
             0,
-            "{rendering:?} is not a base anybody has to close a pull request over"
+            "{rendering:?} is not a base this has anything to rebase against"
         );
     }
-}
-
-/// **A pull request this left closed is not somebody turning the work down.**
-/// The reopen failed, so the next `CLOSED` off the forge is this sweep's own
-/// leavings — recording it would put the wrong sentence on the record for good.
-#[tokio::test]
-async fn a_pull_request_left_closed_by_the_nudge_is_not_recorded_as_refused() {
-    let home = TempDir::new();
-    let fleet = a_fleet_asking_every_turn(&home);
-    a_finished_job(&fleet, &home).await;
-
-    fleet.vcs().unable_to_reopen();
-    fleet.vcs().now_landed(open_against_a_base_that_moved());
-    fleet.turn().await.unwrap();
-    assert_eq!(fleet.vcs().times_asked_to_render_afresh(), 1);
-
-    // What the forge now says, because the close worked and the reopen did not.
-    fleet.vcs().now_landed(Landing::ClosedUnmerged {
-        url: String::from(PULL_REQUEST),
-    });
-    let turned = fleet.turn().await.unwrap();
-
-    assert!(
-        turned.noticed.is_none(),
-        "the closure is Armada's own and is not reported as a person's"
-    );
-    assert!(
-        fleet
-            .store()
-            .lock()
-            .await
-            .landed_by_job()
-            .unwrap()
-            .is_empty(),
-        "`closed_unmerged` is permanent, and this one was never true"
-    );
-    assert_eq!(
-        fleet.vcs().times_asked_to_render_afresh(),
-        2,
-        "the reopen is tried again rather than the closure being believed"
-    );
 }
 
 /// The remaining row of #337: what merged is now what everything else builds
@@ -434,4 +405,74 @@ async fn a_closed_pull_request_leaves_the_repository_where_it_is() {
         "nothing merged, so nothing is behind"
     );
     assert!(fleet.vcs().repository_caught_up_to().is_empty());
+}
+
+// --------------------------------------------------------------- `#663`
+
+/// A clean rebase is put in front of a person: when it happened and what base
+/// it landed the branch on, with nothing to resolve.
+#[tokio::test]
+async fn a_clean_rebase_is_shown_on_the_job_and_carries_no_conflict() {
+    let home = TempDir::new();
+    let fleet = a_fleet_asking_every_turn(&home);
+    let job_id = a_finished_job(&fleet, &home).await;
+
+    fleet.vcs().now_kept_current(KeptCurrent::Rebased {
+        onto: String::from("8c2ce681000000000000000000000000000000"),
+        commits: 2,
+    });
+    fleet.vcs().now_landed(open_against_a_base_that_moved());
+    fleet.turn().await.unwrap();
+
+    let detail = fleet
+        .get_job(ipc::JobId::from(&job_id))
+        .await
+        .expect("the Job is served");
+    let currency = detail
+        .delivery
+        .and_then(|delivery| delivery.pull_request_detail)
+        .and_then(|pr| pr.currency)
+        .expect("a rebase was attempted, so this is no longer absent");
+    assert_eq!(
+        currency.rebased_onto,
+        "8c2ce681000000000000000000000000000000"
+    );
+    assert!(
+        !currency.conflicted(),
+        "a clean rebase has nothing for a person to resolve"
+    );
+}
+
+/// A conflicted rebase is put in front of a person the same way, naming the
+/// files — what a review panel offers the Drone for.
+#[tokio::test]
+async fn a_conflicted_rebase_is_shown_on_the_job_with_its_files() {
+    let home = TempDir::new();
+    let fleet = a_fleet_asking_every_turn(&home);
+    let job_id = a_finished_job(&fleet, &home).await;
+
+    fleet.vcs().now_kept_current(KeptCurrent::Conflicted {
+        onto: String::from("8c2ce681000000000000000000000000000000"),
+        files: vec![String::from("src/parse.rs")],
+    });
+    fleet.vcs().now_landed(open_against_a_base_that_moved());
+    fleet.turn().await.unwrap();
+
+    let detail = fleet
+        .get_job(ipc::JobId::from(&job_id))
+        .await
+        .expect("the Job is served");
+    let currency = detail
+        .delivery
+        .and_then(|delivery| delivery.pull_request_detail)
+        .and_then(|pr| pr.currency)
+        .expect("a conflicted attempt is still an attempt");
+    assert!(currency.conflicted(), "there is something to resolve");
+    assert_eq!(currency.conflict_files, vec![String::from("src/parse.rs")]);
+
+    let landed = fleet.store().lock().await.landed_by_job().unwrap();
+    assert!(
+        !landed.contains_key(&job_id),
+        "a conflict is shown to a person, not settled — the Job stays open"
+    );
 }

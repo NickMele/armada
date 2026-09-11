@@ -49,6 +49,11 @@ import { Tooltip } from "../../primitives/Tooltip/Tooltip";
  * the 422 Fleet gives it. A round trip to learn the field was empty is a
  * refusal a person reads as a failure.
  *
+ * **Merge can be drawn and disabled at once.** `#663`: a branch behind main
+ * with conflicts is a pull request Fleet would refuse to merge, and
+ * `mergeBlockedReason` says so beside the control rather than hiding it —
+ * the caller's own conflict control is what fixes the branch, not this one.
+ *
  * **No glyph on any of them.** Primary and secondary are label-only by
  * contract, and a mark on the destructive one alone would make the difference
  * between them a picture rather than a sentence — which is the reading that
@@ -71,6 +76,15 @@ export type ReviewDecisionProps = {
    * would refuse must not be a button a person can reach.
    */
   onMerge?: () => void;
+  /**
+   * Why merging is blocked, shown beside the control rather than folded into
+   * `disabledNote` — the rest of the group stays live while this one alone is
+   * not. **Presence disables the merge control regardless of `disabled`.**
+   * `#663`: a branch behind main with conflicts is not a pull request Fleet
+   * can land, and a button that fails on the press is worse than one that
+   * says so first.
+   */
+  mergeBlockedReason?: ReactNode;
   /** Take the work, leaving the pull request where it is. Sent on the press. */
   onApprove: () => void;
   /** Send it back with the note. Refused while the note is blank. */
@@ -105,6 +119,7 @@ export function ReviewDecision({
   note,
   onNote,
   onMerge,
+  mergeBlockedReason,
   onApprove,
   onRequestChanges,
   onReject,
@@ -141,13 +156,26 @@ export function ReviewDecision({
       <div className="armada-decision__kept">
         {/* The one accent fill on this surface, and it moves. A job with a pull
             request open has one ordinary ending and it is this one; a job with
-            none never draws this control at all. */}
+            none never draws this control at all. `mergeBlockedReason` present
+            is a third case — drawn, disabled either way, its sentence beside
+            it rather than lost in `disabledNote`, which is the group's. */}
         {merging ? (
-          <Tooltip label={mergeNote}>
-            <Button variant="primary" disabled={disabled} onClick={onMerge}>
-              {mergeLabel}
-            </Button>
-          </Tooltip>
+          <div className="armada-decision__merge">
+            <Tooltip label={mergeNote}>
+              <Button
+                variant="primary"
+                disabled={disabled || mergeBlockedReason !== undefined}
+                onClick={onMerge}
+              >
+                {mergeLabel}
+              </Button>
+            </Tooltip>
+            {mergeBlockedReason === undefined ? null : (
+              <p className="armada-decision__said" role="note">
+                {mergeBlockedReason}
+              </p>
+            )}
+          </div>
         ) : null}
         <Tooltip label={approveNote}>
           <Button

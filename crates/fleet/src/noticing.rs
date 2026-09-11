@@ -28,8 +28,8 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use adapter_traits::{
-    AgentHarness, Delivery, Landing, Mergeable, Rendering, Renewed, RepositoryStanding,
-    UnderReview, Vcs, WhatBecameOfIt, WorkProduct,
+    AgentHarness, Delivery, Landing, Mergeable, RepositoryStanding, UnderReview, Vcs,
+    WhatBecameOfIt, WorkProduct,
 };
 use core_model::{Component, Envelope, FieldValue, JobId, Level, Timestamp};
 
@@ -86,16 +86,6 @@ pub struct Noticed {
 pub(crate) struct Sweep {
     pub(crate) last: Option<Timestamp>,
     pub(crate) next: usize,
-    /// Every pull request this process has closed and reopened, and how that
-    /// went.
-    ///
-    /// **Two rules live in this one map.** A pull request is nudged once, so a
-    /// base this cannot re-pin does not close and reopen a person's work every
-    /// sweep for the life of the process. And a pull request left closed by a
-    /// reopen that failed is not read as somebody turning the work down — it is
-    /// this sweep's own leavings, and the next sweep tries the reopen again
-    /// rather than recording it.
-    pub(crate) nudged: BTreeMap<String, Renewed>,
     /// What the forge last said about each open pull request, so a line is
     /// written when it changes rather than on every rotation. See
     /// [`crate::under_review`], which owns the comparison and the reasoning.
@@ -103,14 +93,12 @@ pub(crate) struct Sweep {
     /// Every pull request this process has already merged for itself under
     /// `auto_merge`, whether or not the forge accepted.
     ///
-    /// **`nudged`'s shape and its reason**, one act along: a merge the forge
-    /// will never accept — a protected base, a required review nobody gave —
-    /// must not spawn a process and write a line every sweep for the life of
-    /// the daemon. A person can still press, and a restart tries once more.
-    ///
-    /// **A set and not a map**, unlike `nudged`: what came of it is on the
-    /// Job's record and in its log already, and a second copy here would be a
-    /// reading that outlived the fact.
+    /// **A set and not a map.** What came of it is on the Job's record and in
+    /// its log already, and a second copy here would be a reading that
+    /// outlived the fact. A merge the forge will never accept — a protected
+    /// base, a required review nobody gave — must not spawn a process and
+    /// write a line every sweep for the life of the daemon; a person can
+    /// still press, and a restart tries once more.
     pub(crate) merged_by_policy: std::collections::BTreeSet<String>,
     /// What this rotation last read live off each open pull request, keyed by
     /// address. `crate::serving::get_job` is the one reader, and it never
@@ -187,30 +175,24 @@ where
         let read = self.vcs().landed(&self.host().repo_root, &asking.url);
         match &read.landing {
             // Still open, so the merge question has no news — and the second
-            // question this call answers does. `#427`: the forge pins the
-            // comparison at the commit the pull request was opened from, and a
-            // base that has moved since renders other people's commits as this
-            // Job's work.
-            Landing::Open { url, rendering } => {
-                self.nudged(&asking.job_id, url, rendering).await;
+            // question this call answers does. `#427`/`#663`: the forge pins
+            // the comparison at the commit the pull request was opened from,
+            // and a base that has moved since renders other people's commits
+            // as this Job's work — so the branch is rebased onto it, once per
+            // base. `crate::currency`.
+            Landing::Open { url, .. } => {
+                self.kept_current(&asking.job_id, &read).await;
                 // **The one state in which the second question means
                 // anything**, on the turn the rotation had already reached this
                 // Job — never a loop of its own. `crate::under_review`.
                 let reviewed = self.read_what_is_under_review(&asking.job_id, url).await;
                 // **Cached on the same turn that read it**, so `get_job` never
                 // asks the forge itself — see [`Sweep::pr_detail`].
-                self.remembered(url, &read, reviewed.as_ref()).await;
+                self.remembered(&asking.job_id, url, &read, reviewed.as_ref())
+                    .await;
                 return Ok(None);
             }
             Landing::Unknown => return Ok(None),
-            // **This sweep's own leavings, not a person turning the work
-            // down.** A reopen that failed left it closed, and recording that
-            // would put the wrong sentence on the record for good — so the
-            // reopen is tried again instead.
-            Landing::ClosedUnmerged { url } if self.left_it_closed(url).await => {
-                self.reopened(url).await;
-                return Ok(None);
-            }
             Landing::Merged { .. } | Landing::ClosedUnmerged { .. } => {}
         }
         self.settled_landing(&asking.job_id, read).await
@@ -311,71 +293,6 @@ where
         Ok(waiting.into_iter().nth(at))
     }
 
-    /// Ask the forge to compare an open pull request afresh, where its base has
-    /// been superseded and this process has not already asked.
-    ///
-    /// **Nothing is returned and nothing raises.** The Job is finished and its
-    /// record says everything it is going to say; what this changes is what a
-    /// person is shown on the forge, which is not a fact Armada holds. A forge
-    /// that would not do it is a log line and another sweep.
-    ///
-    /// **Once per pull request, per process.** Closing and reopening is visible
-    /// to everybody watching it, so a base this cannot re-pin must not do that
-    /// on a loop. The memory is [`Sweep::nudged`], which is lost on a restart —
-    /// costing at most one more nudge over a set that is small by construction.
-    async fn nudged(&self, job: &JobId, url: &str, rendering: &Rendering) {
-        let Rendering::FromASupersededBase { pinned, written_on } = rendering else {
-            return;
-        };
-        if self.sweeping().lock().await.nudged.contains_key(url) {
-            return;
-        }
-        let renewed = self.reopened(url).await;
-        let level = match &renewed {
-            Renewed::Renewed => Level::Info,
-            Renewed::LeftClosed { .. } => Level::Warn,
-        };
-        self.logged(
-            job,
-            Envelope::new(
-                self.now(),
-                level,
-                Component::Fleet,
-                self.run().clone(),
-                match &renewed {
-                    Renewed::Renewed => {
-                        "the pull request was comparing against a base that had \
-                         moved, and was reopened against the right one"
-                    }
-                    Renewed::LeftClosed { .. } => {
-                        "the pull request was closed to re-pin its base and the \
-                         forge would not reopen it"
-                    }
-                },
-            )
-            .in_job(job.as_ulid().clone())
-            .with_field("pull_request", FieldValue::Str(url.to_string()))
-            .with_field("pinned_at", FieldValue::Str(pinned.clone()))
-            .with_field("written_on", FieldValue::Str(written_on.clone())),
-        );
-    }
-
-    /// Close and reopen, and remember how it went.
-    ///
-    /// **The one write to the forge on this path**, and the reason
-    /// [`Sweep::nudged`] exists at all: what it records is not an optimisation
-    /// but the guard that stops a pull request this left closed being read as
-    /// one somebody turned down.
-    async fn reopened(&self, url: &str) -> Renewed {
-        let renewed = self.vcs().rendered_afresh(&self.host().repo_root, url);
-        self.sweeping()
-            .lock()
-            .await
-            .nudged
-            .insert(url.to_string(), renewed.clone());
-        renewed
-    }
-
     /// Remember what this turn read live off one open pull request, so
     /// `get_job` can answer from memory rather than asking the forge itself.
     ///
@@ -385,7 +302,35 @@ where
     /// `mergeable` flip from a forge still computing it to a real answer
     /// without waiting for something else about the pull request to move
     /// too.
-    async fn remembered(&self, url: &str, read: &WhatBecameOfIt, reviewed: Option<&UnderReview>) {
+    async fn remembered(
+        &self,
+        job_id: &JobId,
+        url: &str,
+        read: &WhatBecameOfIt,
+        reviewed: Option<&UnderReview>,
+    ) {
+        // **Read after `kept_current`, on the same turn.** Whatever this
+        // call's own attempt just wrote is what a person is shown next, not
+        // what the record said a moment before it — the reason `#663`'s
+        // review panel names a rebase that just happened rather than the one
+        // before it.
+        let currency = self
+            .store()
+            .lock()
+            .await
+            .kept_current_for(job_id)
+            .ok()
+            .and_then(|kept| {
+                let onto = kept.onto?;
+                Some(ipc::Currency {
+                    rebased_onto: onto,
+                    rebased_at: kept
+                        .at
+                        .as_ref()
+                        .map_or_else(|| (&self.now()).into(), Into::into),
+                    conflict_files: kept.conflict_files.unwrap_or_default(),
+                })
+            });
         let detail = ipc::PullRequestDetail {
             number: read.number,
             title: read.title.clone(),
@@ -406,20 +351,13 @@ where
                         .collect()
                 })
                 .unwrap_or_default(),
+            currency,
         };
         self.sweeping()
             .lock()
             .await
             .pr_detail
             .insert(url.to_string(), detail);
-    }
-
-    /// Whether this process closed that pull request and could not reopen it.
-    async fn left_it_closed(&self, url: &str) -> bool {
-        matches!(
-            self.sweeping().lock().await.nudged.get(url),
-            Some(Renewed::LeftClosed { .. })
-        )
     }
 
     /// Bring the repository every worktree is cut from up to what just merged.
