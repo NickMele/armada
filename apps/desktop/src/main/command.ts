@@ -17,8 +17,8 @@
 import type { BridgeState } from "../shared/bridge";
 import type { ClearOutcome, Draft, Outcome, ReclaimOutcome } from "@armada/protocol";
 import type { CapRaise, ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report, RestartRequested, TurnRaise } from "@armada/protocol";
-import type { ProposalInFlight, Proposed } from "@armada/protocol";
-import { ask, isJobSummary, MODEL_CALL_MS, route, type Answer } from "./request";
+import type { ProposalInFlight, Proposed, ShownAgain } from "@armada/protocol";
+import { ask, isJobSummary, MODEL_CALL_MS, NO_WAIT, route, type Answer } from "./request";
 import { Clearing } from "./clearing";
 import { proposeFromRequest as propose } from "./proposing";
 import { decide, takeUp, type Decision } from "./review";
@@ -131,6 +131,12 @@ export class JobCommands {
    * realises none of the options was right.
    */
   private readonly answering = new Set<string>();
+  /**
+   * Jobs with a press out. Its own set: a press moves nothing on the Job, so it
+   * is in flight beside any act that does, and Fleet refuses a second press on
+   * one Job anyway — this only saves the round trip.
+   */
+  private readonly showing = new Set<string>();
 
   constructor(board: Board) {
     this.board = board;
@@ -476,6 +482,33 @@ export class JobCommands {
       // wrong one here.
       ask(port, "POST", route(jobId, "rerun_gate"), undefined, MODEL_CALL_MS),
     );
+  }
+
+  /**
+   * Ask a Job to show its work again.
+   *
+   * **Not through `act`**, which folds a Job row or re-reads the whole board:
+   * what comes back is a set of frames, and the only thing that changed is the
+   * open Job's detail. So this re-reads that and nothing else.
+   *
+   * **`NO_WAIT`, for `proposeFromRequest`'s reason.** A press runs the
+   * repository's app and its spec, and Fleet bounds it by its own Check budget;
+   * a wait here would be a guess made by the side that knows least, and Bridge
+   * giving up first would throw away the answer while the press ran on.
+   */
+  async showAgain(jobId: string): Promise<Outcome> {
+    if (this.showing.has(jobId)) return { ok: false, why: "already_showing" };
+    const port = this.board.port();
+    if (port === null) return { ok: false, why: "not_connected" };
+    this.showing.add(jobId);
+    try {
+      const answer = await ask(port, "POST", route(jobId, "show_again"), undefined, NO_WAIT);
+      if (answer.ok !== true) return answer.outcome;
+      this.board.refresh(port, jobId);
+      return { ok: true, shown: answer.body as ShownAgain };
+    } finally {
+      this.showing.delete(jobId);
+    }
   }
 
   /**

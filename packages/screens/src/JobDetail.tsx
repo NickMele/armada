@@ -72,6 +72,7 @@ import type {
   Examination,
   Footprint,
   Holds,
+  FollowedLog,
   Journalled,
   Observed,
   Outcome,
@@ -82,7 +83,15 @@ import type { FileReport, JobSummary } from "@armada/protocol";
 import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
 import { heldForMoney, heldForTurns, type ConfirmableAct } from "./Acts";
 import { useCallArguments, type ReadCall } from "./calls";
-import { useCheckOutputs, type ReadCheckOutput } from "./outputs";
+import {
+  useCheckOutputs,
+  useFollowing,
+  type FollowCheckOutput,
+  type ReadCheckOutput,
+} from "./outputs";
+
+/** What `followed` reads as where the caller hands none in. */
+const NOT_FOLLOWING: FollowedLog = { state: "none" };
 import { useFrames, type ReadFrame } from "./frames";
 import { openArtifact } from "./opening";
 import type { OpenArtifact, OpenPullRequest } from "./opening";
@@ -90,6 +99,7 @@ import { DIFF_CHAPTER, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-ke
 import { useAtFloor } from "@armada/shell";
 import { DetailSheet, holdOf, type HeldAt, type OpenSheet } from "./Sheets";
 import { chaptersOf } from "./chapters";
+import { againOf, useShowAgain, type ShowAgainCall } from "./again";
 import { span } from "./duration";
 import { Decide } from "./Decide";
 import { ordered } from "./facts";
@@ -157,6 +167,12 @@ export type JobDetailProps = {
   onRaiseTurnCap: (jobId: string, turnCap: number) => void;
   /** Ask the gate again on a step it could not decide. Nothing is at stake. */
   onRerun: (jobId: string) => void;
+  /**
+   * Ask the Job to show its work again. **Answered to this screen**, like
+   * `onReport`, because what a press came to is said beside its control.
+   * Absent draws no control, only the sets earlier presses kept.
+   */
+  onShowAgain?: ShowAgainCall;
   /**
    * Which Job's diff the host should hold open, or `null` for none.
    *
@@ -241,6 +257,13 @@ export type JobDetailProps = {
    */
   journalled: Journalled;
   /**
+   * The running Check's log main is following, as it is written. Optional,
+   * because a surface drawing a Job with no gate running has nothing to follow.
+   */
+  followed?: FollowedLog;
+  /** Follow one running Check's log, or `null` to stop. */
+  onFollowCheckOutput?: FollowCheckOutput;
+  /**
    * What the open Job holds on this machine. **Opened with the Job**, like the
    * two sockets above: the panel it draws answers *is this working*, which is
    * the question somebody opening a Job they suspect has wedged came with.
@@ -271,6 +294,8 @@ export function JobDetail({
   onOpenPullRequest,
   onReadCall,
   onReadCheckOutput,
+  followed,
+  onFollowCheckOutput,
   onReadFrame,
   onNeedMaterial,
   onNeedRemarks,
@@ -296,6 +321,7 @@ export function JobDetail({
   onAnswer,
   onOverrule,
   onRerun,
+  onShowAgain,
   onReport,
   onApprove,
   onMergePullRequest,
@@ -477,6 +503,9 @@ export function JobDetail({
   // Checks and a reader moving between them should not re-fetch a file it
   // already has.
   const outputs = useCheckOutputs(onReadCheckOutput, job.id);
+  // The running Check's log somebody is reading, for as long as this Job is
+  // open. Streamed by main, and let go when the Job changes.
+  const following = useFollowing(onFollowCheckOutput, followed ?? NOT_FOLLOWING, job.id);
 
   // The frames each step captured, for as long as this Job is open. Held for
   // the Job for `outputs`' reason, and it owns the object URLs it mints — a
@@ -493,6 +522,9 @@ export function JobDetail({
   useEffect(() => {
     if (shownBy !== undefined && shownBy.length > 0) frames.want(shownBy);
   }, [shownBy, frames]);
+  // Asking the Job to show its work again, and the frames its presses kept on
+  // the open step. `again.tsx` holds all of it.
+  const pressing = useShowAgain(onShowAgain, job.id, whole?.show_again, open?.step_id, frames);
 
   const rows = watching === null || open === undefined ? [] : entriesOf(watching.rows, open.step_id);
 
@@ -549,12 +581,20 @@ export function JobDetail({
           calls,
           outputs,
           frames,
+          again: againOf(
+            onShowAgain === undefined ? undefined : whole?.show_again,
+            open.step_id,
+            frames,
+            pressing,
+          ),
           sheet,
           // The Produced chapter opens the step's deliverable, which the phase
           // strip's Submitted tier was the only route to. Same handler, because
           // two would be two vocabularies for one failed open — #307.
           opens: opensRecords,
           onOpenSheet: openSheet,
+          now,
+          following,
           // Scoped to the step `stuck` is actually about — a reader may have
           // navigated to a different step, and `stuck.undecided` is not that
           // step's reason for anything.

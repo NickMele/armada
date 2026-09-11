@@ -129,6 +129,10 @@ const api: BridgeApi = {
   // reason crosses, because nothing is being disagreed with.
   rerunGate: (jobId: string): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.rerunGate, jobId),
 
+  // Ask a Job to show its work. Its own entry because it moves nothing on the
+  // Job: what comes back is a set of frames, or why there is none.
+  showAgain: (jobId: string): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.showAgain, jobId),
+
   // Give one job a higher cost ceiling. **Its own entry and never a general
   // update**: nothing else here sets a value on a job, and a capability that
   // could would be one press meaning whatever field it was handed. The figure
@@ -160,6 +164,11 @@ const api: BridgeApi = {
   // Neither can send anything to a Drone, and no entry here ever will.
   observeJob: (jobId: string | null): Promise<void> =>
     ipcRenderer.invoke(CHANNELS.observeJob, jobId),
+
+  // One running Check's log, as it is written. Read-only like the entry above,
+  // and its own because it is its own socket.
+  followCheckOutput: (jobId: string | null, kept: string | null): Promise<void> =>
+    ipcRenderer.invoke(CHANNELS.followCheckOutput, jobId, kept),
 
   // One Job's transition history. Read-only like the two above it, and a
   // separate entry because it is a separate operation: a history is not a field

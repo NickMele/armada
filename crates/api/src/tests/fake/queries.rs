@@ -158,6 +158,29 @@ impl Queries for FakeDaemon {
         Ok(shapes::check_output(kept))
     }
 
+    /// **The planted log, under its own name, and a refusal for any other.**
+    /// A route test plants a [`crate::LiveOutput`] whose reader it drives, so
+    /// what the socket does with a growing file is proved without a file.
+    async fn observe_check_output(
+        &self,
+        job_id: JobId,
+        kept: String,
+    ) -> Result<crate::LiveOutput, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        if !jobs.iter().any(|job| job.id == job_id) {
+            return Err(self.no_such_job(&job_id));
+        }
+        let planted = self.live.lock().expect("not poisoned").clone();
+        match planted {
+            Some((name, live)) if name == kept => Ok(live),
+            _ => Err(Refusal::Unacceptable(ipc::WireError::raised(
+                "fleet.no_such_check_output",
+                format!("no running Check of this Job is writing a log named `{kept}`"),
+                run_id(),
+            ))),
+        }
+    }
+
     /// **The same two refusals again**, and nothing here opens a file: what the
     /// route has to prove is that the bytes come back as themselves, under a
     /// media type read off the name, and that a name the record does not hold

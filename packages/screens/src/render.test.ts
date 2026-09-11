@@ -68,11 +68,11 @@ describe("which render a job takes", () => {
    * running clock over a Job whose step spent its retry budget and is waiting
    * for somebody to say what is missing. #208.
    *
-   * **And it never answers `unrenderable`**, which `escalated` does. That
-   * status draws its reason's verb and glyph, so a reason this build cannot
-   * name leaves the dead-end render nothing to state. This one has a verb and a
-   * glyph of its own, and what stopped the work is on the stopped step rather
-   * than on the Job — so a Job carrying no reason at all still renders.
+   * Neither this status nor `escalated` ever answers `unrenderable` over a
+   * missing reason — both have a verb and a glyph of their own, and a reason
+   * only ever replaces that pair, never stands in for it being absent. What
+   * stopped the work here is on the stopped step rather than on the Job, so a
+   * Job carrying no reason at all still renders.
    */
   it("draws a job held for repair as stopped, whatever reason it carries", () => {
     expect(renderFor(job({ status: "awaiting_repair" }))).toBe("stopped");
@@ -108,8 +108,7 @@ describe("the escalation reason", () => {
   it("carries no reason for a job held for repair, which stopped no verdict", () => {
     // A spent retry budget stores nothing on the Job's transition: what
     // stopped the work is `failed(gate_failure)` on the step it stopped. So
-    // this reads `undefined` and the render is decided without it, which is
-    // what lets that status draw at all where `escalated` would not.
+    // this reads `undefined` and the render is decided without it.
     expect(
       escalation(job({ status: "awaiting_repair", reason: { named: "gate_failure" } })),
     ).toBeUndefined();
@@ -119,16 +118,19 @@ describe("the escalation reason", () => {
   });
 
   /**
-   * `escalated` is the one status where the render turns on the reason, not
-   * just the status. Where the reason the job carries is a spelling
-   * `ESCALATION_REASON` has no row for — or the job arrives with no `reason`
-   * at all, which the wire permits — the dead-end render has nothing to
-   * state. `unrenderable` says this build cannot describe the job; falling
-   * back to `working` would draw a live rail and a running clock over a job
-   * that has stopped and is waiting on a person.
+   * `escalated` has its own verb and glyph, and a reason's replaces both only
+   * where the job carries one this build's `ESCALATION_REASON` has a row for
+   * — `docs/contracts/iconography.md`, "escalated's reasons — the same
+   * handover, one status over". Where the reason is a spelling that registry
+   * does not have, or the job arrives with no `reason` at all, which the wire
+   * permits and a Fleet mid-escalation has sent for real (`no_report`'s own
+   * event carried none until that was fixed), the status's own badge still
+   * stands. `unrenderable` would say this build cannot describe the job,
+   * which is false — it can, from the status alone — and a blank where a
+   * status goes cannot be told from a finished job.
    */
-  it("draws an escalated job with no nameable reason as unrenderable, not as working", () => {
-    expect(renderFor(job({ status: "escalated", reason: { named: "sat_down" } }))).toBe("unrenderable");
-    expect(renderFor(job({ status: "escalated" }))).toBe("unrenderable");
+  it("draws an escalated job with no nameable reason as stopped, not as unrenderable or working", () => {
+    expect(renderFor(job({ status: "escalated", reason: { named: "sat_down" } }))).toBe("stopped");
+    expect(renderFor(job({ status: "escalated" }))).toBe("stopped");
   });
 });

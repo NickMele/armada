@@ -171,6 +171,25 @@ pub enum Adrift {
     /// must not meet it again as if it were new — the comment reads the same
     /// on the forge forever, and only Armada's own record can tell them apart.
     RemarksAlreadyTakenUp { job: JobId, already: Vec<String> },
+    /// A press whose chosen comments, rendered the way a Drone would read
+    /// them, would not fit the room an opening brief leaves free.
+    ///
+    /// **On the set, never on one comment.**
+    /// `docs/spikes/014-how-much-room-does-a-brief-leave-for-comments.md`
+    /// measures what a real opening brief leaves free and why the bound is
+    /// weighed against `fleet::remarks::brief`'s whole rendered output rather
+    /// than any one comment inside it — five medium comments are the same
+    /// problem the spike's own words name as one long one. `too_large` names
+    /// the comments to drop to bring the rest back under the bound, largest
+    /// first, which is what a person picking a smaller set next has to act
+    /// on.
+    ///
+    /// **Never a truncation.** `fleet::remarks::quoted` still writes whatever
+    /// it is given, whole. This is the only new behaviour, and it happens
+    /// before `brief` is asked to build anything a Drone would see — the same
+    /// place [`NoRemarksChosen`](Adrift::NoRemarksChosen) and the two
+    /// variants above it already stand.
+    RemarksTooLarge { job: JobId, too_large: Vec<String> },
     /// A merge was asked for on a Job whose record holds no pull request.
     ///
     /// **Not [`Adrift::NotMerged`]**, and the difference is whose fault it is:
@@ -421,6 +440,17 @@ pub enum Adrift {
     /// the second reading would answer a different question from the first.
     /// `restart_step` puts a fresh Drone on the worktree the last one left.
     NotStandingThere { job: JobId },
+    /// A person asked a Job to show its work and it cannot run. **Refused
+    /// before anything runs**, and the reason names what is missing rather
+    /// than the press failing on it — `crate::showing_again`.
+    CannotShowAgain {
+        job: JobId,
+        why: crate::showing_again::Unshowable,
+    },
+    /// The task a press ran on ended without answering, which only a panic in
+    /// it does. **A fault and not a refusal**: nothing about the Job refused,
+    /// and the Job is pressable again because the hold went with the task.
+    PressAbandoned { job: JobId },
     /// The gate was asked again on a step with no evidence to be asked about.
     ///
     /// **Both halves of it**: nothing was recorded, or what was recorded will

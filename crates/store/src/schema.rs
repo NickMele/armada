@@ -56,9 +56,8 @@ pub const MIGRATIONS: &[&str] = &[
     V14,
     V15,
     V16,
-    // Beside the table it creates rather than in this file, which is at the 900
-    // lines the gate refuses at — [`V16`] said the next one would not fit. The
-    // order still lives here, which is the part that may not be anywhere else.
+    // Beside the table each creates, because this file is at the 900 lines the
+    // gate refuses at. The order lives here, and may not be anywhere else.
     crate::report::V17,
     crate::plan::V18,
     crate::drone::V19,
@@ -85,6 +84,7 @@ pub const MIGRATIONS: &[&str] = &[
     crate::spend::V40,
     crate::showing::V41,
     crate::showing::V42,
+    crate::shown_again::V43,
 ];
 
 /// Every table whose rows belong to one Job, asked of the file rather than

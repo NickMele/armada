@@ -23,6 +23,7 @@ use crate::enums::{AdvanceGate, StepState};
 use crate::ids::{CriterionId, Instant, StepId};
 use crate::judged::{Flagged, Judged, KeptDeliverable};
 use crate::showing::KeptFrame;
+use crate::underway::ChecksUnderway;
 
 /// What Fleet knows about one step beyond its `job_steps` row.
 ///
@@ -96,6 +97,10 @@ pub struct StepFacts {
     /// waits, and it is gone the moment the call comes back. A column for it
     /// would be a record of something that is only ever true now.
     pub judging: Option<JudgeInFlight>,
+    /// The step's Checks while the gate is running them, for `judging`'s
+    /// reason and from the same kind of slot. `None` on every step whose gate
+    /// is not between starting its Checks and writing its ruling down.
+    pub checking: Option<ChecksUnderway>,
 }
 
 /// One `job_steps` row: which step, where in the order, and where it got to.
@@ -149,6 +154,18 @@ pub struct StepDetail {
     /// frozen workflow does not declare the step.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub advance_gate: Option<AdvanceGate>,
+    /// Whether this is the step the frozen workflow sends the work out on.
+    ///
+    /// **Absent means "Fleet cannot say", exactly as `checks` above it does**
+    /// — a Job named a workflow Fleet does not hold, or one that no longer
+    /// declares the step. Present is always the frozen workflow's own answer,
+    /// so `Some(false)` is as certain as `Some(true)`: a client can say "this
+    /// workflow never opens a pull request" from this field alone, before the
+    /// step it would have delivered on is even reached — `crate::JobDelivery`
+    /// only answers once the branch has actually gone out, which for a
+    /// workflow declaring no delivering step is never.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delivers: Option<bool>,
     /// Absent until a gate has ruled on the step.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_verdict: Option<Verdict>,
@@ -246,6 +263,15 @@ pub struct StepDetail {
     /// thing that separates them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub judging: Option<JudgeInFlight>,
+    /// The step's Checks **right now**, while the gate runs them and until its
+    /// ruling is written down.
+    ///
+    /// **Absent is the ordinary case**, as `judging`'s absence is. It is what
+    /// separates a gate that is working through nine Checks from a step
+    /// nothing has reached, which were the same pixels: every Check reading
+    /// "nothing has run it" until they all flipped at once.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checking: Option<ChecksUnderway>,
     /// When the step was entered. Stamped at creation and moved on entering
     /// `running`, so `entered_at` to `updated_at` is how long the step took.
     pub entered_at: Instant,
@@ -351,6 +377,7 @@ impl StepDetail {
             check_runs: facts.map(|facts| facts.ran.clone()).unwrap_or_default(),
             judge_checks: declared.map(|declared| DeclaredJudge::firing(declared.judge_checks())),
             advance_gate: declared.map(|declared| declared.advance_gate().into()),
+            delivers: declared.map(core_model::ResolvedStep::delivers),
             last_verdict: step
                 .last_verdict()
                 .map(|verdict| Verdict::of(latest_closed_attempt(facts), verdict)),
@@ -376,6 +403,7 @@ impl StepDetail {
                 .map(|facts| facts.verdicts.clone())
                 .unwrap_or_default(),
             judging: facts.and_then(|facts| facts.judging.clone()),
+            checking: facts.and_then(|facts| facts.checking.clone()),
             entered_at: step.entered_at().into(),
             updated_at: step.updated_at().into(),
         }

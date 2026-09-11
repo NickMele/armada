@@ -40,6 +40,7 @@ use crate::proposal::Proposing;
 use crate::proposals::Watching;
 use crate::silence::Liveness;
 use crate::slots::{Slot, Slots};
+use crate::underway::{Announcing, Underway};
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -165,6 +166,35 @@ where
     pub(crate) fn aloft(&self) -> &Aloft {
         &self.aloft
     }
+    /// Each Job's gate that is running Checks, for `serving` to put on
+    /// `get_job` and to resolve a live log's name against. **Read, never
+    /// written, from here** — [`announcing`](Self::announcing) hands out the
+    /// only writer.
+    pub(crate) fn underway(&self) -> &Underway {
+        &self.underway
+    }
+    /// Where one gate says what each of its Checks is doing.
+    ///
+    /// **The step and the run are bound here**, because they name the entry a
+    /// surface reads and the file each live log is written to — and a writer
+    /// that was told them per call could be told two different ones.
+    pub(crate) fn announcing(
+        &self,
+        job: &Job,
+        step: &core_model::StepId,
+        attempt: core_model::Attempt,
+    ) -> Announcing {
+        Announcing::on(
+            job.id().into(),
+            step.clone(),
+            attempt,
+            self.underway.clone(),
+            self.events.clone(),
+            Arc::clone(&self.clock),
+            &self.host.repo_root,
+            &job.handle(),
+        )
+    }
     /// What the dispatch path needs in order to ask the proposer.
     ///
     /// **The Judge's client, and the proposer's own budget.** The call is the
@@ -266,6 +296,9 @@ where
     }
     pub(crate) fn proving(&self) -> &Arc<Mutex<crate::proving::Proving>> {
         &self.proving
+    }
+    pub(crate) fn pressing(&self) -> &crate::showing_again::Pressing {
+        &self.pressing
     }
     pub(crate) fn noticing(&self) -> Noticing {
         self.noticing

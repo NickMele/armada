@@ -28,8 +28,8 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use adapter_traits::{
-    AgentHarness, Delivery, Landing, Rendering, Renewed, RepositoryStanding, Vcs, WhatBecameOfIt,
-    WorkProduct,
+    AgentHarness, Delivery, Landing, Mergeable, Rendering, Renewed, RepositoryStanding,
+    UnderReview, Vcs, WhatBecameOfIt, WorkProduct,
 };
 use core_model::{Component, Envelope, FieldValue, JobId, Level, Timestamp};
 
@@ -112,6 +112,15 @@ pub(crate) struct Sweep {
     /// Job's record and in its log already, and a second copy here would be a
     /// reading that outlived the fact.
     pub(crate) merged_by_policy: std::collections::BTreeSet<String>,
+    /// What this rotation last read live off each open pull request, keyed by
+    /// address. `crate::serving::get_job` is the one reader, and it never
+    /// asks the forge itself — see [`ipc::JobDelivery::pull_request_detail`].
+    ///
+    /// **Cleared the moment a pull request settles**, in `settled_landing`,
+    /// so presence here always means "still open, as of the last rotation":
+    /// nothing that reads this has to compare it against the record's own
+    /// `landed` to tell a live reading from a stale one.
+    pub(crate) pr_detail: BTreeMap<String, ipc::PullRequestDetail>,
 }
 
 /// What the record's state says on the wire, where it says anything.
@@ -172,7 +181,10 @@ where
                 // **The one state in which the second question means
                 // anything**, on the turn the rotation had already reached this
                 // Job — never a loop of its own. `crate::under_review`.
-                self.read_what_is_under_review(&asking.job_id, url).await;
+                let reviewed = self.read_what_is_under_review(&asking.job_id, url).await;
+                // **Cached on the same turn that read it**, so `get_job` never
+                // asks the forge itself — see [`Sweep::pr_detail`].
+                self.remembered(url, &read, reviewed.as_ref()).await;
                 return Ok(None);
             }
             Landing::Unknown => return Ok(None),
@@ -213,6 +225,13 @@ where
             return Ok(None);
         }
         let landed = read.landing;
+        // **Before the record is written, and unconditionally on this path.**
+        // Both variants that pass `is_settled` name the address, and a live
+        // reading left behind under it would answer `get_job` with "still
+        // open" about a pull request that just stopped being one.
+        if let Landing::Merged { url } | Landing::ClosedUnmerged { url } = &landed {
+            self.sweeping().lock().await.pr_detail.remove(url);
+        }
         self.store()
             .lock()
             .await
@@ -338,6 +357,44 @@ where
             .nudged
             .insert(url.to_string(), renewed.clone());
         renewed
+    }
+
+    /// Remember what this turn read live off one open pull request, so
+    /// `get_job` can answer from memory rather than asking the forge itself.
+    ///
+    /// **Every turn that reaches here writes, whether or not anything
+    /// changed.** The read already happened for [`notice_a_merge`]'s own
+    /// reasons; keeping the answer costs nothing further and is what lets
+    /// `mergeable` flip from a forge still computing it to a real answer
+    /// without waiting for something else about the pull request to move
+    /// too.
+    async fn remembered(&self, url: &str, read: &WhatBecameOfIt, reviewed: Option<&UnderReview>) {
+        let detail = ipc::PullRequestDetail {
+            number: read.number,
+            title: read.title.clone(),
+            mergeable: match read.mergeable {
+                Mergeable::Yes => Some(true),
+                Mergeable::No => Some(false),
+                Mergeable::Unreadable => None,
+            },
+            reviews: reviewed
+                .map(|reviewed| {
+                    reviewed
+                        .verdicts
+                        .iter()
+                        .map(|reviewed_by| ipc::ReviewedBy {
+                            by: reviewed_by.by.as_written().to_string(),
+                            verdict: reviewed_by.verdict.kind().to_string(),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+        };
+        self.sweeping()
+            .lock()
+            .await
+            .pr_detail
+            .insert(url.to_string(), detail);
     }
 
     /// Whether this process closed that pull request and could not reopen it.

@@ -24,6 +24,7 @@ import type {
   Report,
   ReportList,
   Saw,
+  ShownAgain,
   Submitted,
   Voice,
   Work,
@@ -330,7 +331,19 @@ export type Outcome =
    * reach is kept on purpose, so a successful reclaim can honestly report that
    * half of it did not happen.
    */
-  | { ok: true; jobId?: string; report?: Report; reclaimed?: WorktreeReclaimed }
+  | {
+      ok: true;
+      jobId?: string;
+      report?: Report;
+      reclaimed?: WorktreeReclaimed;
+      /**
+       * What a press came to, on the same terms as `report`: a receipt the
+       * surface that pressed shows once. The set itself arrives on the Job's
+       * detail; what this adds is `nothing`, the sentence for a press that ran
+       * and kept no set.
+       */
+      shown?: ShownAgain;
+    }
   | { ok: false; why: "not_connected" }
   | { ok: false; why: "empty_brief" }
   | { ok: false; why: "empty_title" }
@@ -378,6 +391,12 @@ export type Outcome =
    * spent on nothing.
    */
   | { ok: false; why: "no_remarks_chosen" }
+  /**
+   * A second press on a Job this window already has one out on. Bridge's own,
+   * like the other `already_` refusals; Fleet refuses it too, so this only
+   * saves the round trip.
+   */
+  | { ok: false; why: "already_showing" }
   | { ok: false; why: "refused"; error: WireError }
   | { ok: false; why: "transport"; detail: string; fault: TransportFault };
 

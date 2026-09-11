@@ -56,9 +56,10 @@ where
             .drone_spawned(step, drone, Actor::Fleet, self.now())
             .map_err(Adrift::IllegalDroneMove)?;
         self.record_drone(&moved).await?;
+        let summary = self.published(&moved.job).await?;
         self.publish(ipc::Event::DroneSpawned(ipc::DroneSpawned::of(
             &moved.event,
-            ipc::JobSummary::from(&moved.job),
+            summary,
             moved.job.branch().map(|branch| branch.as_str().to_string()),
         )));
         Ok(())
@@ -170,9 +171,17 @@ where
             Err(refused) => return Err(Adrift::IllegalDroneMove(refused)),
         };
         self.record_drone(&moved).await?;
+        // **The reason its last transition stored, and not `From`'s `None`.**
+        // The Drone `converging` just told to stop and report is the one this
+        // exit is for, and the Job it left on is already `escalated` with
+        // `no_report` on the log by the time the process dies. `From` would
+        // publish that Job with no reason to draw, and this is the last event
+        // Bridge hears about the row until somebody acts on it — see
+        // `published`.
+        let summary = self.published(&moved.job).await?;
         self.publish(ipc::Event::DroneExited(ipc::DroneExited::of(
             &moved.event,
-            ipc::JobSummary::from(&moved.job),
+            summary,
         )));
         Ok(())
     }

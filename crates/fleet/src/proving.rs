@@ -241,6 +241,8 @@ fn spawn_the_run(
             false,
             std::path::Path::new(&repo_root),
             budget,
+            // A commit is proved with no step and no Job anybody has open.
+            &crate::underway::Announcing::nowhere(),
         )
         .await;
         let observed: Vec<verification::Observed> =

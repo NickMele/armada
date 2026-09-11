@@ -335,6 +335,9 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.rerunGate, (_event, jobId: string) =>
     connection?.commands.rerunGate(jobId),
   );
+  ipcMain.handle(CHANNELS.showAgain, (_event, jobId: string) =>
+    connection?.commands.showAgain(jobId),
+  );
   // More money for one job, on a channel of its own because nothing else here
   // sets a value on a job. It moves no status and asks for no drone: what it
   // stops is the next dispatch being refused for money.
@@ -363,6 +366,13 @@ void app.whenReady().then(() => {
   // there is nothing to send up it, which is what keeps observing read-only.
   ipcMain.handle(CHANNELS.observeJob, (_event, jobId: string | null) =>
     connection?.observeJob(jobId),
+  );
+  // Which running Check's log is open. A fourth socket, carrying lines only,
+  // and read-only for `observeJob`'s reason.
+  ipcMain.handle(
+    CHANNELS.followCheckOutput,
+    (_event, jobId: string | null, kept: string | null) =>
+      connection?.followCheckOutput(jobId, kept),
   );
   // Which Job's transition history is unfolded. One HTTP read, kept current
   // while it is open, and dropped when the section closes — a history is its

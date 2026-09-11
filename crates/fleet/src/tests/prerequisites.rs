@@ -84,6 +84,7 @@ async fn ruled(
         &judging(),
         &keeping_nowhere(),
         Policies::unstated(),
+        &crate::underway::Announcing::nowhere(),
     )
     .await
 }

@@ -69,6 +69,8 @@ export function said(outcome: Outcome): string {
       return "A decision on that job's work is already in flight. It was not sent twice.";
     case "already_answering":
       return "That answer is already in flight. It was not sent twice.";
+    case "already_showing":
+      return "That job is already showing its work. It was not asked twice.";
     case "empty_note":
       return "Requesting changes needs a note. Nothing was sent, and the job is still waiting.";
     case "refused":

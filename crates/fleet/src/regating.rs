@@ -138,7 +138,9 @@ where
             .map_err(|cause| Adrift::Reading(store::LoadJobError::Unreadable(cause)))?;
         // The same call `crate::settling` makes, with the same arguments read
         // off the same places. Nothing here is assembled differently, because
-        // an easier reading would not be the reading that failed.
+        // an easier reading would not be the reading that failed — and that
+        // includes saying each Check as it runs, until the rows are written.
+        let announcing = self.announcing(&job, &step, attempt);
         let ruling = rule_on(
             at.on_attempt(attempt, spent),
             Request::of(&job),
@@ -155,11 +157,13 @@ where
             // a fresh reading of a live setting, and answering it with what the
             // file said the first time would be the one thing `Live` forbids.
             self.gating_policies(),
+            &announcing,
         )
         .await;
 
         self.recorded_checks(job_id, &job.handle(), &step, attempt, &ruling)
             .await?;
+        drop(announcing);
         self.recorded_judgments(job_id, &step, &ruling).await?;
         self.recorded_evidence(job_id, &step, &submission, &ruling)
             .await?;

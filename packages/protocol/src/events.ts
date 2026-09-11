@@ -13,6 +13,7 @@ import type { JudgeInFlight, Settled } from "./detail";
 import type { JobForgotten, JobList, JobSummary, Reason } from "./protocol";
 import type { ManifestReading } from "./reading";
 import type { ProposalInFlight } from "./proposing";
+import type { ChecksUnderway } from "./underway";
 import type { QuestionInFlight } from "./waiting";
 import type { ProtocolVersion } from "./version";
 
@@ -44,6 +45,7 @@ export type Event =
   | ({ kind: "drone.exited" } & DroneExited)
   | ({ kind: "job.files_changed" } & JobFilesChanged)
   | ({ kind: "job.judging" } & JobJudging)
+  | ({ kind: "job.checking" } & JobChecking)
   | ({ kind: "job.asking" } & JobAsking)
   | ({ kind: "job.forgotten" } & JobForgotten)
   | ({ kind: "job.landed" } & JobLanded)
@@ -205,6 +207,25 @@ export type JobJudging = {
   step_id: string;
   /** The call that went out, or absent because it came back. */
   judging?: JudgeInFlight;
+  actor: string;
+  at: string;
+};
+
+/**
+ * One of a step's Checks started or finished, or the gate's ruling on them was
+ * written down. `crates/ipc/src/event.rs`. Since 10.3.
+ *
+ * **`job.judging`'s shape, one tier along.** One message per start and per
+ * finish, each carrying the whole set; elapsed is counted here from
+ * `started_at`. The last message carries nothing and arrives after
+ * `check_runs` holds the same results, so a re-read on it never finds them in
+ * neither place.
+ */
+export type JobChecking = {
+  job_id: string;
+  step_id: string;
+  /** The step's Checks as they stand, or absent because the ruling is written. */
+  checking?: ChecksUnderway;
   actor: string;
   at: string;
 };

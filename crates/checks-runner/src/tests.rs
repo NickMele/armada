@@ -112,6 +112,45 @@ async fn output_comes_back_for_a_person_to_read() {
     assert!(!ran.output.truncated);
 }
 
+/// The claim `#628` rests on: a Check's output can be read while it runs.
+///
+/// The first line is in the file while the Check is still sleeping, and what
+/// comes back at the end is exactly what [`run`] would have captured — the
+/// file is a view of the run and changes nothing the gate reads.
+#[tokio::test]
+async fn output_is_written_down_while_the_check_is_still_running() {
+    let live = std::env::temp_dir().join(format!(
+        "armada-live-{}-{}.log",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|at| at.as_nanos())
+            .unwrap_or_default()
+    ));
+    let writing = live.clone();
+    let running = tokio::spawn(async move {
+        crate::run::run_writing(
+            "/bin/sh -c 'echo first; sleep 1; echo second'",
+            anywhere(),
+            Duration::from_secs(10),
+            Some(&writing),
+        )
+        .await
+    });
+
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    let so_far = std::fs::read_to_string(&live).unwrap_or_default();
+    assert_eq!(so_far, "first\n", "read while the Check slept");
+    assert!(!running.is_finished(), "the Check had not ended yet");
+
+    let ran = running.await.expect("the run");
+    let whole = std::fs::read_to_string(&live).unwrap_or_default();
+    let _ = std::fs::remove_file(&live);
+    assert_eq!(ran.exit, Exit::Code(0));
+    assert_eq!(ran.output.stdout, "first\nsecond\n");
+    assert_eq!(whole, "first\nsecond\n");
+}
+
 #[tokio::test]
 async fn a_command_is_split_into_a_program_and_its_arguments() {
     let ran = attempt("/bin/echo 'one two' three", Duration::from_secs(10)).await;

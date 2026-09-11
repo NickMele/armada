@@ -48,8 +48,11 @@ import {
   checksStand,
   didNotPass,
   howTheChecksWent,
+  isRunning,
+  isWaiting,
   NOT_REACHED,
   panelsOf,
+  type CheckRead,
 } from "./gates";
 import { openArtifact, type OpenArtifact } from "./opening";
 
@@ -154,14 +157,19 @@ export function phasesOf(
   status: string,
   claim?: Submitted,
 ): PhaseStripProps {
-  const submitted = HAS_SUBMITTED.has(step.state);
+  // **A gate running its Checks has the work, not the Drone.** The step stays
+  // `running` through the gate, so read off the state alone the strip said the
+  // Drone was working for as long as the Checks took. `checking` is the gate
+  // saying so, and it is only ever there once the Drone has submitted.
+  const checking = step.checking !== undefined;
+  const submitted = HAS_SUBMITTED.has(step.state) || checking;
   // **A step is only working while its Job is.** `running` on a step outlives
   // the Drone that earned it: a Job holding at `awaiting_review` leaves its
   // last step `running`, and an escalated Job keeps one running with the Drone
   // alive and idle. Read off the step alone, the strip said Working two inches
   // from a badge saying awaiting review, and the screen read as broken.
   const working =
-    (step.state === "running" || step.state === "retrying") && status === RUNNING;
+    (step.state === "running" || step.state === "retrying") && status === RUNNING && !checking;
   const kept = keptRows(keptOf(step, opens));
   const stages: PhaseStage[] = [
     {
@@ -277,30 +285,40 @@ function checksStage(step: StepDetail, opens: Opens): PhaseStage | undefined {
   const reads = checksOf(step);
   if (reads.length === 0) return undefined;
 
-  const rows: PhaseStageRow[] = reads.map(({ check, run }) => ({
-    label: commandOf(check),
+  const rows: PhaseStageRow[] = reads.map((read) => ({
+    label: commandOf(read.check),
     mono: true,
-    result: run === undefined ? NOT_REACHED : resultOf(run),
-    named: run === undefined ? undefined : didNotPass(run) ? "failed" : "passed",
+    result: stoodAt(read),
+    named: read.run === undefined ? undefined : didNotPass(read.run) ? "failed" : "passed",
     // **The output opens from the row of the Check that wrote it.** An exit
     // code is the whole of what a failed Check said here, and the sentence
     // that says why is in the file — which was a path on this screen that
     // nothing opened.
     cited:
-      run?.output_path === undefined ? undefined : (
-        <Opening path={run.output_path} what="check" opens={opens} />
+      read.run?.output_path === undefined ? undefined : (
+        <Opening path={read.run.output_path} what="check" opens={opens} />
       ),
   }));
 
   const { ran, failed } = howTheChecksWent(reads);
   const label =
     reads.length > 2 ? `${reads.length} Checks` : reads.map((read) => read.name).join(", ");
+  // The gate has reached the tier even where nothing has finished yet: a
+  // Check running or waiting for a slot is the tier being worked, not ahead.
+  const moving = reads.some((read) => isRunning(read) || isWaiting(read));
 
   return {
     id: "checks",
     label,
     kind: "checks",
-    state: failed.length > 0 ? "failed" : ran.length === reads.length ? "cleared" : ran.length > 0 ? "current" : "ahead",
+    state:
+      failed.length > 0
+        ? "failed"
+        : ran.length === reads.length
+          ? "cleared"
+          : ran.length > 0 || moving
+            ? "current"
+            : "ahead",
     stands: checksStand(reads),
     rows,
   };
@@ -633,6 +651,11 @@ function noteOf(step: StepDetail, checks: boolean, judge: boolean): string {
   if (step.state === "awaiting_human") {
     return "Everything mechanical has cleared. The workflow asks for a person here.";
   }
+  if (step.checking !== undefined) {
+    return step.judging === undefined
+      ? "The Drone has submitted, and the gate is running its Checks."
+      : "The Drone has submitted, the Checks have run, and the Judge is answering.";
+  }
   if (step.state === "running" || step.state === "retrying") {
     return onlyCurrentAttempt(step, step.check_runs).length === 0
       ? "The Drone is working. Nothing has been submitted, so no gate has been asked anything yet."
@@ -640,6 +663,16 @@ function noteOf(step: StepDetail, checks: boolean, judge: boolean): string {
   }
   if (step.state === "not_started") return "Nothing has reached this step yet.";
   return "";
+}
+
+/**
+ * Where one Check stands on the strip — what it came to, or, while the gate
+ * runs it, that it is running or waiting to start.
+ */
+function stoodAt(read: CheckRead): string {
+  if (isRunning(read)) return "running";
+  if (isWaiting(read)) return "waiting";
+  return read.run === undefined ? NOT_REACHED : resultOf(read.run);
 }
 
 /** What one Check did, in the registry's own verb. */

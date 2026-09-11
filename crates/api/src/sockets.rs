@@ -78,6 +78,28 @@ pub(crate) async fn job_log<D: Queries>(
     upgrade.on_upgrade(move |socket| crate::journal::relay(socket, job, journal))
 }
 
+/// One running Check's log, as it is written.
+///
+/// **Per-Job and its own socket**, for the reasons at the top of this module.
+/// The daemon is asked **before** the upgrade, so a name no running gate of this
+/// Job is writing is a refusal read at the moment it was asked.
+pub(crate) async fn observe_check_output<D: Queries>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+    axum::extract::Path((_, kept)): axum::extract::Path<(String, String)>,
+    upgrade: WebSocketUpgrade,
+) -> Response {
+    let job_id = job.id();
+    match served
+        .daemon()
+        .observe_check_output(job_id.clone(), kept)
+        .await
+    {
+        Ok(live) => upgrade.on_upgrade(move |socket| crate::following::relay(socket, job_id, live)),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// The event stream. **Global, and a client subscribes to nothing** — one
 /// socket carries every Job, because Bridge holds exactly one connection.
 ///

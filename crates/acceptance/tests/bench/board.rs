@@ -96,6 +96,7 @@ pub fn step_facts(job: &Job, ruled: &[(&str, &Ruling)]) -> Vec<StepFacts> {
                 attempts: Vec::new(),
                 verdicts: Vec::new(),
                 judging: None,
+                checking: None,
             }
         })
         .collect()

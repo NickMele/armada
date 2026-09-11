@@ -36,6 +36,7 @@ import {
   DroneBrief,
   FramesPaired,
   FramesShown,
+  ShownAgain,
   Kbd,
   changedFilesSummary,
   keyFor,
@@ -55,6 +56,7 @@ import {
   namesChapter,
   type DetailKeys,
 } from "./detail-keys";
+import { againSummary, type Again } from "./again";
 import { evidenceChaptersOf, type Unnumbered } from "./evidence";
 import {
   framesSummary,
@@ -66,7 +68,7 @@ import {
 } from "./frames";
 import { readingFor, whyNoFootprint } from "./files";
 import { Log } from "./Log";
-import type { Outputs } from "./outputs";
+import type { Following, Outputs } from "./outputs";
 import { keptOf, type KeptRead, type Opens } from "./phases";
 import { producedIn } from "./produced";
 import type { OpenSheet } from "./Sheets";
@@ -92,11 +94,22 @@ export function chaptersOf({
   calls,
   outputs,
   frames,
+  again,
   sheet,
   opens,
   onOpenSheet,
+  now,
+  following,
   undecided,
 }: {
+  /** Now, injected, so a running Check's elapsed time moves with the clock. */
+  now: number;
+  /**
+   * The running Check's log this window is following, and how to follow one —
+   * `outputs.ts`. **Held for the Job, like `outputs`**, and streamed only while
+   * somebody has the Checks chapter open on a running gate.
+   */
+  following: Following;
   job: JobSummary;
   step: StepDetail;
   /**
@@ -172,6 +185,13 @@ export function chaptersOf({
    * handful of screens.
    */
   frames: Frames;
+  /**
+   * Asking the Job to show its work again, and the sets its presses kept on
+   * this step — `again.tsx`. **Absent draws the Shown chapter as it was**, and
+   * present builds it on a step that captured nothing of its own, because the
+   * control and the sets are reasons to have the chapter too.
+   */
+  again?: Again;
   /**
    * Which sheet is open, so the chapter behind it says so and stops offering.
    *
@@ -333,7 +353,9 @@ export function chaptersOf({
     // **Only where there are frames.** A chapter saying a step declared no
     // shown evidence would be on almost every step of almost every Job,
     // reporting the absence of a thing nobody asked for.
-    ...(shown.length === 0 ? [] : [framesChapter(shown, step.frames ?? [], pairs)]),
+    ...(shown.length === 0 && again === undefined
+      ? []
+      : [framesChapter(shown, step.frames ?? [], pairs, again)]),
     {
       id: DIFF_CHAPTER,
       title: "Produced",
@@ -395,7 +417,7 @@ export function chaptersOf({
     // The last chapters, where the step has them. `evidence.tsx` decides
     // whether either is drawn — a step that gates on nothing has neither, and
     // one that gates on a Judge alone has one.
-    ...evidenceChaptersOf({ step, criteria, opens, outputs, undecided }),
+    ...evidenceChaptersOf({ step, criteria, opens, outputs, now, following, undecided }),
   ];
   return story.map((chapter, at) => ({ ...chapter, ordinal: at + 1 }));
 }
@@ -413,7 +435,12 @@ export function chaptersOf({
  * already show, and a control that opens what is already on screen is a second
  * answer to a question nobody asked.
  */
-function framesChapter(shown: ShownFrame[], rows: KeptFrame[], pairs: Paired[]): Unnumbered {
+function framesChapter(
+  shown: ShownFrame[],
+  rows: KeptFrame[],
+  pairs: Paired[],
+  again?: Again,
+): Unnumbered {
   // **Two sides is a different question from two frames**, so it is a different
   // drawing. With a base to compare against, what a reader wants is what the
   // change did to the screen — the pairs that moved, and the ones that did not
@@ -426,20 +453,33 @@ function framesChapter(shown: ShownFrame[], rows: KeptFrame[], pairs: Paired[]):
     // What moved, where there are two sides; how many frames, where there is
     // one. A collapsed chapter reading `20 frames` over ten screens
     // photographed twice would be counting the work rather than the answer.
-    summary: compared ? pairedSummary(pairs) : framesSummary(rows),
+    summary:
+      [compared ? pairedSummary(pairs) : framesSummary(rows), againSummary(again)]
+        .filter((part) => part !== undefined)
+        .join(" · ") || undefined,
     says: compared
       ? "Click to see what the change did to the screen"
       : "Click to see what the step produced",
-    preview: compared ? (
-      <FramesPaired pairs={pairs} emptyNote={NOTHING_SHOWN} />
-    ) : (
-      <FramesShown
-        frames={shown}
-        // Unreachable — the chapter is not built where the list is empty — and
-        // stated anyway, because a component that silently draws nothing is
-        // how a surface goes quiet when a caller's condition drifts.
-        emptyNote={NOTHING_SHOWN}
-      />
+    // The step's own frames first, then what presses kept. **The step's are
+    // left out rather than drawn empty** where it captured nothing and only a
+    // press or the control built the chapter — an empty gallery above the
+    // control would read as a run that failed to load.
+    preview: (
+      <>
+        {shown.length === 0 ? null : compared ? (
+          <FramesPaired pairs={pairs} emptyNote={NOTHING_SHOWN} />
+        ) : (
+          <FramesShown frames={shown} emptyNote={NOTHING_SHOWN} />
+        )}
+        {again === undefined ? null : (
+          <ShownAgain
+            {...(again.offer === undefined ? {} : { offer: again.offer })}
+            sets={again.sets}
+            {...(again.said === undefined ? {} : { said: again.said })}
+            onShow={again.onShow}
+          />
+        )}
+      </>
     ),
   };
 }

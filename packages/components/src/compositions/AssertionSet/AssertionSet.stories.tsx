@@ -114,3 +114,23 @@ export const WhereTheHarnessNamedNothing: Story = {
     ],
   },
 };
+
+/**
+ * A skipped Check on its first run, as the Evidence screen draws it: no
+ * sentence, and the record's reason where the comparison would be. **The reason
+ * is long and must wrap in its own column** — at `max-content` it took the row
+ * and broke the identifier beside it one character a line.
+ */
+export const ASkippedCheckSaysWhy: Story = {
+  args: {
+    rows: [
+      { identifier: "build", named: "passed" },
+      {
+        identifier: "typecheck",
+        named: "absent",
+        against:
+          "no changed file is under apps/**, packages/**, crates/core-model/domain/**, protocol-version.toml, package.json, pnpm-lock.yaml, pnpm-workspace.yaml",
+      },
+    ],
+  },
+};

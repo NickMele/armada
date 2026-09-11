@@ -32,17 +32,29 @@ import type { CheckRun, StepDetail } from "@armada/protocol";
 import { assertedIn, WHAT_THE_SUITE_ASSERTED } from "./asserted";
 import { judgeOf } from "./declared";
 import { namesChapter } from "./detail-keys";
+import { span } from "./duration";
 import {
   checksOf,
   checksStand,
   didNotPass,
+  isRunning,
+  isWaiting,
   outputRunOf,
   sentenceOf,
   stoppedUndecided,
   type CheckRead,
   type Panel,
 } from "./gates";
-import { noteFor, regionOf, rowsOf, type Outputs } from "./outputs";
+import {
+  liveNoteFor,
+  liveRegionOf,
+  liveRowsOf,
+  noteFor,
+  regionOf,
+  rowsOf,
+  type Following,
+  type Outputs,
+} from "./outputs";
 import { basename, openKept, type Opens } from "./phases";
 import { countedIn } from "./verdicts";
 
@@ -62,13 +74,15 @@ export function checksChapter(
   panels: Panel[],
   opens: Opens,
   outputs: Outputs,
+  now: number,
+  following: Following,
   /** Fleet's own reason the gate could not decide. `verdictsChapter`'s own. */
   undecided?: string,
 ): Omit<StepChapter, "ordinal"> | undefined {
   const reads = checksOf(step);
   if (reads.length === 0) return undefined;
 
-  const rows = reads.map(checkRow);
+  const rows = reads.map((read) => checkRow(read, now));
   const judge = judgeRow(step, panels, undecided);
   if (judge !== undefined) rows.push(judge);
 
@@ -77,6 +91,13 @@ export function checksChapter(
   const wrote = new Map<string, string>();
   for (const read of reads) {
     if (read.run?.output_path !== undefined) wrote.set(read.name, read.run.output_path);
+  }
+  // **While the gate runs, a press reads the Check's log here as it grows.**
+  // An editor handed a file still being written shows the moment it opened
+  // it, which is the stale reading this chapter exists to stop.
+  const live = new Map<string, string>();
+  for (const read of reads) {
+    if (read.live?.output_path !== undefined) live.set(read.name, basename(read.live.output_path));
   }
   // The header act, `o` and the reader below all open the same file, because
   // all three come through one reading. Absent where no Check on this attempt
@@ -98,14 +119,19 @@ export function checksChapter(
         // Not "in the viewer". Bridge has no evidence viewer; `main/open.ts`
         // hands the path to the OS, and a tooltip promising a panel nobody
         // built is the surface describing a screen that does not exist.
-        openSaid={OPENS_WHERE}
+        openSaid={live.size > 0 ? READS_HERE : OPENS_WHERE}
         onOpen={(checkId) => {
+          const following_ = live.get(checkId);
+          if (following_ !== undefined) {
+            following.pick(following_);
+            return;
+          }
           const kept = wrote.get(checkId);
           if (kept !== undefined) openKept(opens, { kept, what: "check" });
         }}
       />
     ),
-    ...contentOf(step, reading, outputs),
+    ...(liveContentOf(reads, following) ?? contentOf(step, reading, outputs)),
     ...(output === undefined
       ? {}
       : {
@@ -195,6 +221,58 @@ function ChecksOutput({ kept, outputs }: { kept: string; outputs: Outputs }) {
 }
 
 /**
+ * What the chapter shows while the gate runs, or `undefined` once it has
+ * ruled and the recorded reading takes over.
+ *
+ * **One Check's log, followed as it is written.** The one a person pressed
+ * while it is still the gate's, and otherwise the first Check running — the
+ * one a person opening the chapter mid-gate is waiting on.
+ */
+function liveContentOf(
+  reads: readonly CheckRead[],
+  following: Following,
+): { content: ReactNode; openLabel: ReactNode } | undefined {
+  const logs = reads
+    .map((read) => read.live?.output_path)
+    .filter((path): path is string => path !== undefined)
+    .map(basename);
+  const running = reads
+    .filter(isRunning)
+    .map((read) => read.live?.output_path)
+    .filter((path): path is string => path !== undefined)
+    .map(basename);
+  const picked = following.picked;
+  const kept = picked !== null && logs.includes(picked) ? picked : running[0];
+  if (kept === undefined) return undefined;
+  return {
+    content: <LiveChecksOutput kept={kept} following={following} />,
+    openLabel: READS_THE_RUNNING_LOG,
+  };
+}
+
+/**
+ * One running Check's log, read as it is written.
+ *
+ * **Followed while it is on screen and let go when it is not**, so a socket is
+ * never left streaming a log nobody is reading.
+ */
+function LiveChecksOutput({ kept, following }: { kept: string; following: Following }) {
+  const { follow } = following;
+  useEffect(() => {
+    follow(kept);
+    return () => follow(null);
+  }, [follow, kept]);
+  const region = liveRegionOf(following.reading, kept);
+  return (
+    <ConsoleOutput
+      rows={liveRowsOf(following.reading, kept)}
+      {...(region === undefined ? {} : { region })}
+      emptyNote={liveNoteFor(following.reading, kept)}
+    />
+  );
+}
+
+/**
  * One Check's row.
  *
  * **`says` is the finding and `result` is the measurement.** The wire draws
@@ -202,8 +280,35 @@ function ChecksOutput({ kept, outputs }: { kept: string; outputs: Outputs }) {
  * outran"* and it is **absent on a pass, because a pass measured nothing** — so
  * a passed row is the outcome verb and nothing else, which is the whole
  * sentence there is to say about it.
+ *
+ * **While the gate runs it, a Check waits or runs, and says which.** The
+ * elapsed time is counted here from when it started, against `now`: the wire
+ * sends one message when it starts and one when it finishes, never a tick.
  */
-function checkRow({ name, run }: CheckRead): CheckRunRow {
+function checkRow(read: CheckRead, now: number): CheckRunRow {
+  const { name, run, live } = read;
+  if (isWaiting(read)) {
+    return {
+      id: name,
+      says: WAITING_TO_START,
+      identifier: name,
+      named: "queued",
+      icon: iconOf(undefined),
+      result: "waiting",
+    };
+  }
+  if (isRunning(read)) {
+    const since = live?.started_at;
+    const elapsed = since === undefined ? null : span(since, now);
+    return {
+      id: name,
+      says: elapsed === null ? RUNNING_NOW : `Running for ${elapsed}.`,
+      identifier: name,
+      named: "running",
+      result: "running",
+      ...(live?.output_path === undefined ? {} : { output: basename(live.output_path) }),
+    };
+  }
   return {
     id: name,
     says: saidOf(run),
@@ -324,6 +429,18 @@ const ASKED_AND_SILENT = "The panel was asked and did not answer.";
 
 /** Where an output goes when it is pressed. Bridge has no viewer of its own. */
 const OPENS_WHERE = "Click to open this output in your editor";
+
+/** Where a Check's log goes when it is pressed while the gate is running it. */
+const READS_HERE = "Click to read this Check's log here, as it is written";
+
+/** What a Check the gate has reached and not started says. */
+const WAITING_TO_START = "Waiting to start.";
+
+/** What a running Check says where its start will not parse. */
+const RUNNING_NOW = "Running now.";
+
+/** What opening the chapter offers while the gate runs its Checks. */
+const READS_THE_RUNNING_LOG = "Read the running Check's log as it is written";
 
 /**
  * What opening the chapter offers.

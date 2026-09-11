@@ -13,7 +13,7 @@
 
 use adapter_traits::{Rendering, RepositoryStanding};
 
-use crate::landing::{caught_up, four, rendering};
+use crate::landing::{caught_up, fields, rendering};
 use crate::tests::repo::TempRepo;
 
 // ------------------------------------------------------- one line, four fields
@@ -21,7 +21,7 @@ use crate::tests::repo::TempRepo;
 #[test]
 fn four_fields_are_read_off_one_tab_separated_line() {
     assert_eq!(
-        four("OPEN\tmain\t67cb1b9e\tfdc4cf46"),
+        fields::<4>("OPEN\tmain\t67cb1b9e\tfdc4cf46"),
         Some(["OPEN", "main", "67cb1b9e", "fdc4cf46"])
     );
 }
@@ -32,7 +32,7 @@ fn four_fields_are_read_off_one_tab_separated_line() {
 #[test]
 fn a_line_that_is_not_four_fields_is_no_reading() {
     for said in ["OPEN\tmain\t67cb1b9e", "OPEN", "", "a\tb\tc\td\te"] {
-        assert_eq!(four(said), None, "{said:?}");
+        assert_eq!(fields::<4>(said), None, "{said:?}");
     }
 }
 
@@ -40,7 +40,7 @@ fn a_line_that_is_not_four_fields_is_no_reading() {
 /// request with no base branch is not something this could act on.
 #[test]
 fn a_blank_field_makes_the_whole_reading_absent() {
-    assert_eq!(four("OPEN\t\t67cb1b9e\tfdc4cf46"), None);
+    assert_eq!(fields::<4>("OPEN\t\t67cb1b9e\tfdc4cf46"), None);
 }
 
 // ------------------------------------------------- what the forge is rendering

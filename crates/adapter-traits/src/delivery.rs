@@ -178,15 +178,18 @@ impl Landing {
 }
 
 /// Everything one ask of the forge answers about a pull request that was
-/// opened. **One call and three answers.**
+/// opened. **One call and six answers.**
 ///
 /// `#427` asked for the base question to ride the merge question rather than
 /// sweep on its own, because `gh pr view` answers both in the same breath and
 /// building them apart would be two processes where one would do. So this is
-/// what [`Delivery::landed`] returns, and what it carries is the three things
-/// a person wants to know about work they cannot see: did it land, what does it
-/// land into, and — on [`Landing::Open`], where alone it means anything — is
-/// the forge showing the right diff beside it.
+/// what [`Delivery::landed`] returns, and what it carries has grown from the
+/// two things a person wants to know about work they cannot see — did it land,
+/// and what does it land into — to what a person reads about it before it has:
+/// its number, its title, and whether the forge can merge it as it stands.
+/// Riding the same call is what `#427`'s argument already was; asking a second
+/// time for a value this one already has would be the process this call exists
+/// to spend once.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WhatBecameOfIt {
     /// Whether anybody merged it.
@@ -197,6 +200,25 @@ pub struct WhatBecameOfIt {
     /// **`None` is a forge that did not answer**, which is exactly
     /// [`Landing::Unknown`]'s case and never any other.
     pub base: Option<String>,
+    /// The forge's own number for it. **`None` is `Unknown`'s case again** —
+    /// a forge that answered anything at all named a number, so this is never
+    /// absent beside a `landing` other than [`Landing::Unknown`].
+    pub number: Option<u64>,
+    /// Its title, as the forge holds it right now.
+    ///
+    /// **Not the title Armada opened it with.** `Review::title` is what
+    /// [`Delivery::open_for_review`] sent; a person may have edited the pull
+    /// request's own title since, and this is a later read of the same forge
+    /// answering about the same address. `None` on [`Landing::Unknown`], for
+    /// [`number`](WhatBecameOfIt::number)'s reason.
+    pub title: Option<String>,
+    /// Whether the forge can merge it into its base as it stands.
+    ///
+    /// **A third answer, and not a guess at one of the other two.** A forge
+    /// still computing the answer says so rather than picking one, and
+    /// [`Mergeable::Unreadable`] is that word carried rather than collapsed
+    /// into a conflict nobody has found yet.
+    pub mergeable: Mergeable,
 }
 
 impl WhatBecameOfIt {
@@ -208,8 +230,28 @@ impl WhatBecameOfIt {
         WhatBecameOfIt {
             landing: Landing::Unknown,
             base: None,
+            number: None,
+            title: None,
+            mergeable: Mergeable::Unreadable,
         }
     }
+}
+
+/// Whether the forge can merge a pull request into its base as it stands.
+///
+/// **Not a `bool`.** A forge that has not finished computing the answer says
+/// so, and folding that third word into either `Yes` or `No` would be a guess
+/// this machine has no grounds for — the same argument [`crate::WhatPeopleSaid`]
+/// and [`crate::WhatTheForgeRan`] already make for their own `Unreadable`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Mergeable {
+    /// The forge would merge it, unassisted, right now.
+    Yes,
+    /// The branch and its base disagree, in the forge's own reading —
+    /// [`NotMerged::Conflicted`]'s reading, taken before anybody pressed.
+    No,
+    /// The forge has not said, or did not answer at all.
+    Unreadable,
 }
 
 /// Whether the forge is comparing a pull request against the commit its branch

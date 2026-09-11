@@ -79,6 +79,16 @@ pub struct WorkflowStep {
     /// with nothing on it — the same defect the rail had, one moment earlier
     /// and on the surface where the decision is actually taken.
     pub advance_gate: AdvanceGate,
+    /// Whether this is the step the workflow sends the work out on.
+    ///
+    /// **At most one step of a workflow says yes** — `crates/config/src/
+    /// workflow.rs` refuses a definition declaring two — so a picker can say
+    /// "this workflow never opens a pull request" the moment a person is
+    /// looking at it, the same sentence [`StepDetail::delivers`]
+    /// (`crate::StepDetail::delivers`) lets a rail say once a Job is running.
+    /// `false` on every step of a workflow that delivers nothing.
+    #[serde(default)]
+    pub delivers: bool,
 }
 
 /// One workflow Fleet holds, as a picker offers it.

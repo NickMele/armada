@@ -36,6 +36,7 @@ use crate::peer::{Drones, PeerOf};
 use crate::proposals::Proposals;
 use crate::silence::Liveness;
 use crate::slots::{Concurrency, Slots};
+use crate::underway::Underway;
 
 /// What Fleet knows about the machine it runs on.
 ///
@@ -210,6 +211,7 @@ where
             judge_budget: fittings.judge_budget,
             proposer_budget: fittings.proposer_budget,
             aloft: Aloft::default(),
+            underway: Underway::default(),
             proposals: Proposals::new(),
             judge_model: fittings.judge_model,
             proposer_model: fittings.proposer_model,
@@ -230,6 +232,7 @@ where
             swept: Mutex::new(None),
             sweeping: Mutex::new(Sweep::default()),
             proving: Arc::new(Mutex::new(crate::proving::Proving::default())),
+            pressing: crate::showing_again::Pressing::default(),
             allowance: fittings.allowance,
             polled: Mutex::new(None),
             drones: std::sync::Mutex::new(Drones::default()),

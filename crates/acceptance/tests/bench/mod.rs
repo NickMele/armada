@@ -439,6 +439,7 @@ impl Bench {
             // a deliverable's bytes and `REPO_ROOT` is never touched.
             &Keeping::of(REPO_ROOT, &run.job.handle()),
             Policies::unstated(),
+            &fleet::Announcing::nowhere(),
         )
         .await;
         // What `fleet::dispatch` does with the store, done with a list: the

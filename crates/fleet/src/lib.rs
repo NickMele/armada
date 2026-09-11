@@ -57,6 +57,8 @@ pub mod evidence;
 /// Going and looking at a Job now, because somebody suspects it is wedged.
 /// **The rung below intervene**, and it costs no model call.
 mod examining;
+/// A running Check's log, read for `observe_check_output` as it grows.
+mod following;
 pub mod footprint;
 mod gate;
 mod group;
@@ -134,6 +136,8 @@ pub mod session;
 mod settling;
 /// Running the repository's own harness, and keeping what it produced.
 pub mod showing;
+/// A person asking a Job to show its work, off the turn loop — `#603`.
+mod showing_again;
 pub mod silence;
 pub mod slots;
 pub mod spawning;
@@ -150,6 +154,7 @@ mod unattended;
 /// What the forge says about a pull request nobody has merged yet, read on the
 /// sweep `noticing` already runs.
 mod under_review;
+pub mod underway;
 pub mod watch;
 pub mod widening;
 /// The redactions the `Queries` and `Commands` impls call by hand. Split out to
@@ -206,10 +211,12 @@ pub use scope::{Declared, Drifting, NotDeclared};
 pub use session::{DroneSession, LiveSession, Turn};
 pub use settling::Settled;
 pub use showing::{frames_dir, show, ComingUp, NotShown, Shown};
+pub use showing_again::Unshowable;
 pub use silence::{Liveness, Poke, Quiet, Vigil};
 pub use slots::Concurrency;
 pub use sub_dispatch::NotDispatched;
 pub use transcript::{history, log_of, transcript_of, Live, Recording, Spine, Tap, Taps};
 pub use turning::{keep_turning, Turned, Turning, Worked};
+pub use underway::{Announcing, LiveLog, Underway};
 pub use watch::{Drained, Progress, Watching};
 pub use widening::{NotWidened, Widening};

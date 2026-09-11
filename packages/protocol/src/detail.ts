@@ -23,8 +23,9 @@
 
 import type { JobFootprint } from "./footprint";
 import type { Flagged, Judged, KeptDeliverable } from "./judged";
-import type { KeptFrame } from "./showing";
+import type { KeptFrame, ShowAgain } from "./showing";
 import type { StepAttempt } from "./attempt";
+import type { ChecksUnderway } from "./underway";
 import type {
   CheckRun,
   DeclaredCheck,
@@ -156,6 +157,12 @@ export type JobDetail = {
    * behind this bridge is refused at the socket.
    */
   stuck?: Stuck;
+  /**
+   * Whether a person can ask this Job to show its work again, and every time
+   * somebody did. Since 10.1. **Absent from an older Fleet**, which draws as
+   * no control at all rather than a refusal.
+   */
+  show_again?: ShowAgain;
 };
 
 /**
@@ -379,11 +386,68 @@ export type JobDelivery = {
   /** The address a person clicks. */
   pull_request?: string;
   /**
+   * Live facts about it, off Fleet's own rotation rather than this call.
+   * Since protocol 10.2.
+   *
+   * **Never fetched on this call.** Fleet already asks the forge about every
+   * open pull request on a fixed rotation, to notice a merge; this is that
+   * same reading, cached rather than fetched again.
+   *
+   * **Absent is two different facts, told apart by `landed`.** Where `landed`
+   * is also absent, Fleet's rotation has not reached this pull request yet.
+   * Where `landed` is present, the pull request has settled and Fleet has
+   * stopped asking — read `landed` instead. Present always means `landed` is
+   * absent: a reading taken while the pull request was still open, stale by
+   * at most one rotation.
+   */
+  pull_request_detail?: PullRequestDetail;
+  /**
    * What became of that pull request. Since protocol 6.6. **Absent is unasked
    * or still open** — one absence, because Armada opens a pull request and a
    * person merges it, so "still open" is the fact that nothing has happened.
    */
   landed?: Settled;
+};
+
+/**
+ * What Fleet's rotation last read live off an open pull request. Since
+ * protocol 10.2.
+ *
+ * **A snapshot, not a subscription.** Nothing pushes an update when one of
+ * these changes; reopen the job after Fleet's rotation has had time to come
+ * back around for a fresher one.
+ */
+export type PullRequestDetail = {
+  /** The forge's own number for it, where the forge answered one. */
+  number?: number;
+  /**
+   * Its title, as the forge holds it right now — not the title Armada opened
+   * it with, because a person may have edited it since.
+   */
+  title?: string;
+  /**
+   * Whether the forge can merge it into its base as it stands. **Absent is
+   * not "conflicting"** — it is the forge declining to say.
+   */
+  mergeable?: boolean;
+  /**
+   * Every review that has landed a verdict, oldest first. **Comments are not
+   * here** — `get_remarks` serves everything anybody wrote, and a review's
+   * note would cross twice if it were carried on both.
+   */
+  reviews: ReviewedBy[];
+};
+
+/** One reviewer's verdict on a pull request. Since protocol 10.2. */
+export type ReviewedBy = {
+  /** The login of whoever reviewed it, as the forge spells it. */
+  by: string;
+  /**
+   * One word from the forge's own vocabulary: `approved` or
+   * `changes_requested` — not every state a review can be in, only the two a
+   * person acts on.
+   */
+  verdict: string;
 };
 
 /**
@@ -440,6 +504,14 @@ export type StepDetail = {
    * do. Absent on the same grounds as `checks`.
    */
   advance_gate?: string;
+  /**
+   * Whether this is the step the frozen workflow sends the work out on. Since
+   * protocol 10.2. **Absent means "Fleet cannot say"**, exactly as `checks`
+   * does. Present is always the frozen workflow's own answer, so `false` is
+   * as certain as `true` — a client can say "this workflow never opens a
+   * pull request" from this field alone.
+   */
+  delivers?: boolean;
   /** Absent until a gate has ruled on the step. */
   last_verdict?: Verdict;
   /**
@@ -548,6 +620,8 @@ export type StepDetail = {
    * the six values it may take are unchanged.
    */
   judging?: JudgeInFlight;
+  /** The step's Checks while the gate runs them. Since 10.3. `underway.ts`. */
+  checking?: ChecksUnderway;
   /** Entered, then moved on entering `running`. To `updated_at` is how long. */
   entered_at: string;
   updated_at: string;

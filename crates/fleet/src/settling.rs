@@ -213,6 +213,10 @@ where
         {
             self.noted_not_shown(&job_id, &step, &why);
         }
+        // Held across the ruling *and* its record, and dropped only once the
+        // rows are written: a surface re-reading on the last message must find
+        // each Check's result on `check_runs`, not in neither place.
+        let announcing = self.announcing(&job, &step, attempt);
         let ruling = rule_on(
             at.on_attempt(attempt, spent),
             request,
@@ -226,6 +230,7 @@ where
             &judging,
             &Keeping::of(&self.host().repo_root, &job.handle()),
             self.gating_policies(),
+            &announcing,
         )
         .await;
         // Before the Job or the step moves. A recorded result the transition
@@ -233,6 +238,7 @@ where
         // never written down is a verdict with no trace.
         self.recorded_checks(&job_id, &job.handle(), &step, attempt, &ruling)
             .await?;
+        drop(announcing);
         // And into the step's own transcript, in Fleet's voice. **A Drone never
         // runs a Check** — that is the point of them — so nothing mechanical
         // appeared anywhere in the activity log, which is drawn from the same

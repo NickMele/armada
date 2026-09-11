@@ -44,6 +44,7 @@ import {
   openPullRequest,
   readCall,
   readCheckOutput,
+  followCheckOutput,
   readFrame,
   readDiff,
   readEvidence,
@@ -51,6 +52,7 @@ import {
   readHeld,
   readReports,
   reclaimOne,
+  showAgain,
   stageAttachment,
   useCommands,
   useWatching,
@@ -360,6 +362,8 @@ export function App() {
                 deciding={commands.deciding === reading.id}
                 observed={state.observed}
                 journalled={state.journalled}
+                followed={state.followed}
+                onFollowCheckOutput={followCheckOutput}
                 resources={state.resources}
                 examination={state.examination}
                 // The one act here that changes nothing. It costs no model
@@ -383,6 +387,7 @@ export function App() {
                 onRaiseTurnCap={(jobId, turns) => void commands.raiseTurns(jobId, turns)}
                 onRerun={(jobId) => void commands.rerun(jobId)}
                 onReport={commands.report}
+                onShowAgain={showAgain}
                 onApprove={(jobId) => void commands.approve(jobId)}
                 onMergePullRequest={(jobId) => void commands.decide(jobId, "merge")}
                 onApproveReview={(jobId) => void commands.decide(jobId, "approve")}

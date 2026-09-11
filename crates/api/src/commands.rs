@@ -220,6 +220,27 @@ pub(crate) async fn rerun_gate<D: Commands>(
     }
 }
 
+/// Ask a Job to show its work: the repository's harness runs the last spec a
+/// Drone named, in the Job's worktree, and what it captured comes back as a set
+/// of its own. **The Job does not move**, so what comes back is the set and not
+/// the Job.
+///
+/// 409 before anything runs where it cannot — no harness, no worktree, no spec,
+/// the spec gone, a Drone working, a press already out. 200 with `nothing` set
+/// where the harness ran and captured nothing, which is an answer rather than a
+/// refusal. **It may take as long as the app takes to start**: the daemon runs
+/// it off the turn loop, and the run finishes whether or not this request is
+/// still waiting.
+pub(crate) async fn show_again<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+) -> Response {
+    match served.shared().show_again(job.id()).await {
+        Ok(shown) => answer(StatusCode::OK, &shown, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
 /// Give this Job a higher cost ceiling than the tier above it allows. **The
 /// Job comes back exactly where it was** — the raise moves a number and nothing
 /// else, and the field a caller reads it for is `queued_reason`: `over_budget`

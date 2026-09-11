@@ -411,6 +411,25 @@ pub trait Commands: Send + Sync + 'static {
     fn rerun_gate(&self, job_id: JobId)
         -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
+    /// `show_again` — run the repository's harness against this Job's worktree
+    /// now, and keep what it captured as a set of its own.
+    ///
+    /// **The one command here that takes the daemon by `Arc`**, and that is the
+    /// whole of how it stays off the turn loop. A press runs a server and a
+    /// spec, which takes as long as the app takes to start; the daemon spawns
+    /// the run as a task of its own so nothing that turns Jobs waits on it, and
+    /// a spawned task has to own what it runs on. The request waits for the
+    /// task, and a client that stops waiting does not stop the run.
+    ///
+    /// [`Refusal::IllegalMove`] before anything runs, naming what is missing: no
+    /// harness declared, no worktree, no spec named, the spec gone from the
+    /// worktree, a Drone working in it, or a press already out on this Job.
+    /// A harness that ran and captured nothing is a 200 carrying why.
+    fn show_again(
+        self: std::sync::Arc<Self>,
+        job_id: JobId,
+    ) -> impl Future<Output = Result<ipc::ShownAgain, Refusal>> + Send;
+
     /// `reject_job` — the work is not wanted, and the Job is over.
     ///
     /// **Terminal, which is what makes it the hard stop.** `rejected` is a

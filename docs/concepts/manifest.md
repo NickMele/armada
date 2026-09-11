@@ -89,7 +89,7 @@ Separate registries, not the same thing tagged two ways:
 | Registry | Purpose | Invoked by |
 | --- | --- | --- |
 | Checks | Mandatory — must pass to land or advance code | Fleet, as part of mechanical verification |
-| Commands | Optional, general-purpose — migrations, doc generation, builds, formatting | A Drone during a Job, and you directly via Bridge |
+| Commands | Optional, general-purpose — migrations, doc generation, builds, formatting, servers | A Drone during a Job, and you directly via Bridge |
 | Evidence | Declares the harness — how this repo shows what a change did | Fleet, on a step whose evidence type is `visual` |
 | Ports | Names a port a workspace needs, so Armada can place it | Nothing invokes it — Fleet reads it at claim time |
 
@@ -102,6 +102,38 @@ Commands cover anything project-specific. Armada doesn't reimplement those tools
 A Command can be flagged destructive. That flag gates **Drone** invocation — pauses for your approval, same as any other risky allowlisted op. Your own **manual** invocation via Bridge doesn't require a second approval step, since you're already the one directly triggering it.
 
 **A declared teardown Command is the escape hatch** for a process handed to another supervisor — `launchctl`, a systemd unit, a deliberate double-fork. Everything Armada spawned that stayed in its own tree is killed by process group with no declaration needed, and containers are handled by the Docker adapter, so a declared Command covers only what neither reaches.
+
+### Commands that keep running
+
+A Command with `serve` is a server: it stays up until something stops it. The shape follows Tilt's [`local_resource`](https://docs.tilt.dev/api.html#api.local_resource), which draws the same line between a command expected to exit and one expected to stay up.
+
+```yaml
+ports:
+  storybook: {}
+
+commands:
+  storybook:
+    serve: pnpm -C packages/components exec storybook dev -p ${port.storybook} --no-open --ci
+    ready: curl -sf http://localhost:${port.storybook}
+    links:
+      - url: http://localhost:${port.storybook}
+        name: Storybook
+```
+
+| field | type | required | default | meaning |
+|---|---|---|---|---|
+| `run` | string | no | — | Runs first; the server starts only if it exits zero |
+| `serve` | string | yes, for a server | — | Starts the server, held until stopped |
+| `ready` | string | no | serving once started | Exits zero once the server answers |
+| `links` | list | no | empty | Addresses offered as buttons, each a `url` and optional `name` |
+
+`${port.NAME}` resolves in every field from the claim the server runs under — see Ports, below. [Fleet](fleet.md) holds each server: one instance per Job, stopped when the Job ends.
+
+> **Rule.** A server that exits on its own has failed, whatever its exit code.
+> Why: staying up is the whole of what a server is for.
+
+> **Rule.** A Drone starts a server only through Fleet's MCP tool, never from its shell.
+> Why: Fleet has to know a server is running to hand it to the next Drone and to stop it when the Job ends.
 
 ### Check prerequisites
 
@@ -320,7 +352,7 @@ Each entry has a name and these fields:
 
 Exact key naming and nesting is tracked in `../contracts/configuration.md`.
 
-**A span outlives an interrupted Job and is released by the Job ending, not by anything about ports.** A claim lasts as long as its worktree; an interrupted Job holds both until a person answers its escalation and it reaches a terminal, after which retention sweeps the worktree and the span goes.
+**A span outlives an interrupted Job and is released by the Job ending, not by anything about ports.** A claim lasts as long as its worktree; an interrupted Job holds both until a person answers its escalation and it reaches a terminal, after which retention sweeps the worktree and the span goes. A server started with no Job holds a claim of its own, released when the server stops.
 
 Nothing here asks a person to release a port — there is no such action, and adding one would offer a control for a decision they are already making elsewhere. Past a threshold Fleet surfaces the hold so accumulation is not discovered at exhaustion. [Fleet](fleet.md) owns the mechanism.
 

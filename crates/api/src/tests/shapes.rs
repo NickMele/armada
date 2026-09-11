@@ -103,6 +103,7 @@ fn step_rail(
         check_runs: Vec::new(),
         judge_checks: Some(judge_checks),
         advance_gate: Some(ipc::AdvanceGate::from_wire(gate).expect("a gate the registry has")),
+        delivers: Some(false),
         last_verdict: None,
         overridden: false,
         judged: Vec::new(),
@@ -112,6 +113,7 @@ fn step_rail(
         attempts: Vec::new(),
         verdicts: Vec::new(),
         judging: None,
+        checking: None,
         entered_at: Instant::carried("2026-08-26T09:00:00.000Z"),
         updated_at: Instant::carried("2026-08-26T09:00:00.000Z"),
     }
@@ -228,6 +230,9 @@ pub fn detail(job: JobSummary) -> JobDetail {
         // a slot, a filesystem and a store, and this daemon has none of the
         // three.
         stuck: None,
+        // Absent for the same reason: whether a press could run is read off a
+        // worktree and a Manifest, and this daemon has neither.
+        show_again: None,
     }
 }
 
@@ -499,6 +504,7 @@ pub fn workflows() -> Vec<WorkflowSummary> {
                 }],
                 advance_gate: ipc::AdvanceGate::from_wire("auto_if_judge_passes")
                     .expect("a gate the registry has"),
+                delivers: false,
             },
             ipc::WorkflowStep {
                 step_id: StepId::carried("handoff"),
@@ -507,6 +513,7 @@ pub fn workflows() -> Vec<WorkflowSummary> {
                 judge_checks: Vec::new(),
                 advance_gate: ipc::AdvanceGate::from_wire("human_always")
                     .expect("a gate the registry has"),
+                delivers: true,
             },
         ],
         manifest_id: ManifestId::carried("01MF"),

@@ -74,6 +74,9 @@ mod setup;
 /// What a step's harness produced, as a client is told about it.
 mod showing;
 mod turn;
+/// A step's Checks while the gate is running them, and the socket a running
+/// Check's log is read over.
+mod underway;
 /// The two numbers both sides read, and what a mismatch between them means.
 /// `build.rs` embeds them from `protocol-version.toml`.
 mod version;
@@ -90,8 +93,8 @@ pub use capacity::{AdmissionHold, FleetCapacity};
 pub use checks::{CheckOutput, CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
 pub use detail::{
-    Criterion, Dependency, JobDelivery, JobDetail, JobSpend, JudgeInFlight, Refusal, Settled,
-    StepDetail, StepFacts, Stuck, Verdict,
+    Criterion, Dependency, JobDelivery, JobDetail, JobSpend, JudgeInFlight, PullRequestDetail,
+    Refusal, ReviewedBy, Settled, StepDetail, StepFacts, Stuck, Verdict,
 };
 pub use enums::{
     Actor, AdvanceGate, BudgetHold, CheckOutcome, CriterionSource, DependencyDirection,
@@ -101,8 +104,8 @@ pub use enums::{
 pub use error::{RunId, WireError, WireValue};
 pub use event::{
     ChangeKind, ChangedFile, Cursor, Delivered, DroneExited, DroneSpawned, Event, JobAsking,
-    JobCreated, JobFilesChanged, JobJudging, JobLanded, JobStateChanged, JobStepAdvanced, Missed,
-    ProposalMoved, Reason, Resync, StreamMessage,
+    JobChecking, JobCreated, JobFilesChanged, JobJudging, JobLanded, JobStateChanged,
+    JobStepAdvanced, Missed, ProposalMoved, Reason, Resync, StreamMessage,
 };
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};
 pub use holding::{HeldReason, WorktreeHeld, WorktreesHeld};
@@ -129,10 +132,14 @@ pub use resources::{
     Asked, Finding, Held, JobExamined, JobProcess, JobResources, Look, WorktreeOnDisk,
 };
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
-pub use showing::KeptFrame;
+pub use showing::{KeptFrame, NamedSpec, ShowAgain, ShownAgain, ShownSet};
 pub use turn::{
     BlockKind, CallArguments, Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage,
     Voice, Withheld,
+};
+pub use underway::{
+    CheckUnderway, ChecksUnderway, OutputClosed, OutputEnded, OutputLines, OutputMessage,
+    OutputOpened,
 };
 pub use version::{ProtocolVersion, Skew, PROTOCOL_VERSION};
 pub use waiting::{AskedOption, ChosenAnswer, QuestionInFlight, RedirectInFlight, RedirectWaiting};

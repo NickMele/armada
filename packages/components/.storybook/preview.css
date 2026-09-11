@@ -1,11 +1,7 @@
-/* The sheet's own frame: the canvas ground, the sans face, the body step.
-   Every component below inherits from here rather than restating it. */
+/* The sheet's own frame. The ground, the face and the body step are
+   `@armada/tokens/base.css`'s, loaded before this exactly as Bridge loads
+   them; what is left is the one thing a story wants that the app does not —
+   room around the thing being looked at. */
 body {
-  background: var(--bg-base);
-  color: var(--fg-default);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  line-height: var(--leading-sm);
-  margin: 0;
   padding: var(--space-6);
 }
