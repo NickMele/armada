@@ -93,6 +93,9 @@ importers:
 
   packages/components:
     dependencies:
+      '@armada/brand':
+        specifier: workspace:*
+        version: link:../brand
       '@armada/protocol':
         specifier: workspace:*
         version: link:../protocol

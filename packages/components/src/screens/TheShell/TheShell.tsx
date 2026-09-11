@@ -1,3 +1,4 @@
+import { ArmadaLockupHorizontal, ArmadaMark } from "@armada/brand";
 import type { ReactNode } from "react";
 import { Sidebar, type SidebarItem } from "../../compositions/Sidebar/Sidebar";
 import { StatusBar, type StatusBarProps } from "../../compositions/StatusBar/StatusBar";
@@ -19,7 +20,11 @@ import { StatusBar, type StatusBarProps } from "../../compositions/StatusBar/Sta
  * "layout broke on resize" restated in CSS.
  */
 export type TheShellProps = {
-  /** The app name, in the drag region the traffic lights sit in. */
+  /**
+   * The app name, in the drag region the traffic lights sit in. **Absent
+   * draws Armada's own**: the horizontal lockup, or the mark alone when the
+   * rail is collapsed.
+   */
   appName?: ReactNode;
   /** Beneath the app name — the Manifest picker, on M1's shell. */
   railHeader?: ReactNode;
@@ -48,7 +53,7 @@ export type TheShellProps = {
 };
 
 export function TheShell({
-  appName = "Armada",
+  appName,
   railHeader,
   surfaces,
   activeId,
@@ -64,7 +69,7 @@ export function TheShell({
     <div className="armada-shell">
       <div className="armada-shell__body">
         <Sidebar
-          appName={appName}
+          appName={appName ?? brandOf(collapsed === true)}
           header={railHeader}
           surfaces={surfaces}
           activeId={activeId}
@@ -90,5 +95,28 @@ export function TheShell({
       </div>
       <StatusBar {...status} />
     </div>
+  );
+}
+
+/**
+ * Armada's name in the drag region: the horizontal lockup, or the mark alone
+ * when the rail collapses, which the owner asked for on 11 Sep 2026 after the
+ * collapsed rail drew the wordmark clipped.
+ *
+ * **Decided here, not by the caller.** `Shell` used to choose, and this
+ * component's own default was the word "Armada", so every story drew text the
+ * app never shows. `packages/brand/README.md` floors the lockup at a 20px cap
+ * height, 26px overall; a 48px rail has no room for it, and a clipped lockup
+ * is nothing where the mark alone is still the app's name.
+ *
+ * `title` gives either its accessible name; without one both render
+ * `aria-hidden`. Nothing here is clickable: the drag region cannot hold
+ * anything interactive.
+ */
+function brandOf(collapsed: boolean): ReactNode {
+  return collapsed ? (
+    <ArmadaMark size={20} title="Armada" />
+  ) : (
+    <ArmadaLockupHorizontal height={26} title="Armada" />
   );
 }
