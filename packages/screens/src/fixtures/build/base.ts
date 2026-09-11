@@ -152,6 +152,9 @@ export function manifest(): ManifestSummary {
     id: MANIFEST_ID,
     repository: "armada",
     path: "armada.yml",
+    // Fleet keeps a repository's records in a folder of its own, off the
+    // checkout. A made-up home, since a real one would name a person.
+    records_root: "/Users/user/Library/Application Support/Armada/records/armada",
     version: 3,
     checks: ["cargo_build", "cargo_nextest"],
   };
