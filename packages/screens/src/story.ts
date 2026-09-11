@@ -413,6 +413,8 @@ function opening(occasion: string): string {
       return "Armada asked for the step's evidence.";
     case "poke":
       return "Armada asked whether the Drone was still working.";
+    case "permission":
+      return "Armada carried in a person's answer about a command.";
     default:
       return `Armada sent a ${occasion} turn.`;
   }
