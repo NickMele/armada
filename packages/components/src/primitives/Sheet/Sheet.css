@@ -77,9 +77,14 @@
   border-radius: 0;
 }
 
+/* The head wraps: when the titles and the controls cannot share a row, the
+   controls and the close move under the titles rather than squeezing them.
+   The titles' basis is job detail's own left column, the same floor the job
+   header decides its own line break against. */
 .armada-sheet__head {
   flex: none;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-4) var(--space-6);
@@ -92,7 +97,7 @@
 
 .armada-sheet__titles {
   display: flex;
-  flex: 1;
+  flex: 1 1 var(--w-run-column);
   flex-direction: column;
   gap: var(--space-1);
   min-width: 0;
@@ -100,6 +105,7 @@
 
 .armada-sheet__title {
   margin: 0;
+  white-space: nowrap;
   font-size: var(--text-lg);
   line-height: var(--leading-lg);
   font-weight: var(--weight-heading);
@@ -124,21 +130,27 @@
   line-height: var(--leading-2xs);
   color: var(--fg-subtle);
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* The titles take the slack, so the controls and the close sit at the trailing
    edge without either needing a margin that the other has to cancel. */
+/* The controls yield width before the title does, and scroll when they run
+   out of it. Held at their full width, a sheet narrower than they expected
+   squeezed the title to a word a line and ran its subtitle under the tabs. */
 .armada-sheet__controls {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  flex: none;
+  flex: 0 1 auto;
   min-width: 0;
+  overflow-x: auto;
 }
 
 /* An icon-only ghost control, which is where Iconography permits a glyph. */
 .armada-sheet__close {
   flex: none;
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;

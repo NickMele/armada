@@ -27,6 +27,8 @@ export function JobDetailFrom({
   /**
    * The window's width, where a story is about a narrow one — `--window-floor`
    * is the narrowest Bridge lays out for. Absent fills the story's own width.
+   * It narrows the mount and not the window, so anything that follows the
+   * window's own width, like a sheet's compact header, stays wide.
    */
   width?: string;
 }) {
