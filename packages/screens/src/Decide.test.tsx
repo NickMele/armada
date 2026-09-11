@@ -167,6 +167,11 @@ test("approve and request changes send on the press, with no dialog", async () =
  * a reconnection already produce. What must not happen is what a naive
  * refresh does everywhere else: replace the block and lose what a person was
  * doing in it.
+ *
+ * **`#667`'s 20 s timer lands the same way.** `remarks-poll.ts` calls the
+ * same `remarksChanged` route `job.remarks_changed` does, so a fresh reading
+ * this screen receives is indistinguishable from the one this test sends —
+ * proving one proves both.
  */
 test("a fresh remarks reading keeps a picked comment and a typed note", async () => {
   const address = "https://forge.example/armada/pull/533";

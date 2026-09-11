@@ -141,8 +141,8 @@ export class FleetConnection {
   private readonly notes: JournalSocket;
   /** One running Check's log, as it is written — a fourth socket. `following.ts`. */
   private readonly follow: FollowSocket;
-  /** The claims and the patch, each read when a surface asks — see `review.ts`. */
-  private readonly material: ReviewMaterial;
+  /** Not `private`, `commands`' reason: `remarks-poll.ts` (`#667`) reaches `remarksChanged` from `index.ts`. */
+  readonly material: ReviewMaterial;
   /**
    * Every filed report, where a surface asked — see `reports.ts`. **The one
    * read here no Job scopes**, because a report outlives the Job it is about.
