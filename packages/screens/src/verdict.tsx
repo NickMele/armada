@@ -16,6 +16,7 @@
 //
 // **The fifth arrangement is `verdict-answered.tsx`, not here.**
 
+import { openPullRequest, type OpenPullRequest } from "./opening";
 import type { ReactNode } from "react";
 import { Minus } from "lucide-react";
 import {
@@ -251,14 +252,14 @@ function tookOf(job: JobSummary, whole: JobWhole | null, now: number): string | 
 }
 
 /**
- * The pull request block, where this Job has one open.
+ * The pull request block, where this Job has one: its number as a link to it,
+ * and what Fleet's rotation last read of it.
  *
- * **`pull_request_detail` absent is two different facts, told apart by
- * `landed`.** Absent with `landed` absent is Fleet's rotation not having read
- * this pull request yet; absent with `landed` present is one that has already
- * settled, which is not this block's story to tell — the header's own pull
- * request fact carries that. So this draws only where `detail` itself
- * arrived, never as a stand-in for the address alone.
+ * **The link draws on the address alone.** Before the rotation has read the
+ * pull request there is no detail to show, and the owner asked on 11 Sep 2026
+ * for the review to reach its pull request without going back up to the
+ * header. It opens through `openPullRequest`, the header's own path, so the
+ * address a click carries never decides what opens.
  *
  * **`mergeable` absent is "the forge would not say", never "conflicting".**
  * Drawing it as a refusal would be inventing a verdict the forge did not give.
@@ -266,9 +267,33 @@ function tookOf(job: JobSummary, whole: JobWhole | null, now: number): string | 
 export function pullRequestBlockOf(
   address: string | undefined,
   detail: PullRequestDetail | undefined,
+  onOpen?: () => void,
 ): ReactNode | undefined {
-  if (address === undefined || detail === undefined) return undefined;
-  const number = detail.number === undefined ? (pullRequestNumber(address) ?? "Pull request") : `#${detail.number}`;
+  if (address === undefined) return undefined;
+  const number =
+    detail?.number === undefined ? (pullRequestNumber(address) ?? "Pull request") : `#${detail.number}`;
+  return (
+    <div className="armada-verdict__pr">
+      <p className="text-xs text-fg-muted">
+        <a
+          className="armada-verdict__pr-link mono"
+          href={address}
+          title={address}
+          onClick={(event) => {
+            event.preventDefault();
+            onOpen?.();
+          }}
+        >
+          {number}
+        </a>
+        {detail === undefined ? null : pullRequestReadOf(detail)}
+      </p>
+    </div>
+  );
+}
+
+/** What the rotation last read of a pull request: its title, whether it merges, its reviews. */
+function pullRequestReadOf(detail: PullRequestDetail): string {
   const mergeable =
     detail.mergeable === true ? "mergeable" : detail.mergeable === false ? "not mergeable" : "mergeable unknown";
   const approved = detail.reviews.filter((one) => one.verdict === "approved").length;
@@ -282,18 +307,8 @@ export function pullRequestBlockOf(
         ]
           .filter((part): part is string => part !== undefined)
           .join(" · ") || `${detail.reviews.length} reviewed, unresolved`;
-  return (
-    <div className="armada-verdict__pr">
-      <p className="text-xs text-fg-muted">
-        <span className="mono">{number}</span>
-        {detail.title === undefined ? null : ` · ${detail.title}`} — open, {mergeable}, {reviewed}.
-      </p>
-      <p className="text-2xs text-fg-subtle">
-        Read it there — this page says what Armada knows that the pull request&rsquo;s own page
-        does not.
-      </p>
-    </div>
-  );
+  const title = detail.title === undefined ? "" : ` · ${detail.title}`;
+  return `${title}, open, ${mergeable}, ${reviewed}.`;
 }
 
 /** What `verdictOf` is built from — the panel's own reading of one Job and its open step. */
@@ -307,8 +322,12 @@ export type VerdictArgs = {
   now: number;
   /** This step's own submission, where the Drone has made one. */
   claim: Submitted | undefined;
-  /** The pull request address and its live detail, off `JobDetail.delivery`. */
-  pullRequest?: { address: string | undefined; detail: PullRequestDetail | undefined };
+  /** The pull request address and its live detail, off `JobDetail.delivery`, and how to open it. */
+  pullRequest?: {
+    address: string | undefined;
+    detail: PullRequestDetail | undefined;
+    onOpen?: () => void;
+  };
   /** Fleet's own reason the gate could not decide, scoped to this step. */
   undecided?: string;
   /** A person's own words for overruling the open step, where the log kept one. */
@@ -345,7 +364,7 @@ export function verdictOf({
     ...(never === true && kept.length > 0 ? { deliverable: kept[0]?.opening } : {}),
     ...(pullRequest === undefined
       ? {}
-      : { pullRequest: pullRequestBlockOf(pullRequest.address, pullRequest.detail) }),
+      : { pullRequest: pullRequestBlockOf(pullRequest.address, pullRequest.detail, pullRequest.onOpen) }),
     provesIt: <CheckRuns rows={provesItOf(step, whole?.acceptance_criteria ?? [], now, undecided, reason)} />,
     ...(provesItNoteOf(step, render) === undefined
       ? {}
@@ -379,6 +398,8 @@ export type VerdictSlotAtGateArgs = {
   onReject: (jobId: string) => void;
   onTakeUpRemarks: (jobId: string, remarks: string[]) => void;
   onOpenRemarkLink: (jobId: string, remarkId: string) => void;
+  onOpenPullRequest: OpenPullRequest;
+  onSaid: (sentence: string) => void;
 };
 
 /**
@@ -406,6 +427,8 @@ export function verdictSlotAtGate({
   onReject,
   onTakeUpRemarks,
   onOpenRemarkLink,
+  onOpenPullRequest,
+  onSaid,
 }: VerdictSlotAtGateArgs): ReactNode {
   const address = whole?.delivery?.pull_request;
   const detail = whole?.delivery?.pull_request_detail;
@@ -428,7 +451,14 @@ export function verdictSlotAtGate({
         opens: opensRecords,
         now,
         claim: claimed,
-        pullRequest: { address, detail },
+        pullRequest: {
+          address,
+          detail,
+          onOpen: () =>
+            void openPullRequest(onOpenPullRequest, job.id).then((because) => {
+              if (because !== null) onSaid(because);
+            }),
+        },
         undecided,
       })}
       note={note}

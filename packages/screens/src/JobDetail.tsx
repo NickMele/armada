@@ -661,6 +661,8 @@ export function JobDetail({
             onReject,
             onTakeUpRemarks,
             onOpenRemarkLink,
+            onOpenPullRequest,
+            onSaid,
           })
         : render === "finished" && neverAsked
           ? verdictSlotFinished({ job, whole, open, render, recorded, opensRecords, now, claimed, undecided })
