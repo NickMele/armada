@@ -15,6 +15,7 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import type {
+  BlockKind,
   Criterion,
   Diff,
   Footprint,
@@ -102,15 +103,22 @@ function step(over: Partial<StepDetail> = {}): StepDetail {
  *
  * `headings` is what Fleet stamps on the row — the line numbers it wrote the
  * block headings at. Omitted is a turn with no headed blocks, and a row written
- * before the field existed; the two are the same to a reader.
+ * before the field existed; the two are the same to a reader. `kinds`, since
+ * protocol 9.7, pairs one `BlockKind` per heading by position.
  */
-function instructed(text: string, headings?: number[]): Turn {
+function instructed(text: string, headings?: number[], kinds?: BlockKind[]): Turn {
   return {
     ts: "2026-09-02T13:11:00Z",
     seq: 1,
     step: "plan",
     by: "armada",
-    saw: { event: "instructed", occasion: "opening", text, ...(headings ? { headings } : {}) },
+    saw: {
+      event: "instructed",
+      occasion: "opening",
+      text,
+      ...(headings ? { headings } : {}),
+      ...(kinds ? { kinds } : {}),
+    },
   };
 }
 
@@ -147,6 +155,7 @@ function chapters(
   over: {
     rows?: Turn[];
     step?: StepDetail;
+    steps?: StepDetail[];
     transcript?: string;
     criteria?: Criterion[];
   } = {},
@@ -154,6 +163,7 @@ function chapters(
   return chaptersOf({
     job: job(),
     step: over.step ?? step(),
+    steps: over.steps ?? [over.step ?? step()],
     criteria: over.criteria ?? [],
     frames: NO_FRAMES,
     watching: { rows: over.rows ?? [], skipped: 0 },
@@ -332,6 +342,161 @@ describe("drone instructions", () => {
     const markup = renderToStaticMarkup(chapters({ rows: [instructed(BRIEF)] })[0]!.preview);
     const done = paragraphs(markup).find((said) => said.includes("This is done when:"));
     expect(done).toContain("\n    - two refreshes in flight make one network call");
+  });
+});
+
+describe("a sectioned brief, since protocol 9.7", () => {
+  /** Five headings, two of them the same kind, so a merge is exercised too. */
+  const KINDED = [
+    "JOB BRIEF",
+    "",
+    "Coalesce concurrent token refreshes",
+    "",
+    "WHAT A PERSON SAID",
+    "",
+    "Please also cover the retry path.",
+    "",
+    "STANDING",
+    "",
+    "Report progress every step.",
+    "",
+    "WHERE YOU ARE",
+    "",
+    "This task runs in 3 parts. You are on part 2.",
+    "",
+    "WHAT THIS PART HAS TO PASS",
+    "",
+    "Checks: build, test",
+  ].join("\n");
+  const KINDED_HEADINGS = [0, 4, 8, 12, 16];
+  const KINDED_KINDS: BlockKind[] = ["about_this_job", "about_this_job", "standing", "steps", "checks"];
+
+  // `instructed()` above stamps every row `step: "plan"`, so the step this
+  // describe block opens is named to match it rather than adding a second
+  // signature only this file would use.
+  const THREE_STEPS: StepDetail[] = [
+    step({ step_id: "draft", label: "Draft the change", ordinal: 1 }),
+    step({ step_id: "plan", label: "Plan the change", ordinal: 2 }),
+    step({ step_id: "summarise", label: "Summarise", ordinal: 3 }),
+  ];
+
+  it("draws no outer clamp, since the folded layout bounds it instead", () => {
+    const markup = renderToStaticMarkup(
+      chapters({
+        rows: [instructed(KINDED, KINDED_HEADINGS, KINDED_KINDS)],
+        step: THREE_STEPS[1],
+        steps: THREE_STEPS,
+      })[0]!.preview,
+    );
+    expect(markup).not.toContain("armada-clamped__more");
+    expect(markup).toContain("armada-brief--sectioned");
+  });
+
+  it("merges headings of the same kind into one section", () => {
+    const markup = renderToStaticMarkup(
+      chapters({
+        rows: [instructed(KINDED, KINDED_HEADINGS, KINDED_KINDS)],
+        step: THREE_STEPS[1],
+        steps: THREE_STEPS,
+      })[0]!.preview,
+    );
+    // Both of Fleet's own headings survive, inside the one "About this job"
+    // section — neither is dropped and neither gets a section of its own.
+    expect(markup).toContain("About this job");
+    const about = markup
+      .split('<section class="armada-chapter"')
+      .find((chunk) => chunk.includes("About this job"));
+    expect(about).toBeDefined();
+    expect(headings(about!.split("</section>")[0] ?? "")).toEqual([
+      "JOB BRIEF",
+      "WHAT A PERSON SAID",
+    ]);
+    // Nothing is dropped: every heading Fleet wrote is still somewhere on the
+    // page, either drawn directly or reachable under "Read the words Armada
+    // sent" — never lost to the section it was folded into.
+    expect(headings(markup)).toEqual([
+      "JOB BRIEF",
+      "WHAT A PERSON SAID",
+      "STANDING",
+      "WHERE YOU ARE",
+      "WHAT THIS PART HAS TO PASS",
+    ]);
+  });
+
+  it("reads the step position off data Bridge holds, not off Fleet's prose", () => {
+    const markup = renderToStaticMarkup(
+      chapters({
+        rows: [instructed(KINDED, KINDED_HEADINGS, KINDED_KINDS)],
+        step: THREE_STEPS[1],
+        steps: THREE_STEPS,
+      })[0]!.preview,
+    );
+    expect(markup).toContain("Where you are");
+    expect(markup).toContain("part 2 of 3");
+    expect(markup).toContain("data-activity=\"advanced\""); // Plan the change, done
+    expect(markup).toContain("data-activity=\"running\""); // Implement, current
+    expect(markup).toContain("data-activity=\"not_started\""); // Summarise, ahead
+    // Fleet's own words are still there, reachable underneath.
+    expect(markup).toContain("Read the words Armada sent");
+    expect(markup).toContain("This task runs in 3 parts. You are on part 2.");
+  });
+
+  it("counts the declared Checks in the meta and chips their names", () => {
+    const withChecks = step({
+      step_id: "plan",
+      label: "Plan the change",
+      ordinal: 2,
+      checks: [{ kind: "manifest_check", name: "build" }, { kind: "manifest_check", name: "test" }],
+    });
+    const markup = renderToStaticMarkup(
+      chapters({
+        rows: [instructed(KINDED, KINDED_HEADINGS, KINDED_KINDS)],
+        step: withChecks,
+        steps: [THREE_STEPS[0]!, withChecks, THREE_STEPS[2]!],
+      })[0]!.preview,
+    );
+    expect(markup).toContain("What this part has to pass");
+    expect(markup).toContain("2 checks");
+    expect(markup).toContain("armada-chip");
+    expect(markup).toContain(">build<");
+    expect(markup).toContain(">test<");
+  });
+
+  it("folds the standing section shut and mutes it by default", () => {
+    const markup = renderToStaticMarkup(
+      chapters({
+        rows: [instructed(KINDED, KINDED_HEADINGS, KINDED_KINDS)],
+        step: THREE_STEPS[1],
+        steps: THREE_STEPS,
+      })[0]!.preview,
+    );
+    const section = markup
+      .split('<section class="armada-chapter"')
+      .find((chunk) => chunk.includes("Standing instructions"));
+    expect(section).toBeDefined();
+    expect(section).toContain('data-tone="muted"');
+    // Closed: `Chapter` hides the body with `hidden` rather than unmounting
+    // it, so the words are still in the DOM and only the attribute differs.
+    expect(section).toContain("hidden=\"\"");
+    expect(section).toContain("Report progress every step.");
+  });
+
+  it("draws flat where kinds and headings do not pair, exactly as before 9.7", () => {
+    const markup = renderToStaticMarkup(
+      chapters({
+        rows: [instructed(KINDED, KINDED_HEADINGS, ["about_this_job"])],
+        step: THREE_STEPS[1],
+        steps: THREE_STEPS,
+      })[0]!.preview,
+    );
+    expect(markup).not.toContain("armada-brief--sectioned");
+    expect(headings(markup)).toEqual([
+      "JOB BRIEF",
+      "WHAT A PERSON SAID",
+      "STANDING",
+      "WHERE YOU ARE",
+      "WHAT THIS PART HAS TO PASS",
+    ]);
   });
 });
 

@@ -38,8 +38,14 @@ import { Tooltip } from "../../primitives/Tooltip/Tooltip";
  * amber a person-waited-on carries everywhere else, on the header alone. The
  * body stays neutral: the chapter is not an alert and its contents are not
  * warnings.
+ *
+ * `muted` is the one that says the same thing on every Job — the Drone
+ * brief's standing instructions, folded by default because they carry no fact
+ * specific to this Job. **Dimming is a token, not an alpha**, per
+ * `docs/contracts/design-system.md`: the name steps down to `--fg-subtle`
+ * rather than losing opacity, which would muddy the tone hues beside it.
  */
-export type ChapterTone = "neutral" | "waiting";
+export type ChapterTone = "neutral" | "waiting" | "muted";
 
 export type ChapterProps = {
   /**

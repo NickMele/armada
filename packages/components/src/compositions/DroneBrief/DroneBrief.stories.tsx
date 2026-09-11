@@ -1,8 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, within } from "storybook/test";
+import { expect, userEvent, within } from "storybook/test";
 import { DroneBrief } from "./DroneBrief";
 
-import type { BriefLine } from "./DroneBrief";
+import type { BlockKind } from "@armada/protocol";
+import type { BriefLine, BriefStep } from "./DroneBrief";
 
 /**
  * A brief's lines as the payload carries them, with the lines Fleet named as
@@ -17,6 +18,19 @@ import type { BriefLine } from "./DroneBrief";
 function marked(text: string, headings: readonly number[]): BriefLine[] {
   const named = new Set(headings);
   return text.split("\n").map((line, at) => (named.has(at) ? { text: line, named: "heading" } : { text: line }));
+}
+
+/**
+ * A brief's lines with each heading also carrying the kind the wire pairs it
+ * with, since protocol 9.7. `headings[i]` takes `kinds[i]` — the same
+ * position-pairing `story.ts` reads off `Saw.instructed.kinds`.
+ */
+function sectioned(text: string, headings: readonly number[], kinds: readonly BlockKind[]): BriefLine[] {
+  return text.split("\n").map((line, at) => {
+    const named = headings.indexOf(at);
+    if (named === -1) return { text: line };
+    return { text: line, named: "heading", kind: kinds[named] };
+  });
 }
 
 /**
@@ -279,5 +293,130 @@ export const ABodyLineThatLooksLikeAHeading: Story = {
       // Drawn all the same: a line that is not a heading is still on the brief.
       canvas.getByText(looks);
     }
+  },
+};
+
+/**
+ * The brief Fleet writes once every heading carries a `kind` — the state the
+ * mock this story reconstructs was drawn against. **One section per kind, in
+ * the order the headings arrive**, `about_this_job` merging Fleet's two facts
+ * about the job into one foldable section, `standing` folded shut by default,
+ * and `steps`/`checks` drawing the structured reading `chapters.tsx` builds
+ * off data Bridge already holds — with Fleet's own words still one press away
+ * under each.
+ */
+const SECTIONED_BRIEF = [
+  "JOB BRIEF",
+  "",
+  "Coalesce concurrent token refreshes",
+  "",
+  "WHAT A PERSON SAID",
+  "",
+  "On the restart: please also cover the retry path.",
+  "",
+  "HOW TO HAND WORK IN",
+  "",
+  "Report progress every step. Keep your worktree clean between attempts.",
+  "",
+  "WHERE YOU ARE",
+  "",
+  "This task runs in 3 parts. You are on part 2.",
+  "",
+  "  1. Plan the change — done",
+  "  2. Implement — you are here",
+  "  3. Summarise — not yours",
+  "",
+  "WHAT THIS PART HAS TO PASS",
+  "",
+  "Checks: build, test, format, typecheck",
+].join("\n");
+
+const SECTIONED_HEADINGS = [0, 4, 8, 12, 20];
+const SECTIONED_KINDS: BlockKind[] = [
+  "about_this_job",
+  "about_this_job",
+  "standing",
+  "steps",
+  "checks",
+];
+
+const THE_STEPS: BriefStep[] = [
+  { id: "plan", label: "Plan the change", position: "done" },
+  { id: "implement", label: "Implement", position: "current" },
+  { id: "summarise", label: "Summarise", position: "not_yours" },
+];
+
+const THE_CHECKS = ["build", "test", "format", "typecheck"];
+
+export const TheBriefInSections: Story = {
+  args: {
+    lines: sectioned(SECTIONED_BRIEF, SECTIONED_HEADINGS, SECTIONED_KINDS),
+    steps: THE_STEPS,
+    checks: THE_CHECKS,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    // Four sections, in the order their headings arrived — `about_this_job`
+    // merges two of Fleet's headings into one, so this is four, not five.
+    for (const name of ["About this job", "Standing instructions", "Where you are", "What this part has to pass"]) {
+      canvas.getByText(name);
+    }
+
+    // Open by default, per `SECTION_OPEN`: every kind but `standing`.
+    const jobBrief = canvas.getByRole("heading", { name: "JOB BRIEF" });
+    await expect(jobBrief).toBeVisible();
+    const steps = canvas.getByText("Plan the change");
+    await expect(steps).toBeVisible();
+    const checks = canvas.getByText("build");
+    await expect(checks).toBeVisible();
+
+    // Folded, and muted — the same instructions on every Job. Its words are
+    // still in the DOM, `hidden` rather than gone.
+    const standing = canvas.getByText("Report progress every step. Keep your worktree clean between attempts.");
+    await expect(standing).not.toBeVisible();
+
+    // The meta Bridge already holds, read off the header rather than typed
+    // into a fixture twice.
+    canvas.getByText("part 2 of 3");
+    canvas.getByText("4 checks");
+
+    // Fleet's own words for `steps` are still one press away, unreplaced.
+    // Two sections carry this disclosure — `steps` and `checks` — so this
+    // takes the first, which is `steps`' own by DOM order.
+    const reveal = canvas.getAllByRole("button", { name: /Read the words Armada sent/ })[0];
+    if (reveal === undefined) throw new Error("steps carries no raw-words disclosure");
+    await userEvent.click(reveal);
+    await expect(canvas.getByText(/This task runs in 3 parts\./)).toBeVisible();
+
+    // Opening the folded section keeps everything else exactly where it was —
+    // a fold toggling one section is not a reflow of the others.
+    const standingToggle = canvas.getByRole("button", { name: /Standing instructions/ });
+    await userEvent.click(standingToggle);
+    await expect(standing).toBeVisible();
+    await expect(jobBrief).toBeVisible();
+
+    // Left as it was found, so the story settles back on the state its own
+    // name promises rather than on whatever its last assertion happened to
+    // leave open — three sections open, one folded, in one drawing.
+    await userEvent.click(standingToggle);
+    await userEvent.click(reveal);
+    await expect(standing).not.toBeVisible();
+  },
+};
+
+/**
+ * A turn from a Fleet built before protocol 9.7 — headings with no `kind` to
+ * pair. **Draws exactly as `TheBriefAsFleetWroteIt` does**, flat, because
+ * pairing the first of several kinds and guessing at the rest is worse than
+ * pairing none. The fixture is `SECTIONED_BRIEF` again, with the marker this
+ * Fleet never sent left off.
+ */
+export const AnOlderTurnWithNoKindToPair: Story = {
+  args: { lines: marked(SECTIONED_BRIEF, SECTIONED_HEADINGS) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.queryByText("About this job")).toBeNull();
+    await expect(canvas.getAllByRole("heading")).toHaveLength(5);
   },
 };

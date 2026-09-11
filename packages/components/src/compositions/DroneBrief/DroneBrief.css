@@ -65,3 +65,75 @@
   color: var(--fg-default);
   overflow-wrap: anywhere;
 }
+
+/* The sectioned brief, since protocol 9.7 — one `Chapter` per block kind
+   rather than a flat run of headings and paragraphs. Gap between sections
+   only: each `Chapter` already spaces its own head from its own body. */
+.armada-brief--sectioned {
+  gap: var(--space-2);
+}
+
+/* The `steps` section's structured reading — Fleet's own rail, redrawn from
+   data Bridge already holds. One mark per row, in the order the workflow
+   runs, with no rule between them: the marks themselves carry the position,
+   the way a rail's own column does. */
+.armada-brief__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.armada-brief__step {
+  display: flex;
+}
+
+/* The `checks` section's structured reading — a row of chips rather than the
+   sentence Fleet wrote, since a declared Check is a value and not a story. */
+.armada-brief__checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+/* The words Armada actually sent, still reachable under a structured
+   reading. A ghost control in the accent, matching `Chapter`'s own `more`
+   control, so the two disclosures inside one chapter read as one family. */
+.armada-brief__raw {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.armada-brief__raw-toggle {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--accent);
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease);
+}
+
+.armada-brief__raw-toggle:hover {
+  color: var(--accent-hover);
+}
+
+.armada-brief__raw-toggle:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+.armada-brief__raw-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--armada-chapter-pad, var(--space-3)) 0 0;
+  border-top: var(--border-width) solid var(--border-subtle);
+}

@@ -133,6 +133,17 @@ button.armada-chapter__head:focus-visible {
   background: var(--status-awaiting-review-bg);
 }
 
+/* The chapter that says the same thing on every Job. Dimmed by token, not by
+   opacity: the name and number step down to the quieter pair the rest of the
+   app already uses for a de-emphasised row. */
+.armada-chapter[data-tone="muted"] .armada-chapter__name {
+  color: var(--fg-subtle);
+}
+
+.armada-chapter[data-tone="muted"] .armada-chapter__n {
+  color: var(--fg-subtle);
+}
+
 .armada-chapter__body {
   display: flex;
   flex-direction: column;

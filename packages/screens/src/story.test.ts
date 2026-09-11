@@ -27,7 +27,7 @@
 import { describe, expect, it } from "vitest";
 
 import { SILENCE } from "@armada/components";
-import type { Observed, Turn, Turns } from "@armada/protocol";
+import type { BlockKind, Observed, Turn, Turns } from "@armada/protocol";
 
 import { leading } from "./reading";
 import { entriesOf, NOTHING_YET_ON_THIS_STEP, whyNotWatching } from "./story";
@@ -38,13 +38,19 @@ const A_JOB = "01M1HQZAKN001AJ5MT3PT09KKY";
 const CARRIED: Turns = { live: true, skipped: 0, missed: 0, rows: [] };
 
 /** One `instructed` row, with whatever the wire said about its lines. */
-function instructed(text: string, headings?: number[]): Turn {
+function instructed(text: string, headings?: number[], kinds?: BlockKind[]): Turn {
   return {
     ts: "2026-09-02T13:11:00Z",
     seq: 1,
     step: "plan",
     by: "armada",
-    saw: { event: "instructed", occasion: "opening", text, ...(headings ? { headings } : {}) },
+    saw: {
+      event: "instructed",
+      occasion: "opening",
+      text,
+      ...(headings ? { headings } : {}),
+      ...(kinds ? { kinds } : {}),
+    },
   };
 }
 
@@ -218,6 +224,36 @@ describe("a block heading in a turn's payload", () => {
     // is marked and nothing throws — an index is not a promise about length.
     const said = payload(instructed("JOB BRIEF", [0, 40]));
     expect(said.map((line) => line.named)).toEqual(["heading"]);
+  });
+});
+
+describe("a heading's kind, since protocol 9.7", () => {
+  it("pairs each heading with the kind at the same position", () => {
+    const said = payload(instructed(BRIEF, [0, 6], ["about_this_job", "steps"]));
+    expect(said.find((line) => line.text === "JOB BRIEF")?.kind).toBe("about_this_job");
+    expect(said.find((line) => line.text === "WHERE YOU ARE")?.kind).toBe("steps");
+  });
+
+  it("carries no kind on a line that is not a heading", () => {
+    const said = payload(instructed(BRIEF, [0, 6], ["about_this_job", "steps"]));
+    expect(said.find((line) => line.text === "Yes.")?.kind).toBeUndefined();
+  });
+
+  // The one case #318's own fixture does not reach: `headings` and `kinds`
+  // disagree in length, which is what a turn written before 9.7 looks like
+  // once Bridge starts reading a field that turn never carried. Pairing the
+  // first few and guessing at the rest would be worse than pairing none.
+  it("pairs nothing where kinds and headings are not the same length", () => {
+    const said = payload(instructed(BRIEF, [0, 6], ["about_this_job"]));
+    expect(said.filter((line) => line.named === "heading").map((line) => line.kind)).toEqual([
+      undefined,
+      undefined,
+    ]);
+  });
+
+  it("pairs nothing where the wire sent kinds with no headings at all", () => {
+    const said = payload(instructed(BRIEF, undefined, ["about_this_job"]));
+    expect(said.some((line) => line.named === "heading")).toBe(false);
   });
 });
 

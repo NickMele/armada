@@ -1,3 +1,12 @@
+import type { ReactNode } from "react";
+import { useState } from "react";
+
+import type { BlockKind } from "@armada/protocol";
+import { Chapter } from "../Chapter/Chapter";
+import { Clamped } from "../Clamped/Clamped";
+import { FactChip } from "../FactChip/FactChip";
+import { StepActivityMark, type StepActivity } from "../StepActivityMark/StepActivityMark";
+
 /**
  * Drone brief — what Armada told the Drone, in the blocks it was written in.
  *
@@ -24,6 +33,20 @@
  * the whole of #306, and it was a default `white-space` discarding newlines
  * that were on the wire the entire time.
  *
+ * **Since protocol 9.7, a heading also carries a `kind`**, and where every
+ * heading has one this draws a section per kind rather than a flat run of
+ * headings and paragraphs — a foldable "Where you are" instead of a rail
+ * buried in the twentieth line of prose. **Where `kind` is absent from every
+ * heading — a turn from a Fleet built before 9.7, or one with no headed
+ * blocks at all — this draws exactly as it always has**, flat, because pairing
+ * the first few kinds and guessing at the rest is worse than not pairing any.
+ *
+ * **Sectioned or flat, nothing the Drone was told disappears.** A folded
+ * section keeps its body in the DOM; the `steps` and `checks` sections draw a
+ * structured reading built from data Bridge already holds, but the words Fleet
+ * actually sent stay reachable underneath it, one press away — never replaced,
+ * only led with.
+ *
  * **No font size, for `Prose`'s reason.** The type scale belongs to
  * `docs/contracts/design-system.md`; this draws inside a chapter body at
  * `--text-xs` and reads at whatever size the surface around it sets. A heading
@@ -45,6 +68,52 @@ export type DroneBriefProps = {
    * headings marked, which is what this drew before the marker existed.
    */
   lines: readonly (string | BriefLine)[];
+  /**
+   * The Job's steps, done or still ahead of the one the Drone is on, for the
+   * `steps` section's structured reading.
+   *
+   * **Absent draws the section's own text instead.** Fleet's rail is already
+   * words a Drone can read; this is Bridge's own reading of the same fact, off
+   * data a person already has open elsewhere on the screen, and a caller with
+   * nothing to hand here has lost nothing by not handing it.
+   */
+  steps?: readonly BriefStep[];
+  /**
+   * This step's declared Checks, by name, for the `checks` section's
+   * structured reading. Absent draws the section's own text instead, on the
+   * same reasoning as `steps`.
+   */
+  checks?: readonly string[];
+};
+
+/**
+ * One of the Job's steps, as the `steps` section reads it.
+ *
+ * **Three positions, because that is what Fleet's own rail ever says.** The
+ * brief a Drone reads never carries a step's retries or its verdict — it says
+ * a part is behind you, the one you are on, or ahead of you — so this reads
+ * the same three off `current_step_id` rather than borrowing `StepActivity`'s
+ * fuller vocabulary, which answers a monitoring question nobody is asking
+ * here.
+ */
+export type BriefStep = {
+  id: string;
+  label: string;
+  position: "done" | "current" | "not_yours";
+};
+
+/** `BriefStep.position` to the mark `StepActivityMark` already draws. */
+const MARK_FOR: Record<BriefStep["position"], StepActivity> = {
+  done: "advanced",
+  current: "running",
+  not_yours: "not_started",
+};
+
+/** `BriefStep.position` in words, for the mark's tooltip. */
+const SAID_FOR: Record<BriefStep["position"], string> = {
+  done: "done",
+  current: "you are here",
+  not_yours: "not yours",
 };
 
 /**
@@ -59,13 +128,32 @@ export type DroneBriefProps = {
  * **Every other value draws as body, deliberately.** `passed` and `failed` are
  * what a Check's run came to, and a brief has no outcomes in it — a component
  * that hued by this field would colour a block of instructions as a result.
+ *
+ * **`kind` is read only beside `named: "heading"`.** It is the wire's
+ * `BlockKind`, paired by `story.ts`; a body line carries none, and the type
+ * says so with an optional field rather than a second union.
  */
 export type BriefLine = {
   text: string;
   named?: string;
+  kind?: BlockKind;
 };
 
-export function DroneBrief({ lines }: DroneBriefProps) {
+export function DroneBrief({ lines, steps, checks }: DroneBriefProps) {
+  const sections = briefSections(lines);
+  if (sections === undefined) return <FlatBrief lines={lines} />;
+  if (sections.length === 0) return null;
+  return (
+    <div className="armada-brief armada-brief--sectioned">
+      {sections.map((section, at) => (
+        <BriefSectionView key={at} ordinal={at + 1} section={section} steps={steps} checks={checks} />
+      ))}
+    </div>
+  );
+}
+
+/** The brief exactly as it drew before protocol 9.7 — flat, no folding. */
+function FlatBrief({ lines }: { lines: readonly (string | BriefLine)[] }) {
   const blocks = briefBlocks(lines);
   if (blocks.length === 0) return null;
   return (
@@ -83,6 +171,193 @@ export function DroneBrief({ lines }: DroneBriefProps) {
       )}
     </div>
   );
+}
+
+/** What a section's own blocks draw as, absent any structured reading. */
+function BriefBody({ blocks }: { blocks: readonly BriefBlock[] }) {
+  return (
+    <>
+      {blocks.map((block, at) =>
+        block.heading ? (
+          <h4 className="armada-brief__heading" key={at}>
+            {block.text}
+          </h4>
+        ) : (
+          <p className="armada-brief__block" key={at}>
+            {widenIndent(block.text)}
+          </p>
+        ),
+      )}
+    </>
+  );
+}
+
+/**
+ * The lines a heading's own words to be found where the mock's plain English
+ * has replaced them. **Sentence case, per `docs/contracts/design-system.md`**
+ * — Fleet's own headings are shouted (`JOB BRIEF`), which is content and stays
+ * that way inside a section's body; a section's own title is Bridge's UI
+ * chrome and the prose rules bind it like every other label on screen.
+ *
+ * **A second vocabulary, and the cost is named rather than hidden.** Fleet
+ * decides which kind a heading is; this decides what a person reading Bridge
+ * calls it. Two rows that decide the same word would be one place this can go
+ * stale, so this map is the one place, and nothing downstream restates it.
+ */
+const SECTION_TITLE: Record<BlockKind, string> = {
+  about_this_job: "About this job",
+  standing: "Standing instructions",
+  steps: "Where you are",
+  checks: "What this part has to pass",
+};
+
+/** Whether a section opens by default. Every kind but `standing` does. */
+const SECTION_OPEN: Record<BlockKind, boolean> = {
+  about_this_job: true,
+  standing: false,
+  steps: true,
+  checks: true,
+};
+
+/** How many lines `about_this_job`'s own prose holds before it clamps.
+ *  The rest of the brief is bounded by its own fold now; this is the one
+ *  section whose length is a person's or a model's, at whatever it wrote. */
+const ABOUT_THIS_JOB_LINES = 8;
+
+function BriefSectionView({
+  ordinal,
+  section,
+  steps,
+  checks,
+}: {
+  ordinal: number;
+  section: BriefSection;
+  steps: readonly BriefStep[] | undefined;
+  checks: readonly string[] | undefined;
+}) {
+  const kind = section.kind ?? "standing";
+  const [open, setOpen] = useState(SECTION_OPEN[kind]);
+  return (
+    <Chapter
+      ordinal={ordinal}
+      name={SECTION_TITLE[kind]}
+      meta={metaFor(kind, steps, checks)}
+      tone={kind === "standing" ? "muted" : "neutral"}
+      open={open}
+      onToggle={() => setOpen((was) => !was)}
+    >
+      {kind === "steps" && steps !== undefined ? (
+        <StepsRead steps={steps} raw={section} />
+      ) : kind === "checks" && checks !== undefined ? (
+        <ChecksRead checks={checks} raw={section} />
+      ) : kind === "about_this_job" ? (
+        <Clamped lines={ABOUT_THIS_JOB_LINES}>
+          <BriefBody blocks={sectionBlocks(section)} />
+        </Clamped>
+      ) : (
+        <BriefBody blocks={sectionBlocks(section)} />
+      )}
+    </Chapter>
+  );
+}
+
+/** The header's trailing fact, where Bridge already holds one for this kind. */
+function metaFor(
+  kind: BlockKind,
+  steps: readonly BriefStep[] | undefined,
+  checks: readonly string[] | undefined,
+): string | undefined {
+  if (kind === "steps" && steps !== undefined) {
+    const at = steps.findIndex((step) => step.position === "current");
+    return at === -1 ? undefined : `part ${at + 1} of ${steps.length}`;
+  }
+  if (kind === "checks" && checks !== undefined) {
+    return checks.length === 1 ? "1 check" : `${checks.length} checks`;
+  }
+  // `about_this_job` and `standing` carry no field Bridge holds independently
+  // of the words themselves — the section's name is what there is to say
+  // about it collapsed.
+  return undefined;
+}
+
+function StepsRead({ steps, raw }: { steps: readonly BriefStep[]; raw: BriefSection }) {
+  return (
+    <>
+      <ol className="armada-brief__steps">
+        {steps.map((step, at) => (
+          <li key={step.id} className="armada-brief__step">
+            <StepActivityMark
+              activity={MARK_FOR[step.position]}
+              ordinal={at + 1}
+              label={step.label}
+              says={`${step.label}, ${SAID_FOR[step.position]}`}
+            />
+          </li>
+        ))}
+      </ol>
+      <RawWords raw={raw} />
+    </>
+  );
+}
+
+function ChecksRead({ checks, raw }: { checks: readonly string[]; raw: BriefSection }) {
+  return (
+    <>
+      <div className="armada-brief__checks">
+        {checks.map((check, at) => (
+          <FactChip key={`${check}-${at}`}>{check}</FactChip>
+        ))}
+      </div>
+      <RawWords raw={raw} />
+    </>
+  );
+}
+
+/**
+ * The section's own words, still reachable beneath a structured reading.
+ *
+ * **Nothing the Drone was told may disappear.** `steps` and `checks` lead with
+ * a reading built from data Bridge already has, but what Fleet actually sent
+ * is what the Drone read, and it stays in the DOM behind one more press rather
+ * than being replaced by Bridge's own rendering of the same fact.
+ */
+function RawWords({ raw }: { raw: BriefSection }): ReactNode {
+  const [open, setOpen] = useState(false);
+  const blocks = sectionBlocks(raw);
+  if (blocks.length === 0) return null;
+  return (
+    <div className="armada-brief__raw">
+      <button
+        type="button"
+        className="armada-brief__raw-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((was) => !was)}
+      >
+        {open ? "Hide the words Armada sent" : "Read the words Armada sent"}
+      </button>
+      {/* `hidden`, not unmounted — on `Chapter`'s own rule: what the Drone was
+          told stays in the DOM whether or not this disclosure is open. */}
+      <div className="armada-brief__raw-body" hidden={!open}>
+        <BriefBody blocks={blocks} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A section's own blocks, with its heading restored to the front of them.
+ *
+ * **The one place `heading` and `blocks` are read back together.** They are
+ * split on `BriefSection` because a section's title on screen is
+ * `SECTION_TITLE`, not Fleet's own words — but Fleet's words are still owed
+ * somewhere, and this is where every caller that draws a section's raw
+ * content puts them back at the top of it, exactly where they sat on the
+ * wire.
+ */
+function sectionBlocks(section: BriefSection): BriefBlock[] {
+  return section.heading === undefined
+    ? [...section.blocks]
+    : [{ text: section.heading, heading: true }, ...section.blocks];
 }
 
 /**
@@ -163,4 +438,73 @@ export function briefBlocks(lines: readonly (string | BriefLine)[]): BriefBlock[
   }
   close();
   return blocks;
+}
+
+/** One section of a brief: a heading's own kind, its own words, and its body. */
+export type BriefSection = {
+  /** `undefined` is the unheaded opening, read as `standing` by position. */
+  kind: BlockKind | undefined;
+  /** The heading's own text, exactly as Fleet wrote it. `undefined` for the opening. */
+  heading: string | undefined;
+  /** The body blocks between this heading and the next, or before the first. */
+  blocks: readonly BriefBlock[];
+};
+
+/**
+ * The payload as sections, grouped by heading, or `undefined` where the wire
+ * gave no kind to pair with — a turn from a Fleet built before protocol 9.7,
+ * or one with no headed blocks at all. **The caller draws flat in that case**,
+ * which is `DroneBrief`'s own fallback, not a decision made twice.
+ *
+ * **Headings that share a kind share a section.** `about_this_job` covers
+ * several separate facts Fleet may write as separate blocks — what was asked,
+ * what a person said, what the branch looked like — and none of them is
+ * information this component has to tell apart on its own; they fold and
+ * unfold together, each keeping its own heading inside the one section, rather
+ * than this inventing a title per occurrence for words it cannot tell apart.
+ */
+export function briefSections(lines: readonly (string | BriefLine)[]): BriefSection[] | undefined {
+  const blocks = briefBlocks(lines);
+  const rawLines = lines.map((line) => (typeof line === "string" ? { text: line } : line));
+  const headingKinds = rawLines.filter((line) => line.named === "heading").map((line) => line.kind);
+  if (headingKinds.length === 0 || headingKinds.some((kind) => kind === undefined)) return undefined;
+
+  const byKind = new Map<BlockKind, BriefSection>();
+  const order: BriefSection[] = [];
+  let headingAt = 0;
+  // The unheaded opening, held here until it is known to carry anything. **Not
+  // inserted into `order` up front** — a document with no opening prose and a
+  // `standing` heading partway through must place that section where its
+  // heading actually sits, not at the top reserved for prose that never came.
+  let current: BriefSection = { kind: "standing", heading: undefined, blocks: [] };
+  let openingSettled = false;
+
+  for (const block of blocks) {
+    if (block.heading) {
+      if (!openingSettled) {
+        if (current.blocks.length > 0) {
+          byKind.set("standing", current);
+          order.push(current);
+        }
+        openingSettled = true;
+      }
+      const kind = headingKinds[headingAt];
+      headingAt += 1;
+      if (kind === undefined) continue; // unreachable given the guard above
+      const existing = byKind.get(kind);
+      if (existing === undefined) {
+        current = { kind, heading: block.text, blocks: [] };
+        byKind.set(kind, current);
+        order.push(current);
+      } else {
+        // A second heading of a kind already open joins it as another line of
+        // the same section, keeping its own words rather than losing them.
+        current = existing;
+        (current.blocks as BriefBlock[]).push({ text: block.text, heading: true });
+      }
+    } else {
+      (current.blocks as BriefBlock[]).push(block);
+    }
+  }
+  return order;
 }
