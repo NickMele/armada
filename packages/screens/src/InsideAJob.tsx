@@ -136,26 +136,30 @@ export type InsideAJobProps = {
   /** Why there is no run to draw, where there is none. */
   runAbsent?: string;
   /**
-   * What the Job holds on this machine, in a few lines — the tail of Fleet's
-   * own log, the process count, the worktree, the disk. `JobHoldsSummary`, and
-   * the full reading is a press away on the sheet.
+   * The Job's pulse, in a few lines: the last thing anyone did on it, the process
+   * count, the worktree, the disk. `JobHoldsSummary`, and the full reading is a
+   * press away on the sheet, from `machineAct` on the title line.
    *
    * **Below the run and above the pointers.** It used to be a whole card above
    * the run, which is the largest thing in this column standing in front of the
    * thing a person opens a Job to read. It is context for the run, so it reads
    * after it.
    *
-   * **It carries Fleet's tail, and no second region does.** Cutting a worktree,
-   * running a repository's preparation commands and reclaiming one belong to no
-   * step, and they used to have a region of their own above the run. Both
-   * regions answered *what is happening on this machine right now*, which is
-   * one region too many.
+   * **It carries the latest event, and no second region does.** Cutting a
+   * worktree, running a repository's preparation commands and reclaiming one
+   * belong to no step, so Fleet's notes about them reach a reader here, beside
+   * the Drone's turns and a person's moves, whichever came last.
    *
    * Absent draws nothing. A Job with nothing read and nothing recorded is not a
    * hole in the screen — the same rule `record` below keeps.
    */
   machine?: ReactNode;
   machineLabel?: ReactNode;
+  /**
+   * The control on the region's title line that opens the full reading. On the
+   * title line and not in the block, where the run keeps its elapsed figure.
+   */
+  machineAct?: ReactNode;
   /**
    * The running mark on the current step animates. One per screen: this is the
    * Job being read, so the tree pulses and the header badge stays static.
@@ -239,7 +243,8 @@ export function InsideAJob({
   runElapsed,
   runAbsent = "Nothing serves this Job's workflow, so its steps are unknown.",
   machine,
-  machineLabel = "What this Job holds",
+  machineLabel = "Pulse",
+  machineAct,
   pulsing = true,
   onSelectStep,
   openSteps,
@@ -293,7 +298,10 @@ export function InsideAJob({
               pointers, which is where you go once it says something is wrong. */}
           {machine === undefined ? null : (
             <>
-              <Eyebrow spaced>{machineLabel}</Eyebrow>
+              <div className="armada-inside__pulse-head">
+                <Eyebrow>{machineLabel}</Eyebrow>
+                {machineAct}
+              </div>
               {machine}
             </>
           )}

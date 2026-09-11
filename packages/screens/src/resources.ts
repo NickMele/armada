@@ -27,9 +27,12 @@
 // same condition as a fault on the command seam, for the same reason.
 
 import type { HoldsFigures, HoldsLine, NothingToAsk } from "@armada/components";
-import { nothingRunningIsAFault, sized } from "@armada/components";
-import type { Holds, JobExamined, JobResources as Held } from "@armada/protocol";
+import { JOB_STATUS, nothingRunningIsAFault, sized } from "@armada/components";
+import type { History, Holds, JobExamined, JobResources as Held, Noted, Recorded, Turn } from "@armada/protocol";
 import type { LogRow } from "./story";
+import { entriesOf, hideUnread } from "./story";
+import { clock } from "./duration";
+import { notesOf } from "./notes";
 
 /**
  * What a failed look says, and it says nothing about the Job.
@@ -170,26 +173,70 @@ const NOT_MEASURED = "not measured";
 const NONE_ON_DISK = "none on disk";
 
 /**
- * The last lines the machine wrote, newest first — what the standalone Fleet
- * region drew before it was folded into the summary.
+ * The last thing anyone did on this Job, from whichever voice did it: the
+ * Drone's turns, Fleet's and Armada's notes, and a person's moves on the Job's
+ * history.
  *
- * **Two of them.** The region this replaced bounded at 15rem and still pushed
- * the run below the fold; the whole claim of the block is that it does not.
- *
- * **A line is wrong when its payload was written at error level.** `notesOf` is
- * where a level becomes a rendering — `error` names a payload line `failed` —
- * so this reads that answer rather than making a second one from the level.
+ * **Compared on the wire's own timestamps.** A row's clock drops the date, and
+ * a Job can run past midnight. A row this build cannot read is skipped, the way
+ * the log hides it, and Fleet's and the Drone's own moves on the history are
+ * left out because their streams already say them in their own words.
  */
-export function tailOf(rows: readonly LogRow[]): HoldsLine[] {
-  return rows
-    .slice(-2)
-    .reverse()
-    .map((row) => ({
-      at: row.at,
-      actor: SAYS[row.actor],
-      said: row.message,
-      wrong: row.payload.some((line) => line.named === "failed") || undefined,
-    }));
+export function latestOf(
+  turns: readonly Turn[],
+  notes: readonly Noted[],
+  moves: readonly Recorded[],
+): HoldsLine | undefined {
+  const heard: { when: number; line: HoldsLine }[] = [];
+  for (let at = turns.length - 1; at >= 0; at -= 1) {
+    const turn = turns[at]!;
+    const [row] = hideUnread(entriesOf([turn], undefined)).rows;
+    if (row === undefined) continue;
+    heard.push({ when: Date.parse(turn.ts), line: lineOf(row) });
+    break;
+  }
+  const note = notes[notes.length - 1];
+  const [noted] = note === undefined ? [] : notesOf([note]);
+  if (note !== undefined && noted !== undefined) heard.push({ when: Date.parse(note.at), line: lineOf(noted) });
+  for (let at = moves.length - 1; at >= 0; at -= 1) {
+    const move = moves[at]!;
+    if (move.actor !== "human") continue;
+    heard.push({ when: Date.parse(move.at), line: { at: clock(move.at), actor: "You", said: movedBy(move) } });
+    break;
+  }
+  heard.sort((one, other) => other.when - one.when);
+  return heard[0]?.line;
+}
+
+/** The moves a Job's history read carries, where it is this Job's and has answered. */
+export function movesOf(history: History | undefined, jobId: string): Recorded[] {
+  return history?.state === "read" && history.jobId === jobId ? history.moves : [];
+}
+
+/** What to say where nothing has happened on the Job yet. */
+export const NOTHING_HAPPENED_YET = "Nothing has happened on this Job yet.";
+
+function lineOf(row: LogRow): HoldsLine {
+  return {
+    at: row.at,
+    actor: SAYS[row.actor],
+    said: row.message,
+    wrong: row.payload.some((line) => line.named === "failed") || undefined,
+  };
+}
+
+/** A person's move, as they would say they did it. */
+function movedBy(move: Recorded): string {
+  const moved = move.moved;
+  if (moved.kind === "status") {
+    if (move.status === "awaiting_approval") return "Approved dispatch";
+    if (moved.to === "killed") return "Killed the job";
+    if (moved.to === "rejected") return "Rejected the work";
+    if (move.status === "awaiting_review" && moved.to === "completed_success") return "Approved the work";
+    return `Moved the job to ${JOB_STATUS[moved.to]?.verb ?? moved.to}`;
+  }
+  if (moved.kind === "step") return `Moved ${moved.step_id} to ${moved.to}`;
+  return `Drone ${moved.presence}`;
 }
 
 /**

@@ -1,8 +1,6 @@
-import { Button } from "../../primitives/Button/Button";
-
 /**
- * What this Job holds on the machine, in a few lines, with the full reading one
- * press away.
+ * The Job's pulse: the last thing anyone did on it, and what it holds on this
+ * machine, with the full reading one press away.
  *
  * **The run is what a person opens a Job to read.** `JobResources` is a card
  * with a verdict, a look, a process table and a disk figure, and above the run
@@ -13,9 +11,9 @@ import { Button } from "../../primitives/Button/Button";
  * **It reads after the run, not before it.** It is context for the steps rather
  * than a preface to them.
  *
- * **One region for *what is happening on this machine right now*, not two.**
- * The Fleet log had its own region above the run drawing the same answer, so
- * its tail is the first thing here and the standalone region is gone.
+ * **The top is the last thing anyone did, from any voice.** Fleet, the Drone
+ * and a person all act on a Job, and what a reader wants from this block is
+ * the latest of them, not the last lines of one. The whole log is a press away.
  *
  * **Absence still speaks, in less room.** A read that has not answered and a
  * Job that holds nothing are different things — `JobResources` is careful about
@@ -23,8 +21,9 @@ import { Button } from "../../primitives/Button/Button";
  * the second is a reading, with `None` against the processes and the worktree
  * saying what became of it.
  *
- * **No `Look now` here.** Going and looking is an act on the reading, and the
- * reading is in the sheet. This block's only control is the one that opens it.
+ * **No `Look now` here, and no button.** Going and looking is an act on the
+ * reading, and the reading is in the sheet. The control that opens it sits on
+ * the region's title line, where the run keeps its elapsed figure.
  */
 
 /** One line of what happened on this machine, as the caller formatted it. */
@@ -63,13 +62,10 @@ export type HoldsFigures = {
 };
 
 export type JobHoldsSummaryProps = {
-  /**
-   * The last lines the machine wrote, newest first. **Two are drawn**, because
-   * the region this replaced grew to 15rem and pushed the run off the screen.
-   */
-  tail: HoldsLine[];
-  /** Why there are no lines, where there are none. */
-  tailNote?: string;
+  /** The last thing anyone did on this Job. Absent where nothing has happened yet. */
+  latest?: HoldsLine;
+  /** Why there is nothing to show, where there is nothing. */
+  latestNote?: string;
   /**
    * The reading's figures, or `null` where none has arrived.
    *
@@ -78,37 +74,25 @@ export type JobHoldsSummaryProps = {
   figures: HoldsFigures | null;
   /** Why there is no reading, where there is none. */
   note?: string;
-  /** How old the reading is, as a phrase — `4s`. Formatted by the caller. */
+  /** How old the reading is, as a phrase, like `4s`. Formatted by the caller. */
   age?: string;
-  /** Opens the full reading. The only act this block carries. */
-  onOpen: () => void;
 };
 
-export function JobHoldsSummary({
-  tail,
-  tailNote,
-  figures,
-  note,
-  age,
-  onOpen,
-}: JobHoldsSummaryProps) {
-  const lines = tail.slice(0, 2);
+export function JobHoldsSummary({ latest, latestNote, figures, note, age }: JobHoldsSummaryProps) {
   return (
     <section className="armada-holds-summary">
-      {lines.length === 0 ? (
-        <p className="armada-holds-summary__note">{tailNote ?? NOTHING_RECORDED}</p>
+      {latest === undefined ? (
+        <p className="armada-holds-summary__note">{latestNote ?? NOTHING_RECORDED}</p>
       ) : (
-        <ul className="armada-holds-summary__tail">
-          {lines.map((line, at) => (
-            <li className="armada-holds-summary__line" key={at} data-wrong={line.wrong || undefined}>
-              <span className="armada-holds-summary__at">{line.at}</span>
-              <span className="armada-holds-summary__actor">{line.actor}</span>
-              <span className="armada-holds-summary__said">{line.said}</span>
-            </li>
-          ))}
-        </ul>
+        <div className="armada-holds-summary__latest" data-wrong={latest.wrong || undefined}>
+          <span className="armada-holds-summary__who">
+            {latest.actor}
+            {" · "}
+            <span className="armada-holds-summary__at">{latest.at}</span>
+          </span>
+          <span className="armada-holds-summary__said">{latest.said}</span>
+        </div>
       )}
-
       {figures === null ? (
         <p className="armada-holds-summary__note">{note ?? NOTHING_READ_YET}</p>
       ) : (
@@ -124,18 +108,14 @@ export function JobHoldsSummary({
           )}
         </dl>
       )}
-
-      <div className="armada-holds-summary__foot">
-        {/* The instant qualifies every figure above it, which is why it is here
-            and not a caption — a process can exit between the reading and this
-            screen. Absent rather than guessed where the caller has no age. */}
-        {age === undefined || figures === null ? null : (
+      {/* The instant qualifies every figure above it, which is why it is here
+          and not a caption: a process can exit between the reading and this
+          screen. Absent rather than guessed where the caller has no age. */}
+      {age === undefined || figures === null ? null : (
+        <div className="armada-holds-summary__foot">
           <span className="armada-holds-summary__read-at">{`Read ${age} ago`}</span>
-        )}
-        <Button size="sm" ground="sunken" onClick={onOpen}>
-          Open the full reading
-        </Button>
-      </div>
+        </div>
+      )}
     </section>
   );
 }

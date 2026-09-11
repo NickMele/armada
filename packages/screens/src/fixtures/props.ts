@@ -62,6 +62,7 @@ export function propsFor(fixture: JobFixture): JobDetailProps {
     observed: fixture.observed,
     journalled: fixture.journalled,
     resources: fixture.resources,
+    history: fixture.history,
     examination: { state: "none" },
     onExamine: noop,
     recorded: fixture.recorded,

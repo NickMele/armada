@@ -18,6 +18,7 @@ import type {
   CallRead,
   CheckOutputRead,
   FrameRead,
+  History,
   Holds,
   JobSummary,
   Journalled,
@@ -40,6 +41,8 @@ export type JobFixture = {
   observed: Observed;
   journalled: Journalled;
   resources: Holds;
+  /** `GET /jobs/:job_id/events`, where the fixture carries the Job's history. */
+  history?: History;
   recorded: FoldedReads;
   /**
    * Answers to `onReadCall`, keyed by the call id a transcript row carries —

@@ -19,6 +19,7 @@ import type {
   JobDetail as WireDetail,
   JobDiff,
   JobEvidence,
+  JobHistory,
   JobRead,
   JobRemarks,
   JobResources,
@@ -84,6 +85,9 @@ export function replayed(recording: Recording): JobFixture {
     journalled: journalledFrom(jobId, recording.log.messages, recording.log.open),
     resources: read(jobId, at("/resources"), reads.resources, (body) => ({
       resources: body as JobResources,
+    })),
+    history: read(jobId, at("/events"), reads.events, (body) => ({
+      moves: (body as JobHistory).moves,
     })),
     recorded: {
       // Pushed on the board's socket as `job.files_changed` and never read, and

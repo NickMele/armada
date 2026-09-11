@@ -239,7 +239,7 @@ export * from "./compositions/EvidenceSheet/EvidenceSheet";
 // not at another, and a *View more* that reveals nothing is a surface lying.
 export * from "./compositions/Clamped/Clamped";
 
-// What this Job holds, in a few lines. The full reading was the largest thing
+// The Job's pulse, in a few lines. The full reading was the largest thing
 // in the run column and answered a question nobody had asked yet; this says
 // whether anything is wrong, and opens the reading when the answer is yes.
 export * from "./compositions/JobHoldsSummary/JobHoldsSummary";

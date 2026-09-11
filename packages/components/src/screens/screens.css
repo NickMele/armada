@@ -658,6 +658,16 @@
   gap: var(--space-3);
 }
 
+/* Pulse's title line, with the control that opens its full reading at the
+   trailing edge. Spaced from the run above the way a spaced title is. */
+.armada-inside__pulse-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+
 /* The whole run's elapsed. A figure, never a chart. */
 .armada-inside__elapsed {
   font-family: var(--font-mono);

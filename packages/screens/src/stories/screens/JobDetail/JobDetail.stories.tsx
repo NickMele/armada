@@ -259,11 +259,11 @@ export const CheckOutputOpen: Story = {
   },
 };
 
-/** What the Job holds on the machine, read in full. */
+/** Pulse, read in full: the Details control on its title line opens the sheet. */
 export const FullReadingOpen: Story = {
   name: "Full reading open",
   render: drawing(running),
   play: async ({ canvas, userEvent }) => {
-    await userEvent.click(await canvas.findByRole("button", { name: /Open the full reading/ }));
+    await userEvent.click(await canvas.findByRole("button", { name: /^Details/ }));
   },
 };

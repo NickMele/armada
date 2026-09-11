@@ -447,6 +447,12 @@ export function useWatching(openJob: string | null): void {
     void window.armada.readResources(openJob);
   }, [openJob]);
 
+  // The open Job's history, for the line of Pulse that says what a person last
+  // did. Opened with the Job; main re-reads it on every move once it is asked.
+  useEffect(() => {
+    void window.armada.readHistory(openJob);
+  }, [openJob]);
+
   // Opening another Job drops the socket, and does it before the one below is
   // reopened — the rows in hand belong to the Job that was open, and carrying
   // them into a different one would be a transcript under the wrong title.
