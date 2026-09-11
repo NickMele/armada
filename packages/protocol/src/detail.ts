@@ -35,7 +35,12 @@ import type {
   Subject,
 } from "./protocol";
 import type { QuestionInFlight, RedirectInFlight, RedirectWaiting } from "./waiting";
-import type { CommandAnswer, CommandInFlight, WhenBlocked } from "./commanding";
+import type {
+  AllowedCommandRow,
+  CommandAnswer,
+  CommandInFlight,
+  WhenBlocked,
+} from "./commanding";
 
 /**
  * One Job, whole. The answer to `GET /jobs/:job_id`. `crates/ipc/src/detail.rs`.
@@ -178,6 +183,16 @@ export type JobDetail = {
    * nothing waits there, and a refused command is answered on `stuck.refused`.
    */
   command_waiting?: CommandInFlight;
+  /**
+   * The commands a person allowed for this job, oldest first. Since protocol
+   * 11.0.
+   *
+   * **Empty is a job nobody allowed anything on.** Optional for `offers`'
+   * reason: fleet reads an absent list as empty, and a reader here does the
+   * same rather than drawing a gap. A `repository` allow is listed too — the
+   * job holds it whichever way it was allowed.
+   */
+  allowed_commands?: AllowedCommandRow[];
 };
 
 /**

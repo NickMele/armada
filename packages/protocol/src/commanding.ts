@@ -94,3 +94,26 @@ export type AnswerCommand = {
 export type SetWhenBlocked = {
   when_blocked: WhenBlocked;
 };
+
+/**
+ * How far a person's allow reaches. Since protocol 11.0.
+ *
+ * `job` is this job only — `allow_for_job`. `repository` also wrote the
+ * command into `armada.yml` under `commands` — `always_allow` — and **that line
+ * outlives the row**: removing the allow from this job leaves the file as it is.
+ */
+export type Reach = "job" | "repository";
+
+/**
+ * One command a person allowed for this job. Since protocol 11.0.
+ * `crates/ipc/src/commanding.rs`.
+ */
+export type AllowedCommandRow = {
+  /** The command, whole, as the person allowed it. What `remove_allowed_command` names. */
+  run: string;
+  reach: Reach;
+  /** When it was allowed, by fleet's clock. */
+  allowed_at: string;
+  /** Who allowed it, in the envelope's spelling. Left as `string` like `actor`. */
+  by: string;
+};

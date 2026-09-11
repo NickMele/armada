@@ -18,6 +18,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::enums::Actor;
 use crate::ids::{Instant, StepId};
 
 /// What a Job does when its Drone reaches for a command it was not given.
@@ -130,4 +131,58 @@ pub struct AnswerCommand {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SetWhenBlocked {
     pub when_blocked: WhenBlocked,
+}
+
+/// How far a person's allow reaches.
+///
+/// **The seam's own set, like the two above**, and for their reason: Bridge
+/// matches on it to say whether removing the allow leaves a line in
+/// `armada.yml` behind. `core_model::Reach` is the domain's and is mapped here
+/// rather than wrapped, as [`WhenBlocked`] is in Fleet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Reach {
+    /// This Job only — [`CommandAnswer::AllowForJob`].
+    Job,
+    /// This Job, and written into `armada.yml` under `commands` as well —
+    /// [`CommandAnswer::AlwaysAllow`]. **The line in the file outlives the
+    /// row**: removing the allow from this Job leaves `armada.yml` as it is.
+    Repository,
+}
+
+impl From<core_model::Reach> for Reach {
+    fn from(reach: core_model::Reach) -> Reach {
+        match reach {
+            core_model::Reach::Job => Reach::Job,
+            core_model::Reach::Repository => Reach::Repository,
+        }
+    }
+}
+
+/// One command a person allowed for this Job. A row of
+/// [`JobDetail::allowed_commands`](crate::JobDetail::allowed_commands).
+///
+/// **Every field of the record crosses**, which is a decision rather than a
+/// default: `run` is text a person already read in full before allowing it, and
+/// nothing else on the record is private to Fleet.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AllowedCommandRow {
+    /// The command, as the person allowed it. **What `remove_allowed_command`
+    /// names**, so it crosses whole and never cut to one line.
+    pub run: String,
+    pub reach: Reach,
+    /// When it was allowed, by Fleet's clock.
+    pub allowed_at: Instant,
+    pub by: Actor,
+}
+
+impl From<&core_model::AllowedCommand> for AllowedCommandRow {
+    fn from(allowed: &core_model::AllowedCommand) -> AllowedCommandRow {
+        AllowedCommandRow {
+            run: allowed.run.clone(),
+            reach: allowed.reach.into(),
+            allowed_at: (&allowed.allowed_at).into(),
+            by: allowed.by.into(),
+        }
+    }
 }

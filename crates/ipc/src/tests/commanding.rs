@@ -135,3 +135,89 @@ fn a_spelling_nobody_offers_is_refused() {
     assert!(decode::<CommandAnswer>("an answer", b"\"allow\"").is_err());
     assert!(decode::<WhenBlocked>("a setting", b"\"ask\"").is_err());
 }
+
+#[test]
+fn each_reach_is_spelled_as_the_domain_spells_it() {
+    for (reach, domain, spelled) in [
+        (crate::Reach::Job, core_model::Reach::Job, "\"job\""),
+        (
+            crate::Reach::Repository,
+            core_model::Reach::Repository,
+            "\"repository\"",
+        ),
+    ] {
+        assert_eq!(encode(&reach).expect("plain data"), spelled);
+        assert_eq!(format!("\"{}\"", domain.as_wire()), spelled);
+        assert_eq!(crate::Reach::from(domain), reach);
+        assert_eq!(
+            decode::<crate::Reach>("a reach", spelled.as_bytes()).expect("it reads back"),
+            reach
+        );
+    }
+    assert!(decode::<crate::Reach>("a reach", b"\"everywhere\"").is_err());
+}
+
+/// An always-allow off the record, as Fleet will convert it. **Every field
+/// crosses**, and `run` crosses whole because it is what a removal names.
+fn allowed() -> core_model::AllowedCommand {
+    core_model::AllowedCommand {
+        run: String::from("cargo nextest run -p ipc"),
+        reach: core_model::Reach::Repository,
+        allowed_at: core_model::Timestamp::from_rfc3339("2026-09-11T09:00:00.000Z"),
+        by: core_model::Actor::Human,
+    }
+}
+
+#[test]
+fn an_allowed_command_crosses_whole_from_the_record() {
+    let record = allowed();
+    let row = crate::AllowedCommandRow::from(&record);
+    assert_eq!(row.allowed_at, Instant::from(&record.allowed_at));
+    let json = encode(&row).expect("plain data");
+    assert!(
+        json.contains("\"run\":\"cargo nextest run -p ipc\""),
+        "{json}"
+    );
+    assert!(json.contains("\"reach\":\"repository\""), "{json}");
+    assert!(json.contains("\"by\":\"human\""), "{json}");
+    assert_eq!(
+        decode::<crate::AllowedCommandRow>("an allowed command", json.as_bytes())
+            .expect("it reads back"),
+        row
+    );
+}
+
+/// **Always stated on an 11.0 detail, and read as empty where it is not.** A
+/// detail with no key is a Job nobody allowed anything on, never a parse error.
+#[test]
+fn the_allowed_commands_are_stated_and_an_older_detail_reads_as_none() {
+    use crate::tests::{detail_of, job};
+
+    let mut detail = detail_of(&job(), &[]);
+    let json = encode(&detail).expect("a detail is plain data");
+    assert!(json.contains("\"allowed_commands\":[]"), "{json}");
+    let older = json.replace(",\"allowed_commands\":[]", "");
+    assert!(!older.contains("allowed_commands"), "{older}");
+    assert_eq!(
+        decode::<crate::JobDetail>("a detail", older.as_bytes()).expect("an older detail reads"),
+        detail
+    );
+
+    let first = crate::AllowedCommandRow::from(&allowed());
+    let second = crate::AllowedCommandRow {
+        run: String::from("touch x"),
+        reach: crate::Reach::Job,
+        ..first.clone()
+    };
+    detail.allowed_commands = vec![first, second];
+    let json = encode(&detail).expect("a detail is plain data");
+    let at = |needle: &str| json.find(needle).expect(needle);
+    assert!(
+        at("cargo nextest run -p ipc") < at("touch x"),
+        "oldest first, as Fleet listed them: {json}"
+    );
+    assert_eq!(
+        decode::<crate::JobDetail>("a detail", json.as_bytes()).expect("it reads back"),
+        detail
+    );
+}
