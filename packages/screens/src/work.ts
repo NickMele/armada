@@ -152,7 +152,6 @@ export function workOf(
     iconLabel: "Workflow",
     value: workflow?.name ?? job.workflow_id,
     copyValue: job.workflow_id,
-    meta: "as it was when the job was dispatched",
   });
   if (job.assigned_drone !== undefined) {
     rows.push({

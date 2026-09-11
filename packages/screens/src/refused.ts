@@ -30,12 +30,10 @@ import type { Refused } from "@armada/components";
 import type { JobDetail as JobWhole, Refusal } from "@armada/protocol";
 import { sizeOf } from "./story";
 
-/** The rows and the sentences over and under them. */
+/** The rows, and the sentences under them. */
 export type Refusals = {
   /** In the order Fleet gathered them, oldest first. Never empty. */
   refused: Refused[];
-  /** What the rows are, said once over them. */
-  said: string;
   /** That the list is shorter than what happened, where it is. */
   note?: string;
   /**
@@ -70,31 +68,10 @@ export function refusedIn(whole: JobWhole | null): Refusals | undefined {
   }));
   return {
     refused,
-    said: SAID,
     again: againOf(stuck.refused),
     ...(shortOf(refused.length, stuck.refusals) ?? {}),
   };
 }
-
-/**
- * What the rows are.
- *
- * **The actor is named, and that is the owner's wording.** The sentence it
- * replaced put the Job in the subject — *what this job reached for and was
- * refused* — which is P5's shape, and it read to the person it was written for
- * as a list the Job had produced rather than one a machine had imposed. Naming
- * Fleet answers who to go and argue with, and `docs/contracts/design-system.md`
- * is where an allowlist denial is already attributed: actor=Fleet, with no
- * verification source.
- *
- * **The subject is the job, which is P5.** *Fleet blocked the job from the
- * following* was written first and ruled out on 8 Sep 2026: naming Fleet reads
- * as the sentence's point when the point is what was blocked, and the two
- * sentences beneath already say whose declaration decides it. This is not the
- * band's headline, which is `escalation()`'s and names the trigger rather than
- * an actor.
- */
-const SAID = "The job was blocked from the following:";
 
 /**
  * What a restart meets. **A mechanism and not a tip** — it says how a toolset

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Button } from "../../primitives/Button/Button";
 import { Separator } from "../../primitives/Separator/Separator";
 import { Textarea } from "../../primitives/Textarea/Textarea";
+import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
 /**
  * Review decision — the answers to a Job waiting at a human gate, and the note
@@ -86,11 +87,13 @@ export type ReviewDecisionProps = {
   disabledNote?: ReactNode;
   /** The label over the note field. Sentence case, no Wh- opener. */
   noteLabel?: string;
-  /** What the recoverable acts do, said once beneath them. */
-  keptNote?: ReactNode;
-  /** What merging does. Drawn only where merging is offered. */
+  /** What approving does, on hover over its control. */
+  approveNote?: ReactNode;
+  /** What requesting changes does, on hover over its control. */
+  requestChangesNote?: ReactNode;
+  /** What merging does, on hover over its control. */
   mergeNote?: ReactNode;
-  /** What rejecting costs. Its own sentence, beneath its own rule. */
+  /** What rejecting costs, on hover over its control. */
   rejectNote?: ReactNode;
   mergeLabel?: string;
   approveLabel?: string;
@@ -108,9 +111,10 @@ export function ReviewDecision({
   disabled = false,
   disabledNote,
   noteLabel = "What should change",
-  keptNote = "Approving takes the work. Requesting changes sends this note to the drone as a turn — it keeps the worktree and the step, and comes back running.",
-  mergeNote = "Merging sends the pull request to the forge and then takes the work, and Armada runs the repository's after-merge checks against what landed. Merging on the forge instead skips them.",
-  rejectNote = "Rejecting is a verdict on the work and the job ends there. The drone is stopped and nothing resumes it. Its branch stays where the drone left it.",
+  approveNote = "Takes the work as the drone left it.",
+  requestChangesNote = "Sends this note to the drone as a turn. It keeps the worktree and the step, and comes back running.",
+  mergeNote = "Sends the pull request to the forge, then takes the work. Armada runs the repository's after-merge checks against what landed; merging on the forge instead skips them.",
+  rejectNote = "A verdict on the work, and the job ends there. The drone is stopped and nothing resumes it. Its branch stays where the drone left it.",
   mergeLabel = "Merge and take the work",
   approveLabel = "Approve the work",
   requestChangesLabel = "Request changes",
@@ -139,28 +143,32 @@ export function ReviewDecision({
             request open has one ordinary ending and it is this one; a job with
             none never draws this control at all. */}
         {merging ? (
-          <Button variant="primary" disabled={disabled} onClick={onMerge}>
-            {mergeLabel}
-          </Button>
+          <Tooltip label={mergeNote}>
+            <Button variant="primary" disabled={disabled} onClick={onMerge}>
+              {mergeLabel}
+            </Button>
+          </Tooltip>
         ) : null}
-        <Button
-          variant={merging ? "secondary" : "primary"}
-          disabled={disabled}
-          onClick={onApprove}
-        >
-          {approveLabel}
-        </Button>
+        <Tooltip label={approveNote}>
+          <Button
+            variant={merging ? "secondary" : "primary"}
+            disabled={disabled}
+            onClick={onApprove}
+          >
+            {approveLabel}
+          </Button>
+        </Tooltip>
         {/* Off while the note is blank, which is what Fleet would answer. */}
-        <Button
-          variant="secondary"
-          disabled={disabled || blank}
-          onClick={onRequestChanges}
-        >
-          {requestChangesLabel}
-        </Button>
+        <Tooltip label={requestChangesNote}>
+          <Button
+            variant="secondary"
+            disabled={disabled || blank}
+            onClick={onRequestChanges}
+          >
+            {requestChangesLabel}
+          </Button>
+        </Tooltip>
       </div>
-      {merging ? <p className="armada-decision__said">{mergeNote}</p> : null}
-      <p className="armada-decision__said">{keptNote}</p>
 
       {/* The rule is load-bearing, not decoration: it is what says the control
           under it is not another answer in the group above. */}
@@ -170,12 +178,11 @@ export function ReviewDecision({
         {/* Outlined, because a solid red control reads as an error state rather
             than as an act. Alone, because it is the only one of the three that
             leaves nothing behind. */}
-        <Button variant="destructive" disabled={disabled} onClick={onReject}>
-          {rejectLabel}
-        </Button>
-        <p className="armada-decision__said" data-terminal>
-          {rejectNote}
-        </p>
+        <Tooltip label={rejectNote}>
+          <Button variant="destructive" disabled={disabled} onClick={onReject}>
+            {rejectLabel}
+          </Button>
+        </Tooltip>
       </div>
 
       {disabled && disabledNote !== undefined ? (

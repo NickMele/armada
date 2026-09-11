@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { Button } from "../../primitives/Button/Button";
 import { Checkbox } from "../../primitives/Checkbox/Checkbox";
+import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
 /**
  * The comments people left on this job's pull request, and the ones a drone
@@ -54,7 +55,7 @@ export type ReviewCommentsProps = {
   disabledNote?: ReactNode;
   /** The line over the list. Sentence case, no Wh- opener. */
   label?: ReactNode;
-  /** What picking commits to, above the list rather than on the button. */
+  /** What picking commits to, on hover over the line above the list. */
   note?: ReactNode;
   /**
    * What a pull request nobody has commented on says.
@@ -103,17 +104,15 @@ export function ReviewComments({
   return (
     <section className="armada-remarks" aria-label="Comments on the pull request">
       <div className="armada-remarks__head">
-        <span className="armada-remarks__label">{label}</span>
+        <Tooltip asChild label={note}>
+          <span className="armada-remarks__label">{label}</span>
+        </Tooltip>
       </div>
 
       {comments.length === 0 ? (
         <p className="armada-remarks__said">{emptyNote}</p>
       ) : (
         <>
-          {/* Above the list rather than on the button: what a press commits to
-              is read before the picking, not after it. */}
-          <p className="armada-remarks__said">{note}</p>
-
           <ul className="armada-remarks__list">
             {comments.map((comment) => (
               <li className="armada-remarks__one" key={comment.id}>

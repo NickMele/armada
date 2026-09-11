@@ -128,6 +128,11 @@ export type Recourse = {
    * for.
    */
   withheld?: string;
+  /**
+   * What happened to the last redirect, where one is out. **Shown and never
+   * hovered**: the person reading is usually the person who sent it.
+   */
+  sent?: string;
   /** Where the step stands, in the panel's own voice. Never a menu. */
   stands: string;
 };
@@ -225,6 +230,7 @@ export function recourseOf(job: JobSummary, whole: JobWhole | null): Recourse {
   return {
     ...drew,
     withheld: withheldBy(stuck, drew),
+    ...(sent === "" ? {} : { sent: sent.trim() }),
     stands: act === undefined ? `${sent}${stalled(job, stuck)}` : `${sent}${HOLDING}`,
   };
 }

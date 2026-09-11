@@ -123,7 +123,12 @@ export type StepNotice = {
   tone: "failed" | "stopped" | "waiting" | "note";
   /** What happened, in one line. */
   title?: ReactNode;
-  children: ReactNode;
+  /**
+   * What the title means for a person, on hover over it. Prose, and never the
+   * evidence: a list of what was refused or flagged stays in `children`.
+   */
+  says?: ReactNode;
+  children?: ReactNode;
 };
 
 export type InsideAJobProps = {
@@ -377,10 +382,16 @@ export function InsideAJob({
 
               {step.notice === undefined ? null : (
                 <div className="armada-inside__notice" data-tone={step.notice.tone} role="status">
-                  {step.notice.title === undefined ? null : (
+                  {step.notice.title === undefined ? null : step.notice.says === undefined ? (
                     <span className="armada-inside__notice-title">{step.notice.title}</span>
+                  ) : (
+                    <Tooltip asChild label={step.notice.says}>
+                      <span className="armada-inside__notice-title">{step.notice.title}</span>
+                    </Tooltip>
                   )}
-                  <span className="armada-inside__notice-body">{step.notice.children}</span>
+                  {step.notice.children === undefined ? null : (
+                    <span className="armada-inside__notice-body">{step.notice.children}</span>
+                  )}
                 </div>
               )}
 
