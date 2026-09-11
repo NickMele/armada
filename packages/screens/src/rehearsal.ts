@@ -30,6 +30,7 @@ import type {
   StartRun,
 } from "@armada/protocol";
 import { span } from "./duration";
+import { openServerLink } from "./opening";
 
 export const SETUP_PREFIX = "setup:";
 export const CHECK_PREFIX = "check:";
@@ -177,6 +178,8 @@ export function useRunSheet(
     now: number;
     /** Puts the run sheet up — `JobDetail`'s own sheet state. */
     setSheet: (which: "run") => void;
+    /** Says why a server's link did not open. `JobDetail`'s own toast. */
+    onSaid: (sentence: string) => void;
   },
 ): {
   /** Open the sheet, with `undefined` for nothing selected. */
@@ -189,6 +192,7 @@ export function useRunSheet(
     sheet,
     now,
     setSheet,
+    onSaid,
     runSheet,
     runFollowed,
     onWatchRunSheet,
@@ -271,7 +275,10 @@ export function useRunSheet(
       },
       onOpenLink: (url) => {
         const instanceId = serverInstanceIdOf(data, selected ?? undefined);
-        if (instanceId !== undefined) void onOpenServerLink(instanceId, url);
+        if (instanceId === undefined) return;
+        void openServerLink(onOpenServerLink, instanceId, url).then((because) => {
+          if (because !== null) onSaid(because);
+        });
       },
     },
   };

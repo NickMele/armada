@@ -150,3 +150,41 @@ export async function openPullRequest(
 ): Promise<string | null> {
   return whyNotFollowed(await open(jobId));
 }
+
+/**
+ * Why a server's link did not open, in the app's voice, or `null` because it
+ * did.
+ *
+ * **Not `whyNotFollowed`.** Both answer a `Followed`, but a pull request's
+ * sentences are about a job's record and a server's are about a run sheet's —
+ * `unknown_job` is a shape neither `openServerLink` nor `stopServer` produces,
+ * so it is read here as the same failure `no_address` already covers, rather
+ * than given a sentence about a job that was never the question.
+ */
+export function whyNotOpenedServerLink(followed: Followed): string | null {
+  if (followed.ok) return null;
+  switch (followed.why) {
+    case "unknown_job":
+    case "no_address":
+      return "This server is no longer on the run sheet's own reading. Reopen it and try again.";
+    case "not_addressable":
+      return `Fleet resolved ${followed.address} for this server, and Bridge only opens a web address.`;
+    case "refused":
+      return `This machine did not open ${followed.address}: ${followed.detail}`;
+  }
+}
+
+/** Asking the host to open one server's link — a server id and its own address. */
+export type OpenServerLink = (serverId: string, url: string) => Promise<Followed>;
+
+/**
+ * Ask main to open one server's link, and answer with the sentence to say
+ * where it did not. `null` is success.
+ */
+export async function openServerLink(
+  open: OpenServerLink,
+  serverId: string,
+  url: string,
+): Promise<string | null> {
+  return whyNotOpenedServerLink(await open(serverId, url));
+}

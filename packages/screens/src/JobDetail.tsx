@@ -388,7 +388,7 @@ export function JobDetail({
   // be read. `held` is how many rows the step had when the reading was taken,
   // and `Jump to now` takes it again.
   const [held, setHeld] = useState<HeldAt | null>(null);
-  const runHook = useRunSheet({ ...rehearsal, jobId: job.id, jobTitle: job.title, sheet, now, setSheet });
+  const runHook = useRunSheet({ ...rehearsal, jobId: job.id, jobTitle: job.title, sheet, now, setSheet, onSaid });
 
   // Whether the report dialog is up. **Here rather than in `Acts`**, because
   // two controls open it — the Job header's menu entry and `b` — and the
