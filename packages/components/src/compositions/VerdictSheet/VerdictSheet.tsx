@@ -138,12 +138,17 @@ export function VerdictSheet({
         <Block label="The pull request">{pullRequest}</Block>
       )}
 
+      {risks === undefined ? null : (
+        <Block label="What nothing checked">
+          <p className="armada-verdict__said">{risks}</p>
+        </Block>
+      )}
+
       <Block label="What proves it">
         {provesIt}
         {provesItNote === undefined ? null : (
           <p className="armada-verdict__said">{provesItNote}</p>
         )}
-        {risks === undefined ? null : <p className="armada-verdict__said">{risks}</p>}
       </Block>
 
       <Block label="What the Drone says it left alone">
