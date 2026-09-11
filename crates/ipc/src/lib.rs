@@ -32,6 +32,9 @@ mod attempt;
 mod capacity;
 mod checks;
 mod codec;
+/// A command a Drone was not given, and what a person answers about it. **Two
+/// paths to one answer** — while the Drone waits, or after the Job stopped.
+mod commanding;
 mod detail;
 mod enums;
 mod error;
@@ -95,6 +98,7 @@ pub use attempt::{Move, StepAttempt};
 pub use capacity::{AdmissionHold, FleetCapacity};
 pub use checks::{CheckOutput, CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
+pub use commanding::{AnswerCommand, CommandAnswer, CommandInFlight, SetWhenBlocked, WhenBlocked};
 pub use detail::{
     Criterion, Dependency, JobDelivery, JobDetail, JobSpend, JudgeInFlight, PullRequestDetail,
     Refusal, ReviewedBy, Settled, StepDetail, StepFacts, Stuck, Verdict,
@@ -107,8 +111,8 @@ pub use enums::{
 pub use error::{RunId, WireError, WireValue};
 pub use event::{
     ChangeKind, ChangedFile, Cursor, Delivered, DroneExited, DroneSpawned, Event, JobAsking,
-    JobChecking, JobCreated, JobFilesChanged, JobJudging, JobLanded, JobStateChanged,
-    JobStepAdvanced, Missed, ProposalMoved, Reason, Resync, StreamMessage,
+    JobChecking, JobCommandWaiting, JobCreated, JobFilesChanged, JobJudging, JobLanded,
+    JobStateChanged, JobStepAdvanced, Missed, ProposalMoved, Reason, Resync, StreamMessage,
 };
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};
 pub use holding::{HeldReason, WorktreeHeld, WorktreesHeld};

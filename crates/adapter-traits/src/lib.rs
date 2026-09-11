@@ -53,7 +53,7 @@ pub use delivery::{
 pub use event::{CallDetail, DroneEvent, Speaker};
 pub use harness::{
     AmbientServers, DroneHandle, DroneSpawnConfig, Environment, Grant, Launch, McpConfig, Model,
-    Prompt, Prompting, SpawnConfigRefused, Toolbelt,
+    Prompt, Prompting, SpawnConfigRefused, Toolbelt, PERMISSION_WAIT,
 };
 pub use judge::{Ask, CallProgress, Heard, JudgeCall, ModelClient};
 pub use link_lookup::{LinkLookup, LookupCall};
@@ -102,6 +102,15 @@ pub trait AgentHarness {
     /// escape-hatch constructor, so a caller cannot quietly drop the isolation
     /// the configuration exists to guarantee.
     fn render(&self, config: &DroneSpawnConfig) -> Result<Launch, Self::Error>;
+
+    /// Whether this command could be granted to a Drone at all, as a declared
+    /// or an allowed command: the refusal [`render`](AgentHarness::render)
+    /// would give for it, asked before a person allows it.
+    ///
+    /// **Asked first, because the render refuses the whole spawn.** A command
+    /// a person allowed that this harness cannot express, or one that would
+    /// push, would otherwise fail the Job the next time a Drone is put on it.
+    fn grantable(&self, run: &str) -> Result<(), Self::Error>;
 
     /// Read one line of the Drone's output.
     ///
@@ -233,6 +242,25 @@ pub trait Vcs {
     fn commit_all(
         &self,
         worktree: &Worktree,
+        message: &str,
+        at: CommitTime,
+    ) -> Result<Committed, Self::CommitError>;
+
+    /// Commit only these paths, as the working directory holds them, on top of
+    /// the branch tip in a Job's worktree.
+    ///
+    /// **Everything else is left exactly as it was** — staged, modified or
+    /// untracked — and is not in the commit, which is the whole difference
+    /// from [`commit_all`](Vcs::commit_all). Paths are repository-relative, and
+    /// one the working directory no longer holds is committed as a deletion.
+    /// Each path's index entry is brought to what was committed, so `git
+    /// status` does not show it afterwards as a staged revert.
+    ///
+    /// [`Committed::NothingToCommit`] where the paths already match the tip.
+    fn commit_paths(
+        &self,
+        worktree: &Worktree,
+        paths: &[&str],
         message: &str,
         at: CommitTime,
     ) -> Result<Committed, Self::CommitError>;

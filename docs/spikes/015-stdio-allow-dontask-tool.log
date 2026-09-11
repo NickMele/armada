@@ -1,0 +1,2 @@
+{"t": 1789135138.639, "event": "start", "wait": 3.0, "answer": "allow"}
+{"t": 1789135138.649, "event": "notification", "method": "notifications/initialized"}

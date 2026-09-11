@@ -15,6 +15,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::commanding::CommandInFlight;
 use crate::detail::{JudgeInFlight, Settled};
 use crate::enums::{Actor, JobStatus, StepState};
 use crate::ids::ProposalId;
@@ -107,6 +108,8 @@ pub enum Event {
     JobChecking(JobChecking),
     #[serde(rename = "job.asking")]
     JobAsking(JobAsking),
+    #[serde(rename = "job.command_waiting")]
+    JobCommandWaiting(JobCommandWaiting),
     #[serde(rename = "job.forgotten")]
     JobForgotten(JobForgotten),
     #[serde(rename = "job.landed")]
@@ -574,6 +577,36 @@ pub struct JobAsking {
     pub asking: Option<QuestionInFlight>,
     /// [`Actor::Drone`] on the way out and [`Actor::Human`] on the way back.
     /// See the type.
+    pub actor: Actor,
+    pub at: Instant,
+}
+
+/// A Drone is held on a command waiting for a person, or the one it was held on
+/// was answered.
+///
+/// **[`JobAsking`]'s shape exactly, and for its reason.** Two messages per
+/// command: the one going out carries [`waiting`](JobCommandWaiting::waiting)
+/// and the one coming back carries nothing, and a surface ages the wait from
+/// `asked_at`. Only a Job at [`WhenBlocked::AskMe`](crate::WhenBlocked) produces
+/// it — under the default the call is refused on arrival and nothing waits.
+///
+/// It names no [`JobSummary`](crate::JobSummary), for [`JobAsking`]'s reason.
+///
+/// # What it costs the channel, stated
+///
+/// Two messages per command a Drone is held on, at the rate a person answers,
+/// and it holds no queue of its own. It adds nothing measurable to the
+/// unbounded-sink risk `docs/practices/protocol.md` names.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobCommandWaiting {
+    pub job_id: JobId,
+    /// Which step's Drone is held.
+    pub step_id: StepId,
+    /// The command it is held on. **Absent because it was answered**, and the
+    /// answer itself does not travel here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waiting: Option<CommandInFlight>,
+    /// [`Actor::Drone`] on the way out, and whoever answered on the way back.
     pub actor: Actor,
     pub at: Instant,
 }

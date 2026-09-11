@@ -15,6 +15,7 @@
 //! **`dispatch_job` is granted, not given, and that is not a mismatch.** The
 //! question here is whether a name can *ever* be rendered, so [`rendered_from`]
 //! reads the whole of `allowlist`'s body and not which branch a name is in.
+//! **`permission` is the reverse**: [`OFF_THE_ALLOWLIST`] refuses its entry.
 //!
 //! The two spellings are joined in [`prefixed`] and nowhere else here; the
 //! server half is read from the source rather than written down, in [`server`].
@@ -47,6 +48,17 @@ const ALLOWLIST: &str = "crates/adapters/src/harness.rs";
 const SERVER_IN_IPC: (&str, &str) = ("crates/ipc/src/mcp/mod.rs", "SERVER");
 const SERVER_IN_ADAPTERS: (&str, &str) = ("crates/adapters/src/mcp.rs", "EVIDENCE_SERVER");
 
+/// Roster tools the allowlist must never render, by the constant under
+/// [`ROSTER_DIR`] that spells each one.
+///
+/// **`PERMISSION_TOOL` is called by the harness, never by the model.** A Drone
+/// is spawned with it named as the tool that answers a permission prompt, and
+/// the harness will not use a prompt tool it cannot find in `tools/list` — so it
+/// is on the roster. The model is never shown it, and an allowlist entry would
+/// let a call the model made reach a person as a question the harness asked. So
+/// here the rule refuses the entry instead of requiring it.
+const OFF_THE_ALLOWLIST: &[&str] = &["PERMISSION_TOOL"];
+
 /// How a client spells a tool served by a named MCP server. **The one place
 /// this rule joins the two halves.** `harness.rs` is the one place the product
 /// joins them, which is what makes the constants there comparable at all.
@@ -68,24 +80,41 @@ pub fn the_roster_and_the_allowlist_hold_the_same_set(root: &Path) -> Report {
     let Some(server) = server(root, &mut report) else {
         return report;
     };
-    let Some(roster) = roster(root, &mut report) else {
+    let Some((roster, spellings)) = roster(root, &mut report) else {
+        return report;
+    };
+    let Some(withheld) = off_the_allowlist(OFF_THE_ALLOWLIST, &roster, &spellings, &mut report)
+    else {
         return report;
     };
     let Some(rendered) = rendered(root, &server, &mut report) else {
         return report;
     };
-    compare(&roster, &rendered, &server, &mut report);
+    compare(&roster, &rendered, &withheld, &server, &mut report);
     report
 }
 
-/// Both directions, and each finding names the file to change.
+/// Both directions, and each finding names the file to change. A tool in
+/// `withheld` is the exception: rendering it is the fault.
 fn compare(
     roster: &BTreeSet<String>,
     rendered: &BTreeSet<String>,
+    withheld: &BTreeSet<String>,
     server: &str,
     report: &mut Report,
 ) {
     for tool in roster {
+        if withheld.contains(tool) {
+            if rendered.contains(tool) {
+                report.fail(format!(
+                    "{ALLOWLIST} — `allowlist` renders `{}`, which only the harness calls. The \
+                     model is never shown it, and an entry there lets a call the model makes \
+                     reach a person as a question the harness asked",
+                    prefixed(server, tool)
+                ));
+            }
+            continue;
+        }
         if !rendered.contains(tool) {
             report.fail(format!(
                 "{ALLOWLIST} — `{tool}` is a tool {ROSTER} serves and `allowlist` renders no \
@@ -148,13 +177,17 @@ fn declared(root: &Path, path: &str, name: &str, report: &mut Report) -> Option<
     }
 }
 
-/// Every tool name a call may name, bare.
+/// Every tool name a call may name, bare, and every constant under
+/// [`ROSTER_DIR`] that spells one.
 ///
 /// Read from `named`'s arms rather than from the constants, because a constant
 /// is a spelling and `named` is the set: a name `named` does not answer is not
 /// callable, and requiring the allowlist to carry it would be wrong. The
-/// constants are read too, to resolve each arm's identifier to its literal.
-fn roster(root: &Path, report: &mut Report) -> Option<BTreeSet<String>> {
+/// constants are read too, to resolve each arm's identifier to its literal —
+/// and handed back, because [`OFF_THE_ALLOWLIST`] is resolved the same way.
+type Roster = (BTreeSet<String>, BTreeMap<String, String>);
+
+fn roster(root: &Path, report: &mut Report) -> Option<Roster> {
     let Ok(tools) = fs::read_to_string(root.join(ROSTER)) else {
         report.fail(format!("{ROSTER} — the file `named` is written in"));
         return None;
@@ -165,7 +198,42 @@ fn roster(root: &Path, report: &mut Report) -> Option<BTreeSet<String>> {
             spellings.extend(str_consts(&text));
         }
     }
-    roster_from(&tools, &spellings, report)
+    let found = roster_from(&tools, &spellings, report)?;
+    Some((found, spellings))
+}
+
+/// The tools named by `names`, spelled, where every one is a tool the roster
+/// serves.
+///
+/// `None` where one resolves to nothing, or to a tool `named` does not answer.
+/// An exception for nothing is a rule that has stopped reading the source, and
+/// the rename that caused it should fail here rather than leave a hole the next
+/// tool walks through.
+fn off_the_allowlist(
+    names: &[&str],
+    roster: &BTreeSet<String>,
+    spellings: &BTreeMap<String, String>,
+    report: &mut Report,
+) -> Option<BTreeSet<String>> {
+    let mut found = BTreeSet::new();
+    for name in names {
+        let Some(tool) = spellings.get(*name) else {
+            report.fail(format!(
+                "xtask/src/rules_toolbelt.rs — `OFF_THE_ALLOWLIST` names `{name}`, which is no \
+                 `&str` constant under {ROSTER_DIR}/. Follow the rename there"
+            ));
+            return None;
+        };
+        if !roster.contains(tool) {
+            report.fail(format!(
+                "{ROSTER} — `named` answers no `{tool}`, and `OFF_THE_ALLOWLIST` keeps it off \
+                 the allowlist. An exception for a tool nothing serves is stale; remove it"
+            ));
+            return None;
+        }
+        found.insert(tool.clone());
+    }
+    Some(found)
 }
 
 /// The set half of [`roster`], over text rather than files, so each way it can

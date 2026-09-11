@@ -405,4 +405,35 @@ where
         let job = self.load(&id).await.map_err(|why| self.refusal(why))?;
         self.summarised(&job).await
     }
+
+    /// A person's answer to a command a Drone was refused or is waiting on.
+    /// The refusals are `crate::permitting::NotPermitted`'s.
+    async fn answer_command(
+        &self,
+        job_id: JobId,
+        answer: ipc::AnswerCommand,
+    ) -> Result<JobSummary, Refusal> {
+        let id = job_id.to_domain();
+        Fleet::answer_command(self, &id, &answer.call, answer.answer)
+            .await
+            .map_err(|why| self.refusal(why.about(&id)))?;
+        let job = self.load(&id).await.map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
+    }
+
+    /// How this Job meets a blocked command, changed. Loaded first, so an id
+    /// naming nothing is a 404 rather than a setting written against nothing.
+    async fn set_when_blocked(
+        &self,
+        job_id: JobId,
+        setting: ipc::SetWhenBlocked,
+    ) -> Result<JobSummary, Refusal> {
+        let id = job_id.to_domain();
+        let job = self.load(&id).await.map_err(|why| self.refusal(why))?;
+        let when = crate::permitting::domain_setting(setting.when_blocked);
+        Fleet::set_when_blocked(self, &id, when)
+            .await
+            .map_err(|why| self.refusal(why.about(&id)))?;
+        self.summarised(&job).await
+    }
 }

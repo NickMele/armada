@@ -17,12 +17,39 @@ use std::future::Future;
 
 use crate::mcp::Caller;
 use ipc::mcp::{
-    AskQuestion, CheckReport, DeclareScope, DispatchJob, NotRecorded, Receipt, RequestScope,
-    SubmitEvidence,
+    AskQuestion, CheckReport, DeclareScope, DispatchJob, NotRecorded, PermissionAsked, Receipt,
+    RequestScope, SubmitEvidence,
 };
+
+/// Whether a call outside a Drone's toolbelt may run.
+///
+/// **No input on `Allow`.** The call runs as it was asked, so the transport
+/// echoes the input it was handed, and nothing here can change what runs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PermissionAnswer {
+    Allow,
+    /// It does not run. The words are what the Drone reads.
+    Deny(String),
+}
 
 /// Everything a Drone Fleet spawned may call.
 pub trait Tools: Send + Sync + 'static {
+    /// The permission tool — asked **by the harness, not the Drone**, before
+    /// any call outside the Drone's toolbelt runs.
+    ///
+    /// # The third call held open, and never refused
+    ///
+    /// The decision has to be in the reply: the harness runs the call on an
+    /// allow and not otherwise, and has no later turn to read an answer from.
+    /// So where a person is asked, the call waits on them, bounded by the
+    /// harness's own patience. Every failure is a [`PermissionAnswer::Deny`]
+    /// and never a tool error, because a deny says why and an error does not.
+    fn permission(
+        &self,
+        caller: Caller,
+        asked: PermissionAsked,
+    ) -> impl Future<Output = PermissionAnswer> + Send;
+
     /// `ask_question` — the working Drone asks the person who approved the Job
     /// something it cannot answer from the repository, and offers the answers it
     /// will accept.

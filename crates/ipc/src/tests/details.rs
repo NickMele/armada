@@ -333,6 +333,8 @@ fn blocked() -> Stuck {
             truncated: false,
             length: Some(30),
             because: String::new(),
+            offers: Vec::new(),
+            withheld: None,
         }],
         refusals: 1,
         undecided: None,
@@ -458,6 +460,90 @@ fn an_unmeasured_argument_carries_no_length_rather_than_nought() {
     assert_eq!(
         decode::<Stuck>("a classification", json.as_bytes()).expect("it reads back"),
         old
+    );
+}
+
+/// **A row from before 10.7 offers nothing**, which is what it meant then too:
+/// nothing on it could be allowed from a screen.
+#[test]
+fn a_refusal_from_before_answers_existed_offers_nothing() {
+    let old =
+        r#"{"tool":"Bash","call":"toolu_01","detail":"git push","truncated":false,"because":""}"#;
+    let read = decode::<Refusal>("a refusal", old.as_bytes()).expect("the new fields default");
+    assert!(read.offers.is_empty());
+    assert_eq!(read.withheld, None);
+}
+
+/// The offers cross in order. Why one is withheld crosses beside them, and is
+/// absent — not null — on a row a person can allow.
+#[test]
+fn a_refusal_says_what_a_person_may_answer_and_why_not_where_they_may_not() {
+    let mut open = blocked();
+    open.refused[0].offers = vec![
+        crate::CommandAnswer::AllowForJob,
+        crate::CommandAnswer::AlwaysAllow,
+        crate::CommandAnswer::Reject,
+    ];
+    let json = encode(&open).expect("a classification is plain data");
+    assert!(
+        json.contains("\"offers\":[\"allow_for_job\",\"always_allow\",\"reject\"]"),
+        "{json}"
+    );
+    assert!(!json.contains("withheld"), "{json}");
+    assert_eq!(
+        decode::<Stuck>("a classification", json.as_bytes()).expect("it reads back"),
+        open
+    );
+
+    let mut push = blocked();
+    push.refused[0].detail = String::from("git push origin HEAD");
+    push.refused[0].withheld = Some(String::from("A push is never allowed from here."));
+    let json = encode(&push).expect("a classification is plain data");
+    assert!(json.contains("\"offers\":[]"), "empty is stated: {json}");
+    assert!(
+        json.contains("\"withheld\":\"A push is never allowed from here.\""),
+        "{json}"
+    );
+    assert_eq!(
+        decode::<Stuck>("a classification", json.as_bytes()).expect("it reads back"),
+        push
+    );
+}
+
+/// Both are filled after `JobDetail::of`, so a detail built from the record
+/// alone carries neither key — and one Fleet filled carries both.
+#[test]
+fn the_setting_and_the_waiting_command_are_absent_until_fleet_fills_them() {
+    let mut detail = detail_of(&job(), &[]);
+    let json = encode(&detail).expect("a detail is plain data");
+    assert!(
+        !json.contains("when_blocked") && !json.contains("command_waiting"),
+        "absent, never null: {json}"
+    );
+
+    detail.when_blocked = Some(crate::WhenBlocked::AskMe);
+    detail.command_waiting = Some(crate::CommandInFlight {
+        call: String::from("toolu_01"),
+        step_id: crate::StepId::carried("repro"),
+        asked_at: crate::Instant::carried("2026-09-11T09:00:00.000Z"),
+        tool: String::from("Bash"),
+        detail: String::from("touch x"),
+        truncated: false,
+        length: Some(7),
+        offers: vec![
+            crate::CommandAnswer::AllowForJob,
+            crate::CommandAnswer::Reject,
+        ],
+    });
+    let json = encode(&detail).expect("a detail is plain data");
+    assert!(json.contains("\"when_blocked\":\"ask_me\""), "{json}");
+    assert!(
+        json.contains("\"command_waiting\":{\"call\":\"toolu_01\""),
+        "{json}"
+    );
+    assert_eq!(
+        decode::<JobDetail>("a detail", json.as_bytes()).expect("it reads back"),
+        detail
     );
 }
 

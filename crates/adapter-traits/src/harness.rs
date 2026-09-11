@@ -23,8 +23,13 @@
 //! [`DroneSpawnConfig`], [`Launch`] and [`McpConfig`] each say what they
 //! refuse.
 
+//! **Over 500 lines, on purpose.** Every type here is a field of
+//! [`DroneSpawnConfig`] or what one renders into, and "no escape hatch at any
+//! level" is a claim a reader should be able to check in one file.
+
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use core::time::Duration;
 
 use crate::Worktree;
 
@@ -132,19 +137,31 @@ impl McpConfig {
 
 /// How a Drone is answered when it reaches for something it was not granted.
 ///
-/// **One variant.** A detached Drone has no controlling terminal and its stdin
-/// carries the session, so a prompt has nobody to answer it and would hang the
-/// Job until its timeout. Leaving the mode off is worse still: it inherits
-/// whatever the operator configured, which was measured as `auto`.
+/// **One variant: Armada always answers.** Refusing at once or holding the
+/// question for a person is the Job's setting, read by Fleet, not a second
+/// variant here. A detached Drone has no terminal to be asked at, and leaving
+/// the mode off inherits the operator's, measured as `auto`.
 ///
-/// The cost is stated in the baseline prompt rather than hidden: a denial
-/// arrives silently, so the Drone is told to notice one and stop rather than
-/// route around it.
+/// **It fails closed, measured.** A permission tool that errors, or a server
+/// that cannot be reached, leaves the call unrun.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Prompting {
-    /// The Drone is never asked. A call outside the toolbelt is refused.
-    Never,
+    /// Every call outside the toolbelt is put to Armada's permission tool,
+    /// and its answer is whether the call runs.
+    Fleet,
 }
+
+/// How long the harness waits on Armada's answer to one permission question.
+///
+/// **Fleet holds a question for less than this**, so an unanswered one ends in
+/// Fleet's refusal, which says why, rather than in a call abandoned unrun.
+///
+/// **Five minutes, because that is what HTTP allows.** Over Armada's transport
+/// the agent CLI ends a tool call after 300 seconds without a reply whatever
+/// its tool timeout says, and raising that exposed a further limit near 360
+/// — `docs/spikes/015-can-a-person-answer-a-blocked-command.md`. The tool
+/// timeout is still set to this, because its own default ends the call at 60.
+pub const PERMISSION_WAIT: Duration = Duration::from_secs(5 * 60);
 
 /// One thing a Drone may do, named for the capability rather than for the tool.
 ///
@@ -169,6 +186,11 @@ pub enum Grant {
     /// The string comes from a `commands.<name>.run` in an `armada.yml` that a
     /// person committed, never from a Drone.
     RunADeclaredCommand(String),
+    /// Run one command a person allowed for this Job, spelled as it was asked.
+    ///
+    /// **Rendered as a declared command is, push refusal included** — a person
+    /// answering a question is not reviewing a Manifest.
+    RunAnAllowedCommand(String),
     /// Create Jobs, as children of the one being worked.
     ///
     /// **The only grant whose effect outlives the Drone that holds it.** Every
@@ -338,9 +360,9 @@ impl DroneSpawnConfig {
         &self.environment
     }
 
-    /// Whether the Drone can be asked to confirm something. It cannot.
+    /// Who answers when the Drone reaches past its toolbelt. Armada does.
     pub fn prompting(&self) -> Prompting {
-        Prompting::Never
+        Prompting::Fleet
     }
 }
 
@@ -386,7 +408,7 @@ pub enum SpawnConfigRefused {
 /// It takes its environment and its directory from the [`DroneSpawnConfig`]
 /// rather than from its own caller, so an implementation cannot render a Drone
 /// into a different directory or a different environment than the one it was
-/// given.
+/// given — bar [`Launch::waiting_on_permission`], whose value is fixed here.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Launch {
     program: String,
@@ -410,6 +432,15 @@ impl Launch {
             directory: String::from(config.worktree().path()),
             environment: config.environment().clone(),
         }
+    }
+
+    /// The harness's name for its permission wait, set to [`PERMISSION_WAIT`]
+    /// in milliseconds. **The one variable a harness adds, and not a value it
+    /// chooses**; a name the config already holds is refused, not overwritten.
+    pub fn waiting_on_permission(mut self, variable: &str) -> Result<Launch, SpawnConfigRefused> {
+        let millis = PERMISSION_WAIT.as_millis().to_string();
+        self.environment = self.environment.and(variable, &millis)?;
+        Ok(self)
     }
 
     pub fn program(&self) -> &str {

@@ -94,6 +94,7 @@ pub mod noticing;
 pub mod overlap;
 pub mod overruling;
 pub mod peer;
+pub mod permitting;
 pub mod policy;
 pub mod preparing;
 pub mod process;

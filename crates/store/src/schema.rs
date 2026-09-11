@@ -85,6 +85,7 @@ pub const MIGRATIONS: &[&str] = &[
     crate::showing::V41,
     crate::showing::V42,
     crate::shown_again::V43,
+    crate::allowing::V44,
 ];
 
 /// Every table whose rows belong to one Job, asked of the file rather than
@@ -867,8 +868,7 @@ CREATE TABLE job_footprint_files (
 /// standing, so the gap outlives the state.
 ///
 /// The step arm is one `CASE` where [`V14`] had four `OR`s: three moves carry a
-/// reason, every other carries none. Written short because this file sits on
-/// the 900 the gate refuses at, and the next migration will not fit in it.
+/// reason, every other carries none, written short for this file's 900 lines.
 const V16: &str = r#"
 DROP TRIGGER job_events_hold_one_whole_shape;
 

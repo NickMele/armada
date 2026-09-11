@@ -71,7 +71,11 @@ where
             .await
             .map_err(|why| self.refusal(why))?;
         let queued = self.queued_reason(job).await?;
-        let asking = self.question_awaited(job.id()).await.is_some();
+        // **A command a person is being asked about waits on them too**, and
+        // the Board says so the same way: the Drone holds its session and its
+        // spend until somebody answers.
+        let asking = self.question_awaited(job.id()).await.is_some()
+            || self.command_awaited(job.id()).await.is_some();
         Ok(JobSummary::of(
             job,
             reason.as_ref(),

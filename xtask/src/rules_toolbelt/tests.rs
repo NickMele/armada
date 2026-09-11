@@ -57,9 +57,12 @@ fn run(tools: &[(&str, &str)], given: &[(&str, &str)], granted: &[(&str, &str)])
     let mut report = Report::new("test");
     let (text, spellings) = roster_source(tools);
     let roster = roster_from(&text, &spellings, &mut report);
+    let withheld = roster
+        .as_ref()
+        .and_then(|roster| off_the_allowlist(OFF_THE_ALLOWLIST, roster, &spellings, &mut report));
     let rendered = rendered_from(&harness_source(given, granted), SERVER, &mut report);
-    if let (Some(roster), Some(rendered)) = (&roster, &rendered) {
-        compare(roster, rendered, SERVER, &mut report);
+    if let (Some(roster), Some(withheld), Some(rendered)) = (&roster, &withheld, &rendered) {
+        compare(roster, rendered, withheld, SERVER, &mut report);
     }
     said(report)
 }
@@ -88,11 +91,48 @@ const SERVED: &[(&str, &str)] = &[
     ("CHECKS_TOOL", "run_checks"),
     ("ASK_TOOL", "ask_question"),
     ("DISPATCH_TOOL", "dispatch_job"),
+    ("PERMISSION_TOOL", "permission"),
 ];
 
+/// Served, and in no toolbelt — which is the arrangement, not a gap.
 #[test]
 fn the_arrangement_the_repository_holds_is_a_match() {
     assert_eq!(run(SERVED, GIVEN, GRANTED), Vec::<String>::new());
+}
+
+/// The harness's tool in argv is the fault here, the reverse of every other
+/// tool: an entry would let a call the model made reach a person.
+#[test]
+fn the_harness_only_tool_in_argv_is_refused() {
+    let given = &[GIVEN, &[("PERMISSION_TOOL", "permission")][..]].concat();
+    let said = run(SERVED, given, GRANTED);
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(said[0].contains("mcp__armada__permission"), "{said:?}");
+    assert!(said[0].contains("only the harness calls"), "{said:?}");
+}
+
+/// An exception whose constant was renamed away names nothing, and a rule that
+/// kept passing would leave the gap open for the next tool.
+#[test]
+fn an_exception_naming_no_constant_fails() {
+    let mut report = Report::new("test");
+    let (text, spellings) = roster_source(SERVED);
+    let roster = roster_from(&text, &spellings, &mut report).expect("a roster");
+    assert!(off_the_allowlist(&["GONE_TOOL"], &roster, &spellings, &mut report).is_none());
+    let said = said(report);
+    assert!(said[0].contains("`GONE_TOOL`"), "{said:?}");
+}
+
+/// Spelled, and served by nothing: the exception outlived its tool.
+#[test]
+fn an_exception_for_a_tool_nothing_serves_fails() {
+    let mut report = Report::new("test");
+    let (text, mut spellings) = roster_source(&SERVED[..5]);
+    spellings.insert("PERMISSION_TOOL".into(), "permission".into());
+    let roster = roster_from(&text, &spellings, &mut report).expect("a roster");
+    assert!(off_the_allowlist(OFF_THE_ALLOWLIST, &roster, &spellings, &mut report).is_none());
+    let said = said(report);
+    assert!(said[0].contains("is stale"), "{said:?}");
 }
 
 /// The bug of 30 Aug 2026, rebuilt: `ask_question` in the roster and in no

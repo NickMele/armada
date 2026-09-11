@@ -61,6 +61,72 @@ const DRAIN: Duration = Duration::from_secs(2);
 struct Heard {
     events: Vec<DroneEvent>,
     ended: bool,
+    /// Refusals Fleet made whose call the stream has not shown yet.
+    ///
+    /// **Why Fleet writes refusals at all.** A call refused by Armada's own
+    /// permission tool leaves no refusal line in the stream (measured:
+    /// `docs/spikes/015-can-a-person-answer-a-blocked-command.md`), so the fold
+    /// that tells `blocked_by_policy` from `stalled` would see a Drone that was
+    /// never refused. Fleet said no, so Fleet says so here.
+    ///
+    /// **Held back rather than appended**, because the permission question and
+    /// the line naming the call race each other, and a refusal folded before
+    /// its own call reads as a Drone that reached again after being refused.
+    early: Vec<DroneEvent>,
+}
+
+impl Heard {
+    /// What the reader decoded, in the order it arrived, with any refusal Fleet
+    /// already made for one of these calls placed straight after it.
+    fn take(&mut self, read: &[DroneEvent]) {
+        for event in read {
+            if let DroneEvent::Refused { call, .. } = event {
+                // The harness said so as well. One refusal, not two.
+                if self.refused(call) {
+                    continue;
+                }
+            }
+            self.events.push(event.clone());
+            if let DroneEvent::Called { call, .. } = event {
+                if let Some(at) = self.early.iter().position(|early| names(early, call)) {
+                    let refusal = self.early.remove(at);
+                    self.events.push(refusal);
+                }
+            }
+        }
+    }
+
+    /// A refusal Fleet made. After its call where the call has been heard,
+    /// held until it is where it has not.
+    fn refused_by_fleet(&mut self, refusal: DroneEvent) {
+        let DroneEvent::Refused { call, .. } = &refusal else {
+            return;
+        };
+        if self.refused(call) {
+            return;
+        }
+        let heard_the_call = self
+            .events
+            .iter()
+            .any(|event| matches!(event, DroneEvent::Called { call: seen, .. } if seen == call));
+        if heard_the_call {
+            self.events.push(refusal);
+        } else {
+            self.early.push(refusal);
+        }
+    }
+
+    fn refused(&self, call: &str) -> bool {
+        self.events
+            .iter()
+            .chain(self.early.iter())
+            .any(|event| names(event, call))
+    }
+}
+
+/// Whether this is a refusal of that call.
+fn names(event: &DroneEvent, call: &str) -> bool {
+    matches!(event, DroneEvent::Refused { call: refused, .. } if refused == call)
 }
 
 /// How far a run has got, in the only four numbers anything asks for.
@@ -224,8 +290,7 @@ impl Watching {
                 filling
                     .lock()
                     .expect("the transcript is not held across a panic")
-                    .events
-                    .extend(read.iter().cloned());
+                    .take(&read);
                 for tap in &taps {
                     tap.saw(&read);
                 }
@@ -239,6 +304,26 @@ impl Watching {
             heard,
             reader: Some(reader),
         }
+    }
+
+    /// Fleet refused one of this Drone's calls itself, through the permission
+    /// tool, and the stream will not say so. What this adds is folded exactly
+    /// as a refusal the harness reported, placed after the call it refuses.
+    ///
+    /// **Returns the row** so the caller can offer it to the taps: this type
+    /// holds no taps, and the refusal belongs in the transcript file beside the
+    /// Drone's own rows.
+    pub fn refused_by_fleet(&self, tool: &str, call: &str, because: &str) -> DroneEvent {
+        let refusal = DroneEvent::Refused {
+            tool: tool.to_string(),
+            call: call.to_string(),
+            because: because.to_string(),
+        };
+        self.heard
+            .lock()
+            .expect("the transcript is not held across a panic")
+            .refused_by_fleet(refusal.clone());
+        refusal
     }
 
     /// A transcript Fleet holds no pipe into, and never will.
@@ -267,6 +352,7 @@ impl Watching {
             heard: Arc::new(Mutex::new(Heard {
                 events: Vec::new(),
                 ended: true,
+                early: Vec::new(),
             })),
             reader: None,
         }
@@ -412,5 +498,75 @@ impl Drop for Watching {
         if let Some(reader) = self.reader.as_ref() {
             reader.abort();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use adapter_traits::{CallDetail, DroneEvent};
+
+    use super::Heard;
+
+    fn called(call: &str) -> DroneEvent {
+        DroneEvent::Called {
+            tool: "Bash".to_string(),
+            call: call.to_string(),
+            detail: CallDetail::of("npm publish"),
+        }
+    }
+
+    fn refused(call: &str) -> DroneEvent {
+        DroneEvent::Refused {
+            tool: "Bash".to_string(),
+            call: call.to_string(),
+            because: String::new(),
+        }
+    }
+
+    /// The fold's view, as `called a` / `refused a`, so an assertion reads as
+    /// the order it is about.
+    fn folded(heard: &Heard) -> Vec<String> {
+        heard
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                DroneEvent::Called { call, .. } => Some(format!("called {call}")),
+                DroneEvent::Refused { call, .. } => Some(format!("refused {call}")),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_refusal_after_its_call_was_heard_follows_it() {
+        let mut heard = Heard::default();
+        heard.take(&[called("a")]);
+        heard.refused_by_fleet(refused("a"));
+        assert_eq!(folded(&heard), ["called a", "refused a"]);
+    }
+
+    #[test]
+    fn a_refusal_that_beats_its_call_waits_for_it() {
+        // The permission question and the line naming the call race. Folded
+        // first, the refusal would read as a Drone that reached again after it.
+        let mut heard = Heard::default();
+        heard.refused_by_fleet(refused("a"));
+        assert!(folded(&heard).is_empty(), "nothing to follow yet");
+        heard.take(&[called("a"), called("b")]);
+        assert_eq!(folded(&heard), ["called a", "refused a", "called b"]);
+    }
+
+    #[test]
+    fn the_harness_and_fleet_saying_so_is_one_refusal() {
+        let mut heard = Heard::default();
+        heard.take(&[called("a")]);
+        heard.refused_by_fleet(refused("a"));
+        heard.take(&[refused("a")]);
+        assert_eq!(folded(&heard), ["called a", "refused a"]);
+
+        let mut heard = Heard::default();
+        heard.take(&[called("b"), refused("b")]);
+        heard.refused_by_fleet(refused("b"));
+        assert_eq!(folded(&heard), ["called b", "refused b"]);
     }
 }

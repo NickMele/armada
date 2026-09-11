@@ -19,9 +19,10 @@ use std::future::Future;
 
 use crate::daemon::Refusal;
 use ipc::{
-    CapRaise, ChangesRequested, ChosenAnswer, FileReport, JobExamined, JobForgotten, JobId,
-    JobSummary, NamedRun, ProposeJob, Redirection, Redispatched, RemarksTakenUp, Report,
-    RestartRequested, RunRecord, RunUnderway, StartRun, TurnRaise, WorktreeReclaimed,
+    AnswerCommand, CapRaise, ChangesRequested, ChosenAnswer, FileReport, JobExamined, JobForgotten,
+    JobId, JobSummary, NamedRun, ProposeJob, Redirection, Redispatched, RemarksTakenUp, Report,
+    RestartRequested, RunRecord, RunUnderway, SetWhenBlocked, StartRun, TurnRaise,
+    WorktreeReclaimed,
 };
 
 /// Everything a client asks Fleet to do.
@@ -538,6 +539,32 @@ pub trait Commands: Send + Sync + 'static {
         &self,
         job_id: JobId,
         answer: ChosenAnswer,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `answer_command` — a person answers a command a Drone reached for and
+    /// was not granted: allow it for this Job, allow it in the repository, or
+    /// reject it.
+    ///
+    /// **Two moments, one call id.** A command a Drone is waiting on is
+    /// answered in place and the Drone carries on in its session; a refused
+    /// row on a Job stopped at `blocked_by_policy` is answered after the fact,
+    /// and the Drone standing there is told or the step restarts.
+    ///
+    /// [`Refusal::IllegalMove`] where the call names nothing waiting or
+    /// refused, and where the answer is not among the ones the command offers.
+    fn answer_command(
+        &self,
+        job_id: JobId,
+        answer: AnswerCommand,
+    ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `set_when_blocked` — how this Job meets a command its Drone was not
+    /// granted, changed while it runs. **Read by the next permission
+    /// question**, so nothing respawns and nothing moves.
+    fn set_when_blocked(
+        &self,
+        job_id: JobId,
+        setting: SetWhenBlocked,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
 
     /// `start_run` — run one Check or Command in this Job's worktree, as a

@@ -19,7 +19,7 @@ files, a rule can — and the rule is the point.
 | `step-states.toml` | Where one step of the frozen WorkflowDef is. The `state` column on `job_steps`, and the inner half |
 | `job-transitions.toml` | Every legal edge of the status machine, what fires it, and the escalation trigger it belongs to |
 | `transition-guards.toml` | The conditions an edge is admitted under, and the step states each one admits |
-| `job-fields.toml` | What a Job record holds — the `jobs` row, the `job_steps` row, and the three things stored elsewhere |
+| `job-fields.toml` | What a Job record holds — the `jobs` row, the `job_steps` row, and the things stored elsewhere |
 | `escalation-triggers.toml` | Why a Job stopped and a person is being asked |
 | `check-outcomes.toml` | What one declared mechanical Check did. The `outcome` column on `job_step_checks` |
 | `enum-verbs.toml` | The word, the glyph and the colour each variant renders as, for every enum its own header lists |

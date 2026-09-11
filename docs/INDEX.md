@@ -159,6 +159,10 @@ approximations.
   before they are most of what the Drone reads, read cold against `assemble`
   in `crates/fleet/src/briefing.rs`, and the character bound on the whole set
   that follows from it. Not measured in this session; handed over.
+- [`spikes/015-can-a-person-answer-a-blocked-command.md`](spikes/015-can-a-person-answer-a-blocked-command.md)
+  — whether a Drone refused a command can wait on a person's answer through a
+  permission tool, how long the agent CLI waits over stdio and over HTTP, and
+  what a tool that fails does to the call.
 
 Raw transcripts sit beside each record. A negative result is a result and stays.
 

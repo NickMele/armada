@@ -321,6 +321,21 @@ where
             delivery,
             spend,
         );
+        // After the constructor for `show_again`'s reason: the setting is a
+        // store read, the waiting command is on the slot, and what a refused
+        // row may be answered with is the Manifest's and the harness's.
+        detail.when_blocked = Some(self.when_blocked_of(job.id()).await);
+        detail.command_waiting = self.command_awaited(job.id()).await;
+        if let Some(stuck) = detail.stuck.as_mut() {
+            for refused in &mut stuck.refused {
+                let command = (refused.tool == "Bash").then(|| refused.detail.clone());
+                let (offers, withheld) = self
+                    .offers_after(&job, &refused.tool, command.as_deref())
+                    .await;
+                refused.offers = offers;
+                refused.withheld = withheld;
+            }
+        }
         // After the constructor, because it is read off the worktree and the
         // Manifest as well as the record — `crate::showing_again`.
         detail.show_again = Some(

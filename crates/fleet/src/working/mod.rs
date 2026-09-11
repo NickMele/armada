@@ -43,6 +43,7 @@ use crate::adopting::{Adopted, Session};
 use crate::converging::{elapsed, Chain};
 use crate::drone::{Ending, Started};
 use crate::footprint::Publishing;
+use crate::permitting::Waiting;
 use crate::questioning::Question;
 use crate::session::LiveSession;
 use crate::silence::Liveness;
@@ -176,6 +177,9 @@ pub(crate) struct Working {
     /// held, because a Drone that could stack questions would be holding a
     /// conversation and a queue is a thing a person answers out of order.
     asked: Option<Question>,
+    /// The permission question a person was asked about a call this Drone
+    /// made. Beside `asked` and for its reasons — see `crate::permitting`.
+    permission: Option<Waiting>,
     /// What [`Progress::boundaries`](crate::Progress::boundaries) read when
     /// Armada last put a turn into this session.
     ///
@@ -352,6 +356,7 @@ impl Working {
             heard: 0,
             answering: None,
             asked: None,
+            permission: None,
             told_after: AtomicUsize::new(0),
             pokes: 0,
             liveness,
@@ -415,6 +420,7 @@ impl Working {
             heard: 0,
             answering: None,
             asked: None,
+            permission: None,
             told_after: AtomicUsize::new(0),
             pokes: 0,
             liveness,

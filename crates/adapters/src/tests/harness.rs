@@ -14,8 +14,8 @@ use adapter_traits::{
 };
 
 use crate::harness::{
-    ask_tool, checks_tool, dispatch_tool, evidence_tool, scope_tool, widen_tool, HarnessRefused,
-    HeadlessAgent,
+    ask_tool, checks_tool, dispatch_tool, evidence_tool, permission_tool, scope_tool, widen_tool,
+    HarnessRefused, HeadlessAgent,
 };
 
 const SECRET_LOOKING_TASK: &str = "fix the parser, the token is hunter2";
@@ -85,15 +85,51 @@ fn every_rendering_carries_the_strict_flag_and_the_file_together() {
     }
 }
 
+/// Every belt a Drone can be given, for the properties no grant may change.
+fn every_kind_of_toolbelt() -> [Toolbelt; 3] {
+    [
+        Toolbelt::evidence_only(),
+        Toolbelt::evidence_only().and(Grant::ReadTheWorktree),
+        Toolbelt::evidence_only()
+            .and(Grant::ReadTheWorktree)
+            .and(Grant::ChangeTheWorktree)
+            .and(Grant::RunADeclaredCommand(String::from("cargo test")))
+            .and(Grant::DispatchAJob),
+    ]
+}
+
+/// **Asked, and Armada is who is asked.** Leaving the mode off inherits the
+/// operator's own default, measured as `auto` — a Drone that approves itself —
+/// and `dontAsk` never consults the tool, so nothing could be held for a person.
 #[test]
-fn the_drone_is_never_asked_to_confirm_anything() {
-    // Leaving the mode off does not mean "no mode": it inherits the operator's
-    // own default, measured as `auto` — a Drone that approves itself.
-    let args = rendered(Toolbelt::evidence_only());
-    assert_eq!(
-        value_after(&args, "--permission-mode").as_deref(),
-        Some("dontAsk")
-    );
+fn every_question_a_drone_raises_is_put_to_armada() {
+    for belt in every_kind_of_toolbelt() {
+        let args = rendered(belt);
+        assert_eq!(
+            value_after(&args, "--permission-mode").as_deref(),
+            Some("default"),
+            "{args:?}"
+        );
+        assert_eq!(
+            value_after(&args, "--permission-prompt-tool").as_deref(),
+            Some(permission_tool()),
+            "{args:?}"
+        );
+    }
+}
+
+/// The tool answers for the Drone and is not one of the Drone's, so it is on
+/// no allowlist however much was granted.
+#[test]
+fn the_permission_tool_is_on_no_allowlist() {
+    for belt in every_kind_of_toolbelt() {
+        let args = rendered(belt);
+        let allowed = value_after(&args, "--allowedTools").expect("an allowlist is rendered");
+        assert!(
+            !allowed.split(',').any(|entry| entry == permission_tool()),
+            "{allowed}"
+        );
+    }
 }
 
 #[test]
@@ -226,14 +262,62 @@ fn nothing_readable_is_on_the_argument_list() {
 #[test]
 fn the_launch_takes_its_directory_and_environment_from_the_config() {
     // Not from the harness. An implementation has no parameter through which it
-    // could put a Drone somewhere else or hand it something else.
+    // could put a Drone somewhere else or hand it something else — the one
+    // variable it adds is the permission wait, and that value is not its own.
     let launch = HeadlessAgent::at("/usr/local/bin/agent")
         .render(&config(Toolbelt::evidence_only()))
         .expect("a legal configuration renders");
 
     assert_eq!(launch.program(), "/usr/local/bin/agent");
     assert_eq!(launch.directory(), worktree().path());
-    assert_eq!(launch.environment(), &environment());
+    let given = environment();
+    let (from_the_config, added) = launch.environment().vars().split_at(given.vars().len());
+    assert_eq!(from_the_config, given.vars());
+    assert_eq!(added.len(), 1, "one variable past the config's: {added:?}");
+}
+
+/// Over HTTP the CLI abandons a tool call after about a minute unless told
+/// otherwise, and after five minutes whatever it is told — measured, spike 15.
+#[test]
+fn the_drone_waits_on_a_permission_answer_longer_than_fleet_holds_one() {
+    let launch = HeadlessAgent::at("/usr/local/bin/agent")
+        .render(&config(Toolbelt::evidence_only()))
+        .expect("a legal configuration renders");
+
+    let wait = launch
+        .environment()
+        .vars()
+        .iter()
+        .find(|(name, _)| name == "MCP_TOOL_TIMEOUT")
+        .map(|(_, value)| value.clone());
+    assert_eq!(
+        wait,
+        Some(adapter_traits::PERMISSION_WAIT.as_millis().to_string())
+    );
+    assert_eq!(wait.as_deref(), Some("300000"), "five minutes");
+}
+
+/// Which of two values wins is a rule nobody would find, so a config that
+/// already names the wait is refused at render rather than overwritten.
+#[test]
+fn a_config_that_already_names_the_wait_is_refused() {
+    let already = Environment::nothing()
+        .and("MCP_TOOL_TIMEOUT", "1")
+        .expect("a legal name");
+    let config = DroneSpawnConfig::spawn_in(
+        &worktree(),
+        Model::named("a-model").expect("a named model"),
+        Prompt::assembled(SECRET_LOOKING_TASK).expect("an assembled prompt"),
+        McpConfig::only_these("/var/armada/01AAA/mcp.json").expect("an absolute path"),
+        Toolbelt::evidence_only(),
+        already,
+    );
+
+    let refused = HeadlessAgent::at("/usr/local/bin/agent").render(&config);
+    assert!(
+        matches!(refused, Err(HarnessRefused::PermissionWaitNotSet(_))),
+        "{refused:?}"
+    );
 }
 
 #[test]
@@ -250,6 +334,20 @@ fn no_credential_is_anywhere_in_a_rendered_drone() {
             "a credential-bearing variable reached a Drone: {name}"
         );
     }
+}
+
+#[test]
+fn a_command_is_grantable_exactly_when_it_would_render() {
+    let harness = HeadlessAgent::at("/usr/local/bin/agent");
+    assert!(harness.grantable("npm publish --access public").is_ok());
+    assert!(matches!(
+        harness.grantable("git push origin HEAD"),
+        Err(HarnessRefused::CommandWouldPush { .. })
+    ));
+    assert!(matches!(
+        harness.grantable("echo (a, b)"),
+        Err(HarnessRefused::CommandNotExpressibleAsARule { .. })
+    ));
 }
 
 #[test]
@@ -299,6 +397,33 @@ fn a_command_that_would_break_the_rule_is_refused_rather_than_rendered() {
             refused,
             Err(HarnessRefused::CommandNotExpressibleAsARule { .. })
         ),
+        "{refused:?}"
+    );
+}
+
+/// **A command a person allowed is spelled as a declared one, and refused as
+/// one.** A push allowed at a question is still not a push a Drone can make.
+#[test]
+fn a_command_a_person_allowed_renders_as_a_declared_one_and_a_push_is_still_refused() {
+    let declared = rendered(
+        Toolbelt::evidence_only().and(Grant::RunADeclaredCommand(String::from("npm install"))),
+    );
+    let allowed = rendered(
+        Toolbelt::evidence_only().and(Grant::RunAnAllowedCommand(String::from("npm install"))),
+    );
+    assert_eq!(allowed, declared);
+    let list = value_after(&allowed, "--allowedTools").expect("an allowlist is rendered");
+    assert!(
+        list.split(',').any(|entry| entry == "Bash(npm install:*)"),
+        "{list}"
+    );
+
+    let refused =
+        HeadlessAgent::at("/usr/local/bin/agent").render(&config(Toolbelt::evidence_only().and(
+            Grant::RunAnAllowedCommand(String::from("git push origin main")),
+        )));
+    assert!(
+        matches!(refused, Err(HarnessRefused::CommandWouldPush { .. })),
         "{refused:?}"
     );
 }

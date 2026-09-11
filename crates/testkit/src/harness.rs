@@ -173,6 +173,12 @@ impl AgentHarness for FakeHarness {
         Ok(launch)
     }
 
+    /// Anything. The fake renders no rules, so no command is one it could not
+    /// express.
+    fn grantable(&self, _run: &str) -> Result<(), FakeHarnessRefused> {
+        Ok(())
+    }
+
     fn read(&self, line: &str) -> Vec<DroneEvent> {
         match self.scripted.get(line) {
             Some(events) => events.clone(),

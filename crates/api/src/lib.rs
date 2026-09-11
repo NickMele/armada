@@ -48,7 +48,7 @@ mod watching_run;
 #[cfg(test)]
 mod tests;
 
-pub use daemon::{Commands, Daemon, Queries, Refusal, Tools};
+pub use daemon::{Commands, Daemon, PermissionAnswer, Queries, Refusal, Tools};
 pub use following::{Follow, Followed, LiveOutput};
 pub use journal::{Journal, Reading, FOLLOW};
 pub use mcp::{Caller, MCP_PATH};

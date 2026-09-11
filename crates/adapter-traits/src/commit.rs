@@ -1,4 +1,5 @@
-//! What [`Vcs::commit_all`](crate::Vcs::commit_all) takes and what it comes
+//! What [`Vcs::commit_all`](crate::Vcs::commit_all) and
+//! [`Vcs::commit_paths`](crate::Vcs::commit_paths) take and what they come
 //! back with.
 //!
 //! # Why a commit is Fleet's and not a Drone's

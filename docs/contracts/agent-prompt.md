@@ -331,6 +331,8 @@ which is an assembled prompt and therefore governed here.
 | **The part-before block** | The same fact, where the Drone that would have read it has ended | Drafted, not sanctioned |
 | **The waiting-instruction block** | `redirect_drone` or `request_changes` arrived where no Drone was there to take it | The person writes the words; the frame around them is drafted |
 | **The picked-comments block** | A person picked comments off the Job's pull request and pressed. The same block, assembled from somebody else's words rather than typed | Whoever commented writes the words; Armada writes the frame and the fence, and neither is sanctioned |
+| **The permission answer** | A Drone reached for a call outside its toolbelt and Armada's permission tool said no. **It is the tool's reply, and injected into nothing** | Drafted, not sanctioned |
+| **The permission turn** | A person answered a permission question after the tool had already told the Drone to wait, or answered a refused row on a stopped Job whose Drone is still there | Drafted, not sanctioned |
 
 **Every turn Fleet authors now has wording.** `redirect_drone` carries a
 person's words rather than Fleet's, so it has none of its own to specify.
@@ -549,6 +551,101 @@ path sends waits, holding a session, until a person notices.
 └────────────────────────────────────────────────
 ```
 
+## The permission answer
+
+What Armada's permission tool says when it refuses a call. It is the tool's
+reply rather than a turn, so the Drone reads it inside the call it made. Which
+variant goes is Fleet's to decide, from the Job's setting, from whether a person
+answered, and from whether the command can be allowed at all.
+
+| Variant | Sent when |
+|---|---|
+| Not granted | The Job refuses and holds, or the call is a tool rather than a command |
+| Asked | The Job asks, and nobody answered inside the hold |
+| Already asking | The Job asks, and a person is already being asked about another call |
+| Rejected | A person said no while the call was held |
+| Withheld | The command is declared destructive, or the harness cannot grant it |
+
+The already-asking and ungrantable forms follow the same two sentences: what
+is happening, then what not to do. Neither is a final refusal of the first
+kind — the already-asking call is not recorded as one.
+
+**Drafted wording. Not sanctioned.**
+
+```
+┌─ NOT GRANTED ──────────────────────────────────
+│ This task is not granted `npm publish --access
+│ public`. A person decides whether to allow it.
+│ Do not try to get the same result another way.
+└────────────────────────────────────────────────
+```
+
+```
+┌─ ASKED ────────────────────────────────────────
+│ A person has been asked whether you may run
+│ `npm publish --access public`, and has not
+│ answered yet. Stop and wait: the answer arrives
+│ as your next turn. Do not try another way to do
+│ the same thing meanwhile.
+└────────────────────────────────────────────────
+```
+
+```
+┌─ REJECTED ─────────────────────────────────────
+│ A person said no to `npm publish --access
+│ public`. Do not run it, or anything that does
+│ the same thing. Carry on without it if the task
+│ allows, or ask a question if it cannot be done
+│ without it.
+└────────────────────────────────────────────────
+```
+
+```
+┌─ WITHHELD ─────────────────────────────────────
+│ `rm -rf .armada/store.db` is declared
+│ destructive in this repository, and an
+│ unattended task never runs it. Do not try to
+│ get the same result another way.
+└────────────────────────────────────────────────
+```
+
+**The asked variant is why the permission turn exists.** Over HTTP the agent
+CLI stops waiting on a tool within minutes, well before a person can be counted
+on to answer — [spike 15](../spikes/015-can-a-person-answer-a-blocked-command.md).
+So the call is answered with a wait, and the person's answer follows as a turn.
+
+## The permission turn
+
+A person's answer to a permission question, arriving after the call it was
+about has already returned. A Drone reading it is waiting on exactly this, so it
+names the command and says what to do next and nothing else.
+
+**Drafted wording. Not sanctioned.**
+
+```
+┌─ TURN ─────────────────────────────────────────
+│ A person allowed `npm publish --access public`
+│ for this task. Run it again now; it will not be
+│ refused.
+└────────────────────────────────────────────────
+```
+
+```
+┌─ TURN ─────────────────────────────────────────
+│ A person allowed `npm publish --access public`
+│ in this repository. It is declared in
+│ armada.yml on your branch, in a commit of its
+│ own; leave that change as it is. Run the
+│ command again now; it will not be refused.
+└────────────────────────────────────────────────
+```
+
+A person who says no sends the rejected answer's wording as the turn, unchanged.
+
+**It never crosses a step boundary.** Where no Drone is left to tell, the step
+restarts and the allow is in force for the next Drone, which is told nothing
+about it.
+
 ## `redirect_drone`
 
 Human-initiated, so its content comes from a person rather than from a
@@ -702,7 +799,7 @@ out rather than staying for tidiness.
 | --- | --- | --- |
 | **Completion is claimed through the Evidence tool, and nowhere else.** Saying a step is done in prose does not advance anything | Call the tool | The v1 failure. A Drone that does not know the sanctioned path invents one, and it needs to know before the first step ends |
 | **Stopping and handing back is a legitimate way to finish. Guessing is not.** `escape_hatch` ends autonomous execution and passes the Job to a person | Call `escape_hatch` | The moment it is needed is the moment the Drone has stopped reading the step, so no per-Job assembly gets it in front of the Drone reliably |
-| **A denied command is denied, not an obstacle to route around.** Denials are silent, so notice them rather than continuing without the capability | Stop and report on a denial rather than proceeding | `--permission-mode dontAsk` denies without a prompt. Nothing else in the prompt would ever mention a denial, and the measured v1 failure is work continuing past one |
+| **A denied command is denied, not an obstacle to route around.** Denials are silent, so notice them rather than continuing without the capability | Stop and report on a denial rather than proceeding | Armada's permission tool answers every call outside the toolbelt, and a refusal may come back as a bare error with no reason. The measured v1 failure is work continuing past one |
 
 **Framing is deliberately unspecified on the `escape_hatch` clause.** The
 abstention literature finds opt-out rates move materially with the

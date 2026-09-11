@@ -105,6 +105,18 @@ impl Working {
             .store(self.transcript.progress().boundaries, Ordering::SeqCst);
     }
 
+    /// Write down a call Fleet refused through the permission tool, where the
+    /// fold that classifies the ending reads refusals and in the transcript.
+    ///
+    /// **Fleet's to write because the stream will not.** A refusal from the
+    /// permission tool leaves no refusal line — see `crate::watch`.
+    pub(crate) fn refused_by_fleet(&self, tool: &str, call: &str, because: &str) {
+        let refusal = self.transcript.refused_by_fleet(tool, call, because);
+        for tap in &self.taps {
+            tap.saw(std::slice::from_ref(&refusal));
+        }
+    }
+
     pub(crate) fn transcript_ended(&self) -> bool {
         self.transcript.transcript_ended()
     }

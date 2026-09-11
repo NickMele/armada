@@ -24,10 +24,10 @@
 //! rest are inherent, and inherent is what a `Fleet::` path resolves to.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
-use api::Tools;
+use api::{PermissionAnswer, Tools};
 use ipc::mcp::{
-    AskQuestion, CheckReport, DeclareScope, DispatchJob, NotRecorded, Receipt, RequestScope,
-    SubmitEvidence,
+    AskQuestion, CheckReport, DeclareScope, DispatchJob, NotRecorded, PermissionAsked, Receipt,
+    RequestScope, SubmitEvidence,
 };
 
 use crate::daemon::Fleet;
@@ -66,6 +66,16 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
+    /// The harness asking whether a call outside the Drone's toolbelt may run.
+    /// `Fleet::permission` decides, and a caller Fleet cannot place is refused
+    /// like every other call it cannot place — as a deny, which fails closed.
+    async fn permission(&self, caller: api::Caller, asked: PermissionAsked) -> PermissionAnswer {
+        match self.placed(&caller) {
+            Ok(job) => Fleet::permission(self, &job, &asked).await,
+            Err(why) => PermissionAnswer::Deny(why.because),
+        }
+    }
+
     /// The working Drone asking a person something it cannot answer from the
     /// repository. Binding and refusals are `Fleet::ask_question`'s, under the
     /// slot lock. **The receipt says taken, never answered**: what a person

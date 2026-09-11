@@ -28,6 +28,7 @@ use serde_json::{json, Map, Value};
 
 use super::ask::{ASK_FIELDS, ASK_TOOL, FEWEST_OPTIONS, MOST_OPTIONS};
 use super::dispatch::{DISPATCH_FIELDS, DISPATCH_TOOL};
+use super::permission::{PERMISSION_FIELDS, PERMISSION_TOOL};
 use super::widening::{WIDEN_FIELDS, WIDEN_TOOL};
 
 /// The Evidence tool's own name, bare. The client joins it to the server name
@@ -162,6 +163,8 @@ pub enum NotAnArgument {
 impl core::fmt::Display for NotAnArgument {
     fn fmt(&self, out: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
+            // `permission` is left out: the model is not shown it and has
+            // nothing to call it for, so naming it here would be an offer.
             NotAnArgument::NoSuchTool { named } => write!(
                 out,
                 "there is no tool called `{named}`. The tools are `{TOOL}`, \
@@ -386,6 +389,7 @@ pub(crate) fn named(name: &str) -> Result<&'static str, NotAnArgument> {
         CHECKS_TOOL => Ok(CHECKS_TOOL),
         DISPATCH_TOOL => Ok(DISPATCH_TOOL),
         ASK_TOOL => Ok(ASK_TOOL),
+        PERMISSION_TOOL => Ok(PERMISSION_TOOL),
         other => Err(NotAnArgument::NoSuchTool {
             named: other.to_string(),
         }),
@@ -416,6 +420,10 @@ pub(crate) fn argumentless(tool: &'static str) -> NotAnArgument {
         DISPATCH_TOOL => NotAnArgument::NoArguments {
             tool: DISPATCH_TOOL,
             takes: DISPATCH_FIELDS,
+        },
+        PERMISSION_TOOL => NotAnArgument::NoArguments {
+            tool: PERMISSION_TOOL,
+            takes: PERMISSION_FIELDS,
         },
         _ => NotAnArgument::NoArguments {
             tool: TOOL,
@@ -470,6 +478,7 @@ pub(crate) fn listed() -> Vec<Value> {
         super::widening::widen_tool(),
         super::dispatch::dispatch_tool(),
         super::ask::ask_tool(),
+        super::permission::permission_tool(),
     ]
 }
 

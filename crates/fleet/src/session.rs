@@ -34,6 +34,7 @@ use verification::OutcomeTurn;
 
 use crate::converging::ReportNow;
 use crate::group::{end_the_group, run_is_over};
+use crate::permitting::Permitted;
 use crate::questioning::Answer;
 use crate::resume::Redirection;
 use crate::silence::Poke;
@@ -41,7 +42,7 @@ use crate::terms::{Declaring, Redeclaring};
 
 /// A Drone's live session, from the gate's side.
 ///
-/// **Seven methods, and none of them can start anything.** There is no spawn,
+/// **A method per authorship, and none of them can start anything.** There is no spawn,
 /// no respawn and no restart, because the gate must not be able to produce a
 /// Drone — and no way to remove a worktree, because nothing in this workspace
 /// can. A restart is `crate::resume`'s and it reaches a spawn rather than this
@@ -136,6 +137,15 @@ pub trait LiveSession {
     /// it were an answer to a closed question, which is the conversation
     /// `crate::questioning` exists instead of.
     fn answer(&self, answer: &Answer) -> impl Future<Output = Result<(), Self::Error>> + Send;
+
+    /// Hand the Drone a person's answer to a permission question, after the
+    /// call it was about has returned.
+    ///
+    /// **Its own method for [`answer`](LiveSession::answer)'s reason**: the
+    /// words are Fleet's around a command the Drone itself ran, and
+    /// [`Permitted`] has no constructor taking free text.
+    fn permit(&self, permitted: &Permitted)
+        -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// Ask a Drone that has said nothing whether it is still there.
     ///
@@ -238,6 +248,13 @@ impl Turn {
         Turn::of(answer.text())
     }
 
+    /// A person's answer to a permission question, injected after the call
+    /// it was about has returned. The wording is [`Permitted`]'s and there is
+    /// no way to send other text under it.
+    pub fn permitting(permitted: &Permitted) -> Turn {
+        Turn::of(permitted.text())
+    }
+
     /// Fleet's own liveness nudge, injected into a session that has said
     /// nothing for a while. The wording is `Poke`'s and there is no way to send
     /// other text under it.
@@ -281,6 +298,8 @@ pub enum Occasion {
     Report,
     /// Fleet's liveness nudge, after a silence.
     Poke,
+    /// A person's answer to a permission question, after its call returned.
+    Permission,
 }
 
 impl Occasion {
@@ -293,6 +312,7 @@ impl Occasion {
             Occasion::Drift => "drift",
             Occasion::Report => "report",
             Occasion::Poke => "poke",
+            Occasion::Permission => "permission",
         }
     }
 }
@@ -439,6 +459,10 @@ impl LiveSession for DroneSession {
 
     async fn answer(&self, answer: &Answer) -> Result<(), io::Error> {
         self.say(&Turn::answering(answer)).await
+    }
+
+    async fn permit(&self, permitted: &Permitted) -> Result<(), io::Error> {
+        self.say(&Turn::permitting(permitted)).await
     }
 
     async fn poke(&self, nudge: &Poke) -> Result<(), io::Error> {

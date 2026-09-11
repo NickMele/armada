@@ -24,12 +24,14 @@
 //! values this file produces live in [`declared`].
 
 mod declared;
+mod declaring;
 mod harness;
 mod referring;
 
 use referring::{after_merge, preparation, required_by};
 
 pub use declared::{Check, Command, Preparation};
+pub use declaring::{Declared, NotDeclared};
 pub use harness::Harness;
 
 use std::collections::{BTreeMap, BTreeSet};

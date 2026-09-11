@@ -14,8 +14,9 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
 use ipc::{
-    CapRaise, ChangesRequested, ChosenAnswer, FileReport, JobRequest, Overruled, ProposeJob,
-    Redirection, RemarksTakenUp, RestartRequested, StopProposal, TurnRaise,
+    AnswerCommand, CapRaise, ChangesRequested, ChosenAnswer, FileReport, JobRequest, Overruled,
+    ProposeJob, Redirection, RemarksTakenUp, RestartRequested, SetWhenBlocked, StopProposal,
+    TurnRaise,
 };
 
 use crate::answers::{answer, refused, undecodable};
@@ -411,6 +412,42 @@ pub(crate) async fn answer_question<D: Commands>(
     };
     let job_id = job.id();
     match served.daemon().answer_question(job_id, chosen).await {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// Answer a command a Drone was refused, or is waiting on. **The Job comes
+/// back**, moved only where a stopped step restarted or a Drone was told. 409
+/// where the call names nothing waiting or refused, or the answer is not one it
+/// offers.
+pub(crate) async fn answer_command<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+    body: Bytes,
+) -> Response {
+    let answered: AnswerCommand = match ipc::decode("an answer to a command", &body) {
+        Ok(answered) => answered,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served.daemon().answer_command(job.id(), answered).await {
+        Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// Change how this Job meets a blocked command. **The Job comes back
+/// unchanged**: the setting is read by the next permission question.
+pub(crate) async fn set_when_blocked<D: Commands>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+    body: Bytes,
+) -> Response {
+    let setting: SetWhenBlocked = match ipc::decode("a setting", &body) {
+        Ok(setting) => setting,
+        Err(why) => return undecodable(&why.to_string(), served.run_id()),
+    };
+    match served.daemon().set_when_blocked(job.id(), setting).await {
         Ok(job) => answer(StatusCode::OK, &job, served.run_id()),
         Err(refusal) => refused(refusal),
     }

@@ -33,6 +33,7 @@ use verification::OutcomeTurn;
 
 use crate::converging::ReportNow;
 use crate::group::end_the_group;
+use crate::permitting::Permitted;
 use crate::process::{holder_of, Holder, StartedAt};
 use crate::questioning::Answer;
 use crate::resume::Redirection;
@@ -270,8 +271,9 @@ impl Session {
     }
 }
 
-/// **Six refusals and one act.** Nothing an adopted Drone is asked to listen to
-/// can be delivered, and the one thing Fleet can still do to it is end it.
+/// **Every turn refused, and one act.** Nothing an adopted Drone is asked to
+/// listen to can be delivered, and the one thing Fleet can still do to it is
+/// end it.
 impl LiveSession for Session {
     type Error = io::Error;
 
@@ -310,6 +312,13 @@ impl LiveSession for Session {
     async fn answer(&self, answer: &Answer) -> Result<(), io::Error> {
         match self {
             Session::Spawned(session) => session.answer(answer).await,
+            Session::Adopted(_) => Err(io::Error::other(NOTHING_TO_SPEAK_INTO)),
+        }
+    }
+
+    async fn permit(&self, permitted: &Permitted) -> Result<(), io::Error> {
+        match self {
+            Session::Spawned(session) => session.permit(permitted).await,
             Session::Adopted(_) => Err(io::Error::other(NOTHING_TO_SPEAK_INTO)),
         }
     }

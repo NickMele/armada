@@ -62,6 +62,25 @@ fn nothing_it_recorded_ever_goes_away() {
     assert_eq!(vcs.created().len(), 2);
 }
 
+/// A test can tell a commit of some paths from a commit of everything, which
+/// is the whole of what separates the two calls.
+#[test]
+fn a_commit_of_some_paths_records_which() {
+    let vcs = FakeVcs::new();
+    let made = vcs.create_worktree(&spec(JOB)).unwrap();
+    let at = CommitTime::seconds_since_epoch(1);
+    vcs.commit_all(&made, "everything", at).unwrap();
+    vcs.commit_paths(&made, &["a.txt", "b/c.txt"], "some", at)
+        .unwrap();
+
+    let paths: Vec<Option<Vec<String>>> =
+        vcs.committed().into_iter().map(|made| made.paths).collect();
+    assert_eq!(
+        paths,
+        vec![None, Some(vec!["a.txt".to_string(), "b/c.txt".to_string()])]
+    );
+}
+
 #[test]
 fn it_creates_nothing_on_disk() {
     let vcs = FakeVcs::new();

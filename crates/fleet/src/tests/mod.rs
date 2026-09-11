@@ -73,6 +73,7 @@ mod overlap;
 mod overruling;
 mod paying;
 mod peer;
+mod permitting;
 mod planning;
 mod planted;
 mod policy_gate;

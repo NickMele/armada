@@ -221,6 +221,10 @@ pub fn detail(job: JobSummary) -> JobDetail {
         // Absent for the redirect's reason exactly: an unanswered question
         // lives on a working slot, and this daemon holds none.
         asking: None,
+        // Absent for the question's reason: a command waiting on a person is
+        // held on a working slot too, and so is the setting a Fleet reads.
+        command_waiting: None,
+        when_blocked: None,
         // Absent again: a waiting note is a column on `jobs`, and this
         // daemon's Jobs are wire summaries rather than records.
         redirect_waiting: None,

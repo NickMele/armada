@@ -1,0 +1,4 @@
+{"t": 1789139230.704, "event": "start", "wait": 0.0, "answer": "deny"}
+{"t": 1789139230.716, "event": "notification", "method": "notifications/initialized"}
+{"t": 1789139234.854, "event": "asked", "tool_name": "Bash", "input": {"command": "touch spike-marker.txt", "description": "Create spike-marker.txt"}}
+{"t": 1789139234.855, "event": "answered", "after": 0.0, "body": {"behavior": "deny", "message": "A person said no to this command."}}
