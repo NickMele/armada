@@ -216,4 +216,11 @@
      Job level, so hard rule 3 requires it to be declared here rather than
      picked at a component. */
   --degraded-dot: var(--status-awaiting-review);
+
+  /* A heads-up about an act a person is about to take, not a Job state — an
+     alias, never a new value. Amber because this file already rules that
+     amber means a person is on this, and a run landing in a Drone's worktree
+     is exactly that. */
+  --notice-caution: var(--status-awaiting-review);
+  --notice-caution-bg: var(--status-awaiting-review-bg);
 }

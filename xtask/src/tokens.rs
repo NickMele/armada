@@ -144,6 +144,14 @@ pub const THEME: &[(&str, Slot)] = &[
         "--degraded-edge",
         Slot::CssOnly("a degraded edge's width, read beside --degraded"),
     ),
+    // A caution notice — an alias of --status-awaiting-review, not a new
+    // value. Below Job level, so it is declared in status.css rather than
+    // picked at a component, same as --degraded-dot above.
+    ("--notice-caution", Slot::Named("color", "notice-caution")),
+    (
+        "--notice-caution-bg",
+        Slot::Named("color", "notice-caution-bg"),
+    ),
     // Colours.
     ("--bg-", Slot::NsFull("color")),
     ("--fg-", Slot::NsFull("color")),

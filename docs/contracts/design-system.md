@@ -274,10 +274,19 @@ longer sit fourth on screen. Explicit numbering is what lets both hold:
 the rows a person needs are at the top, and the citation still resolves.
 See How are criterion verdicts encoded without status hue?
 
-**Everything else below Job level stays neutral.** A Kit file's drift
-state, an origin tag and the retry marker carry position, surface,
-weight and glyph. Adding a value to `tokens/status.css` is a contract
-change, not a design decision.
+**Everything else below Job level stays neutral, with one exception.** A
+Kit file's drift state, an origin tag and the retry marker carry
+position, surface, weight and glyph. Adding a value to
+`tokens/status.css` is a contract change, not a design decision.
+
+> **Rule.** A caution notice is the one Alert tone below Job level that
+> takes hue, and it aliases `--status-awaiting-review` as
+> `--notice-caution`.
+> Why: amber already means a person is on this, and a run that lands in
+> a Drone's worktree is that.
+
+It carries no glyph, because `triangle-alert` is Doctor's and the
+contract has no generic alarm glyph.
 
 ### Diff
 
