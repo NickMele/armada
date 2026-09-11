@@ -1,7 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 import { CHANNELS } from "../shared/bridge";
-import type { BridgeApi, BridgeState, Summons } from "../shared/bridge";
+import type { BridgeState, Summons } from "../shared/bridge";
+import type { BridgeApi } from "../shared/api";
 import type {
   CallRead,
   CheckOutputRead,

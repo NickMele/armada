@@ -1,4 +1,4 @@
-import type { BridgeApi } from "../../shared/bridge";
+import type { BridgeApi } from "../../shared/api";
 
 // What the preload put on the window, and the whole of what the renderer can
 // reach. Declared rather than imported at runtime: the preload is a wire, not
