@@ -54,7 +54,9 @@ Each run writes its output to `./.armada`, one run directory per run in the same
 > Why: a Job log is worth keeping as long as its history is worth reading, and a rehearsal is only worth keeping as long as you might still be debugging what you just ran.
 
 > **Rule.** No run from this surface writes Evidence, and no Check gets a stored pass or fail against it.
-> Why: a remembered per-Check verdict reads as Evidence the moment it sits beside a Job, and no copy saying "not evidence" survives being scanned; the tree can also change between the run and a dispatch, which is the whole reason Evidence ties a gate's answer to the diff it judged.
+> Why: a pass that counted for a Job from the same tree is the path around verification that v1 proved becomes the default path.
+
+A remembered per-Check verdict reads as Evidence the moment it sits beside a Job, and no copy saying "not evidence" survives being scanned. The tree can also change between the run and a dispatch, which is the whole reason Evidence ties a gate's answer to the diff it judged.
 
 The transcript is keepable, the judgement is not. This surface is for rehearsing; a Job is where a Check means something.
 
@@ -179,7 +181,7 @@ Running Verify straight after Write, as [Set Up a Project (Manifest)](set-up-a-p
 > Why: keeping a script and its Check in step is an engineering judgement, not something Armada checks for.
 
 > **Rule.** Verify and drift say nothing about policy or permissions, because neither names anything runnable in the repo; the panel states that explicitly.
-> Why: a clean result must not read as "all of this is still right" when whole sections carry no verdict.
+> Why: about a third of a mature Manifest names nothing runnable, and a clean result must not read as "all of this is still right" when that much carries no verdict.
 
 > **Rule.** Drift's two verdicts are `gone` and `current`, answering *is this file still true* — a different question from the dry-run's *does this file still work*.
 
@@ -195,7 +197,7 @@ Running Verify straight after Write, as [Set Up a Project (Manifest)](set-up-a-p
 > **Rule.** Drift renders amber throughout, never red.
 > Why: a drifted file is behind, not broken — the dry-run beside it is what would prove broken.
 
-Verdicts render as words in the status colour, matching Doctor: `new`, `gone`, `diverged`, `current`.
+Verdicts render as words in the status colour, matching Doctor: `gone` and `current`.
 
 > **Rule.** A dry-run failure never becomes a Doctor fail.
 > Why: Doctor reports live, stateless service health, while a dry-run is a rehearsal chosen on one project — routing it into Doctor would store a verdict there and read one project's broken Check as a machine-level failure.
