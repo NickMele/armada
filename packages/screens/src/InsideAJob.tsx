@@ -1,17 +1,28 @@
+// The arrangement `JobDetail` renders. Its rules are in
+// `packages/components/src/screens/screens.css`, which Bridge and Storybook
+// both load.
+
 import type { ReactNode } from "react";
+import { Unplug } from "lucide-react";
 import { Fragment, useCallback, useState } from "react";
-import { conceptSaid } from "../../concepts";
-import { Tooltip } from "../../primitives/Tooltip/Tooltip";
-import { JobBrief, type JobBriefProps } from "../../compositions/JobBrief/JobBrief";
-import { JobDetailHeaderActions } from "../../compositions/JobDetailHeaderActions/JobDetailHeaderActions";
-import type { JobDetailField } from "../../compositions/JobDetailHeaderActions/JobDetailHeaderActions";
-import type { JobLogReferenceRow, NotOpened } from "../../compositions/JobLogReference/JobLogReference";
-import { PhaseStrip, type PhaseStripProps } from "../../compositions/PhaseStrip/PhaseStrip";
-import { RunTree, type RunTreeStep } from "../../compositions/RunTree/RunTree";
-import { StepStory, type StepChapter } from "../../compositions/StepStory/StepStory";
-import { WhereRow } from "../../compositions/WhereRow/WhereRow";
-import { Absent } from "../absent";
-import type { JobDetailHeading } from "../detail";
+import {
+  JobBrief,
+  JobDetailHeaderActions,
+  PhaseStrip,
+  RunTree,
+  StepStory,
+  Tooltip,
+  WhereRow,
+  conceptSaid,
+  type JobBriefProps,
+  type JobDetailField,
+  type JobDetailHeading,
+  type JobLogReferenceRow,
+  type NotOpened,
+  type PhaseStripProps,
+  type RunTreeStep,
+  type StepChapter,
+} from "@armada/components";
 
 /**
  * Inside a Job — one arrangement, at every state.
@@ -112,7 +123,12 @@ export type StepNotice = {
   tone: "failed" | "stopped" | "waiting" | "note";
   /** What happened, in one line. */
   title?: ReactNode;
-  children: ReactNode;
+  /**
+   * What the title means for a person, on hover over it. Prose, and never the
+   * evidence: a list of what was refused or flagged stays in `children`.
+   */
+  says?: ReactNode;
+  children?: ReactNode;
 };
 
 export type InsideAJobProps = {
@@ -125,26 +141,30 @@ export type InsideAJobProps = {
   /** Why there is no run to draw, where there is none. */
   runAbsent?: string;
   /**
-   * What the Job holds on this machine, in a few lines — the tail of Fleet's
-   * own log, the process count, the worktree, the disk. `JobHoldsSummary`, and
-   * the full reading is a press away on the sheet.
+   * The Job's pulse, in a few lines: the last thing anyone did on it, the process
+   * count, the worktree, the disk. `JobHoldsSummary`, and the full reading is a
+   * press away on the sheet, from `machineAct` on the title line.
    *
    * **Below the run and above the pointers.** It used to be a whole card above
    * the run, which is the largest thing in this column standing in front of the
    * thing a person opens a Job to read. It is context for the run, so it reads
    * after it.
    *
-   * **It carries Fleet's tail, and no second region does.** Cutting a worktree,
-   * running a repository's preparation commands and reclaiming one belong to no
-   * step, and they used to have a region of their own above the run. Both
-   * regions answered *what is happening on this machine right now*, which is
-   * one region too many.
+   * **It carries the latest event, and no second region does.** Cutting a
+   * worktree, running a repository's preparation commands and reclaiming one
+   * belong to no step, so Fleet's notes about them reach a reader here, beside
+   * the Drone's turns and a person's moves, whichever came last.
    *
    * Absent draws nothing. A Job with nothing read and nothing recorded is not a
    * hole in the screen — the same rule `record` below keeps.
    */
   machine?: ReactNode;
   machineLabel?: ReactNode;
+  /**
+   * The control on the region's title line that opens the full reading. On the
+   * title line and not in the block, where the run keeps its elapsed figure.
+   */
+  machineAct?: ReactNode;
   /**
    * The running mark on the current step animates. One per screen: this is the
    * Job being read, so the tree pulses and the header badge stays static.
@@ -170,15 +190,15 @@ export type InsideAJobProps = {
    * opens the output of that attempt's run.
    */
   onOpenArtifact?: (artifactId: string) => void;
+  /** Told when a fact in the tree names a chapter: select that step, on it. */
+  onOpenChapter?: (stepId: string, chapterId: string) => void;
   /**
    * Where things are — the worktree, the branch, the Manifest, the workflow,
    * the log, the transcript, the Drone. **A path opens where it lives; an
-   * identifier copies.** This milestone is about never needing these; they are
-   * here for when you want them anyway.
+   * identifier copies.**
    */
   where?: JobLogReferenceRow[];
   whereLabel?: ReactNode;
-  whereNote?: ReactNode;
   /** Why nothing can be named there, where nothing can. */
   whereAbsent?: string;
   /**
@@ -202,6 +222,13 @@ export type InsideAJobProps = {
   /** Why no step is open, where none is. */
   stepAbsent?: string;
   /**
+   * Why nothing about this Job could be read, where Fleet did not answer for
+   * it. **One message where the step goes, instead of an empty region per
+   * part of the screen**: every region would say the same thing, and four of
+   * them read as four failures.
+   */
+  unreachable?: string;
+  /**
    * The trailing sheet, where one is open — the step's activity log, or the
    * Job's patch.
    *
@@ -224,24 +251,26 @@ export function InsideAJob({
   run,
   runLabel = "The run",
   runElapsed,
-  runAbsent = "Nothing serves this Job's workflow, so its steps are unknown.",
+  runAbsent = "Steps unknown",
   machine,
-  machineLabel = "What this Job holds",
+  machineLabel = "Pulse",
+  machineAct,
   pulsing = true,
   onSelectStep,
   openSteps,
   onOpenStep,
   onOpenArtifact,
+  onOpenChapter,
   where,
   whereLabel = "Where things are",
-  whereNote,
-  whereAbsent = "Nothing serves this Job's paths or its branch.",
+  whereAbsent = "Paths unknown",
   record,
   recordLabel = "What it left behind",
   brief,
-  briefAbsent = "Nothing serves this Job's brief or its acceptance criteria.",
+  briefAbsent = "No brief",
   step,
-  stepAbsent = "No step is open. Select one in the run.",
+  stepAbsent = "Select a step in the run",
+  unreachable,
   sheet,
   onCopied,
 }: InsideAJobProps) {
@@ -259,9 +288,9 @@ export function InsideAJob({
             )}
           </div>
           {run.length === 0 ? (
-            <div className="armada-screen__slot">
-              <Absent name="The run" note={runAbsent} />
-            </div>
+            <p className="armada-inside__absent" role="note">
+              {unreachable ?? runAbsent}
+            </p>
           ) : (
             <RunTree
               steps={run}
@@ -271,6 +300,7 @@ export function InsideAJob({
               onOpen={onOpenStep}
               onCopied={onCopied}
               onOpenArtifact={onOpenArtifact}
+              onOpenChapter={onOpenChapter}
             />
           )}
 
@@ -278,18 +308,21 @@ export function InsideAJob({
               pointers, which is where you go once it says something is wrong. */}
           {machine === undefined ? null : (
             <>
-              <Eyebrow spaced>{machineLabel}</Eyebrow>
+              <div className="armada-inside__pulse-head">
+                <Eyebrow>{machineLabel}</Eyebrow>
+                {machineAct}
+              </div>
               {machine}
             </>
           )}
 
           <Eyebrow spaced>{whereLabel}</Eyebrow>
           {where === undefined || where.length === 0 ? (
-            <div className="armada-screen__slot">
-              <Absent name="Where things are" note={whereAbsent} />
-            </div>
+            <p className="armada-inside__absent" role="note">
+              {unreachable ?? whereAbsent}
+            </p>
           ) : (
-            <WhereRegion rows={where} note={whereNote} onCopied={onCopied} />
+            <WhereRegion rows={where} onCopied={onCopied} />
           )}
 
           {record === undefined ? null : (
@@ -306,21 +339,28 @@ export function InsideAJob({
 
         {/* The panel. Same regions in the same order at every state. */}
         <div className="armada-inside__panel">
-          <div className="armada-inside__brief">
-            <Eyebrow>Brief</Eyebrow>
-            {brief === undefined ? (
-              <div className="armada-screen__slot">
-                <Absent name="Brief" note={briefAbsent} />
-              </div>
-            ) : (
-              <JobBrief {...brief} />
-            )}
-          </div>
-
-          {step === undefined ? (
-            <div className="armada-screen__slot">
-              <Absent name="The step" note={stepAbsent} />
+          {unreachable !== undefined ? null : (
+            <div className="armada-inside__brief">
+              <Eyebrow>Brief</Eyebrow>
+              {brief === undefined ? (
+                <p className="armada-inside__absent" role="note">
+                  {briefAbsent}
+                </p>
+              ) : (
+                <JobBrief {...brief} />
+              )}
             </div>
+          )}
+
+          {unreachable !== undefined ? (
+            <div className="armada-inside__unreachable" role="status">
+              <Unplug size={20} strokeWidth={1.5} aria-hidden />
+              <span>{unreachable}</span>
+            </div>
+          ) : step === undefined ? (
+            <p className="armada-inside__absent" role="note">
+              {stepAbsent}
+            </p>
           ) : (
             <>
               <div className="armada-inside__step-head">
@@ -357,17 +397,23 @@ export function InsideAJob({
 
               {step.notice === undefined ? null : (
                 <div className="armada-inside__notice" data-tone={step.notice.tone} role="status">
-                  {step.notice.title === undefined ? null : (
+                  {step.notice.title === undefined ? null : step.notice.says === undefined ? (
                     <span className="armada-inside__notice-title">{step.notice.title}</span>
+                  ) : (
+                    <Tooltip asChild label={step.notice.says}>
+                      <span className="armada-inside__notice-title">{step.notice.title}</span>
+                    </Tooltip>
                   )}
-                  <span className="armada-inside__notice-body">{step.notice.children}</span>
+                  {step.notice.children === undefined ? null : (
+                    <span className="armada-inside__notice-body">{step.notice.children}</span>
+                  )}
                 </div>
               )}
 
               {step.phases === undefined ? (
                 <p className="armada-inside__absent" role="note">
                   {step.phasesAbsent ??
-                    "Nothing serves this step's gates, so where it stands is unknown."}
+                    "Gates unknown"}
                 </p>
               ) : (
                 // The screen's own handler falls through to the strip unless
@@ -462,11 +508,9 @@ function FieldLabel({ children }: { children: ReactNode }) {
  */
 function WhereRegion({
   rows,
-  note,
   onCopied,
 }: {
   rows: JobLogReferenceRow[];
-  note?: ReactNode;
   onCopied?: (value: string) => void;
 }) {
   const [unopened, setUnopened] = useState<{ row: number; because: string } | null>(null);
@@ -517,7 +561,6 @@ function WhereRegion({
           </Fragment>
         );
       })}
-      {note === undefined ? null : <p className="armada-inside__where-note">{note}</p>}
     </div>
   );
 }

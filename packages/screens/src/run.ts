@@ -21,7 +21,7 @@
 // its step like every other row — is the per-step answer, and it is what the
 // tree draws.
 
-import type { RunTreeFact, RunTreePath, RunTreeStep, StepActivity } from "@armada/components";
+import type { RunTreeFact, RunTreeStep, StepActivity } from "@armada/components";
 
 import type { Turn } from "@armada/protocol";
 import { CHECK_ADVANCES, CHECK_OUTCOME, CRITERION_VERDICT_CHECK, ESCALATION_REASON, STEP_STATE } from "@armada/components";
@@ -34,6 +34,7 @@ import type {
   StepDetail,
 } from "@armada/protocol";
 import { isSweepMarker } from "./declared";
+import { DIFF_CHAPTER } from "./detail-keys";
 import { span } from "./duration";
 import { ordered } from "./facts";
 import { checksOf, checksStand } from "./gates";
@@ -86,7 +87,7 @@ export function runOf(
  * What a step with no facts says. **Not "nothing happened"** — a step that has
  * not started has produced nothing, and that is ordinary rather than a gap.
  */
-const NOTHING_RECORDED = "Nothing is recorded against this step yet.";
+const NOTHING_RECORDED = "Nothing recorded yet";
 
 /**
  * The short facts beneath a step: what its Checks came to, what its Judge came
@@ -189,7 +190,13 @@ function verdictFact(verdict: { named: string; trigger?: string }): RunTreeFact 
  * gate rows off a running second one.
  */
 function attemptFact(step: StepDetail, attempt: StepAttempt): RunTreeFact {
-  const outcome = STEP_STATE[attempt.outcome]?.verb ?? attempt.outcome;
+  // **An attempt that was retried is over, so it does not say `retrying`.**
+  // That is the step's word while the next attempt runs; on the attempt it
+  // read as a Drone still working on a run the step had already moved past.
+  const outcome =
+    attempt.outcome === "retrying"
+      ? HANDED_BACK
+      : (STEP_STATE[attempt.outcome]?.verb ?? attempt.outcome);
   const advanced = attempt.outcome === "advanced";
   const children: RunTreeFact[] = [];
 
@@ -216,37 +223,20 @@ function attemptFact(step: StepDetail, attempt: StepAttempt): RunTreeFact {
   };
 }
 
+/** What an attempt the gate returned to its Drone came to. The strip's word for the same loop. */
+const HANDED_BACK = "handed back";
+
 /**
- * What this step wrote, as paths that keep their filenames.
- *
- * **Bounded to what fits a narrow column.** Past three the fact counts the
- * rest: a step that wrote thirty files is a step whose file list belongs in the
- * panel's Produced chapter, where there is room for it.
+ * What this step wrote, as a count. The files themselves are the Produced
+ * chapter's, where there is room for them, and pressing the count opens it.
  */
 function producedFact(wrote: ChangedFile[]): RunTreeFact | undefined {
   if (wrote.length === 0) return undefined;
-  const paths: RunTreePath[] = wrote.slice(0, SHOWN).map((file) => split(file.path));
-  const rest = wrote.length - paths.length;
   return {
     label: "Produced",
-    value: rest > 0 ? `+${rest} more` : undefined,
-    paths,
+    value: `${wrote.length} ${wrote.length === 1 ? "file" : "files"}`,
+    chapter: DIFF_CHAPTER,
   };
-}
-
-/** How many produced paths the tree draws before it counts the rest. */
-const SHOWN = 3;
-
-/**
- * A path split into the part that may truncate and the part that never does.
- * **The separator belongs to the directory** — without it `src` and
- * `selectors.ts` read as two names rather than one path.
- */
-function split(path: string): RunTreePath {
-  const cut = path.lastIndexOf("/");
-  return cut < 0
-    ? { basename: path }
-    : { directory: path.slice(0, cut + 1), basename: path.slice(cut + 1) };
 }
 
 /**

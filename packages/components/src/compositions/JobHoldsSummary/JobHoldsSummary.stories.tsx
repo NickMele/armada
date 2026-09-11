@@ -1,12 +1,11 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn } from "storybook/test";
+import { expect } from "storybook/test";
 
 import { JobHoldsSummary, type HoldsLine } from "./JobHoldsSummary";
 
 const meta: Meta<typeof JobHoldsSummary> = {
   title: "Compositions/Job holds (summary)",
   component: JobHoldsSummary,
-  args: { onOpen: fn() },
   // The column it lives in is `--w-run-column`. Drawn at that width, because
   // what this block claims is that it fits under a run without pushing the
   // pointers below it off the screen.
@@ -23,10 +22,11 @@ export default meta;
 type Story = StoryObj<typeof JobHoldsSummary>;
 
 /** The last two lines Armada wrote about this Job, newest first. */
-const TAIL: HoldsLine[] = [
-  { at: "14:31:58", actor: "Drone", said: "thinking" },
-  { at: "14:30:28", actor: "Fleet", said: "Heartbeat — quiet 48s" },
-];
+const LATEST: HoldsLine = {
+  at: "14:31:58",
+  actor: "Drone",
+  said: "Edit packages/settings/src/selectors.ts",
+};
 
 /**
  * **A Job holding a live worktree.** Two processes, a checkout on disk and the
@@ -35,7 +35,7 @@ const TAIL: HoldsLine[] = [
  */
 export const HoldingALiveWorktree: Story = {
   args: {
-    tail: TAIL,
+    latest: LATEST,
     figures: { processes: 2, worktree: "healthy", size: "1.2 GiB" },
     age: "3s",
   },
@@ -51,7 +51,7 @@ export const HoldingALiveWorktree: Story = {
  */
 export const TheReadHasNotAnswered: Story = {
   args: {
-    tail: TAIL,
+    latest: LATEST,
     figures: null,
     note: "Fleet did not answer, so what this Job holds is unknown.",
     age: "3s",
@@ -68,10 +68,7 @@ export const TheReadHasNotAnswered: Story = {
  */
 export const HoldingNothing: Story = {
   args: {
-    tail: [
-      { at: "09:22:04", actor: "Fleet", said: "Worktree reclaimed" },
-      { at: "09:21:58", actor: "Fleet", said: "Job finished" },
-    ],
+    latest: { at: "09:22:04", actor: "Fleet", said: "Worktree reclaimed" },
     figures: { processes: 0, worktree: "none on disk" },
     age: "11s",
   },
@@ -98,10 +95,7 @@ export const HoldingNothing: Story = {
  */
 export const TheWorktreeIsInTrouble: Story = {
   args: {
-    tail: [
-      { at: "09:16:47", actor: "Fleet", said: "A preparation command failed", wrong: true },
-      { at: "09:14:02", actor: "Fleet", said: "Worktree cut" },
-    ],
+    latest: { at: "09:16:47", actor: "Fleet", said: "A preparation command failed", wrong: true },
     figures: {
       processes: 0,
       nothingRunningIsWrong: true,
@@ -109,5 +103,14 @@ export const TheWorktreeIsInTrouble: Story = {
       worktreeIsWrong: true,
     },
     age: "4s",
+  },
+};
+
+/** A person acted last, so the latest event is theirs. */
+export const APersonActedLast: Story = {
+  args: {
+    latest: { at: "14:40:12", actor: "You", said: "Approved dispatch" },
+    figures: { processes: 1, worktree: "healthy", size: "1.2 GiB" },
+    age: "2s",
   },
 };

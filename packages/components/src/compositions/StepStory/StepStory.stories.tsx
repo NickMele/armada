@@ -68,7 +68,7 @@ const CHAPTERS: StepChapter[] = [
     ordinal: 2,
     title: "Activity log",
     live: true,
-    summary: "47 entries · every line opens",
+    summary: "47 entries",
     preview: <ActivityLog entries={PREVIEW} />,
     content: <ActivityLog entries={WHOLE} />,
     openLabel: "Open the log — all 47 entries",
@@ -88,39 +88,34 @@ const CHAPTERS: StepChapter[] = [
 export const TheStory: Story = {
   args: { chapters: CHAPTERS },
   /**
-   * **Opening one chapter closes the other.** That is the answer to the height
-   * problem, and it is the constraint that makes this a story rather than a
-   * stack of accordions — two long chapters open at once is the state an
-   * accordion reaches on its second press and this must never reach at all.
+   * **A header folds its own chapter and no other.** Folding the log leaves
+   * Produced open, and the log opens again on the same press.
    *
-   * The last two lines are the other half of the rule: collapsed is hidden,
-   * not unmounted. The log is still streaming into a chapter that is shut, and
-   * the header's `aria-controls` still has to name something.
+   * The body is hidden rather than unmounted: the log is still streaming into a
+   * chapter that is shut, and the header's `aria-controls` still has to name
+   * something.
    */
   play: async ({ canvas, userEvent }) => {
     const log = canvas.getByRole("button", { name: /Activity log/ });
     const produced = canvas.getByRole("button", { name: /Produced/ });
-
-    // Nothing open, so every chapter is showing what it holds.
     await expect(log).toHaveAttribute("aria-expanded", "true");
     await expect(produced).toHaveAttribute("aria-expanded", "true");
 
     await userEvent.click(log);
-    await expect(log).toHaveAttribute("aria-expanded", "true");
-    await expect(produced).toHaveAttribute("aria-expanded", "false");
-
-    await userEvent.click(produced);
-    await expect(produced).toHaveAttribute("aria-expanded", "true");
     await expect(log).toHaveAttribute("aria-expanded", "false");
+    await expect(produced).toHaveAttribute("aria-expanded", "true");
 
     const body = document.getElementById(log.getAttribute("aria-controls") ?? "");
     await expect(body).not.toBeNull();
     await expect(body).not.toBeVisible();
+
+    await userEvent.click(log);
+    await expect(log).toHaveAttribute("aria-expanded", "true");
   },
 };
 
 /**
- * The log open. The chapters around it collapse to their header lines, which
+ * The log open. The chapters around it stay as they are, which
  * still say what each holds — the story's order is intact while one part of it
  * is long.
  */
@@ -174,46 +169,41 @@ export const HeldByTheCaller: Story = {
   args: { chapters: CHAPTERS, openChapter: "log", onOpen: fn() },
   /**
    * The inertness the prose above calls deliberate, asserted — because inert
-   * and broken are the same drawing. A component that kept its own copy of the
-   * open chapter beside the caller's would look right in every story where the
-   * caller writes back, and disagree with it silently everywhere else.
+   * and broken are the same drawing. The log's whole content is open because
+   * the caller says so, and pressing its Close asks the caller rather than
+   * closing it here. Folding by a header is the reader's and never reaches the
+   * caller.
    */
   play: async ({ args, canvas, userEvent }) => {
     const produced = canvas.getByRole("button", { name: /Produced/ });
-    await expect(produced).toHaveAttribute("aria-expanded", "false");
+    await expect(produced).toHaveAttribute("aria-expanded", "true");
+
+    await userEvent.click(canvas.getByRole("button", { name: /^Close/ }));
+    await expect(args.onOpen).toHaveBeenCalledWith(null);
+    await expect(canvas.getByRole("button", { name: /^Close/ })).toBeVisible();
 
     await userEvent.click(produced);
-    await expect(args.onOpen).toHaveBeenCalledWith("produced");
-    await expect(produced).toHaveAttribute("aria-expanded", "false");
+    await expect(args.onOpen).toHaveBeenCalledTimes(1);
   },
 };
 
 /**
- * **A chapter with only a preview can still be pressed back open.** With
- * another chapter open, one collapsed to its header line had no way back except
- * closing the one that was open — so `Drone instructions`, which has nothing
- * past its preview, was a header a reader pressed and nothing happened to. That
- * is the same dead control the run tree's facts were given a rule about.
- *
- * **And it gains no control at the foot of its body**, because there is still
- * nothing past the preview. The two are different questions and were one until
- * this: whether the header can be pressed, and whether there is more to show.
+ * **A chapter with only a preview still folds**, and gains no control at the
+ * foot of its body, because there is nothing past the preview. Whether the
+ * header can be pressed and whether there is more to show are two questions.
  */
-export const AChapterWithOnlyAPreviewStillOpens: Story = {
+export const AChapterWithOnlyAPreviewStillFolds: Story = {
   args: { chapters: CHAPTERS },
   play: async ({ canvas, userEvent }) => {
     const instructions = canvas.getByRole("button", { name: /Drone instructions/ });
     const log = canvas.getByRole("button", { name: /Activity log/ });
 
-    await userEvent.click(log);
+    await userEvent.click(instructions);
     await expect(instructions).toHaveAttribute("aria-expanded", "false");
+    await expect(log).toHaveAttribute("aria-expanded", "true");
 
     await userEvent.click(instructions);
     await expect(instructions).toHaveAttribute("aria-expanded", "true");
-    await expect(log).toHaveAttribute("aria-expanded", "false");
-
-    // Nothing past the preview, so no `Close` at the foot of it. The log has
-    // one and this must not gain one by being pressable.
     await expect(canvas.queryByRole("button", { name: "Close" })).toBeNull();
   },
 };

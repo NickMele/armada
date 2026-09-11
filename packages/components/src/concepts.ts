@@ -87,10 +87,10 @@ const SAID: Readonly<Record<string, string>> = {
   "where things are":
     "What this Job holds on disk and what identifies it. The screen above exists so nobody needs " +
     "these; they are here for when you want one anyway.",
-  "what this job holds":
-    "What is on this machine right now — the processes Fleet started, the disk the worktree is " +
-    "using, and the last lines Fleet wrote about the Job itself. Everything else on this screen " +
-    "is what happened.",
+  pulse:
+    "The last thing anyone did on this Job, whether Fleet, its Drone or you, and what it holds on " +
+    "this machine right now: its processes, its worktree and the disk that takes. Details opens " +
+    "the full reading.",
   "what it left behind":
     "What the Job recorded, kept after it ended — its moves, its Drone's turns, what it touched " +
     "and what it claimed.",

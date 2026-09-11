@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
+import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 import { PhaseCard, phaseGlyph } from "../PhaseCard/PhaseCard";
 import type { PhaseCardRow, PhaseStageKind, PhaseStageState } from "../PhaseCard/PhaseCard";
 
@@ -124,14 +125,13 @@ export type PhaseStripProps = {
    */
   label?: ReactNode;
   /**
-   * The sentence beneath — where the step stands, in the panel's own voice.
+   * Where the step stands, in the panel's own voice, on hover over the label.
    * *The Drone is working. Nothing has been submitted, so no gate has been
    * asked anything yet.*
    *
-   * **One sentence describing the state, not a paragraph describing the
-   * menu.** What each act does belongs on that act's tooltip with its binding,
-   * and this is also where an ungated step says what advances it instead of
-   * drawing an empty gate.
+   * **On the label and never under the graph.** The graph already draws the
+   * state; a sentence beneath it said the same thing a second time on every
+   * step, and the owner asked for the screen's prose to sit behind a hover.
    */
   note?: ReactNode;
   /** Which stage is pinned on mount. After that the strip holds its own. */
@@ -353,7 +353,13 @@ export function PhaseStrip({
 
   return (
     <section className="armada-phases">
-      {label === undefined ? null : <span className="armada-phases__label">{label}</span>}
+      {label === undefined ? null : note === undefined ? (
+        <span className="armada-phases__label">{label}</span>
+      ) : (
+        <Tooltip asChild label={note}>
+          <span className="armada-phases__label">{label}</span>
+        </Tooltip>
+      )}
 
       <div className="armada-phases__frame" ref={frameRef}>
         <div
@@ -486,7 +492,6 @@ export function PhaseStrip({
         )}
       </div>
 
-      {note === undefined ? null : <p className="armada-phases__note">{note}</p>}
     </section>
   );
 }

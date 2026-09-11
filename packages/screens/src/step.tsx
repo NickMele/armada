@@ -28,14 +28,15 @@ import {
   JOB_LIFECYCLE,
   Refusals,
 } from "@armada/components";
-import type { JobDetailField, StepNotice } from "@armada/components";
+import type { JobDetailField } from "@armada/components";
+import type { StepNotice } from "./InsideAJob";
 import type { ReactNode } from "react";
 
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
 import { span } from "./duration";
 import { sentenceOf } from "./gates";
 import { Opening, openKept, type Opens } from "./phases";
-import { recourseOf } from "./recovery";
+import { recourseOf, type Recourse } from "./recovery";
 import { refusedIn } from "./refused";
 import { escalation } from "./render";
 import { steeringOf } from "./steering";
@@ -83,7 +84,6 @@ export function askingOf(whole: JobWhole | null): StepNotice | undefined {
   return {
     tone: "waiting",
     title: "The drone asked a question and is waiting for you.",
-    children: "Nothing advances until you answer, and nothing is wrong.",
   };
 }
 
@@ -172,7 +172,6 @@ export function noticeOf(
       // answers a worry the reader had not had yet, and reads as reassurance
       // that something is.
       title: "This Job needs your review before it can go on.",
-      children: "Every step passed its gates. Nothing advances until you answer.",
     };
   }
   // **The one thing a redirect into a healthy drone leaves behind.** That job
@@ -209,6 +208,11 @@ export function noticeOf(
   // writes it lower-case and unpunctuated, like a log line; `sentenceOf` is
   // what every other reader of this same field takes to say it as a sentence.
   const undecided = whole?.stuck?.undecided;
+  const shown =
+    undecided !== undefined ||
+    flagged.length > 0 ||
+    refused !== undefined ||
+    recourse.sent !== undefined;
   return {
     // A Job that is over is red; one holding with a live Drone is not, because
     // a person deciding what happens next is not a failure.
@@ -231,7 +235,8 @@ export function noticeOf(
         )}
       </>
     ),
-    children: (
+    says: saysOf(recourse, refused?.again),
+    children: !shown ? undefined : (
       <>
         {/* Beside the headline, ahead of everything else the band says — the
             one fact #633 found missing was why the gate could not decide, and
@@ -252,7 +257,6 @@ export function noticeOf(
               // path of anything it can open under one word.
               brief: flag.brief_path,
             }))}
-            said={WHAT_THE_CHECK_FOUND}
             citation="whole"
             // The brief opens where the flag is read. It is the third of the
             // records `phases.tsx` already opens, kept in the same directory
@@ -261,19 +265,27 @@ export function noticeOf(
             onOpenBrief={(brief) => openKept(opens, { kept: brief, what: "brief" })}
           />
         )}
-        {refused === undefined ? null : <Refusals {...refused} />}
-        {/* Blocks, because the band's body is one inline span and these are two
-            sentences: run together inline they read as "…what happens next.
-            Restart is not offered…" with no break, which is what was on screen
-            for every job offering a redirect. */}
-        <span className="block">{recourse.stands}</span>
-        {recourse.withheld === undefined ? null : (
-          <span className="block text-fg-subtle">{recourse.withheld}</span>
-        )}
+        {refused === undefined ? null : <Refusals {...refused} again={undefined} />}
+        {recourse.sent === undefined ? null : <span className="block">{recourse.sent}</span>}
       </>
     ),
   };
 }
 
-/** What the flag rows are, said once over them rather than once on each. */
-const WHAT_THE_CHECK_FOUND = "What the gaming check found, and where:";
+/**
+ * What a stopped band's title means, on hover over it. **The evidence stays on
+ * the band**: what was flagged, what was refused and the answer to a redirect
+ * are facts about this Job, and these sentences are the reading of them.
+ *
+ * **A refusal says only how to lift it.** That the drone is paused and why
+ * Restart is missing are both on the screen already, in the badge and in the
+ * controls, and four sentences in one hover read as none.
+ */
+function saysOf(recourse: Recourse, again: string | undefined): string {
+  if (again !== undefined) return again;
+  const stands =
+    recourse.sent === undefined ? recourse.stands : recourse.stands.replace(`${recourse.sent} `, "");
+  return [stands, recourse.withheld, again]
+    .filter((line) => line !== undefined && line !== "")
+    .join(" ");
+}

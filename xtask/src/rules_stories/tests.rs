@@ -157,6 +157,16 @@ impl Tree {
         self
     }
 
+    /// One story and its component under the screens package's own root.
+    fn screen(self, group: &str, name: &str, title: &str) -> Tree {
+        let dir = self.0.join(SCREENS).join(group).join(name);
+        fs::create_dir_all(&dir).expect("a screen directory");
+        fs::write(dir.join(format!("{name}.stories.tsx")), story(title)).expect("a story");
+        fs::write(dir.join(format!("{name}.tsx")), "export const Thing = () => null;\n")
+            .expect("a component");
+        self
+    }
+
     fn loose_story(self, at: &str, title: &str) -> Tree {
         let path = self.0.join(ROOT).join(at);
         fs::create_dir_all(path.parent().expect("a parent")).expect("a directory");
@@ -299,4 +309,17 @@ fn a_missing_library_names_itself() {
             "{ROOT} — the component library the stories live in"
         )]
     );
+}
+
+/// The screens package's stories are held to the same rule, under their own
+/// root — a second root the rule did not walk would be Storybook loading stories
+/// nothing checks, which is the drift this rule replaced a registry to stop.
+#[test]
+fn a_screens_story_that_disagrees_with_its_directory_is_named_too() {
+    let failed = Tree::new("screens-mismatch")
+        .component("primitives", "Badge", Some("Primitives/Badge"), true)
+        .screen("screens", "JobDetail", "Screens/Job details")
+        .run();
+    assert_eq!(failed.len(), 1, "{failed:?}");
+    assert!(failed[0].contains(SCREENS), "names the screens root: {failed:?}");
 }

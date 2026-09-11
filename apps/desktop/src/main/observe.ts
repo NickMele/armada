@@ -12,12 +12,11 @@
 
 import WebSocket from "ws";
 
-import type { Observed, Turn, Turns } from "@armada/protocol";
+import type { Observed, Turns } from "@armada/protocol";
+import { NO_TURNS, SOCKET_CLOSED, turnArrived } from "@armada/protocol";
 import type { TurnMessage } from "@armada/protocol";
 import { HOST } from "./runtime-file";
 
-/** Nothing has arrived yet, and nothing has been lost. */
-const FRESH: Turns = { live: false, skipped: 0, missed: 0, rows: [] };
 
 /**
  * One Job's Observe connection.
@@ -30,7 +29,7 @@ export class ObserveSocket {
   private readonly publish: (observed: Observed) => void;
   private socket: WebSocket | null = null;
   private jobId: string | null = null;
-  private turns: Turns = FRESH;
+  private turns: Turns = NO_TURNS;
   /** Monotonic per connection. A row's own identity, since none carries one. */
   private seq = 0;
 
@@ -42,7 +41,7 @@ export class ObserveSocket {
   open(port: number | null, jobId: string | null): void {
     this.close();
     this.jobId = jobId;
-    this.turns = FRESH;
+    this.turns = NO_TURNS;
     this.seq = 0;
     if (jobId === null) {
       this.publish({ state: "none" });
@@ -62,7 +61,7 @@ export class ObserveSocket {
     // is "the Job has no turns", which is an ordinary answer with rows of its
     // own, so this says what happened rather than rendering as an empty pane.
     socket.on("error", (cause: Error) => this.broke(cause.message));
-    socket.on("close", () => this.ended("the connection closed"));
+    socket.on("close", () => this.ended(SOCKET_CLOSED));
   }
 
   /** Whether a socket is up. A reconnecting Fleet reopens one that is not. */
@@ -97,48 +96,23 @@ export class ObserveSocket {
       return;
     }
 
-    if (message.message === "opened") {
-      // `live` and `skipped` are stated once, on the first message, and are
-      // the two facts a reader needs before the first row: whether anything is
-      // still writing, and whether the history in front of them is whole.
-      this.turns = { ...FRESH, live: message.live, skipped: message.skipped };
+    // What the message does to the turns is `turnArrived`'s, in the wire
+    // package, so a recorded Job replayed in Storybook folds the same way.
+    const next = turnArrived(this.turns, message, this.seq);
+    if (message.message === "row") this.seq += 1;
+    this.turns = next.turns;
+    if (next.ended === undefined) {
       this.publish({ state: "watching", jobId, turns: this.turns });
       return;
     }
 
-    if (message.message === "row") {
-      // `step` is named in the rest pattern rather than left to fall into it:
-      // the wire carries it beside the row's kind, `Saw` declares no such
-      // field, and a spread would put it on the union at runtime where no
-      // reader can see it. It travelled that way, undrawn, until #160.
-      // `by` is named for `step`'s reason and carries `drone` where it is
-      // absent — every row written before Fleet stamped the field decoded from
-      // a Drone's own output, so the default is the truth rather than a guess.
-      const { message: _tag, ts, step, by, ...saw } = message;
-      const row: Turn = { ts, seq: this.seq++, step, by: by ?? "drone", saw };
-      this.turns = { ...this.turns, rows: [...this.turns.rows, row] };
-      this.publish({ state: "watching", jobId, turns: this.turns });
-      return;
-    }
-
-    if (message.message === "missed") {
-      // Counted and said, never skipped quietly: a transcript with a silent
-      // gap reads as a Drone that went quiet, which is the one thing this
-      // record exists to tell apart.
-      this.turns = { ...this.turns, missed: this.turns.missed + message.dropped };
-      this.publish({ state: "watching", jobId, turns: this.turns });
-      return;
-    }
-
-    // `closed` carries why, because a socket that simply stops is
-    // indistinguishable from one that broke. The rows are kept, and the socket
-    // is let go here rather than left to close under its own event: Fleet sends
-    // `closed` and *then* closes, so a listener still attached would answer the
-    // transport's close by restating the transport — overwriting `drone_ended`,
-    // the one reason a viewer actually wanted, with "the connection closed".
+    // The socket is let go here rather than left to close under its own
+    // event: Fleet sends `closed` and *then* closes, so a listener still
+    // attached would answer the transport's close by restating the transport —
+    // overwriting `drone_ended`, the one reason a viewer actually wanted, with
+    // "the connection closed".
     this.close();
-    this.turns = { ...this.turns, live: false };
-    this.publish({ state: "ended", jobId, turns: this.turns, because: message.because });
+    this.publish({ state: "ended", jobId, turns: this.turns, because: next.ended });
   }
 
   private ended(because: string): void {

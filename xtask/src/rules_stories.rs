@@ -24,6 +24,15 @@ use crate::{files_with_ext, Report};
 /// `../src/**/*.stories.tsx` from `.storybook/`, which is this directory.
 const ROOT: &str = "packages/components/src";
 
+/// The screens package's stories.
+///
+/// **A screen assembled from wire data can only be drawn where the package
+/// that assembles it is reachable**, and `components` may not import
+/// `screens`. So those stories live under `screens`, in the same
+/// `<group>/<Name>/` shape, and Storybook globs both roots. Checked where
+/// present: a package with no stories of its own has nothing to disagree with.
+const SCREENS: &str = "packages/screens/src/stories";
+
 /// Where the transform and the directory layout are written down.
 const SKILL: &str = ".claude/skills/armada-components/SKILL.md";
 
@@ -50,20 +59,23 @@ pub fn every_story_names_its_own_path(root: &Path) -> Report {
         return report;
     }
 
-    for group in dirs_in(&src) {
-        for component in dirs_in(&src.join(&group)) {
-            check(&src, &group, &component, &mut report);
+    for base in [ROOT, SCREENS] {
+        let src = root.join(base);
+        for group in dirs_in(&src) {
+            for component in dirs_in(&src.join(&group)) {
+                check(&src, base, &group, &component, &mut report);
+            }
         }
+        stories_are_in_a_component_directory(root, &src, base, &mut report);
     }
-    stories_are_in_a_component_directory(root, &src, &mut report);
     report
 }
 
 /// One component directory: its story, its component file, and whether the
 /// title in the first agrees with the name of the directory.
-fn check(src: &Path, group: &str, component: &str, report: &mut Report) {
+fn check(src: &Path, base: &str, group: &str, component: &str, report: &mut Report) {
     let on_disk = src.join(group).join(component);
-    let dir = format!("{ROOT}/{group}/{component}");
+    let dir = format!("{base}/{group}/{component}");
     let story = format!("{dir}/{component}.stories.tsx");
 
     if !on_disk.join(format!("{component}.tsx")).is_file() {
@@ -125,9 +137,9 @@ fn check(src: &Path, group: &str, component: &str, report: &mut Report) {
 /// A story anywhere but `<group>/<Name>/<Name>.stories.tsx` has no directory to
 /// be checked against, so it is invisible to the rule above while still being
 /// picked up by Storybook's glob.
-fn stories_are_in_a_component_directory(root: &Path, src: &Path, report: &mut Report) {
+fn stories_are_in_a_component_directory(root: &Path, src: &Path, base: &str, report: &mut Report) {
     for path in files_with_ext(root, src, &["tsx"]) {
-        let Some(rest) = path.strip_prefix(&format!("{ROOT}/")) else {
+        let Some(rest) = path.strip_prefix(&format!("{base}/")) else {
             continue;
         };
         let parts: Vec<&str> = rest.split('/').collect();

@@ -45,24 +45,26 @@
   overflow: hidden;
 }
 
-/* Four columns: the mark, the finding, the output control and the result.
-   
-   **The result column can shrink now, and it could not.** It was `max-content`
-   with `nowrap`, which is right for `exit 0` and wrong for the sentence a
-   skipped Check carries — `no changed file is under apps/**, packages/**, …`
-   is a reason rather than a measurement, and at `max-content` it sized the
-   grid wider than the pane, pushed itself under the finding beside it, and
-   squeezed the finding's column to nothing. `minmax(0, max-content)` keeps the
-   right edge lined up down the list and lets a long one give way.
-   
-   The finding's column takes `min-content` as its floor for the other half of
-   the same defect: at `0` it collapsed, and an identifier set to break
-   anywhere then broke every character onto its own line. */
+/* Two lines: the mark, the finding and the result on the first, and the id
+   with the control that opens the output on the second, under the finding.
+
+   **The output control left the first line.** It sat between the finding and
+   the result, and a Check's output file name is long: at `max-content` it
+   took half the row and squeezed the sentence a person reads first to a third.
+
+   **The result column can shrink**, for a skipped Check whose result is a
+   reason rather than a measurement: `minmax(0, max-content)` keeps the right
+   edge lined up down the list and lets a long one give way. The finding's
+   column keeps `min-content` as its floor, because at `0` it collapsed. */
 .armada-check-runs__row {
   display: grid;
-  grid-template-columns: var(--space-4) minmax(min-content, 1fr) max-content minmax(0, max-content);
+  grid-template-columns: var(--space-4) minmax(min-content, 1fr) minmax(0, max-content);
+  grid-template-areas:
+    "mark says result"
+    ". foot foot";
   align-items: start;
-  gap: var(--space-2);
+  column-gap: var(--space-3);
+  row-gap: calc(var(--space-1) / 2);
   padding: var(--space-1) var(--space-2);
   /* The selected row's bar sits in this reserved edge, so selecting a row
      never moves the text beside it. */
@@ -80,6 +82,7 @@
 }
 
 .armada-check-runs__mark {
+  grid-area: mark;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -87,16 +90,20 @@
   color: var(--fg-subtle);
 }
 
-.armada-check-runs__what {
+/* The id, and the output control at the far end of the same line. */
+.armada-check-runs__foot {
+  grid-area: foot;
   display: flex;
-  flex-direction: column;
-  gap: calc(var(--space-1) / 2);
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
   min-width: 0;
 }
 
 /* What the Check came to. Sans, because it is a finding somebody can read —
    the identifier under it is what a machine joins on. */
 .armada-check-runs__says {
+  grid-area: says;
   font-family: var(--font-sans);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
@@ -104,6 +111,7 @@
 }
 
 .armada-check-runs__id {
+  min-width: 0;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
@@ -121,7 +129,11 @@
    button per row would read as four decisions to make. */
 .armada-check-runs__output {
   appearance: none;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   padding: calc(var(--space-1) / 2) var(--space-1);
   border: var(--border-width) solid var(--border-default);
   border-bottom-color: var(--accent);
@@ -151,26 +163,22 @@
   outline-offset: var(--focus-ring-offset);
 }
 
-/* A Check with nothing to open keeps the column so the results stay in one
-   line down the list. */
-.armada-check-runs__no-output {
-  display: block;
-}
-
-/* The output control and Run it here, beside each other in the one column —
-   the run sheet is a second control on the same row, never a second column. */
+/* The output control and Run it here, side by side at the end of the second
+   line. The group can shrink, so a long file name ellipses before it pushes
+   the id off the line. */
 .armada-check-runs__output-group {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 /* The exit code or the state. Mono and measured, hued per row and never summed
    onto the step or the Job — a red result here sits under a running step
    without the two contradicting each other. */
 .armada-check-runs__result {
-  flex: none;
+  grid-area: result;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);

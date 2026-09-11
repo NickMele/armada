@@ -152,7 +152,6 @@ export function workOf(
     iconLabel: "Workflow",
     value: workflow?.name ?? job.workflow_id,
     copyValue: job.workflow_id,
-    meta: "as it was when the job was dispatched",
   });
   if (job.assigned_drone !== undefined) {
     rows.push({
@@ -212,7 +211,7 @@ const NOT_WRITTEN = "not written yet";
 /** Why there is no region to draw, which is never the same sentence twice. */
 export function whyNoWork(watched: Watched, jobId: string): string {
   if (watched.state === "failed" && watched.jobId === jobId) {
-    return "Fleet did not answer for this job, so its paths and its brief are unknown.";
+    return "Fleet did not answer";
   }
   return "Reading this job.";
 }

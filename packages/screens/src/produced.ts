@@ -36,8 +36,8 @@ export type Produced = {
    * not exist.
    */
   planDeclared: boolean;
-  /** What the list says about itself, under it. */
-  note: string;
+  /** Where the list drifted from a plan, under it. Nothing where it did not. */
+  note?: string;
 };
 
 /**
@@ -92,15 +92,12 @@ function keptRow(file: TouchedFile): ChangedFile {
  * one. A job's work is the whole branch and a plan belongs to a step, so
  * `implement` scoping three files says nothing about what `handoff` wrote.
  */
-export function keptNote(kept: JobFootprint): string {
-  const taken = "Read when the job stopped.";
-  if ((kept.plans ?? []).length === 0) {
-    return `${taken} No step declared a plan, so nothing here is measured against one.`;
-  }
+export function keptNote(kept: JobFootprint): string | undefined {
+  if ((kept.plans ?? []).length === 0) return undefined;
   const outside = kept.files.filter(
     (file) => file.planned_by !== undefined && file.planned_by.length === 0,
   ).length;
   return outside === 0
-    ? `${taken} Every path is inside the plans the steps declared.`
-    : `${taken} ${outside} of ${kept.files.length} paths are outside the plans the steps declared.`;
+    ? undefined
+    : `${outside} of ${kept.files.length} paths are outside the plans the steps declared.`;
 }

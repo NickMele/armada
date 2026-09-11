@@ -41,7 +41,7 @@ export function JobHoldsSheet({
       open={open}
       contained
       floor={floor}
-      title="What this Job holds"
+      title="Pulse"
       subtitle={
         jobId === undefined || floor ? undefined : (
           <span className="armada-holds-sheet__mono">{jobId}</span>

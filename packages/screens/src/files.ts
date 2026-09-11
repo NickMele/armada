@@ -48,13 +48,11 @@ export function filesOf(reading: JobFilesChanged): ChangedFile[] {
  * that case says the step scoped nothing, which is a fact about the step rather
  * than about the reading.
  */
-export function footprintNote(reading: JobFilesChanged): string {
-  if (!reading.plan_declared) return "This step declared no plan, so nothing here is measured against one.";
+export function footprintNote(reading: JobFilesChanged): string | undefined {
+  if (!reading.plan_declared) return undefined;
   const outside = reading.files.filter((file) => file.outside_plan === true).length;
   const total = reading.files.length;
-  return outside === 0
-    ? "Every path is inside the plan this step declared."
-    : `${outside} of ${total} paths are outside the plan this step declared.`;
+  return outside === 0 ? undefined : `${outside} of ${total} paths are outside the plan this step declared.`;
 }
 
 /** The reading for this Job, or nothing. A footprint belongs to one Job. */
@@ -72,6 +70,6 @@ export function readingFor(footprint: Footprint, jobId: string): JobFilesChanged
  */
 export function whyNoFootprint(hasDrone: boolean): string {
   return hasDrone
-    ? "Nothing has been written yet."
-    : "No drone is on this job yet.";
+    ? "Nothing written yet"
+    : "No drone yet";
 }

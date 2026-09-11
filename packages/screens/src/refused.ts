@@ -30,12 +30,10 @@ import type { Refused } from "@armada/components";
 import type { JobDetail as JobWhole, Refusal } from "@armada/protocol";
 import { sizeOf } from "./story";
 
-/** The rows and the sentences over and under them. */
+/** The rows, and the sentences under them. */
 export type Refusals = {
   /** In the order Fleet gathered them, oldest first. Never empty. */
   refused: Refused[];
-  /** What the rows are, said once over them. */
-  said: string;
   /** That the list is shorter than what happened, where it is. */
   note?: string;
   /**
@@ -70,31 +68,10 @@ export function refusedIn(whole: JobWhole | null): Refusals | undefined {
   }));
   return {
     refused,
-    said: SAID,
     again: againOf(stuck.refused),
     ...(shortOf(refused.length, stuck.refusals) ?? {}),
   };
 }
-
-/**
- * What the rows are.
- *
- * **The actor is named, and that is the owner's wording.** The sentence it
- * replaced put the Job in the subject — *what this job reached for and was
- * refused* — which is P5's shape, and it read to the person it was written for
- * as a list the Job had produced rather than one a machine had imposed. Naming
- * Fleet answers who to go and argue with, and `docs/contracts/design-system.md`
- * is where an allowlist denial is already attributed: actor=Fleet, with no
- * verification source.
- *
- * **The subject is the job, which is P5.** *Fleet blocked the job from the
- * following* was written first and ruled out on 8 Sep 2026: naming Fleet reads
- * as the sentence's point when the point is what was blocked, and the two
- * sentences beneath already say whose declaration decides it. This is not the
- * band's headline, which is `escalation()`'s and names the trigger rather than
- * an actor.
- */
-const SAID = "The job was blocked from the following:";
 
 /**
  * What a restart meets. **A mechanism and not a tip** — it says how a toolset
@@ -118,7 +95,7 @@ const SAID = "The job was blocked from the following:";
  */
 function againOf(refused: readonly Refusal[]): string {
   const ran = refused.some((one) => one.tool === BASH);
-  return ran ? `${FIXED_AT_SPAWN} ${DECLARED_COMMANDS}` : FIXED_AT_SPAWN;
+  return ran ? DECLARED_COMMANDS : FIXED_AT_SPAWN;
 }
 
 /**
@@ -131,8 +108,7 @@ const BASH = "Bash";
 
 /** True of every refusal, and the reason a restart is not a fix on its own. */
 const FIXED_AT_SPAWN =
-  "A drone's toolset is fixed when it starts, and a restart builds the same one from the same " +
-  "declaration. A drone that reaches for these again is refused again.";
+  "A drone keeps the tools it started with, so a restart would be blocked the same way.";
 
 /**
  * What declares a command, where a command was refused. **No path**: Fleet may
@@ -145,8 +121,8 @@ const FIXED_AT_SPAWN =
  * a person to add an entry they already have.
  */
 const DECLARED_COMMANDS =
-  "A command is in that toolset only where the repository's armada.yml declares it under " +
-  "commands and does not mark it destructive.";
+  "A drone can only run commands the repository's armada.yml declares. To allow one, add it " +
+  "under commands and do not mark it destructive.";
 
 /**
  * How much of one command is on the row, where it is not all of it.

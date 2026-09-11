@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { DispatchAJobFullWithTheM1SubsetMarked } from "./DispatchAJobFullWithTheM1SubsetMarked";
+import { DispatchAJobFullWithTheM1SubsetMarked } from "./DispatchAJob";
 
 /**
  * Journey · Dispatch a Job. What M1 renders where the approval card goes.
@@ -16,7 +16,7 @@ import { DispatchAJobFullWithTheM1SubsetMarked } from "./DispatchAJobFullWithThe
  * `killed`** — a job you never dispatched was not stopped, it was abandoned.
  */
 const meta: Meta<typeof DispatchAJobFullWithTheM1SubsetMarked> = {
-  title: "Screens/Dispatch a job — full, with the M1 subset marked",
+  title: "Screens/Dispatch a job",
   component: DispatchAJobFullWithTheM1SubsetMarked,
 };
 export default meta;

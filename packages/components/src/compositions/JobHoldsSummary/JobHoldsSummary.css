@@ -1,4 +1,4 @@
-/* What this Job holds, in a few lines, above the full reading it opens.
+/* The Job's pulse, in a few lines, above the full reading it opens.
 
    A well and not a card, which is the line the design system draws: the card
    is `JobResources`, on the layer where the acting happens. This is a reading
@@ -14,28 +14,16 @@
   background: var(--surface-well);
 }
 
-/* The tail. Two lines, and never a scrolling well: the region this replaced
-   bounded at 15rem and still pushed the run below the fold. */
-.armada-holds-summary__tail {
+/* The last thing anyone did on this Job: who and when on one line, what they
+   did under it. One event, because the point is the latest; the whole log is a
+   press away. */
+.armada-holds-summary__latest {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  gap: calc(var(--space-1) / 2);
   min-width: 0;
 }
 
-/* Instant, then who, then the one line — the grammar every log in this app
-   reads in. The line is the only column that flexes, so the two fixed columns
-   stay in place across both rows and the eye reads down them. */
-.armada-holds-summary__line {
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
-  align-items: baseline;
-  gap: var(--space-2);
-  min-width: 0;
-}
 
 .armada-holds-summary__at {
   font-family: var(--font-mono);
@@ -45,30 +33,32 @@
   font-variant-numeric: tabular-nums;
 }
 
-.armada-holds-summary__actor {
+.armada-holds-summary__who {
   font-family: var(--font-sans);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--text-label);
 }
 
-/* Clipped rather than wrapped. A summary that reflowed to three lines when a
-   Fleet message ran long is the region growing back. */
+/* Held to two lines. A long Drone line is a turn to read in the log, and a
+   block that grew to fit it would push the pointers under it off the screen. */
 .armada-holds-summary__said {
   min-width: 0;
   font-family: var(--font-sans);
   font-size: var(--text-xs);
   line-height: var(--leading-xs);
   color: var(--text-body);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
-/* A line that recorded something going wrong. The hue on the text alone, as
-   the full reading's verdict takes it — no tint and no box, because a tinted
+/* An event that recorded something going wrong. The hue on the text alone, as
+   the full reading's verdict takes it: no tint and no box, because a tinted
    chip in this column is what a Job status is. */
-.armada-holds-summary__line[data-wrong] .armada-holds-summary__said {
+.armada-holds-summary__latest[data-wrong] .armada-holds-summary__said {
   color: var(--error);
 }
 
@@ -113,7 +103,7 @@
   color: var(--error);
 }
 
-/* Why there is no tail, or no reading. Prose, because both are sentences and
+/* Why there is nothing yet, or no reading. Prose, because both are sentences and
    neither is a figure — an empty block here would read as a Job holding
    nothing, which is a different answer. */
 .armada-holds-summary__note {
@@ -125,8 +115,7 @@
   text-wrap: pretty;
 }
 
-/* The instant and the one control. The control is last on the row at every
-   width, so the age never pushes it out of the corner a reader reaches for. */
+/* When the reading was taken. It qualifies every figure above it. */
 .armada-holds-summary__foot {
   display: flex;
   align-items: center;

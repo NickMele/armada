@@ -365,6 +365,7 @@ export function App() {
                 followed={state.followed}
                 onFollowCheckOutput={followCheckOutput}
                 resources={state.resources}
+                history={state.history}
                 examination={state.examination}
                 // The one act here that changes nothing. It costs no model
                 // call, and its answer arrives on the published state rather

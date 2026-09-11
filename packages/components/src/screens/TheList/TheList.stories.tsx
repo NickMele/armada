@@ -8,7 +8,7 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import type { JobRowField, JobRowStackedProps } from "../../compositions/JobRowStacked/JobRowStacked";
-import { TheListSixStatesOneRowShape } from "./TheListSixStatesOneRowShape";
+import { TheListSixStatesOneRowShape } from "./TheList";
 
 /**
  * Journey · Monitor Active Work. Six Job states, one row shape, in the order
@@ -48,7 +48,7 @@ import { TheListSixStatesOneRowShape } from "./TheListSixStatesOneRowShape";
  * drawing rather than proof the track is filled.
  */
 const meta: Meta<typeof TheListSixStatesOneRowShape> = {
-  title: "Screens/The list — six states, one row shape",
+  title: "Screens/The list",
   component: TheListSixStatesOneRowShape,
 };
 export default meta;

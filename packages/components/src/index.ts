@@ -67,13 +67,14 @@ export * from "./compositions/WorkflowRail/WorkflowRail";
 // What every job detail render shares. The five screens that took it are gone:
 // job detail is one arrangement, and the five were the defect.
 export * from "./screens/detail";
+export * from "./screens/absent";
 
 // The three journey screens, lifted for the reason the job detail three were:
 // a story with hardcoded fixtures is a screen nothing outside Storybook can
 // render. Each takes the regions it composes as props.
-export * from "./screens/DispatchAJobFullWithTheM1SubsetMarked/DispatchAJobFullWithTheM1SubsetMarked";
+export * from "./screens/DispatchAJob/DispatchAJob";
 export * from "./screens/FirstLaunch/FirstLaunch";
-export * from "./screens/TheListSixStatesOneRowShape/TheListSixStatesOneRowShape";
+export * from "./screens/TheList/TheList";
 
 // The shell. Rail, panel and status bar — the frame the three above mount
 // inside. A screen like them, and lifted for the same reason: Bridge needs the
@@ -106,10 +107,6 @@ export * from "./compositions/ActivityLog/ActivityLog";
 // The step's story — Drone instructions, Activity log, Produced. Opening one
 // collapses the others to their header line.
 export * from "./compositions/StepStory/StepStory";
-
-// Inside a job — the one arrangement, at every state. The screen #186 built:
-// the run as a tree, the selected step in the panel, its story in order.
-export * from "./screens/InsideAJobOneArrangementAtEveryState/InsideAJobOneArrangementAtEveryState";
 
 // The two chips a step's facts are made of. A fact is a value; a path is the
 // one value that keeps its filename at every width.
@@ -242,7 +239,7 @@ export * from "./compositions/EvidenceSheet/EvidenceSheet";
 // not at another, and a *View more* that reveals nothing is a surface lying.
 export * from "./compositions/Clamped/Clamped";
 
-// What this Job holds, in a few lines. The full reading was the largest thing
+// The Job's pulse, in a few lines. The full reading was the largest thing
 // in the run column and answered a question nobody had asked yet; this says
 // whether anything is wrong, and opens the reading when the answer is yes.
 export * from "./compositions/JobHoldsSummary/JobHoldsSummary";

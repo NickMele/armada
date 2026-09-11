@@ -170,7 +170,7 @@ describe("what a stopped job says it was refused", () => {
     expect(drawn?.note).toBeUndefined();
   });
 
-  it("says a restart builds the same toolset, on every list there is", () => {
+  it("says what would lift the block, on every list there is", () => {
     // The fact that makes the rows actionable, and it is true of every refusal
     // — so no shape of list may arrive without it.
     const shapes = [
@@ -181,7 +181,7 @@ describe("what a stopped job says it was refused", () => {
     ];
     for (const refused of shapes) {
       const drawn = refusedIn(whole({ refused, refusals: refused.length }));
-      expect(drawn?.again).toContain("a restart builds the same one");
+      expect(drawn?.again).toMatch(/armada\.yml|a restart would be blocked the same way/);
     }
   });
 

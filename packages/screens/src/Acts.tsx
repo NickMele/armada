@@ -16,7 +16,7 @@ import type { SplitButtonItem } from "@armada/components";
 import { JOB_LIFECYCLE } from "@armada/components";
 import type { Outcome } from "@armada/protocol";
 import type { FileReport, JobDetail as JobWhole, JobSummary } from "@armada/protocol";
-import { ACT_LABEL, MENU_LABEL, REPORT_LABEL } from "./copy";
+import { ACT_LABEL, MENU_LABEL, RAISE_CAP_LABEL, RAISE_TURN_CAP_LABEL, REPORT_LABEL } from "./copy";
 import { RaiseCapControl } from "./RaiseCap";
 import { RaiseTurnCapControl } from "./RaiseTurnCap";
 import { recourseOf } from "./recovery";
@@ -259,51 +259,51 @@ export function Acts({
   // and the report where it does not — the two are the only non-destructive
   // acts this header holds until `Pilot` lands, and the lead is never
   // destructive.
-  const lead: Lead | undefined =
-    render !== "stopped"
-      ? undefined
-      : acts.includes("redispatch")
-        ? { act: "redispatch", label: ACT_LABEL.redispatch }
-        : { act: "report", label: REPORT_LABEL };
-  const behind: SplitButtonItem[] =
-    lead === undefined
-      ? []
-      : [
-          // Never a repeat of the lead: a menu that offers the label again is
-          // one entry a person reads twice and can act on once.
-          ...(lead.act === "report"
-            ? []
-            : [{ label: REPORT_LABEL, shortcut: REPORT_KEY, onSelect: () => onReporting(true) }]),
-          ...acts
-            .filter((act) => act !== lead.act)
-            .map((act) => ({
-              label: MENU_LABEL[act],
-              // Both kills end something and the reclaim removes a directory,
-              // and the menu draws that rather than the control announcing it
-              // in red on the face.
-              danger: true,
-              onSelect: () => onAct(act, job.id),
-            })),
-        ];
-  // Which ceiling is holding this job, if either. **The wire's answer and not a
-  // comparison made here**: `queued_reason` and `budget_hold` are computed by
-  // Fleet from the same predicate admission asks, and a screen that compared
-  // the spend to the cap for itself would be a second reading — right until the
-  // two disagreed on a job Fleet was already starting.
-  const forMoney = heldForMoney(job);
-  const forTurns = heldForTurns(job);
+  // Every act this header offers, in the order one would lead. **One control
+  // carries them all**: the first is its face and the rest are its menu, so the
+  // header never shows two buttons side by side. The face can be an act that
+  // ends something, because every act here asks for a confirmation before it
+  // does anything, and a stray Enter lands on that dialog's Cancel.
+  //
+  // Approving leads where a Job waits for it, redispatch leads a stopped Job
+  // that can be redispatched, and the report leads one that cannot. After those,
+  // the acts in `acts`' own order, then raising a ceiling, which is a decision
+  // about spending and never the face while anything else is offered.
+  const hasSpend = whole?.spend !== undefined;
+  const forMoney = heldForMoney(job) && hasSpend;
+  const forTurns = heldForTurns(job) && hasSpend;
+  const act = (name: ConfirmableAct): Entry => ({
+    face: ACT_LABEL[name],
+    label: MENU_LABEL[name],
+    danger: true,
+    onSelect: () => onAct(name, job.id),
+  });
+  const entries: Entry[] = [
+    ...(job.status === "awaiting_approval"
+      ? [{ face: approving ? "Approving" : APPROVE_LABEL, label: APPROVE_LABEL, onSelect: () => onApprove(job.id) }]
+      : []),
+    ...(acts.includes("redispatch") ? [act("redispatch")] : []),
+    ...(render === "stopped"
+      ? [{ face: REPORT_LABEL, label: REPORT_LABEL, shortcut: REPORT_KEY, onSelect: () => onReporting(true) }]
+      : []),
+    ...acts.filter((name) => name !== "redispatch").map(act),
+    ...(forMoney ? [{ face: RAISE_CAP_LABEL, label: RAISE_CAP_LABEL, onSelect: () => onRaising(true) }] : []),
+    ...(forTurns
+      ? [{ face: RAISE_TURN_CAP_LABEL, label: RAISE_TURN_CAP_LABEL, onSelect: () => onRaisingTurns(true) }]
+      : []),
+  ];
+  const [lead, ...behind] = entries;
+  // The accent says a person is waited on and nothing else does. A terminal
+  // Job's control is quiet, because there is nobody it is waiting for.
+  const variant = job.status === "awaiting_approval" || life?.whoIsActing === "Person" ? "primary" : "secondary";
+  const busy = acting || stale || approving;
   return (
     <>
-      {/* The one control on this header that changes what the job may spend,
-          drawn where the refusal is read. **Only on a job held for money**: the
-          act is legal on any job that is not over, and offering it everywhere
-          would put a money control on every row of a board nobody is worried
-          about the money on. It needs the detail for the figures the dialog is
-          decided against, so it waits for that like every other act here.
-          Neutral and never a lead — a split button's face is what a stray Enter
-          hits, and this one is a decision about spending. */}
+      {/* The ceilings' dialogs, on a job held for money or for turns. Their
+          entries are in the one control below; these draw no button. */}
       {forMoney && whole?.spend !== undefined ? (
         <RaiseCapControl
+          trigger={false}
           jobId={job.id}
           spend={whole.spend}
           disabled={acting || stale}
@@ -312,12 +312,9 @@ export function Acts({
           onRaise={onRaiseCap}
         />
       ) : null}
-      {/* The other ceiling's control, on the same terms and never beside the
-          first: `budget_hold` says which one caught this job, and offering both
-          would put the press that cannot start it next to the press that can.
-          Neutral and never a lead, for the cost cap's reason. */}
       {forTurns && whole?.spend !== undefined ? (
         <RaiseTurnCapControl
+          trigger={false}
           jobId={job.id}
           spend={whole.spend}
           disabled={acting || stale}
@@ -326,9 +323,8 @@ export function Acts({
           onRaise={onRaiseTurnCap}
         />
       ) : null}
-      {/* The dialog with no button. Offered on every stopped job rather than
-          only the ones something can still be done to — a job nothing can be
-          done to is the one most likely to have failed wrongly and been left. */}
+      {/* The report's dialog, on every stopped job. A job nothing can be done
+          to is the one most likely to have failed wrongly and been left. */}
       {render === "stopped" ? (
         <ReportControl
           jobId={job.id}
@@ -339,65 +335,23 @@ export function Acts({
           onCopied={onCopied}
         />
       ) : null}
-      {/* One control, whatever the state offers. The accent says the Job is
-          waiting on a person and nothing else does — a terminal Job's control
-          is quiet, because there is nobody it is waiting for.
-
-          **A split button with nothing in its menu is a button**, which is the
-          primitive's own rule and not a shortcut taken here: a killed Job with
-          no Drone and no replacement offers the report and nothing else, and a
-          caret over an empty menu is a control that does not answer. */}
+      {/* A split button with nothing in its menu is a button: a caret over an
+          empty menu is a control that does not answer. */}
       {lead === undefined ? null : behind.length === 0 ? (
-        <Button
-          variant={life?.whoIsActing === "Person" ? "primary" : "secondary"}
-          disabled={acting || stale}
-          onClick={() => (lead.act === "report" ? onReporting(true) : onAct(lead.act, job.id))}
-        >
-          {lead.label}
+        <Button variant={variant} disabled={busy} onClick={lead.onSelect}>
+          {lead.face}
         </Button>
       ) : (
         <SplitButton
-          variant={life?.whoIsActing === "Person" ? "primary" : "secondary"}
-          items={behind}
-          disabled={acting || stale}
+          variant={variant}
+          items={behind.map(({ face: _face, ...item }) => item)}
+          disabled={busy}
           menuLabel="Everything else this job can do"
-          onAction={() => (lead.act === "report" ? onReporting(true) : onAct(lead.act, job.id))}
+          onAction={lead.onSelect}
         >
-          {lead.label}
+          {lead.face}
         </SplitButton>
       )}
-      {/* The renders the split button has no legal lead on. Both of the
-          drawing's leads there are unbuilt — `Pilot` is #250, and `Review` is
-          the decision block under the story rather than a header act — and a
-          lead is never destructive, so until one lands each act keeps its own
-          quiet button. Neutral, because the confirmation is where a terminal
-          act states what it costs. */}
-      {lead !== undefined
-        ? null
-        : acts.map((act) => (
-            <Button
-              key={act}
-              variant="secondary"
-              disabled={acting || stale}
-              onClick={() => onAct(act, job.id)}
-            >
-              {ACT_LABEL[act]}
-            </Button>
-          ))}
-      {/* The one primary this header ever carries, and the only forward act in
-          the set. Last, where the shell head puts its own primary — the accent
-          fill and the distance are what keep it from reading as a peer of the
-          red group. Approving a Job you opened in order to read it is the whole
-          point of the gate; going back to the list to say yes is not. */}
-      {job.status === "awaiting_approval" ? (
-        <Button
-          variant="primary"
-          disabled={approving || stale}
-          onClick={() => onApprove(job.id)}
-        >
-          {approving ? "Approving" : "Approve dispatch"}
-        </Button>
-      ) : null}
     </>
   );
 }
@@ -475,10 +429,9 @@ export function heldForTurns(job: JobSummary): boolean {
   return overBudget(job) && job.budget_hold === TURN_CAP;
 }
 
-/**
- * The act on the face of the split button. Two, and never a third: the lead is
- * never destructive, and these are the only acts this header holds that are
- * not.
- */
-type Lead = { act: "redispatch"; label: string } | { act: "report"; label: string };
+/** One act the header offers: its face as the lead, its line in the menu. */
+type Entry = SplitButtonItem & { face: string };
+
+/** The approval act, which is the screen's own and not a `JobAct`. */
+const APPROVE_LABEL = "Approve dispatch";
 

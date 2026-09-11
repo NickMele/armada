@@ -22,7 +22,7 @@
 
 import { afterEach, expect, test } from "vitest";
 import { page } from "vitest/browser";
-import { InsideAJob } from "@armada/components";
+import { InsideAJob } from "./InsideAJob";
 import type { Artifact, JobDetail, JobSummary, StepDetail } from "@armada/protocol";
 
 import { chaptersOf } from "./chapters";

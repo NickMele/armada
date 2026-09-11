@@ -50,7 +50,7 @@ export function JobRecord({
   value,
   defaultValue,
   onChange,
-  emptyNote = "Nothing about this job is recorded yet.",
+  emptyNote = "Nothing recorded yet",
 }: JobRecordProps) {
   const [internal, setInternal] = useState(defaultValue ?? sections[0]?.id);
   // The open section, held to what exists: a controlled value naming a section

@@ -326,7 +326,7 @@ export function checkRow(read: CheckRead, now: number): CheckRunRow {
  * What one Check came to, in a sentence.
  *
  * The registry's verb, and what the Check was measured against where it
- * declared one — `Failed — expected exit 0`, with what it produced instead in
+ * declared one — `Failed, expected exit 0`, with what it produced instead in
  * the column beside it. Nothing here invents a word: `check-outcomes.toml` owns
  * all six.
  */
@@ -335,7 +335,7 @@ export function saidOf(run: CheckRun | undefined): string {
   const verb = CHECK_OUTCOME[run.outcome]?.verb ?? run.outcome;
   return run.expected === undefined
     ? asSentence(verb)
-    : `${asSentence(verb)} — expected ${run.expected}`;
+    : `${asSentence(verb)}, expected ${run.expected}`;
 }
 
 /**
@@ -411,10 +411,10 @@ function asSentence(verb: string): string {
 const JUDGE_ROW = "judge";
 
 /** What a declared Check with no run on this attempt says. */
-const NOTHING_HAS_RUN_IT = "Nothing has run this Check yet.";
+const NOTHING_HAS_RUN_IT = "Not run yet";
 
 /** What the Judge's row says before a call has gone out. */
-const NOT_ASKED_YET = "Waiting for every Check to finish.";
+const NOT_ASKED_YET = "Waiting on the Checks";
 
 /** What it says while a call is out. `judging` is what makes the two different. */
 const ASKING_NOW = "The panel is answering now.";

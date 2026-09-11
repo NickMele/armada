@@ -30,7 +30,7 @@ import { SILENCE } from "@armada/components";
 import type { BlockKind, Observed, Turn, Turns } from "@armada/protocol";
 
 import { leading } from "./reading";
-import { entriesOf, NOTHING_YET_ON_THIS_STEP, whyNotWatching } from "./story";
+import { NOTHING_YET_ON_THIS_STEP, entriesOf, hideUnread, whyNotWatching } from "./story";
 
 const A_JOB = "01M1HQZAKN001AJ5MT3PT09KKY";
 
@@ -283,6 +283,15 @@ describe("a kind this Bridge has no reading for", () => {
     );
     expect(rows).toHaveLength(kinds.length);
     expect(new Set(rows.map((row) => row.message)).size).toBe(kinds.length);
+  });
+
+  it("is left out of the log and counted, so the log says how many it hid", () => {
+    const rows = entriesOf(
+      [unrecognised("system/thinking_tokens", 1), unrecognised("system/thinking_tokens", 2)],
+      "plan",
+    );
+    expect(rows).toHaveLength(2);
+    expect(hideUnread(rows)).toEqual({ rows: [], unread: 2 });
   });
 
   it("keeps the kind on the payload, so the row still opens to something", () => {

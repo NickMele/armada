@@ -94,9 +94,9 @@ export const AllFourStates: Story = {
    * away and a strip that had stopped pinning altogether would pass every line
    * here.
    */
-  play: async ({ canvas, userEvent }) => {
+  play: async ({ canvas, canvasElement, userEvent }) => {
     const checks = canvas.getByRole("button", { name: /build, test/ });
-    const away = canvas.getByText(/The Drone is working/);
+    const away = canvasElement;
 
     await userEvent.hover(checks);
     await expect(canvas.getByRole("dialog")).toBeVisible();
@@ -308,9 +308,9 @@ export const HandedBackByACheck: Story = {
    * that opens an empty box, so a description there would sit on a `span` and
    * be announced by nothing.
    */
-  play: async ({ canvas, userEvent }) => {
+  play: async ({ canvas, canvasElement, userEvent }) => {
     const checks = canvas.getByRole("button", { name: /test failed/ });
-    const away = canvas.getByText(/A command exited non-zero/);
+    const away = canvasElement;
 
     await userEvent.click(checks);
     await userEvent.hover(away);

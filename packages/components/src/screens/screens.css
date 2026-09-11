@@ -658,6 +658,16 @@
   gap: var(--space-3);
 }
 
+/* Pulse's title line, with the control that opens its full reading at the
+   trailing edge. Spaced from the run above the way a spaced title is. */
+.armada-inside__pulse-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+
 /* The whole run's elapsed. A figure, never a chart. */
 .armada-inside__elapsed {
   font-family: var(--font-mono);
@@ -695,16 +705,6 @@
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--status-completed-failed);
-  text-wrap: pretty;
-}
-
-/* What the region is for, said once at the foot of it. */
-.armada-inside__where-note {
-  margin: var(--space-1) 0 0;
-  padding: 0 var(--space-2);
-  font-size: var(--text-2xs);
-  line-height: var(--leading-2xs);
-  color: var(--fg-subtle);
   text-wrap: pretty;
 }
 
@@ -874,4 +874,25 @@
   line-height: var(--leading-xs);
   color: var(--fg-subtle);
   text-wrap: pretty;
+}
+
+/* The whole Job unread, because Fleet did not answer. One calm message where
+   the step goes: a red box per region, each saying the same thing, read as
+   four failures. Muted, because nothing about the Job itself is wrong. */
+.armada-inside__unreachable {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding-block: var(--space-12);
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  text-align: center;
+}
+
+.armada-inside__unreachable svg {
+  color: var(--fg-subtle);
 }

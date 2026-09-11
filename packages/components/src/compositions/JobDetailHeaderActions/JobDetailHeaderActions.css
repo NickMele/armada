@@ -46,10 +46,16 @@
   min-width: 0;
 }
 
+/* The title and the job id share a line while both fit, and the id drops
+   under the title when they do not. It was a line that never wrapped, with an
+   id that never shrank, so a narrow window took the whole shortfall out of the
+   title and set it one word to a line beside an id at full width. */
 .armada-job-head__line {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
   min-width: 0;
 }
 
@@ -65,7 +71,9 @@
 /* The job id identifies and does not describe, so it recedes: mono, the
    smallest step, and --fg-subtle. */
 .armada-job-head__id {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);

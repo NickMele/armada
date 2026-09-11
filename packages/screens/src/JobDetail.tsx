@@ -62,15 +62,18 @@
 // region could be written. The pull request link and Pilot's slot are the two
 // most recent, and both are the header's — they go in `heading.tsx` now.
 
-import { JobHoldsSummary } from "@armada/components";
+import { Button, JobHoldsSummary } from "@armada/components";
+import { ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { InsideAJob, type RunTreeStep } from "@armada/components";
+import { type RunTreeStep } from "@armada/components";
+import { InsideAJob } from "./InsideAJob";
 
 import type {
   Diff,
   Evidence,
   Examination,
   Footprint,
+  History,
   Holds,
   FollowedLog,
   Journalled,
@@ -113,9 +116,9 @@ import { renderFor } from "./render";
 import { runOf } from "./run";
 import { askingOf, fieldsOf, noticeOf, questionOf } from "./step";
 import { StepActs } from "./StepActs";
-import { NOTHING_FROM_FLEET_YET, notesOf, whyNoNotes } from "./notes";
-import { entriesOf, whyNotWatching } from "./story";
-import { LOOK_FAILED, nothingToAsk, summarised, tailOf, whyNoReading } from "./resources";
+import { whyNoNotes } from "./notes";
+import { entriesOf, hideUnread, whyNotWatching } from "./story";
+import { LOOK_FAILED, NOTHING_HAPPENED_YET, latestOf, movesOf, nothingToAsk, summarised, whyNoReading } from "./resources";
 import { briefOf, whyNoWork, workOf } from "./work";
 
 export type { ConfirmableAct, JobAct } from "./Acts";
@@ -270,6 +273,11 @@ export type JobDetailProps = {
    */
   resources: Holds;
   /**
+   * The Job's history, for the one line of Pulse that says what a person last
+   * did. Optional: without it, Pulse draws the latest of the Drone and Fleet.
+   */
+  history?: History;
+  /**
    * What the last look found, where somebody pressed for one. **Never opened
    * with the Job** — an answer that appeared unasked would be the machine
    * noticing on its own, which is a different capability.
@@ -311,6 +319,7 @@ export function JobDetail({
   observed,
   journalled,
   resources,
+  history,
   examination,
   onExamine,
   recorded,
@@ -414,7 +423,6 @@ export function JobDetail({
   // a chapter drawn from the rows alone reads every one of them as a step that
   // has not started. `story.ts` holds the sentences. #324.
   const transcript = whyNotWatching(observed);
-  const fleetSaid = useMemo(() => notesOf(noted?.notes ?? []), [noted]);
 
   // What the keyboard can name, built before it is drawn. **The three regions
   // the contextual tier reaches are values here rather than queries later** —
@@ -526,7 +534,9 @@ export function JobDetail({
   // the open step. `again.tsx` holds all of it.
   const pressing = useShowAgain(onShowAgain, job.id, whole?.show_again, open?.step_id, frames);
 
-  const rows = watching === null || open === undefined ? [] : entriesOf(watching.rows, open.step_id);
+  const rows = hideUnread(
+    watching === null || open === undefined ? [] : entriesOf(watching.rows, open.step_id),
+  ).rows;
 
   /**
    * Open a sheet. **The second one replaces the first** rather than stacking on
@@ -680,6 +690,9 @@ export function JobDetail({
       run={run.map(named)}
       runElapsed={span(job.created_at, now) ?? undefined}
       runAbsent={whyNoSteps(watched, job.id)}
+      unreachable={
+        watched.state === "failed" && watched.jobId === job.id ? "Fleet did not answer" : undefined
+      }
       // What it holds on this machine, below the run and above the pointers.
       // **Five lines, and the reading a press away.** It answers *is this
       // working*, which is what a person suspecting a wedged Job came with —
@@ -693,13 +706,18 @@ export function JobDetail({
       // to no step are also the ones a reader wants after it stopped.
       machine={
         <JobHoldsSummary
-          tail={tailOf(fleetSaid)}
-          tailNote={whyNoNotes(journalled) ?? NOTHING_FROM_FLEET_YET}
+          latest={latestOf(watching?.rows ?? [], noted?.notes ?? [], movesOf(history, job.id))}
+          latestNote={whyNoNotes(journalled) ?? NOTHING_HAPPENED_YET}
           figures={summarised(holding, examinedNow)}
           note={whyNoReading(resources)}
           age={holding === null ? undefined : (span(holding.read_at, now) ?? undefined)}
-          onOpen={() => openSheet("holds")}
         />
+      }
+      machineAct={
+        <Button variant="ghost" size="sm" onClick={() => openSheet("holds")}>
+          Details
+          <ChevronRight size={12} strokeWidth={2} aria-hidden />
+        </Button>
       }
       // One animated mark per screen, on the thing being read — and nothing
       // pulses on a Job that is over, where "still working" is a claim no step
@@ -708,13 +726,17 @@ export function JobDetail({
       // sheet's live mark takes it.
       pulsing={render === "working" && sheet === null}
       onSelectStep={setSelected}
+      // A count in the tree opens its chapter: the step, then the reader on it.
+      onOpenChapter={(stepId, chapterId) => {
+        setSelected(stepId);
+        keys.onFocusChapter(chapterId);
+      }}
       // The tree draws exactly what the keyboard holds. **Selecting a step
       // still does not open its facts** — that is `RunTree`'s rule and it is
       // the reason the two are separate props at all.
       openSteps={keys.openSteps}
       onOpenStep={keys.onOpenStep}
       where={workOf(onOpenArtifact, job, whole, manifest, workflow)}
-      whereNote={NAMED_NOT_NEEDED}
       whereAbsent={whyNoWork(watched, job.id)}
       brief={whole === null ? undefined : briefOf(whole)}
       briefAbsent={whyNoBrief(watched, job.id)}
@@ -832,11 +854,6 @@ function named(step: RunTreeStep): RunTreeStep {
   };
 }
 
-/** What the pointers under the run are for, said once. */
-const NAMED_NOT_NEEDED =
-  "A path opens where it lives; an identifier copies. Nothing above needs these — they are here " +
-  "for when you want them anyway.";
-
 /** The reads the panel's own chapters draw from. */
 export type FoldedReads = {
   footprint: Footprint;
@@ -858,7 +875,7 @@ function whyNoSteps(watched: Watched, jobId: string): string | undefined {
       : undefined;
   }
   if (watched.state === "failed" && watched.jobId === jobId) {
-    return "Fleet did not answer for this Job, so its steps are unknown.";
+    return "Fleet did not answer";
   }
   return "Reading this Job.";
 }
@@ -870,7 +887,7 @@ function whyNoSteps(watched: Watched, jobId: string): string | undefined {
  */
 function whyNoBrief(watched: Watched, jobId: string): string {
   if (watched.state === "failed" && watched.jobId === jobId) {
-    return "Fleet did not answer for this job.";
+    return "Fleet did not answer";
   }
   return "Reading this job.";
 }

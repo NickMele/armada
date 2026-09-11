@@ -27,8 +27,9 @@ import type {
   Look,
   Outcome,
 } from "@armada/protocol";
-import { nothingToAsk, summarised, tailOf } from "./resources";
-import type { LogRow } from "./story";
+import { latestOf, nothingToAsk, summarised } from "./resources";
+import type { NoteLevel, Noted, Recorded, Turn } from "@armada/protocol";
+import { clock } from "./duration";
 
 const JOB = "01M130Y1380016YK5S0JXBXDQ5";
 
@@ -218,49 +219,59 @@ describe("what the summary says", () => {
   });
 });
 
-describe("the tail", () => {
-  const rows: LogRow[] = [
-    { id: "1", at: "09:14:02", actor: "fleet", kind: "note", message: "Worktree cut", payload: [] },
-    {
-      id: "2",
-      at: "09:14:02",
-      actor: "fleet",
-      kind: "note",
-      message: "Preparation began",
-      payload: [],
-    },
-    {
-      id: "3",
-      at: "09:16:47",
-      actor: "fleet",
-      kind: "note",
-      message: "A preparation command failed",
-      payload: [{ text: "exit  1", named: "failed" }],
-    },
-  ];
-
-  // Two, and the newest first. The region this replaced bounded at 15rem and
-  // still pushed the run below the fold.
-  it("takes the last two, newest first", () => {
-    expect(tailOf(rows).map((line) => line.said)).toEqual([
-      "A preparation command failed",
-      "Preparation began",
-    ]);
+describe("the last thing anyone did", () => {
+  const turn = (ts: string, seq = 1): Turn => ({
+    ts,
+    seq,
+    step: "fix",
+    by: "drone",
+    saw: { event: "started", session: "s", model: "sonnet", mcp_servers: 0 },
+  });
+  const unread = (ts: string): Turn => ({
+    ts,
+    seq: 9,
+    step: "fix",
+    by: "drone",
+    saw: { event: "unrecognised", kind: "system/thinking_tokens" },
+  });
+  const note = (at: string, msg: string, level: NoteLevel = "info"): Noted => ({ at, by: "fleet", level, msg, seq: 1 });
+  const moved = (at: string, actor: string): Recorded => ({
+    seq: 1,
+    status: "awaiting_approval",
+    moved: { kind: "status", to: "queued" },
+    actor,
+    at,
   });
 
-  it("names who wrote each line as a person reads it", () => {
-    expect(tailOf(rows)[0]!.actor).toBe("Fleet");
+  it("is the newest of the Drone, Fleet and a person", () => {
+    const latest = latestOf(
+      [turn("2026-09-11T10:00:00Z")],
+      [note("2026-09-11T10:05:00Z", "Worktree cut")],
+      [moved("2026-09-11T10:02:00Z", "human")],
+    );
+    expect(latest?.actor).toBe("Fleet");
+    expect(latest?.said).toBe("Worktree cut");
   });
 
-  // The level is already a rendering by the time it gets here: `notesOf` names
-  // an error payload `failed`. Reading that answer is what keeps the tail's
-  // hue and the log's hue the same hue.
-  it("marks a line whose payload was written at error level", () => {
-    expect(tailOf(rows)[0]!.wrong).toBe(true);
-    expect(tailOf(rows)[1]!.wrong).toBeUndefined();
+  it("names a person's move as theirs, in their words", () => {
+    expect(latestOf([], [], [moved("2026-09-11T10:02:00Z", "human")])).toEqual({
+      at: clock("2026-09-11T10:02:00Z"),
+      actor: "You",
+      said: "Approved dispatch",
+    });
   });
 
-  it("draws nothing where the log carries nothing", () => {
-    expect(tailOf([])).toEqual([]);
+  it("skips a row this build cannot read, the way the log does", () => {
+    const latest = latestOf([turn("2026-09-11T10:00:00Z"), unread("2026-09-11T10:09:00Z")], [], []);
+    expect(latest?.actor).toBe("Drone");
+    expect(latest?.at).toBe(clock("2026-09-11T10:00:00Z"));
+  });
+
+  it("leaves Fleet's own moves on the history to Fleet's own log", () => {
+    expect(latestOf([], [], [moved("2026-09-11T10:02:00Z", "fleet")])).toBeUndefined();
+  });
+
+  it("says nothing where nothing has happened", () => {
+    expect(latestOf([], [], [])).toBeUndefined();
   });
 });

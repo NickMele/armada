@@ -128,6 +128,11 @@ export type Recourse = {
    * for.
    */
   withheld?: string;
+  /**
+   * What happened to the last redirect, where one is out. **Shown and never
+   * hovered**: the person reading is usually the person who sent it.
+   */
+  sent?: string;
   /** Where the step stands, in the panel's own voice. Never a menu. */
   stands: string;
 };
@@ -225,6 +230,7 @@ export function recourseOf(job: JobSummary, whole: JobWhole | null): Recourse {
   return {
     ...drew,
     withheld: withheldBy(stuck, drew),
+    ...(sent === "" ? {} : { sent: sent.trim() }),
     stands: act === undefined ? `${sent}${stalled(job, stuck)}` : `${sent}${HOLDING}`,
   };
 }
@@ -235,8 +241,7 @@ export function recourseOf(job: JobSummary, whole: JobWhole | null): Recourse {
  * is on that act's own tooltip and a paragraph naming all of them above the
  * buttons is the block this replaced.
  */
-const HOLDING =
-  "The drone is holding at this step. Nothing advances until you decide what happens next.";
+const HOLDING = "The drone is paused, waiting for you.";
 
 /**
  * Why an act a person is looking for is not on offer. **At most one line**: an
@@ -256,7 +261,7 @@ function withheldBy(stuck: Stuck, made: Recourse): string | undefined {
  * which is where a reason for an absent act is least likely to be read.
  */
 const RESTART_WITHHELD =
-  "Restart is not offered while the drone is alive: a restart throws that session away.";
+  "Restart is off while the drone is still running, because it would throw away the drone's session.";
 
 /**
  * The words one trigger's override is offered in. **Five, because five places

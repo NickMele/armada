@@ -17,6 +17,7 @@ interface NoteRecord {
   note: string;
   at: string;
   picked?: Picked;
+  shot?: string;
 }
 
 // The panel is a fixed-height region handed to us by Storybook — content
@@ -55,6 +56,17 @@ const Textarea = styled.textarea(({ theme }) => ({
   border: `1px solid ${theme.appBorderColor}`,
   borderRadius: theme.appBorderRadius,
   padding: 8,
+}));
+
+// A pasted screenshot, before it is sent and under the note it went with.
+const Shot = styled.img(({ theme }) => ({
+  display: "block",
+  maxWidth: "100%",
+  maxHeight: 160,
+  objectFit: "contain",
+  alignSelf: "flex-start",
+  border: `1px solid ${theme.appBorderColor}`,
+  borderRadius: theme.appBorderRadius,
 }));
 
 const NoteRow = styled.div(({ theme }) => ({
@@ -130,6 +142,8 @@ function NotesPanel({ active }: { active?: boolean }) {
   const [notes, setNotes] = useState<NoteRecord[]>([]);
   const [picking, setPicking] = useState(false);
   const [picked, setPicked] = useState<Picked | null>(null);
+  // A screenshot pasted into the note, as a data URL until it is sent.
+  const [shot, setShot] = useState<string | null>(null);
   // Why the last send did not land. Null while nothing has failed.
   const [failed, setFailed] = useState<string | null>(null);
 
@@ -159,7 +173,24 @@ function NotesPanel({ active }: { active?: boolean }) {
   useEffect(() => {
     setPicked(null);
     setPicking(false);
+    setShot(null);
   }, [storyId]);
+
+  // An image on the clipboard becomes the note's screenshot; text still pastes
+  // as text.
+  const paste = useCallback((event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const image = Array.from(event.clipboardData.items).find((item) =>
+      item.type.startsWith("image/"),
+    );
+    const file = image?.getAsFile();
+    if (!file) return;
+    event.preventDefault();
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") setShot(reader.result);
+    };
+    reader.readAsDataURL(file);
+  }, []);
 
   const startPicking = useCallback(() => {
     setPicked(null);
@@ -201,26 +232,33 @@ function NotesPanel({ active }: { active?: boolean }) {
    * chrome saying it failed.
    */
   const send = useCallback(() => {
-    if (!storyId || !draft.trim()) return;
+    if (!storyId || (!draft.trim() && !shot)) return;
     const data = api.getCurrentStoryData();
     const titled = "title" in data ? `${data.title} / ${data.name}` : storyId;
     setFailed(null);
     fetch("/__notes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ story: storyId, titled, note: draft, ...(picked ? { picked } : {}) }),
+      body: JSON.stringify({
+        story: storyId,
+        titled,
+        note: draft,
+        ...(picked ? { picked } : {}),
+        ...(shot ? { shot } : {}),
+      }),
     })
       .then((response) => {
         if (!response.ok) throw new Error(`the dev server answered ${response.status}`);
         setDraft("");
         setPicked(null);
+        setShot(null);
         setFailed(null);
         refresh();
       })
       .catch((reason: unknown) => {
         setFailed(reason instanceof Error ? reason.message : String(reason));
       });
-  }, [api, draft, picked, refresh, storyId]);
+  }, [api, draft, picked, refresh, shot, storyId]);
 
   if (!active) return null;
 
@@ -230,8 +268,15 @@ function NotesPanel({ active }: { active?: boolean }) {
         <Textarea
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder="Note this story for the agent session reading .notes/storybook.jsonl"
+          onPaste={paste}
+          placeholder="Note this story for the agent session reading .notes/storybook.jsonl. Paste an image to attach a screenshot."
         />
+        {shot && (
+          <>
+            <Shot src={shot} alt="Screenshot to send with this note" />
+            <Button onClick={() => setShot(null)}>Remove screenshot</Button>
+          </>
+        )}
         <PickRow>
           {picking ? (
             <>
@@ -250,7 +295,7 @@ function NotesPanel({ active }: { active?: boolean }) {
             <Button onClick={() => setPicked(null)}>Clear pick</Button>
           </>
         )}
-        <Button onClick={send} disabled={!draft.trim() || !storyId}>
+        <Button onClick={send} disabled={(!draft.trim() && !shot) || !storyId}>
           Send
         </Button>
         {/* Said in the panel rather than the console. The reviewer is looking
@@ -268,6 +313,12 @@ function NotesPanel({ active }: { active?: boolean }) {
           <NoteRow key={index}>
             <div>{record.note}</div>
             {record.picked && <PickSummary picked={record.picked} />}
+            {record.shot && (
+              <Shot
+                src={`/__notes/shots/${record.shot.split("/").pop() ?? ""}`}
+                alt="Screenshot sent with this note"
+              />
+            )}
             <Timestamp>{new Date(record.at).toLocaleString()}</Timestamp>
           </NoteRow>
         ))}

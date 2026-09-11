@@ -14,10 +14,11 @@ import type { StepActivity } from "../StepActivityMark/StepActivityMark";
  * fixed column on every row and the motion then appears in one predictable
  * place rather than moving with the workflow's length.
  *
- * **Advanced segments are neutral here, and that is a stated exception.** In a
- * rail an advanced step keeps `--step-advanced`; a bar compresses a whole rail
- * into one short track, so five rows of six advanced steps is thirty green
- * marks and the hue stops meaning anything. Hue marks the current step alone.
+ * **A step behind the current one keeps its hue**, `--step-advanced`, the same
+ * as in a rail. The bar used to draw them neutral on the argument that a list
+ * of Jobs would be a wall of green; the owner ruled the other way on 11 Sep
+ * 2026, because a grey run of finished steps read as steps that had not
+ * happened.
  */
 export type StepBarProps = {
   /** One segment per step. Segment width is what says how long a workflow is. */
@@ -28,9 +29,9 @@ export type StepBarProps = {
    */
   current: number;
   /**
-   * The current step's activity — the one segment that takes a hue, and the
-   * only place a step's state reaches a list row. `killed` and `retrying`
-   * take none, as everywhere else.
+   * The current step's activity, and the hue its segment takes. The steps
+   * behind it take `advanced`'s. `killed` and `retrying` take none, as
+   * everywhere else.
    */
   activity?: StepActivity;
   /**

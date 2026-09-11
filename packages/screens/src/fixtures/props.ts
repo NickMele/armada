@@ -1,0 +1,72 @@
+// Every prop `JobDetail` needs, answered from one fixture — for the stories that
+// draw a fixture and for the proof that renders every one of them.
+//
+// **One place, because two would drift.** The proof and the stories used to be
+// able to disagree about what an unanswered read comes back as, and a story
+// that drew a read the proof never rendered would be the gap this package's
+// fixtures exist to close.
+
+import type { CallRead, CheckOutputRead, FrameRead, Followed, Opened, Outcome } from "@armada/protocol";
+
+import type { JobDetailProps } from "../JobDetail";
+import type { JobFixture } from "./fixture";
+
+const NOT_CONNECTED: Outcome = { ok: false, why: "not_connected" };
+const UNKNOWN_JOB_OPENED: Opened = { ok: false, why: "unknown_job" };
+const UNKNOWN_JOB_FOLLOWED: Followed = { ok: false, why: "unknown_job" };
+const NOT_ANSWERED_CALL: CallRead = { ok: false, outcome: NOT_CONNECTED };
+const NOT_ANSWERED_OUTPUT: CheckOutputRead = { ok: false, outcome: NOT_CONNECTED };
+const NOT_ANSWERED_FRAME: FrameRead = { ok: false, outcome: NOT_CONNECTED };
+
+function noop(): void {}
+
+/**
+ * Every prop `JobDetail` needs, answered from one fixture's own reads and
+ * no-ops beyond it. **Reads are answered; acts do nothing.** A story is a
+ * reading of one moment, so a press that would change the Job has nowhere to
+ * go — and the proof that renders every fixture never presses anything.
+ */
+export function propsFor(fixture: JobFixture): JobDetailProps {
+  return {
+    job: fixture.job,
+    watched: fixture.watched,
+    workflows: fixture.workflows,
+    manifests: fixture.manifests,
+    stale: false,
+    now: fixture.now,
+    acting: false,
+    approving: false,
+    deciding: false,
+    onAct: noop,
+    onRedirect: noop,
+    onAnswer: noop,
+    onOverrule: noop,
+    onRaiseCap: noop,
+    onRaiseTurnCap: noop,
+    onRerun: noop,
+    onReadDiff: noop,
+    onOpenArtifact: async () => UNKNOWN_JOB_OPENED,
+    onOpenPullRequest: async () => UNKNOWN_JOB_FOLLOWED,
+    onReadCall: async (_jobId, callId) => fixture.calls[callId] ?? NOT_ANSWERED_CALL,
+    onReadCheckOutput: async (_jobId, kept) => fixture.checkOutputs[kept] ?? NOT_ANSWERED_OUTPUT,
+    onReadFrame: async (_jobId, kept) => fixture.frames[kept] ?? NOT_ANSWERED_FRAME,
+    onNeedMaterial: noop,
+    onNeedRemarks: noop,
+    onReport: async () => NOT_CONNECTED,
+    onApprove: noop,
+    onMergePullRequest: noop,
+    onApproveReview: noop,
+    onRequestChanges: noop,
+    onReject: noop,
+    onTakeUpRemarks: noop,
+    observed: fixture.observed,
+    journalled: fixture.journalled,
+    resources: fixture.resources,
+    history: fixture.history,
+    examination: { state: "none" },
+    onExamine: noop,
+    recorded: fixture.recorded,
+    onCopied: noop,
+    onSaid: noop,
+  };
+}

@@ -105,6 +105,12 @@ export type RunTreeFact = {
    */
   opens?: string;
   /**
+   * The chapter of this step's story the fact is the count of, like `produced`.
+   * Present makes the value a control that opens the step on that chapter,
+   * where the caller answers `onOpenChapter`; the same rule as `opens` holds.
+   */
+  chapter?: string;
+  /**
    * What the value opens to on hover — a `PhaseCard`, and nothing else.
    *
    * **The rich hover, and it exists because some values cannot be explained in
@@ -233,6 +239,11 @@ export type RunTreeProps = {
    * should draw.
    */
   onOpenArtifact?: (artifactId: string) => void;
+  /**
+   * Told when a fact that names a chapter is pressed: select that step and put
+   * the reader on that chapter of its story.
+   */
+  onOpenChapter?: (stepId: string, chapterId: string) => void;
 };
 
 /**
@@ -244,6 +255,7 @@ function drawFact(
   fact: RunTreeFact,
   onCopied: RunTreeProps["onCopied"],
   onOpenArtifact: RunTreeProps["onOpenArtifact"],
+  onOpenChapter?: (chapterId: string) => void,
 ): StepRowFact {
   const bare =
     fact.value === undefined ? null : (
@@ -265,7 +277,15 @@ function drawFact(
     label: fact.label,
     value: (
       <>
-        {fact.opens === undefined || onOpenArtifact === undefined ? (
+        {fact.chapter !== undefined && onOpenChapter !== undefined && fact.opens === undefined ? (
+          <button
+            type="button"
+            className="armada-run-tree__opens"
+            onClick={() => onOpenChapter(fact.chapter as string)}
+          >
+            {chip}
+          </button>
+        ) : fact.opens === undefined || onOpenArtifact === undefined ? (
           chip
         ) : (
           // The chip is unchanged inside it. A fact chip is a value being read
@@ -291,7 +311,7 @@ function drawFact(
         ))}
       </>
     ),
-    children: fact.children?.map((child) => drawFact(child, onCopied, onOpenArtifact)),
+    children: fact.children?.map((child) => drawFact(child, onCopied, onOpenArtifact, onOpenChapter)),
     folded: fact.folded,
   };
 }
@@ -318,6 +338,7 @@ export function RunTree({
   onOpen,
   onCopied,
   onOpenArtifact,
+  onOpenChapter,
 }: RunTreeProps) {
   const [held, setHeld] = useState<ReadonlySet<string>>(
     () => new Set(steps.filter((step) => step.factsOpen).map((step) => step.id)),
@@ -369,7 +390,14 @@ export function RunTree({
             pulsing={pulsing && (step.current ?? false)}
             factsId={`armada-run-facts-${step.id}`}
             factsAbsent={step.factsAbsent}
-            facts={(step.facts ?? []).map((fact) => drawFact(fact, onCopied, onOpenArtifact))}
+            facts={(step.facts ?? []).map((fact) =>
+              drawFact(
+                fact,
+                onCopied,
+                onOpenArtifact,
+                onOpenChapter === undefined ? undefined : (chapterId) => onOpenChapter(step.id, chapterId),
+              ),
+            )}
           />
         </li>
       ))}

@@ -260,7 +260,7 @@ export function Decide({
           same value in two places. */}
       {evidence.state === "failed" && evidence.jobId === job.id ? (
         <p className="text-fg-muted">
-          What this drone claimed could not be read. The record below names the same failure.
+          The drone's claims could not be read
         </p>
       ) : null}
     </>

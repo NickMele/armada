@@ -149,7 +149,7 @@ function isEcho(row: Turn): boolean {
 
 /** What a step with no rows says. Ordinary, and never an error. */
 export const NOTHING_YET_ON_THIS_STEP =
-  "Nothing has happened on this step yet.";
+  "Nothing yet";
 
 /**
  * What the socket says about its own reading, or nothing while it is reading.
@@ -172,7 +172,7 @@ export function whyNotWatching(observed: Observed): string | undefined {
     case "opening":
       return "Armada is opening this job's transcript.";
     case "none":
-      return "Armada is not reading this job's transcript.";
+      return "Not reading the transcript";
     case "failed":
       // The detail is main's own sentence — which port, which peer, which
       // frame — and it is the half a reader can act on.
@@ -220,6 +220,16 @@ export function entriesOf(rows: readonly Turn[], stepId: string | undefined): Lo
     .filter((row) => stepId === undefined || row.step === undefined || row.step === stepId)
     .filter((row) => !isEcho(row))
     .map(rowOf);
+}
+
+/**
+ * The rows a person can read, and how many were left out. The count keeps the
+ * hiding honest: a log that shortens with nothing saying so reads as a Drone
+ * that did less.
+ */
+export function hideUnread(rows: readonly LogRow[]): { rows: LogRow[]; unread: number } {
+  const shown = rows.filter((row) => row.kind !== "unrecognised");
+  return { rows: shown, unread: rows.length - shown.length };
 }
 
 /**
@@ -351,6 +361,7 @@ function rowOf(row: Turn): LogRow {
     case "unrecognised":
       // A kind this Bridge has no case for. Drawn as itself rather than
       // dropped: a row nobody can read is a finding, and a missing row is not.
+      // The log counts these rather than listing them (`hideUnread`).
       //
       // **The kind is in the sentence, not only behind it.** Five of these
       // arrived across four seconds carrying five different kinds and read as
