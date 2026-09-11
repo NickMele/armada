@@ -708,31 +708,27 @@
   text-wrap: pretty;
 }
 
-/* The Job's brief, at the top of the panel. **A line, not a card**: the label
-   inline and the sentence beside it, on the panel's own surface.
-
-   It was a caption stacked over `JobBrief`'s well, which put a darker card
-   inside a region already labelled BRIEF — a second surface the drawing does
-   not have, holding one sentence. Baseline-aligned so the caps label sits on
-   the sentence's first line however far the sentence wraps, and the label is
-   `flex: none` so the prose takes every remaining pixel. */
+/* The Job's brief, at the top of the panel: the label above it, and the text
+   along the panel's own edge beneath. **Still no card.** It was once a caption
+   over `JobBrief`'s well, a darker card inside a region already labelled
+   BRIEF. Then it was one line, the label inline and the text beside it, which
+   indented every line of the brief by the label's width. The owner asked on
+   11 Sep 2026 for the label above and the text flush with the edge. */
 .armada-inside__brief {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
+  flex-direction: column;
+  gap: var(--space-1);
   min-width: 0;
 }
 
+/* Only as wide as its word, so the label's hover is the label and not the row. */
 .armada-inside__brief > .armada-screen__eyebrow {
-  flex: none;
+  align-self: flex-start;
 }
 
-/* The brief itself, or the sentence saying why there is none. `minmax(0, 1fr)`
-   in flex terms: it absorbs every pixel the label does not take, and `min-width:
-   0` is what lets a long unbroken word wrap rather than push the pair wider
-   than the panel. */
+/* The brief itself, or the sentence saying why there is none. `min-width: 0`
+   lets a long unbroken word wrap rather than push the panel wider. */
 .armada-inside__brief > :not(.armada-screen__eyebrow) {
-  flex: 1;
   min-width: 0;
 }
 
