@@ -169,3 +169,74 @@ async fn the_span_is_freed_once_the_job_is_killed() {
         "the span is released once the Job reaches a terminal status"
     );
 }
+
+/// **A Job and the main checkout never overlap.** Both are claimed against
+/// the same range, through the same `try_claim`, and read each other's spans
+/// back through the same `every_port_claim` before either probes a
+/// candidate.
+#[tokio::test]
+async fn a_job_and_the_main_checkout_never_overlap() {
+    let home = TempDir::new();
+    let fleet = a_fleet_declaring_storybook(&home, 1);
+    let job = fleet
+        .propose(a_proposal("a Job beside the main checkout"))
+        .await
+        .expect("proposed");
+    worktree_directory(&home, &job);
+    let dispatched = dispatched(&fleet, job.id()).await.expect("dispatch runs");
+
+    let main_checkout = fleet.main_checkout_ports().await;
+    let job_ports = fleet.port_map(&dispatched).await;
+    assert_ne!(
+        main_checkout.get("storybook"),
+        job_ports.get("storybook"),
+        "the Job and the main checkout do not hold the same port"
+    );
+}
+
+/// **Claimed on first need, and reused after that.** Two calls with no Job or
+/// server in between answer with the same span — there is nothing here that
+/// would claim a second one.
+#[tokio::test]
+async fn the_main_checkouts_span_is_reused_rather_than_reclaimed() {
+    let home = TempDir::new();
+    let fleet = a_fleet_declaring_storybook(&home, 1);
+
+    let first = fleet.main_checkout_ports().await;
+    let second = fleet.main_checkout_ports().await;
+    assert_eq!(first, second, "the same claim, read back twice");
+    assert_eq!(
+        fleet
+            .store()
+            .lock()
+            .await
+            .every_port_claim()
+            .expect("read")
+            .len(),
+        1,
+        "one claim, not one per call"
+    );
+}
+
+/// **The span is released on Fleet shutdown.** No Job and no server is
+/// involved — the release the composition root calls once, after teardown.
+#[tokio::test]
+async fn the_main_checkouts_span_is_released_on_shutdown() {
+    let home = TempDir::new();
+    let fleet = a_fleet_declaring_storybook(&home, 1);
+    let claimed = fleet.main_checkout_ports().await;
+    assert!(!claimed.is_empty(), "a span was claimed");
+
+    fleet.released_main_checkout_ports().await;
+
+    assert!(
+        fleet
+            .store()
+            .lock()
+            .await
+            .every_port_claim()
+            .expect("read")
+            .is_empty(),
+        "the main checkout's span is free again"
+    );
+}

@@ -518,6 +518,11 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     // over. **Nothing else on this side knows where the logs are**, which is
     // why it comes from Fleet rather than from the root resolved above.
     let job_logs = Arc::new(fleet.job_logs());
+    // Kept past the move below, for the main checkout's own port span: its
+    // release happens here, once, after the turn loop has drained — not from
+    // inside a Fleet method the way a Job's own release is, because there is
+    // no Job whose transition would carry it. See `fleet::ports`.
+    let fleet_for_shutdown = Arc::clone(&fleet);
     let app = api::router(api::Served::sharing(fleet, run_id, events).reading(job_logs));
     println!("serving {} on {bound}", api::SERVED.len());
 
@@ -537,6 +542,12 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     // whole Check budget and a terminal that has gone quiet reads as a wedge.
     println!("stopping: letting the turn in flight finish");
     turning.stopped().await;
+
+    // After teardown, never before it: the turn in flight has finished, so
+    // nothing this process spawned in the main checkout is still running.
+    // `docs/concepts/fleet.md`, *Servers* — held for as long as Fleet runs,
+    // released once, here.
+    fleet_for_shutdown.released_main_checkout_ports().await;
 
     // Dropping it removes the file, which is what makes this a clean exit. An
     // exit that skips the drop leaves the file stale, and the next start

@@ -13,6 +13,11 @@
 //! nullable fields a caller here could set both or neither of, and
 //! [`PortRange::of`] takes every one of its three numbers so a caller cannot
 //! build a range with a granule of zero and a division by it later.
+//!
+//! **Over 500 lines.** The main checkout's own claim — sized, probed and
+//! released the same way a Job's is — reuses `try_claim` rather than being a
+//! second copy of it beside a different Rust type; keeping the two together is
+//! what makes that reuse visible.
 
 use std::collections::BTreeMap;
 use std::net::{TcpListener, TcpStream};
@@ -408,7 +413,7 @@ where
     /// takes**: nothing was spawned, so `not_configurable` reads correctly —
     /// the Manifest's own `ports:` would not resolve to a usable span.
     pub(crate) async fn claimed_ports(&self, job: &Job) -> Result<(), Adrift> {
-        if let Err(cause) = self.try_claim_ports(job).await {
+        if let Err(cause) = self.try_claim(PortClaimant::Job(job.id().clone())).await {
             self.move_job(
                 job,
                 core_model::Target::Escalated(core_model::EscalationTrigger::NotConfigurable),
@@ -423,7 +428,15 @@ where
         Ok(())
     }
 
-    async fn try_claim_ports(&self, job: &Job) -> Result<(), PortsRefused> {
+    /// Claim a span for `claimant`, sized from the Manifest's `ports:` and
+    /// rounded to the granule. **The one place a span is picked** — a Job's
+    /// own claim and the main checkout's both go through this, so the two
+    /// never overlap: both read [`Store::every_port_claim`] before probing a
+    /// candidate, and the main checkout's own row (once it has one) is in
+    /// that read exactly like a Job's.
+    ///
+    /// [`Store::every_port_claim`]: store::Store::every_port_claim
+    async fn try_claim(&self, claimant: PortClaimant) -> Result<(), PortsRefused> {
         let declared = self.manifest().port_names();
         if declared.is_empty() {
             return Ok(());
@@ -446,7 +459,7 @@ where
             .lock()
             .await
             .claim_port_span(&PortClaim {
-                claimant: PortClaimant::Job(job.id().clone()),
+                claimant,
                 base,
                 width,
                 claimed_at: self.now(),
@@ -496,5 +509,83 @@ where
             .lock()
             .await
             .release_port_span(&PortClaimant::Job(job.id().clone()));
+    }
+
+    /// The main checkout's own claimed span, resolved to a name-to-port map.
+    /// **Claimed on first need, and reused after that** — the proof run after
+    /// a merge draws from this, and so will a server started from the
+    /// Manifest surface with no Job, since neither has a worktree of its own
+    /// to claim against.
+    pub(crate) async fn main_checkout_ports(&self) -> BTreeMap<String, u16> {
+        if let Some(claim) = self.main_checkout_claim().await {
+            return port_map(self.manifest(), &claim);
+        }
+        // First need: nothing to escalate and nobody to tell if this
+        // refuses, for `main_checkout_port_env`'s own reason — a proof run
+        // with an unresolved `${port.NAME}` is diagnosable from its own log,
+        // and there is no Job here to carry a `not_configurable`.
+        let _ = self.try_claim(PortClaimant::MainCheckout).await;
+        match self.main_checkout_claim().await {
+            Some(claim) => port_map(self.manifest(), &claim),
+            None => BTreeMap::new(),
+        }
+    }
+
+    /// Every variable the main checkout's claimed span sets:
+    /// `ARMADA_PORT_<NAME>` and any declared `env`, for the proof run after a
+    /// merge and, later, a server started with no Job.
+    pub(crate) async fn main_checkout_port_env(&self) -> Vec<(String, String)> {
+        let names = match env_names(self.manifest()) {
+            Ok(names) => names,
+            Err(_) => return Vec::new(),
+        };
+        let ports = self.main_checkout_ports().await;
+        env_vars(&names, &ports)
+    }
+
+    async fn main_checkout_claim(&self) -> Option<PortClaim> {
+        self.store()
+            .lock()
+            .await
+            .port_span_for_main_checkout()
+            .ok()
+            .flatten()
+    }
+
+    /// Release the main checkout's span. **Called once, at Fleet shutdown,
+    /// after teardown** — `docs/concepts/fleet.md`, *Servers*: unlike a Job's
+    /// span, the main checkout's is held for as long as Fleet runs rather
+    /// than per run, so nothing releases it between one proof run and the
+    /// next.
+    ///
+    /// **`pub`, and not `pub(crate)`** — every other release in this module
+    /// happens from inside a Fleet method that already holds the Job whose
+    /// span it is releasing; there is no such method for the main checkout,
+    /// so the composition root calls this directly once the turn loop has
+    /// drained. See `armada::serve`.
+    pub async fn released_main_checkout_ports(&self) {
+        let _ = self
+            .store()
+            .lock()
+            .await
+            .release_port_span(&PortClaimant::MainCheckout);
+    }
+
+    /// At boot, confirm a main-checkout claim a crashed Fleet left behind is
+    /// still good before this process reuses it. **The bind-and-connect
+    /// probe rule applies here exactly as it does to a fresh claim** — a row
+    /// on disk says nothing about whether the ports it names are still free,
+    /// only that the last Fleet to hold them believed they were. A span that
+    /// fails the probe is released rather than reused, so the next call to
+    /// [`main_checkout_ports`](Fleet::main_checkout_ports) claims a fresh one.
+    pub(crate) async fn reconciled_main_checkout_ports(&self) {
+        let Some(claim) = self.main_checkout_claim().await else {
+            return;
+        };
+        let top = claim.base.saturating_add(claim.width.saturating_sub(1));
+        let still_free = (claim.base..=top).all(|port| BindConnectProbe.free(port));
+        if !still_free {
+            self.released_main_checkout_ports().await;
+        }
     }
 }

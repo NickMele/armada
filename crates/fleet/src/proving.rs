@@ -125,6 +125,10 @@ where
             at_commit,
             &base,
         );
+        // The main checkout's own span — claimed on first need, reused after
+        // that. See `crate::ports`.
+        let ports = self.main_checkout_ports().await;
+        let port_env = self.main_checkout_port_env().await;
         spawn_the_run(
             Arc::clone(self.proving()),
             job.clone(),
@@ -134,6 +138,8 @@ where
             self.budget().duration(),
             at_commit.to_string(),
             base,
+            ports,
+            port_env,
         );
     }
 
@@ -220,6 +226,7 @@ where
 /// **The `running` marker is cleared on every path**, including the one where
 /// the observations and the Checks do not line up — a marker left set would
 /// stop every later merge being proved for the life of the process, silently.
+#[allow(clippy::too_many_arguments)]
 fn spawn_the_run(
     proving: Arc<Mutex<Proving>>,
     job: JobId,
@@ -229,6 +236,8 @@ fn spawn_the_run(
     budget: Duration,
     at_commit: String,
     base: String,
+    ports: BTreeMap<String, u16>,
+    port_env: Vec<(String, String)>,
 ) {
     tokio::spawn(async move {
         // `touched` is empty and `moved` is false, and neither is consulted:
@@ -246,14 +255,12 @@ fn spawn_the_run(
             budget,
             // A commit is proved with no step and no Job anybody has open.
             &crate::underway::Announcing::nowhere(),
-            // No Job, so no claim: `docs/concepts/fleet.md`'s Ports section
-            // gives a claim two shapes, a Job's own or a no-Job run's, and
-            // this pass is neither — nothing in the design mints a claim for
-            // proving a commit after a merge. `checking::ran` still takes the
-            // pair so every caller resolves a Check's Command the same way;
-            // this one resolves nothing because it holds nothing to resolve.
-            &BTreeMap::new(),
-            &[],
+            // The main checkout's own claim — `docs/concepts/fleet.md`'s
+            // Ports section: held while Fleet runs, and this is what a proof
+            // run after a merge draws from. Empty where the Manifest
+            // declares no `ports:`.
+            &ports,
+            &port_env,
         )
         .await;
         let observed: Vec<verification::Observed> =
