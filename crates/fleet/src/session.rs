@@ -144,10 +144,8 @@ pub trait LiveSession {
     /// **Its own method for [`answer`](LiveSession::answer)'s reason**: the
     /// words are Fleet's around a command the Drone itself ran, and
     /// [`Permitted`] has no constructor taking free text.
-    fn permit(
-        &self,
-        permitted: &Permitted,
-    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+    fn permit(&self, permitted: &Permitted)
+        -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// Ask a Drone that has said nothing whether it is still there.
     ///

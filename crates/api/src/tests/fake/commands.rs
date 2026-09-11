@@ -26,6 +26,18 @@ use ipc::{
 use super::FakeDaemon;
 use crate::{Commands, Refusal};
 
+impl FakeDaemon {
+    /// The Job as it stands, or the 404 every fake command gives an id that
+    /// names nothing.
+    fn unmoved(&self, job_id: &JobId) -> Result<JobSummary, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        jobs.iter()
+            .find(|job| job.id == *job_id)
+            .cloned()
+            .ok_or_else(|| self.no_such_job(job_id))
+    }
+}
+
 impl Commands for FakeDaemon {
     async fn propose_from_request(
         &self,
@@ -133,6 +145,22 @@ impl Commands for FakeDaemon {
         _answer: ipc::ChosenAnswer,
     ) -> Result<JobSummary, Refusal> {
         self.fake_answer_question(job_id, _answer).await
+    }
+    /// The Job back, unmoved: what an answer does is Fleet's slot and store,
+    /// and a router test's question is whether the body arrived.
+    async fn answer_command(
+        &self,
+        job_id: JobId,
+        _answer: ipc::AnswerCommand,
+    ) -> Result<JobSummary, Refusal> {
+        self.unmoved(&job_id)
+    }
+    async fn set_when_blocked(
+        &self,
+        job_id: JobId,
+        _setting: ipc::SetWhenBlocked,
+    ) -> Result<JobSummary, Refusal> {
+        self.unmoved(&job_id)
     }
     async fn restart_step(
         &self,

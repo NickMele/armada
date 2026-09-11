@@ -13,7 +13,33 @@
 //! drafted in `docs/contracts/agent-prompt.md`, under the permission answer and
 //! the permission turn.
 
-use core_model::{AllowedCommand, Reach, WhenBlocked};
+mod holding;
+
+pub use holding::{domain_setting, wire_setting, NotPermitted};
+
+use core_model::{AllowedCommand, Reach, StepId, Timestamp, WhenBlocked};
+use tokio::sync::oneshot;
+
+/// A permission question a person has been asked, about a call this Drone
+/// made, and not answered yet.
+///
+/// **Held on the slot and written to no column**, for
+/// `crate::questioning::Question`'s reason: a Fleet that restarts loses the
+/// Drone whose call it was.
+pub struct Waiting {
+    /// The harness's id for the call. What a person's answer names, so an
+    /// answer from a window left open across a newer question joins to nothing.
+    pub call: String,
+    pub step: StepId,
+    pub asked_at: Timestamp,
+    pub tool: String,
+    pub command: String,
+    /// Where the answer goes while the tool call is still held open.
+    ///
+    /// **`None` once the hold has ended**, the Drone having been told to wait
+    /// for a turn: the answer then arrives as a [`Permitted`] turn instead.
+    pub reply: Option<oneshot::Sender<ipc::CommandAnswer>>,
+}
 
 /// What the permission tool answers before anybody is asked.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -35,6 +61,9 @@ pub enum Withheld {
     Destructive { name: String },
     /// A tool rather than a command.
     NotACommand { tool: String },
+    /// The harness could not grant it: a push, or a command its rules cannot
+    /// express. `why` is the harness's own sentence.
+    Ungrantable { why: String },
 }
 
 impl Withheld {
@@ -47,6 +76,7 @@ impl Withheld {
             Withheld::NotACommand { tool } => {
                 format!("{tool} is a tool, and only a command can be allowed from here")
             }
+            Withheld::Ungrantable { why } => format!("no task can be granted this: {why}"),
         }
     }
 }
@@ -54,12 +84,15 @@ impl Withheld {
 /// The answer before anyone is asked.
 ///
 /// `destructive` is every destructive command the Manifest declares, as
-/// `(name, run)`, handed in so the answer is a function of what it is given.
+/// `(name, run)`, and `ungrantable` is the harness's refusal of this command
+/// where it has one — both handed in, so the answer is a function of what it
+/// is given.
 pub fn first(
     tool: &str,
     command: Option<&str>,
     allowed: &[AllowedCommand],
     destructive: &[(String, String)],
+    ungrantable: Option<String>,
     when: WhenBlocked,
 ) -> First {
     let Some(command) = command else {
@@ -72,6 +105,9 @@ pub fn first(
     }
     if let Some((name, _)) = destructive.iter().find(|(_, run)| covers(run, command)) {
         return First::Withheld(Withheld::Destructive { name: name.clone() });
+    }
+    if let Some(why) = ungrantable {
+        return First::Withheld(Withheld::Ungrantable { why });
     }
     match when {
         WhenBlocked::RefuseAndHold => First::NotGranted,
@@ -109,6 +145,10 @@ pub enum Refusing {
     NotGranted,
     /// A person is being asked and has not answered inside the hold.
     Asked,
+    /// A person is being asked about another of this Drone's calls.
+    AlreadyAsking {
+        other: String,
+    },
     /// A person said no.
     Rejected,
     Withheld(Withheld),
@@ -127,10 +167,18 @@ impl Refusing {
                  yet. Stop and wait: the answer arrives as your next turn. Do not try another \
                  way to do the same thing meanwhile."
             ),
+            Refusing::AlreadyAsking { other } => format!(
+                "A person is being asked whether you may run `{other}`. Wait for that answer, \
+                 which arrives as your next turn, before reaching for `{what}`."
+            ),
             Refusing::Rejected => rejected(what),
             Refusing::Withheld(Withheld::Destructive { .. }) => format!(
                 "`{what}` is declared destructive in this repository, and an unattended task \
                  never runs it. Do not try to get the same result another way."
+            ),
+            Refusing::Withheld(Withheld::Ungrantable { why }) => format!(
+                "`{what}` cannot be granted to a task: {why}. Do not try to get the same \
+                 result another way."
             ),
             Refusing::Withheld(Withheld::NotACommand { .. }) => format!(
                 "This task is not granted `{what}`. Do not try to get the same result another \
@@ -222,7 +270,7 @@ mod tests {
     fn a_tool_that_is_not_a_command_is_withheld_whatever_the_setting() {
         for when in [WhenBlocked::RefuseAndHold, WhenBlocked::AskMe] {
             assert_eq!(
-                first("WebFetch", None, &[], &[], when),
+                first("WebFetch", None, &[], &[], None, when),
                 First::Withheld(Withheld::NotACommand {
                     tool: "WebFetch".to_string()
                 })
@@ -234,7 +282,14 @@ mod tests {
     fn an_allow_answers_before_the_setting_is_read() {
         let allows = [allowed("npm publish")];
         assert_eq!(
-            first("Bash", Some("npm publish --tag next"), &allows, &[], WhenBlocked::RefuseAndHold),
+            first(
+                "Bash",
+                Some("npm publish --tag next"),
+                &allows,
+                &[],
+                None,
+                WhenBlocked::RefuseAndHold
+            ),
             First::Allowed
         );
     }
@@ -243,7 +298,14 @@ mod tests {
     fn a_destructive_command_is_withheld_and_never_asked_about() {
         let destructive = [("reset".to_string(), "rm -rf .armada".to_string())];
         assert_eq!(
-            first("Bash", Some("rm -rf .armada"), &[], &destructive, WhenBlocked::AskMe),
+            first(
+                "Bash",
+                Some("rm -rf .armada"),
+                &[],
+                &destructive,
+                None,
+                WhenBlocked::AskMe
+            ),
             First::Withheld(Withheld::Destructive {
                 name: "reset".to_string()
             })
@@ -251,13 +313,44 @@ mod tests {
     }
 
     #[test]
+    fn a_command_the_harness_cannot_grant_is_withheld_in_its_words() {
+        assert_eq!(
+            first(
+                "Bash",
+                Some("git push origin HEAD"),
+                &[],
+                &[],
+                Some("it would push".to_string()),
+                WhenBlocked::AskMe
+            ),
+            First::Withheld(Withheld::Ungrantable {
+                why: "it would push".to_string()
+            })
+        );
+    }
+
+    #[test]
     fn the_setting_decides_everything_else() {
         assert_eq!(
-            first("Bash", Some("npm publish"), &[], &[], WhenBlocked::RefuseAndHold),
+            first(
+                "Bash",
+                Some("npm publish"),
+                &[],
+                &[],
+                None,
+                WhenBlocked::RefuseAndHold
+            ),
             First::NotGranted
         );
         assert_eq!(
-            first("Bash", Some("npm publish"), &[], &[], WhenBlocked::AskMe),
+            first(
+                "Bash",
+                Some("npm publish"),
+                &[],
+                &[],
+                None,
+                WhenBlocked::AskMe
+            ),
             First::Ask
         );
     }

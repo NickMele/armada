@@ -52,7 +52,10 @@ impl fmt::Display for NotDeclared {
                  added without rewriting it. Add it by hand"
             ),
             NotDeclared::MoreThanOneLine => {
-                write!(out, "the command is more than one line, and a `run:` holds one")
+                write!(
+                    out,
+                    "the command is more than one line, and a `run:` holds one"
+                )
             }
             NotDeclared::WouldNotRead(cause) => write!(
                 out,

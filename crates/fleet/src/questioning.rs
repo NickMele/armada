@@ -471,12 +471,13 @@ where
     }
 }
 
-/// A question outstanding on this Drone's slot, whatever else is true.
+/// A question outstanding on this Drone's slot, whatever else is true: its own,
+/// or a permission question a person was asked about a call it made.
 ///
 /// **Free, and read before anything that costs.** A field on the slot the caller
 /// already holds, which is why both vigils can afford to ask.
 pub(crate) fn waiting_on_an_answer(at_work: &Working) -> bool {
-    at_work.asked().is_some()
+    at_work.asked().is_some() || at_work.permission().is_some()
 }
 
 /// The refusal a Drone reads, from the tool's own error.

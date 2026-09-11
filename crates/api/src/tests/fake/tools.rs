@@ -10,14 +10,29 @@
 //! is the only one this crate can honestly raise — the rest is the working slot
 //! and belongs to Fleet.
 
-use ipc::mcp::{CheckReport, DeclareScope, DispatchJob, NotRecorded, Receipt, SubmitEvidence};
+use ipc::mcp::{
+    CheckReport, DeclareScope, DispatchJob, NotRecorded, PermissionAsked, Receipt, SubmitEvidence,
+};
 use std::sync::atomic::Ordering;
 
 use super::FakeDaemon;
 use crate::tests::shapes;
-use crate::Tools;
+use crate::{PermissionAnswer, Tools};
 
 impl Tools for FakeDaemon {
+    /// Allowed while a Job is running and refused otherwise, which is all the
+    /// transport is under test for: that the decision reaches the reply.
+    async fn permission(
+        &self,
+        _caller: crate::Caller,
+        _asked: PermissionAsked,
+    ) -> PermissionAnswer {
+        match self.while_working("call to be about") {
+            Ok(()) => PermissionAnswer::Allow,
+            Err(why) => PermissionAnswer::Deny(why.because),
+        }
+    }
+
     /// The Evidence tool, faked down to what the transport is under test for:
     /// a submission is taken while a Job is running and refused otherwise.
     ///

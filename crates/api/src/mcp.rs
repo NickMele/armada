@@ -29,7 +29,7 @@ use axum::routing::post;
 use axum::Router;
 use ipc::mcp::{self, Answered, Incoming};
 
-use crate::daemon::Tools;
+use crate::daemon::{PermissionAnswer, Tools};
 use crate::routes::Served;
 
 /// Where the Evidence tool is served.
@@ -189,6 +189,17 @@ async fn called<D: Tools>(
             Ok(receipt) => Answered::Recorded { id, receipt },
             Err(why) => Answered::Refused { id, why },
         },
+        // **The third call held open**, and the harness's rather than the
+        // Drone's: the call it asks about runs on an allow and not otherwise,
+        // so the answer has to be in the reply. What bounds the wait is the
+        // harness's own patience, which Fleet holds for less than.
+        Incoming::Permission { id, asked } => {
+            let input = asked.input.clone();
+            match served.daemon().permission(caller, asked).await {
+                PermissionAnswer::Allow => Answered::Permitted { id, input },
+                PermissionAnswer::Deny(message) => Answered::Withheld { id, message },
+            }
+        }
     };
     match mcp::answer(answered) {
         Ok(body) => (

@@ -201,7 +201,7 @@ fn checks_passed(ran: &[(StepId, Vec<StepCheck>)], step: Option<&StepId>) -> boo
 /// still the step the Job is holding. Both `refused` and the gate's own
 /// undecided sentence read off this, so a screen's evidence and its trigger
 /// name the same step.
-fn stopped_step(job: &Job) -> Option<&StepId> {
+pub(crate) fn stopped_step(job: &Job) -> Option<&StepId> {
     job.stopped_on()
         .map(|(step, _)| step)
         .or_else(|| job.current_step().map(|step| step.step_id()))

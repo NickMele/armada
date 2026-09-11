@@ -109,6 +109,15 @@ where
     /// there is: `drone.md` gives the mid-step path a session and nothing
     /// written down, and the note written down is `request_changes`.
     pub async fn redirect(&self, job_id: &JobId, instruction: &Redirection) -> Result<Job, Adrift> {
+        self.steer(job_id, Steer::Words(instruction)).await
+    }
+
+    /// [`redirect`](Fleet::redirect)'s act, for whichever of the two things a
+    /// person may send a Drone that is standing there: their own words, or
+    /// their answer to a command it was refused. **One act and two
+    /// authorships**, so the machines move the same way for both and only the
+    /// turn differs.
+    pub(crate) async fn steer(&self, job_id: &JobId, speech: Steer<'_>) -> Result<Job, Adrift> {
         let Some(slot) = self.slot_of(job_id).await else {
             return Err(Adrift::NoDroneToRedirect {
                 job: job_id.clone(),
@@ -145,7 +154,7 @@ where
             Some(step) => self.resumed(&job, step, Actor::Human).await?,
             None => job,
         };
-        self.instruct(job_id, instruction, &working).await?;
+        self.instruct(job_id, &speech, &working).await?;
         if let Some(at_work) = working.as_mut() {
             // **The two paths differ on the step's clocks, and on nothing
             // else.** Both start the thrashing chain again — without that a
@@ -600,7 +609,7 @@ where
     async fn instruct(
         &self,
         job_id: &JobId,
-        instruction: &Redirection,
+        speech: &Steer<'_>,
         working: &Option<Working>,
     ) -> Result<(), Adrift> {
         let Some(at_work) = working.as_ref() else {
@@ -608,16 +617,31 @@ where
                 job: job_id.clone(),
             });
         };
-        at_work.instructed(Occasion::Redirect, instruction.text());
-        at_work
-            .session()
-            .redirect(instruction)
-            .await
-            .map_err(|cause| Adrift::NotTold {
-                job: job_id.clone(),
-                cause,
-            })
+        let sent = match speech {
+            Steer::Words(instruction) => {
+                at_work.instructed(Occasion::Redirect, instruction.text());
+                at_work.session().redirect(instruction).await
+            }
+            Steer::Permission(permitted) => {
+                at_work.instructed(Occasion::Permission, permitted.text());
+                at_work.session().permit(permitted).await
+            }
+        };
+        sent.map_err(|cause| Adrift::NotTold {
+            job: job_id.clone(),
+            cause,
+        })
     }
+}
+
+/// What a steer carries into the session. **Each is its own authorship**, so
+/// each goes through its own `LiveSession` method and neither can be sent as
+/// the other.
+pub(crate) enum Steer<'a> {
+    /// A person's own words.
+    Words(&'a Redirection),
+    /// A person's answer to a command the Drone was refused.
+    Permission(&'a crate::permitting::Permitted),
 }
 
 /// One step's rows out of a whole Job's, which is the shape every step read

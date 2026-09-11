@@ -28,10 +28,11 @@ use ipc::RunId;
 use std::sync::Arc;
 
 use crate::commands::{
-    answer_question, approve_dispatch, approve_review, examine_job, file_report, forget_job,
-    kill_drone, kill_job, merge_pull_request, override_verdict, propose_from_request, propose_job,
-    raise_cost_cap, raise_turn_cap, reclaim_worktree, redirect_drone, redispatch_job, reject_job,
-    request_changes, rerun_gate, restart_step, show_again, stop_proposal, take_up_remarks,
+    answer_command, answer_question, approve_dispatch, approve_review, examine_job, file_report,
+    forget_job, kill_drone, kill_job, merge_pull_request, override_verdict, propose_from_request,
+    propose_job, raise_cost_cap, raise_turn_cap, reclaim_worktree, redirect_drone, redispatch_job,
+    reject_job, request_changes, rerun_gate, restart_step, set_when_blocked, show_again,
+    stop_proposal, take_up_remarks,
 };
 use crate::daemon::Daemon;
 use crate::journal::Journal;
@@ -354,6 +355,18 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/jobs/:job_id/answer_question",
     },
+    // Not a shape `answer_question` also takes: that one is a label a Drone
+    // offered, and this one of three answers Fleet offers about a command.
+    Route {
+        operation: "answer_command",
+        method: "POST",
+        path: "/jobs/:job_id/answer_command",
+    },
+    Route {
+        operation: "set_when_blocked",
+        method: "POST",
+        path: "/jobs/:job_id/set_when_blocked",
+    },
     // What a person says went wrong, under the Job it is about, and every
     // report filed, which is not under one — a report outlives the Job it
     // names, so a listing reachable only through a Job would lose exactly the
@@ -625,6 +638,11 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/:job_id/redirect", post(redirect_drone::<D>))
         .route("/jobs/:job_id/restart_step", post(restart_step::<D>))
         .route("/jobs/:job_id/answer_question", post(answer_question::<D>))
+        .route("/jobs/:job_id/answer_command", post(answer_command::<D>))
+        .route(
+            "/jobs/:job_id/set_when_blocked",
+            post(set_when_blocked::<D>),
+        )
         .route("/jobs/:job_id/report", post(file_report::<D>))
         .route("/reports", get(list_reports::<D>))
         .route("/worktrees", get(list_worktrees::<D>))

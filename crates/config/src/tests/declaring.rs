@@ -86,13 +86,19 @@ fn quotes_and_backslashes_read_back_as_written() {
 #[test]
 fn an_inline_commands_map_is_left_to_a_person() {
     let text = "version: 1\nid: armada\ncommands: {fmt: {run: cargo fmt}}\n";
-    assert!(matches!(declare(text, "cargo test"), Err(NotDeclared::Inline)));
+    assert!(matches!(
+        declare(text, "cargo test"),
+        Err(NotDeclared::Inline)
+    ));
 }
 
 #[test]
 fn a_file_that_does_not_read_is_not_touched() {
     let text = "version: 1\nid: armada\nbudget: 40\n";
-    assert!(matches!(declare(text, "cargo test"), Err(NotDeclared::Unreadable(_))));
+    assert!(matches!(
+        declare(text, "cargo test"),
+        Err(NotDeclared::Unreadable(_))
+    ));
 }
 
 #[test]

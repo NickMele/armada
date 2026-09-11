@@ -17,7 +17,10 @@ use std::time::Duration;
 
 use core_model::Timestamp;
 
+use tokio::sync::oneshot;
+
 use crate::converging::Chain;
+use crate::permitting::Waiting;
 use crate::questioning::Question;
 use crate::working::Working;
 
@@ -110,6 +113,31 @@ impl Working {
     /// than being told there is nothing to answer on a Drone that never heard.
     pub(crate) fn answered_question(&mut self) {
         self.asked = None;
+    }
+
+    /// The permission question a person has been asked on this Drone's
+    /// behalf, where there is one.
+    pub(crate) fn permission(&self) -> Option<&Waiting> {
+        self.permission.as_ref()
+    }
+
+    /// Hold a permission question for a person. **One at a time**, checked by
+    /// the caller under this slot's lock, for `asks`' reason.
+    pub(crate) fn waits_for_permission(&mut self, waiting: Waiting) {
+        self.permission = Some(waiting);
+    }
+
+    /// The held tool call, taken to answer it. `None` where the hold has
+    /// already ended and the answer has to go as a turn.
+    pub(crate) fn permission_reply(&mut self) -> Option<oneshot::Sender<ipc::CommandAnswer>> {
+        self.permission
+            .as_mut()
+            .and_then(|waiting| waiting.reply.take())
+    }
+
+    /// The permission question is answered, or no longer anybody's to answer.
+    pub(crate) fn permission_settled(&mut self) -> Option<Waiting> {
+        self.permission.take()
     }
 
     /// What [`Progress::turned`](crate::Progress::turned) reads now. The

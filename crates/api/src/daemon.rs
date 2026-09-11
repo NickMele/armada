@@ -30,7 +30,7 @@ mod tools;
 
 pub use commands::Commands;
 pub use queries::Queries;
-pub use tools::Tools;
+pub use tools::{PermissionAnswer, Tools};
 
 use ipc::WireError;
 
