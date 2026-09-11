@@ -108,6 +108,35 @@ impl Command {
     }
 }
 
+/// A port a workspace needs, so Fleet can place it.
+///
+/// **Knowledge, never authority.** `docs/concepts/manifest.md`, *Ports*, says
+/// why this is a fourth registry beside Checks, Commands and Evidence rather
+/// than a permission: injecting a port number grants no ability a Drone
+/// lacked, since it could already bind any port. Claiming, sizing and probing
+/// are all Fleet's, at claim time — nothing here decides a number.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Port {
+    pub(super) container: Option<u32>,
+    pub(super) env: Option<String>,
+}
+
+impl Port {
+    /// The container-side port — the join key the Docker adapter matches a
+    /// compose document's published port against. `None` where the file
+    /// declares no `container`.
+    pub fn container(&self) -> Option<u32> {
+        self.container
+    }
+
+    /// The variable name the repo's own stack already expects. `None` where
+    /// the file declares no `env` — `ARMADA_PORT_<NAME>` is emitted regardless,
+    /// which is why this is optional rather than a second required name.
+    pub fn env(&self) -> Option<&str> {
+        self.env.as_deref()
+    }
+}
+
 /// A Command that has to run in a worktree before any step does, resolved.
 ///
 /// **Name and command line together, because the two answer different
