@@ -100,7 +100,7 @@ export const Live: Story = {
     ordinal: 2,
     name: "Activity log",
     live: true,
-    meta: "live · 47 entries · every line opens",
+    meta: "live · 47 entries",
     open: false,
     onToggle: () => {},
     bodyId: "chapter-live",

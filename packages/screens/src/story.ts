@@ -223,6 +223,16 @@ export function entriesOf(rows: readonly Turn[], stepId: string | undefined): Lo
 }
 
 /**
+ * The rows a person can read, and how many were left out. The count keeps the
+ * hiding honest: a log that shortens with nothing saying so reads as a Drone
+ * that did less.
+ */
+export function hideUnread(rows: readonly LogRow[]): { rows: LogRow[]; unread: number } {
+  const shown = rows.filter((row) => row.kind !== "unrecognised");
+  return { rows: shown, unread: rows.length - shown.length };
+}
+
+/**
  * One row as a line. **The kind is the wire's own word** — no vocabulary in the
  * repository carries a verb per turn kind, so the spelling renders rather than
  * copy invented here.
@@ -351,6 +361,7 @@ function rowOf(row: Turn): LogRow {
     case "unrecognised":
       // A kind this Bridge has no case for. Drawn as itself rather than
       // dropped: a row nobody can read is a finding, and a missing row is not.
+      // The log counts these rather than listing them (`hideUnread`).
       //
       // **The kind is in the sentence, not only behind it.** Five of these
       // arrived across four seconds carrying five different kinds and read as

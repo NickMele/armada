@@ -72,7 +72,7 @@ import type { Following, Outputs } from "./outputs";
 import { keptOf, type KeptRead, type Opens } from "./phases";
 import { producedIn } from "./produced";
 import type { OpenSheet } from "./Sheets";
-import { entriesOf, NOTHING_YET_ON_THIS_STEP } from "./story";
+import { entriesOf, NOTHING_YET_ON_THIS_STEP, hideUnread } from "./story";
 
 /**
  * The story: Drone instructions, then Activity log, then Produced. **The same
@@ -217,7 +217,7 @@ export function chaptersOf({
    */
   undecided?: string;
 }): StepChapter[] {
-  const rows = watching === null ? [] : entriesOf(watching.rows, step.step_id);
+  const { rows, unread } = hideUnread(watching === null ? [] : entriesOf(watching.rows, step.step_id));
   // **The turns Fleet sent, and not everything in Armada's voice.** The two
   // were the same set until a turn the harness replays onto the Drone's stream
   // started arriving attributed (#110) — since then each of Armada's turns is
@@ -300,9 +300,11 @@ export function chaptersOf({
       // The dot, not the word. `StepStory` composes `Chapter` now, so the
       // running mark has its own channel and the summary carries only counts.
       live,
+      // Counts, and whether its sheet is open. What a row does is on the row.
       summary: [
         `${rows.length} ${rows.length === 1 ? "entry" : "entries"}`,
-        sheet === "log" ? "open" : "every line opens",
+        ...(unread === 0 ? [] : [`${unread} hidden`]),
+        ...(sheet === "log" ? ["open"] : []),
       ].join(" · "),
       // The affordance is on the header line and it names where it goes. A
       // chapter that opens a layer has no body for a foot control to sit under.

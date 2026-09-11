@@ -68,7 +68,7 @@ const CHAPTERS: StepChapter[] = [
     ordinal: 2,
     title: "Activity log",
     live: true,
-    summary: "47 entries · every line opens",
+    summary: "47 entries",
     preview: <ActivityLog entries={PREVIEW} />,
     content: <ActivityLog entries={WHOLE} />,
     openLabel: "Open the log — all 47 entries",

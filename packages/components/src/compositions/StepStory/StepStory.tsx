@@ -39,7 +39,7 @@ export type StepChapter = {
   ordinal: number;
   title: ReactNode;
   /**
-   * The header line's trailing half — `47 entries · every line opens`,
+   * The header line's trailing half — `47 entries`,
    * `3 files · +94 −31`. What the chapter holds, so a collapsed one still
    * answers for itself.
    */

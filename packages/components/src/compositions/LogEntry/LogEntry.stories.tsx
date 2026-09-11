@@ -74,8 +74,8 @@ export const Fleet: Story = {
 };
 
 /**
- * Closed, which is every row until it is pressed. The chevron is the promise
- * the chapter's header makes: *every line opens*.
+ * Closed, which is every row until it is pressed. The chevron says the row
+ * opens.
  */
 export const Closed: Story = {
   args: {

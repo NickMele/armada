@@ -115,7 +115,7 @@ import { runOf } from "./run";
 import { askingOf, fieldsOf, noticeOf, questionOf } from "./step";
 import { StepActs } from "./StepActs";
 import { NOTHING_FROM_FLEET_YET, notesOf, whyNoNotes } from "./notes";
-import { entriesOf, whyNotWatching } from "./story";
+import { entriesOf, hideUnread, whyNotWatching } from "./story";
 import { LOOK_FAILED, nothingToAsk, summarised, tailOf, whyNoReading } from "./resources";
 import { briefOf, whyNoWork, workOf } from "./work";
 
@@ -527,7 +527,9 @@ export function JobDetail({
   // the open step. `again.tsx` holds all of it.
   const pressing = useShowAgain(onShowAgain, job.id, whole?.show_again, open?.step_id, frames);
 
-  const rows = watching === null || open === undefined ? [] : entriesOf(watching.rows, open.step_id);
+  const rows = hideUnread(
+    watching === null || open === undefined ? [] : entriesOf(watching.rows, open.step_id),
+  ).rows;
 
   /**
    * Open a sheet. **The second one replaces the first** rather than stacking on
