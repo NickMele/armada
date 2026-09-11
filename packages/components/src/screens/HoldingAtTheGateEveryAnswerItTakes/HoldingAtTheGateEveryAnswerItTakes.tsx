@@ -5,6 +5,7 @@ import {
   type ReviewComment,
 } from "../../compositions/ReviewComments/ReviewComments";
 import { ReviewDecision } from "../../compositions/ReviewDecision/ReviewDecision";
+import { VerdictSheet, type VerdictSheetProps } from "../../compositions/VerdictSheet/VerdictSheet";
 import { InsideAJob } from "../InsideAJobOneArrangementAtEveryState/InsideAJobOneArrangementAtEveryState";
 import type { InsideAJobProps } from "../InsideAJobOneArrangementAtEveryState/InsideAJobOneArrangementAtEveryState";
 
@@ -24,27 +25,39 @@ import type { InsideAJobProps } from "../InsideAJobOneArrangementAtEveryState/In
  * `Decide.tsx` decides all three off `pullRequest` being present, so this does
  * too rather than taking a flag.
  *
+ * **The block after the story is a verdict sheet now, since #10.2.** What was
+ * asked for, what came back, what proves it and what it left alone wrap the
+ * same three answers this file always drew — `verdict` is the sheet's own data,
+ * minus `actions`, which stays this file's.
+ *
  * # This is `Decide`'s arrangement without `Decide`'s reads
  *
- * `packages/screens/src/Decide.tsx` composes exactly these three — the
- * decision, the merge confirmation and the comments — and holds exactly this
- * state: the reviewer's draft note, and which answer is being confirmed. It
- * cannot be imported here: `@armada/components` does not depend on
- * `@armada/screens` and must not, so the arrangement is stated twice and the
- * second statement is this one. Reported, and the same seam
- * `ActivityLog.stories.tsx` names over its own quoted constant.
+ * `packages/screens/src/Decide.tsx` and `packages/screens/src/verdict.tsx`
+ * compose exactly these parts — the record, the decision, the merge
+ * confirmation and the comments — and hold exactly this state: the reviewer's
+ * draft note, and which answer is being confirmed. Neither can be imported
+ * here: `@armada/components` does not depend on `@armada/screens` and must
+ * not, so the arrangement is stated twice and the second statement is this
+ * one. Reported, and the same seam `ActivityLog.stories.tsx` names over its
+ * own quoted constant.
  */
 export type HoldingAtTheGateProps = InsideAJobProps & {
   /** The answers, and what each one reaches. */
   answers: TheAnswersProps;
+  /** The verdict sheet's own data — everything `VerdictSheet` takes besides `actions`. */
+  verdict: Omit<VerdictSheetProps, "actions" | "recordNote">;
 };
 
-export function HoldingAtTheGate({ answers, step, ...rest }: HoldingAtTheGateProps) {
+export function HoldingAtTheGate({ answers, verdict, step, ...rest }: HoldingAtTheGateProps) {
   return (
     <div className="armada-screen">
       <InsideAJob
         {...rest}
-        step={step === undefined ? undefined : { ...step, after: <TheAnswers {...answers} /> }}
+        step={
+          step === undefined
+            ? undefined
+            : { ...step, after: <VerdictSheet {...verdict} actions={<TheAnswers {...answers} />} /> }
+        }
       />
     </div>
   );

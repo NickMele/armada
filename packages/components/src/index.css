@@ -57,6 +57,7 @@
 @import "./compositions/UnifiedDiff/UnifiedDiff.css";
 @import "./compositions/ReviewComments/ReviewComments.css";
 @import "./compositions/ReviewDecision/ReviewDecision.css";
+@import "./compositions/VerdictSheet/VerdictSheet.css";
 @import "./primitives/Prose/Prose.css";
 @import "./compositions/GamingFlags/GamingFlags.css";
 

@@ -114,6 +114,21 @@ export function isWaiting(read: CheckRead): boolean {
   return read.live !== undefined && read.live.started_at === undefined && read.live.ran === undefined;
 }
 
+/**
+ * Runs on the current attempt that no declared Check accounts for.
+ *
+ * **What `checksOf` cannot surface.** It joins from `step.checks`, the
+ * declaration, so a mechanical run with no declared counterpart — the
+ * `artifact_exists` check a gate-only workflow keeps as its whole tier — never
+ * appears there. The verdict sheet's "what proves it" reads this alongside
+ * `checksOf` so that a real run is never dropped for want of a declaration to
+ * join it to.
+ */
+export function mechanicalRunsOf(step: StepDetail): CheckRun[] {
+  const named = new Set(checksOf(step).map((read) => read.name));
+  return onlyCurrentAttempt(step, step.check_runs).filter((run) => !named.has(run.name));
+}
+
 /** A Check that did not pass, read off the registry's own `advances`. */
 export function didNotPass(run: CheckRun): boolean {
   return CHECK_ADVANCES[run.outcome] === false;

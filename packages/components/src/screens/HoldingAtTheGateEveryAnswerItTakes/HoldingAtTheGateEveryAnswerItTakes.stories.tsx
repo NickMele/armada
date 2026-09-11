@@ -1,6 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { Minus, ShieldCheck } from "lucide-react";
 import { expect, within } from "storybook/test";
 import { Button } from "../../primitives/Button/Button";
+import { CheckRuns } from "../../compositions/CheckRuns/CheckRuns";
+import type { VerdictSheetProps } from "../../compositions/VerdictSheet/VerdictSheet";
 import { OnAScreen, WHERE, BRIEF } from "../InsideAJobOneArrangementAtEveryState/fixtures";
 import { HoldingAtTheGate } from "./HoldingAtTheGateEveryAnswerItTakes";
 import {
@@ -80,6 +83,98 @@ const AT_THE_GATE = {
 };
 
 /**
+ * The verdict sheet's own record, for the two Jobs this sheet draws.
+ *
+ * **Kept beside the answers rather than folded into `gate.tsx`.** The record
+ * is what `packages/screens/src/verdict.ts` builds from the wire on the real
+ * screen; here it is written by hand for the same reason the rest of this
+ * file is — a fixture with no live Job behind it, restating what the product
+ * would compute.
+ */
+const RECORD_AT_THE_GATE: Omit<VerdictSheetProps, "actions" | "recordNote"> = {
+  title: "Split the settings reducer so the selectors can be tested alone",
+  criteria: [
+    "The settings reducer no longer holds selector logic.",
+    "Every selector is unit-tested without mounting the reducer.",
+  ],
+  cameBack:
+    "The reducer now holds state alone. Every selector moved to its own module with its own " +
+    "test file, and the reducer's own tests no longer stand in for them.",
+  pullRequest: (
+    <p className="text-xs text-fg-muted">
+      <span className="mono">#4711</span> · Split the settings reducer so the selectors can be
+      tested alone — open, mergeable, no reviews yet.
+    </p>
+  ),
+  note: "This repository sets auto_merge: never. Merging here is Fleet acting on your press, and it runs the after-merge Checks. Merging on the forge does not.",
+  provesIt: (
+    <CheckRuns
+      rows={[
+        {
+          id: "suite",
+          says: "All 212 tests passed",
+          identifier: "check:test_suite",
+          named: "passed",
+          icon: ShieldCheck,
+        },
+        {
+          id: "api",
+          says: "No exported symbol added or removed",
+          identifier: "check:public_api",
+          named: "passed",
+          icon: ShieldCheck,
+        },
+      ]}
+    />
+  ),
+  leftAlone: "The reducer's own tests were not rewritten. They still pass against the smaller reducer.",
+  figures: [
+    { label: "Branch", value: "fix/settings-split-selectors", mono: true },
+    { label: "Files", value: "7", mono: true },
+    { label: "Took", value: "34m 18s · ~$3.10", mono: true },
+    { label: "Steps", value: "4 of 4 passed", mono: true },
+  ],
+};
+
+const RECORD_NO_PULL_REQUEST: Omit<VerdictSheetProps, "actions" | "recordNote"> = {
+  title: "Decide how a Job's evidence reaches the Board without a second read",
+  criteria: ["Propose where the read happens, and what it costs if it does not."],
+  cameBack:
+    "A two-page plan. Evidence reaches the Board off the same call Fleet already makes for the " +
+    "gate, so nothing reads a Job's evidence twice.",
+  provesIt: (
+    <CheckRuns
+      rows={[
+        {
+          id: "exists",
+          says: "The plan exists",
+          identifier: "artifact_exists",
+          named: "passed",
+          icon: ShieldCheck,
+        },
+        {
+          // The dash glyph: an absence of verification, never `x` (a system
+          // failure) and never `shield-*` (a Check ran).
+          id: "nothing",
+          says: "Nothing checked what it says",
+          identifier: "no Judge · no Checks",
+          icon: Minus,
+        },
+      ]}
+    />
+  ),
+  provesItNote: "Reading the plan is the review. Your answer is the only verdict this step gets.",
+  leftAlone: "It does not say what the Board does while that read is in flight.",
+  figures: [
+    { label: "Document", value: "plan.md", mono: true },
+    { label: "Took", value: "22m 06s · ~$0.74", mono: true },
+    { label: "Steps", value: "2 of 2 passed", mono: true },
+    { label: "Pull request", value: "never, for this workflow", mono: true },
+  ],
+  note: "Approving ends the Job here. Nothing is merged, and nothing waits on a forge.",
+};
+
+/**
  * **A Job holding with its pull request open, and the fourth answer is what
  * this state is for.** Merge sits in the group beside Approve and takes the
  * primary fill off it, because a Job with a pull request open has one ordinary
@@ -119,6 +214,7 @@ export const WithAPullRequest: Story = {
         chapters: GATE_CHAPTERS,
       }}
       answers={{ onMerge: nothingPressedYet, comments: REMARKS }}
+      verdict={RECORD_AT_THE_GATE}
     />
   ),
   /**
@@ -177,6 +273,7 @@ export const TheMergeConfirmation: Story = {
         chapters: GATE_CHAPTERS,
       }}
       answers={{ onMerge: nothingPressedYet, comments: REMARKS, confirming: "merge" }}
+      verdict={RECORD_AT_THE_GATE}
     />
   ),
   /**
@@ -228,6 +325,7 @@ export const CommentsPickedUp: Story = {
         chapters: GATE_CHAPTERS,
       }}
       answers={{ onMerge: nothingPressedYet, comments: REMARKS }}
+      verdict={RECORD_AT_THE_GATE}
     />
   ),
   /**
@@ -300,6 +398,7 @@ export const WithNoPullRequest: Story = {
         chapters: PLAN_CHAPTERS,
       }}
       answers={{}}
+      verdict={RECORD_NO_PULL_REQUEST}
     />
   ),
   /**
@@ -313,7 +412,11 @@ export const WithNoPullRequest: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.queryByRole("button", { name: "Merge and take the work" })).toBeNull();
     await expect(canvas.queryByRole("region", { name: "Comments on the pull request" })).toBeNull();
-    await expect(canvas.queryByText("Pull request")).toBeNull();
+    // The header still carries no `Pull request` fact — `facts.ts` draws one
+    // only where Fleet opened one — but the verdict sheet's own figure now
+    // says so in words, which is what #10.2 closed: a workflow that never
+    // delivers used to leave this unstated rather than answered.
+    await expect(canvas.getByText("never, for this workflow")).toBeVisible();
     // Approve is the group's lead again, which is the other half of the rule.
     const approve = canvas.getByRole("button", { name: "Approve the work" });
     const changes = canvas.getByRole("button", { name: "Request changes" });

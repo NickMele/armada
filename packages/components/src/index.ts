@@ -55,6 +55,7 @@ export * from "./compositions/JobRecord/JobRecord";
 export * from "./compositions/JobRowStacked/JobRowStacked";
 export * from "./compositions/ReviewComments/ReviewComments";
 export * from "./compositions/ReviewDecision/ReviewDecision";
+export * from "./compositions/VerdictSheet/VerdictSheet";
 export * from "./compositions/Sidebar/Sidebar";
 export * from "./compositions/StatusBar/StatusBar";
 export * from "./compositions/StepActivityMark/StepActivityMark";
