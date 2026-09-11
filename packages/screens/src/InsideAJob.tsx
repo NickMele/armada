@@ -537,10 +537,6 @@ function WhereRegion({
         const failed = unopened !== null && unopened.row === at ? unopened.because : null;
         return (
           <Fragment key={at}>
-            {/* A row that starts a second group. The drawing runs its seven rows
-                flat; this keeps the grouping the surface asked for and spends a
-                hairline on it rather than a second heading. */}
-            {row.separated ? <span className="armada-inside__where-rule" aria-hidden /> : null}
             <WhereRow
               label={row.iconLabel}
               value={row.value}
