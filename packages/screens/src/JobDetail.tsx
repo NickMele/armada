@@ -734,7 +734,6 @@ export function JobDetail({
       openSteps={keys.openSteps}
       onOpenStep={keys.onOpenStep}
       where={workOf(onOpenArtifact, job, whole, manifest, workflow)}
-      whereNote={NAMED_NOT_NEEDED}
       whereAbsent={whyNoWork(watched, job.id)}
       brief={whole === null ? undefined : briefOf(whole)}
       briefAbsent={whyNoBrief(watched, job.id)}
@@ -851,11 +850,6 @@ function named(step: RunTreeStep): RunTreeStep {
     ),
   };
 }
-
-/** What the pointers under the run are for, said once. */
-const NAMED_NOT_NEEDED =
-  "A path opens where it lives; an identifier copies. Nothing above needs these — they are here " +
-  "for when you want them anyway.";
 
 /** The reads the panel's own chapters draw from. */
 export type FoldedReads = {

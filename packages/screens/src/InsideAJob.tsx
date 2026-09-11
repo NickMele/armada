@@ -190,12 +190,10 @@ export type InsideAJobProps = {
   /**
    * Where things are — the worktree, the branch, the Manifest, the workflow,
    * the log, the transcript, the Drone. **A path opens where it lives; an
-   * identifier copies.** This milestone is about never needing these; they are
-   * here for when you want them anyway.
+   * identifier copies.**
    */
   where?: JobLogReferenceRow[];
   whereLabel?: ReactNode;
-  whereNote?: ReactNode;
   /** Why nothing can be named there, where nothing can. */
   whereAbsent?: string;
   /**
@@ -253,7 +251,6 @@ export function InsideAJob({
   onOpenChapter,
   where,
   whereLabel = "Where things are",
-  whereNote,
   whereAbsent = "Nothing serves this Job's paths or its branch.",
   record,
   recordLabel = "What it left behind",
@@ -312,7 +309,7 @@ export function InsideAJob({
               <Absent name="Where things are" note={whereAbsent} />
             </div>
           ) : (
-            <WhereRegion rows={where} note={whereNote} onCopied={onCopied} />
+            <WhereRegion rows={where} onCopied={onCopied} />
           )}
 
           {record === undefined ? null : (
@@ -485,11 +482,9 @@ function FieldLabel({ children }: { children: ReactNode }) {
  */
 function WhereRegion({
   rows,
-  note,
   onCopied,
 }: {
   rows: JobLogReferenceRow[];
-  note?: ReactNode;
   onCopied?: (value: string) => void;
 }) {
   const [unopened, setUnopened] = useState<{ row: number; because: string } | null>(null);
@@ -540,7 +535,6 @@ function WhereRegion({
           </Fragment>
         );
       })}
-      {note === undefined ? null : <p className="armada-inside__where-note">{note}</p>}
     </div>
   );
 }
