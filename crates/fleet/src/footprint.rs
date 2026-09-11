@@ -344,7 +344,7 @@ fn declared(plan: &store::DeclaredPlan) -> ipc::DeclaredPlan {
 /// impl could only live in `ipc` — and that would put the harness seam's
 /// vocabulary under the wire crate to save a `match` that is the boundary doing
 /// its job.
-fn kind(change: Change) -> ipc::ChangeKind {
+pub(crate) fn kind(change: Change) -> ipc::ChangeKind {
     match change {
         Change::Added => ipc::ChangeKind::Added,
         Change::Modified => ipc::ChangeKind::Modified,

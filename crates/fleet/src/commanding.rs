@@ -198,6 +198,24 @@ where
             .map_err(|why| refusing.refusal(why))
     }
 
+    /// A person's run in a Job's worktree. **The `Arc` is handed on**, so the
+    /// run is a task of its own — `crate::rehearsing`.
+    async fn start_run(
+        self: std::sync::Arc<Self>,
+        job_id: JobId,
+        run: ipc::StartRun,
+    ) -> Result<ipc::RunUnderway, Refusal> {
+        Fleet::start_rehearsal(self, &job_id.to_domain(), run).await
+    }
+
+    async fn stop_run(&self, job_id: JobId, run: ipc::NamedRun) -> Result<ipc::RunRecord, Refusal> {
+        self.stop_rehearsal(&job_id.to_domain(), run.id).await
+    }
+
+    async fn undo_run(&self, job_id: JobId, run: ipc::NamedRun) -> Result<ipc::RunRecord, Refusal> {
+        self.undo_rehearsal(&job_id.to_domain(), run.id).await
+    }
+
     /// More money for one Job, and nothing else changes.
     ///
     /// **The summary is re-read rather than folded from the raise.** Nothing

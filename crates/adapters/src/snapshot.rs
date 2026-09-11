@@ -66,7 +66,9 @@ pub enum NotUndone {
     Unreadable(SnapshotError),
     /// These paths no longer hold what the run left, so writing the older
     /// version over them would take somebody's later work.
-    Moved { paths: Vec<String> },
+    Moved {
+        paths: Vec<String>,
+    },
     /// The first path that would not write. The ones before it were restored.
     NotRestored {
         path: String,
@@ -80,7 +82,14 @@ pub fn snapshot(worktree: &Path, run: &str, at_seconds: i64) -> Result<Snapshot,
     let repo = open(worktree)?;
     let tree = as_it_stands(&repo, worktree)?;
     let head = repo.head().and_then(|head| head.peel_to_commit()).ok();
-    let before = commit_over(&repo, worktree, tree, head.as_ref(), "before a run", at_seconds)?;
+    let before = commit_over(
+        &repo,
+        worktree,
+        tree,
+        head.as_ref(),
+        "before a run",
+        at_seconds,
+    )?;
     repo.reference(&reference, before, true, "a run's snapshot")
         .map_err(|cause| git(worktree, "keeping the snapshot", cause))?;
     Ok(Snapshot {
@@ -103,7 +112,14 @@ impl Snapshot {
         let before = repo
             .find_commit(self.before)
             .map_err(|cause| git(worktree, "reading the snapshot back", cause))?;
-        let after = commit_over(&repo, worktree, tree, Some(&before), "after a run", at_seconds)?;
+        let after = commit_over(
+            &repo,
+            worktree,
+            tree,
+            Some(&before),
+            "after a run",
+            at_seconds,
+        )?;
         repo.reference(&self.reference, after, true, "a run's snapshot, settled")
             .map_err(|cause| git(worktree, "keeping the snapshot", cause))?;
         let changed = between(&repo, worktree, &before, after)?;
@@ -322,7 +338,10 @@ fn between(
     Ok(diff
         .deltas()
         .filter_map(|delta| {
-            let path = delta.new_file().path().or_else(|| delta.old_file().path())?;
+            let path = delta
+                .new_file()
+                .path()
+                .or_else(|| delta.old_file().path())?;
             Some(ChangedFile::new(
                 path.to_string_lossy().into_owned(),
                 change(delta.status()),
@@ -359,7 +378,8 @@ fn written(
         path: path.to_string(),
         cause,
     };
-    let unreadable = |cause| NotUndone::Unreadable(git(worktree, "reading the snapshot back", cause));
+    let unreadable =
+        |cause| NotUndone::Unreadable(git(worktree, "reading the snapshot back", cause));
     let held = before.get_path(Path::new(path)).map_err(unreadable)?;
     let blob = repo.find_blob(held.id()).map_err(unreadable)?;
     let target = worktree.join(path);

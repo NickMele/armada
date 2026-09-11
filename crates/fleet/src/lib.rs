@@ -119,6 +119,9 @@ pub mod redaction;
 pub mod redispatch;
 mod refusing;
 mod regating;
+/// A person's run of one Manifest entry in a Job's worktree, and Undo from
+/// the snapshot taken before it. **A rehearsal, never a verdict.**
+mod rehearsing;
 /// A person picks comments off a pull request, they reach a Drone as its
 /// opening brief, and one reply on the pull request says which. **The one place
 /// text somebody outside this machine wrote enters a prompt.**

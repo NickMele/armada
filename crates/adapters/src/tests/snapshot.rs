@@ -68,7 +68,10 @@ fn undo_puts_back_the_work_that_was_there_and_not_the_last_commit() {
     let restored = undo(root, &settled.reference).expect("undone");
     assert_eq!(restored.len(), 3);
     assert_eq!(read(root, "src/lib.rs").as_deref(), Some("the drone's\n"));
-    assert_eq!(read(root, "notes.md").as_deref(), Some("the drone's notes\n"));
+    assert_eq!(
+        read(root, "notes.md").as_deref(),
+        Some("the drone's notes\n")
+    );
     assert_eq!(read(root, "generated.rs"), None);
     assert_eq!(
         git.head().expect("a head").target(),
