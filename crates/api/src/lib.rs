@@ -36,9 +36,14 @@ mod observing;
 mod queries;
 /// The `:job_id` a route carries, resolved before a handler can reach it.
 mod reference;
+/// The run sheet's routes: a person's run of one Manifest entry in a Job's
+/// worktree, and what the runs left.
+mod rehearsing;
 mod routes;
 mod sockets;
 mod stream;
+/// A person's run's output, on a socket of its own per run — never `/events`.
+mod watching_run;
 
 #[cfg(test)]
 mod tests;
@@ -51,3 +56,4 @@ pub use observing::{Feed, Observed, Seen, Turns, Watch, WATCHING};
 pub use reference::Resolved;
 pub use routes::{router, Route, Served, SERVED};
 pub use stream::{Broadcaster, Next, Subscription, BACKLOG};
+pub use watching_run::{ObservedRun, RunChunk, RunFeed, RunSeen, RunWatch, RUN_BACKLOG};

@@ -240,6 +240,7 @@ where
             sweeping: Mutex::new(Sweep::default()),
             proving: Arc::new(Mutex::new(crate::proving::Proving::default())),
             pressing: crate::showing_again::Pressing::default(),
+            rehearsals: crate::rehearsing::Rehearsals::default(),
             allowance: fittings.allowance,
             polled: Mutex::new(None),
             drones: std::sync::Mutex::new(Drones::default()),

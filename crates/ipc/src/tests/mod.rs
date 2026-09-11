@@ -30,6 +30,8 @@ mod journal;
 mod mcp;
 /// The one DTO on this seam a peer *writes*, and what it refuses.
 mod proposals;
+/// A person's run: the two kinds it streams under, and the record it leaves.
+mod rehearsal;
 mod reports;
 /// What a reviewing person is handed, and the note they send back.
 mod reviewing;

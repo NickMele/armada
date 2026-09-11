@@ -20,6 +20,7 @@ mod landing;
 mod mcp;
 mod reclaim;
 pub mod repo;
+mod snapshot;
 mod standing;
 mod transcript;
 mod under_review;
