@@ -31,12 +31,14 @@ import type { BridgeState } from "../shared/bridge";
 import type { CallRead, CheckOutputRead, Connection, FrameRead } from "@armada/protocol";
 import type { JobHistory, Recorded } from "@armada/protocol";
 import type { JobDetail, JobExamined, JobResources, JobSummary, StreamMessage } from "@armada/protocol";
+import type { Outcome, RunSheet, ServerState, StartRun } from "@armada/protocol";
 import { JobCommands } from "./command";
 import { FollowSocket } from "./following";
 import { JournalSocket } from "./journal";
 import { ObserveSocket } from "./observe";
 import { JobReader } from "./reader";
 import { HeldReader } from "./holding";
+import { RunCommands, RunSocket } from "./rehearsal";
 import { ReportsReader } from "./reports";
 import {
   ask,
@@ -46,10 +48,12 @@ import {
   frameOf,
   holdingsOf,
   manifestReadingOf,
+  serversOf,
 } from "./request";
 import { ReviewMaterial } from "./review";
 import { startingIdentity } from "./runtime-file";
 import { takeAgain, type Again } from "./screen";
+import { ServerCommands } from "./servers";
 import { FleetSocket, type BridgeStateFleet } from "./socket";
 
 /** Time is injected, never read: a connection that calls the clock cannot be replayed. */
@@ -109,6 +113,16 @@ export class FleetConnection {
    * wire and why `examineJob` is the press that takes a fresh one.
    */
   private readonly resources: JobReader<{ resources: JobResources }>;
+  /** The run sheet — Journey 9. Opened with the sheet, not the Job, `diff`'s
+   * reason: the frozen Manifest is read on the press that draws it. */
+  private readonly runSheet: JobReader<{ sheet: RunSheet }>;
+  /** Every act on the run sheet — see `rehearsal.ts`. */
+  private readonly runs: RunCommands;
+  /** The run a window is reading, as it prints — its own socket. `rehearsal.ts`. */
+  private readonly runFollow: RunSocket;
+  /** Starting and stopping a server — see `servers.ts`. The list is
+   * `this.current.servers`, folded from `/events` below. */
+  private readonly servers: ServerCommands;
   /** The Job whose turns are open. A second socket to Fleet — see `observe.ts`. */
   private observing: string | null = null;
   /**
@@ -202,6 +216,18 @@ export class FleetConnection {
       keeps: (body) => ({ moves: (body as JobHistory).moves }),
       publish: (history) => this.publish({ history }),
     });
+    this.runSheet = new JobReader<{ sheet: RunSheet }>({
+      route: (jobId) => `/jobs/${encodeURIComponent(jobId)}/run_sheet`,
+      keeps: (body) => ({ sheet: body as RunSheet }),
+      publish: (runSheet) => this.publish({ runSheet }),
+    });
+    this.runFollow = new RunSocket((runFollowed) => this.publish({ runFollowed }));
+    this.runs = new RunCommands({
+      port: () => this.connected()?.port ?? null,
+      follow: (port, jobId, runId) => this.runFollow.open(port, jobId, runId),
+      refreshSheet: (port) => this.runSheet.again(port),
+    });
+    this.servers = new ServerCommands({ port: () => this.connected()?.port ?? null });
     this.commands = new JobCommands({
       port: () => this.connected()?.port ?? null,
       fold: (job) => this.fold(job),
@@ -261,6 +287,8 @@ export class FleetConnection {
     this.observing = null;
     this.reading = null;
     this.history.close();
+    this.runSheet.close();
+    this.runFollow.close();
     this.turns.close();
     this.notes.close();
     this.follow.close();
@@ -315,6 +343,9 @@ export class FleetConnection {
       // the window that opened after the save — which is most windows, since a
       // refusal stands until the file is corrected.
       void this.readManifest(fleet.port);
+      // And every server Fleet holds, once per connection — `server.*` on
+      // `/events` carries each row whole from here on.
+      void this.readServers(fleet.port);
       // **And the open Job's screen, whole.** A resync says where every Job is
       // and nothing about what any one of them holds, so every region of the
       // Job somebody has open is taken again together — `screen.ts` is the
@@ -487,6 +518,26 @@ export class FleetConnection {
       this.publish({ connection, manifestReading: event });
       return;
     }
+    if (event.kind === "run.finished") {
+      // A rehearsal: no Board row, no per-Job re-read. Only the sheet's own
+      // reading moves, and only where it is this run's Job.
+      this.publish({ connection });
+      if (this.runSheet.jobId === event.job_id) void this.runSheet.again(fleet.port);
+      return;
+    }
+    if (
+      event.kind === "server.starting" ||
+      event.kind === "server.serving" ||
+      event.kind === "server.exited"
+    ) {
+      // Replaced, never patched: the event carries the whole `ServerState`.
+      const row: ServerState = event;
+      const servers = this.current.servers.servers.some((one) => one.id === row.id)
+        ? this.current.servers.servers.map((one) => (one.id === row.id ? row : one))
+        : [row, ...this.current.servers.servers];
+      this.publish({ connection, servers: { servers } });
+      return;
+    }
 
     if (event.kind !== "job.state_changed") {
       // A newer Fleet's kind, or one that moves no row: never folded as a move.
@@ -610,6 +661,45 @@ export class FleetConnection {
   /** Read one Job's transition history, or `null` to stop. */
   async readHistory(jobId: string | null): Promise<void> {
     await this.history.want(this.connected()?.port ?? null, jobId);
+  }
+
+  // ------------------------------------------------- the run sheet, servers
+  /** Read the run sheet — Journey 9 — or `null` to stop. Opened by the sheet. */
+  async watchRunSheet(jobId: string | null): Promise<void> {
+    await this.runSheet.want(this.connected()?.port ?? null, jobId);
+  }
+
+  /** One run's output, or `null` to stop — a run `startRun` just began, or one
+   * the sheet is reopening onto in flight. */
+  async observeRun(jobId: string | null, runId: string | null): Promise<void> {
+    this.runFollow.open(this.connected()?.port ?? null, jobId, runId);
+  }
+
+  /** Run one Check or Command in this Job's worktree, and start following it. */
+  startRun(jobId: string, body: StartRun): Promise<Outcome> {
+    return this.runs.startRun(jobId, body);
+  }
+
+  /** End a run's process group. Its log keeps what printed. */
+  stopRun(jobId: string, id: string): Promise<Outcome> {
+    return this.runs.stopRun(jobId, id);
+  }
+
+  /** Start a declared server, for a Job's worktree or the main checkout. */
+  startServer(name: string, jobId?: string): Promise<Outcome> {
+    return this.servers.startServer(name, jobId);
+  }
+
+  /** End a server's process group. Its log keeps what printed. */
+  stopServer(id: string): Promise<Outcome> {
+    return this.servers.stopServer(id);
+  }
+
+  /** Every server Fleet holds. Read once per connection; `server.*` on
+   * `/events` keeps the list current from there. */
+  private async readServers(port: number): Promise<void> {
+    const servers = await serversOf(port);
+    if (servers !== null) this.publish({ servers });
   }
 
   /** Re-read the open Job, where the event was about it. */

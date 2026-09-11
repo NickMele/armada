@@ -36,6 +36,7 @@ import type { FileReport, FleetCapacity, JobSummary, ProposalInFlight, Unreadabl
 import type { ManifestReading } from "@armada/protocol";
 import type { CommandAnswer, WhenBlocked } from "@armada/protocol";
 import type { Artifact, Followed, Opened } from "@armada/protocol";
+import type { RunFollowed, RunSheetRead, ServerList, StartRun } from "@armada/protocol";
 import { spoken } from "@armada/protocol";
 
 
@@ -262,6 +263,21 @@ export type BridgeState = {
    * Read when the surface opens and dropped when it closes, like the reports.
    */
   held: HeldWorktrees;
+  /** The run sheet — Journey 9. Opened with the sheet, not the Job, `diff`'s
+   * rule: most Jobs are never rehearsed, so nothing pays for one nobody asked. */
+  runSheet: RunSheetRead;
+  /** The run a window is reading, as it prints — its own socket, `followed`'s
+   * shape one subject over. One at a time. */
+  runFollowed: RunFollowed;
+  /**
+   * Every server Fleet holds, each Job's and the main checkout's.
+   *
+   * **Read once per connection, kept current by folding `server.*` off
+   * `/events`**, `capacity`'s terms. Not scoped to the open Job — *Where
+   * things are* keeps a *Serving* row up after the sheet that started it
+   * closes.
+   */
+  servers: ServerList;
 };
 
 
@@ -578,6 +594,27 @@ export type BridgeApi = {
    * naming the Job, and this walks a process table and a directory.
    */
   readResources: (jobId: string | null) => Promise<void>;
+  /** Read the run sheet — Journey 9 — or `null` to stop. Opened by the sheet,
+   * not the Job: `readDiff`'s rule, one read on demand. */
+  watchRunSheet: (jobId: string | null) => Promise<void>;
+  /** One run's output, or `null` to stop — opened for a run `startRun` just
+   * began, or one the sheet is reopening onto in flight. */
+  observeRun: (jobId: string | null, runId: string | null) => Promise<void>;
+  /** Run one Check or Command in this Job's own worktree, narrowed or whole.
+   * **A rehearsal**: no Evidence, nothing on the Job moves. Opens
+   * `observeRun` for the caller the moment the run exists. */
+  startRun: (jobId: string, body: StartRun) => Promise<Outcome>;
+  /** End a run's process group. Its log keeps what printed. */
+  stopRun: (jobId: string, runId: string) => Promise<Outcome>;
+  /** Start a declared server — this Job's worktree, or the main checkout with
+   * no Job. `server.serving`/`server.exited` follow as events. */
+  startServer: (name: string, jobId?: string) => Promise<Outcome>;
+  /** End a server's process group. Its log keeps what printed. */
+  stopServer: (serverId: string) => Promise<Outcome>;
+  /** Open one server link in the system browser. **No surface navigates.** A
+   * server id and the link's own address — main checks it against the links
+   * it holds for that server before handing anything to the OS. */
+  openServerLink: (serverId: string, url: string) => Promise<Followed>;
   /**
    * Ask Fleet to go and look at this Job now, and say what it found.
    *
@@ -811,6 +848,9 @@ export const NOTHING_YET: BridgeState = {
   resources: { state: "none" },
   examination: { state: "none" },
   held: { state: "none" },
+  runSheet: { state: "none" },
+  runFollowed: { state: "none" },
+  servers: { servers: [] },
 };
 
 /** The channels the preload is allowed to name. There is no general `invoke`. */
@@ -848,6 +888,13 @@ export const CHANNELS = {
   readHistory: "bridge:read-history",
   readEvidence: "bridge:read-evidence",
   readResources: "bridge:read-resources",
+  watchRunSheet: "bridge:watch-run-sheet",
+  observeRun: "bridge:observe-run",
+  startRun: "bridge:start-run",
+  stopRun: "bridge:stop-run",
+  startServer: "bridge:start-server",
+  stopServer: "bridge:stop-server",
+  openServerLink: "bridge:open-server-link",
   examineJob: "bridge:examine-job",
   readDiff: "bridge:read-diff",
   readRemarks: "bridge:read-remarks",
