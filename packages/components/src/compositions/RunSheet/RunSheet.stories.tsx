@@ -17,19 +17,30 @@ import type { ChangedFile } from "../ChangedFiles/ChangedFiles";
  * is prose for auditing the gate, not for a row read at a glance.
  *
  * The sheet is laid out inside the nearest positioned ancestor, so the story
- * draws one — the same convention `JobDiffSheet`'s stories use. **`100vh`,
- * not a token**: this rail is three full groups deep and `--palette-max-height`
- * (400px, the command palette's own ceiling) clipped it before `storybook`
- * ever came into view. No length token names a full-height reading, and
- * `100vh` is not a length literal the gate polices — it is the viewport, which
- * is what a sheet actually opens against.
+ * draws one — the same convention `JobDiffSheet`'s stories use. Not a token
+ * for the height: this rail is three full groups deep and
+ * `--palette-max-height` (400px, the command palette's own ceiling) clipped
+ * it before `storybook` ever came into view. No length token names a
+ * full-height reading, and a viewport unit is not the length literal the
+ * gate polices — it is the viewport, which is what a sheet actually opens
+ * against.
  */
 const meta: Meta<typeof RunSheet> = {
   title: "Compositions/Run sheet",
   component: RunSheet,
   decorators: [
     (Story) => (
-      <div style={{ position: "relative", height: "100vh", background: "var(--bg-base)" }}>
+      <div
+        style={{
+          position: "relative",
+          // `.storybook/preview.css` pads `body` by `--space-6` on every
+          // side, so a frame at the full viewport height runs `2 ×
+          // --space-6` past the window's bottom edge before this subtracts
+          // it back out.
+          height: "calc(100dvh - 2 * var(--space-6))",
+          background: "var(--bg-base)",
+        }}
+      >
         <Story />
       </div>
     ),
