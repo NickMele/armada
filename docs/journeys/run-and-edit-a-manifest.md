@@ -20,12 +20,7 @@ Most of this capability was already sanctioned and had no surface. The Manifest 
 
 **Running a single Check on demand is the one new capability.** Checks are specified as invoked by Fleet as part of mechanical verification, and the only ad-hoc path was Verify's live dry-run, which runs all of them. Running one is new capability, not a missing screen.
 
-## Bridge gains a seventh surface
-
-> **Rule.** Manifest is Bridge's seventh surface, in the rail beside Job Board and Doctor.
-> Why: Bridge has been specified as six surfaces throughout, and Manifest is the addition.
-
-Consequences propagated from this: the Bridge concept page, the Doctor concept page (which named "one of Bridge's six surfaces" twice), and Iconography's Navigation table, which needed a nav glyph for it. `file-cog` was already assigned to Manifest under Git and config, so the rail reuses it.
+Manifest is Bridge's seventh surface, in the rail beside Job Board and Doctor, carrying the `file-cog` glyph already assigned to it under Git and config.
 
 ## Flow
 
@@ -35,8 +30,6 @@ Open Bridge → Manifest → read the current project's Checks and Commands → 
 > Why: the switcher is how the rest of Bridge scopes itself, and a second selector inside the surface would answer the same question twice.
 
 A monorepo's root `armada.yml` appears as its own entry in the switcher, since its Checks run only when the diff touches root paths and it is not just another workspace.
-
-## Checks and Commands are separate groups
 
 > **Rule.** Checks and Commands render as two separate groups, never one list with a badge.
 > Why: they are separate registries that differ in what they mean — a Check gates code, a Command does not — and one list would ask a person to learn a distinction the layout could just state.
@@ -55,8 +48,10 @@ A server started here runs in the working tree and holds a port claim of its own
 
 The output and the judgement are two different things.
 
-> **Rule.** Runs write their output to `./.armada`, where logs already go, so the panel is a view onto a file rather than a buffer that evaporates; Dismiss closes the panel, not the log.
-> Why: retention is a garbage-collection concern, and there is already a retention window setting to hang it on.
+Each run writes its output to `./.armada`, one run directory per run in the same tree as Job logs, so the panel is a view onto a file rather than a buffer that evaporates — Dismiss closes the panel, not the log.
+
+> **Rule.** Ad-hoc run log retention is a Machine setting, default 30 days — shorter than a Job's own retention window.
+> Why: a Job log is worth keeping as long as its history is worth reading, and a rehearsal is only worth keeping as long as you might still be debugging what you just ran.
 
 > **Rule.** No run from this surface writes Evidence, and no Check gets a stored pass or fail against it.
 > Why: a remembered per-Check verdict reads as Evidence the moment it sits beside a Job, and no copy saying "not evidence" survives being scanned; the tree can also change between the run and a dispatch, which is the whole reason Evidence ties a gate's answer to the diff it judged.
@@ -144,37 +139,29 @@ Each run writes its log under `./.armada` like every other ad-hoc run here, with
 > **Rule.** The form expresses everything the schema has, so an edit made in the file always round-trips back into the form and nothing can be dropped.
 > Why: the file view is there for people who would rather read the file than the form, not for what the form cannot reach.
 
-The schema and the form move together — a field added to one is a field added to the other. The file stays reachable because pretending a committed file is not a file hides what lands in the repo, not because the form falls short.
+The schema and the form move together — a field added to one is a field added to the other. The file stays reachable because hiding that a committed file is a file would hide what lands in the repo, not because the form falls short.
 
 > **Rule.** The toggle is never labelled with the file's format; it is named by its path.
 > Why: the lexicon bans naming a Manifest by its format — it is a Manifest, never "the yaml."
 
 > **Rule.** Editing during a running Job needs no warning and no lock.
-> Why: a Job resolves its config from a snapshot, so it is judged against the Checks it started with and an edit on this surface cannot reach it — the same mechanism that stops a Drone granting itself a Command. The next Job picks up the new file; the running one does not.
+> Why: a Job is judged against the Checks and Commands it snapshotted at creation, so an edit here cannot reach it — the next Job picks up the new file, the running one does not.
 
 > **Rule.** Save writes the file to disk and stops there — no staging, no commit.
-> Why: the file is tracked, so the change appears in the working tree like any other edit and is committed when everything else is; Armada writing to git on your behalf would be a surprise in the one place a person is most sensitive to surprises.
+> Why: the file is tracked, so the edit appears in the working tree and is committed along with everything else; Armada committing to git on your behalf would be a surprise in the one place a person is most sensitive to one.
 
-> **Rule.** Write always commits whatever the proposal has iterated to — there is no separate Write-path mode for a single workspace, or for a monorepo batch.
-> Why: iteration happens per workspace, at whatever pace suits each one's evidence, so there is nothing left for a Write-path mode to choose between.
+> **Rule.** Write always commits whatever the proposal has iterated to — there is no separate Write-path mode for a single workspace versus a monorepo batch.
+> Why: iteration happens per workspace, at whatever pace suits its own evidence, so there is nothing left for a Write-path mode to choose between.
 
-> **Rule.** The snapshot a Job freezes at creation covers Checks as well as Commands.
-> Why: a Job frozen at a gate would otherwise be judged against a Check that changed under it — the safety this claims is the safety of the yardstick, not only of the toolbelt.
+## Verify
 
-> **Rule.** The snapshot is taken at Job creation, not at spawn.
-> Why: a Job spawns one Drone per step, so a snapshot taken at spawn would be re-resolved at every step boundary — which has no person in it — and could let a Drone weaken a Check in one step and be measured against the weakened one in the next. The one re-snapshot is a scope revision, which a person approves. `../concepts/drone.md` carries the rule.
-
-## Verify belongs here
-
-Both halves belong here: **drift detection** (re-scan and flag) and the **live dry-run** (run everything once).
+Both halves belong on this surface: **drift detection** (re-scan and flag) and the **live dry-run** (run everything once).
 
 > **Rule.** This is the surface where you look at what drifted and act on it, not Doctor.
-> Why: Doctor's Manifest module only reports *that* a manifest has drifted, and Doctor is a scan that changes nothing, so the re-scan cannot live there.
-
-## Verify runs the file
+> Why: Doctor's Manifest module only reports *that* a manifest has drifted, and Doctor is a scan that changes nothing, so the re-scan and acting on it cannot live there.
 
 > **Rule.** Verify runs setup and every Check once, and reports what happened — nothing more.
-> Why: it exists for the moment a manifest is new or has just been edited, which is when a file that parses cleanly can still be wrong in every command it names.
+> Why: a manifest that parses cleanly can still be wrong in every command it names, which is most likely right after it is written or edited.
 
 > **Rule.** Verify and drift are two separate things, not two halves of one panel.
 > Why: one panel with two verdict groups reads as an audit of the file rather than a rehearsal of it.
@@ -183,37 +170,35 @@ Both halves belong here: **drift detection** (re-scan and flag) and the **live d
 
 > **Rule.** Verify is an act — it runs the file, behind its own button, and asks where to run once for the whole set.
 
-Running Verify straight after Write, as Set Up a Project (Manifest) does, is correct: a brand-new file is precisely the case Verify is for.
+Running Verify straight after Write, as [Set Up a Project (Manifest)](set-up-a-project-manifest.md) does, is correct: a brand-new file is exactly the case Verify exists for.
 
 > **Rule.** Drift never reports a script the repo picked up that the file does not yet name.
-> Why: the file carries no record of what it was written against, so nothing can say *new* or *changed* without storing a scan — existence needs no history, since the name is in the file and either the script is there or it is not.
+> Why: the file carries no record of what it was written against, so nothing can call a script new or changed without storing a scan — existence alone needs no history.
 
-> **Rule.** Drift says nothing about whether a listed command still does the right thing — a `test` script narrowed to one directory still reads as existing, and drift stays quiet.
-> Why: keeping a script and its Check in step is an engineering job, not something Armada should guess at.
+> **Rule.** Drift says nothing about whether a listed command still does the right thing — a `test` script narrowed to one directory still reads as existing.
+> Why: keeping a script and its Check in step is an engineering judgement, not something Armada checks for.
 
-> **Rule.** The not-checked band is load-bearing: policy and permissions name nothing runnable, so a real portion of a mature manifest is outside what Verify can say anything about, and a clean result must not read as "all of this is still right."
+> **Rule.** Verify and drift say nothing about policy or permissions, because neither names anything runnable in the repo; the panel states that explicitly.
+> Why: a clean result must not read as "all of this is still right" when whole sections carry no verdict.
 
-> **Rule.** Drift detection and the live dry-run are two groups with two verdicts, not one score, answering different questions — *is this file still true*, and *does this file still work*. Drift's two verdicts: `gone` and `current`.
+> **Rule.** Drift's two verdicts are `gone` and `current`, answering *is this file still true* — a different question from the dry-run's *does this file still work*.
 
-> **Rule.** The dry-run never runs automatically — not on opening the surface, and not as part of drift — and always asks where to run, once for the whole set rather than per Check.
-> Why: it runs real Checks, and a real test suite is expensive; drift is a read and costs nothing, so it runs on opening.
+> **Rule.** The dry-run never runs automatically — not on opening the surface, and not as part of drift — and always asks where to run, once for the whole set.
+> Why: it runs real Checks and a real test suite, which is expensive, while drift is a free read that can run on opening.
 
-> **Rule.** Verify reports, it does not fix — no Apply, no Accept all — and acting on a row means going to Edit, where the consequence is stated.
-> Why: the Manifest concept page is explicit that Verify flags without changing the file, and Update is manual editing.
+> **Rule.** Verify reports and never fixes — no Apply, no Accept all — and acting on a row means going to Edit, where the consequence is stated.
+> Why: the Manifest concept page specifies Verify as flagging without changing the file, with Update as the only manual edit path.
 
-> **Rule.** A drifted `id` row reports and offers nothing at all.
+> **Rule.** A drifted `id` row offers no fix action at all.
 > Why: `id` reads as drifted whenever a package is renamed, and changing it orphans every Job that references this Manifest.
 
-> **Rule.** Drift is amber throughout, never red.
-> Why: a drifted file is behind, not broken — and the dry-run below it proves the difference.
+> **Rule.** Drift renders amber throughout, never red.
+> Why: a drifted file is behind, not broken — the dry-run beside it is what would prove broken.
 
 Verdicts render as words in the status colour, matching Doctor: `new`, `gone`, `diverged`, `current`.
 
-> **Rule.** Neither half can see about a third of the file: policy and permissions have nothing in the repo to compare against, and the dry-run does not touch them.
-> Why: the panel states that explicitly, rather than letting a clean result read as "all of this is still right."
-
-> **Rule.** A dry-run failure is not a Doctor fail.
-> Why: Doctor reports service health — things that are up or down, probed on demand and holding no state — while a dry-run is something you chose to run, on one project, and its result is a rehearsal like every other run on this surface. Routing it into Doctor would put a stored verdict in a surface that reports live facts, and make one project's broken Check read as a machine-level failure.
+> **Rule.** A dry-run failure never becomes a Doctor fail.
+> Why: Doctor reports live, stateless service health, while a dry-run is a rehearsal chosen on one project — routing it into Doctor would store a verdict there and read one project's broken Check as a machine-level failure.
 
 ## Open questions
 
