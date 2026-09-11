@@ -15,20 +15,19 @@ import type { ChangedFile } from "../ChangedFiles/ChangedFiles";
  * `when` both carried into the row note.
  *
  * The sheet is laid out inside the nearest positioned ancestor, so the story
- * draws one — the same convention `JobDiffSheet`'s stories use.
+ * draws one — the same convention `JobDiffSheet`'s stories use. **`100vh`,
+ * not a token**: this rail is three full groups deep and `--palette-max-height`
+ * (400px, the command palette's own ceiling) clipped it before `storybook`
+ * ever came into view. No length token names a full-height reading, and
+ * `100vh` is not a length literal the gate polices — it is the viewport, which
+ * is what a sheet actually opens against.
  */
 const meta: Meta<typeof RunSheet> = {
   title: "Compositions/Run sheet",
   component: RunSheet,
   decorators: [
     (Story) => (
-      <div
-        style={{
-          position: "relative",
-          height: "var(--palette-max-height)",
-          background: "var(--bg-base)",
-        }}
-      >
+      <div style={{ position: "relative", height: "100vh", background: "var(--bg-base)" }}>
         <Story />
       </div>
     ),
@@ -70,14 +69,14 @@ const GROUPS: RunSheetGroup[] = [
         id: "build",
         name: "build",
         run: "cargo build --workspace --locked",
-        narrowRun: "cargo build --locked",
+        narrowRun: "cargo build --locked -p fleet -p api",
         narrowed: true,
       },
       {
         id: "test",
         name: "test",
         run: "cargo nextest run --workspace --exclude acceptance",
-        narrowRun: "cargo nextest run",
+        narrowRun: "cargo nextest run -p fleet -p api",
         narrowed: true,
       },
       {
@@ -94,7 +93,9 @@ const GROUPS: RunSheetGroup[] = [
         name: "format",
         run: "cargo fmt --all --check",
         note: "Runs fmt first.",
-        narrowRun: "rustfmt --check --edition 2021",
+        narrowRun:
+          "rustfmt --check --edition 2021 crates/fleet/src/working/dry_run.rs " +
+          "crates/api/src/routes/jobs.rs",
         narrowed: true,
       },
     ],
@@ -121,10 +122,12 @@ export const AtRest: Story = {
   },
 };
 
+// Cut mid-build, not at a result — a running Job has not finished, and a
+// streamed reading that already showed `test result: ok` would say otherwise.
 const RUNNING_ROWS: ConsoleRow[] = [
   { row: "line", at: 1, text: "   Compiling armada-fleet v0.1.0" },
   { row: "fold", at: 2, says: "compiling chrono-lite v0.4.2 (18.4s) — 62 lines", open: false },
-  { row: "line", at: 64, text: "test result: ok. 312 passed; 0 failed; 3 ignored" },
+  { row: "line", at: 64, text: "   Compiling armada-api v0.1.0" },
 ];
 
 /** A run in flight: output streaming, elapsed counting up, and Stop. */
@@ -162,9 +165,11 @@ export const UnexpectedExit: Story = {
   },
 };
 
+// What `fmt` actually touches: Rust source, run through rustfmt. Neither
+// Cargo.lock nor a package.json is a file `cargo fmt` ever rewrites.
 const CHANGED_FILES: ChangedFile[] = [
-  { path: "Cargo.lock", change: "modified", added: 4, deleted: 1 },
-  { path: "packages/components/package.json", change: "modified", added: 1, deleted: 0 },
+  { path: "crates/fleet/src/working/dry_run.rs", change: "modified", added: 3, deleted: 3 },
+  { path: "crates/api/src/routes/jobs.rs", change: "modified", added: 2, deleted: 1 },
 ];
 
 /** A run that wrote to the tree: the files, Open the diff, Undo this run. */
