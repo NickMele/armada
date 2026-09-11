@@ -15,7 +15,7 @@ Read the journey that covers what you are about to design or build, before you b
 | [Monitor Active Work](monitor-active-work.md) | Design or build the Active Jobs list or the job detail rail — the M1 monitoring subset, and what the full surface defers |
 | [Set Up a Project (Manifest)](set-up-a-project-manifest.md) | Design or build onboarding a new repo — Locate, Scan, the picker, the proposal sheet, ports, Write and Verify |
 | [Change a Job's Scope](change-a-jobs-scope.md) | Design or build widening or narrowing a dispatched Job — the scope picker, the second approval gate, the narrowing confirmation, and what a respawn costs |
-| [Run and edit a Manifest](run-and-edit-a-manifest.md) | Design or build Bridge's Manifest surface — running a Check or Command on demand, editing a manifest, or Verify's drift-plus-dry-run |
+| [Run and edit a Manifest](run-and-edit-a-manifest.md) | Design or build Bridge's Manifest surface — running a Check or Command on demand, editing a manifest, Verify's drift-plus-dry-run, or the run sheet on Job detail |
 | [Guild Setup & Configuration](guild-setup-and-configuration.md) | Design or build the Kit/Machine settings surface — first-time init or an ongoing settings edit |
 | [Consult Helm](consult-helm.md) | Design or build Helm's entry point — starting a session, or what it can read |
 | [First-Run Onboarding](first-run-onboarding.md) | Design or build the hard-gated first-launch sequence that chains Guild Setup, Set Up a Project, Check System Health and Dispatch a Job together |
