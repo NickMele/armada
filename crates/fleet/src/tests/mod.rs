@@ -111,6 +111,7 @@ mod settling;
 mod showing;
 mod showing_again;
 mod silence;
+mod snapshotting;
 mod starting;
 mod stuck;
 mod sub_dispatch;
