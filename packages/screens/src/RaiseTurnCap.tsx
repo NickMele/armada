@@ -48,6 +48,7 @@ export function RaiseTurnCapControl({
   open,
   onOpen,
   onRaise,
+  trigger = true,
 }: {
   jobId: string;
   /**
@@ -65,6 +66,11 @@ export function RaiseTurnCapControl({
    */
   open: boolean;
   onOpen: (up: boolean) => void;
+  /**
+   * Whether to draw its own button. Off where the job header's one control
+   * carries the entry instead, so the header never shows two buttons.
+   */
+  trigger?: boolean;
   /** The new ceiling, as a turn count — the unit `spend` reads it in. */
   onRaise: (jobId: string, turnCap: number) => void;
 }) {
@@ -89,9 +95,11 @@ export function RaiseTurnCapControl({
 
   return (
     <>
-      <Button variant="secondary" disabled={disabled} onClick={() => onOpen(true)}>
-        {RAISE_TURN_CAP_LABEL}
-      </Button>
+      {trigger ? (
+        <Button variant="secondary" disabled={disabled} onClick={() => onOpen(true)}>
+          {RAISE_TURN_CAP_LABEL}
+        </Button>
+      ) : null}
       <Dialog
         open={open}
         tone="neutral"

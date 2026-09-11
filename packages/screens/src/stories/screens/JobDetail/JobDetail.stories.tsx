@@ -64,6 +64,26 @@ export const DoneRecorded: Story = {
   render: drawing(() => recorded("done-worktree-given-back")),
 };
 
+/** The recorded Job at the narrowest window. The title and the job id stack, and the acts are one control. */
+export const DoneRecordedNarrow: Story = {
+  name: "Done (recorded), narrow window",
+  render: () => (
+    <JobDetailFrom fixture={recorded("done-worktree-given-back")} width="var(--window-floor)" />
+  ),
+};
+
+/** The header's one control with its menu open: the act that leads on its face, the rest behind it. */
+export const HeaderActionsOpen: Story = {
+  name: "Header actions open",
+  render: drawing(() => recorded("done-worktree-given-back")),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(
+      await canvas.findByRole("button", { name: "Everything else this job can do" }),
+    );
+    await expect(await within(document.body).findByRole("menuitem", { name: /record/i })).toBeVisible();
+  },
+};
+
 /** Midway through Fix, before its Check has run. */
 export const Running: Story = { name: "Running", render: drawing(running) };
 
