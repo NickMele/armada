@@ -26,6 +26,22 @@ export const Escalated: Story = {
 };
 
 /**
+ * The caution tone — the one Alert tone below Job level that takes hue,
+ * aliasing `--status-awaiting-review` as `--notice-caution` per the design
+ * system contract's Below Job level section. A heads-up about an act a
+ * person is about to take, not a Job state: amber already means a person is
+ * on this, and a run landing in a Drone's worktree is that. No glyph —
+ * `triangle-alert` is Doctor's and the contract has no generic alarm glyph.
+ */
+export const Caution: Story = {
+  args: {
+    tone: "caution",
+    title: "A Drone is working in this tree",
+    children: "This run shares the worktree and its build directory. Nothing locks.",
+  },
+};
+
+/**
  * The neutral tone, drawn as the Doctor condition strip. A health check is a
  * standing condition, not a queued decision, so it takes no Job hue: a module
  * is not a Job state. It names what is failing and what that costs.

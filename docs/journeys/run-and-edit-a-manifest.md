@@ -86,7 +86,7 @@ Where the Job's worktree no longer exists, **Run…** stays in place, disabled, 
 | Group | Holds | Each row carries |
 |---|---|---|
 | Setup | The Commands `setup.requires` names | Its `run` line; re-running one repairs a broken install |
-| Checks | Every Check, in declaration order | Its `run` line, and a sentence where `when` skips it for this Job |
+| Checks | Every Check, in declaration order | Its `run` line |
 | Commands | Every Command `setup.requires` does not name | Its `run` line, or its `serve` line for a server |
 
 Setup rows show no time, because nothing records when setup finished in a worktree. The sheet's header shows when `armada.yml` was last edited before the Job froze it, which Fleet reads from git. Where the worktree's own `armada.yml` differs from the frozen one, a notice says so and offers the worktree's version.

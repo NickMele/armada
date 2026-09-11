@@ -1,12 +1,17 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn } from "storybook/test";
 import { WhereRow } from "./WhereRow";
+import { Button } from "../../primitives/Button/Button";
 
+// The real column — Job detail's own "Where things are" is `--w-run-column`,
+// not a guess. A Serving row's address read as "localh" at a narrower width
+// this file used to draw instead.
 const meta: Meta<typeof WhereRow> = {
   title: "Compositions/Where row",
   component: WhereRow,
   decorators: [
     (Story) => (
-      <div style={{ width: "calc(var(--space-12) * 8)" }}>
+      <div style={{ width: "var(--w-run-column)" }}>
         <Story />
       </div>
     ),
@@ -122,4 +127,83 @@ export const NothingToDo: Story = {
     value: "armada.yml",
     act: "open",
   },
+};
+
+/**
+ * The worktree row plus **Run…**, the run sheet's entry point. The row still
+ * opens where it lives — `Run…` is a second control beside it, never a
+ * replacement for the first.
+ */
+export const WithRun: Story = {
+  args: {
+    label: "Worktree",
+    value: ".armada/worktrees/job_2d90bb",
+    act: "open",
+    onAct: fn(),
+    run: { onRun: fn() },
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Run…" }));
+    await expect(args.run!.onRun).toHaveBeenCalled();
+    // The row's own act is untouched by adding a second control beside it.
+    await userEvent.click(canvas.getByRole("button", { name: /Worktree|worktree/ }));
+    await expect(args.onAct).toHaveBeenCalled();
+  },
+};
+
+/**
+ * **The worktree is gone.** `Run…` stays in place, disabled, and says why —
+ * a control that vanished would read as a capability nobody ever had.
+ */
+export const WithRunWorktreeGone: Story = {
+  args: {
+    label: "Worktree",
+    value: ".armada/worktrees/job_2d90bb",
+    act: "open",
+    run: { disabledReason: "This Job's worktree was given back." },
+  },
+  play: async ({ canvas }) => {
+    const control = canvas.getByRole("button", { name: "Run…" });
+    await expect(control).toBeDisabled();
+  },
+};
+
+/**
+ * **A server outlives the sheet.** Closing the run sheet leaves a server
+ * running, so *Where things are* gains a *Serving* row per server, with its
+ * link buttons — `actions`, generalised from `run` for a row whose control
+ * is not the fixed shape of a single `Run…` button.
+ *
+ * **No `act` on the Serving row.** It first drew `open` for the trailing
+ * glyph, which put `external-link` beside `Open Storybook` saying the same
+ * thing twice — Nick's call. The value names what is serving and where; the
+ * one thing to press is the button beside it.
+ *
+ * **The value is the address alone, not `name · address`.** At the real
+ * column the name and the address together read as `storybook · local…` —
+ * cut mid-word, on a row whose whole point is that address. The button beside
+ * it is already named *Open Storybook*, which is where the server's name
+ * belongs; the row is one server, so the address does not need to repeat it.
+ */
+export const WithAServingRow: Story = {
+  render: () => (
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      <WhereRow
+        label="Worktree"
+        value=".armada/worktrees/job_2d90bb"
+        act="open"
+        onAct={() => {}}
+        run={{ onRun: () => {} }}
+      />
+      <WhereRow
+        label="Serving"
+        value="localhost:41207"
+        actions={
+          <Button variant="secondary" size="sm" onClick={() => {}}>
+            Open Storybook
+          </Button>
+        }
+      />
+    </div>
+  ),
 };

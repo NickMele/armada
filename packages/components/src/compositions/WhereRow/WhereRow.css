@@ -85,6 +85,21 @@ button.armada-wrow:focus-visible .armada-wrow__mark {
   color: var(--fg-muted);
 }
 
+/* The worktree row plus the run sheet's own `Run…`, as two siblings rather
+   than one button nested in another. The row keeps its own grid and gives up
+   the width `Run…` needs. */
+.armada-wrow-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.armada-wrow-line > .armada-wrow {
+  flex: 1;
+  min-width: 0;
+}
+
 /* What pressing the row does. The visible label is a path and the mark is
    12px; neither is an accessible name. */
 .armada-wrow__sr {

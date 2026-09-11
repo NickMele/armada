@@ -157,6 +157,15 @@
   display: block;
 }
 
+/* The output control and Run it here, beside each other in the one column —
+   the run sheet is a second control on the same row, never a second column. */
+.armada-check-runs__output-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+
 /* The exit code or the state. Mono and measured, hued per row and never summed
    onto the step or the Job — a red result here sits under a running step
    without the two contradicting each other. */

@@ -1,7 +1,10 @@
 /* Alert. A standing condition, drawn flat: no shadow, because it is not a
- * floating layer. The escalated tone takes the Job token and its 12% tint; the
- * neutral tone takes no hue, because a module is not a Job state.
- *
+ * floating layer. The escalated tone takes the Job token and its 12% tint;
+ * the neutral tone takes no hue, because a module is not a Job state. The
+ * caution tone is the one exception below Job level — --notice-caution and
+ * --notice-caution-bg, which alias --status-awaiting-review per the design
+ * system contract's Below Job level section, for a heads-up about an act a
+ * person is about to take rather than anything the Job itself is doing.
  */
 .armada-alert {
   display: flex;
@@ -16,6 +19,11 @@
 .armada-alert--escalated {
   background: var(--status-escalated-bg);
   border: var(--border-width) solid var(--status-escalated);
+}
+
+.armada-alert--caution {
+  background: var(--notice-caution-bg);
+  border: var(--border-width) solid var(--notice-caution);
 }
 
 .armada-alert--neutral {

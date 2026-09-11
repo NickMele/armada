@@ -95,6 +95,8 @@
   --color-error: var(--error);
   --color-degraded: var(--degraded);
   --color-degraded-dot: var(--degraded-dot);
+  --color-notice-caution: var(--notice-caution);
+  --color-notice-caution-bg: var(--notice-caution-bg);
   --font-weight-body: var(--weight-body);
   --font-weight-medium: var(--weight-medium);
   --font-weight-heading: var(--weight-heading);

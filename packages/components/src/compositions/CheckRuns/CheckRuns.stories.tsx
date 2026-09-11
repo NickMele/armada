@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { CircleX, ShieldCheck, ShieldMinus, ShieldX } from "lucide-react";
-import { expect } from "storybook/test";
+import { expect, fn } from "storybook/test";
 import { CheckRuns, type CheckRun } from "./CheckRuns";
 
 /**
@@ -176,6 +176,25 @@ export const TheOpenOutputSaysSo: Story = {
     // Every other row's control is a control, and says it is not the open one.
     const rest = canvas.getAllByRole("button", { pressed: false });
     await expect(rest).toHaveLength(3);
+  },
+};
+
+const onRunHere = fn();
+
+/**
+ * **Run it here**, beside the output the row already opens — the run sheet's
+ * entry point from a Check's own row on job detail.
+ */
+export const RunItHereBesideTheOutput: Story = {
+  args: {
+    rows: finished.map((row) => (row.id === "chk-suite" ? { ...row, onRunHere } : row)),
+    label: "Checks",
+  },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Run it here" }));
+    await expect(onRunHere).toHaveBeenCalled();
+    // The output control beside it is untouched.
+    await expect(canvas.getByRole("button", { name: "output · 2,180 lines" })).toBeVisible();
   },
 };
 

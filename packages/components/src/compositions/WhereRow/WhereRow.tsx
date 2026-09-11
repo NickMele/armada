@@ -2,6 +2,7 @@ import { ChevronRight, Copy, ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback } from "react";
 import { conceptSaid } from "../../concepts";
+import { Button } from "../../primitives/Button/Button";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
 /**
@@ -49,7 +50,12 @@ export type WhereRowProps = {
    * Sans and `--fg-subtle`, so it reads as a note about the value.
    */
   note?: ReactNode;
-  act: WhereRowAct;
+  /**
+   * Absent draws no trailing mark at all — the *Serving* row's own value
+   * names nothing that opens or copies on its own; the one thing to press is
+   * `actions`, beside it.
+   */
+  act?: WhereRowAct;
   /**
    * What `copy` writes, where `value` has been shortened for the row. Defaults
    * to `value` when that is a string; a row whose value is not a string and
@@ -66,6 +72,35 @@ export type WhereRowProps = {
    * accessible name on its own.
    */
   actLabel?: string;
+  /**
+   * The run sheet's own entry point — **Run…** on the worktree row.
+   *
+   * **A second control, not the row's act.** The row's own act, where it has
+   * one, still opens or copies its value; this opens Journey 9's run sheet
+   * instead, so the row can no longer be one element playing both parts. Where
+   * present, the row renders as a label and `Run…` carries the row's own
+   * hover and accessible name.
+   *
+   * **Disabled with a reason, never hidden.** The worktree row still says
+   * `Run…` when the worktree is gone — a control that vanished would read as
+   * a capability nobody ever had, where a disabled one with its reason on
+   * hover reads as a fact about this Job.
+   */
+  run?: {
+    onRun?: () => void;
+    /** Why `Run…` is disabled — the worktree no longer exists. */
+    disabledReason?: string;
+  };
+  /**
+   * Trailing controls beside the row, for a row whose act is not one of the
+   * three above — a server's link buttons on its *Serving* row, one per
+   * `links` entry, each labelled by name or by the bare URL.
+   *
+   * **The same sibling shape `run` takes**, generalised: a server can offer
+   * more than one link, where `run` is always exactly one button, so this
+   * takes whatever the caller renders rather than a fixed shape.
+   */
+  actions?: ReactNode;
 };
 
 /** The trailing glyph is 12px at strokeWidth 2, as every mark on this screen is. */
@@ -108,6 +143,8 @@ export function WhereRow({
   onCopied,
   onAct,
   actLabel,
+  run,
+  actions,
 }: WhereRowProps) {
   const writes = copyValue ?? (typeof value === "string" ? value : undefined);
   const press = useCallback(() => {
@@ -124,9 +161,10 @@ export function WhereRow({
     );
   }, [act, onAct, onCopied, writes]);
 
-  const actable = act === "copy" ? writes !== undefined : onAct !== undefined;
-  const Mark = MARK[act];
-  const says = actLabel ?? SAYS[act];
+  const actable =
+    act === undefined ? false : act === "copy" ? writes !== undefined : onAct !== undefined;
+  const Mark = act === undefined ? undefined : MARK[act];
+  const says = act === undefined ? undefined : (actLabel ?? SAYS[act]);
 
   // The label column names the thing; the concept says what that thing is.
   // `asChild`, because the row is a three-track grid and a wrapper would take
@@ -147,29 +185,56 @@ export function WhereRow({
         {value}
         {note === undefined ? null : <span className="armada-wrow__note">{note}</span>}
       </span>
-      <Mark size={GLYPH} strokeWidth={STROKE} className="armada-wrow__mark" aria-hidden />
+      {Mark === undefined ? null : (
+        <Mark size={GLYPH} strokeWidth={STROKE} className="armada-wrow__mark" aria-hidden />
+      )}
     </>
   );
 
-  if (!actable) {
-    return (
-      <div className="armada-wrow" data-act={act}>
-        {body}
-      </div>
-    );
-  }
-
-  // The row is the control, so its hover says what pressing it does. `title` is
-  // gone with it: the browser's own bubble carries no delay grouping, no
-  // placement and no token, and two tooltips answering one hover is one too
-  // many.
-  const pressSays = actLabel ?? actSays(act, label) ?? says;
-  return (
-    <Tooltip asChild label={pressSays}>
+  const row = !actable ? (
+    <div className="armada-wrow" data-act={act}>
+      {body}
+    </div>
+  ) : (
+    // The row is the control, so its hover says what pressing it does. `title`
+    // is gone with it: the browser's own bubble carries no delay grouping, no
+    // placement and no token, and two tooltips answering one hover is one too
+    // many.
+    // `act!`: this branch draws only when `actable` is true, which requires
+    // `act` to be set — see its computation above.
+    <Tooltip asChild label={actLabel ?? actSays(act!, label) ?? says}>
       <button type="button" className="armada-wrow" data-act={act} onClick={press}>
         {body}
         <span className="armada-wrow__sr">{says}</span>
       </button>
     </Tooltip>
+  );
+
+  if (run === undefined && actions === undefined) return row;
+
+  // A second control beside the row's own, so the two cannot become one
+  // button nested inside another. `Run…` and a server's link buttons are
+  // siblings, and `.armada-wrow-line` is what gives the row back the width
+  // it loses to them.
+  return (
+    <div className="armada-wrow-line">
+      {row}
+      {run === undefined ? null : (
+        // Not `asChild`: a disabled button does not reliably fire hover in
+        // every browser, and the wrapping span the default form draws does.
+        <Tooltip label={run.disabledReason ?? "Run a Check or Command in this Job's worktree"}>
+          <Button
+            variant="secondary"
+            size="sm"
+            ground="card"
+            disabled={run.disabledReason !== undefined}
+            onClick={run.onRun}
+          >
+            Run…
+          </Button>
+        </Tooltip>
+      )}
+      {actions}
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { conceptSaid } from "../../concepts";
+import { Button } from "../../primitives/Button/Button";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
 /**
@@ -88,6 +89,12 @@ export type CheckRun = {
    * with nothing to press rather than a row with a dead control on it.
    */
   output?: ReactNode;
+  /**
+   * Opens the run sheet with this Check selected and narrowed — **Run it
+   * here**, beside the output this row already opens. Absent where the
+   * caller has no run sheet to send the row to.
+   */
+  onRunHere?: () => void;
 };
 
 export type CheckRunsProps = {
@@ -167,25 +174,34 @@ export function CheckRuns({
                   {row.identifier}
                 </span>
               </span>
-              {row.output === undefined ? (
+              {row.output === undefined && row.onRunHere === undefined ? (
                 // A Check with nothing to show keeps the column and leaves it
                 // empty. A disabled control here would be a target that
                 // refuses, which is worse than no target.
                 <span className="armada-check-runs__no-output" aria-hidden />
               ) : (
-                // `aria-pressed` is what carries the selection. It used to live
-                // only in the stylesheet, which told nobody who was not looking
-                // at it which output the viewer was showing.
-                <Tooltip asChild label={openSaid}>
-                  <button
-                    type="button"
-                    className="armada-check-runs__output"
-                    aria-pressed={open}
-                    onClick={() => onOpen?.(row.id)}
-                  >
-                    {row.output}
-                  </button>
-                </Tooltip>
+                <span className="armada-check-runs__output-group">
+                  {row.output === undefined ? null : (
+                    // `aria-pressed` is what carries the selection. It used to
+                    // live only in the stylesheet, which told nobody who was
+                    // not looking at it which output the viewer was showing.
+                    <Tooltip asChild label={openSaid}>
+                      <button
+                        type="button"
+                        className="armada-check-runs__output"
+                        aria-pressed={open}
+                        onClick={() => onOpen?.(row.id)}
+                      >
+                        {row.output}
+                      </button>
+                    </Tooltip>
+                  )}
+                  {row.onRunHere === undefined ? null : (
+                    <Button variant="ghost" size="sm" ground="card" onClick={row.onRunHere}>
+                      Run it here
+                    </Button>
+                  )}
+                </span>
               )}
               {row.result === undefined ? null : (
                 <span className="armada-check-runs__result">{row.result}</span>

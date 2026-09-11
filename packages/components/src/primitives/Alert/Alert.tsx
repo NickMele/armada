@@ -5,15 +5,25 @@ import type { ReactNode } from "react";
  * elevation is surface, and shadows are legal only on dialog, sheet, popover,
  * dropdown, tooltip and the palette.
  *
- * The contract's component mapping does not carry Alert. The two tones below
- * are read off the component sheet, which draws exactly two: a condition in
- * the escalation hue, and the neutral Doctor condition strip. Neither tone is
- * chosen — escalated takes the Job token, and neutral takes no hue at all.
+ * Three tones. Two are read off the component sheet, which draws exactly two:
+ * a condition in the escalation hue, and the neutral Doctor condition strip.
+ * Neither is chosen — escalated takes the Job token, and neutral takes no hue
+ * at all. The third, `caution`, is a contract addition: the one Alert tone
+ * below Job level that takes hue, aliasing `--status-awaiting-review` as
+ * `--notice-caution` per `docs/contracts/design-system.md`, Below Job level.
+ * A heads-up about an act a person is about to take, not a Job state.
  *
  * The glyph is the caller's, because Alert is not the thing that decides which
- * glyph a condition owns.
+ * glyph a condition owns. `caution` carries none by contract — `triangle-alert`
+ * is Doctor's and the contract has no generic alarm glyph.
  */
-export type AlertTone = "escalated" | "neutral";
+export type AlertTone = "escalated" | "caution" | "neutral";
+
+const TONE_CLASS: Record<AlertTone, string> = {
+  escalated: "armada-alert--escalated",
+  caution: "armada-alert--caution",
+  neutral: "armada-alert--neutral",
+};
 
 export type AlertProps = {
   tone?: AlertTone;
@@ -32,7 +42,7 @@ export function Alert({ tone = "escalated", title, children, icon, action }: Ale
     <div
       className={[
         "armada-alert",
-        tone === "neutral" ? "armada-alert--neutral" : "armada-alert--escalated",
+        TONE_CLASS[tone],
         // A headline makes the copy a block, and the glyph belongs beside its
         // first line. Without one there is a single line to sit against, and
         // aligning to its top reads as a mistake rather than as alignment.
