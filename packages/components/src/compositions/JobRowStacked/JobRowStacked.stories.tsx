@@ -47,7 +47,7 @@ const open = (
  * makes the duplicate a second reference rather than a second answer.
  *
  * The fourth track was `--armada-track-time`, 76px, while `APPROVAL_TRACKS` in
- * `TheListSixStatesOneRowShape` drew the drawing's 100px as a bare `calc()`.
+ * `TheList` drew the drawing's 100px as a bare `calc()`.
  * The drawing wins: the timestamp track is `--armada-track-created`, and both
  * lists say so in the same words.
  */

@@ -72,9 +72,9 @@ export * from "./screens/absent";
 // The three journey screens, lifted for the reason the job detail three were:
 // a story with hardcoded fixtures is a screen nothing outside Storybook can
 // render. Each takes the regions it composes as props.
-export * from "./screens/DispatchAJobFullWithTheM1SubsetMarked/DispatchAJobFullWithTheM1SubsetMarked";
+export * from "./screens/DispatchAJob/DispatchAJob";
 export * from "./screens/FirstLaunch/FirstLaunch";
-export * from "./screens/TheListSixStatesOneRowShape/TheListSixStatesOneRowShape";
+export * from "./screens/TheList/TheList";
 
 // The shell. Rail, panel and status bar — the frame the three above mount
 // inside. A screen like them, and lifted for the same reason: Bridge needs the
