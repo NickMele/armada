@@ -63,11 +63,12 @@ export function PathChip({ directory, basename, note, title, onCopy }: PathChipP
   const body = (
     <>
       {directory === undefined || directory === "" ? null : (
-        // `dir="ltr"` inside an `rtl` box: the characters stay in reading
-        // order and only the overflow end moves. Without it a path renders
-        // its separators on the wrong side.
-        <span className="armada-path__dir" dir="ltr">
-          {directory}
+        // An ltr isolate *inside* the rtl box, so the characters keep reading
+        // order and only the overflow end moves. On the box itself the
+        // stylesheet's `direction: rtl` overrides `dir`, and the trailing
+        // separator is drawn at the front.
+        <span className="armada-path__dir">
+          <bdi dir="ltr">{directory}</bdi>
         </span>
       )}
       <span className="armada-path__base">{basename}</span>
