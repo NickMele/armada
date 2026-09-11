@@ -25,6 +25,7 @@
 
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use core::time::Duration;
 
 use crate::Worktree;
 
@@ -145,6 +146,14 @@ pub enum Prompting {
     /// The Drone is never asked. A call outside the toolbelt is refused.
     Never,
 }
+
+/// How long the harness waits on Armada's answer to one permission question.
+///
+/// **Fleet holds a question for less than this**, so a question nobody answers
+/// ends in Fleet's refusal, which says why. A harness that gave up first would
+/// leave the call unrun while the question was still in front of a person, and
+/// their answer would reach nobody.
+pub const PERMISSION_WAIT: Duration = Duration::from_secs(30 * 60);
 
 /// One thing a Drone may do, named for the capability rather than for the tool.
 ///
