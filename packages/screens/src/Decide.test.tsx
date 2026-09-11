@@ -302,3 +302,56 @@ test("a conversation comment an older Fleet sent with null fields still renders"
     .element(page.getByText("The branch has merge conflicts, please resolve them"))
     .toBeVisible();
 });
+
+// `#663`: Fleet's own rebase, offered as its own control rather than folded
+// into `ReviewDecision`'s four — it is not a verdict on the work.
+test("resolve conflicts is offered beside the pull request, and sends on the press with no dialog", async () => {
+  const sent: string[] = [];
+  mount(
+    <Decide
+      onNeedMaterial={() => {}}
+      onNeedRemarks={() => {}}
+      job={JOB}
+      evidence={NO_EVIDENCE}
+      remarks={NO_REMARKS}
+      stale={false}
+      deciding={false}
+      pullRequest="https://forge.example/armada/pull/533"
+      onMerge={() => {}}
+      onResolveConflict={(jobId) => sent.push(jobId)}
+      onApprove={() => {}}
+      onRequestChanges={() => {}}
+      onReject={() => {}}
+      onTakeUpRemarks={() => {}}
+      onOpenRemarkLink={() => {}}
+    />,
+  );
+
+  await userEvent.click(page.getByRole("button", { name: "Resolve conflicts with main" }));
+
+  expect(sent).toEqual([JOB.id]);
+  await expect.element(page.getByRole("dialog")).not.toBeInTheDocument();
+});
+
+test("resolve conflicts draws nothing where the caller gave no handler", async () => {
+  mount(
+    <Decide
+      onNeedMaterial={() => {}}
+      onNeedRemarks={() => {}}
+      job={JOB}
+      evidence={NO_EVIDENCE}
+      remarks={NO_REMARKS}
+      stale={false}
+      deciding={false}
+      onMerge={() => {}}
+      onApprove={() => {}}
+      onRequestChanges={() => {}}
+      onReject={() => {}}
+      onTakeUpRemarks={() => {}}
+      onOpenRemarkLink={() => {}}
+    />,
+  );
+  await expect
+    .element(page.getByRole("button", { name: "Resolve conflicts with main" }))
+    .not.toBeInTheDocument();
+});

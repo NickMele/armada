@@ -304,6 +304,7 @@ export function pullRequestBlockOf(
   if (address === undefined) return undefined;
   const number =
     detail?.number === undefined ? (pullRequestNumber(address) ?? "Pull request") : `#${detail.number}`;
+  const currency = currencyLineOf(detail?.currency);
   return (
     <div className="armada-verdict__pr">
       <p className="text-xs text-fg-muted">
@@ -323,6 +324,11 @@ export function pullRequestBlockOf(
         </span>
         {detail === undefined ? null : pullRequestReadOf(detail)}
       </p>
+      {currency === undefined ? null : (
+        <p className={currency.conflicted ? "text-xs text-fg-default" : "text-2xs text-fg-subtle"}>
+          {currency.said}
+        </p>
+      )}
     </div>
   );
 }
@@ -344,6 +350,29 @@ function pullRequestReadOf(detail: PullRequestDetail): string {
           .join(" · ") || `${detail.reviews.length} reviewed, unresolved`;
   const title = detail.title === undefined ? "" : ` · ${detail.title}`;
   return `${title}, open, ${mergeable}, ${reviewed}.`;
+}
+
+/**
+ * What the last attempt to keep this pull request's branch current against a
+ * moved base says, where main has ever moved under it. `#663`.
+ *
+ * **`undefined` is the ordinary case.** Most of a pull request's life the
+ * branch has never needed to move, and this block says nothing about it —
+ * silence here is not a gap, it is the base never having moved.
+ */
+export function currencyLineOf(
+  currency: PullRequestDetail["currency"],
+): { said: string; conflicted: boolean } | undefined {
+  if (currency === undefined) return undefined;
+  const onto = currency.rebased_onto.slice(0, 7);
+  if (currency.conflict_files === undefined || currency.conflict_files.length === 0) {
+    return { said: `Rebased onto \`${onto}\` and pushed — the branch is current with main.`, conflicted: false };
+  }
+  const files = currency.conflict_files.join(", ");
+  return {
+    said: `Behind \`${onto}\` with conflicts Fleet could not resolve on its own: ${files}.`,
+    conflicted: true,
+  };
 }
 
 /** What `verdictOf` is built from — the panel's own reading of one Job and its open step. */
@@ -430,6 +459,8 @@ export type VerdictSlotAtGateArgs = {
   stale: boolean;
   deciding: boolean;
   onMergePullRequest: (jobId: string) => void;
+  /** Send the branch back for a Drone that can edit files. `#663`. */
+  onResolvePullRequestConflict: (jobId: string) => void;
   onApproveReview: (jobId: string) => void;
   onRequestChanges: (jobId: string, note: string) => void;
   onReject: (jobId: string) => void;
@@ -459,6 +490,7 @@ export function verdictSlotAtGate({
   stale,
   deciding,
   onMergePullRequest,
+  onResolvePullRequestConflict,
   onApproveReview,
   onRequestChanges,
   onReject,
@@ -469,6 +501,10 @@ export function verdictSlotAtGate({
 }: VerdictSlotAtGateArgs): ReactNode {
   const address = whole?.delivery?.pull_request;
   const detail = whole?.delivery?.pull_request_detail;
+  // **Offered whenever there is a pull request to send back**, not only where
+  // a conflict is already known — the base may have moved since Fleet's own
+  // rotation last read it, and the press itself is what asks Fleet to look.
+  const canResolveConflict = address !== undefined;
   const never = neverDelivers(whole?.steps ?? []);
   // Never `auto_merge`: approving here never merges regardless of that
   // policy, which holds a later, separate gate (`fleet::gate`, `reviewing`).
@@ -519,6 +555,7 @@ export function verdictSlotAtGate({
           deciding={deciding}
           {...(address === undefined ? {} : { pullRequest: address })}
           onMerge={onMergePullRequest}
+          {...(canResolveConflict ? { onResolveConflict: onResolvePullRequestConflict } : {})}
           onApprove={onApproveReview}
           onRequestChanges={onRequestChanges}
           onReject={onReject}

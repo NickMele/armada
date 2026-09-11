@@ -11,6 +11,7 @@ import type { JobDetail as JobWhole, StepDetail, Submitted } from "@armada/proto
 import {
   briefOf,
   cameBackOf,
+  currencyLineOf,
   leftAloneOf,
   neverAsksAPerson,
   neverDelivers,
@@ -275,5 +276,44 @@ describe("what proves it, where the step carries an overruled verdict", () => {
     const rows = provesItOf({ ...overriddenStep(), overridden: false }, [], NOW);
     expect(rows.some((row) => row.named === "overruled")).toBe(false);
     expect(rows.some((row) => row.named === "refused")).toBe(true);
+  });
+});
+
+// `#663`: what the last attempt to keep a pull request's branch current
+// against a moved base says.
+describe("the currency line a rebase against a moved base leaves", () => {
+  it("is undefined where the base has never moved", () => {
+    expect(currencyLineOf(undefined)).toBeUndefined();
+  });
+
+  it("says the branch is current where the rebase was clean", () => {
+    const said = currencyLineOf({
+      rebased_onto: "8c2ce681000000000000000000000000000000",
+      rebased_at: "2026-09-11T19:41:00Z",
+      conflict_files: [],
+    });
+    expect(said?.conflicted).toBe(false);
+    expect(said?.said).toContain("8c2ce68");
+    expect(said?.said).toMatch(/current with main/);
+  });
+
+  it("names the files and says nothing was resolved where the rebase conflicted", () => {
+    const said = currencyLineOf({
+      rebased_onto: "8c2ce681000000000000000000000000000000",
+      rebased_at: "2026-09-11T19:41:00Z",
+      conflict_files: ["src/parse.rs", "src/lex.rs"],
+    });
+    expect(said?.conflicted).toBe(true);
+    expect(said?.said).toContain("src/parse.rs");
+    expect(said?.said).toContain("src/lex.rs");
+    expect(said?.said).toMatch(/conflicts/);
+  });
+
+  it("is not conflicted where `conflict_files` is absent", () => {
+    const said = currencyLineOf({
+      rebased_onto: "8c2ce681000000000000000000000000000000",
+      rebased_at: "2026-09-11T19:41:00Z",
+    });
+    expect(said?.conflicted).toBe(false);
   });
 });

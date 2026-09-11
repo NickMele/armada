@@ -23,7 +23,7 @@
 use std::collections::BTreeMap;
 
 use adapter_traits::Landing;
-use core_model::{JobId, Ulid};
+use core_model::{JobId, Timestamp, Ulid};
 
 use crate::error::{fault, WriteError};
 use crate::open::Store;
@@ -55,6 +55,25 @@ ALTER TABLE jobs ADD COLUMN delivery_pull_request TEXT;
 /// this shipped reads as unasked, which is exactly what it is.
 pub(crate) const V26: &str = r#"
 ALTER TABLE jobs ADD COLUMN delivery_landed TEXT;
+"#;
+
+/// Version 48 — the base a pull request's branch was last brought up to,
+/// where main moved under it. `#663`, in place of the close-and-reopen it
+/// replaced.
+///
+/// **Durable, unlike the in-memory guard it replaces.** `fleet::noticing`
+/// used to remember what it had closed and reopened in a map that did not
+/// survive a restart, and #660 was closed and reopened twice for the same
+/// base because of it. This is read back before a rebase is attempted, so
+/// the memory outlives the process that wrote it.
+///
+/// Three nullable columns and no backfill, [`V21`]'s shape: a Job whose
+/// branch has never needed to move has nothing to say here, and a Job written
+/// before this column existed reads exactly the same as one that has not.
+pub(crate) const V48: &str = r#"
+ALTER TABLE jobs ADD COLUMN delivery_rebased_onto TEXT;
+ALTER TABLE jobs ADD COLUMN delivery_rebased_at TEXT;
+ALTER TABLE jobs ADD COLUMN delivery_rebase_conflict_files TEXT;
 "#;
 
 /// What a Job's branch came to, as the record holds it.
@@ -95,6 +114,34 @@ impl Delivery {
             && self.pushed.is_none()
             && self.pull_request.is_none()
             && self.landed.is_none()
+    }
+}
+
+/// What the last attempt to keep a pull request's branch current against a
+/// moved base came to.
+///
+/// **Written once per base, and read back before the next attempt.** That is
+/// the whole of what makes a conflicted rebase retried once per move of main
+/// rather than once per sweep — `fleet::currency` compares `onto` against the
+/// base's tip *now* and does nothing where they already agree.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Currency {
+    /// The base's tip this was last attempted against. `None` is a branch
+    /// that has never needed to move — the ordinary case for most of a pull
+    /// request's life.
+    pub onto: Option<String>,
+    pub at: Option<Timestamp>,
+    /// Absent on a clean rebase or where nothing has been attempted yet.
+    /// Present — and never empty — where the attempt against `onto`
+    /// conflicted and the branch was left exactly as it was.
+    pub conflict_files: Option<Vec<String>>,
+}
+
+impl Currency {
+    /// Whether the branch is currently behind `tip` with conflicts nobody has
+    /// resolved — what a review panel offers a person the Drone for.
+    pub fn conflicted_against(&self, tip: &str) -> bool {
+        self.onto.as_deref() == Some(tip) && self.conflict_files.is_some()
     }
 }
 
@@ -214,6 +261,67 @@ impl Store {
             });
         }
         Ok(())
+    }
+
+    /// Write what the last attempt to keep this pull request's branch current
+    /// came to. **Its own `UPDATE`**, for [`record_landed`](Store::record_landed)'s
+    /// reason: a later turn asking a question the finishing turn could not
+    /// have answered, writing columns nothing else touches.
+    pub fn record_kept_current(
+        &mut self,
+        job_id: &JobId,
+        onto: &str,
+        at: &Timestamp,
+        conflict_files: Option<&[String]>,
+    ) -> Result<(), WriteError> {
+        // Newline-joined rather than JSON: every path here is a line
+        // `git diff --name-only` printed, so none of them holds one, and a
+        // column this narrow does not earn a parser.
+        let files = conflict_files.map(|files| files.join("\n"));
+        let updated = self
+            .conn
+            .execute(
+                "UPDATE jobs SET delivery_rebased_onto = ?2, delivery_rebased_at = ?3, \
+                 delivery_rebase_conflict_files = ?4 WHERE job_id = ?1",
+                (job_id.as_str(), onto, at.as_str(), files),
+            )
+            .map_err(fault("recording an attempt to keep a pull request current"))
+            .map_err(WriteError::Database)?;
+        if updated == 0 {
+            return Err(WriteError::NoSuchJob {
+                job_id: job_id.clone(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Read what the last attempt to keep this pull request's branch current
+    /// came to. [`Currency::default`] is every Job that has never needed one.
+    pub fn kept_current_for(&self, job_id: &JobId) -> Result<Currency, crate::error::LoadJobError> {
+        self.conn
+            .query_row(
+                "SELECT delivery_rebased_onto, delivery_rebased_at, \
+                 delivery_rebase_conflict_files FROM jobs WHERE job_id = ?1",
+                (job_id.as_str(),),
+                |row| {
+                    let files: Option<String> = row.get(2)?;
+                    let at: Option<String> = row.get(1)?;
+                    Ok(Currency {
+                        onto: row.get(0)?,
+                        at: at.map(Timestamp::from_rfc3339),
+                        conflict_files: files
+                            .map(|held| held.split('\n').map(str::to_string).collect()),
+                    })
+                },
+            )
+            .or_else(|why| match why {
+                rusqlite::Error::QueryReturnedNoRows => Ok(Currency::default()),
+                other => Err(crate::error::LoadJobError::Unreadable(
+                    crate::error::RowError::Database(fault(
+                        "reading what a rebase against a moved base came to",
+                    )(other)),
+                )),
+            })
     }
 
     /// Every Job that has a pull request nobody has settled, with its branch

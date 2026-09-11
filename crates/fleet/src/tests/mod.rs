@@ -31,6 +31,7 @@ mod capacity;
 mod checking;
 mod checks;
 mod concurrency;
+mod conflict_resolution;
 mod converging;
 mod coupling;
 mod covering;

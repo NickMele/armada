@@ -137,7 +137,7 @@ async fn a_workflow_that_delivers_nothing_finishes_with_nothing_pushed() {
     assert!(
         !fleet.vcs().delivered().iter().any(|did| matches!(
             did,
-            Delivered::Pushed { .. } | Delivered::OpenedForReview { .. }
+            Delivered::PushedForcing { .. } | Delivered::OpenedForReview { .. }
         )),
         "and nothing was pushed and nothing opened for review: {:?}",
         fleet.vcs().delivered()
@@ -186,7 +186,7 @@ async fn a_job_that_changed_nothing_is_answered_rather_than_committed() {
     assert!(
         !fleet.vcs().delivered().iter().any(|did| matches!(
             did,
-            Delivered::Pushed { .. } | Delivered::OpenedForReview { .. }
+            Delivered::PushedForcing { .. } | Delivered::OpenedForReview { .. }
         )),
         "no branch is pushed over a worktree that held nothing: {:?}",
         fleet.vcs().delivered()
@@ -273,7 +273,7 @@ async fn a_refused_commit_still_completes_the_job_and_says_so() {
             .vcs()
             .delivered()
             .iter()
-            .any(|did| matches!(did, Delivered::Pushed { .. })),
+            .any(|did| matches!(did, Delivered::PushedForcing { .. })),
         "and nothing was published over a commit that did not land"
     );
     assert_eq!(

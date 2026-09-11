@@ -89,7 +89,7 @@ mod write;
 mod tests;
 
 pub use attempt::Attempted;
-pub use delivery::{Delivery, Unsettled};
+pub use delivery::{Currency, Delivery, Unsettled};
 pub use error::{DatabaseFault, LoadAllError, LoadJobError, OpenError, RowError, WriteError};
 pub use fold::{Moved, RecordedEvent};
 pub use footprint::Footprinted;

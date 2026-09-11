@@ -46,9 +46,11 @@
 
 import { useEffect, useState } from "react";
 import {
+  Button,
   Dialog,
   ReviewComments,
   ReviewDecision,
+  Tooltip,
   UnifiedDiff,
   type UnifiedDiffProps,
 } from "@armada/components";
@@ -107,6 +109,13 @@ export type DecideProps = {
   pullRequest?: string;
   /** Merge that pull request, then take the work. */
   onMerge: (jobId: string) => void;
+  /**
+   * Send the branch back for a Drone that can edit files to bring it current
+   * with main. `#663`. **Absent draws nothing**, the same rule `onMerge`
+   * follows: `verdict.tsx` decides presence from the pull request, never a
+   * flag here.
+   */
+  onResolveConflict?: (jobId: string) => void;
   onApprove: (jobId: string) => void;
   onRequestChanges: (jobId: string, note: string) => void;
   onReject: (jobId: string) => void;
@@ -147,6 +156,7 @@ export function Decide({
   deciding,
   pullRequest,
   onMerge,
+  onResolveConflict,
   onApprove,
   onRequestChanges,
   onReject,
@@ -219,6 +229,20 @@ export function Decide({
         disabled={off}
         {...(why === undefined ? {} : { disabledNote: why })}
       />
+
+      {/* A fifth answer at the same gate, and not one of the four the table
+          above documents: it is not a verdict on the work, it is Fleet's own
+          rebase against a base that may have moved. `#663`. No confirmation —
+          nothing here is destroyed either way, the same reading `onApprove`
+          gets: a clean rebase pushes on its own, and a conflict only spawns a
+          Drone on the step before the one that delivers, never this gate's. */}
+      {onResolveConflict === undefined ? null : (
+        <Tooltip label="Fleet rebases the branch onto main and pushes it. If it conflicts, a Drone that can edit files resolves it — never the Drone at this gate.">
+          <Button variant="secondary" disabled={off} onClick={() => onResolveConflict(job.id)}>
+            Resolve conflicts with main
+          </Button>
+        </Tooltip>
+      )}
 
       {/* The one act here that writes outside a worktree Fleet made.
           **Neutral, not destructive**: nothing ends and nothing is destroyed,

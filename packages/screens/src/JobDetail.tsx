@@ -245,6 +245,8 @@ export type JobDetailProps = {
    * request, which `Decide` decides from the detail rather than from a flag.
    */
   onMergePullRequest: (jobId: string) => void;
+  /** Send the branch back for a Drone that can edit files. `#663`. */
+  onResolvePullRequestConflict: (jobId: string) => void;
   onApproveReview: (jobId: string) => void;
   onRequestChanges: (jobId: string, note: string) => void;
   onReject: (jobId: string) => void;
@@ -348,6 +350,7 @@ export function JobDetail({
   onReport,
   onApprove,
   onMergePullRequest,
+  onResolvePullRequestConflict,
   onApproveReview,
   onRequestChanges,
   onReject,
@@ -656,6 +659,7 @@ export function JobDetail({
             stale,
             deciding,
             onMergePullRequest,
+            onResolvePullRequestConflict,
             onApproveReview,
             onRequestChanges,
             onReject,

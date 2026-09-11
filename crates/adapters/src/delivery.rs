@@ -28,8 +28,8 @@ use std::path::Path;
 use std::process::{Command, Output};
 
 use adapter_traits::{
-    Base, BaseOnTheRemote, BroughtUpToDate, Delivery, Merged, NotDelivered, NotMerged, Opened,
-    Pushed, Renewed, RepositoryStanding, Review, UnderReview, WhatBecameOfIt,
+    Base, BaseOnTheRemote, BroughtUpToDate, Delivery, KeptCurrent, Merged, NotDelivered, NotMerged,
+    Opened, Pushed, RepositoryStanding, Review, UnderReview, WhatBecameOfIt,
 };
 use adapter_traits::{Standing, Worktree};
 use git2::{BranchType, Repository};
@@ -145,6 +145,10 @@ impl Delivery for GitVcs {
         }
     }
 
+    fn push_forcing(&self, worktree: &Worktree) -> Result<Pushed, NotDelivered> {
+        crate::keeping_current::pushed_forcing(worktree)
+    }
+
     fn open_for_review(
         &self,
         worktree: &Worktree,
@@ -200,8 +204,12 @@ impl Delivery for GitVcs {
         crate::inline_comments::read(in_repo, pull_request)
     }
 
-    fn rendered_afresh(&self, in_repo: &str, pull_request: &str) -> Renewed {
-        crate::landing::rendered_afresh(in_repo, pull_request)
+    fn kept_current(&self, in_repo: &str, handle: &str, base: &str) -> KeptCurrent {
+        crate::keeping_current::kept_current(in_repo, handle, base)
+    }
+
+    fn base_tip(&self, in_repo: &str, base: &str) -> Option<String> {
+        crate::keeping_current::base_tip(in_repo, base)
     }
 
     fn merge(&self, in_repo: &str, pull_request: &str) -> Result<Merged, NotMerged> {
@@ -289,7 +297,7 @@ fn already_open(worktree: &Worktree) -> Option<String> {
 ///
 /// Where several are configured and none is `origin`, nothing here can say
 /// which one a person meant, so nothing is pushed.
-fn a_remote(repo: &Repository) -> Option<String> {
+pub(crate) fn a_remote(repo: &Repository) -> Option<String> {
     let remotes = repo.remotes().ok()?;
     let named: Vec<String> = remotes.iter().flatten().map(str::to_string).collect();
     match named.iter().any(|name| name == "origin") {
@@ -303,7 +311,7 @@ fn a_remote(repo: &Repository) -> Option<String> {
 /// Both directory names are asked for, because git uses one for the merge
 /// backend and the other for the apply backend and which is in play depends on
 /// the machine's configuration.
-fn rebase_in_progress(worktree: &Worktree) -> bool {
+pub(crate) fn rebase_in_progress(worktree: &Worktree) -> bool {
     ["rebase-merge", "rebase-apply"].iter().any(|name| {
         match git(worktree, &["rev-parse", "--git-path", name]) {
             Ok(run) => {
@@ -316,7 +324,7 @@ fn rebase_in_progress(worktree: &Worktree) -> bool {
 }
 
 /// The paths git is holding as unresolved, one per line.
-fn unmerged_files(worktree: &Worktree) -> Vec<String> {
+pub(crate) fn unmerged_files(worktree: &Worktree) -> Vec<String> {
     let Ok(run) = git(worktree, &["diff", "--name-only", "--diff-filter=U"]) else {
         return Vec::new();
     };
@@ -328,7 +336,7 @@ fn unmerged_files(worktree: &Worktree) -> Vec<String> {
         .collect()
 }
 
-fn open(worktree: &Worktree) -> Result<Repository, NotDelivered> {
+pub(crate) fn open(worktree: &Worktree) -> Result<Repository, NotDelivered> {
     Repository::open(worktree.path()).map_err(|cause| {
         NotDelivered::of("opening the Job's worktree", cause.message().to_string())
     })
@@ -377,7 +385,7 @@ fn tip_of(repo: &Repository, name: &str) -> Result<git2::Oid, NotDelivered> {
 
 /// Run `git` in the Job's worktree. **No shell**, like every other command
 /// Armada runs, so nothing in an argument can be read as syntax.
-fn git(worktree: &Worktree, args: &[&str]) -> Result<Output, NotDelivered> {
+pub(crate) fn git(worktree: &Worktree, args: &[&str]) -> Result<Output, NotDelivered> {
     run(worktree, "git", args).map_err(|why| NotDelivered::of("running git", why.to_string()))
 }
 

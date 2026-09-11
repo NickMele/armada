@@ -31,8 +31,8 @@ use crate::commands::{
     answer_command, answer_question, approve_dispatch, approve_review, examine_job, file_report,
     forget_job, kill_drone, kill_job, merge_pull_request, override_verdict, propose_from_request,
     propose_job, raise_cost_cap, raise_turn_cap, reclaim_worktree, redirect_drone, redispatch_job,
-    reject_job, request_changes, rerun_gate, restart_step, set_when_blocked, show_again,
-    stop_proposal, take_up_remarks,
+    reject_job, request_changes, rerun_gate, resolve_pull_request_conflict, restart_step,
+    set_when_blocked, show_again, stop_proposal, take_up_remarks,
 };
 use crate::daemon::Daemon;
 use crate::journal::Journal;
@@ -259,6 +259,15 @@ pub const SERVED: &[Route] = &[
         operation: "merge_pull_request",
         method: "POST",
         path: "/jobs/:job_id/merge",
+    },
+    // A sixth thing to do at the review gate, `#663`: the branch is behind
+    // main or conflicts with it, and this is Fleet's own rebase, never a
+    // Drone's — its own route for `take_up_remarks`'s reason, a body that
+    // took a flag here would mean two things.
+    Route {
+        operation: "resolve_pull_request_conflict",
+        method: "POST",
+        path: "/jobs/:job_id/resolve_pull_request_conflict",
     },
     // The answer at a gate that refused, which is a different place from the
     // three above: those answer `awaiting_review` and this answers `escalated`.
@@ -716,6 +725,10 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/:job_id/frames/:run/:name", get(get_frame::<D>))
         .route("/jobs/:job_id/approve_review", post(approve_review::<D>))
         .route("/jobs/:job_id/merge", post(merge_pull_request::<D>))
+        .route(
+            "/jobs/:job_id/resolve_pull_request_conflict",
+            post(resolve_pull_request_conflict::<D>),
+        )
         .route("/jobs/:job_id/request_changes", post(request_changes::<D>))
         .route("/jobs/:job_id/reject", post(reject_job::<D>))
         .route("/jobs/:job_id/take_up_remarks", post(take_up_remarks::<D>))
