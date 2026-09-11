@@ -39,6 +39,20 @@ use crate::resume::Redirection;
 /// Armada writes into somebody else's repository is.
 const ENOUGH_OF_A_NAME: usize = 80;
 
+/// How much of [`brief`]'s own output a chosen set of comments may spend.
+///
+/// **On the set, and never on one comment.**
+/// `docs/spikes/014-how-much-room-does-a-brief-leave-for-comments.md` measured
+/// a real opening brief with nothing chosen at 9,972 characters, of which
+/// 1,238 is fixed on every one regardless of the Job — everything [`brief`]
+/// adds is on top of that, never in place of it. 8,000 keeps the comments a
+/// minority of the resulting turn, with headroom below the one full brief
+/// measured for a shorter one the spike did not see, and it is weighed
+/// against `brief`'s own rendered output — wrapper sentences and every
+/// [`quoted`] marker included — because that is what actually reaches the
+/// next turn.
+const ROOM_FOR_COMMENTS: usize = 8_000;
+
 /// What one Job's open pull request has on it, and what has already been spent.
 ///
 /// **Three things and not a rendered answer.** The DTO is `crate::serving`'s to
@@ -118,7 +132,8 @@ where
     /// reads.
     ///
     /// **Every refusal happens before anything moves.** A handle the pull
-    /// request no longer has, a handle already spent, a press naming nothing:
+    /// request no longer has, a handle already spent, a press naming nothing,
+    /// a chosen set that would not fit the room an opening brief leaves free:
     /// each is a question about now, answered while the Job is still at its
     /// gate and answerable by every act it was answerable by a moment ago.
     /// `request_changes`'s own refusals come after, and it has the same
@@ -166,7 +181,19 @@ where
                 already,
             });
         }
-        let note = Redirection::saying(&brief(&picked)).ok_or_else(|| Adrift::NoRemarksChosen {
+        let rendered = brief(&picked);
+        // **Before the forge is asked to move anything**, for
+        // `chosen.is_empty()`'s reason above: whether a chosen set fits is a
+        // question about the words themselves, answerable before
+        // `request_changes` moves the Job, and a refusal answered after would
+        // have to be undone rather than never sent.
+        if rendered.len() > ROOM_FOR_COMMENTS {
+            return Err(Adrift::RemarksTooLarge {
+                job: job_id.clone(),
+                too_large: worth_dropping(&picked, rendered.len() - ROOM_FOR_COMMENTS),
+            });
+        }
+        let note = Redirection::saying(&rendered).ok_or_else(|| Adrift::NoRemarksChosen {
             job: job_id.clone(),
         })?;
         // The road, entered rather than rebuilt. Every refusal it already has
@@ -341,6 +368,32 @@ fn quoted(said: &FromOutside) -> String {
     out
 }
 
+/// Which of the picked comments to drop to bring [`brief`]'s rendered output
+/// back under [`ROOM_FOR_COMMENTS`].
+///
+/// **The largest first, until dropping them would be enough.** The bound is on
+/// the rendered set as a whole, so no one comment is "the" reason a press is
+/// refused — this names the fewest comments whose removal would free
+/// `over_by` characters, which is what a person can act on: drop these, press
+/// again.
+fn worth_dropping(picked: &[&Remark], over_by: usize) -> Vec<String> {
+    let mut sized: Vec<(usize, &Remark)> = picked
+        .iter()
+        .map(|remark| (quoted(&remark.said).len(), *remark))
+        .collect();
+    sized.sort_by(|a, b| b.0.cmp(&a.0));
+    let mut dropped = Vec::new();
+    let mut freed = 0;
+    for (size, remark) in sized {
+        if freed >= over_by {
+            break;
+        }
+        freed += size;
+        dropped.push(remark.id.as_written().to_string());
+    }
+    dropped
+}
+
 /// The one comment Armada writes onto the pull request.
 ///
 /// **One reply per press, saying what was taken up and what was not.** A reply
@@ -475,6 +528,39 @@ mod tests {
         assert!(
             !written.contains("`carol`"),
             "a comment taken up on an earlier press is in neither list: {written}"
+        );
+    }
+
+    #[test]
+    fn worth_dropping_names_the_fewest_largest_comments_needed() {
+        // Rendered sizes (quoted, single line: 2 + body + 1): 13, 8, 6.
+        let big = remark("IC_big", "alice", &"x".repeat(10));
+        let medium = remark("IC_medium", "bob", &"x".repeat(5));
+        let small = remark("IC_small", "carol", &"x".repeat(3));
+        let picked = [&big, &medium, &small];
+        // Neither the biggest alone (13) nor any two but the two biggest
+        // reach 15; only dropping the two biggest does.
+        let dropped = worth_dropping(&picked, 15);
+        assert_eq!(
+            dropped,
+            vec![String::from("IC_big"), String::from("IC_medium")],
+            "largest first, and only as many as it takes: {dropped:?}"
+        );
+    }
+
+    #[test]
+    fn worth_dropping_stops_as_soon_as_one_comment_is_enough() {
+        let big = remark("IC_big", "alice", &"x".repeat(20));
+        let medium = remark("IC_medium", "bob", &"x".repeat(10));
+        let small = remark("IC_small", "carol", &"x".repeat(10));
+        let picked = [&big, &medium, &small];
+        // The biggest comment alone (23) already frees more than 15; naming
+        // the other two too would ask a person to drop more than necessary.
+        let dropped = worth_dropping(&picked, 15);
+        assert_eq!(
+            dropped,
+            vec![String::from("IC_big")],
+            "the fewest comments whose removal is enough, not every large one: {dropped:?}"
         );
     }
 

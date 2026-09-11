@@ -112,6 +112,14 @@ impl fmt::Display for Adrift {
                 already.len(),
                 job.as_str()
             ),
+            Adrift::RemarksTooLarge { job, too_large } => write!(
+                out,
+                "the comments picked off {}'s pull request would not fit the room an \
+                 opening brief leaves free. Drop {} of them and press again: {}",
+                job.as_str(),
+                too_large.len(),
+                too_large.join(", ")
+            ),
             Adrift::NothingToMerge { job } => write!(
                 out,
                 "{} opened no pull request, so approving it is the act",
@@ -503,6 +511,7 @@ impl Adrift {
             | Adrift::NoRemarksChosen { job }
             | Adrift::RemarksGone { job, .. }
             | Adrift::RemarksAlreadyTakenUp { job, .. }
+            | Adrift::RemarksTooLarge { job, .. }
             | Adrift::NoSuchStep { job, .. }
             | Adrift::NotReaped { job, .. }
             | Adrift::NotForgettable { job, .. }
@@ -647,12 +656,13 @@ impl Error for Adrift {
             // The two a merge makes. `NotMerged` is not an `Error` either.
             | Adrift::NothingToMerge { .. }
             | Adrift::NotMerged { .. }
-            // The four a review's comments make. Each says what a press could
+            // The five a review's comments make. Each says what a press could
             // not be, and none wraps a failure underneath it.
             | Adrift::ReviewUnreadable { .. }
             | Adrift::NoRemarksChosen { .. }
             | Adrift::RemarksGone { .. }
             | Adrift::RemarksAlreadyTakenUp { .. }
+            | Adrift::RemarksTooLarge { .. }
             | Adrift::NothingToPropose
             | Adrift::NoReadingWorktree(_)
             | Adrift::NoWorkflowFits { .. }

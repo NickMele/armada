@@ -857,6 +857,8 @@ notes = """
 
 **A comment the pull request no longer has refuses the whole press.** A person picked a set; acting on the part of it that survived, without saying so, is exactly the silent divergence the choice existed to prevent. What they get back is which handles are gone.
 
+**A chosen set that would not fit the room an opening brief leaves free is refused before anything moves.** `docs/spikes/014-how-much-room-does-a-brief-leave-for-comments.md` measures that room and the bound it justifies — on the whole rendered set, never on one comment, because five medium comments are the same problem as one long one. Nothing is truncated: `fleet::remarks::quoted` still writes whatever it is given, whole. What a person gets back is which of the comments to drop to fit, largest first.
+
 **One reply on the pull request, and never one per comment.** A reply per comment turns a review thread into a conversation with a daemon. What a reviewer needs is one answer naming what was taken up and what was not, which is what this writes — after the Job has moved, so the reply says what happened rather than what was about to. It is the second thing Armada writes into a repository it does not own; the first is `merge_pull_request`.
 
 **Nothing about a comment's text reaches the forge.** The reply names logins and timestamps and quotes no body: a reviewer can already read what they wrote, and echoing it back would put somebody else's words through a second write. The two fields it does name are made safe to render at the point of use — `fleet::remarks`.
