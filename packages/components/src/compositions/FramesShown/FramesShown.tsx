@@ -3,14 +3,35 @@ import type { ReactNode } from "react";
 import "./FramesShown.css";
 
 /**
+ * What a fetched frame draws as, once the caller knows what it is.
+ *
+ * **The kind and the payload travel together**, so a component reading `kind`
+ * can narrow to the field that kind actually carries rather than trusting a
+ * `src` that a text frame never set. `image` and `video` mint a `blob:` URL —
+ * the caller's job, since it needs a live Fleet — and `text` and `json` carry
+ * the decoded string itself: neither is drawn through an element that would
+ * treat it as markup.
+ *
+ * **No `svg` or `html`.** Fleet answers both as `application/octet-stream` on
+ * purpose — a browser executes either as a document — so neither reaches this
+ * type. A caller that got bytes back for one of them is in the `unshowable`
+ * case below, same as any kind Bridge does not know.
+ */
+export type FrameContent =
+  | { kind: "image"; src: string }
+  | { kind: "video"; src: string }
+  | { kind: "text"; text: string }
+  | { kind: "json"; text: string };
+
+/**
  * One frame, as this component is handed it.
  *
  * **The bytes are the caller's problem and the drawing is this one's.** A frame
- * reaches the renderer as an array over the preload and becomes a `blob:` URL;
- * that is a screen's job and needs a live Fleet, so what arrives here is a
- * resolved `src` or a reason there is not one. It is what lets this component
- * be drawn in Storybook, and what keeps one fetch out of a component that may
- * be mounted twice.
+ * reaches the renderer as an array over the preload and becomes a `blob:` URL
+ * or a decoded string; that is a screen's job and needs a live Fleet, so what
+ * arrives here is a resolved [`FrameContent`] or a reason there is not one. It
+ * is what lets this component be drawn in Storybook, and what keeps one fetch
+ * out of a component that may be mounted twice.
  */
 export type ShownFrame = {
   /** What a caller names it by. Stable, and the key. */
@@ -42,16 +63,18 @@ export type ShownFrame = {
   /** What the file weighs. Drawn as read, so a slow one says why it is slow. */
   weight: string;
   /**
-   * Where to draw it from, once the caller has the bytes.
+   * What to draw, once the caller has it.
    *
    * **Absent is not an error.** It is the ordinary state for the moment before
    * a fetch answers, and `why` is what tells that apart from a read that
-   * failed.
+   * settled with nothing to draw — a failed read, a kind Bridge does not know,
+   * or a file held back for its size. All three are the frame's own business,
+   * never the whole step's, so the plate says it rather than the list.
    */
-  src?: string;
+  content?: FrameContent;
   /**
-   * Why there is no `src`, where the reason is worth saying. Absent alongside
-   * an absent `src` is a frame still being read.
+   * Why there is no `content`, where the reason is worth saying. Absent
+   * alongside an absent `content` is a frame still being read.
    */
   why?: ReactNode;
 };
@@ -134,43 +157,70 @@ function said(frame: ShownFrame): string {
 }
 
 /**
- * The image, or the box where it will be.
+ * The frame, drawn as its own kind, or the box where it will be.
  *
- * **A button only where pressing does something.** A frame nobody can open is a
- * figure and not a control — `onOpen` absent is a record being read, which is
- * the same rule the file rail follows one composition over. And a frame with no
- * bytes yet is never a control either: there is nothing behind it to open.
+ * **A button only where pressing does something, and only for an image.** A
+ * frame nobody can open is a figure and not a control — `onOpen` absent is a
+ * record being read, which is the same rule the file rail follows one
+ * composition over. A frame with no content yet is never a control either:
+ * there is nothing behind it to open. Video keeps its own controls rather than
+ * sitting inside a button that would steal their clicks; text and JSON have
+ * nothing an *open* would show that is not already on the plate.
  */
 function Plate({ frame, onOpen }: { frame: ShownFrame; onOpen?: (kept: string) => void }) {
-  if (frame.src === undefined) {
+  if (frame.content === undefined) {
     return (
       <span className="armada-frames__plate" data-empty>
         {/* Absent with no reason is a read in flight, and it says so rather
             than drawing a blank that reads as a frame of a blank page — which
-            is the one thing this surface must never be mistaken for. */}
+            is the one thing this surface must never be mistaken for. A kind
+            Bridge cannot draw and a file held back for its size land here
+            too, each with its own sentence — the name is already on the line
+            below, so the plate need only say why there is nothing on it. */}
         <span className="armada-frames__why">{frame.why ?? "reading…"}</span>
       </span>
     );
   }
-  const plate = (
-    <img
-      className="armada-frames__image"
-      src={frame.src}
-      // **The name and never a description.** Alt text saying what the frame
-      // shows would be the caption this surface refuses, written by whoever
-      // wired it rather than by the spec.
-      alt={frame.name}
-    />
-  );
-  if (onOpen === undefined) return <span className="armada-frames__plate">{plate}</span>;
+  if (frame.content.kind === "image") {
+    const image = (
+      <img
+        className="armada-frames__image"
+        src={frame.content.src}
+        // **The name and never a description.** Alt text saying what the frame
+        // shows would be the caption this surface refuses, written by whoever
+        // wired it rather than by the spec.
+        alt={frame.name}
+      />
+    );
+    if (onOpen === undefined) return <span className="armada-frames__plate">{image}</span>;
+    return (
+      <button
+        className="armada-frames__plate"
+        type="button"
+        onClick={() => onOpen(frame.kept)}
+        aria-label={`Open ${frame.name}`}
+      >
+        {image}
+      </button>
+    );
+  }
+  if (frame.content.kind === "video") {
+    return (
+      <span className="armada-frames__plate">
+        <video
+          className="armada-frames__video"
+          src={frame.content.src}
+          controls
+          preload="metadata"
+          aria-label={frame.name}
+        />
+      </span>
+    );
+  }
+  // text or json — the record's own words, never rendered as markup.
   return (
-    <button
-      className="armada-frames__plate"
-      type="button"
-      onClick={() => onOpen(frame.kept)}
-      aria-label={`Open ${frame.name}`}
-    >
-      {plate}
-    </button>
+    <span className="armada-frames__plate armada-frames__plate--text">
+      <pre className="armada-frames__text">{frame.content.text}</pre>
+    </span>
   );
 }

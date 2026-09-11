@@ -55,14 +55,14 @@ export const TwoFrames: Story = {
         name: "job-detail-refused.png",
         attempt: 1,
         weight: "41.0 KB",
-        src: shot("darkslategray", "Job detail — refused"),
+        content: { kind: "image", src: shot("darkslategray", "Job detail — refused") },
       },
       {
         kept: "show.1/job-detail-advanced.png",
         name: "job-detail-advanced.png",
         attempt: 1,
         weight: "38.4 KB",
-        src: shot("midnightblue", "Job detail — advanced"),
+        content: { kind: "image", src: shot("midnightblue", "Job detail — advanced") },
       },
     ],
   },
@@ -88,7 +88,10 @@ export const EveryRunSaysWhichItIs: Story = {
       name: "home.png",
       attempt,
       weight: "40.2 KB",
-      src: shot(attempt === 3 ? "midnightblue" : "maroon", `attempt ${attempt}`),
+      content: {
+        kind: "image",
+        src: shot(attempt === 3 ? "midnightblue" : "maroon", `attempt ${attempt}`),
+      },
     })),
   },
   play: async ({ canvas }) => {
@@ -116,7 +119,7 @@ export const StillReading: Story = {
         name: "home.png",
         attempt: 1,
         weight: "412 KB",
-        src: shot("darkslategray", "home"),
+        content: { kind: "image", src: shot("darkslategray", "home") },
       },
       { kept: "show.1/settings.png", name: "settings.png", attempt: 1, weight: "388 KB" },
     ],
@@ -144,7 +147,7 @@ export const OneCouldNotBeRead: Story = {
         name: "home.png",
         attempt: 1,
         weight: "40.2 KB",
-        src: shot("darkslategray", "home"),
+        content: { kind: "image", src: shot("darkslategray", "home") },
       },
       {
         kept: "show.1/settings.png",
@@ -229,7 +232,7 @@ export const BeforeAndAfter: Story = {
         attempt: 1,
         side: "before",
         weight: "37.2 KB",
-        src: shot("dimgray", "Home — as it was"),
+        content: { kind: "image", src: shot("dimgray", "Home — as it was") },
       },
       {
         kept: "show.1.branch/home.png",
@@ -237,7 +240,7 @@ export const BeforeAndAfter: Story = {
         attempt: 1,
         side: "after",
         weight: "41.0 KB",
-        src: shot("darkslategray", "Home — with the change"),
+        content: { kind: "image", src: shot("darkslategray", "Home — with the change") },
       },
       {
         kept: "show.1.branch/settings.png",
@@ -245,7 +248,7 @@ export const BeforeAndAfter: Story = {
         attempt: 1,
         side: "after",
         weight: "38.8 KB",
-        src: shot("darkslateblue", "Settings — new screen"),
+        content: { kind: "image", src: shot("darkslateblue", "Settings — new screen") },
       },
     ],
   },
@@ -254,5 +257,111 @@ export const BeforeAndAfter: Story = {
     // The added screen still says which side it is, so a reader counting halves
     // can see that this one has none.
     await expect(canvas.getByText("attempt 1 · after · 38.8 KB")).toBeInTheDocument();
+  },
+};
+
+/**
+ * **A harness's own text, drawn as text.** `#605`: `evidence:` covers more than
+ * a screenshot, and a Check's stdout or a plan a harness wrote is unreadable as
+ * a broken `<img>`. Quoted verbatim, mono, and never parsed as markup — the
+ * repository's words, not a rendering of them.
+ */
+export const ATextFrame: Story = {
+  args: {
+    frames: [
+      {
+        kept: "implement.1/plan.txt",
+        name: "plan.txt",
+        attempt: 1,
+        weight: "184 B",
+        content: {
+          kind: "text",
+          text: "1. Add the field to the schema\n2. Backfill existing rows\n3. Turn on the read path",
+        },
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/Backfill existing rows/)).toBeInTheDocument();
+    // Never an image for a kind that is not one.
+    await expect(canvas.queryAllByRole("img")).toHaveLength(0);
+  },
+};
+
+/**
+ * **Structured data, drawn as text too.** `#605` names JSON among what a Job
+ * screen must show and is explicit that it is drawn as text, never as markup —
+ * a table built from an arbitrary object is a parser this surface would own,
+ * and the file's own bytes are already the honest reading.
+ */
+export const AJsonFrame: Story = {
+  args: {
+    frames: [
+      {
+        kept: "implement.1/response.json",
+        name: "response.json",
+        attempt: 1,
+        weight: "62 B",
+        content: {
+          kind: "json",
+          text: '{\n  "status": "ok",\n  "rows": 3\n}',
+        },
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/"status": "ok"/)).toBeInTheDocument();
+  },
+};
+
+/**
+ * **A recording, with its own controls.** `#605`: a run of the app is a fourth
+ * kind the Job screen must show. The plate is not a button here — a button
+ * around a native player would steal the clicks its own controls are for.
+ */
+export const AVideoFrame: Story = {
+  args: {
+    frames: [
+      {
+        kept: "implement.1/walkthrough.webm",
+        name: "walkthrough.webm",
+        attempt: 1,
+        weight: "2.1 MB",
+        content: { kind: "video", src: "data:video/webm;base64," },
+      },
+    ],
+  },
+  play: async ({ canvasElement, canvas }) => {
+    await expect(canvasElement.querySelector("video")).not.toBeNull();
+    // A recording is not a still, and never opened as one.
+    await expect(canvas.queryAllByRole("button")).toHaveLength(0);
+  },
+};
+
+/**
+ * **A kind Bridge does not know, named rather than drawn broken.** SVG and HTML
+ * are the standing examples — a browser would execute either as a document —
+ * and Fleet answers both as bytes on purpose. The file's own name is already on
+ * the line under the plate; the plate itself only has to say why there is
+ * nothing on it.
+ */
+export const AKindBridgeCannotShow: Story = {
+  args: {
+    frames: [
+      {
+        kept: "implement.1/report.pdf",
+        name: "report.pdf",
+        attempt: 1,
+        weight: "612 KB",
+        why: "Bridge does not know how to draw this kind of file.",
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("report.pdf")).toBeInTheDocument();
+    await expect(
+      canvas.getByText("Bridge does not know how to draw this kind of file."),
+    ).toBeInTheDocument();
+    await expect(canvas.queryAllByRole("img")).toHaveLength(0);
   },
 };

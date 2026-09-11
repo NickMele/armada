@@ -36,7 +36,13 @@ function shot(fill: string, said: string): string {
 }
 
 function side(name: string, kept: string, said: string, fill: string) {
-  return { kept, name, attempt: 1, weight: "40.2 KB", src: shot(fill, said) };
+  return {
+    kept,
+    name,
+    attempt: 1,
+    weight: "40.2 KB",
+    content: { kind: "image" as const, src: shot(fill, said) },
+  };
 }
 
 /**

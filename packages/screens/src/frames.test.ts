@@ -48,7 +48,7 @@ describe("what a step's frames draw as", () => {
     // Neither drawn nor failed: the plate says the wait. A frame nothing has
     // asked for and one still in flight are the same wait from where the
     // person is sitting, and this is what makes them read the same.
-    expect(shown[0]!.src).toBeUndefined();
+    expect(shown[0]!.content).toBeUndefined();
     expect(shown[0]!.why).toBeUndefined();
   });
 

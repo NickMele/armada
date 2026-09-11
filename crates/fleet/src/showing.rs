@@ -461,11 +461,15 @@ pub fn kept(
 
 /// Take the frames a run left in the worktree, now that they are kept.
 ///
-/// **Between the two runs, and this is what makes the second listing honest.**
-/// Both sides shoot into one directory, so a frame the base run took and the
-/// branch run did not reach — the shot of a screen the change removed, or every
-/// shot after the point where a spec gave up at base — would still be sitting
-/// there when [`collected`] reads the directory again, and would be filed as
+/// **Written for two runs sharing one directory, and unreachable today.**
+/// `#602` switched the base run off — `showed` never calls
+/// [`Fleet::before_this_job`], the only caller of this function — so the one
+/// run Fleet makes now has exactly one listing and nothing before it to reap.
+/// Kept rather than deleted, for the base run's own reason: both sides would
+/// still shoot into one directory, so a frame the base run took and the branch
+/// run did not reach — the shot of a screen the change removed, or every shot
+/// after the point where a spec gave up at base — would still be sitting there
+/// when [`collected`] reads the directory again, and would be filed as
 /// something the branch produced.
 ///
 /// **Only the names it was given, and never the directory.** `evidence.frames`
@@ -486,11 +490,13 @@ pub(crate) fn reaped(worktree: &Path, from: &str, frames: &[StepFrame]) {
 /// workflow author typed and nothing validates it, so one holding a separator
 /// would put the copies somewhere other than under this Job.
 ///
-/// **The side is the third part.** A run of a step is now two runs, and they
+/// **The side is the third part, even though `showed` asks for
+/// [`Side::Branch`] alone now.** `#602` switched the base run off, but the
+/// shape here is what a base run needs whenever it comes back: both runs
 /// write files whose names the harness chose and which are therefore the same
-/// on both sides — so the side has to be somewhere in the path, and putting it
+/// on both sides, so the side has to be somewhere in the path, and putting it
 /// here rather than in the file name keeps the frame's own name the spec's
-/// word and keeps [`tail`] two components. `Side::as_str` holds no separator,
+/// word and keeps [`tail`] two components. `Side::as_wire` holds no separator,
 /// so this is still one directory.
 ///
 /// Rows written before the side existed name `<step>.<attempt>` and go on

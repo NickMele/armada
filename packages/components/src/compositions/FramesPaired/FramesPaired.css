@@ -60,10 +60,26 @@
 
 /* Contained, never cropped. A frame cropped to fill its plate is a frame with
    the part that mattered outside the box. */
-.armada-pairs__image {
+.armada-pairs__image,
+.armada-pairs__video {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+}
+
+/* The record's own text, quoted rather than laid out — same rule as the flat
+   gallery's `.armada-frames__text`, one composition over. */
+.armada-pairs__text {
+  max-height: 100%;
+  margin: 0;
+  padding: var(--space-2);
+  overflow: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  color: var(--fg-default);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-align: left;
 }
 
 /* Which side is on screen. **Always drawn**, so the reading is never ambiguous

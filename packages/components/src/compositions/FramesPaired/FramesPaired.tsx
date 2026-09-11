@@ -158,13 +158,7 @@ function Flip({ pair }: { pair: PairedFrame }) {
         <span className="armada-pairs__tag" data-side={side}>
           {side}
         </span>
-        {drawn?.src === undefined ? (
-          <span className="armada-pairs__why">{drawn?.why ?? "reading…"}</span>
-        ) : (
-          // **The name and never a description.** Alt text saying what the
-          // frame shows would be the caption this surface refuses.
-          <img className="armada-pairs__image" src={drawn.src} alt={`${pair.name}, ${side}`} />
-        )}
+        <Content frame={drawn} name={pair.name} side={side} />
       </div>
       <p className="armada-pairs__caption">
         <span className="armada-pairs__name">{pair.name}</span>
@@ -178,4 +172,47 @@ function Flip({ pair }: { pair: PairedFrame }) {
       </p>
     </div>
   );
+}
+
+/**
+ * One side's plate content, drawn by kind — or the reason there is none.
+ *
+ * **A pair is `#209`'s reading of two screenshots, and stays sized for one.**
+ * Video and text can be paired in principle — the same spec run against two
+ * checkouts — but nothing produces a paired video or a paired log today, since
+ * the base run this draws against is off (`#602`). Handling every kind here
+ * rather than assuming `src` keeps that true if the base run comes back before
+ * this component is looked at again.
+ */
+function Content({
+  frame,
+  name,
+  side,
+}: {
+  frame: ShownFrame | undefined;
+  name: string;
+  side: "before" | "after";
+}) {
+  if (frame?.content === undefined) {
+    return <span className="armada-pairs__why">{frame?.why ?? "reading…"}</span>;
+  }
+  if (frame.content.kind === "image") {
+    // **The name and never a description.** Alt text saying what the frame
+    // shows would be the caption this surface refuses.
+    return (
+      <img className="armada-pairs__image" src={frame.content.src} alt={`${name}, ${side}`} />
+    );
+  }
+  if (frame.content.kind === "video") {
+    return (
+      <video
+        className="armada-pairs__video"
+        src={frame.content.src}
+        controls
+        preload="metadata"
+        aria-label={`${name}, ${side}`}
+      />
+    );
+  }
+  return <pre className="armada-pairs__text">{frame.content.text}</pre>;
 }

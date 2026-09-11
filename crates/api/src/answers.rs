@@ -66,22 +66,67 @@ pub(crate) fn file(name: &str, bytes: Vec<u8>) -> Response {
 
 /// What a file's own name says it is.
 ///
-/// **A short list and a wide default.** These are the formats a screenshot is
-/// written in; everything else is bytes, which is what the caller is told.
-/// Growing this list is a decision about what Armada will render, and it is
-/// made here rather than by a crate that knows every extension there is.
+/// **A short list and a wide default.** These are the formats `#605` named a
+/// Job screen must draw — a screenshot, a harness's own text, a structured
+/// result, a recording — and everything else is bytes, which is what the
+/// caller is told. Growing this list is a decision about what Armada will
+/// render, and it is made here rather than by a crate that knows every
+/// extension there is.
 fn media_type(name: &str) -> &'static str {
     match name.rsplit('.').next().map(str::to_ascii_lowercase) {
         Some(ext) if ext == "png" => "image/png",
         Some(ext) if ext == "jpg" || ext == "jpeg" => "image/jpeg",
         Some(ext) if ext == "webp" => "image/webp",
         Some(ext) if ext == "gif" => "image/gif",
-        // **Served, and never rendered from a type this chose.** An SVG is a
-        // document a browser executes, so it is answered as bytes rather than
-        // as an image — a harness that writes one has still written a frame,
-        // and what draws it is a decision for the surface rather than for a
+        Some(ext) if ext == "txt" => "text/plain",
+        Some(ext) if ext == "json" => "application/json",
+        Some(ext) if ext == "webm" => "video/webm",
+        Some(ext) if ext == "mp4" => "video/mp4",
+        // **Served, and never rendered from a type this chose.** An SVG or an
+        // HTML file is a document a browser executes, so each is answered as
+        // bytes rather than as the image or the markup it is — a harness that
+        // writes one has still written a frame, and what draws it (or that
+        // nothing here will) is a decision for the surface rather than for a
         // header set here.
         _ => "application/octet-stream",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::media_type;
+
+    #[test]
+    fn every_declared_kind_answers_its_own_media_type() {
+        assert_eq!(media_type("home.png"), "image/png");
+        assert_eq!(
+            media_type("home.PNG"),
+            "image/png",
+            "the extension, cased either way"
+        );
+        assert_eq!(media_type("home.jpg"), "image/jpeg");
+        assert_eq!(media_type("home.jpeg"), "image/jpeg");
+        assert_eq!(media_type("home.webp"), "image/webp");
+        assert_eq!(media_type("home.gif"), "image/gif");
+        assert_eq!(media_type("output.txt"), "text/plain");
+        assert_eq!(media_type("result.json"), "application/json");
+        assert_eq!(media_type("session.webm"), "video/webm");
+        assert_eq!(media_type("session.mp4"), "video/mp4");
+    }
+
+    /// **SVG and HTML are documents a browser executes, and stay bytes.** The
+    /// module doc says why: sniffed and rendered from a type chosen here, either
+    /// one would run as a document rather than draw as the frame it is.
+    #[test]
+    fn svg_and_html_are_still_served_as_bytes() {
+        assert_eq!(media_type("home.svg"), "application/octet-stream");
+        assert_eq!(media_type("home.html"), "application/octet-stream");
+    }
+
+    #[test]
+    fn a_name_with_no_extension_or_an_unknown_one_is_bytes() {
+        assert_eq!(media_type("README"), "application/octet-stream");
+        assert_eq!(media_type("archive.tar.gz"), "application/octet-stream");
     }
 }
 

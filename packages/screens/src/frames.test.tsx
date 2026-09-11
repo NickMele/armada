@@ -76,7 +76,9 @@ function Probe({ read, jobId, rows }: { read: ReadFrame; jobId: string; rows: Ke
             {state === undefined
               ? "unasked"
               : state.state === "got"
-                ? `got ${state.src.startsWith("blob:") ? "a blob" : state.src}`
+                ? state.content.kind === "image" || state.content.kind === "video"
+                  ? `got ${state.content.src.startsWith("blob:") ? "a blob" : state.content.src}`
+                  : `got text: ${state.content.text}`
                 : state.state === "absent"
                   ? state.note
                   : "fetching"}
@@ -189,4 +191,83 @@ test("tells a Fleet that did not answer apart from a file that is gone", async (
   await expect
     .element(page.getByText("Fleet did not answer for this frame."))
     .toBeInTheDocument();
+});
+
+/**
+ * **Text and JSON decode to a string, never a `blob:` URL.** There is nothing
+ * to revoke for either — the whole reason this module holds an object URL at
+ * all is that an `<img>` needs one, and a `<pre>` reads a string directly.
+ */
+test("decodes text and JSON rather than minting a URL for them", async () => {
+  const read: ReadFrame = async (_job, kept) =>
+    kept === "implement.1/plan.txt"
+      ? { ok: true, bytes: new TextEncoder().encode("do the thing"), type: "text/plain" }
+      : { ok: true, bytes: new TextEncoder().encode('{"ok":true}'), type: "application/json" };
+  mount(
+    <Probe
+      read={read}
+      jobId="01JOB"
+      rows={[
+        frame({ kept: "implement.1/plan.txt", name: "plan.txt" }),
+        frame({ kept: "implement.1/result.json", name: "result.json" }),
+      ]}
+    />,
+  );
+  await expect.element(page.getByText("got text: do the thing")).toBeInTheDocument();
+  await expect.element(page.getByText('got text: {"ok":true}')).toBeInTheDocument();
+  expect(revoked).toHaveLength(0);
+});
+
+/**
+ * **A kind Fleet answered as bytes and nothing here can place draws as a
+ * refusal, not a broken plate.** `application/octet-stream` is what Fleet
+ * sends for an SVG or an HTML file on purpose, and for anything else
+ * `answers::media_type` does not name.
+ */
+test("says it does not know how to draw a kind it cannot place", async () => {
+  const read: ReadFrame = async () => ({
+    ok: true,
+    bytes: new Uint8Array([1, 2, 3]),
+    type: "application/octet-stream",
+  });
+  mount(<Probe read={read} jobId="01JOB" rows={[frame({ name: "report.pdf" })]} />);
+  await expect
+    .element(page.getByText("Bridge does not know how to draw this kind of file."))
+    .toBeInTheDocument();
+});
+
+/**
+ * **A video over the bound is never asked for.** The record already says what
+ * it weighs, so this is decided before `read` is ever called — proved here by
+ * asserting `read` was not invoked for it, rather than by anything about what
+ * it would have answered.
+ */
+test("holds a video back by its recorded size rather than reading it", async () => {
+  const read = vi.fn(async () => got);
+  const heavy = frame({
+    kept: "implement.1/walkthrough.webm",
+    name: "walkthrough.webm",
+    bytes: 21 * 1024 * 1024,
+  });
+  mount(<Probe read={read} jobId="01JOB" rows={[heavy]} />);
+  await expect
+    .element(page.getByText("This video is 21.0 MB — too large to read here."))
+    .toBeInTheDocument();
+  expect(read).not.toHaveBeenCalled();
+});
+
+/** A video under the bound is read like anything else. */
+test("reads a video under the bound", async () => {
+  const read: ReadFrame = async () => ({
+    ok: true,
+    bytes: new Uint8Array([1, 2, 3]),
+    type: "video/webm",
+  });
+  const light = frame({
+    kept: "implement.1/walkthrough.webm",
+    name: "walkthrough.webm",
+    bytes: 1024,
+  });
+  mount(<Probe read={read} jobId="01JOB" rows={[light]} />);
+  await expect.element(page.getByText("got a blob")).toBeInTheDocument();
 });

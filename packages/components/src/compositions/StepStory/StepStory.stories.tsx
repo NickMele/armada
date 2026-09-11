@@ -281,14 +281,14 @@ export const ShowingTheOutcome: Story = {
                 name: "job-detail-refused.png",
                 attempt: 1,
                 weight: "41.0 KB",
-                src: shot("darkslategray", "attempt 1 — still wrong"),
+                content: { kind: "image", src: shot("darkslategray", "attempt 1 — still wrong") },
               },
               {
                 kept: "show.2/job-detail-refused.png",
                 name: "job-detail-refused.png",
                 attempt: 2,
                 weight: "40.2 KB",
-                src: shot("midnightblue", "attempt 2 — collapsed"),
+                content: { kind: "image", src: shot("midnightblue", "attempt 2 — collapsed") },
               },
             ]}
           />
