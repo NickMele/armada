@@ -175,3 +175,49 @@ test("reject still asks, and merging is not what it asks about", async () => {
   await userEvent.click(page.getByRole("dialog").getByRole("button", { name: "Reject the work" }));
   expect(sent.rejected).toEqual([JOB.id]);
 });
+
+test("a conversation comment an older Fleet sent with null fields still renders", async () => {
+  // A Fleet built before protocol 10.8's fix sent an empty `inline` and `url`
+  // as `null`. Passed through as a code block, `null.path` took down the whole
+  // comments region on the first conversation comment anybody left.
+  const remarks: Remarks = {
+    state: "read",
+    jobId: JOB.id,
+    review: {
+      job_id: JOB.id,
+      pull_request: "https://forge.example/armada/pull/533",
+      remarks: [
+        {
+          id: "IC_conversation",
+          by: "a-reviewer",
+          at: "2026-09-11T18:55:54Z",
+          said: "The branch has merge conflicts, please resolve them",
+          taken_up: false,
+          url: null,
+          inline: null,
+        },
+      ],
+    },
+  };
+  mount(
+    <Decide
+      onNeedMaterial={() => {}}
+      onNeedRemarks={() => {}}
+      job={JOB}
+      evidence={NO_EVIDENCE}
+      remarks={remarks}
+      stale={false}
+      deciding={false}
+      pullRequest="https://forge.example/armada/pull/533"
+      onMerge={() => {}}
+      onApprove={() => {}}
+      onRequestChanges={() => {}}
+      onReject={() => {}}
+      onTakeUpRemarks={() => {}}
+      onOpenRemarkLink={() => {}}
+    />,
+  );
+  await expect
+    .element(page.getByText("The branch has merge conflicts, please resolve them"))
+    .toBeVisible();
+});

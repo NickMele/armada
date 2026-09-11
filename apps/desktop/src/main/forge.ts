@@ -69,7 +69,7 @@ function addressable(address: string): boolean {
 function remarkAddressOf(state: BridgeState, jobId: string, remarkId: string): string | undefined {
   const remarks = state.remarks;
   if (remarks.state !== "read" || remarks.jobId !== jobId) return undefined;
-  return remarks.review.remarks.find((remark) => remark.id === remarkId)?.url;
+  return remarks.review.remarks.find((remark) => remark.id === remarkId)?.url ?? undefined;
 }
 
 /**
