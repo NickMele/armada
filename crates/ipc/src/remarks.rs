@@ -81,9 +81,11 @@ pub struct Remark {
     pub taken_up: bool,
     /// Where this comment lives on the forge, for Bridge to open. `None` where
     /// the forge answered no address under this name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
     /// The code this comment is about, where it is attached to one line of the
     /// diff. `None` for a comment on the pull request's own conversation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub inline: Option<InlineContext>,
 }
 

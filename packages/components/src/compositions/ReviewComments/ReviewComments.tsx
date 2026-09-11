@@ -176,7 +176,7 @@ export function ReviewComments({
                 {/* The code this comment is about, ahead of its words: a
                     person reading "this leaks a handle" wants the line it is
                     about in view before the sentence, not after. */}
-                {comment.inline === undefined ? null : (
+                {!comment.inline ? null : (
                   <div className="armada-remarks__code">
                     <span className="armada-remarks__file mono">
                       {comment.inline.path}:{comment.inline.line}

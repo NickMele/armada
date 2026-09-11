@@ -295,8 +295,11 @@ function mineRemarks(remarks: Remarks, jobId: string) {
     at: remark.at,
     said: remark.said,
     takenUp: remark.taken_up,
-    hasLink: remark.url !== undefined,
-    ...(remark.inline === undefined ? {} : { inline: remark.inline }),
+    // Truthiness, not `!== undefined`: an older Fleet sends `null` for both,
+    // and `null` passed through here crashed the comments on a conversation
+    // comment, whose `inline` is empty.
+    hasLink: Boolean(remark.url),
+    ...(remark.inline ? { inline: remark.inline } : {}),
   }));
 }
 

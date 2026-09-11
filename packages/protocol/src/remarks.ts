@@ -66,14 +66,18 @@ export type Remark = {
   taken_up: boolean;
   /**
    * Where this comment lives on the forge, for a link to open. `undefined`
-   * where the forge answered no address under this name.
+   * where the forge answered no address under this name. **`null` from a Fleet
+   * built before protocol 10.8's fix**, which sent an empty value as `null`
+   * rather than leaving it out; a reader treats the two alike.
    */
-  url?: string;
+  url?: string | null;
   /**
    * The code this comment is about, where it is attached to one line of the
-   * diff. `undefined` for a comment on the pull request's own conversation.
+   * diff. `undefined` for a comment on the pull request's own conversation, and
+   * **`null` from a Fleet built before this was left out when empty** — the
+   * shape that crashed job detail's comments on a conversation comment.
    */
-  inline?: InlineContext;
+  inline?: InlineContext | null;
 };
 
 /** The code one inline comment is about, exactly as the forge answered. */
