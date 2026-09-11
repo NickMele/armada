@@ -37,7 +37,11 @@ const SCREENS: &str = "packages/screens/src/stories";
 const SKILL: &str = ".claude/skills/armada-components/SKILL.md";
 
 /// Where the app's own code is: what renders a screen outside Storybook.
-const APP: &[&str] = &["apps/desktop/src", "packages/shell/src", "packages/screens/src"];
+const APP: &[&str] = &[
+    "apps/desktop/src",
+    "packages/shell/src",
+    "packages/screens/src",
+];
 
 /// Every story's title is its path, and every component has a story.
 ///
@@ -105,7 +109,10 @@ pub fn every_screen_is_one_the_app_renders(root: &Path) -> Report {
             continue;
         };
         let names = exported_names(&text);
-        if names.iter().any(|name| app.iter().any(|source| mentions(source, name))) {
+        if names
+            .iter()
+            .any(|name| app.iter().any(|source| mentions(source, name)))
+        {
             continue;
         }
         report.fail(format!(
