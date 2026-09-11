@@ -17,7 +17,7 @@
 // one decision: the badge is the header, so there is no partial render to fall
 // back to.
 
-import type { JobDetailHeading } from "@armada/components";
+import { JOB_LIFECYCLE, JOB_STATUS, type JobDetailHeading } from "@armada/components";
 import type {
   FileReport,
   JobDetail as JobWhole,
@@ -147,13 +147,27 @@ export function headingOf({
 }
 
 /**
- * A Job the registry has no sanctioned glyph, verb or hue for. The badge is
- * the header, so there is no partial render to fall back to — and no glyph is
+ * A Job neither registry `renderFor` reads has a row for. The badge is the
+ * header, so there is no partial render to fall back to — and no glyph is
  * invented for it here any more than in the list.
+ *
+ * **Names which registry is short, rather than saying "variant" always.**
+ * That used to be the only word this printed, including once for a Job whose
+ * `readingOf` was a complete badge — `escalated` with no reason this build
+ * could name, which has its own verb and glyph and was never missing a
+ * variant at all. `renderFor` no longer reaches here for that Job; this
+ * still says the true thing for the case that remains, a wire spelling
+ * `JOB_STATUS` has no row for at all, or one it has a row for while
+ * `JOB_LIFECYCLE` — decided separately, per `render.ts`'s own comment —
+ * does not.
  */
 export function Unrenderable({ job }: { job: JobSummary }) {
-  const reading = readingOf(job);
-  const missing = reading.as === "badge" ? ["variant"] : reading.missing;
+  const missing = [
+    ...(JOB_STATUS[job.status] === undefined ? ["variant"] : []),
+    ...(JOB_STATUS[job.status] !== undefined && JOB_LIFECYCLE[job.status] === undefined
+      ? ["lifecycle"]
+      : []),
+  ];
   return (
     <p className="text-fg-muted">
       {`${job.title} — `}
