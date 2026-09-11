@@ -13,6 +13,9 @@
 //! that a frame exists, what it is called and what it weighs — rides the
 //! record, and the bytes are fetched once by whoever opens it.
 //!
+//! **A person's press is a run of its own, beside the step's and never over
+//! it**, and it is kept in [`crate::shown_again`] rather than here.
+//!
 //! **Beside the change it makes rather than in `schema.rs`**, like
 //! [`V29`](crate::proving::V29) and for its reason: that file is at the 900
 //! lines the gate refuses at.
@@ -38,11 +41,11 @@ use crate::row::{column, string};
 /// run.
 ///
 /// **No column for which side the frame came from.** That waited for the run
-/// against `base` to exist and it now does — [`V41`] adds it, and adds it
-/// backfilled rather than nullable, which is what V5's rule permits here: every
-/// row this table held before that migration was taken on the branch, because
-/// the branch was the only place a harness ran. That is an observation, not a
-/// default.
+/// against `base`, which `#209` shipped and `#602` switched off again: one run
+/// now, in the Job's own worktree, with the base run's code kept. [`V41`] added
+/// the column backfilled rather than nullable, which is what V5's rule permits
+/// here — every row this table held before it was taken on the branch — and it
+/// stays, because every row written since is a branch frame too.
 ///
 /// **`bytes` and no media type.** The file's own extension is in `name` and in
 /// `path`, and a second field naming the same fact is a second place to keep it

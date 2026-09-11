@@ -31,6 +31,7 @@ mod resolving;
 mod retain;
 mod revision;
 mod roundtrip;
+mod showing;
 mod spend;
 mod tmp;
 

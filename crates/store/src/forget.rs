@@ -60,6 +60,9 @@ pub struct Forgotten {
     /// what every other kept file here does too — the record is what this
     /// deletes, and the directory is `armada clean`'s.
     pub step_frames: usize,
+    /// The frames a person's presses captured, one row each. **The rows and not
+    /// the images**, for `step_frames`' reason.
+    pub shown_again: usize,
     /// The header saying a Job's footprint was recorded. One row, or none.
     pub footprint: usize,
     /// The files that footprint held, one row each.
@@ -110,6 +113,7 @@ impl Forgotten {
             "job_step_gaming_flags" => &mut self.step_gaming_flags,
             "job_step_evidence" => &mut self.step_evidence,
             "job_step_frames" => &mut self.step_frames,
+            "job_shown_again" => &mut self.shown_again,
             "job_footprint" => &mut self.footprint,
             "job_footprint_files" => &mut self.footprint_files,
             "job_step_plans" => &mut self.step_plans,

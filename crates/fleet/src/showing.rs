@@ -461,16 +461,13 @@ pub fn kept(
 
 /// Take the frames a run left in the worktree, now that they are kept.
 ///
-/// **Written for two runs sharing one directory, and unreachable today.**
-/// `#602` switched the base run off — `showed` never calls
-/// [`Fleet::before_this_job`], the only caller of this function — so the one
-/// run Fleet makes now has exactly one listing and nothing before it to reap.
-/// Kept rather than deleted, for the base run's own reason: both sides would
-/// still shoot into one directory, so a frame the base run took and the branch
-/// run did not reach — the shot of a screen the change removed, or every shot
-/// after the point where a spec gave up at base — would still be sitting there
-/// when [`collected`] reads the directory again, and would be filed as
-/// something the branch produced.
+/// **Every run shoots into one directory, so this is what makes the next
+/// listing honest.** [`collected`] lists whatever `evidence.frames` holds, and a
+/// frame an earlier run wrote and this one did not — a step's earlier attempt,
+/// a person's earlier press, or the base run when it comes back — would be
+/// filed as this run's. `showed`, `showing_again::pressed` and
+/// [`Fleet::before_this_job`] call it once a run's copies are kept, and only
+/// with what was copied: a frame that would not copy stays where it was.
 ///
 /// **Only the names it was given, and never the directory.** `evidence.frames`
 /// is a path the repository named and may hold anything it also puts there; a
@@ -652,8 +649,8 @@ where
         let (frames, refused) = match shown {
             Shown::NotShown(why) => (Vec::new(), Some(why)),
             Shown::Nothing => (Vec::new(), None),
-            Shown::Frames(frames) => (
-                kept(
+            Shown::Frames(frames) => {
+                let copied = kept(
                     &self.host().repo_root,
                     handle,
                     step,
@@ -662,9 +659,12 @@ where
                     worktree,
                     harness.frames().as_str(),
                     Side::Branch,
-                ),
-                None,
-            ),
+                );
+                // Out of the worktree once kept, so the next run of this step
+                // lists only what it wrote — see [`reaped`].
+                reaped(worktree, harness.frames().as_str(), &copied);
+                (copied, None)
+            }
         };
         self.store()
             .lock()

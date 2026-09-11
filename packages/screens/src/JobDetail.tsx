@@ -90,6 +90,7 @@ import { DIFF_CHAPTER, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-ke
 import { useAtFloor } from "@armada/shell";
 import { DetailSheet, holdOf, type HeldAt, type OpenSheet } from "./Sheets";
 import { chaptersOf } from "./chapters";
+import { againOf, useShowAgain, type ShowAgainCall } from "./again";
 import { span } from "./duration";
 import { Decide } from "./Decide";
 import { ordered } from "./facts";
@@ -157,6 +158,12 @@ export type JobDetailProps = {
   onRaiseTurnCap: (jobId: string, turnCap: number) => void;
   /** Ask the gate again on a step it could not decide. Nothing is at stake. */
   onRerun: (jobId: string) => void;
+  /**
+   * Ask the Job to show its work again. **Answered to this screen**, like
+   * `onReport`, because what a press came to is said beside its control.
+   * Absent draws no control, only the sets earlier presses kept.
+   */
+  onShowAgain?: ShowAgainCall;
   /**
    * Which Job's diff the host should hold open, or `null` for none.
    *
@@ -296,6 +303,7 @@ export function JobDetail({
   onAnswer,
   onOverrule,
   onRerun,
+  onShowAgain,
   onReport,
   onApprove,
   onMergePullRequest,
@@ -493,6 +501,9 @@ export function JobDetail({
   useEffect(() => {
     if (shownBy !== undefined && shownBy.length > 0) frames.want(shownBy);
   }, [shownBy, frames]);
+  // Asking the Job to show its work again, and the frames its presses kept on
+  // the open step. `again.tsx` holds all of it.
+  const pressing = useShowAgain(onShowAgain, job.id, whole?.show_again, open?.step_id, frames);
 
   const rows = watching === null || open === undefined ? [] : entriesOf(watching.rows, open.step_id);
 
@@ -549,6 +560,12 @@ export function JobDetail({
           calls,
           outputs,
           frames,
+          again: againOf(
+            onShowAgain === undefined ? undefined : whole?.show_again,
+            open.step_id,
+            frames,
+            pressing,
+          ),
           sheet,
           // The Produced chapter opens the step's deliverable, which the phase
           // strip's Submitted tier was the only route to. Same handler, because

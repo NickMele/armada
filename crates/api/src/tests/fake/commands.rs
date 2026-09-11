@@ -81,6 +81,12 @@ impl Commands for FakeDaemon {
     async fn rerun_gate(&self, job_id: JobId) -> Result<JobSummary, Refusal> {
         self.fake_rerun_gate(job_id).await
     }
+    async fn show_again(
+        self: std::sync::Arc<Self>,
+        job_id: JobId,
+    ) -> Result<ipc::ShownAgain, Refusal> {
+        self.fake_show_again(job_id).await
+    }
     async fn raise_cost_cap(
         &self,
         job_id: JobId,

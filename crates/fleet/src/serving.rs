@@ -284,7 +284,7 @@ where
             .write_scope_overlaps(&job)
             .await
             .map_err(|why| self.refusal(why))?;
-        Ok(JobDetail::of(
+        let mut detail = JobDetail::of(
             &job,
             reason.as_ref(),
             queued.reason,
@@ -309,7 +309,15 @@ where
             overlaps,
             delivery,
             spend,
-        ))
+        );
+        // After the constructor, because it is read off the worktree and the
+        // Manifest as well as the record — `crate::showing_again`.
+        detail.show_again = Some(
+            self.showing_again_of(&job)
+                .await
+                .map_err(|why| self.refusal(why))?,
+        );
+        Ok(detail)
     }
 
     /// Every move one Job made, oldest first. **The log, read — not folded.**
@@ -548,9 +556,17 @@ where
         self.load(&id).await.map_err(|why| self.refusal(why))?;
         let frames = {
             let store = self.store().lock().await;
-            store
+            let mut frames = store
                 .step_frames_every_attempt(&id)
-                .map_err(|why| self.refusal(Adrift::Reading(why)))?
+                .map_err(|why| self.refusal(Adrift::Reading(why)))?;
+            // And every frame a person's press kept, which is the second list
+            // the allowlist is — see `crate::showing_again`.
+            frames.extend(crate::showing_again::pressed_rows(
+                store
+                    .shown_again_every_press(&id)
+                    .map_err(|why| self.refusal(Adrift::Reading(why)))?,
+            ));
+            frames
         };
         let (held, bytes) = crate::showing::frame_bytes(&self.host().repo_root, &kept, &frames)
             .ok_or_else(|| self.refusal(Adrift::NoSuchFrame { named: kept }))?;

@@ -341,6 +341,16 @@ impl fmt::Display for Adrift {
                  Restart the step to put a fresh Drone on the worktree it left",
                 job.as_str()
             ),
+            // The sentence alone, with no Job id in front of it: the refusal
+            // already names the Job it is about, and this is what the control
+            // puts under the button a person just pressed.
+            Adrift::CannotShowAgain { why, .. } => write!(out, "{}", why.said()),
+            Adrift::PressAbandoned { job } => write!(
+                out,
+                "the run showing {}'s work ended without an answer. Its log says how far it got; \
+                 press again to run it again",
+                job.as_str()
+            ),
             Adrift::NothingToRuleOn { job, step } => write!(
                 out,
                 "{}'s step `{}` has no evidence the gate could be asked about again: none was \
@@ -520,6 +530,8 @@ impl Adrift {
             | Adrift::CheckDidNotPass { job, .. }
             | Adrift::NotUndecided { job, .. }
             | Adrift::NotStandingThere { job }
+            | Adrift::CannotShowAgain { job, .. }
+            | Adrift::PressAbandoned { job }
             | Adrift::NothingToRuleOn { job, .. }
             | Adrift::Unreasoned { job }
             | Adrift::NotFileable { job, .. }
@@ -622,6 +634,10 @@ impl Error for Adrift {
             | Adrift::NotUndecided { .. }
             | Adrift::NotStandingThere { .. }
             | Adrift::NothingToRuleOn { .. }
+            // A press refused, or one whose task ended: the first says what is
+            // missing and the second what happened, and neither wraps a cause.
+            | Adrift::CannotShowAgain { .. }
+            | Adrift::PressAbandoned { .. }
             | Adrift::Unreasoned { .. }
             // `NotFiled` joins them: it says what a filing could not be, not
             // what failed underneath it.

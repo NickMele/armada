@@ -23,7 +23,7 @@
 
 import type { JobFootprint } from "./footprint";
 import type { Flagged, Judged, KeptDeliverable } from "./judged";
-import type { KeptFrame } from "./showing";
+import type { KeptFrame, ShowAgain } from "./showing";
 import type { StepAttempt } from "./attempt";
 import type {
   CheckRun,
@@ -156,6 +156,12 @@ export type JobDetail = {
    * behind this bridge is refused at the socket.
    */
   stuck?: Stuck;
+  /**
+   * Whether a person can ask this Job to show its work again, and every time
+   * somebody did. Since 10.1. **Absent from an older Fleet**, which draws as
+   * no control at all rather than a refusal.
+   */
+  show_again?: ShowAgain;
 };
 
 /**

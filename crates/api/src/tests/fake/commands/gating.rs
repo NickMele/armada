@@ -130,6 +130,21 @@ impl FakeDaemon {
         }
         Ok(job.clone())
     }
+    /// A press, faked on the one thing the transport can see: the Job has to
+    /// be there. This daemon holds no worktree and no harness, so the answer is
+    /// the press having run and captured nothing — a 200 carrying why, which is
+    /// the shape the real one answers with when a spec photographs nothing.
+    pub(super) async fn fake_show_again(&self, job_id: JobId) -> Result<ipc::ShownAgain, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        if !jobs.iter().any(|job| job.id == job_id) {
+            return Err(self.no_such_job(&job_id));
+        }
+        Ok(ipc::ShownAgain {
+            job_id,
+            set: None,
+            nothing: Some(String::from("this daemon runs no harness")),
+        })
+    }
     /// Filing, faked on the two things the transport can see: the Job has to
     /// exist, and **a report with no sentence is not a report.** What Fleet
     /// attaches around the sentence is Fleet's — three reads and a render —

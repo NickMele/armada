@@ -118,3 +118,70 @@ export type KeptFrame = {
    */
   digest?: string;
 };
+
+/**
+ * Whether a person can ask this Job to show its work again, and every time
+ * somebody did. Since 10.1, on `JobDetail.show_again`.
+ *
+ * **Facts, not a verdict.** Each field is one thing Fleet checked, and the
+ * control reads them in its own order to say why it cannot run — which is why
+ * there is no closed set of reasons on the wire to match on.
+ */
+export type ShowAgain = {
+  /** Whether `armada.yml` declares an `evidence:` harness. */
+  harness: boolean;
+  /** Whether the Job's worktree is on disk. A clean or a reclaim takes it. */
+  worktree_on_disk: boolean;
+  /**
+   * The spec a press reruns — the last one a Drone named on a `shown` step.
+   * **Absent where no Drone ever named one.**
+   */
+  spec?: NamedSpec;
+  /** Whether a Drone is working in the worktree right now. */
+  drone_working: boolean;
+  /** When the press out right now began. Absent where none is. */
+  showing_since?: string;
+  /**
+   * Every press this Job kept, oldest first. **Beside the step's own frames
+   * and never in them** — `StepDetail.frames` stays what the step produced.
+   */
+  shown: ShownSet[];
+};
+
+/** The spec a press reruns, and the run of the step that named it. */
+export type NamedSpec = {
+  step_id: string;
+  /** Which run of the step named it, counted from one. */
+  attempt: number;
+  /** The Drone's own `shown_by`, as it submitted it. */
+  spec: string;
+  /** Whether the spec is still in the worktree. A later run may have moved it. */
+  on_disk: boolean;
+};
+
+/**
+ * What one press captured. **Told apart by when it ran**: two presses are two
+ * sets, and neither replaces the step's frames.
+ */
+export type ShownSet = {
+  /** The Job's own count of presses, one-based. */
+  press: number;
+  pressed_at: string;
+  /** The step whose spec was rerun, and the run of it that named the spec. */
+  step_id: string;
+  attempt: number;
+  /** Never empty: a press that captured nothing kept no set. */
+  frames: KeptFrame[];
+};
+
+/**
+ * The answer to `POST /jobs/:job_id/show_again`: the set the press kept, or
+ * why there is none. **Never both and never neither.** A harness that ran and
+ * captured nothing is not a refusal, so it is a 200 carrying the sentence the
+ * Job's own log carries.
+ */
+export type ShownAgain = {
+  job_id: string;
+  set?: ShownSet;
+  nothing?: string;
+};
