@@ -14,8 +14,8 @@ use adapter_traits::{
 };
 
 use crate::harness::{
-    ask_tool, checks_tool, dispatch_tool, evidence_tool, scope_tool, widen_tool, HarnessRefused,
-    HeadlessAgent,
+    ask_tool, checks_tool, dispatch_tool, evidence_tool, permission_tool, scope_tool, widen_tool,
+    HarnessRefused, HeadlessAgent,
 };
 
 const SECRET_LOOKING_TASK: &str = "fix the parser, the token is hunter2";
@@ -85,15 +85,51 @@ fn every_rendering_carries_the_strict_flag_and_the_file_together() {
     }
 }
 
+/// Every belt a Drone can be given, for the properties no grant may change.
+fn every_kind_of_toolbelt() -> [Toolbelt; 3] {
+    [
+        Toolbelt::evidence_only(),
+        Toolbelt::evidence_only().and(Grant::ReadTheWorktree),
+        Toolbelt::evidence_only()
+            .and(Grant::ReadTheWorktree)
+            .and(Grant::ChangeTheWorktree)
+            .and(Grant::RunADeclaredCommand(String::from("cargo test")))
+            .and(Grant::DispatchAJob),
+    ]
+}
+
+/// **Asked, and Armada is who is asked.** Leaving the mode off inherits the
+/// operator's own default, measured as `auto` — a Drone that approves itself —
+/// and `dontAsk` never consults the tool, so nothing could be held for a person.
 #[test]
-fn the_drone_is_never_asked_to_confirm_anything() {
-    // Leaving the mode off does not mean "no mode": it inherits the operator's
-    // own default, measured as `auto` — a Drone that approves itself.
-    let args = rendered(Toolbelt::evidence_only());
-    assert_eq!(
-        value_after(&args, "--permission-mode").as_deref(),
-        Some("dontAsk")
-    );
+fn every_question_a_drone_raises_is_put_to_armada() {
+    for belt in every_kind_of_toolbelt() {
+        let args = rendered(belt);
+        assert_eq!(
+            value_after(&args, "--permission-mode").as_deref(),
+            Some("default"),
+            "{args:?}"
+        );
+        assert_eq!(
+            value_after(&args, "--permission-prompt-tool").as_deref(),
+            Some(permission_tool()),
+            "{args:?}"
+        );
+    }
+}
+
+/// The tool answers for the Drone and is not one of the Drone's, so it is on
+/// no allowlist however much was granted.
+#[test]
+fn the_permission_tool_is_on_no_allowlist() {
+    for belt in every_kind_of_toolbelt() {
+        let args = rendered(belt);
+        let allowed = value_after(&args, "--allowedTools").expect("an allowlist is rendered");
+        assert!(
+            !allowed.split(',').any(|entry| entry == permission_tool()),
+            "{allowed}"
+        );
+    }
 }
 
 #[test]

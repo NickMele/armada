@@ -12,7 +12,7 @@
 //! | Flag | What its absence does |
 //! | --- | --- |
 //! | `--strict-mcp-config` | The session comes up holding every MCP server the operator has connected. Measured: seven servers, ninety-five tools, personal accounts. **This is the v1 defect this step exists for** |
-//! | `--permission-mode` | The mode falls back to the operator's own configured default, which was measured as `auto` — a Drone that approves itself. **A denial is silent to the Drone and loud here**: `dontAsk` refuses without prompting, which it must, because a detached Drone has no terminal and a prompt would hang the Job until its timeout. The Drone is told so in the baseline prompt, and every refusal is a `DroneEvent::Refused` in the transcript, so a Job that goes quiet is diagnosable as an argv problem rather than a prompt one |
+//! | `--permission-mode` | The mode falls back to the operator's own configured default, which was measured as `auto` — a Drone that approves itself. **`default`, with `--permission-prompt-tool`, makes a denial Armada's answer rather than the mode's**: every call the allowlist does not cover is put to Armada's permission tool, which refuses at once or holds the question for a person, as the Job says. `dontAsk` would refuse without consulting the tool at all. A tool that errors or cannot be reached leaves the call unrun, measured, so the failure is closed rather than a hang |
 //! | `--allowedTools` | Every built-in tool is callable. It is a permission allowlist and **not** a toolset: it removed none of the thirty built-ins in any of the three spike runs. That is why confinement here is a floor rather than a fence, and it is written down as an open question on Drone rather than papered over — the built-in tools are bounded by what the Drone can reach, a worktree and an empty environment, not by this list |
 //!
 //! **Nothing readable goes in argv**: no prompt text, no task, nothing brokered.
@@ -77,6 +77,12 @@ const ASK_TOOL: &str = "mcp__armada__ask_question";
 /// calls it without the grant is denied by the CLI silently, which is why Fleet
 /// refuses the same call in words on its own side.
 const DISPATCH_TOOL: &str = "mcp__armada__dispatch_job";
+
+/// **In no toolbelt and never in `--allowedTools`.** The CLI calls it itself,
+/// on `--permission-prompt-tool`, with each call the allowlist does not cover,
+/// and its answer is whether that call runs. The Drone's model is not shown it,
+/// measured, so it is not a tool the Drone has.
+const PERMISSION_TOOL: &str = "mcp__armada__permission";
 
 /// The program name `crates/config/settings.toml` gives as the default for the
 /// AgentHarness binary path: `claude (on PATH)`.
@@ -187,10 +193,15 @@ impl AgentHarness for HeadlessAgent {
             config.model().as_str().into(),
         ];
 
+        // The asking mode, with Armada as the one asked. `dontAsk` never
+        // consults a prompt tool, so a Job holding a question for a person
+        // needs this mode even for the tool to refuse.
         match config.prompting() {
-            Prompting::Never => {
+            Prompting::Fleet => {
                 args.push("--permission-mode".into());
-                args.push("dontAsk".into());
+                args.push("default".into());
+                args.push("--permission-prompt-tool".into());
+                args.push(PERMISSION_TOOL.into());
             }
         }
 
@@ -386,6 +397,12 @@ pub fn ask_tool() -> &'static str {
 /// tool a spawn can be built without.
 pub fn dispatch_tool() -> &'static str {
     DISPATCH_TOOL
+}
+
+/// The permission tool's name, for a caller asserting it is on
+/// `--permission-prompt-tool` and on no allowlist.
+pub fn permission_tool() -> &'static str {
+    PERMISSION_TOOL
 }
 
 /// The server every tool above is served from.

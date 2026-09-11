@@ -133,18 +133,20 @@ impl McpConfig {
 
 /// How a Drone is answered when it reaches for something it was not granted.
 ///
-/// **One variant.** A detached Drone has no controlling terminal and its stdin
-/// carries the session, so a prompt has nobody to answer it and would hang the
-/// Job until its timeout. Leaving the mode off is worse still: it inherits
-/// whatever the operator configured, which was measured as `auto`.
+/// **One variant, and Armada is always who answers.** Whether that answer is
+/// a refusal at once or a question held for a person is the Job's setting,
+/// read by Fleet — not a second variant here, which would put the choice
+/// where nobody looking at a Job can see it. A prompt at the Drone's own end
+/// has nobody to answer it, since a detached Drone has no terminal; leaving the
+/// mode off inherits the operator's, which was measured as `auto`.
 ///
-/// The cost is stated in the baseline prompt rather than hidden: a denial
-/// arrives silently, so the Drone is told to notice one and stop rather than
-/// route around it.
+/// **It fails closed, measured.** A permission tool that errors, or a server
+/// that cannot be reached, leaves the call unrun.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Prompting {
-    /// The Drone is never asked. A call outside the toolbelt is refused.
-    Never,
+    /// Every call outside the toolbelt is put to Armada's permission tool,
+    /// and its answer is whether the call runs.
+    Fleet,
 }
 
 /// How long the harness waits on Armada's answer to one permission question.
@@ -347,9 +349,9 @@ impl DroneSpawnConfig {
         &self.environment
     }
 
-    /// Whether the Drone can be asked to confirm something. It cannot.
+    /// Who answers when the Drone reaches past its toolbelt. Armada does.
     pub fn prompting(&self) -> Prompting {
-        Prompting::Never
+        Prompting::Fleet
     }
 }
 
