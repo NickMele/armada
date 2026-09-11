@@ -39,6 +39,9 @@ mod forget;
 mod gaming;
 /// Where a verdict's own question was kept, and the column that points at it.
 mod judged;
+/// What the Manifest read at Job creation, kept whole and off the Job row's
+/// own fields.
+mod manifest_snapshot;
 /// The migration list, and where a file stands against it. `V1`..`V16` stay in
 /// `schema`; this is only what had to move to keep that file under the gate.
 mod migrations;
