@@ -188,9 +188,12 @@ button.armada-srow__name:focus-visible {
   display: none;
 }
 
+/* The label at the leading edge and the value at the trailing one, the way a
+   step's name and its elapsed figure sit on the row above. */
 .armada-srow__fact {
   display: flex;
   align-items: baseline;
+  justify-content: space-between;
   /* The drawn 7px: --space-2 less a quarter --space-1. A name and its value
      read as one pair, so this is tighter than the gap between pairs. */
   gap: calc(var(--space-2) - var(--space-1) / 4);

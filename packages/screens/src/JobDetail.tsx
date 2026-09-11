@@ -711,6 +711,11 @@ export function JobDetail({
       // sheet's live mark takes it.
       pulsing={render === "working" && sheet === null}
       onSelectStep={setSelected}
+      // A count in the tree opens its chapter: the step, then the reader on it.
+      onOpenChapter={(stepId, chapterId) => {
+        setSelected(stepId);
+        keys.onFocusChapter(chapterId);
+      }}
       // The tree draws exactly what the keyboard holds. **Selecting a step
       // still does not open its facts** — that is `RunTree`'s rule and it is
       // the reason the two are separate props at all.

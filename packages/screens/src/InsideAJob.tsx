@@ -181,6 +181,8 @@ export type InsideAJobProps = {
    * opens the output of that attempt's run.
    */
   onOpenArtifact?: (artifactId: string) => void;
+  /** Told when a fact in the tree names a chapter: select that step, on it. */
+  onOpenChapter?: (stepId: string, chapterId: string) => void;
   /**
    * Where things are — the worktree, the branch, the Manifest, the workflow,
    * the log, the transcript, the Drone. **A path opens where it lives; an
@@ -243,6 +245,7 @@ export function InsideAJob({
   openSteps,
   onOpenStep,
   onOpenArtifact,
+  onOpenChapter,
   where,
   whereLabel = "Where things are",
   whereNote,
@@ -282,6 +285,7 @@ export function InsideAJob({
               onOpen={onOpenStep}
               onCopied={onCopied}
               onOpenArtifact={onOpenArtifact}
+              onOpenChapter={onOpenChapter}
             />
           )}
 

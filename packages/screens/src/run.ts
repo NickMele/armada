@@ -21,7 +21,7 @@
 // its step like every other row — is the per-step answer, and it is what the
 // tree draws.
 
-import type { RunTreeFact, RunTreePath, RunTreeStep, StepActivity } from "@armada/components";
+import type { RunTreeFact, RunTreeStep, StepActivity } from "@armada/components";
 
 import type { Turn } from "@armada/protocol";
 import { CHECK_ADVANCES, CHECK_OUTCOME, CRITERION_VERDICT_CHECK, ESCALATION_REASON, STEP_STATE } from "@armada/components";
@@ -34,6 +34,7 @@ import type {
   StepDetail,
 } from "@armada/protocol";
 import { isSweepMarker } from "./declared";
+import { DIFF_CHAPTER } from "./detail-keys";
 import { span } from "./duration";
 import { ordered } from "./facts";
 import { checksOf, checksStand } from "./gates";
@@ -217,36 +218,16 @@ function attemptFact(step: StepDetail, attempt: StepAttempt): RunTreeFact {
 }
 
 /**
- * What this step wrote, as paths that keep their filenames.
- *
- * **Bounded to what fits a narrow column.** Past three the fact counts the
- * rest: a step that wrote thirty files is a step whose file list belongs in the
- * panel's Produced chapter, where there is room for it.
+ * What this step wrote, as a count. The files themselves are the Produced
+ * chapter's, where there is room for them, and pressing the count opens it.
  */
 function producedFact(wrote: ChangedFile[]): RunTreeFact | undefined {
   if (wrote.length === 0) return undefined;
-  const paths: RunTreePath[] = wrote.slice(0, SHOWN).map((file) => split(file.path));
-  const rest = wrote.length - paths.length;
   return {
     label: "Produced",
-    value: rest > 0 ? `+${rest} more` : undefined,
-    paths,
+    value: `${wrote.length} ${wrote.length === 1 ? "file" : "files"}`,
+    chapter: DIFF_CHAPTER,
   };
-}
-
-/** How many produced paths the tree draws before it counts the rest. */
-const SHOWN = 3;
-
-/**
- * A path split into the part that may truncate and the part that never does.
- * **The separator belongs to the directory** — without it `src` and
- * `selectors.ts` read as two names rather than one path.
- */
-function split(path: string): RunTreePath {
-  const cut = path.lastIndexOf("/");
-  return cut < 0
-    ? { basename: path }
-    : { directory: path.slice(0, cut + 1), basename: path.slice(cut + 1) };
 }
 
 /**
