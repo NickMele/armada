@@ -1,4 +1,6 @@
-//! The pull request a finished Job opens, assembled from the record.
+//! The review Fleet writes — one composition, two readers: the pull request's
+//! Markdown body, and `get_job`'s `ipc::JobReview` for the review area, at a
+//! gate that never opens one too. `#665`.
 //!
 //! # Nothing a Drone wrote reaches this
 //!
@@ -14,12 +16,9 @@
 //! contract. This is Fleet's body and it keeps the same four, so a reviewer
 //! reading a queue finds the same section in the same place whoever wrote it.
 //!
-//! **Outcome is the one Fleet cannot write in a Drone's terms.** A Drone knows
-//! what its change does; Fleet has only what it verified, and admitting a
-//! Drone's sentence is what this file exists to prevent. So that section says
-//! what the record proves — which files changed — and says nothing read them
-//! for meaning. A heading held open honestly beats one dropped, which reads as
-//! a body that forgot it.
+//! **Outcome is the one Fleet cannot write in a Drone's terms**: it says what
+//! the record proves rather than what the change does, because admitting a
+//! Drone's sentence is what this file exists to prevent.
 //!
 //! Risks come before evidence: a body ending on its passes reads as a claim
 //! that everything is fine.
@@ -27,25 +26,83 @@
 use adapter_traits::{how_the_base_was_found, Base, BaseOnTheRemote, Changed, Review};
 use core_model::{Job, StepCheck, StepId, StepState};
 
-/// The pull request for a Job that finished.
+/// What Fleet composed, in the four parts it is made of. No heading is baked
+/// into any of them — a heading is how one reader draws a part, not what the
+/// part is.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct StructuredReview {
+    /// The brief, in the requester's own words. `job.facts()`, trimmed.
+    pub why: String,
+    /// What the Job's worktree changed, as far as a diff can say it.
+    pub outcome: String,
+    /// What nothing checked, and what the base carries that this Job did not
+    /// write, where there is a base to ask.
+    pub risks: String,
+    /// Every step and every Check that ran against it, with its outcome.
+    pub evidence: String,
+}
+
+/// [`StructuredReview`], as the four columns `store::Review` holds it in.
 ///
-/// `checks` is what the store holds against the Job, step by step, in the order
-/// the store returned. A step with no rows is a step whose Checks were never
-/// run, and it is named as one rather than left out.
+/// **Always all four `Some`.** A composition that ran has something to say in
+/// every section — even an empty diff and an unremarkable base still produce a
+/// sentence — so `None` is reserved for [`store::Review::is_empty`]'s own
+/// meaning: a Job that has not reached a gate yet.
+pub(crate) fn as_stored(review: &StructuredReview) -> store::Review {
+    store::Review {
+        why: Some(review.why.clone()),
+        outcome: Some(review.outcome.clone()),
+        risks: Some(review.risks.clone()),
+        evidence: Some(review.evidence.clone()),
+    }
+}
+
+/// Compose the review. `checks` is what the store holds against the Job, step
+/// by step, in the order the store returned. A step with no rows is a step
+/// whose Checks were never run, and it is named as one rather than left out.
+///
+/// `base` and `remote` are `None` on a Job that has not pushed — every gate
+/// that is not the step a workflow declares delivering, and that step's own
+/// gate before delivery has run at all. The Risks section says less there;
+/// nothing else changes.
+pub(crate) fn structured_review_of(
+    job: &Job,
+    checks: &[(StepId, Vec<StepCheck>)],
+    base: Option<&Base>,
+    remote: Option<&BaseOnTheRemote>,
+    changed: &Changed,
+) -> StructuredReview {
+    StructuredReview {
+        why: job.facts().as_str().trim().to_string(),
+        outcome: outcome_of(changed),
+        risks: risks_of(job, base, remote),
+        evidence: evidence_of(job, checks),
+    }
+}
+
+/// The pull request body for a Job that delivers. **The one caller that has a
+/// base and a remote for certain** — `opened_for_review` reaches this only
+/// where a branch was pushed — so both are handed in as their own arguments
+/// rather than wrapped in `Some`, and this is the one Markdown rendering the
+/// forge ever sees.
 pub(crate) fn review_of(
     job: &Job,
     checks: &[(StepId, Vec<StepCheck>)],
     base: &Base,
     remote: &BaseOnTheRemote,
     changed: &Changed,
-) -> Review {
+) -> (Review, StructuredReview) {
+    let structured = structured_review_of(job, checks, Some(base), Some(remote), changed);
     let mut body = String::new();
-    body.push_str(&why_it_was_needed(job));
-    body.push_str(&what_came_of_it(changed));
-    body.push_str(&the_risks(job, base, remote));
-    body.push_str(&the_evidence(job, checks));
+    body.push_str(&why_and_satisfies(job, &structured.why));
+    body.push_str("## What is the outcome of the change\n\n");
+    body.push_str(&structured.outcome);
+    body.push_str("## Risks\n\n");
+    body.push_str(&structured.risks);
+    body.push_str("## Checks Evidence\n\n");
+    body.push_str(&structured.evidence);
     body.push_str(&the_record(job, base));
-    Review::assembled(job.title().as_str(), body)
+    (Review::assembled(job.title().as_str(), body), structured)
 }
 
 /// The brief the Job was created with, and what it had to satisfy.
@@ -53,11 +110,11 @@ pub(crate) fn review_of(
 /// **A person's own words, which is why they may be quoted whole.** The rule
 /// this file keeps is that nothing a *Drone* wrote reaches a pull request; the
 /// brief came from whoever asked for the work.
-fn why_it_was_needed(job: &Job) -> String {
-    let mut out = format!(
-        "## Why was the change needed?\n\n{}\n\n",
-        job.facts().as_str().trim()
-    );
+///
+/// **`why` is handed in rather than read off `job` again**, so the Markdown
+/// and [`StructuredReview::why`] cannot drift apart by one `.trim()`.
+fn why_and_satisfies(job: &Job, why: &str) -> String {
+    let mut out = format!("## Why was the change needed?\n\n{why}\n\n");
     if !job.acceptance_criteria().is_empty() {
         out.push_str("## What it had to satisfy\n\n");
         for criterion in job.acceptance_criteria() {
@@ -83,19 +140,19 @@ fn why_it_was_needed(job: &Job) -> String {
 ///
 /// **A Job that changed nothing says so.** An empty section under a heading
 /// reads as a body that gave up; the sentence is a fact, and an unusual one.
-fn what_came_of_it(changed: &Changed) -> String {
-    let mut out = String::from("## What is the outcome of the change\n\n");
+fn outcome_of(changed: &Changed) -> String {
     if changed.is_empty() {
-        out.push_str("This Job changed no file. Its work, if it did any, is not in the tree.\n\n");
-        return out;
+        return String::from(
+            "This Job changed no file. Its work, if it did any, is not in the tree.\n\n",
+        );
     }
-    out.push_str(&format!(
+    let mut out = format!(
         "{} changed:\n\n",
         match changed.len() {
             1 => String::from("One file"),
             many => format!("{many} files"),
         }
-    ));
+    );
     for file in changed.files() {
         out.push_str(&format!(
             "- `{}` — {}\n",
@@ -111,8 +168,8 @@ fn what_came_of_it(changed: &Changed) -> String {
 }
 
 /// Every step with its verdict, and every Check under it with its outcome.
-fn the_evidence(job: &Job, checks: &[(StepId, Vec<StepCheck>)]) -> String {
-    let mut out = String::from("## Checks Evidence\n\n");
+fn evidence_of(job: &Job, checks: &[(StepId, Vec<StepCheck>)]) -> String {
+    let mut out = String::new();
     for row in job.steps() {
         let label = job
             .workflow()
@@ -152,9 +209,14 @@ fn one_check(check: &StepCheck) -> String {
 ///
 /// It carries the cost, the reason, and what to do — the three things
 /// `agent-copy.md` says a caveat needs to be actionable rather than skimmed.
-fn the_risks(job: &Job, base: &Base, remote: &BaseOnTheRemote) -> String {
-    let mut out = String::from("## Risks\n\n");
-    out.push_str(
+///
+/// **`base` and `remote` absent is a Job that has not pushed a branch**, which
+/// is every gate but the one a workflow declares delivering. The boilerplate
+/// and the unchecked-criteria line still say something there; only the
+/// paragraph about what the base carries needs a branch to compare, so it is
+/// the one part that goes quiet.
+fn risks_of(job: &Job, base: Option<&Base>, remote: Option<&BaseOnTheRemote>) -> String {
+    let mut out = String::from(
         "Every line below is something Fleet ran, not something the agent reported. \
          What no Check covered is not covered here either — a Check is a command and \
          an exit code, and nothing in this repository reads a Check's output for \
@@ -171,15 +233,18 @@ fn the_risks(job: &Job, base: &Base, remote: &BaseOnTheRemote) -> String {
                 .join("\n")
         ));
     }
-    if let Some(line) = what_the_base_carries(base, remote) {
-        out.push_str(&line);
+    if let (Some(base), Some(remote)) = (base, remote) {
+        if let Some(line) = what_the_base_carries(base, remote) {
+            out.push_str(&line);
+        }
     }
     out
 }
 
 /// Where this came from, under no heading. **Last, and not a section**: it is
 /// how a reader joins the pull request back to the Job, and it answers nothing
-/// the four headings ask.
+/// the four headings ask. Markdown-only — the review area already carries the
+/// Job it is open on, so nothing on the wire needs this line.
 fn the_record(job: &Job, base: &Base) -> String {
     format!(
         "Armada job `{}`, workflow `{}`, branch `{}`, merging into `{}` ({}).\n",

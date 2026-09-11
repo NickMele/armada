@@ -191,6 +191,46 @@ async fn a_boundary_a_person_approved_catches_the_branch_up() {
     );
 }
 
+/// **A Job with no pull request still gets a review — `#665`.** A workflow
+/// that never delivers stops for a person at its gate exactly as one that does,
+/// and the review area has to say the same things there: the brief, the diff
+/// this attempt produced, the Checks that ran, and the risks a mechanical tier
+/// could see. None of that needs a pushed branch to compose.
+#[tokio::test]
+async fn a_job_that_never_delivers_still_gets_a_review_at_its_gate() {
+    let home = TempDir::new();
+    let fleet =
+        a_fleet_reviewing_and_delivering_nothing(&home, FakeWorkProduct::changed(&["src/log.rs"]));
+    let job_id = at_the_gate(&fleet, &home).await;
+
+    assert!(
+        fleet.vcs().delivered().is_empty(),
+        "this workflow declares no delivering step, so nothing pushed and no \
+         pull request opened — the review below has no Markdown body to lean on"
+    );
+
+    let stored = fleet
+        .store()
+        .lock()
+        .await
+        .review_for(&job_id)
+        .expect("the review reads back");
+    assert!(
+        !stored.is_empty(),
+        "the gate still composed a review, with no pull request behind it"
+    );
+    assert!(
+        stored.why.is_some_and(|why| !why.is_empty()),
+        "the brief is there whether or not the workflow ever delivers"
+    );
+    assert!(
+        stored
+            .evidence
+            .is_some_and(|evidence| evidence.contains("is waiting for a person")),
+        "the step this Job stopped at is named in its own evidence"
+    );
+}
+
 /// A base that did not move is not rebased and nothing is announced, at a human
 /// boundary exactly as at a mechanical one — the catch-up is attempted at every
 /// boundary and is a no-op at most of them.

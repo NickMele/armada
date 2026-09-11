@@ -43,6 +43,12 @@ export type VerdictSheetProps = {
   header?: { done: ReactNode; when: ReactNode };
   /** What was asked for — the Job's own title. */
   title: ReactNode;
+  /**
+   * The brief — Fleet's own `why` section, the same words the pull request's
+   * "Why was the change needed?" carries. Absent where Fleet has composed no
+   * review yet, which draws as the title alone, unchanged from before `#665`.
+   */
+  brief?: ReactNode;
   /** The acceptance criteria the Job was frozen with, one line each. */
   criteria: readonly ReactNode[];
   /** What stands in for the criteria list where the Job carries none. */
@@ -61,6 +67,12 @@ export type VerdictSheetProps = {
   provesIt: ReactNode;
   /** The line under the checklist, where a step's evidence is the whole of it. */
   provesItNote?: ReactNode;
+  /**
+   * What nothing checked, and what the base carries that this Job did not
+   * write — Fleet's own `risks` section, the same words the pull request's
+   * "Risks" carries. Absent where Fleet has composed no review yet.
+   */
+  risks?: ReactNode;
   /** What it left alone — `Submitted.not_claimed`, or why there is nothing here. */
   leftAlone: ReactNode;
   /** The figures, in the order the drawing runs them. */
@@ -76,6 +88,7 @@ export type VerdictSheetProps = {
 export function VerdictSheet({
   header,
   title,
+  brief,
   criteria,
   criteriaAbsent,
   cameBack,
@@ -83,6 +96,7 @@ export function VerdictSheet({
   pullRequest,
   provesIt,
   provesItNote,
+  risks,
   leftAlone,
   figures,
   note,
@@ -99,6 +113,7 @@ export function VerdictSheet({
       )}
       <Block label="What you asked for">
         <p className="armada-verdict__lede">{title}</p>
+        {brief === undefined ? null : <p className="armada-verdict__said">{brief}</p>}
         {criteria.length === 0 ? (
           criteriaAbsent === undefined ? null : (
             <p className="armada-verdict__said">{criteriaAbsent}</p>
@@ -128,6 +143,7 @@ export function VerdictSheet({
         {provesItNote === undefined ? null : (
           <p className="armada-verdict__said">{provesItNote}</p>
         )}
+        {risks === undefined ? null : <p className="armada-verdict__said">{risks}</p>}
       </Block>
 
       <Block label="What it left alone">

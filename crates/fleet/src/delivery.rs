@@ -28,7 +28,7 @@ use adapter_traits::{
     AgentHarness, Base, BroughtUpToDate, Changed, Delivery, Opened, Pushed, Standing, Vcs,
     WorkProduct, Worktree,
 };
-use core_model::Job;
+use core_model::{Component, Envelope, FieldValue, Job, Level, StepId};
 use verification::TheBaseMoved;
 
 use crate::adrift::Adrift;
@@ -206,10 +206,21 @@ where
             .work()
             .changed_files(worktree)
             .unwrap_or_else(|_| Changed::nothing());
-        let review = review_of(job, &checks, base, &remote, &changed);
-        self.vcs()
+        let (review, structured) = review_of(job, &checks, base, &remote, &changed);
+        let opened = self
+            .vcs()
             .open_for_review(worktree, base, &review)
-            .map_err(|why| Adrift::from_delivery(job.id(), why))
+            .map_err(|why| Adrift::from_delivery(job.id(), why))?;
+        // **The same composition, kept beside the Job.** The pull request
+        // already carries `review`'s Markdown; this is what lets `get_job`
+        // serve the sections it was built from with no second read of the
+        // worktree.
+        self.store()
+            .lock()
+            .await
+            .record_review(job.id(), &crate::review::as_stored(&structured))
+            .map_err(Adrift::Writing)?;
+        Ok(opened)
     }
 
     /// The branch this repository's work merges into.
@@ -242,5 +253,91 @@ where
             Standing::UpToDate => Ok(0),
             Standing::Behind { commits } => Ok(commits),
         }
+    }
+
+    /// Compose and store the review at a gate that is not the step a workflow
+    /// declares delivering.
+    ///
+    /// **The delivering step's own gate is [`opened_for_review`](Fleet::opened_for_review)'s.**
+    /// That one composes at the step's *entry*, before its own Checks exist,
+    /// so its words match what the pull request already carries — see
+    /// `crate::review`'s module doc. Recomposing here, after the step's Checks
+    /// are in, would serve a review the pull request no longer says, so a
+    /// step this workflow declares delivering is skipped.
+    ///
+    /// Every other `human_always` stop has no Markdown to protect and reaches
+    /// here instead — `#665`, so the review area says the same things at a
+    /// gate that never opens a pull request.
+    pub(crate) async fn compose_review_at_gate(
+        &self,
+        job: &Job,
+        step: &StepId,
+        worktree: &Worktree,
+    ) {
+        let delivers = job
+            .workflow()
+            .step(step)
+            .is_some_and(core_model::ResolvedStep::delivers);
+        if delivers {
+            return;
+        }
+        if let Err(why) = self.compose_and_store_review(job, worktree).await {
+            self.noted_review_not_composed(job, step, &why);
+        }
+    }
+
+    /// The read and the write [`compose_review_at_gate`](Fleet::compose_review_at_gate)
+    /// is held around. A worktree with no base still has Checks and a diff, so
+    /// only the two git reads are optional.
+    async fn compose_and_store_review(&self, job: &Job, worktree: &Worktree) -> Result<(), Adrift> {
+        let checks = self
+            .store()
+            .lock()
+            .await
+            .step_checks(job.id())
+            .map_err(Adrift::Reading)?;
+        let base = self.the_base(job.id(), worktree)?;
+        let remote = match &base {
+            Some(base) => Some(
+                self.vcs()
+                    .base_on_the_remote(worktree, base)
+                    .map_err(|why| Adrift::from_delivery(job.id(), why))?,
+            ),
+            None => None,
+        };
+        let changed = self
+            .work()
+            .changed_files(worktree)
+            .unwrap_or_else(|_| Changed::nothing());
+        let structured = crate::review::structured_review_of(
+            job,
+            &checks,
+            base.as_ref(),
+            remote.as_ref(),
+            &changed,
+        );
+        self.store()
+            .lock()
+            .await
+            .record_review(job.id(), &crate::review::as_stored(&structured))
+            .map_err(Adrift::Writing)
+    }
+
+    /// Write into the Job's own log that the review area's text did not
+    /// compose at this gate, and why. **Held, never raised**: the gate has
+    /// already ruled and a person is about to be shown the Job either way —
+    /// what this costs is a section of context, not the stop itself.
+    fn noted_review_not_composed(&self, job: &Job, step: &StepId, cause: &Adrift) {
+        let envelope = Envelope::new(
+            self.now(),
+            Level::Warn,
+            Component::Fleet,
+            self.run().clone(),
+            "the review area's own text did not compose at this gate",
+        )
+        .in_job(job.id().as_ulid().clone())
+        .at_step(step.as_str())
+        .with_field("cause", FieldValue::Str(cause.to_string()));
+        self.noted_in_the_log(job.id(), &envelope);
     }
 }
