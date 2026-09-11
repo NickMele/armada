@@ -15,6 +15,7 @@
 //! suite of minutes. The store is Fleet's to write, so what comes back waits in
 //! [`Proving::done`] for a later turn — the shape `take_delivered` has.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -245,6 +246,14 @@ fn spawn_the_run(
             budget,
             // A commit is proved with no step and no Job anybody has open.
             &crate::underway::Announcing::nowhere(),
+            // No Job, so no claim: `docs/concepts/fleet.md`'s Ports section
+            // gives a claim two shapes, a Job's own or a no-Job run's, and
+            // this pass is neither — nothing in the design mints a claim for
+            // proving a commit after a merge. `checking::ran` still takes the
+            // pair so every caller resolves a Check's Command the same way;
+            // this one resolves nothing because it holds nothing to resolve.
+            &BTreeMap::new(),
+            &[],
         )
         .await;
         let observed: Vec<verification::Observed> =

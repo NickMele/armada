@@ -217,6 +217,8 @@ where
         // rows are written: a surface re-reading on the last message must find
         // each Check's result on `check_runs`, not in neither place.
         let announcing = self.announcing(&job, &step, attempt);
+        let ports = self.port_map(&job).await;
+        let port_env = self.port_env(&job).await;
         let ruling = rule_on(
             at.on_attempt(attempt, spent),
             request,
@@ -231,6 +233,8 @@ where
             &Keeping::of(&self.host().records_root, &job.handle()),
             self.gating_policies(),
             &announcing,
+            &ports,
+            &port_env,
         )
         .await;
         // Before the Job or the step moves. A recorded result the transition

@@ -169,6 +169,8 @@ impl Repo {
             &Keeping::of(&self.root().to_string_lossy(), HANDLE),
             Policies::unstated(),
             &crate::underway::Announcing::nowhere(),
+            &std::collections::BTreeMap::new(),
+            &[],
         )
         .await
     }

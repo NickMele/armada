@@ -351,6 +351,8 @@ where
         let mut printed = Vec::new();
         let mut took = Vec::with_capacity(declared.checks().len());
         let mut narrowed_to = Vec::with_capacity(declared.checks().len());
+        let ports = self.port_map(&plan.record).await;
+        let port_env = self.port_env(&plan.record).await;
         for done in crate::checking::ran(
             declared.checks(),
             &touched,
@@ -361,6 +363,8 @@ where
             // A Drone asking about its own change is not a gate a person is
             // watching, and a live log here would sit beside the gate's own.
             &crate::underway::Announcing::nowhere(),
+            &ports,
+            &port_env,
         )
         .await
         {

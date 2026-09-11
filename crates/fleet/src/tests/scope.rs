@@ -105,6 +105,8 @@ pub(super) async fn ruled_by(
         &keeping_nowhere(),
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
+        &std::collections::BTreeMap::new(),
+        &[],
     )
     .await
 }
@@ -660,6 +662,8 @@ async fn a_step_with_no_scope_is_asked_nothing_it_did_not_declare() {
         &keeping_nowhere(),
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
+        &std::collections::BTreeMap::new(),
+        &[],
     )
     .await;
 
@@ -703,6 +707,8 @@ async fn an_ungated_step_with_no_scope_advances_on_evidence_alone() {
         &keeping_nowhere(),
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
+        &std::collections::BTreeMap::new(),
+        &[],
     )
     .await;
     assert!(ruling.advanced(), "{ruling:?}");

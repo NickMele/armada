@@ -70,6 +70,8 @@ async fn ruled_on_a_deliverable(judge: Arc<FakeJudge>, contents: Option<&str>) -
         &keeping_nowhere(),
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
+        &std::collections::BTreeMap::new(),
+        &[],
     )
     .await
 }
@@ -185,6 +187,8 @@ async fn a_deliverable_that_is_not_text_decides_neither_way() {
         &keeping_nowhere(),
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
+        &std::collections::BTreeMap::new(),
+        &[],
     )
     .await;
 
