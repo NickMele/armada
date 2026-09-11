@@ -42,11 +42,18 @@ pub fn no_off_contract_design_value(root: &Path) -> Report {
     // `apps/` was the whole surface while Bridge held every component. The
     // components moved to a package of their own, and a rule that reads only
     // `apps/` would have stopped watching the files it exists for — silently,
-    // and while still reporting green.
+    // and while still reporting green. The screens moved again, into a package
+    // of their own, and that one went unwatched until job detail's own
+    // arrangement moved into it.
     let mut files = files_with_ext(root, &root.join("apps"), &EXT);
     files.extend(files_with_ext(
         root,
         &root.join("packages").join("components"),
+        &EXT,
+    ));
+    files.extend(files_with_ext(
+        root,
+        &root.join("packages").join("screens"),
         &EXT,
     ));
     for path in files {
