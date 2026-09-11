@@ -95,7 +95,7 @@ export function refusedIn(whole: JobWhole | null): Refusals | undefined {
  */
 function againOf(refused: readonly Refusal[]): string {
   const ran = refused.some((one) => one.tool === BASH);
-  return ran ? `${FIXED_AT_SPAWN} ${DECLARED_COMMANDS}` : FIXED_AT_SPAWN;
+  return ran ? DECLARED_COMMANDS : FIXED_AT_SPAWN;
 }
 
 /**
@@ -121,8 +121,8 @@ const FIXED_AT_SPAWN =
  * a person to add an entry they already have.
  */
 const DECLARED_COMMANDS =
-  "To allow a command, add it under commands in the repository's armada.yml, without marking it " +
-  "destructive.";
+  "A drone can only run commands the repository's armada.yml declares. To allow one, add it " +
+  "under commands and do not mark it destructive.";
 
 /**
  * How much of one command is on the row, where it is not all of it.

@@ -276,8 +276,13 @@ export function noticeOf(
  * What a stopped band's title means, on hover over it. **The evidence stays on
  * the band**: what was flagged, what was refused and the answer to a redirect
  * are facts about this Job, and these sentences are the reading of them.
+ *
+ * **A refusal says only how to lift it.** That the drone is paused and why
+ * Restart is missing are both on the screen already, in the badge and in the
+ * controls, and four sentences in one hover read as none.
  */
 function saysOf(recourse: Recourse, again: string | undefined): string {
+  if (again !== undefined) return again;
   const stands =
     recourse.sent === undefined ? recourse.stands : recourse.stands.replace(`${recourse.sent} `, "");
   return [stands, recourse.withheld, again]
