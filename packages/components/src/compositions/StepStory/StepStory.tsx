@@ -6,22 +6,14 @@ import { Chapter, type ChapterTone } from "../Chapter/Chapter";
  * The step's story — Drone instructions, then Activity log, then Produced, in
  * the order it happened.
  *
- * **Opening one chapter collapses the others to their header line.** Not to
- * save room: to keep the story's order intact while one part of it is long. A
- * collapsed chapter still carries its header, so what happened in the step
- * stays readable at a glance even while a reader is deep in one part of it.
+ * **A header opens and closes its own chapter and no other.** A collapsed
+ * chapter keeps its header, so the story's order and what happened in the step
+ * stay readable at a glance, and a reader decides how much else is on screen.
+ * Showing a chapter's whole content, where it has more than its preview, is its
+ * foot control's and the keyboard map's, and that stays one chapter at a time.
  *
- * **One open at a time**, and that is the constraint that makes this different
- * from a stack of accordions — six open at once was unreadable, which is what
- * this replaces. The cost is real and stated rather than hidden: you cannot
- * read the transcript beside the diff, and that pairing is how a Drone
- * narrating one thing and doing another is caught. If that turns out to matter
- * the fix is a split for those two only, not letting everything open at once.
- *
- * **Every chapter is always on screen.** A chapter with nothing open shows its
- * preview — the first few log entries, the files with their counts — so the
- * story reads through without pressing anything. Opening is for the whole of a
- * thing, never for finding out that it exists.
+ * **Every chapter starts open, on its preview**: the first few log entries, the
+ * files with their counts. The story reads through without pressing anything.
  *
  * **A chapter is `Chapter`, and this holds the order and the one-open rule.**
  * It drew its own header for a while, beside a `Chapter` component that was
@@ -105,6 +97,9 @@ export type StepStoryProps = {
 
 export function StepStory({ chapters, openId, openChapter, onOpen }: StepStoryProps) {
   const [held, setHeld] = useState<string | null>(openId ?? null);
+  // Which chapters a reader folded by their header. Local: folding is how much
+  // of the story is on screen, and nothing above this needs to know it.
+  const [shut, setShut] = useState<ReadonlySet<string>>(() => new Set());
   const bodies = useId();
   // Controlled by presence, not by a flag: a caller either holds the value or
   // it does not, and a boolean beside it is a second answer that can disagree.
@@ -117,22 +112,27 @@ export function StepStory({ chapters, openId, openChapter, onOpen }: StepStoryPr
     onOpen?.(next);
   }
 
+  function fold(chapterId: string): void {
+    setShut((was) => {
+      const next = new Set(was);
+      if (next.has(chapterId)) next.delete(chapterId);
+      else next.add(chapterId);
+      return next;
+    });
+  }
+
   return (
     <ol className="armada-story">
       {chapters.map((chapter) => {
-        // Two different questions, and they were one until 2026-09-08. `more`
-        // is whether there is anything past the preview, which is what draws
-        // the control at the foot. `opens` is whether the header can be
-        // pressed — and with another chapter open, a chapter collapsed to its
-        // header line had no way back except closing that one. Pressing
-        // `Produced` now shows `Produced`, which is what a reader means by it.
+        // `more` is whether there is anything past the preview, which is what
+        // draws the control at the foot. `opens` is whether the header can be
+        // pressed, which any chapter with something to show can be.
         const more = chapter.content !== undefined;
         const opens = more || chapter.preview !== undefined;
         const shown = open === chapter.id;
-        // A chapter that is not the open one collapses to its header the
-        // moment anything is open. Nothing else changes: same chapters, same
-        // order, so the reader never loses where they are.
-        const collapsed = open !== null && !shown;
+        // Folded by its own header and by nothing else. A chapter showing its
+        // whole content is open whatever its header last said.
+        const collapsed = shut.has(chapter.id) && !shown;
         return (
           <li className="armada-story__chapter" key={chapter.id} data-open={shown || undefined}>
             <Chapter
@@ -143,7 +143,7 @@ export function StepStory({ chapters, openId, openChapter, onOpen }: StepStoryPr
               tone={chapter.tone}
               says={chapter.says}
               open={!collapsed}
-              onToggle={opens ? () => toggle(chapter.id) : undefined}
+              onToggle={opens ? () => fold(chapter.id) : undefined}
               act={chapter.act}
               bodyId={`${bodies}-${chapter.id}`}
               moreLabel={

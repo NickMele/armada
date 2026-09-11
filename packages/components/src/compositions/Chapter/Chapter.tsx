@@ -7,18 +7,12 @@ import { Tooltip } from "../../primitives/Tooltip/Tooltip";
  * One chapter of a step's story — a numbered header line, and a body that
  * opens beneath it.
  *
- * **A chapter collapses to its header, never to nothing.** That is the whole
- * mechanism: the chapter you open grows in place and the others fall back to
- * one line each, so the story stays on screen, the order never changes, and
- * one thing is long at a time. A collapsed chapter still carries its number,
- * its name and its meta, so what happened in the step is readable at a glance
- * even while you are deep in one part of it.
+ * **A chapter collapses to its header, never to nothing.** A collapsed chapter
+ * still carries its number, its name and its meta, so what happened in the
+ * step stays readable at a glance.
  *
- * **One open at a time is the caller's rule, not this component's.** A chapter
- * knows whether it is open; what closes the others is the region holding them.
- * That constraint is what makes this different from a stack of accordions,
- * which allowed all six at once and became unreadable — but a component cannot
- * enforce a rule about its siblings.
+ * **Each chapter opens and closes on its own.** Pressing one header never
+ * closes another; the region holding them decides nothing about that.
  *
  * **No tab strip, and no second surface.** The four-tab region job detail grew
  * is what put the activity log behind a click; the chapters replace it because
