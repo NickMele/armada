@@ -269,6 +269,7 @@ fn reach(status: JobStatus) -> Job {
     reached
 }
 
+mod allowed;
 mod covers;
 mod loop_return;
 mod machine;

@@ -24,6 +24,9 @@
 //! migration list and a version row, applied on open, and `job_events` is
 //! append-only in the database itself, by trigger.
 
+/// How a Job meets a command its Drone was not granted, and what a person
+/// allowed it.
+mod allowing;
 mod attempt;
 mod columns;
 /// The Drone pointer, where it now lives: one column per step.

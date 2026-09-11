@@ -24,6 +24,7 @@
 //! in some other state has to transition into it — a test that constructs its
 //! way there asserts nothing about the machine it claims to be testing.
 
+mod allowed;
 mod attempt;
 mod check;
 mod collision;
@@ -54,6 +55,7 @@ mod workflow;
 #[cfg(test)]
 mod tests;
 
+pub use allowed::{AllowedCommand, Reach, WhenBlocked};
 pub use attempt::{Attempt, Iteration, Spent};
 pub use check::{CheckOutcome, StepCheck};
 pub use collision::{collisions, Collision, ScopeClaim};
