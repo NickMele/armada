@@ -69,9 +69,13 @@ export class ReviewMaterial {
    * `GET /jobs/:job_id/remarks`, published whole.
    *
    * **The one read on this class that costs a forge**, which is why it is here
-   * and not on the reads an event refreshes: nothing takes it on a timer, and
-   * what re-takes it is a person pressing Refresh or a connection coming back
-   * to a reading that failed.
+   * and not on the reads `takeAgain` refreshes on every occasion: nothing
+   * takes it on a timer. What re-takes it is a person pressing Refresh, a
+   * connection coming back to a reading that failed, or `job.remarks_changed`
+   * (`#661`) — Fleet's own sweep finding the pull request's comments moved,
+   * answered by {@link ReviewMaterial.remarksChanged} rather than by
+   * `takeAgain`'s occasions, and only where this Job's comments are the ones
+   * on screen.
    *
    * **An empty list on `read` is a pull request nobody has commented on.** A
    * forge that would not answer is a refusal, so it lands as `failed` — the two
@@ -119,6 +123,24 @@ export class ReviewMaterial {
   /** What people wrote on one Job's pull request, or `null` to stop. */
   async remarks(port: number | null, jobId: string | null): Promise<void> {
     await this.conversation.want(port, jobId);
+  }
+
+  /**
+   * `job.remarks_changed` arrived for this Job: ask again, so a person
+   * looking at the comments sees the new one without reopening the Job.
+   *
+   * **A no-op for every Job but the one held.** Nobody has read this Job's
+   * comments unless `Decide` opened on a pull request and called
+   * {@link remarks} — the read costs a forge call and nothing takes it on a
+   * timer — so a Job this reader holds no id for has nobody to refresh.
+   *
+   * **`again`, not `want`.** `want` republishes a transient `reading` state
+   * before the answer lands; a person part-way through ticking comments does
+   * not need the block to blank and redraw around them, only the list under
+   * it to gain the new one.
+   */
+  async remarksChanged(port: number, jobId: string): Promise<void> {
+    if (this.conversation.jobId === jobId) await this.conversation.again(port);
   }
 
   /**

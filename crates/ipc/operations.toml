@@ -1308,6 +1308,25 @@ It carries the row whole, for `job.step_advanced`'s reason: a client told only t
 **Armada does not merge.** `docs/scope.md` and the `handoff` step's `human_always` gate both say a person does. Knowing that a merge happened is a different capability from performing one, and this is only the first.
 """
 
+[operations."job.remarks_changed"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "The forge's answer about one Job's pull request comments changed since the last sweep found it open"
+notes = """
+`#661`. Fleet already reads a pull request's conversation and review bodies on `noticing`'s rotation — `read_what_is_under_review` — and used to throw them away once the log line was decided. This is the second use of that same read: a comparison of remark handles, a hash of each body and every reviewer's verdict, kept beside the count `AsItStood` already compares for the log line. Neither comparison replaces the other; the count is what the log line reads, and this one is what decides whether Bridge is told at all.
+
+It carries the id and nothing else. `get_remarks` already answers what changed and brings the inline comments this sweep never asks for — a copy of its answer riding this event would be a second shape to keep in step with the first for no reader that could not ask `get_remarks` instead.
+
+**Never on the first sweep that reads a given pull request.** A first read has no earlier one to compare against, and firing this for every open pull request the moment Fleet starts is exactly the flood a sweep asking one pull request per interval exists not to cause.
+
+Only for a Job the merge sweep found still open — `notice_a_merge` calls `read_what_is_under_review` in that one arm — so a settled pull request never produces this, on `job.landed`'s own rule that a Job which left the rotation is not asked about again.
+
+`helm_access` is `Bridge only`, on `job.judging`'s reasoning: this is a wake-up about a screen a person is looking at rather than a fact worth a Helm session's tokens, and Helm already has `get_remarks` for the answer.
+
+It adds nothing measurable to the unbounded-sink risk `docs/practices/protocol.md` names. The rotation produces at most one of these per `Noticing` interval across every open pull request Fleet holds, which is `job.asking`'s own bound one order slower — a person answers faster than a sweep rotates.
+"""
+
 [operations."job.asking"]
 kind = "event"
 transport = "WebSocket"

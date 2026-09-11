@@ -288,6 +288,115 @@ async fn a_forge_that_would_not_answer_writes_nothing_and_forgets_nothing() {
     );
 }
 
+/// Everything this subscription has waiting, in order. `crate::tests::proposing`'s
+/// own helper, one file over: drained after the fact, and it stops at the
+/// first pause rather than at a count.
+async fn published(subscription: &mut api::Subscription) -> Vec<ipc::Event> {
+    let mut seen = Vec::new();
+    while let Ok(Some(api::Next::Send(delivered))) =
+        tokio::time::timeout(std::time::Duration::from_millis(200), subscription.next()).await
+    {
+        seen.push(delivered.event);
+    }
+    seen
+}
+
+/// Every `job.remarks_changed` a subscription saw, by the Job it named.
+fn remarks_changed(seen: &[ipc::Event]) -> Vec<&ipc::JobId> {
+    seen.iter()
+        .filter_map(|event| match event {
+            ipc::Event::JobRemarksChanged(changed) => Some(&changed.job_id),
+            _ => None,
+        })
+        .collect()
+}
+
+/// **`#661`: the whole of what the issue asked for.** A comment added between
+/// two sweeps of the same pull request tells Bridge, by Job, so a person
+/// looking at the comments gets a fresh read without reopening anything.
+#[tokio::test]
+async fn a_comment_added_since_the_last_sweep_publishes_job_remarks_changed() {
+    let home = TempDir::new();
+    let fleet = a_fleet_asking_every_turn(&home);
+    let job_id = a_finished_job(&fleet, &home).await;
+    fleet.vcs().now_landed(still_open());
+    fleet
+        .vcs()
+        .now_under_review(approved_with_a_failing_check());
+
+    // The first sweep to read this pull request has nothing to compare
+    // against, so it must not count as news — see the second case below.
+    fleet.turn().await.unwrap();
+
+    let mut subscription = fleet.events().subscribe();
+    let mut with_a_second_comment = approved_with_a_failing_check();
+    with_a_second_comment.remarks.push(Remark::written(
+        "IC_kwDO2",
+        "somebody_else",
+        "2026-09-08T10:05:00Z",
+        "one more thing",
+    ));
+    fleet.vcs().now_under_review(with_a_second_comment);
+    fleet.turn().await.unwrap();
+
+    let seen = published(&mut subscription).await;
+    let wire_job_id = ipc::JobId::from(&job_id);
+    assert_eq!(
+        remarks_changed(&seen),
+        vec![&wire_job_id],
+        "the Job whose pull request gained a comment, named once: {seen:?}"
+    );
+}
+
+/// **The other half of the rule.** A sweep that reads exactly what the last
+/// one read is not news, and nothing goes to Bridge over it.
+#[tokio::test]
+async fn a_reading_that_has_not_changed_publishes_nothing() {
+    let home = TempDir::new();
+    let fleet = a_fleet_asking_every_turn(&home);
+    a_finished_job(&fleet, &home).await;
+    fleet.vcs().now_landed(still_open());
+    fleet
+        .vcs()
+        .now_under_review(approved_with_a_failing_check());
+    fleet.turn().await.unwrap();
+
+    let mut subscription = fleet.events().subscribe();
+    for _ in 0..3 {
+        fleet.turn().await.unwrap();
+    }
+
+    let seen = published(&mut subscription).await;
+    assert!(
+        remarks_changed(&seen).is_empty(),
+        "the same reading three sweeps running is not news: {seen:?}"
+    );
+}
+
+/// **A Fleet that just started must not flood Bridge.** The first sweep to
+/// read an open pull request has no earlier reading to compare against, and
+/// that absence is not itself news — every open pull request Fleet holds
+/// would otherwise publish one of these the moment it came up.
+#[tokio::test]
+async fn the_first_sweep_after_boot_publishes_nothing() {
+    let home = TempDir::new();
+    let fleet = a_fleet_asking_every_turn(&home);
+    a_finished_job(&fleet, &home).await;
+    fleet.vcs().now_landed(still_open());
+    fleet
+        .vcs()
+        .now_under_review(approved_with_a_failing_check());
+
+    let mut subscription = fleet.events().subscribe();
+    fleet.turn().await.unwrap();
+
+    let seen = published(&mut subscription).await;
+    assert!(
+        remarks_changed(&seen).is_empty(),
+        "the first read of a pull request this process has ever made: {seen:?}"
+    );
+}
+
 /// **An approval is not a verdict and moves nothing.** The Job is at its human
 /// gate before the reading and at its human gate after it, whatever the forge
 /// said — deciding what to do about a review is `#525` and is not built.

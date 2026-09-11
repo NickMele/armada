@@ -114,6 +114,8 @@ pub enum Event {
     JobForgotten(JobForgotten),
     #[serde(rename = "job.landed")]
     JobLanded(JobLanded),
+    #[serde(rename = "job.remarks_changed")]
+    JobRemarksChanged(JobRemarksChanged),
     #[serde(rename = "proposal.moved")]
     ProposalMoved(ProposalMoved),
     #[serde(rename = "manifest.reread")]
@@ -223,6 +225,34 @@ pub struct JobLanded {
     /// up to one sweep of the rotation, and the forge is where the exact
     /// instant lives — a second answer here would be the nearer one and the
     /// wrong one.
+    pub at: Instant,
+}
+
+/// The forge's answer to one Job's pull request changed since the last sweep
+/// found it open: a comment was added, edited or removed, or a review landed.
+/// `#661`.
+///
+/// **Carries the id and nothing else.** `crate::under_review`'s own read is
+/// deliberately narrow — one call, no line comments — and Bridge already holds
+/// the route that reads the whole conversation, `get_remarks`, which also
+/// brings in the inline comments this event's own source never asked for.
+/// Carrying a copy of the answer here would be a second shape for the one
+/// `get_remarks` already gives, kept in step with nothing.
+///
+/// **Only for a Job whose pull request is still open**, since the sweep that
+/// finds this out is the same one `notice_a_merge` runs before asking, and
+/// only where this is not the first sweep to read that pull request: a first
+/// read has nothing to compare against, and firing one of these for every
+/// open pull request the moment Fleet starts would be the flood
+/// `crate::noticing`'s own module doc warns the sweep exists not to cause.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobRemarksChanged {
+    pub job_id: JobId,
+    /// Always Fleet. Nobody pressed anything in Armada — the forge is what
+    /// moved.
+    pub actor: Actor,
+    /// When the sweep read this, not when the comment was written. The forge
+    /// is where the exact instant lives.
     pub at: Instant,
 }
 

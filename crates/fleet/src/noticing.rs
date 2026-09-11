@@ -121,6 +121,21 @@ pub(crate) struct Sweep {
     /// nothing that reads this has to compare it against the record's own
     /// `landed` to tell a live reading from a stale one.
     pub(crate) pr_detail: BTreeMap<String, ipc::PullRequestDetail>,
+    /// What this rotation last read off each open pull request's comments and
+    /// reviews, compared to decide whether to publish `job.remarks_changed`.
+    /// `#661`.
+    ///
+    /// **A stronger comparison than [`reviewed`](Sweep::reviewed), and its own
+    /// map rather than a field added to [`AsItStood`].** That one is what the
+    /// Job's log line reads and stays a count on purpose — see its own doc.
+    /// This is what decides whether Bridge is told at all, and needs to notice
+    /// an edit or a swap a count cannot see.
+    ///
+    /// **Cleared the moment a pull request settles**, [`pr_detail`](Sweep::pr_detail)'s
+    /// own reason: a settled pull request leaves the rotation and this stops
+    /// being asked about, so keeping its last signature here would only be
+    /// memory nothing reads again.
+    pub(crate) commented: BTreeMap<String, crate::under_review::RemarkSignature>,
 }
 
 /// What the record's state says on the wire, where it says anything.
@@ -230,7 +245,9 @@ where
         // reading left behind under it would answer `get_job` with "still
         // open" about a pull request that just stopped being one.
         if let Landing::Merged { url } | Landing::ClosedUnmerged { url } = &landed {
-            self.sweeping().lock().await.pr_detail.remove(url);
+            let mut sweeping = self.sweeping().lock().await;
+            sweeping.pr_detail.remove(url);
+            sweeping.commented.remove(url);
         }
         self.store()
             .lock()

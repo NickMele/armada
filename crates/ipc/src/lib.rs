@@ -112,7 +112,8 @@ pub use error::{RunId, WireError, WireValue};
 pub use event::{
     ChangeKind, ChangedFile, Cursor, Delivered, DroneExited, DroneSpawned, Event, JobAsking,
     JobChecking, JobCommandWaiting, JobCreated, JobFilesChanged, JobJudging, JobLanded,
-    JobStateChanged, JobStepAdvanced, Missed, ProposalMoved, Reason, Resync, StreamMessage,
+    JobRemarksChanged, JobStateChanged, JobStepAdvanced, Missed, ProposalMoved, Reason, Resync,
+    StreamMessage,
 };
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};
 pub use holding::{HeldReason, WorktreeHeld, WorktreesHeld};

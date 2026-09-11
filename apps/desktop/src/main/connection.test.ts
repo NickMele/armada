@@ -73,6 +73,14 @@ const SCREEN = {
   diff: `/jobs/${A_JOB}/diff`,
 } as const;
 
+/**
+ * **Deliberately off `SCREEN`.** `screen.ts` excludes the comments from every
+ * occasion that table classifies — reading them costs a forge call, so
+ * nothing takes them again on a reconnection or a gap. `job.remarks_changed`
+ * is its own, narrower trigger, tested on its own route below.
+ */
+const REMARKS_ROUTE = `/jobs/${A_JOB}/remarks`;
+
 /** What each of those answers. Every body is the smallest one that reads. */
 function answering(route: string): unknown {
   switch (route) {
@@ -86,6 +94,8 @@ function answering(route: string): unknown {
       return { job_id: A_JOB, steps: [] };
     case SCREEN.diff:
       return { job_id: A_JOB };
+    case REMARKS_ROUTE:
+      return { job_id: A_JOB, pull_request: "https://forge.example/armada/pull/1", remarks: [] };
     default:
       return undefined;
   }
@@ -497,4 +507,95 @@ it("re-reads the open Job when a Drone comes on or off a step", async () => {
   }
   expect(fleet.read(SCREEN.detail)).toBe(3);
   expect(fleet.read("/jobs")).toBe(0);
+});
+
+/**
+ * `#661`: the sweep found this Job's pull request had a new comment, and the
+ * comments a person is already looking at are read again without anybody
+ * reopening the Job.
+ */
+it("re-reads the comments on job.remarks_changed, only where a person asked for them", async () => {
+  const fleet = await serving();
+  const home = await runtimeFile(fleet.port);
+  const published = publishing();
+  const connection = new FleetConnection({
+    home,
+    publish: (state) => published.publish(state),
+    now: () => 1_756_840_000_000,
+  });
+  opened.push(() => connection.stop());
+
+  connection.start();
+  const stream = await fleet.stream(0);
+  stream.send(resyncing(1));
+  await published.until((state) => state.connection.state === "connected");
+
+  // Nobody has asked for the comments yet — `Decide` opens them, and nothing
+  // else in Bridge does. The event must have nobody to wake.
+  stream.send(
+    JSON.stringify({
+      message: "event",
+      cursor: 2,
+      event: {
+        kind: "job.remarks_changed",
+        job_id: A_JOB,
+        actor: "fleet",
+        at: "2026-09-11T10:00:00Z",
+      },
+    }),
+  );
+  await published.until(
+    (state) => state.connection.state === "connected" && state.connection.cursor === 2,
+  );
+  expect(fleet.read(REMARKS_ROUTE)).toBe(0);
+
+  // The surface that reviews this Job opened its comments, exactly as
+  // `onNeedRemarks` does.
+  await connection.readRemarks(A_JOB);
+  await published.until((state) => state.remarks.state === "read");
+  expect(fleet.read(REMARKS_ROUTE)).toBe(1);
+
+  stream.send(
+    JSON.stringify({
+      message: "event",
+      cursor: 3,
+      event: {
+        kind: "job.remarks_changed",
+        job_id: A_JOB,
+        actor: "fleet",
+        at: "2026-09-11T10:05:00Z",
+      },
+    }),
+  );
+  await published.until(() => fleet.read(REMARKS_ROUTE) === 2);
+
+  // **A different Job's pull request is not this Job's read.** Sent, then
+  // proved a no-op by a third read of this Job's own that only a further
+  // event of its own should cause.
+  stream.send(
+    JSON.stringify({
+      message: "event",
+      cursor: 4,
+      event: {
+        kind: "job.remarks_changed",
+        job_id: "01M1HQZAKN001AJ5MT3PT0OTHR",
+        actor: "fleet",
+        at: "2026-09-11T10:06:00Z",
+      },
+    }),
+  );
+  stream.send(
+    JSON.stringify({
+      message: "event",
+      cursor: 5,
+      event: {
+        kind: "job.remarks_changed",
+        job_id: A_JOB,
+        actor: "fleet",
+        at: "2026-09-11T10:07:00Z",
+      },
+    }),
+  );
+  await published.until(() => fleet.read(REMARKS_ROUTE) === 3);
+  expect(fleet.read(REMARKS_ROUTE)).toBe(3);
 });

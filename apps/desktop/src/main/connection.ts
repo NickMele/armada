@@ -554,6 +554,18 @@ export class FleetConnection {
       return;
     }
 
+    if (event.kind === "job.remarks_changed") {
+      // **Only wakes a read already open, and moves no row.** The forge's
+      // comments changed, which is not a fact `JobSummary` carries and not a
+      // fact the Board draws — `job.files_changed`'s own terms. `review.ts`
+      // owns the "was anybody looking" check, because that is the same
+      // question `Decide` answers with its own `onNeedRemarks` effect and
+      // this must not re-ask where nothing asked the first time.
+      this.publish({ connection });
+      void this.material.remarksChanged(fleet.port, event.job_id);
+      return;
+    }
+
     if (event.kind === "job.forgotten") {
       // The opposite of `job.created`: the id, and nothing to fold — the row
       // is gone at Fleet by the time this arrives, so it is dropped here

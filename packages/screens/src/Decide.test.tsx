@@ -28,7 +28,7 @@ import { page, userEvent } from "vitest/browser";
 
 import type { Evidence, JobSummary, Remarks } from "@armada/protocol";
 import { Decide } from "./Decide";
-import { mount, unmount } from "./mounted";
+import { mount, rerender, unmount } from "./mounted";
 
 afterEach(unmount);
 
@@ -159,6 +159,82 @@ test("approve and request changes send on the press, with no dialog", async () =
   expect(sent.changes).toEqual([JOB.id]);
 
   await expect.element(page.getByRole("dialog")).not.toBeInTheDocument();
+});
+
+/**
+ * `#661`: `job.remarks_changed` re-reads the comments and this screen is
+ * handed the fresh list as an ordinary prop change — the same one Refresh and
+ * a reconnection already produce. What must not happen is what a naive
+ * refresh does everywhere else: replace the block and lose what a person was
+ * doing in it.
+ */
+test("a fresh remarks reading keeps a picked comment and a typed note", async () => {
+  const address = "https://forge.example/armada/pull/533";
+  const firstRead: Remarks = {
+    state: "read",
+    jobId: JOB.id,
+    review: {
+      job_id: JOB.id,
+      pull_request: address,
+      remarks: [
+        {
+          id: "IC_1",
+          by: "alice",
+          at: "2026-08-31T09:05:00Z",
+          said: "rename the flag",
+          taken_up: false,
+        },
+      ],
+    },
+  };
+  const screen = (remarks: Remarks) => (
+    <Decide
+      onNeedMaterial={() => {}}
+      onNeedRemarks={() => {}}
+      job={JOB}
+      evidence={NO_EVIDENCE}
+      remarks={remarks}
+      stale={false}
+      deciding={false}
+      pullRequest={address}
+      onMerge={() => {}}
+      onApprove={() => {}}
+      onRequestChanges={() => {}}
+      onReject={() => {}}
+      onTakeUpRemarks={() => {}}
+      onOpenRemarkLink={() => {}}
+    />
+  );
+  mount(screen(firstRead));
+
+  await userEvent.click(page.getByRole("checkbox", { name: "Act on this" }));
+  await userEvent.fill(
+    page.getByRole("textbox", { name: "What should change" }),
+    "The gate arm is missing from config's loader.",
+  );
+
+  // The sweep found the pull request had a second comment since the last
+  // read, and `review.ts` asked for the comments again — the same `remarks`
+  // prop `onNeedRemarks` fills on open, arriving a second time.
+  const secondRead: Remarks = {
+    ...firstRead,
+    review: {
+      ...firstRead.review,
+      remarks: [
+        ...firstRead.review.remarks,
+        { id: "IC_2", by: "bob", at: "2026-08-31T09:10:00Z", said: "and this too", taken_up: false },
+      ],
+    },
+  };
+  rerender(screen(secondRead));
+
+  const boxes = page.getByRole("checkbox", { name: "Act on this" });
+  await expect.element(boxes.nth(1)).toBeInTheDocument();
+  await expect.element(boxes.nth(0)).toBeChecked();
+  await expect.element(boxes.nth(1)).not.toBeChecked();
+  await expect
+    .element(page.getByRole("textbox", { name: "What should change" }))
+    .toHaveValue("The gate arm is missing from config's loader.");
 });
 
 test("reject still asks, and merging is not what it asks about", async () => {
