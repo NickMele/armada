@@ -342,6 +342,9 @@ fn a_screen_names_what_it_exports() {
 /// the app rendering that screen.
 #[test]
 fn a_mention_is_a_whole_word() {
-    assert!(mentions("import { TheShell } from \"@armada/components\";", "TheShell"));
+    assert!(mentions(
+        "import { TheShell } from \"@armada/components\";",
+        "TheShell"
+    ));
     assert!(!mentions("const TheShellFrame = 1;", "TheShell"));
 }
