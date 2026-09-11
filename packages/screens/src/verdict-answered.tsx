@@ -17,9 +17,9 @@
 // reading `verdictSlotAtGate` and `verdictSlotFinished` use, and duplicating
 // its plumbing here for a different shape would be the second copy that made
 // this split worth making. The four block labels are the only thing shared —
-// "What you asked for", "What came back", "What proves it", "What it left
-// alone" — because the sheet is one document with one layout; what fills each
-// block is this file's own read.
+// "What you asked for", "What the Drone says it did", "What proves it", "What
+// the Drone says it left alone" — because the sheet is one document with one
+// layout; what fills each block is this file's own read.
 
 import type { ReactNode } from "react";
 import {
@@ -65,9 +65,10 @@ export function humanGateStepOf(steps: readonly StepDetail[]): StepDetail | unde
 }
 
 /**
- * The step "What came back", "What it left alone" and the deliverable figure
- * read — the delivering step, or the last one. **Never the open step**: a
- * reader who has not navigated anywhere still gets the Job's own summary.
+ * The step "What the Drone says it did", "What the Drone says it left alone"
+ * and the deliverable figure read — the delivering step, or the last one.
+ * **Never the open step**: a reader who has not navigated anywhere still gets
+ * the Job's own summary.
  */
 function chosenStepOf(steps: readonly StepDetail[]): StepDetail | undefined {
   return steps.find((one) => one.delivers === true) ?? steps[steps.length - 1];

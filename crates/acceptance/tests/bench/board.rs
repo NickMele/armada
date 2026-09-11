@@ -139,6 +139,7 @@ pub fn detail(job: &Job, reason: Option<&TransitionReason>, steps: &[StepFacts])
         None,
         None,
         None,
+        None,
     )
 }
 
@@ -168,6 +169,7 @@ pub fn delivered(
         stuck.as_ref(),
         None,
         Some(delivery),
+        None,
         None,
     )
 }

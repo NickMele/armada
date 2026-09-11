@@ -159,12 +159,12 @@ export function provesItNoteOf(step: StepDetail, render: Render): string | undef
     : "Reading the document is the review. Your answer is the only verdict this step gets.";
 }
 
-/** What came back — the Drone's own claim, or why there is nothing to read yet. */
+/** What the Drone says it did — its own claim, or why there is nothing to read yet. */
 export function cameBackOf(claim: Submitted | undefined): string {
   return claim?.claimed ?? "This step has not submitted its evidence yet.";
 }
 
-/** What it left alone — `not_claimed`, or the named absence of a boundary. */
+/** What the Drone says it left alone — `not_claimed`, or the named absence of a boundary. */
 export function leftAloneOf(claim: Submitted | undefined): string {
   if (claim === undefined) return "This step has not submitted its evidence yet.";
   return claim.not_claimed ?? "This step's submission drew no boundary around what it did not change.";
@@ -173,6 +173,38 @@ export function leftAloneOf(claim: Submitted | undefined): string {
 /** The acceptance criteria, as the sentences a person asked for. */
 export function criteriaOf(whole: JobWhole | null): string[] {
   return (whole?.acceptance_criteria ?? []).map((one) => one.text);
+}
+
+/**
+ * Fleet's `**bold**` and `` `code` `` spans, read as plain text.
+ *
+ * **`review`'s Markdown is written for the pull request's own renderer.** The
+ * words are one builder's — that is the whole point of `#665` — but the
+ * marks around them are not; a sheet with no Markdown renderer would draw the
+ * asterisks and backticks themselves, and that is not the same words.
+ */
+function plainTextOf(markdown: string): string {
+  return markdown.replaceAll("**", "").replaceAll("`", "");
+}
+
+/**
+ * The brief — Fleet's own `why` section, the same words the pull request's
+ * "Why was the change needed?" carries. Absent where Fleet has composed no
+ * review yet: a Job still running, or read off a Fleet older than 10.10.
+ */
+export function briefOf(whole: JobWhole | null): string | undefined {
+  const why = whole?.review?.why;
+  return why === undefined || why.length === 0 ? undefined : plainTextOf(why);
+}
+
+/**
+ * What nothing checked, and what the base carries that this Job did not
+ * write — Fleet's own `risks` section, the same words the pull request's
+ * "Risks" carries. Absent for `briefOf`'s reason.
+ */
+export function risksOf(whole: JobWhole | null): string | undefined {
+  const risks = whole?.review?.risks;
+  return risks === undefined || risks.trim().length === 0 ? undefined : plainTextOf(risks.trim());
 }
 
 /** The figures, in the order the drawing runs them. */
@@ -361,6 +393,7 @@ export function verdictOf({
   const never = neverDelivers(whole?.steps ?? []);
   return {
     title: job.title,
+    ...(briefOf(whole) === undefined ? {} : { brief: briefOf(whole) }),
     criteria: criteriaOf(whole),
     criteriaAbsent: "This Job's frozen workflow named no acceptance criteria.",
     cameBack: cameBackOf(claim),
@@ -372,6 +405,7 @@ export function verdictOf({
     ...(provesItNoteOf(step, render) === undefined
       ? {}
       : { provesItNote: provesItNoteOf(step, render) }),
+    ...(risksOf(whole) === undefined ? {} : { risks: risksOf(whole) }),
     leftAlone: leftAloneOf(claim),
     figures: figuresOf({ job, whole, step, render, diff, opens, now, drones }),
   };
