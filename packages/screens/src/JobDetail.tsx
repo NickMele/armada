@@ -64,7 +64,8 @@
 
 import { JobHoldsSummary } from "@armada/components";
 import { useEffect, useMemo, useState } from "react";
-import { InsideAJob, type RunTreeStep } from "@armada/components";
+import { type RunTreeStep } from "@armada/components";
+import { InsideAJob } from "./InsideAJob";
 
 import type {
   Diff,

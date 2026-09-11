@@ -28,7 +28,8 @@ import {
   JOB_LIFECYCLE,
   Refusals,
 } from "@armada/components";
-import type { JobDetailField, StepNotice } from "@armada/components";
+import type { JobDetailField } from "@armada/components";
+import type { StepNotice } from "./InsideAJob";
 import type { ReactNode } from "react";
 
 import type { JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";

@@ -1,17 +1,28 @@
+// The arrangement `JobDetail` renders. Its rules are in
+// `packages/components/src/screens/screens.css`, which Bridge and Storybook
+// both load.
+
 import type { ReactNode } from "react";
 import { Fragment, useCallback, useState } from "react";
-import { conceptSaid } from "../../concepts";
-import { Tooltip } from "../../primitives/Tooltip/Tooltip";
-import { JobBrief, type JobBriefProps } from "../../compositions/JobBrief/JobBrief";
-import { JobDetailHeaderActions } from "../../compositions/JobDetailHeaderActions/JobDetailHeaderActions";
-import type { JobDetailField } from "../../compositions/JobDetailHeaderActions/JobDetailHeaderActions";
-import type { JobLogReferenceRow, NotOpened } from "../../compositions/JobLogReference/JobLogReference";
-import { PhaseStrip, type PhaseStripProps } from "../../compositions/PhaseStrip/PhaseStrip";
-import { RunTree, type RunTreeStep } from "../../compositions/RunTree/RunTree";
-import { StepStory, type StepChapter } from "../../compositions/StepStory/StepStory";
-import { WhereRow } from "../../compositions/WhereRow/WhereRow";
-import { Absent } from "../absent";
-import type { JobDetailHeading } from "../detail";
+import {
+  Absent,
+  JobBrief,
+  JobDetailHeaderActions,
+  PhaseStrip,
+  RunTree,
+  StepStory,
+  Tooltip,
+  WhereRow,
+  conceptSaid,
+  type JobBriefProps,
+  type JobDetailField,
+  type JobDetailHeading,
+  type JobLogReferenceRow,
+  type NotOpened,
+  type PhaseStripProps,
+  type RunTreeStep,
+  type StepChapter,
+} from "@armada/components";
 
 /**
  * Inside a Job — one arrangement, at every state.

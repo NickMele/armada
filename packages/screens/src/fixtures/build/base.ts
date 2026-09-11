@@ -1,10 +1,9 @@
 // The one Job every fixture is a moment of, and the parts every builder shares.
 //
-// **One narrative, not six unrelated Jobs.** The Bug workflow Job Storybook
-// already knows — "Split the settings reducer so the selectors can be tested
-// alone", branch `fix/settings-split-selectors` — from
-// `packages/components/src/screens/InsideAJob/fixtures.tsx`. Each state file in this
-// directory freezes it at a different moment; sharing the id, the workflow and
+// **One narrative, not six unrelated Jobs.** The Bug workflow Job "Split the
+// settings reducer so the selectors can be tested alone", on branch
+// `fix/settings-split-selectors`. Each state file in this directory freezes it
+// at a different moment; sharing the id, the workflow and
 // the step labels here is what keeps a reader able to recognise the same Job
 // across the roster rather than reading six strangers.
 //

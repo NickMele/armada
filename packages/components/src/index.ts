@@ -67,6 +67,7 @@ export * from "./compositions/WorkflowRail/WorkflowRail";
 // What every job detail render shares. The five screens that took it are gone:
 // job detail is one arrangement, and the five were the defect.
 export * from "./screens/detail";
+export * from "./screens/absent";
 
 // The three journey screens, lifted for the reason the job detail three were:
 // a story with hardcoded fixtures is a screen nothing outside Storybook can
@@ -106,10 +107,6 @@ export * from "./compositions/ActivityLog/ActivityLog";
 // The step's story — Drone instructions, Activity log, Produced. Opening one
 // collapses the others to their header line.
 export * from "./compositions/StepStory/StepStory";
-
-// Inside a job — the one arrangement, at every state. The screen #186 built:
-// the run as a tree, the selected step in the panel, its story in order.
-export * from "./screens/InsideAJob/InsideAJob";
 
 // The two chips a step's facts are made of. A fact is a value; a path is the
 // one value that keeps its filename at every width.
