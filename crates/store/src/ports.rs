@@ -1,11 +1,11 @@
-//! The span of ports a Job's worktree holds, or a no-Job server run holds.
+//! The span of ports a Job's worktree holds, or the main checkout holds.
 //!
-//! `docs/concepts/fleet.md`, *Ports*: "A claim carries a `job_id`, or the run
-//! of a server started with no Job, so who holds which span is a query rather
-//! than an inspection of directories." [`PortClaimant`] is that either/or,
-//! answered by the type rather than by two nullable columns a caller could
-//! leave both set or both empty — the shape a `CHECK` would otherwise have to
-//! refuse at the boundary between this crate and whoever calls it.
+//! `docs/concepts/fleet.md`, *Ports*: "A claim carries a `job_id`, or marks
+//! the main checkout, so who holds which span is a query rather than an
+//! inspection of directories." [`PortClaimant`] is that either/or, answered by
+//! the type rather than by two nullable columns a caller could leave both set
+//! or both empty — the shape a `CHECK` would otherwise have to refuse at the
+//! boundary between this crate and whoever calls it.
 //!
 //! **Sizing, probing and picking a free span are not here.** This module
 //! persists a claim once Fleet has decided one; the decision is
@@ -18,21 +18,23 @@ use crate::error::{fault, LoadAllError, LoadJobError, RowError, WriteError};
 use crate::open::Store;
 use crate::row::column;
 
-/// Version 45 — the port span a Job's worktree holds, or a no-Job server run
+/// Version 45 — the port span a Job's worktree holds, or the main checkout
 /// holds.
 ///
 /// Beside the table it creates, like every migration since [`V17`
 /// docs](crate::report::V17) — `schema.rs` is at the 900 lines the gate
 /// refuses at.
 ///
-/// **`job_id` and `run_id` are both nullable and the `CHECK` admits exactly
-/// one.** [`PortClaimant`] makes the wrong shape unspeakable from Rust; the
-/// `CHECK` holds the same rule from underneath, for a row this crate did not
-/// write. Same argument as `job_events_hold_one_whole_shape`.
+/// **`job_id` and `main_checkout` are both nullable and the `CHECK` admits
+/// exactly one.** [`PortClaimant`] makes the wrong shape unspeakable from
+/// Rust; the `CHECK` holds the same rule from underneath, for a row this
+/// crate did not write. Same argument as `job_events_hold_one_whole_shape`.
 ///
-/// **One claim per Job and one per run**, each its own partial unique index
-/// rather than one column in a composite key: the two shapes never compare to
-/// each other, so there is no one key that spans both.
+/// **One claim per Job and at most one for the main checkout**, each its own
+/// partial unique index. `main_checkout` is `1` or absent rather than a
+/// boolean column with no `WHERE` on the index: a `UNIQUE` index over a column
+/// most rows hold `NULL` in already ignores those rows, so the one value the
+/// column is ever given is what the index has to make singular.
 ///
 /// **The foreign key on `job_id` is what makes this table one
 /// [`tables_pointing_at_a_job`](crate::migrations::tables_pointing_at_a_job)
@@ -44,17 +46,18 @@ use crate::row::column;
 /// which is what zero rows says.
 pub(crate) const V45: &str = r#"
 CREATE TABLE port_claims (
-    job_id     TEXT REFERENCES jobs(job_id),
-    run_id     TEXT,
-    base       INTEGER NOT NULL,
-    width      INTEGER NOT NULL,
-    claimed_at TEXT NOT NULL,
+    job_id        TEXT REFERENCES jobs(job_id),
+    main_checkout INTEGER,
+    base          INTEGER NOT NULL,
+    width         INTEGER NOT NULL,
+    claimed_at    TEXT NOT NULL,
     CHECK (base > 0 AND width > 0),
-    CHECK ((job_id IS NULL) <> (run_id IS NULL))
+    CHECK ((job_id IS NULL) <> (main_checkout IS NULL)),
+    CHECK (main_checkout IS NULL OR main_checkout = 1)
 ) STRICT;
 
 CREATE UNIQUE INDEX port_claims_by_job ON port_claims (job_id) WHERE job_id IS NOT NULL;
-CREATE UNIQUE INDEX port_claims_by_run ON port_claims (run_id) WHERE run_id IS NOT NULL;
+CREATE UNIQUE INDEX port_claims_main_checkout ON port_claims (main_checkout) WHERE main_checkout IS NOT NULL;
 "#;
 
 /// Who a port span belongs to. **Exactly one of the two, and there is no
@@ -63,10 +66,11 @@ CREATE UNIQUE INDEX port_claims_by_run ON port_claims (run_id) WHERE run_id IS N
 pub enum PortClaimant {
     /// A Job's worktree, for the whole of the worktree's lifetime.
     Job(JobId),
-    /// A server started from the Manifest surface with no Job, named by its
-    /// own run. Opaque here — the Manifest surface that mints one is not yet
-    /// built, and this crate has no opinion about its shape beyond "text".
-    Run(String),
+    /// The main checkout, held for as long as Fleet runs. What the proof run
+    /// after a merge draws its ports from, and what a server started from the
+    /// Manifest surface with no Job runs in and draws its ports from —
+    /// neither has a worktree of its own to claim against.
+    MainCheckout,
 }
 
 /// A span of contiguous ports, claimed.
@@ -89,21 +93,22 @@ impl Store {
     /// once, at worktree cut, and a second call here is a caller asking for
     /// what it should have read back with [`port_span_for_job`], so it fails
     /// rather than silently moving the Job's ports out from under a Command
-    /// already holding the first span's numbers.
+    /// already holding the first span's numbers. The main checkout's claim is
+    /// the same: claimed once, on first need, and reused after that.
     ///
     /// [`port_span_for_job`]: Store::port_span_for_job
     pub fn claim_port_span(&mut self, claim: &PortClaim) -> Result<(), WriteError> {
-        let (job_id, run_id) = match &claim.claimant {
+        let (job_id, main_checkout) = match &claim.claimant {
             PortClaimant::Job(job_id) => (Some(job_id.as_str()), None),
-            PortClaimant::Run(run_id) => (None, Some(run_id.as_str())),
+            PortClaimant::MainCheckout => (None, Some(1_i64)),
         };
         self.conn
             .execute(
-                "INSERT INTO port_claims (job_id, run_id, base, width, claimed_at) \
+                "INSERT INTO port_claims (job_id, main_checkout, base, width, claimed_at) \
                  VALUES (?1, ?2, ?3, ?4, ?5)",
                 (
                     job_id,
-                    run_id,
+                    main_checkout,
                     i64::from(claim.base),
                     i64::from(claim.width),
                     claim.claimed_at.as_str(),
@@ -132,9 +137,9 @@ impl Store {
                 "DELETE FROM port_claims WHERE job_id = ?1",
                 (job_id.as_str(),),
             ),
-            PortClaimant::Run(run_id) => self.conn.execute(
-                "DELETE FROM port_claims WHERE run_id = ?1",
-                (run_id.as_str(),),
+            PortClaimant::MainCheckout => self.conn.execute(
+                "DELETE FROM port_claims WHERE main_checkout IS NOT NULL",
+                (),
             ),
         };
         deleted
@@ -148,7 +153,7 @@ impl Store {
         let found = self
             .conn
             .query_row(
-                "SELECT job_id, run_id, base, width, claimed_at \
+                "SELECT job_id, main_checkout, base, width, claimed_at \
                  FROM port_claims WHERE job_id = ?1",
                 (job_id.as_str(),),
                 |row| Ok(read_claim(row)),
@@ -165,8 +170,36 @@ impl Store {
         found.transpose().map_err(LoadJobError::Unreadable)
     }
 
-    /// Every span currently claimed, Job spans before run spans and each in
-    /// claim order.
+    /// The span claimed for the main checkout, if one has been.
+    ///
+    /// **Not a [`LoadJobError`]** — there is no Job to name if the read fails,
+    /// so a database fault here is [`LoadAllError::Database`], the same
+    /// reading [`every_port_claim`](Store::every_port_claim) gives one.
+    pub fn port_span_for_main_checkout(&self) -> Result<Option<PortClaim>, LoadAllError> {
+        let found = self
+            .conn
+            .query_row(
+                "SELECT job_id, main_checkout, base, width, claimed_at \
+                 FROM port_claims WHERE main_checkout IS NOT NULL",
+                (),
+                |row| Ok(read_claim(row)),
+            )
+            .map(Some)
+            .or_else(|why| match why {
+                rusqlite::Error::QueryReturnedNoRows => Ok(None),
+                other => Err(LoadAllError::Database(fault(
+                    "reading the main checkout's port span",
+                )(other))),
+            })?;
+        found.transpose().map_err(|cause| {
+            LoadAllError::Database(fault("reading the main checkout's port span")(
+                rusqlite::Error::InvalidColumnName(cause.to_string()),
+            ))
+        })
+    }
+
+    /// Every span currently claimed, Job spans before the main checkout's and
+    /// each in claim order.
     ///
     /// **What Fleet reads before it picks a candidate span.** One pass rather
     /// than a query per attempt, the same shape as
@@ -177,8 +210,8 @@ impl Store {
         let mut asked = self
             .conn
             .prepare(
-                "SELECT job_id, run_id, base, width, claimed_at \
-                 FROM port_claims ORDER BY job_id IS NULL, job_id, run_id, claimed_at",
+                "SELECT job_id, main_checkout, base, width, claimed_at \
+                 FROM port_claims ORDER BY job_id IS NULL, job_id, main_checkout, claimed_at",
             )
             .map_err(fault("preparing the port claim read"))
             .map_err(LoadAllError::Database)?;
@@ -202,20 +235,23 @@ impl Store {
 }
 
 /// One row, narrowed. **The claimant is refused rather than guessed** — a row
-/// holding both or neither of `job_id` and `run_id` is a row the `CHECK`
-/// should have stopped, and reading it as one or the other would be this
-/// crate deciding the shape the database already refused to hold.
+/// holding both or neither of `job_id` and `main_checkout` is a row the
+/// `CHECK` should have stopped, and reading it as one or the other would be
+/// this crate deciding the shape the database already refused to hold.
 fn read_claim(row: &rusqlite::Row<'_>) -> Result<PortClaim, RowError> {
     let job_id: Option<String> = row.get("job_id").map_err(column(TABLE, "job_id"))?;
-    let run_id: Option<String> = row.get("run_id").map_err(column(TABLE, "run_id"))?;
-    let claimant = match (job_id, run_id) {
+    let main_checkout: Option<i64> = row
+        .get("main_checkout")
+        .map_err(column(TABLE, "main_checkout"))?;
+    let claimant = match (job_id, main_checkout) {
         (Some(job_id), None) => PortClaimant::Job(JobId::carried(Ulid::carried(job_id))),
-        (None, Some(run_id)) => PortClaimant::Run(run_id),
+        (None, Some(_)) => PortClaimant::MainCheckout,
         _ => {
             return Err(RowError::MalformedColumn {
                 table: TABLE,
                 column: "job_id",
-                detail: "a port claim names exactly one of a Job or a run, and this row does not"
+                detail: "a port claim names exactly one of a Job or the main checkout, and this \
+                         row does not"
                     .to_string(),
             })
         }

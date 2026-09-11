@@ -1,5 +1,5 @@
-//! A Job's port span, and a no-Job run's, told apart by the type rather than
-//! by two nullable columns a test would otherwise have to police.
+//! A Job's port span, and the main checkout's, told apart by the type rather
+//! than by two nullable columns a test would otherwise have to police.
 
 use core_model::Timestamp;
 
@@ -98,40 +98,111 @@ fn two_jobs_get_different_spans() {
     );
 }
 
-/// A run started with no Job — the Manifest surface `#618` has not built yet —
-/// still gets a claim of its own, keyed by its run rather than by a Job.
+/// The main checkout — the proof run after a merge, and a server started with
+/// no Job, both draw from this — gets a claim of its own, keyed by neither a
+/// Job nor a run.
 #[test]
-fn a_run_with_no_job_still_gets_a_claim() {
+fn the_main_checkout_gets_a_claim_of_its_own() {
     let dir = TempDir::new();
     let mut store = open(&dir);
-    let claimant = PortClaimant::Run("01RUN00000000000000000001".to_string());
     store
         .claim_port_span(&PortClaim {
-            claimant: claimant.clone(),
+            claimant: PortClaimant::MainCheckout,
             base: 42000,
             width: 2,
             claimed_at: claimed_at(),
         })
-        .expect("a no-Job claim is recorded");
+        .expect("the main checkout's claim is recorded");
+
+    let read = store
+        .port_span_for_main_checkout()
+        .expect("the read succeeds")
+        .expect("a claim is there");
+    assert_eq!(read.claimant, PortClaimant::MainCheckout);
+    assert_eq!(read.base, 42000);
 
     let all = store.every_port_claim().expect("every claim is read");
-    assert_eq!(
-        all.len(),
-        1,
-        "one claim, keyed by the run rather than a Job"
-    );
-    assert_eq!(all[0].claimant, claimant);
+    assert_eq!(all.len(), 1, "one claim, naming the main checkout");
+    assert_eq!(all[0].claimant, PortClaimant::MainCheckout);
 
     store
-        .release_port_span(&claimant)
-        .expect("the no-Job claim is released");
+        .release_port_span(&PortClaimant::MainCheckout)
+        .expect("the main checkout's claim is released");
     assert!(
         store
             .every_port_claim()
             .expect("every claim is read")
             .is_empty(),
-        "the run's own release takes its claim, with no Job involved at all"
+        "the main checkout's own release takes its claim, with no Job involved at all"
     );
+}
+
+/// A second claim for the main checkout is refused rather than silently
+/// replacing it — the same rule a Job's own second claim is refused by.
+#[test]
+fn a_second_claim_for_the_main_checkout_is_refused() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    store
+        .claim_port_span(&PortClaim {
+            claimant: PortClaimant::MainCheckout,
+            base: 42000,
+            width: 2,
+            claimed_at: claimed_at(),
+        })
+        .expect("the first claim is recorded");
+    let refused = store.claim_port_span(&PortClaim {
+        claimant: PortClaimant::MainCheckout,
+        base: 42010,
+        width: 2,
+        claimed_at: claimed_at(),
+    });
+    assert!(
+        matches!(refused, Err(WriteError::Database(_))),
+        "a second claim for the main checkout is a conflict, not a replacement: {refused:?}"
+    );
+}
+
+/// **A Job and the main checkout never overlap.** Both are real, independent
+/// claims, and the ranges Fleet picks them from never collide by
+/// construction — this is the store's own half of that: two rows, two
+/// different spans, read back apart.
+#[test]
+fn a_job_and_the_main_checkout_never_overlap() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job(&mut store, "01PORT000000000000000010");
+    let job = job_id("01PORT000000000000000010");
+    store
+        .claim_port_span(&PortClaim {
+            claimant: PortClaimant::Job(job.clone()),
+            base: 41000,
+            width: 4,
+            claimed_at: claimed_at(),
+        })
+        .expect("the job's span is claimed");
+    store
+        .claim_port_span(&PortClaim {
+            claimant: PortClaimant::MainCheckout,
+            base: 41004,
+            width: 4,
+            claimed_at: claimed_at(),
+        })
+        .expect("the main checkout's span is claimed");
+
+    let job_read = store
+        .port_span_for_job(&job)
+        .expect("read")
+        .expect("a claim");
+    let main_read = store
+        .port_span_for_main_checkout()
+        .expect("read")
+        .expect("a claim");
+    assert_ne!(
+        job_read.base, main_read.base,
+        "the Job and the main checkout do not hold the same span"
+    );
+    assert_eq!(store.every_port_claim().expect("read").len(), 2);
 }
 
 /// **The span is free again once the Job ends.** Release, not a timer —
