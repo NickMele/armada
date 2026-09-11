@@ -478,7 +478,9 @@ export class FleetConnection {
       return;
     }
 
-    if (event.kind === "job.judging") {
+    if (event.kind === "job.judging" || event.kind === "job.checking") {
+      // `job.checking` is the same answer one tier along: `StepDetail.checking`
+      // is re-read, and a running Check's elapsed time is counted, not re-read.
       // **Re-read rather than fold.** The call is served on the open Job's own
       // field, `StepDetail.judging`, which is what a Bridge opened mid-call
       // already reads — so folding it into a second copy would give one fact
@@ -491,17 +493,6 @@ export class FleetConnection {
       this.refresh(fleet.port, event.job_id);
       return;
     }
-
-    if (event.kind === "job.checking") {
-      // **`job.judging`'s answer, one tier along.** The set is served on the
-      // open Job's `StepDetail.checking`, which is what a Bridge opened
-      // mid-gate reads, so the event is the wake-up and the detail the answer.
-      // Two reads per Check; the elapsed time is counted here, not re-read.
-      this.publish({ connection });
-      this.refresh(fleet.port, event.job_id);
-      return;
-    }
-
     if (event.kind === "job.asking") {
       // **The row does change here, unlike a Judge call, and it was not being
       // changed.** `JobSummary.asking` is the second arm of the Needs-you rule:
@@ -747,11 +738,7 @@ export class FleetConnection {
     this.notes.open(port, jobId);
   }
 
-  /**
-   * Read one running Check's log as it is written, or `null` to stop. **Its
-   * own act**, unlike the log above: a Check's log is opened by pressing its
-   * row, and nothing a person did not open is streamed.
-   */
+  /** One running Check's log, as it is written, or `null` to stop. Opened by a press. */
   followCheckOutput(jobId: string | null, kept: string | null): void {
     this.follow.open(this.connected()?.port ?? null, jobId, kept);
   }

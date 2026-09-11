@@ -22,12 +22,6 @@
 //! and returned to the caller; no branch in this file looks at a byte of it.
 //! Deciding which lines were the failure is a Judge's question answered by
 //! reading the diff, and a runner that grepped stdout would answer it badly.
-//!
-//! **What a Check prints can also be written down as it arrives.**
-//! [`run_writing`] appends every chunk to a file the moment it is read, so a
-//! person watching a Check that takes minutes can read what it has printed so
-//! far. That file is a view of the run and nothing decides on it: the
-//! [`Attempt`] handed back is captured exactly as [`run`] captures it.
 
 use std::io::Write;
 use std::path::Path;
@@ -99,7 +93,10 @@ pub async fn run(command: &str, worktree: &Path, budget: Duration) -> Attempt {
     run_writing(command, worktree, budget, None).await
 }
 
-/// [`run`], and every chunk of output appended to `live` as it is read.
+/// [`run`], and every chunk of output appended to `live` as it is read, so a
+/// person watching a Check that takes minutes can read what it has printed so
+/// far. **Nothing decides on that file**: the [`Attempt`] handed back is
+/// captured exactly as [`run`] captures it.
 ///
 /// **Both streams go into one file, in the order they arrived.** That is what
 /// a terminal shows, and it is the only order there is while the Check is

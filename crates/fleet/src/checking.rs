@@ -23,14 +23,6 @@
 //!
 //! A failing Check cancels none of the others. Someone reading a failed step
 //! wants every result, and the second failure often explains the first.
-//!
-//! # Each Check is said to start and to finish as it does
-//!
-//! [`Announcing`] is told when the batch begins, when each Check is spawned and
-//! when each is joined — so a person watching sees a Check waiting for a slot,
-//! running since a given instant, and finished with its result, rather than
-//! nothing until the ruling. **It is told and never asked**: nothing here reads
-//! it back, and the vector this returns is built exactly as it was before.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -297,7 +289,11 @@ fn looked_for(worktree: &Path, target: &str) -> Artifact {
 /// path already is. Reading it before rather than during also means no Check's
 /// output can be part of what the diff sees.
 ///
-/// `announcing` is told as each Check starts and finishes; see the module.
+/// `announcing` is told when the batch begins and as each Check is spawned and
+/// joined, so a person sees it waiting, running and finished rather than
+/// nothing until the ruling. **Told and never asked**: nothing here reads it
+/// back, and what this returns is built exactly as it was before —
+/// `crate::underway`.
 pub(crate) async fn ran(
     checks: &[ResolvedCheck],
     touched: &[String],
