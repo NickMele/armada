@@ -190,7 +190,10 @@ where
             "drone_id",
             FieldValue::Str(stood_down.drone.as_str().to_string()),
         )
-        .with_field("ending", FieldValue::Str(said(&stood_down.ending)))
+        .with_field(
+            "ending",
+            FieldValue::Str(said(&stood_down.ending, stood_down.terminated.is_ok())),
+        )
         .with_field("signalled", FieldValue::Bool(stood_down.terminated.is_ok()))
         .with_field("transcript", FieldValue::Str(heard(&stood_down.drained)));
         // A log line that will not write does not undo the ending, for
@@ -206,7 +209,19 @@ where
 /// the reason its own doc gives, and a boundary is reached because the *gate*
 /// passed the step — what the process did on its way out is a separate fact and
 /// this is all of it that is legible.
-fn said(ending: &Ending) -> String {
+///
+/// **`Vanished` alone cannot say why nothing arrived, so `signalled` is a
+/// second parameter rather than a fourth `Ending` variant.** A step also ends
+/// because a person advanced or killed it, so this cannot and does not claim
+/// the Drone handed anything in — only that Fleet's own signal, not the
+/// process dying on its own, is why no terminating event is on record. Read
+/// `signalled` false and the process was already gone before Fleet came to
+/// stop it, which is the one case `Ending::of`'s own doc describes and the
+/// original sentence still fits. Read it true and Fleet ended a process that
+/// was, until that signal, still running: a Job whose step ended while its
+/// Drone was mid-turn read the old, single sentence as one that had died,
+/// when Fleet simply had not waited for it to close its own.
+fn said(ending: &Ending, signalled: bool) -> String {
     match ending {
         Ending::Reported {
             refusals,
@@ -223,7 +238,34 @@ fn said(ending: &Ending) -> String {
                 (false, _) => "",
             }
         ),
+        Ending::Vanished if signalled => String::from("stopped before a terminating event arrived"),
         Ending::Vanished => String::from("no terminating event ever arrived"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Fleet signalled a Drone that was still running, and the sentence has
+    /// to read as Fleet's own act rather than as a process that died — the
+    /// reason `said` takes `signalled` at all.
+    #[test]
+    fn a_vanished_ending_fleet_itself_signalled_says_fleet_stopped_it() {
+        assert_eq!(
+            said(&Ending::Vanished, true),
+            "stopped before a terminating event arrived"
+        );
+    }
+
+    /// The process was already gone before Fleet reached for it — nothing
+    /// Fleet did explains the silence, so the original sentence still holds.
+    #[test]
+    fn a_vanished_ending_fleet_never_signalled_says_nothing_ever_arrived() {
+        assert_eq!(
+            said(&Ending::Vanished, false),
+            "no terminating event ever arrived"
+        );
     }
 }
 

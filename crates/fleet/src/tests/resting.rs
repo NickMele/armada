@@ -579,8 +579,10 @@ async fn a_run_that_ends_waiting_with_no_turns_left_is_reaped() {
 ///
 /// **And the slot does not come back quietly.** A transcript cut short is a fold
 /// over a prefix, so the line that hands the slot back has to say the reading
-/// was incomplete; a person reading `no terminating event ever arrived` beside
-/// nothing else would take it for a Drone that vanished.
+/// was incomplete; a person reading the `ending` field alone — `no terminating
+/// event ever arrived`, or that Fleet stopped the Drone first — would take
+/// either for the whole of what happened, with nothing to say a prefix was all
+/// that was ever read.
 #[tokio::test]
 async fn a_pipe_something_else_holds_open_does_not_hold_the_turn_loop() {
     let home = TempDir::new();
