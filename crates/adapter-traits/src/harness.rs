@@ -155,7 +155,13 @@ pub enum Prompting {
 ///
 /// **Fleet holds a question for less than this**, so an unanswered one ends in
 /// Fleet's refusal, which says why, rather than in a call abandoned unrun.
-pub const PERMISSION_WAIT: Duration = Duration::from_secs(30 * 60);
+///
+/// **Five minutes, because that is what HTTP allows.** Over Armada's transport
+/// the agent CLI ends a tool call after 300 seconds without a reply whatever
+/// its tool timeout says, and raising that exposed a further limit near 360
+/// — `docs/spikes/015-can-a-person-answer-a-blocked-command.md`. The tool
+/// timeout is still set to this, because its own default ends the call at 60.
+pub const PERMISSION_WAIT: Duration = Duration::from_secs(5 * 60);
 
 /// One thing a Drone may do, named for the capability rather than for the tool.
 ///

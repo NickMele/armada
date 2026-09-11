@@ -233,6 +233,11 @@ impl AgentHarness for HeadlessAgent {
             .map_err(HarnessRefused::PermissionWaitNotSet)
     }
 
+    /// The rule [`allowlist`] renders a command as, asked of one command.
+    fn grantable(&self, run: &str) -> Result<(), HarnessRefused> {
+        command_rule(run).map(|_| ())
+    }
+
     fn read(&self, line: &str) -> Vec<DroneEvent> {
         transcript::read(line)
     }

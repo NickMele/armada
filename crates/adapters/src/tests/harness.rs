@@ -277,7 +277,7 @@ fn the_launch_takes_its_directory_and_environment_from_the_config() {
 }
 
 /// Over HTTP the CLI abandons a tool call after about a minute unless told
-/// otherwise, measured, and a question held for a person takes longer.
+/// otherwise, and after five minutes whatever it is told — measured, spike 15.
 #[test]
 fn the_drone_waits_on_a_permission_answer_longer_than_fleet_holds_one() {
     let launch = HeadlessAgent::at("/usr/local/bin/agent")
@@ -294,7 +294,7 @@ fn the_drone_waits_on_a_permission_answer_longer_than_fleet_holds_one() {
         wait,
         Some(adapter_traits::PERMISSION_WAIT.as_millis().to_string())
     );
-    assert_eq!(wait.as_deref(), Some("1800000"), "thirty minutes");
+    assert_eq!(wait.as_deref(), Some("300000"), "five minutes");
 }
 
 /// Which of two values wins is a rule nobody would find, so a config that
@@ -334,6 +334,20 @@ fn no_credential_is_anywhere_in_a_rendered_drone() {
             "a credential-bearing variable reached a Drone: {name}"
         );
     }
+}
+
+#[test]
+fn a_command_is_grantable_exactly_when_it_would_render() {
+    let harness = HeadlessAgent::at("/usr/local/bin/agent");
+    assert!(harness.grantable("npm publish --access public").is_ok());
+    assert!(matches!(
+        harness.grantable("git push origin HEAD"),
+        Err(HarnessRefused::CommandWouldPush { .. })
+    ));
+    assert!(matches!(
+        harness.grantable("echo (a, b)"),
+        Err(HarnessRefused::CommandNotExpressibleAsARule { .. })
+    ));
 }
 
 #[test]

@@ -103,6 +103,15 @@ pub trait AgentHarness {
     /// the configuration exists to guarantee.
     fn render(&self, config: &DroneSpawnConfig) -> Result<Launch, Self::Error>;
 
+    /// Whether this command could be granted to a Drone at all, as a declared
+    /// or an allowed command: the refusal [`render`](AgentHarness::render)
+    /// would give for it, asked before a person allows it.
+    ///
+    /// **Asked first, because the render refuses the whole spawn.** A command
+    /// a person allowed that this harness cannot express, or one that would
+    /// push, would otherwise fail the Job the next time a Drone is put on it.
+    fn grantable(&self, run: &str) -> Result<(), Self::Error>;
+
     /// Read one line of the Drone's output.
     ///
     /// **Total, and never empty.** There is no `Result`: a line that does not
