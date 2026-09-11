@@ -239,6 +239,51 @@ fn allowed_commands_come_back_oldest_first_whoever_allowed_them() {
     );
 }
 
+/// One row goes, by its exact text, and the Job's other allows and its
+/// neighbour's stay. A second take-back finds nothing and says so.
+#[test]
+fn taking_back_an_allow_removes_that_row_and_no_other() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job(&mut store, "01TAKEN");
+    a_job(&mut store, "01KEPT");
+    let (id, kept) = (job_id("01TAKEN"), job_id("01KEPT"));
+    for run in ["cargo test", "cargo build"] {
+        store
+            .allow_command(&id, &allowed(run, Reach::Job, "2026-08-26T10:00:00.000Z"))
+            .expect("allowed");
+    }
+    store
+        .allow_command(
+            &kept,
+            &allowed("cargo test", Reach::Repository, "2026-08-26T10:00:00.000Z"),
+        )
+        .expect("allowed");
+
+    assert!(!store.remove_allowed_command(&id, "cargo").expect("reads"));
+    assert!(store
+        .remove_allowed_command(&id, "cargo test")
+        .expect("removed"));
+
+    let left: Vec<String> = store
+        .allowed_commands(&id)
+        .expect("reads")
+        .into_iter()
+        .map(|allow| allow.run)
+        .collect();
+    assert_eq!(left, vec!["cargo build"]);
+    assert_eq!(store.allowed_commands(&kept).expect("reads").len(), 1);
+    assert!(
+        !store
+            .remove_allowed_command(&id, "cargo test")
+            .expect("reads"),
+        "already gone"
+    );
+    assert!(!store
+        .remove_allowed_command(&job_id("01NOBODY"), "cargo test")
+        .expect("no Job, no row"));
+}
+
 #[test]
 fn forgetting_a_job_takes_what_was_allowed_it() {
     let dir = TempDir::new();

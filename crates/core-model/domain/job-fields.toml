@@ -57,7 +57,7 @@ nullable = "No — zero rows is nothing allowed"
 frozen_at = "Never"
 purpose = "Commands a person allowed for this Job, each carried by every later spawn of it. `reach` says whether the person also made it permanent in the repository's `armada.yml`."
 in_code = "Yes"
-notes = "Keyed by `(job_id, run)`, so allowing one command twice is one row. A second allow at `repository` reach raises a `job`-reach row and nothing lowers one; `allowed_at` and `by` stay the first allow's, so the list keeps the order things were allowed in. No event: an allow moves no status and no step, so the table is the authority for its rows, as `job_remarks_taken_up` is. `run` is the command text as allowed, and nothing in `core-model` or `store` interprets it."
+notes = "Keyed by `(job_id, run)`, so allowing one command twice is one row. A second allow at `repository` reach raises a `job`-reach row and nothing lowers one; `allowed_at` and `by` stay the first allow's, so the list keeps the order things were allowed in. A person may take a row back from Job detail, and the next permission question answers by `when_blocked` again; a command also made permanent stays declared in `armada.yml` on the Job's branch. No event: an allow moves no status and no step, so the table is the authority for its rows, as `job_remarks_taken_up` is. `run` is the command text as allowed, and nothing in `core-model` or `store` interprets it."
 why = "An allow that lived only with the Drone that asked would be lost at its exit, and the next spawn of the same Job would meet the same refusal and ask again. A table rather than an array column so the key refuses a duplicate in the database, instead of every writer checking first."
 
 [fields.assigned_drone]

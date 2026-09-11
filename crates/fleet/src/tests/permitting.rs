@@ -14,7 +14,7 @@ use std::time::Duration;
 use adapter_traits::{CallDetail, DroneEvent};
 use api::{PermissionAnswer, Queries};
 use config::ResolvedWorkflow;
-use core_model::{JobId, JobStatus, WhenBlocked};
+use core_model::{Actor, AllowedCommand, JobId, JobStatus, Reach, Timestamp, WhenBlocked};
 use ipc::mcp::{Incoming, PermissionAsked};
 use ipc::{CommandAnswer, CommandInFlight};
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Sketch};
@@ -246,6 +246,52 @@ async fn allow_all_allows_the_call_and_asks_nobody() {
         .allowed_commands(&job)
         .unwrap()
         .is_empty());
+}
+
+/// **A command taken back is refused at the next question**, with nothing
+/// respawned for it, and a second take-back finds nothing to take.
+#[tokio::test]
+async fn a_command_taken_back_is_no_longer_allowed() {
+    let home = TempDir::new();
+    let fleet = a_fleet_with(&home, a_drone_that_reached_for("c1"));
+    let job = started(&fleet, &home).await;
+    fleet
+        .store()
+        .lock()
+        .await
+        .allow_command(
+            &job,
+            &AllowedCommand {
+                run: "npm publish".to_string(),
+                reach: Reach::Job,
+                allowed_at: Timestamp::from_rfc3339("2026-09-11T12:00:00.000Z"),
+                by: Actor::Human,
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        fleet
+            .permission(&job, &asked("Bash", "npm publish", "c1"))
+            .await,
+        PermissionAnswer::Allow
+    );
+
+    fleet
+        .remove_allowed_command(&job, "npm publish")
+        .await
+        .expect("a person allowed it");
+
+    let answer = fleet
+        .permission(&job, &asked("Bash", "npm publish", "c2"))
+        .await;
+    let PermissionAnswer::Deny(words) = answer else {
+        panic!("taken back, so refused and held: {answer:?}");
+    };
+    assert!(words.contains("not granted `npm publish`"), "{words}");
+    assert!(matches!(
+        fleet.remove_allowed_command(&job, "npm publish").await,
+        Err(NotPermitted::NothingAllowed { .. })
+    ));
 }
 
 /// A person saying no is the call's answer, and it is a refusal the fold sees.

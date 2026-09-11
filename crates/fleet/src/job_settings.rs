@@ -42,7 +42,7 @@ where
             .lock()
             .await
             .set_model_override(job, model)
-            .map_err(|cause| NotPermitted::NotRecorded {
+            .map_err(|cause| NotPermitted::NotChanged {
                 cause: cause.to_string(),
             })?;
         match model {
@@ -63,6 +63,36 @@ where
                 .await
             }
         }
+        Ok(())
+    }
+
+    /// Take back a command a person allowed this Job. **Read by the next
+    /// permission question**, so nothing respawns, and that question answers
+    /// by the Job's setting again.
+    ///
+    /// Refused where nothing a person allowed is spelled `run`. **The allow
+    /// row only**: a command made permanent is declared in `armada.yml` on the
+    /// Job's branch, in a commit of its own, and stays there.
+    pub async fn remove_allowed_command(&self, job: &JobId, run: &str) -> Result<(), NotPermitted> {
+        let removed = self
+            .store()
+            .lock()
+            .await
+            .remove_allowed_command(job, run)
+            .map_err(|cause| NotPermitted::NotChanged {
+                cause: cause.to_string(),
+            })?;
+        if !removed {
+            return Err(NotPermitted::NothingAllowed {
+                run: run.to_string(),
+            });
+        }
+        self.noted_setting(
+            job,
+            "a person took back a command they allowed this job",
+            &[("command", run.to_string())],
+        )
+        .await;
         Ok(())
     }
 

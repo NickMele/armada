@@ -144,6 +144,29 @@ impl Store {
             })?;
         Ok(())
     }
+
+    /// Take back a person's allow of this command for this Job. `true` where
+    /// a row went, `false` where there was none — an id naming no Job too, for
+    /// [`allowed_commands`](Store::allowed_commands)' reason. The text must
+    /// match the allow exactly, since it is the key.
+    ///
+    /// **The row only.** A command a person also made permanent is declared in
+    /// `armada.yml` on the Job's branch, and nothing here reaches that file.
+    pub fn remove_allowed_command(
+        &mut self,
+        job_id: &JobId,
+        run: &str,
+    ) -> Result<bool, WriteError> {
+        let removed = self
+            .conn
+            .execute(
+                "DELETE FROM job_allowed_commands WHERE job_id = ?1 AND run = ?2",
+                (job_id.as_str(), run),
+            )
+            .map_err(fault("taking back a command a person allowed"))
+            .map_err(WriteError::Database)?;
+        Ok(removed > 0)
+    }
 }
 
 /// One row, with its two enums refused by name rather than defaulted.
