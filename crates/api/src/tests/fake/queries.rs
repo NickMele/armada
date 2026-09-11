@@ -222,6 +222,22 @@ impl Queries for FakeDaemon {
         self.runs_nothing(&job_id)
     }
 
+    /// **The fake holds no server**, so the list is empty and every id names
+    /// nothing. What holding one means is `fleet::servers`', tested there.
+    async fn list_servers(&self) -> Result<ipc::ServerList, Refusal> {
+        Ok(ipc::ServerList {
+            servers: Vec::new(),
+        })
+    }
+
+    async fn observe_server(&self, server_id: String) -> Result<crate::ObservedServer, Refusal> {
+        Err(Refusal::Unacceptable(ipc::WireError::raised(
+            "fleet.no_such_server",
+            format!("the fake daemon holds no server called `{server_id}`"),
+            run_id(),
+        )))
+    }
+
     /// **The same two refusals again**, and nothing here opens a file: what the
     /// route has to prove is that the bytes come back as themselves, under a
     /// media type read off the name, and that a name the record does not hold

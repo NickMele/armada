@@ -403,25 +403,6 @@ pub enum Renewed {
     LeftClosed { why: String },
 }
 
-/// What came of writing one comment onto a pull request.
-///
-/// **No `Result`**, for [`Renewed`]'s reason: the reply says what Armada has
-/// already done, so a forge that would not take it changes nothing about the
-/// Job — the Drone is already asked for and the branch is already the one the
-/// work lands on. What a caller does with either arm is write a line.
-///
-/// **Not posting is never silent.** A reviewer who left a comment and sees no
-/// answer concludes nothing happened, and the one thing worse than no reply is
-/// a reply nobody knows is missing. So the refusal carries its sentence and the
-/// caller logs it against the Job.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Replied {
-    /// The comment is on the pull request.
-    Posted,
-    /// The forge would not take it, and this is what it said.
-    NotPosted { why: String },
-}
-
 /// Where the repository every worktree is cut from stands, after a merge was
 /// noticed.
 ///
@@ -673,28 +654,6 @@ pub trait Delivery {
     /// [`landed`](Delivery::landed)'s reason — a Job's own worktree is
     /// reclaimed long before anybody merges its work.
     fn merge(&self, in_repo: &str, pull_request: &str) -> Result<Merged, NotMerged>;
-
-    /// Write one comment onto a pull request.
-    ///
-    /// **The second method here that writes into a repository nobody on this
-    /// machine holds**, and [`merge`](Delivery::merge) is the first. It changes
-    /// nothing anybody builds on, which is the whole of what makes it the
-    /// quieter of the two — but everybody watching the pull request is mailed
-    /// about it, so a caller that could send two sends one.
-    ///
-    /// **`saying` is assembled by the caller and every word of it is Armada's.**
-    /// Nothing a reviewer wrote is echoed back onto the forge except the login
-    /// and the timestamp a reply has to name to be useful, and the caller is
-    /// where those are made safe to render — see `fleet::remarks`.
-    ///
-    /// **One reply per press, never one per comment.** A reply per comment
-    /// turns a review thread into a conversation with a daemon; what a reviewer
-    /// needs is one answer saying what was taken up and what was not. That rule
-    /// lives with the caller, because nothing here could enforce it.
-    ///
-    /// `in_repo` is the repository every worktree was cut from, for
-    /// [`landed`](Delivery::landed)'s reason.
-    fn replied(&self, in_repo: &str, pull_request: &str, saying: &str) -> Replied;
 
     /// Make the forge compare a pull request against the commit its branch
     /// actually sits on.

@@ -58,7 +58,7 @@ import type { JobSummary } from "@armada/protocol";
 import type { Work } from "@armada/protocol";
 import {
   CHANGED_NOTHING,
-  CONFIRM_MERGE,
+  confirmMerge,
   CONFIRM_REJECT,
   diffNote,
   drawn,
@@ -66,6 +66,7 @@ import {
   whyNoDiff,
   whyNoRemarks,
 } from "./review";
+import { hostLabel } from "./facts";
 
 /**
  * Ask main for one Job's evidence and one Job's diff, or drop both.
@@ -191,12 +192,27 @@ export function Decide({
   const off = stale || deciding;
   const why = stale ? NOT_LIVE : deciding ? IN_FLIGHT : undefined;
 
+  // **Read off the same address the merge control's own presence is decided
+  // from.** `pullRequest` is undefined exactly where `onMerge` is absent below,
+  // so `merge` is never drawn from where `pullRequest ?? ""` stands in for it —
+  // the fallback only keeps the dialog's props typed while it cannot open.
+  const host = pullRequest === undefined ? undefined : hostLabel(pullRequest);
+  const merge = confirmMerge(pullRequest ?? "");
+
   return (
     <>
       <ReviewDecision
         note={note}
         onNote={setNote}
-        {...(pullRequest === undefined ? {} : { onMerge: () => setAsking("merge") })}
+        {...(pullRequest === undefined
+          ? {}
+          : {
+              onMerge: () => setAsking("merge"),
+              mergeNote:
+                `Merges the pull request on ${host}, then takes the work. Armada runs the ` +
+                `repository's after-merge checks against what landed; merging it on ${host} ` +
+                "yourself skips them.",
+            })}
         onApprove={() => onApprove(job.id)}
         onRequestChanges={() => onRequestChanges(job.id, note)}
         onReject={() => setAsking("reject")}
@@ -216,7 +232,7 @@ export function Decide({
       <Dialog
         open={asking === "merge"}
         tone="neutral"
-        title={CONFIRM_MERGE.title}
+        title={merge.title}
         confirmLabel="Merge and take the work"
         onCancel={() => setAsking(null)}
         onConfirm={() => {
@@ -224,7 +240,7 @@ export function Decide({
           onMerge(job.id);
         }}
       >
-        {CONFIRM_MERGE.body}
+        {merge.body}
       </Dialog>
 
       {/* The one act on this surface that ends something. Cancel holds initial
@@ -258,6 +274,7 @@ export function Decide({
           comments={mineRemarks(remarks, job.id) ?? []}
           onTakeUp={(ids) => onTakeUpRemarks(job.id, ids)}
           onOpenLink={(remarkId) => onOpenRemarkLink(job.id, remarkId)}
+          {...(host === undefined ? {} : { hostLabel: host })}
           disabled={off}
           {...(why === undefined ? {} : { disabledNote: why })}
         />

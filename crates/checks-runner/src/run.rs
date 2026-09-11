@@ -363,7 +363,7 @@ pub(crate) fn not_started(error: std::io::Error, program: String, worktree: &Pat
 }
 
 /// A code, or the signal that meant there was none.
-fn ended(status: &std::process::ExitStatus) -> Exit {
+pub(crate) fn ended(status: &std::process::ExitStatus) -> Exit {
     use std::os::unix::process::ExitStatusExt;
     match status.code() {
         Some(code) => Exit::Code(code),

@@ -27,7 +27,7 @@ use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{PermissionAnswer, Tools};
 use ipc::mcp::{
     AskQuestion, CheckReport, DeclareScope, DispatchJob, NotRecorded, PermissionAsked, Receipt,
-    RequestScope, SubmitEvidence,
+    RequestScope, ServerReport, SubmitEvidence,
 };
 
 use crate::daemon::Fleet;
@@ -182,5 +182,25 @@ where
             }),
             Err(why) => Err(why.into()),
         }
+    }
+
+    /// The Drone asking for a server the Manifest declares. Which instance,
+    /// on which port, and how long to wait for `ready` are all
+    /// `Fleet::server_for_drone`'s — see `crate::servers`. **What comes back is
+    /// where it stands**, even where it fell over: that is the answer asked for.
+    async fn start_server(
+        self: std::sync::Arc<Self>,
+        caller: api::Caller,
+        name: String,
+    ) -> Result<ServerReport, NotRecorded> {
+        let job = self.placed(&caller)?;
+        let record = self.load(&job).await.map_err(|why| NotRecorded {
+            because: why.to_string(),
+        })?;
+        Fleet::server_for_drone(std::sync::Arc::clone(&self), record, &name)
+            .await
+            .map_err(|why| NotRecorded {
+                because: why.to_string(),
+            })
     }
 }

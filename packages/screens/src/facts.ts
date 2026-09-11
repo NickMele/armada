@@ -146,6 +146,28 @@ export function pullRequestNumber(address: string): string | null {
 }
 
 /**
+ * What a person calls the code host a pull request's address names — its
+ * domain, read off the address itself.
+ *
+ * **Never a friendly name this file invents for one vendor over another.**
+ * `xtask/src/rules.rs`'s `no_vendor_literal_outside_adapters` holds the line
+ * that only `crates/adapters` gets to know whose API Armada is talking to —
+ * a vendor's name anywhere else, string or comment, is that boundary having
+ * leaked — and Bridge does not get to cross it just because most pull
+ * requests today happen to be on the same host. The domain a real address
+ * names is not a name this file chose; it is Fleet's own record, read back.
+ * Where the address does not even parse, the fallback names what it is
+ * without pretending to know where.
+ */
+export function hostLabel(address: string): string {
+  try {
+    return new URL(address).hostname;
+  } catch {
+    return "the pull request's host";
+  }
+}
+
+/**
  * What became of that pull request — continuing the fact that names it, where
  * there is one to continue.
  *

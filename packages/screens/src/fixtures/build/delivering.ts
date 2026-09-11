@@ -44,8 +44,8 @@ import {
   workflow,
 } from "./base";
 
-/** The forge address this Job's branch went out on. Same style as `terminal.ts`'s. */
-const PULL_REQUEST = "https://forge.example/armada/settings/pull/512";
+/** The pull request address this Job's branch went out on. Same style as `terminal.ts`'s. */
+const PULL_REQUEST = "https://git.example/armada/settings/pull/512";
 
 /**
  * What people wrote on this Job's own pull request. `Decide.tsx` draws this

@@ -133,6 +133,7 @@ async fn the_tool_list_carries_every_tool_and_only_one_that_reports() {
         "declare_scope",
         "request_scope",
         "run_checks",
+        "start_server",
         "dispatch_job",
         "ask_question",
         "permission",
@@ -144,15 +145,15 @@ async fn the_tool_list_carries_every_tool_and_only_one_that_reports() {
     }
     // **Only one of them reports**, which is what the count is about — a Drone
     // choosing between reporting-shaped tools is spike 6's one miss, and none
-    // of a declaration, a scope request, a dry run, a dispatch and a question
-    // is a report. `permission` is not even the Drone's: the harness calls it,
+    // of a declaration, a scope request, a dry run, a server, a dispatch and a
+    // question is a report. `permission` is not even the Drone's: the harness calls it,
     // and the model is never shown it — spike 15.
     //
     // The count is of the top-level key, one per tool. `ask_question`'s schema
     // nests an object for its options and `dispatch_job`'s nests one for its
     // edges; neither adds an `inputSchema`, because the nested shapes are
     // `items` and `properties`.
-    assert_eq!(answered.body.matches("\"inputSchema\"").count(), 7);
+    assert_eq!(answered.body.matches("\"inputSchema\"").count(), 8);
     assert_eq!(
         answered
             .body

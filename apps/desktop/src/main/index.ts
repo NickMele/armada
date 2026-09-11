@@ -12,6 +12,7 @@ import type { Artifact, CommandAnswer, WhenBlocked } from "@armada/protocol";
 import { FleetConnection } from "./connection";
 import { openArtifact } from "./open";
 import { openPullRequest, openRemarkLink } from "./forge";
+import { RemarksPoll } from "./remarks-poll";
 import { Attention } from "./telling";
 
 // Bridge's window, and the one connection under it.
@@ -86,6 +87,13 @@ async function stageAttachment(
 
 let connection: FleetConnection | null = null;
 
+/** Whether any window is on screen and not minimized. A closed one is neither. */
+function anyWindowShown(): boolean {
+  return BrowserWindow.getAllWindows().some(
+    (window) => !window.isDestroyed() && window.isVisible() && !window.isMinimized(),
+  );
+}
+
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
     width: 1280,
@@ -103,6 +111,17 @@ function createWindow(): BrowserWindow {
   });
 
   window.on("ready-to-show", () => window.show());
+
+  // The on-screen comments poll, #667: backgrounded or minimized stops the
+  // 20 s timer, and any of these bringing a window back on screen resumes it.
+  // `closed` is here rather than left to `window-all-closed`, because on
+  // macOS the app and the connection both outlive a closed window.
+  const tellVisibility = (): void => remarksPoll.shown(anyWindowShown());
+  window.on("show", tellVisibility);
+  window.on("hide", tellVisibility);
+  window.on("minimize", tellVisibility);
+  window.on("restore", tellVisibility);
+  window.on("closed", tellVisibility);
 
   // **This window goes nowhere.** It loads one file and stays on it for the
   // life of the process, so every navigation and every new window is refused
@@ -141,6 +160,20 @@ function createWindow(): BrowserWindow {
  * is five round trips to Fleet, which is the wrong price for a click on a path.
  */
 let published: BridgeState = NOTHING_YET;
+
+/**
+ * The comments timer for whichever Job's review panel is on screen. #667.
+ *
+ * **Reads the port off `published` rather than holding one**, `review.ts`'s
+ * reason for taking a port on every call rather than keeping it: this is
+ * built once, long before a connection exists to read it from. `again` is
+ * `ReviewMaterial.remarksChanged`, the route `job.remarks_changed` already
+ * calls, so the sweep and this timer refresh the same way.
+ */
+const remarksPoll = new RemarksPoll({
+  port: () => (published.connection.state === "connected" ? published.connection.fleet.port : null),
+  again: (port, jobId) => connection?.material.remarksChanged(port, jobId) ?? Promise.resolve(),
+});
 
 /** Every window sees the same state, because there is one connection behind it. */
 function publish(state: BridgeState): void {
@@ -408,9 +441,12 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.readDiff, (_event, jobId: string | null) =>
     connection?.readDiff(jobId),
   );
-  ipcMain.handle(CHANNELS.readRemarks, (_event, jobId: string | null) =>
-    connection?.readRemarks(jobId),
-  );
+  // The panel's own 20 s timer, #667 — same Job as the read this triggers,
+  // so the two can never end up watching different pull requests.
+  ipcMain.handle(CHANNELS.readRemarks, (_event, jobId: string | null) => {
+    remarksPoll.watch(jobId);
+    return connection?.readRemarks(jobId);
+  });
   // The rest of one cut row, fetched by the person who opened it. Its own
   // channel and not part of `observeJob`: the socket is bounded on purpose, and
   // an argument big enough to need this is the payload that would evict the

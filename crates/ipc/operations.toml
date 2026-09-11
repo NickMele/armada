@@ -477,6 +477,19 @@ Not `/events`, which carries only `run.finished`: output is the fastest thing a 
 `helm_access` is `No` for `observe_check_output`'s reason.
 """
 
+[operations.observe_server]
+kind = "query"
+transport = "WebSocket"
+helm_access = "No"
+description = "One server's output — what its log holds, then what it prints next — on a socket of its own"
+notes = """
+**`observe_run`'s shape, one subject over**: the subscription first, then the log as history, then live lines; `missed` with a count where a viewer fell behind, and `closed` once the server has ended. A server that has ended opens too, with its whole log — which is how one that fell over is read.
+
+Not `/events`, which carries only a server's three lifecycle facts, for `observe_run`'s reason.
+
+`helm_access` is `No` for `observe_check_output`'s reason.
+"""
+
 [operations.answer_command]
 kind = "command"
 transport = "HTTP"
@@ -500,13 +513,45 @@ It replaces `approve_command`, a placeholder row for confirm-before-destructive 
 kind = "command"
 transport = "HTTP"
 helm_access = "No"
-description = "Whether one Job asks a person about a command it was not given, or refuses it and holds"
+description = "Whether one Job asks a person about a command it was not given, refuses it and holds, or runs it"
 notes = """
 A live setting on one Job. The next permission question the Job's Drone raises reads it, and no Drone is respawned for it.
 
-The body is `when_blocked`: `refuse_and_hold` or `ask_me`. A new Job starts at `refuse_and_hold`, because that asks nobody to be watching; `ask_me` holds a Drone inside the call until somebody answers. `JobDetail.when_blocked` reads it back, and is absent from a Fleet older than 10.6.
+The body is `when_blocked`: `refuse_and_hold`, `ask_me` or `allow_all`. A new Job starts at `refuse_and_hold`, because that asks nobody to be watching; `ask_me` holds a Drone inside the call until somebody answers. `JobDetail.when_blocked` reads it back, and is absent from a Fleet older than 10.6.
+
+**`allow_all` runs every command without asking, except two**: one `armada.yml` declares destructive and one the harness cannot grant — a push. Those still stop for a person, so no setting on this route lets a Job push or run a destructive command unseen. It arrived at 11.0 and was a major bump, because Bridge matches on this set to choose which control to draw.
 
 `helm_access` is `No`, for `answer_command`'s reason: whether a Drone is held waiting on the owner is the owner's to decide.
+"""
+
+[operations.set_model]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Choose the model one Job's later steps run on, or clear the choice"
+notes = """
+A live setting on one Job, like `set_when_blocked`, and the answer is the Job's summary. **The next step's spawn reads it; the step running now keeps its model.** Nothing is respawned for it, so a Drone mid-step is never cut off to pick up a model.
+
+The body is `model`: a name `list_models` offers, or `null` to clear the choice so each later step runs on the model its workflow gives it. `null` is sent rather than implied — a body with no `model` key is refused, because a Bridge that dropped the field would otherwise throw a person's choice away and answer 200. `JobDetail.model_override` reads the choice back, and is absent where there is none.
+
+Refused with a 409 on a model `list_models` does not offer. The picker and the route answer from the same list, so a name only a stale window still shows is told rather than spawned.
+
+`helm_access` is `No`: which model spends a Job's budget is the owner's to decide, and a Helm that could move it could move it past what the owner priced the Job at.
+"""
+
+[operations.remove_allowed_command]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Take back a command a person allowed for one Job"
+notes = """
+The body is `run`, the command exactly as `JobDetail.allowed_commands` lists it, and the answer is the Job's summary. **The next reach for it is answered by the Job's `when_blocked` again.**
+
+**An always-allow already written into `armada.yml` stays in `armada.yml`.** A `repository` allow was two things — the row on this Job and a commit on its branch — and this takes back the row. The line in the file is an edit to `armada.yml`, not an act on a Job.
+
+Refused with a 409 where the Job holds no such allow, so a window left open across a removal is told rather than answered 200.
+
+`helm_access` is `No`, for `answer_command`'s reason: what a Drone may run is the owner's to decide.
 """
 
 [operations.approve_dispatch]
@@ -905,7 +950,7 @@ Refused on a Job that is not at `awaiting_review`. `awaiting_approval -> rejecte
 kind = "command"
 transport = "HTTP"
 helm_access = "No"
-description = "The comments a person picked off the pull request reach a Drone, and one reply on the pull request says which"
+description = "The comments a person picked off the pull request reach a Drone. Nothing is written back onto the pull request"
 notes = """
 **A second entrance onto the note road, not a second road.** What it does to the Job is `request_changes`, called rather than restated: the words go onto the record as `redirect_waiting`, the Job takes `awaiting_review -> queued`, and the Drone re-admission puts back on the same step opens with them. The block a Drone reads is `crossing::Redirected` either way. What is different is only where the words came from.
 
@@ -917,9 +962,7 @@ notes = """
 
 **A chosen set that would not fit the room an opening brief leaves free is refused before anything moves.** `docs/spikes/014-how-much-room-does-a-brief-leave-for-comments.md` measures that room and the bound it justifies — on the whole rendered set, never on one comment, because five medium comments are the same problem as one long one. Nothing is truncated: `fleet::remarks::quoted` still writes whatever it is given, whole. What a person gets back is which of the comments to drop to fit, largest first.
 
-**One reply on the pull request, and never one per comment.** A reply per comment turns a review thread into a conversation with a daemon. What a reviewer needs is one answer naming what was taken up and what was not, which is what this writes — after the Job has moved, so the reply says what happened rather than what was about to. It is the second thing Armada writes into a repository it does not own; the first is `merge_pull_request`.
-
-**Nothing about a comment's text reaches the forge.** The reply names logins and timestamps and quotes no body: a reviewer can already read what they wrote, and echoing it back would put somebody else's words through a second write. The two fields it does name are made safe to render at the point of use — `fleet::remarks`.
+**Nothing is written back onto the pull request.** Armada's own record — `job_remarks_taken_up` — is what tells a comment already handed to a Drone apart from one nobody has touched; the forge never hears about a press.
 
 `helm_access` is `No`, because Helm access on a command is the Intervention Ladder rung and this has none.
 """
@@ -1211,6 +1254,43 @@ notes = """
 Refused while a Drone is working in the tree, while a run is in flight, on a run already undone or with no snapshot, and where a path the run changed has moved since — writing the older version over it would take somebody's later work.
 """
 
+# Servers: a Command with `serve`, held by Fleet — `docs/concepts/fleet.md`,
+# *Servers*. `observe_server` is with the sockets and the three `server.*`
+# kinds with the events.
+
+[operations.list_servers]
+kind = "query"
+transport = "HTTP"
+helm_access = "No"
+description = "Every server Fleet holds — each Job's and the main checkout's — and the last instance of each that ended"
+notes = """
+**In Fleet's memory and nowhere else.** A server is true only while the process holding it lives, so there is no table: a Fleet that restarts holds none, having stopped every one it held on the way out — or, after a crash, ended what it left behind when it next starts. The last instance of each that ended is kept beside the live ones, so a server that fell over is still there to read — with its exit code and its log — until it is started again or its Job ends.
+
+`helm_access` is `No`: the reader is a person at the run sheet or *Where things are*.
+"""
+
+[operations.start_server]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Start a server the Manifest declares, for a Job or for the main checkout — or be handed the one already running"
+notes = """
+**A name, never a command line and never a port.** What runs is the Manifest's `run` then `serve`, with `${port.NAME}` resolved from the span it runs under: the Job's, or the main checkout's where the body names no Job. `serve` starts only if `run` exits zero, and the instance is `serving` once `ready` exits zero — polled, never a duration — or at once where there is no `ready`.
+
+**One instance per Job per server.** A second request, from a person or through a Drone's `start_server` tool, is answered with the instance already starting or serving rather than a second one on the same port.
+
+It answers at once, `starting`; `server.serving` and `server.exited` follow on `/events`, and the output is `observe_server`'s. Refused where the name declares no server, where the Job's worktree is gone or the Job has ended.
+"""
+
+[operations.stop_server]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "End a server's process group; its log keeps what printed"
+notes = """
+Answers with the instance once it has ended. A Job's servers are also stopped when the Job ends, before its span is released, and every server is stopped when Fleet stops. Refused on an id that names no running server.
+"""
+
 [operations.restart_fleet]
 kind = "command"
 transport = "HTTP"
@@ -1441,6 +1521,33 @@ helm_access = "Bridge only"
 description = "A person's run ended: its record, with exit code, duration and what it changed"
 notes = """
 Carries the whole `RunRecord` — the row `list_runs` answers — so the sheet draws the result and the changed files without a read. Published after the record is written, so a reader that re-reads on it finds the run in the history.
+"""
+
+[operations."server.starting"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "A server was started, for a Job or for the main checkout: its `run` is going, or `serve` is up and `ready` has not passed"
+notes = """
+Carries the whole `ServerState` — the row `list_servers` answers — in each of the three `server.*` kinds, so a row is replaced rather than patched. **Lifecycle facts only**: a server's output is `observe_server`'s and never this stream's.
+"""
+
+[operations."server.serving"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "A server's `ready` passed, or it started with no `ready` to wait for: its links are live"
+notes = """
+`serving_since` is what uptime counts from; nothing ticks on the wire.
+"""
+
+[operations."server.exited"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "A server ended: stopped by a person, its Job or Fleet — or on its own, which is a failure whatever its code"
+notes = """
+`stopped: false` is a server that fell over, with its exit code and a sentence; its log stays readable on `observe_server`. A Job's servers publish this before the Job's own terminal `job.state_changed`, because they are torn down before its span is released.
 """
 
 [operations."review.ready"]

@@ -48,6 +48,7 @@ pub(super) fn preparation(
     value: &Value,
     declares: &BTreeSet<String>,
     commands: &BTreeMap<String, Command>,
+    serves: &BTreeSet<String>,
     out: &mut Vec<Refusal>,
 ) -> Vec<Preparation> {
     let Some(mut table) = Table::open("setup", value, out) else {
@@ -62,7 +63,7 @@ pub(super) fn preparation(
     let Some(items) = items else {
         return Vec::new();
     };
-    named_commands(texts(items, out), declares, commands, out)
+    named_commands(texts(items, out), declares, commands, serves, out)
         .into_iter()
         .map(|(name, run)| Preparation { name, run })
         .collect()
@@ -163,13 +164,14 @@ pub(super) fn required_by(
     drafted: BTreeMap<String, DraftCheck>,
     declares: &BTreeSet<String>,
     commands: &BTreeMap<String, Command>,
+    serves: &BTreeSet<String>,
     out: &mut Vec<Refusal>,
 ) -> BTreeMap<String, Check> {
     let mut built = BTreeMap::new();
     for (name, draft) in drafted {
         let requires = draft
             .requires
-            .map(|items| named_commands(items, declares, commands, out))
+            .map(|items| named_commands(items, declares, commands, serves, out))
             .unwrap_or_default()
             .into_iter()
             .map(|(name, run)| Prerequisite::resolved(name, run))
@@ -203,6 +205,7 @@ fn named_commands(
     items: Vec<(String, String)>,
     declares: &BTreeSet<String>,
     commands: &BTreeMap<String, Command>,
+    serves: &BTreeSet<String>,
     out: &mut Vec<Refusal>,
 ) -> Vec<(String, String)> {
     let mut built: Vec<(String, String)> = Vec::with_capacity(items.len());
@@ -223,6 +226,10 @@ fn named_commands(
                 Fault::RequiresSomethingDestructive { value: name },
             )),
             Some(command) => built.push((name, command.run().to_string())),
+            // A server never exits, so whatever waits on it first waits forever.
+            None if serves.contains(&name) => {
+                out.push(Refusal::new(key, Fault::RequiresAServer { value: name }))
+            }
             None => out.push(Refusal::new(
                 key,
                 Fault::NotADeclaredCommand {

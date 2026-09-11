@@ -18,7 +18,7 @@ use std::future::Future;
 use crate::mcp::Caller;
 use ipc::mcp::{
     AskQuestion, CheckReport, DeclareScope, DispatchJob, NotRecorded, PermissionAsked, Receipt,
-    RequestScope, SubmitEvidence,
+    RequestScope, ServerReport, SubmitEvidence,
 };
 
 /// Whether a call outside a Drone's toolbelt may run.
@@ -214,4 +214,23 @@ pub trait Tools: Send + Sync + 'static {
         caller: Caller,
         dispatch: DispatchJob,
     ) -> impl Future<Output = Result<Receipt, NotRecorded>> + Send;
+
+    /// `start_server` — the working Drone asks for a server the Manifest
+    /// declares, and is told where it is.
+    ///
+    /// **The only way a Drone gets one**, because Fleet has to know a server is
+    /// running to hand it to the next Drone and to stop it with the Job. The
+    /// Drone names the server and never a port or a Job: the port is
+    /// `${port.NAME}` from its Job's span, and the Job is [`Caller`]'s.
+    ///
+    /// **One per Job**: a second Drone asking gets the first one's instance.
+    /// By `Arc`, for [`Commands::start_server`]'s reason, and it waits a
+    /// bounded while for `ready` so the answer can carry a live address.
+    ///
+    /// [`Commands::start_server`]: crate::Commands::start_server
+    fn start_server(
+        self: std::sync::Arc<Self>,
+        caller: Caller,
+        name: String,
+    ) -> impl Future<Output = Result<ServerReport, NotRecorded>> + Send;
 }

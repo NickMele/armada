@@ -87,21 +87,31 @@ export const PullRequestOpen: Story = {
   args: {
     ...AtAGate.args,
     pullRequest: (
-      <div className="flex flex-col gap-2">
-        <p className="text-xs text-fg-muted">
-          <GitPullRequest size={12} strokeWidth={2} aria-hidden className="inline" />{" "}
-          <span className="mono">#4711</span> · Declare capacity.rs and gate the next undeclared
-          test file — open, mergeable, no reviews yet.
-        </p>
-        <p className="text-2xs text-fg-subtle">
-          Read it there — this page says what Armada knows that the pull request's own page does
-          not.
-        </p>
-      </div>
+      <p className="text-xs text-fg-muted">
+        <span className="armada-verdict__pr-ref">
+          <GitPullRequest size={12} strokeWidth={2} aria-hidden />
+          <a
+            href="https://git.example/armada/armada/pull/4711"
+            title="https://git.example/armada/armada/pull/4711"
+            className="mono armada-verdict__pr-link"
+            onClick={(event) => event.preventDefault()}
+          >
+            #4711
+          </a>
+        </span>{" "}
+        · Declare capacity.rs and gate the next undeclared test file, open, mergeable, no reviews
+        yet.
+      </p>
     ),
-    note:
-      "This repository sets auto_merge: never. Merging here is Fleet acting on your press, and " +
-      "it runs the after-merge Checks. Merging on the forge does not.",
+    note: (
+      <>
+        <strong>Merge and take the work</strong> merges this pull request on git.example, then
+        runs the repository&rsquo;s after-merge Checks on what landed.{" "}
+        <strong>Approve the work</strong> takes it without merging — the pull request stays open.{" "}
+        <strong>Request changes</strong> sends your note to the Drone, which keeps working on this
+        same branch.
+      </>
+    ),
     actions: (
       <>
         <ReviewDecision
@@ -170,7 +180,7 @@ export const GateWithoutAPullRequest: Story = {
       { label: "Steps", value: "1 of 2 passed", mono: true },
       { label: "Pull request", value: "never, for this workflow", mono: true },
     ],
-    note: "Approving ends the Job here. Nothing is merged, and nothing waits on a forge.",
+    note: "Approving ends the Job here. Nothing is merged, and no pull request is waiting on it.",
     actions: (
       <ReviewDecision
         note=""

@@ -44,6 +44,7 @@ use crate::queries::{
 use crate::rehearsing::{
     get_run_output, get_run_sheet, list_runs, observe_run, start_run, stop_run, undo_run,
 };
+use crate::servers::{list_servers, observe_server, start_server, stop_server};
 use crate::sockets::{events, job_log, observe_check_output, observe_job};
 use crate::stream::Broadcaster;
 
@@ -321,6 +322,25 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/jobs/:job_id/undo_run",
     },
+    // Servers: a Command that stays running. Not under `/jobs` because one
+    // started with no Job belongs to none; the start and stop are segments of
+    // the collection, `stop_proposal`'s shape, since an instance's id is all a
+    // stop needs.
+    Route {
+        operation: "list_servers",
+        method: "GET",
+        path: "/servers",
+    },
+    Route {
+        operation: "start_server",
+        method: "POST",
+        path: "/servers/start",
+    },
+    Route {
+        operation: "stop_server",
+        method: "POST",
+        path: "/servers/stop",
+    },
     // The one act on this table that changes what a Job may spend, and its own
     // route because nothing else on the Job is a number a person sets. It is
     // not a field on some general update: there is no general update, and the
@@ -452,6 +472,12 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/jobs/:job_id/runs/:run_id/observe",
     },
+    // One server's output, as it prints — `observe_run`'s shape per instance.
+    Route {
+        operation: "observe_server",
+        method: "GET",
+        path: "/servers/:server_id/observe",
+    },
     // Every event kind is served on the one socket, and every one is named:
     // `SERVED` is what a rule compares to the inventory, so a kind published
     // and not listed here is a kind no rule can see. The rule also compares
@@ -544,6 +570,22 @@ pub const SERVED: &[Route] = &[
     // run prints is `observe_run`'s, never this stream's.
     Route {
         operation: "run.finished",
+        method: "GET",
+        path: "/events",
+    },
+    // A server's three lifecycle facts. Its output is `observe_server`'s.
+    Route {
+        operation: "server.starting",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "server.serving",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "server.exited",
         method: "GET",
         path: "/events",
     },
@@ -693,6 +735,10 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/:job_id/start_run", post(start_run::<D>))
         .route("/jobs/:job_id/stop_run", post(stop_run::<D>))
         .route("/jobs/:job_id/undo_run", post(undo_run::<D>))
+        .route("/servers", get(list_servers::<D>))
+        .route("/servers/start", post(start_server::<D>))
+        .route("/servers/stop", post(stop_server::<D>))
+        .route("/servers/:server_id/observe", get(observe_server::<D>))
         .route(
             "/jobs/:job_id/approve_dispatch",
             post(approve_dispatch::<D>),

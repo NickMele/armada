@@ -29,6 +29,7 @@ use serde_json::{json, Map, Value};
 use super::ask::{ASK_FIELDS, ASK_TOOL, FEWEST_OPTIONS, MOST_OPTIONS};
 use super::dispatch::{DISPATCH_FIELDS, DISPATCH_TOOL};
 use super::permission::{PERMISSION_FIELDS, PERMISSION_TOOL};
+use super::serving::{SERVER_FIELDS, SERVER_TOOL};
 use super::widening::{WIDEN_FIELDS, WIDEN_TOOL};
 
 /// The Evidence tool's own name, bare. The client joins it to the server name
@@ -169,7 +170,7 @@ impl core::fmt::Display for NotAnArgument {
                 out,
                 "there is no tool called `{named}`. The tools are `{TOOL}`, \
                  `{SCOPE_TOOL}`, `{WIDEN_TOOL}`, `{CHECKS_TOOL}`, \
-                 `{DISPATCH_TOOL}` and `{ASK_TOOL}`"
+                 `{SERVER_TOOL}`, `{DISPATCH_TOOL}` and `{ASK_TOOL}`"
             ),
             NotAnArgument::NoArguments { tool, takes } => write!(
                 out,
@@ -229,6 +230,15 @@ impl core::fmt::Display for NotAnArgument {
                  which files each one reads is Fleet's reading of your \
                  worktree — pass `only_what_changed: true` to have them \
                  narrowed to what you have changed"
+            ),
+            // The field a Drone is likeliest to invent here is a port, and the
+            // answer is that nobody on this call chooses one.
+            NotAnArgument::NotAField { named, tool, .. } if *tool == SERVER_TOOL => write!(
+                out,
+                "`{named}` is not a field of `{tool}`, which takes `name` and \
+                 nothing else. The server runs on the port the project's \
+                 armada.yml names for it in your task's own range — neither you \
+                 nor this call picks one"
             ),
             NotAnArgument::NotAField { named, tool, takes } => write!(
                 out,
@@ -387,6 +397,7 @@ pub(crate) fn named(name: &str) -> Result<&'static str, NotAnArgument> {
         SCOPE_TOOL => Ok(SCOPE_TOOL),
         WIDEN_TOOL => Ok(WIDEN_TOOL),
         CHECKS_TOOL => Ok(CHECKS_TOOL),
+        SERVER_TOOL => Ok(SERVER_TOOL),
         DISPATCH_TOOL => Ok(DISPATCH_TOOL),
         ASK_TOOL => Ok(ASK_TOOL),
         PERMISSION_TOOL => Ok(PERMISSION_TOOL),
@@ -420,6 +431,10 @@ pub(crate) fn argumentless(tool: &'static str) -> NotAnArgument {
         DISPATCH_TOOL => NotAnArgument::NoArguments {
             tool: DISPATCH_TOOL,
             takes: DISPATCH_FIELDS,
+        },
+        SERVER_TOOL => NotAnArgument::NoArguments {
+            tool: SERVER_TOOL,
+            takes: SERVER_FIELDS,
         },
         PERMISSION_TOOL => NotAnArgument::NoArguments {
             tool: PERMISSION_TOOL,
@@ -475,6 +490,7 @@ pub(crate) fn listed() -> Vec<Value> {
         evidence_tool(),
         scope_tool(),
         checks_tool(),
+        super::serving::server_tool(),
         super::widening::widen_tool(),
         super::dispatch::dispatch_tool(),
         super::ask::ask_tool(),

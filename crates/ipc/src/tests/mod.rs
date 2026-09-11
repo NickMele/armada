@@ -39,6 +39,7 @@ mod rehearsal;
 mod reports;
 /// What a reviewing person is handed, and the note they send back.
 mod reviewing;
+mod servers;
 /// The Board row, and the redaction it exists for.
 mod summaries;
 mod turns;

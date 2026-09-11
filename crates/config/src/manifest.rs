@@ -2,13 +2,13 @@
 //!
 //! **These keys, and nothing else.** `version`, `id`, `base`; `run`,
 //! `expect_exit_code`, `when`, `requires` and `narrow` under `checks.<name>`;
-//! `run` and `destructive` under `commands.<name>`; `container` and `env`
-//! under `ports.<name>`, a fourth registry; `setup.requires`; the three keys
-//! [`drone`] reads, the one section here that is a dial rather than a
-//! registry; and the two policies a `manifest_rule:<key>` gate names,
-//! `auto_merge` and `review_gate`. Every other section the concept page
-//! describes is refused: permissions, secrets, skills, budget, dispatch
-//! freeze.
+//! `run`, `destructive`, `serve`, `ready` and `links` under `commands.<name>`;
+//! `container` and `env` under `ports.<name>`, a fourth registry;
+//! `setup.requires`; the three keys [`drone`] reads, the one section here that
+//! is a dial rather than a registry; and the two policies a
+//! `manifest_rule:<key>` gate names, `auto_merge` and `review_gate`. Every
+//! other section the concept page describes is refused: permissions, secrets,
+//! skills, budget, dispatch freeze.
 //!
 //! **A key nothing reads is worse than a key that is not there.** A `budget:
 //! 40` nothing consumes reads as a budget that is set, and refusing it keeps
@@ -21,19 +21,22 @@
 //! the workflow step. **Both `requires` keys name Commands this file declares
 //! and share every refusal** — [`named_commands`]; `setup`'s code word is
 //! *preparation*, because `armada::setup` runs nothing and means something
-//! else, and one word over two meanings is a second vocabulary. The three
-//! values this file produces live in [`declared`].
+//! else, and one word over two meanings is a second vocabulary. The values
+//! this file produces live in [`declared`], and a server in [`serving`].
 
 mod declared;
 mod declaring;
 mod harness;
 mod referring;
+mod serving;
 
 use referring::{after_merge, preparation, required_by};
+use serving::CommandEntry;
 
 pub use declared::{Check, Command, Port, Preparation};
 pub use declaring::{Declared, NotDeclared};
 pub use harness::Harness;
+pub use serving::{Link, Server};
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -73,7 +76,7 @@ const CHECK_KEYS: &[&str] = &["run", "expect_exit_code", "when", "requires", "na
 /// The keys M1 reads inside `checks.<name>.narrow`.
 const NARROW_KEYS: &[&str] = &["run", "each", "from", "under", "except"];
 /// The keys M1 reads inside `commands.<name>`.
-const COMMAND_KEYS: &[&str] = &["run", "destructive"];
+const COMMAND_KEYS: &[&str] = &["run", "destructive", "serve", "ready", "links"];
 /// The keys M1 reads inside `ports.<name>`.
 const PORT_KEYS: &[&str] = &["container", "env"];
 /// The keys M1 reads inside `setup`.
@@ -110,6 +113,9 @@ pub struct Manifest {
     /// which is the whole reason both exist.
     checks_as_written: Vec<String>,
     commands: BTreeMap<String, Command>,
+    /// The Commands declaring `serve`, apart from `commands` so nothing that
+    /// waits on a Command can be handed one — see [`serving`].
+    servers: BTreeMap<String, Server>,
     /// The fourth registry. **Shares no namespace check with Checks or
     /// Commands** — nothing in the concept page says a port name may not
     /// repeat one, and `${port.NAME}` is its own vocabulary in a Command
@@ -250,6 +256,18 @@ impl Manifest {
     /// Every declared Command name, sorted.
     pub fn command_names(&self) -> Vec<String> {
         self.commands.keys().cloned().collect()
+    }
+
+    /// A Command declaring `serve`, by name, or [`None`]. **Never answered by
+    /// [`command`](Manifest::command)**, which is what keeps a server out of
+    /// every reader that waits for a Command to exit.
+    pub fn server(&self, name: &str) -> Option<&Server> {
+        self.servers.get(name)
+    }
+
+    /// Every Command declaring `serve`, sorted.
+    pub fn server_names(&self) -> Vec<String> {
+        self.servers.keys().cloned().collect()
     }
 
     /// A declared port by name, or [`None`]. Fleet's claim-time lookup for
@@ -417,10 +435,18 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         Some(value) => registry(value, "checks", CHECK_KEYS, out, check_entry),
         None => (BTreeMap::new(), Vec::new()),
     };
-    let (commands, _) = match top.optional("commands") {
-        Some(value) => registry(value, "commands", COMMAND_KEYS, out, command_entry),
+    let (entries, _) = match top.optional("commands") {
+        Some(value) => registry(value, "commands", COMMAND_KEYS, out, serving::entry),
         None => (BTreeMap::new(), Vec::new()),
     };
+    let (mut commands, mut servers) = (BTreeMap::new(), BTreeMap::new());
+    for (name, entry) in entries {
+        match entry {
+            CommandEntry::Runs(command) => commands.insert(name, command).map(|_| ()),
+            CommandEntry::Serves(server) => servers.insert(name, server).map(|_| ()),
+        };
+    }
+    let serves: BTreeSet<String> = servers.keys().cloned().collect();
     // Independent of both registries above: a port is a fourth thing this
     // file declares, not a property of a Check or a Command, and nothing
     // downstream resolves one against `checks` or `commands`.
@@ -443,9 +469,9 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
     // `setup.requires` — both of which are arrays, where order is already the
     // semantics.
     let declares: BTreeSet<String> = drafted.keys().cloned().collect();
-    let checks = required_by(drafted, &declares, &commands, out);
+    let checks = required_by(drafted, &declares, &commands, &serves, out);
     let prepared_by = match top.optional("setup") {
-        Some(value) => preparation(value, &declares, &commands, out),
+        Some(value) => preparation(value, &declares, &commands, &serves, out),
         None => Vec::new(),
     };
     // After the two registries and before the dials, which is where it reads:
@@ -472,7 +498,7 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
 
     // Sibling maps sharing no keys. Reported against `commands`, because the
     // Checks registry is the one that gates and is the one to keep.
-    for name in commands.keys() {
+    for name in commands.keys().chain(servers.keys()) {
         if checks.contains_key(name) {
             out.push(Refusal::new(
                 format!("commands.{name}"),
@@ -489,6 +515,7 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         checks,
         checks_as_written,
         commands,
+        servers,
         ports,
         prepared_by,
         harness,
@@ -722,26 +749,6 @@ fn covers(at: &str, value: &Value, out: &mut Vec<Refusal>) -> Result<Option<Cove
         true => Err(()),
         false => Ok(Covers::of(patterns)),
     }
-}
-
-fn command_entry(
-    at: &str,
-    value: &Value,
-    known: &'static [&'static str],
-    out: &mut Vec<Refusal>,
-) -> Option<Command> {
-    let mut table = Table::open(at, value, out)?;
-    let run = table
-        .required("run", out)
-        .and_then(|value| yaml::text(&table.at("run"), value, out));
-    let destructive = table
-        .optional("destructive")
-        .and_then(|value| yaml::flag(&table.at("destructive"), value, out));
-    table.close(known, out);
-    Some(Command {
-        run: run?,
-        destructive: destructive.unwrap_or(false),
-    })
 }
 
 fn port_entry(

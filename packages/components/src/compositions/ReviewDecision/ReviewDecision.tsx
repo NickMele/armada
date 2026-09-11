@@ -113,7 +113,7 @@ export function ReviewDecision({
   noteLabel = "What should change",
   approveNote = "Takes the work as the drone left it.",
   requestChangesNote = "Sends this note to the drone as a turn. It keeps the worktree and the step, and comes back running.",
-  mergeNote = "Sends the pull request to the forge, then takes the work. Armada runs the repository's after-merge checks against what landed; merging on the forge instead skips them.",
+  mergeNote = "Merges the pull request on its code host, then takes the work. Armada runs the repository's after-merge checks against what landed; merging it there yourself skips them.",
   rejectNote = "A verdict on the work, and the job ends there. The drone is stopped and nothing resumes it. Its branch stays where the drone left it.",
   mergeLabel = "Merge and take the work",
   approveLabel = "Approve the work",

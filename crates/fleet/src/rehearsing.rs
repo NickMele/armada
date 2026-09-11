@@ -19,7 +19,9 @@
 
 mod entries;
 mod in_flight;
-mod records;
+/// `pub(crate)` because a server's log is a run's log one directory over, read
+/// and followed the same way — `crate::servers`.
+pub(crate) mod records;
 mod running;
 mod unrehearsable;
 
@@ -87,6 +89,7 @@ where
             worktree_unreadable,
             drone_working: job.status() == JobStatus::Running,
             running: self.rehearsals().in_flight(job_id),
+            servers: self.declared_servers(job_id, &manifest),
         })
     }
 
@@ -98,6 +101,12 @@ where
     ) -> Result<ipc::RunUnderway, Refusal> {
         let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
         let refused = |why| self.run_refusal(job_id, why);
+        // A server never exits, so a run of one would hold the Job's one run
+        // slot for good — and Fleet would not know to hand it on or stop it.
+        let (froze, _) = self.effective_manifest(&job).await;
+        if froze.server(&asked.name).is_some() {
+            return Err(refused(Unrehearsable::IsAServer { name: asked.name }));
+        }
         let Some(tree) = self.tree_of(&job) else {
             return Err(refused(Unrehearsable::NoWorktree));
         };

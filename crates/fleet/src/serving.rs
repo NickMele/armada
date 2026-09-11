@@ -659,6 +659,16 @@ where
         self.observe_rehearsal(&job_id.to_domain(), run_id).await
     }
 
+    /// Every server Fleet holds — `crate::servers`.
+    async fn list_servers(&self) -> Result<ipc::ServerList, Refusal> {
+        Ok(self.server_list())
+    }
+
+    async fn observe_server(&self, server_id: String) -> Result<api::ObservedServer, Refusal> {
+        self.observed_server(&server_id)
+            .map_err(|why| self.server_refusal(why, None))
+    }
+
     /// Every workflow this Fleet holds, so a caller can name one that will not
     /// be refused.
     async fn list_workflows(&self) -> Result<Vec<WorkflowSummary>, Refusal> {
