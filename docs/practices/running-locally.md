@@ -155,6 +155,13 @@ this repository is public. On success it prints each read's status and how many
 messages each socket carried. A read that answered 409 is recorded as the
 refusal it was, and the story draws it that way.
 
+**`node scripts/record-job.mjs --board <slug>` records the whole Board instead**:
+every row the Job list serves, and the workflows and manifests they name, into
+`packages/screens/src/fixtures/boards/<slug>.json`. `Screens/Board` replays it
+beside the rows it builds. It makes only those three reads, so it changes
+nothing on the Fleet it reads, and it scrubs and refuses exactly as above. It
+prints how many Jobs and workflows it wrote.
+
 ## Running a Check or a Command by hand
 
 **`armada check` and `armada run` need no Fleet.** They read `armada.yml` and

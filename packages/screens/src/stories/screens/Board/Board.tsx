@@ -28,12 +28,15 @@ export function BoardFrom({
   jobs,
   workflows,
   connection = CONNECTED,
+  now = NOW,
 }: {
   jobs: readonly JobSummary[];
   workflows: readonly WorkflowSummary[];
   connection?: Connection;
+  /** When the Board is read. A recording passes its own, or run times go negative. */
+  now?: number;
 }) {
-  const statement = statementOf(connection, NOW, NOW);
+  const statement = statementOf(connection, now, now);
   const live = connection.state === "connected";
   const head = headOf({
     reading: false,
@@ -72,7 +75,7 @@ export function BoardFrom({
           <Jobs
             jobs={jobs}
             stale={!live}
-            now={NOW}
+            now={now}
             workflows={workflows}
             disconnected={live ? null : statement.headline}
             selected={null}

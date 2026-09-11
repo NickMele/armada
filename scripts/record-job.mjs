@@ -29,6 +29,8 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..");
 const RECORDED = join(REPO, "packages/screens/src/fixtures/recorded");
+/** Where a recording of the whole Board goes. `Screens/Board` replays it. */
+const BOARDS = join(REPO, "packages/screens/src/fixtures/boards");
 /** How long a socket may stay quiet before a stream still running is cut. */
 const QUIET_MS = 2000;
 /** How long one read may take. A Fleet this slow is worth hearing about. */
@@ -36,11 +38,17 @@ const READ_MS = 10_000;
 
 const args = process.argv.slice(2);
 const devFleet = option("--dev-fleet");
+const boardSlug = option("--board");
 const home = devFleet === undefined ? homedir() : join(devFleet, "home/user");
 const [wanted, slug, says] = args;
-if (!wanted || !slug || !says || !/^[a-z0-9-]+$/.test(slug)) {
+const asked =
+  boardSlug === undefined
+    ? Boolean(wanted && slug && says && /^[a-z0-9-]+$/.test(slug))
+    : /^[a-z0-9-]+$/.test(boardSlug);
+if (!asked) {
   console.error(
     'usage: node scripts/record-job.mjs <job id or handle> <slug> "<the state, as a sentence>" [--dev-fleet <scratch-dir>]\n' +
+      "       node scripts/record-job.mjs --board <slug> [--dev-fleet <scratch-dir>]\n" +
       "  <slug> is the recording's directory: lower case, digits and hyphens",
   );
   process.exit(2);
@@ -55,6 +63,34 @@ try {
   fail(`the runtime file names pid ${pid}, and nothing is running as it`);
 }
 const BASE = `http://127.0.0.1:${port}`;
+
+// **`--board` records the Board rather than one Job**: every row `list_jobs`
+// serves, and the workflows and manifests those rows name, scrubbed and checked
+// the way a Job's recording is. `Screens/Board` replays it beside the rows it
+// builds, so a real Board's mix of states is in Storybook too.
+if (boardSlug !== undefined) {
+  const [listedJobs, heldWorkflows, heldManifests] = await Promise.all([
+    get("/jobs"),
+    get("/workflows"),
+    get("/manifests"),
+  ]);
+  const board = {
+    jobs: listOf(listedJobs.body, "jobs"),
+    workflows: listOf(heldWorkflows.body, "workflows"),
+    manifests: listOf(heldManifests.body, "manifests"),
+  };
+  const { text, replaced } = scrub(JSON.stringify(board, null, 1));
+  const left = leaks(text);
+  if (left.length > 0) fail(`nothing written — the scrub left ${left.join(", ")}`);
+  mkdirSync(BOARDS, { recursive: true });
+  writeFileSync(join(BOARDS, `${boardSlug}.json`), `${text}\n`);
+  console.log(`recorded the Board as ${boardSlug}`);
+  console.log(`  jobs       ${board.jobs.length}`);
+  console.log(`  workflows  ${board.workflows.length}`);
+  console.log(`  scrubbed   ${replaced} occurrences; ${Math.round(text.length / 1024)} KiB written`);
+  await new Promise((flushed) => process.stdout.write("", flushed));
+  process.exit(0);
+}
 
 const listed = await get("/jobs");
 const jobs = Array.isArray(listed.body) ? listed.body : (listed.body?.jobs ?? []);
@@ -143,6 +179,11 @@ console.log(`  scrubbed   ${replaced} occurrences; ${Math.round(text.length / 10
 // hold the recording's own terminal after the file is already written.
 await new Promise((flushed) => process.stdout.write("", flushed));
 process.exit(0);
+
+/** A list read, whether Fleet answered it bare or under its own name. */
+function listOf(body, key) {
+  return Array.isArray(body) ? body : (body?.[key] ?? []);
+}
 
 /** One option and its value, taken out of `args` so the positionals are left. */
 function option(name) {
