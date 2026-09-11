@@ -83,6 +83,8 @@ pub struct Forgotten {
     /// zero here, and one that counts a row is a departure that never
     /// recorded itself.
     pub drone_process: usize,
+    /// The commands a person allowed for the Job, one row each.
+    pub allowed_commands: usize,
     /// Rows removed from a table this build has no field for.
     ///
     /// Always zero today, and a test says so. It exists because the delete is
@@ -121,6 +123,7 @@ impl Forgotten {
             "job_drone_process" => &mut self.drone_process,
             "job_drone_spend" => &mut self.drone_spend,
             "job_remarks_taken_up" => &mut self.remarks_taken_up,
+            "job_allowed_commands" => &mut self.allowed_commands,
             _ => return None,
         })
     }
