@@ -53,7 +53,7 @@ export type VerdictSheetProps = {
   criteria: readonly ReactNode[];
   /** What stands in for the criteria list where the Job carries none. */
   criteriaAbsent?: ReactNode;
-  /** What came back — the Drone's own claim, `Submitted.claimed`. */
+  /** What the Drone says it did — the Drone's own claim, `Submitted.claimed`. */
   cameBack: ReactNode;
   /** The deliverable this step kept, as a control that opens it. */
   deliverable?: ReactNode;
@@ -73,7 +73,7 @@ export type VerdictSheetProps = {
    * "Risks" carries. Absent where Fleet has composed no review yet.
    */
   risks?: ReactNode;
-  /** What it left alone — `Submitted.not_claimed`, or why there is nothing here. */
+  /** What the Drone says it left alone — `Submitted.not_claimed`, or why there is nothing here. */
   leftAlone: ReactNode;
   /** The figures, in the order the drawing runs them. */
   figures: readonly VerdictFigure[];
@@ -127,7 +127,7 @@ export function VerdictSheet({
         )}
       </Block>
 
-      <Block label="What came back">
+      <Block label="What the Drone says it did">
         <p className="armada-verdict__said">{cameBack}</p>
         {deliverable === undefined ? null : (
           <div className="armada-verdict__document">{deliverable}</div>
@@ -146,7 +146,7 @@ export function VerdictSheet({
         {risks === undefined ? null : <p className="armada-verdict__said">{risks}</p>}
       </Block>
 
-      <Block label="What it left alone">
+      <Block label="What the Drone says it left alone">
         <p className="armada-verdict__said">{leftAlone}</p>
       </Block>
 

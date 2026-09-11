@@ -194,7 +194,7 @@ pub struct JobDetail {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub command_waiting: Option<CommandInFlight>,
     /// The review Fleet composed at this Job's gate — the same text a pull
-    /// request carries, where this Job has one. **Since 10.10**, and absent
+    /// request carries, where this Job has one. **Since 10.11**, and absent
     /// from a Fleet older than that, which a reader draws as no review at all
     /// rather than a Job that changed nothing.
     ///

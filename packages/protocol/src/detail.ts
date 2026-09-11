@@ -180,7 +180,7 @@ export type JobDetail = {
   command_waiting?: CommandInFlight;
   /**
    * The review Fleet composed at this job's gate — the same text a pull
-   * request carries, where this job has one. Since protocol 10.10.
+   * request carries, where this job has one. Since protocol 10.11.
    *
    * **One builder.** `crates/fleet/src/review.rs` composes this and the pull
    * request's Markdown body from the one reading of the record; the review
@@ -190,7 +190,7 @@ export type JobDetail = {
    * **Absent is a job that has not reached a gate yet**, not an empty review:
    * a job still running, or one that finished with no `human_always` step at
    * all, carries nothing here. It is also every job read from a Fleet older
-   * than 10.10, which draws the same as one that has not reached a gate.
+   * than 10.11, which draws the same as one that has not reached a gate.
    */
   review?: JobReview;
 };

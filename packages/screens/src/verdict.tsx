@@ -159,12 +159,12 @@ export function provesItNoteOf(step: StepDetail, render: Render): string | undef
     : "Reading the document is the review. Your answer is the only verdict this step gets.";
 }
 
-/** What came back — the Drone's own claim, or why there is nothing to read yet. */
+/** What the Drone says it did — its own claim, or why there is nothing to read yet. */
 export function cameBackOf(claim: Submitted | undefined): string {
   return claim?.claimed ?? "This step has not submitted its evidence yet.";
 }
 
-/** What it left alone — `not_claimed`, or the named absence of a boundary. */
+/** What the Drone says it left alone — `not_claimed`, or the named absence of a boundary. */
 export function leftAloneOf(claim: Submitted | undefined): string {
   if (claim === undefined) return "This step has not submitted its evidence yet.";
   return claim.not_claimed ?? "This step's submission drew no boundary around what it did not change.";
