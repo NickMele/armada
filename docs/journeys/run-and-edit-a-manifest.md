@@ -1,14 +1,14 @@
 # Journey 9 — Run and edit a Manifest
 
-**What it is:** View a project's Manifest, run any single Check or Command against it without dispatching a Job, and edit it.
+**What it is:** View a project's Manifest, run any single Check or Command against it — without dispatching a Job, or inside one Job's worktree — and edit it.
 
 Design fidelity: not set. Analysis: Complete. UI/UX design: In progress.
 
 ---
 
-**Trigger:** "I want to run the lint here without spinning up a drone," or "this project's checks are wrong and I want to fix them."
+**Trigger:** "I want to run the lint here without spinning up a drone," "this project's checks are wrong and I want to fix them," or "the gate refused `test` on this Job and I want to run it myself."
 
-**Concepts touched:** Bridge (Manifest — a new surface), Manifest, Fleet.
+**Concepts touched:** Bridge (Manifest — a new surface, and Job detail), Manifest, Fleet, Job.
 
 **Milestone:** Reach.
 
@@ -54,6 +54,64 @@ Two different things, and the first draft of this journey conflated them.
 - *It counts for a Job from the same tree* — rejected hardest. This is the path around verification that v1 proved becomes the default path. The tree can change between the run and the dispatch, which is the whole reason Evidence ties a gate's answer to the diff it judged.
 
 **The transcript is keepable, the judgement is not.** This surface is for rehearsing; a Job is where a Check means something.
+
+## Running one inside a Job
+
+Job detail carries the same rehearsal for one Job, against the Manifest that Job froze and in that Job's worktree. It opens as a trailing sheet under the sheet rules in [Monitor Active Work](monitor-active-work.md).
+
+> **Rule.** The run sheet lists and runs the Manifest the Job froze at creation.
+> Why: the gate judges the Job against that snapshot, so rehearsing anything else answers a question the gate never asks.
+
+> **Rule.** A run from the sheet writes no Evidence and no `check_runs` row, and moves nothing on the Job.
+> Why: the reasoning under *A passing Check leaves no verdict behind* holds with more force beside a Job.
+
+### Opening it
+
+| From | Opens |
+|---|---|
+| **Run…** on the worktree row of *Where things are* | The sheet, nothing selected |
+| `r` on Job detail | The sheet, nothing selected |
+| **Run it here** on a refused Check's row | The sheet, that Check selected and narrowed |
+| The command palette | One entry per Check and Command |
+
+Where the Job's worktree no longer exists, **Run…** stays in place, disabled, and the row says why.
+
+### What it lists
+
+| Group | Holds | Each row carries |
+|---|---|---|
+| Setup | The Commands `setup.requires` names | Its `run` line; re-running one repairs a broken install |
+| Checks | Every Check, in declaration order | Its `run` line, and a sentence where `when` skips it for this Job |
+| Commands | Every Command `setup.requires` does not name | Its `run` line |
+
+Setup rows show no time, because nothing records when setup finished in a worktree. The sheet's header shows when `armada.yml` was last edited before the Job froze it, which Fleet reads from git. Where the worktree's own `armada.yml` differs from the frozen one, a notice says so and offers the worktree's version.
+
+### Running one
+
+> **Rule.** A run from the sheet executes in the Job's own worktree.
+> Why: a throwaway copy waits on `runedit-adhoc-run-location`, below.
+
+| Case | Behaviour |
+|---|---|
+| A Check with `narrow` | Narrowed to what the Job changed; the whole tree is one press away |
+| A Check with `requires` | Its prerequisites run first, as the Manifest concept states |
+| Output | Streams live while the elapsed time counts up |
+| Stop | Ends the run's process group; the log keeps what printed |
+| A Drone working in the tree | Nothing locks; a notice says the run shares its tree and build directory |
+| Approval | None, destructive or not; `runedit-destructive-command-warning` applies |
+
+### What a run leaves
+
+Each run writes its log under `./.armada` like every other ad-hoc run here, with the same retention. No Check row carries a result, and nothing from a run reaches the rail, the Job header or the Job Board.
+
+> **Rule.** The sheet's run list shows each run's exit code, unhued, and opens its log.
+> Why: a past rehearsal is worth scanning, and keeping it inside the sheet stops it reading as the gate's answer.
+
+> **Rule.** After a run that changed the worktree, the sheet lists the changed files and offers Open the diff and Undo this run.
+> Why: nothing in a Manifest says in advance which Commands write, and a Check's `requires` can name one that does.
+
+> **Rule.** Undo restores a snapshot of the worktree taken just before the run, and is not offered while a Drone is working.
+> Why: Fleet commits a Job's work only when it delivers, per `crates/fleet/src/landing.rs`, so a plain discard would take the Drone's uncommitted work with it.
 
 ## Editing
 
@@ -108,4 +166,4 @@ Drift detection and the live dry-run are two groups with two verdicts, not one s
 
 ## Related
 
-Set Up a Project (Manifest) — where a Manifest first comes to exist, and the surface this journey's empty state has to hand off to.
+Set Up a Project (Manifest) — where a Manifest first comes to exist, and the surface this journey's empty state has to hand off to. [Monitor Active Work](monitor-active-work.md) — Job detail, where the run sheet opens.

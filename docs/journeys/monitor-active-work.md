@@ -50,6 +50,8 @@ Open Bridge → Active Jobs → lightweight heartbeat per active Drone: status, 
 
 **One sheet at a time.** Opening the diff while the log is open replaces it, and `Esc` returns to the panel rather than to the previous sheet. Why: a layer that pops back to another layer makes one key mean two depths of *back*.
 
+**The run sheet follows the same rules.** It opens from the worktree row or `r`, and [Run and edit a Manifest](run-and-edit-a-manifest.md) owns what it holds.
+
 **This supersedes the inline expander for those two chapters, which is built.** `StepStory` opens all three in place today, and `packages/screens/src/JobDetail.tsx` holds the open chapter for the step. Drone instructions keeps that treatment and the collapse rule above; the other two leave the panel. `#286` builds the sheets.
 
 **The Job's brief sits above the step, on the panel's raised surface.** Why: every step is read against it.
