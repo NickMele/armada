@@ -789,11 +789,23 @@ export function JobDetail({
               // **The question sits where the redirect box does** — between the
               // strip and the story, because it is the same kind of thing: a
               // box a person acts in about the step they are looking at. A
-              // command the Drone is waiting on is the same box, in the same place.
-              before: waitingOf(
-                questionOf(whole, job.id, now, stale, acting, onAnswer),
-                commandOf(whole, now, answering),
-              ),
+              // command the Drone is waiting on is the same box, in the same place,
+              // and at the gate so is the review (the owner, 11 Sep 2026).
+              before:
+                render === "reviewing" && verdictSlot !== undefined ? (
+                  <>
+                    {waitingOf(
+                      questionOf(whole, job.id, now, stale, acting, onAnswer),
+                      commandOf(whole, now, answering),
+                    )}
+                    {verdictSlot}
+                  </>
+                ) : (
+                  waitingOf(
+                    questionOf(whole, job.id, now, stale, acting, onAnswer),
+                    commandOf(whole, now, answering),
+                  )
+                ),
               // The strip draws the stage the keyboard pinned, and hover stays
               // its own: hovering reports where the pointer is rather than what
               // a reader decided, so nothing up here holds it.
@@ -805,12 +817,11 @@ export function JobDetail({
               chapters,
               openChapterId: keys.openChapterId,
               onOpenChapter: keys.onOpenChapter,
-              // Review and reply are one loop: the decision is the block under
-              // the story, one scroll from the diff it is made against, never a
-              // second surface and never a second panel. The verdict sheet is
-              // what draws that block now — `Decide`'s acts sit inside it,
-              // unchanged, at `verdictSlot`'s `actions`.
-              after: verdictSlot,
+              // A finished Job's verdict sheet is a record read after the
+              // story, so it stays under it. At the gate it is above (see
+              // `before`). `Decide`'s acts sit inside it, unchanged, at
+              // `verdictSlot`'s `actions`.
+              after: render === "reviewing" ? undefined : verdictSlot,
             }
       }
       stepAbsent={whyNoSteps(watched, job.id)}
