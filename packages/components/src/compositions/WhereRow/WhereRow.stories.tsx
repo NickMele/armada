@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn } from "storybook/test";
 import { WhereRow } from "./WhereRow";
 
 const meta: Meta<typeof WhereRow> = {
@@ -121,5 +122,44 @@ export const NothingToDo: Story = {
     label: "Manifest",
     value: "armada.yml",
     act: "open",
+  },
+};
+
+/**
+ * The worktree row plus **Run…**, the run sheet's entry point. The row still
+ * opens where it lives — `Run…` is a second control beside it, never a
+ * replacement for the first.
+ */
+export const WithRun: Story = {
+  args: {
+    label: "Worktree",
+    value: ".armada/worktrees/job_2d90bb",
+    act: "open",
+    onAct: fn(),
+    run: { onRun: fn() },
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Run…" }));
+    await expect(args.run!.onRun).toHaveBeenCalled();
+    // The row's own act is untouched by adding a second control beside it.
+    await userEvent.click(canvas.getByRole("button", { name: /Worktree|worktree/ }));
+    await expect(args.onAct).toHaveBeenCalled();
+  },
+};
+
+/**
+ * **The worktree is gone.** `Run…` stays in place, disabled, and says why —
+ * a control that vanished would read as a capability nobody ever had.
+ */
+export const WithRunWorktreeGone: Story = {
+  args: {
+    label: "Worktree",
+    value: ".armada/worktrees/job_2d90bb",
+    act: "open",
+    run: { disabledReason: "This Job's worktree was given back." },
+  },
+  play: async ({ canvas }) => {
+    const control = canvas.getByRole("button", { name: "Run…" });
+    await expect(control).toBeDisabled();
   },
 };

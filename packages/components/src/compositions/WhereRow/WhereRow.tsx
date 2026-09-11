@@ -2,6 +2,7 @@ import { ChevronRight, Copy, ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback } from "react";
 import { conceptSaid } from "../../concepts";
+import { Button } from "../../primitives/Button/Button";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
 /**
@@ -66,6 +67,25 @@ export type WhereRowProps = {
    * accessible name on its own.
    */
   actLabel?: string;
+  /**
+   * The run sheet's own entry point — **Run…** on the worktree row.
+   *
+   * **A second control, not the row's act.** The row's own act, where it has
+   * one, still opens or copies its value; this opens Journey 9's run sheet
+   * instead, so the row can no longer be one element playing both parts. Where
+   * present, the row renders as a label and `Run…` carries the row's own
+   * hover and accessible name.
+   *
+   * **Disabled with a reason, never hidden.** The worktree row still says
+   * `Run…` when the worktree is gone — a control that vanished would read as
+   * a capability nobody ever had, where a disabled one with its reason on
+   * hover reads as a fact about this Job.
+   */
+  run?: {
+    onRun?: () => void;
+    /** Why `Run…` is disabled — the worktree no longer exists. */
+    disabledReason?: string;
+  };
 };
 
 /** The trailing glyph is 12px at strokeWidth 2, as every mark on this screen is. */
@@ -108,6 +128,7 @@ export function WhereRow({
   onCopied,
   onAct,
   actLabel,
+  run,
 }: WhereRowProps) {
   const writes = copyValue ?? (typeof value === "string" ? value : undefined);
   const press = useCallback(() => {
@@ -151,25 +172,44 @@ export function WhereRow({
     </>
   );
 
-  if (!actable) {
-    return (
-      <div className="armada-wrow" data-act={act}>
-        {body}
-      </div>
-    );
-  }
-
-  // The row is the control, so its hover says what pressing it does. `title` is
-  // gone with it: the browser's own bubble carries no delay grouping, no
-  // placement and no token, and two tooltips answering one hover is one too
-  // many.
-  const pressSays = actLabel ?? actSays(act, label) ?? says;
-  return (
-    <Tooltip asChild label={pressSays}>
+  const row = !actable ? (
+    <div className="armada-wrow" data-act={act}>
+      {body}
+    </div>
+  ) : (
+    // The row is the control, so its hover says what pressing it does. `title`
+    // is gone with it: the browser's own bubble carries no delay grouping, no
+    // placement and no token, and two tooltips answering one hover is one too
+    // many.
+    <Tooltip asChild label={actLabel ?? actSays(act, label) ?? says}>
       <button type="button" className="armada-wrow" data-act={act} onClick={press}>
         {body}
         <span className="armada-wrow__sr">{says}</span>
       </button>
     </Tooltip>
+  );
+
+  if (run === undefined) return row;
+
+  // A second control beside the row's own, so the two cannot become one
+  // button nested inside another. The run sheet's `Run…` is a sibling, and
+  // `.armada-wrow-line` is what gives the row back the width it loses to it.
+  return (
+    <div className="armada-wrow-line">
+      {row}
+      {/* Not `asChild`: a disabled button does not reliably fire hover in
+          every browser, and the wrapping span the default form draws does. */}
+      <Tooltip label={run.disabledReason ?? "Run a Check or Command in this Job's worktree"}>
+        <Button
+          variant="secondary"
+          size="sm"
+          ground="card"
+          disabled={run.disabledReason !== undefined}
+          onClick={run.onRun}
+        >
+          Run…
+        </Button>
+      </Tooltip>
+    </div>
   );
 }
