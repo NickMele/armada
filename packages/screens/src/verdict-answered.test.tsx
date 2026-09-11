@@ -158,6 +158,21 @@ describe("the verdict sheet once a Job is done and a person answered it", () => 
     });
   }
 
+  // The real Job's own shape: a person asked the gate again after
+  // `gate_undecided`, and the second attempt answered `gate_failure` off the
+  // same Checks and the same Judge call — writing no `check_runs` and no
+  // `judged` row of its own. `onlyCurrentAttempt` (`facts.ts`) has to find
+  // attempt 1's rows for a step shaped like that, with no help from this file.
+  function testsStepRerun(): StepDetail {
+    return step({
+      ...testsStep(true),
+      attempts: [
+        { attempt: 1, outcome: "stopped", why: "gate_undecided", started_at: "2026-09-11T04:10:10.968Z" },
+        { attempt: 2, outcome: "stopped", why: "gate_failure", started_at: "2026-09-11T04:50:53.326Z" },
+      ],
+    });
+  }
+
   function handoffStep(): StepDetail {
     return step({
       step_id: "handoff",
@@ -188,11 +203,14 @@ describe("the verdict sheet once a Job is done and a person answered it", () => 
     overridden?: boolean;
     evidence?: Evidence;
     notes?: readonly Noted[];
+    /** The `tests` step reran without redoing its Checks or its Judge call. */
+    rerun?: boolean;
   }): ReactElement<VerdictSheetProps> {
+    const tests = args.rerun === true ? testsStepRerun() : testsStep(args.overridden ?? true);
     const whole: JobWhole = {
       job: job(),
       created_at: "2026-09-11T03:43:58.613Z",
-      steps: [scopeStep(), implementStep(), testsStep(args.overridden ?? true), handoffStep()],
+      steps: [scopeStep(), implementStep(), tests, handoffStep()],
       acceptance_criteria: [],
       dependencies: [],
       spend: {
@@ -276,6 +294,17 @@ describe("the verdict sheet once a Job is done and a person answered it", () => 
       expect(rows.some((row) => row.named === "overruled")).toBe(false);
       const refused = rows.find((row) => row.says === "declared_plan_drift");
       expect(refused?.identifier).toBe("Judge: not met");
+    });
+
+    // A rerun gate leaves the step's own current attempt (2) with no rows of
+    // its own — the real Job's own shape. This is what `withDataAttempt` used
+    // to patch around locally; the shared read in `facts.ts` now does it for
+    // every caller.
+    it("still shows a reran step's Checks and its overruled criterion", () => {
+      const rows = rowsOf(slotFor({ rerun: true }));
+      expect(rows.some((row) => row.id === "checks-passed" && row.says?.toString().includes("tests"))).toBe(true);
+      const overruled = rows.find((row) => row.named === "overruled");
+      expect(overruled?.says).toBe("declared_plan_drift");
     });
   });
 

@@ -119,34 +119,6 @@ function sentenceListOf(items: readonly string[]): string {
 }
 
 /**
- * The step, with its own `attempts` read back to the last one that actually
- * produced Check or Judge data.
- *
- * **A step Fleet re-asked the gate on, without re-running anything, records a
- * further `attempts` entry carrying none of its own.** This real Job's own
- * `tests` step is exactly that: its first attempt stopped `gate_undecided`,
- * a person asked the gate again, and the second attempt answered
- * `gate_failure` off the same Checks and the same Judge call — writing no
- * `check_runs` and no `judged` row tagged with its own number.
- * `onlyCurrentAttempt` (`facts.ts`) reads `attempts.at(-1)` and finds nothing
- * for a step shaped like that, which is a defect in that shared read and not
- * this one — scoped here, on the one arrangement whose whole argument is that
- * an overruled verdict is never hidden, rather than changed for every other
- * caller of a read this task was not asked to touch.
- */
-function withDataAttempt(step: StepDetail): StepDetail {
-  const last = step.attempts.at(-1);
-  if (last === undefined) return step;
-  const hasDataAt = (attempt: number) =>
-    step.check_runs.some((run) => run.attempt === attempt) || step.judged.some((one) => one.attempt === attempt);
-  if (hasDataAt(last.attempt)) return step;
-  for (let at = last.attempt - 1; at >= 1; at -= 1) {
-    if (hasDataAt(at)) return { ...step, attempts: [...step.attempts.slice(0, -1), { ...last, attempt: at }] };
-  }
-  return step;
-}
-
-/**
  * Every Check any step ran, across the whole Job, as `provesIt` draws Checks.
  * **Passing steps fold into one row** — `"Scope, implement and tests passed
  * their Checks"`, naming which Checks — because a reader scanning a finished
@@ -159,8 +131,7 @@ function checksAcrossJobOf(steps: readonly StepDetail[], now: number): CheckRunR
   const passedSteps: string[] = [];
   const passedNames: string[] = [];
   const rows: CheckRunRow[] = [];
-  for (const raw of steps) {
-    const step = withDataAttempt(raw);
+  for (const step of steps) {
     const reads = checksOf(step);
     const mechanical = mechanicalRunsOf(step);
     if (reads.length === 0 && mechanical.length === 0) continue;
@@ -221,9 +192,8 @@ function judgeRowsAcrossJobOf(
   notes: readonly Noted[],
 ): CheckRunRow[] {
   const rows: CheckRunRow[] = [];
-  for (const raw of steps) {
-    if ((raw.judge_checks?.length ?? 0) === 0) continue;
-    const step = withDataAttempt(raw);
+  for (const step of steps) {
+    if ((step.judge_checks?.length ?? 0) === 0) continue;
     for (const panel of panelsOf(step, criteria)) {
       const text = panel.criterion?.text ?? panel.criterionId;
       if (panel.verdict === "met") {
