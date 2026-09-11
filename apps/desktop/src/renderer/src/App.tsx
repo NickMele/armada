@@ -42,6 +42,7 @@ import {
   examine,
   openArtifact,
   openPullRequest,
+  openRemarkLink,
   readCall,
   readCheckOutput,
   followCheckOutput,
@@ -401,6 +402,7 @@ export function App() {
                 onRequestChanges={(jobId, note) => void commands.decide(jobId, "changes", note)}
                 onReject={(jobId) => void commands.decide(jobId, "reject")}
                 onTakeUpRemarks={(jobId, remarks) => void commands.takeUpRemarks(jobId, remarks)}
+                onOpenRemarkLink={(jobId, remarkId) => void openRemarkLink(jobId, remarkId)}
                 onCopied={setCopied}
                 onSaid={setTelling}
               />

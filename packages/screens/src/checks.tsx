@@ -34,11 +34,13 @@ import { judgeOf } from "./declared";
 import { namesChapter } from "./detail-keys";
 import { span } from "./duration";
 import {
+  checksFromAttempt,
   checksOf,
   checksStand,
   didNotPass,
   isRunning,
   isWaiting,
+  notedFrom,
   outputRunOf,
   sentenceOf,
   stoppedUndecided,
@@ -109,8 +111,10 @@ export function checksChapter(
   return {
     id: CHECKS_CHAPTER,
     title: "Checks",
-    // The same sentence the phase strip's tier stands at, from the same call.
-    summary: checksStand(reads),
+    // The same sentence the phase strip's tier stands at, from the same call
+    // — with which attempt it is from, where a rerun gate has left it behind
+    // the step's own current one.
+    summary: notedFrom(checksStand(reads), checksFromAttempt(step)),
     // The preview is the whole list — four rows is not a reading. What has no
     // end is what is behind each row, and that is what a press opens.
     preview: (
@@ -357,11 +361,41 @@ export function iconOf(run: CheckRun | undefined): CheckRunRow["icon"] {
  * declared id a citation resolves against; a panel has none — it is one
  * `judge_checks[]` entry on a step — so the row says what was declared, in
  * words, and claims nothing about being joinable.
+ *
+ * **`reason` is drawn only where the step this row is about was overruled.**
+ * `provesItOf` is the one caller that ever has one — it reads a person's own
+ * words off the Job's log, scoped to this step — and passing it on a step
+ * nobody overruled would be a row claiming an act that did not happen.
  */
-export function judgeRow(step: StepDetail, panels: Panel[], undecided?: string): CheckRunRow | undefined {
+export function judgeRow(
+  step: StepDetail,
+  panels: Panel[],
+  undecided?: string,
+  /** The reason a person gave for overruling this step, where the log kept one. */
+  reason?: string,
+): CheckRunRow | undefined {
   const declared = step.judge_checks;
   if (declared === undefined || declared.length === 0) return undefined;
   const identifier = declared.map(judgeOf).join(" · ");
+  if (step.overridden && panels.length > 0) {
+    const refused = panels.filter((panel) => panel.verdict === "not_met");
+    const finding = refused[0]?.refused[0];
+    const grounds = finding?.expected ?? finding?.produced ?? finding?.consequence;
+    return {
+      id: JUDGE_ROW,
+      says: countedIn(refused.length, panels.length),
+      identifier: `${identifier} · overruled by you`,
+      identifierIsAName: true,
+      named: "overruled",
+      icon: CRITERION_VERDICT_JUDGE.not_met?.icon ?? undefined,
+      detail:
+        grounds === undefined
+          ? undefined
+          : reason === undefined
+            ? `Not met: ${grounds}`
+            : `Not met: ${grounds} You: “${reason}”`,
+    };
+  }
   if (panels.length === 0) {
     // **Asked and silent outranks queued and running.** `gate_undecided` is a
     // call Fleet already made and could not read back, which is a different

@@ -8,14 +8,7 @@
 import { describe, expect, it } from "vitest";
 import type { StepDetail, Submitted } from "@armada/protocol";
 
-import {
-  cameBackOf,
-  leftAloneOf,
-  neverAsksAPerson,
-  neverDelivers,
-  provesItNoteOf,
-  provesItOf,
-} from "./verdict";
+import { cameBackOf, leftAloneOf, neverAsksAPerson, neverDelivers, provesItNoteOf, provesItOf } from "./verdict";
 
 function step(over: Partial<StepDetail> = {}): StepDetail {
   return {
@@ -199,5 +192,43 @@ describe("what came back, and what it left alone", () => {
 
   it("names the absence where the submission drew none", () => {
     expect(leftAloneOf({ ...claim, not_claimed: undefined })).toMatch(/drew no boundary/);
+  });
+});
+
+describe("what proves it, where the step carries an overruled verdict", () => {
+  function overriddenStep(): StepDetail {
+    return step({
+      overridden: true,
+      judge_checks: [{ criteria: 1, gaming_check: true }],
+      judged: [
+        { attempt: 1, criterion_id: "c1", verdict: "met" },
+        {
+          attempt: 1,
+          criterion_id: "c2",
+          verdict: "not_met",
+          expected: "The step should not touch crates/ipc/operations.toml.",
+        },
+      ],
+    });
+  }
+
+  it("draws the judge row overruled, naming the finding and the person's own words", () => {
+    const rows = provesItOf(overriddenStep(), [], NOW, undefined, "The note is correct and needed.");
+    const judge = rows.find((row) => row.named === "overruled");
+    expect(judge?.identifier).toMatch(/overruled by you$/);
+    expect(judge?.detail).toMatch(/The step should not touch crates\/ipc\/operations\.toml\./);
+    expect(judge?.detail).toMatch(/You: “The note is correct and needed\.”/);
+  });
+
+  it("draws the finding alone where the log kept no reason", () => {
+    const rows = provesItOf(overriddenStep(), [], NOW);
+    const judge = rows.find((row) => row.named === "overruled");
+    expect(judge?.detail).toBe("Not met: The step should not touch crates/ipc/operations.toml.");
+  });
+
+  it("draws the ordinary refused row where the step was not overridden", () => {
+    const rows = provesItOf({ ...overriddenStep(), overridden: false }, [], NOW);
+    expect(rows.some((row) => row.named === "overruled")).toBe(false);
+    expect(rows.some((row) => row.named === "refused")).toBe(true);
   });
 });

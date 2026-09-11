@@ -4,11 +4,11 @@
 //! # The one place this seam carries text from outside this machine
 //!
 //! Every other string here was written by a person at this keyboard, by a Drone
-//! Fleet spawned, or by Fleet itself. [`Remark::said`] was written by whoever
-//! can see the pull request, which on a public repository is anybody.
-//! `adapter_traits::FromOutside` is the type that keeps it apart on the Rust
-//! side and it stops here: what crosses the wire is a `String`, because JSON
-//! has no other shape for it.
+//! Fleet spawned, or by Fleet itself. [`Remark::said`] and
+//! [`InlineContext::hunk`] were written by whoever can see the pull request,
+//! which on a public repository is anybody. `adapter_traits::FromOutside` is
+//! the type that keeps it apart on the Rust side and it stops here: what
+//! crosses the wire is a `String`, because JSON has no other shape for it.
 //!
 //! **So the guard on this side is where it is rendered.** A renderer that
 //! interpolates rather than escapes is the exposure, and Bridge draws these as
@@ -49,7 +49,8 @@ pub struct JobRemarks {
 
 /// One comment on a pull request.
 ///
-/// **Four strings the forge wrote and one fact Armada knows.** Every field but
+/// **Four strings the forge wrote and one fact Armada knows**, plus two more
+/// fields the forge wrote where it had them. Every field but
 /// [`taken_up`](Remark::taken_up) came from outside this machine and none of
 /// them has been cleaned — see this module's own note about where the guard is.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -78,6 +79,24 @@ pub struct Remark {
     /// `take_up_remarks` refuses one of these, so a surface that draws it as
     /// choosable is offering a press that will be refused.
     pub taken_up: bool,
+    /// Where this comment lives on the forge, for Bridge to open. `None` where
+    /// the forge answered no address under this name.
+    pub url: Option<String>,
+    /// The code this comment is about, where it is attached to one line of the
+    /// diff. `None` for a comment on the pull request's own conversation.
+    pub inline: Option<InlineContext>,
+}
+
+/// The code one inline comment is about, exactly as the forge answered.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InlineContext {
+    /// The file the comment is on, relative to the repository root.
+    pub path: String,
+    /// The line of the current diff the comment sits on.
+    pub line: u32,
+    /// The diff around that line, as the forge's own patch renders it —
+    /// `@@` header included.
+    pub hunk: String,
 }
 
 /// The comments a person picked to act on.

@@ -1,5 +1,14 @@
 # Spike 14 — How much room does an opening brief leave for chosen comments?
 
+**The bound this spike measured was dropped by the owner's decision on
+2026-09-11, `#648`: what a person picks off a pull request is what a Drone
+gets, at any length.** A chosen set no longer shares a prompt's room at all —
+it is written whole into a file in the Drone's worktree, and
+`fleet::remarks::pointer` puts a short pointer to that file on the turn in
+place of the words themselves. This spike's reading stays below as a record
+of the number that used to gate a press and the arithmetic it came from; it no
+longer describes anything the code does.
+
 **About the size of the whole brief itself, and no measured brief comes close to spending it.**
 A real opening brief runs 9,972 characters, of which 1,238 — the same on every one of 20 sampled
 — are fixed regardless of the Job. Nothing chosen off a pull request has ever had to share space

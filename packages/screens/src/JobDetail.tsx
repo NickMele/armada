@@ -109,6 +109,7 @@ import { headingOf, Unrenderable } from "./heading";
 import { detailOf, holdingOf, logOf, lookOf, turnsOf } from "./mine";
 import { phasesOf } from "./phases";
 import { neverAsksAPerson, verdictSlotAtGate, verdictSlotFinished } from "./verdict";
+import { verdictSlotAfterAnswer } from "./verdict-answered";
 // Which Check's output `o` opens. **The same call the Checks chapter's own act
 // makes**, so the key and the control cannot open different files.
 import { outputOf } from "./gates";
@@ -254,6 +255,9 @@ export type JobDetailProps = {
    * told.
    */
   onTakeUpRemarks: (jobId: string, remarks: string[]) => void;
+  /** Open one comment on the forge. `Decide`'s own note on why this is a Job
+   *  id and a comment id, never an address. */
+  onOpenRemarkLink: (jobId: string, remarkId: string) => void;
   /**
    * What the second socket has said. **Opened for every Job that is open**, not
    * on a press: the activity log is a chapter of the step's story and a chapter
@@ -348,6 +352,7 @@ export function JobDetail({
   onRequestChanges,
   onReject,
   onTakeUpRemarks,
+  onOpenRemarkLink,
   onCopied,
   onSaid,
 }: JobDetailProps) {
@@ -653,10 +658,11 @@ export function JobDetail({
             onRequestChanges,
             onReject,
             onTakeUpRemarks,
+            onOpenRemarkLink,
           })
         : render === "finished" && neverAsked
           ? verdictSlotFinished({ job, whole, open, render, recorded, opensRecords, now, claimed, undecided })
-          : undefined;
+          : render === "finished" ? verdictSlotAfterAnswer({ job, whole, recorded, opensRecords, now, notes: noted?.notes ?? [], onOpenPullRequest }) : undefined;
 
   // One way to answer a command the Drone was not given, for both places a
   // person meets one: the command it is waiting on, and a refused row.

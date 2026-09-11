@@ -15,7 +15,15 @@ import type { Criterion, Judged, StepDetail } from "@armada/protocol";
 
 import { citationsOf, givenTo } from "./cited";
 import { assertedIn } from "./asserted";
-import { checksOf, outputOf, outputRunOf, panelSizeOf, panelsOf } from "./gates";
+import {
+  checksFromAttempt,
+  checksOf,
+  judgeFromAttempt,
+  outputOf,
+  outputRunOf,
+  panelSizeOf,
+  panelsOf,
+} from "./gates";
 import { noteFor, regionOf, rowsOf } from "./outputs";
 
 function step(over: Partial<StepDetail> = {}): StepDetail {
@@ -40,6 +48,16 @@ function step(over: Partial<StepDetail> = {}): StepDetail {
 const TWICE: StepDetail["attempts"] = [
   { attempt: 1, outcome: "retrying", started_at: "2026-09-09T09:00:00Z" },
   { attempt: 2, outcome: "refused", started_at: "2026-09-09T09:20:00Z" },
+];
+
+/**
+ * A gate reran without asking the Checks or the Judge again — `rerun_gate` and
+ * an overrule both do this. The step is on attempt 2, and attempt 2 has
+ * written nothing to either list yet.
+ */
+const RERUN: StepDetail["attempts"] = [
+  { attempt: 1, outcome: "retrying", started_at: "2026-09-09T09:00:00Z" },
+  { attempt: 2, outcome: "running", started_at: "2026-09-09T09:20:00Z" },
 ];
 
 const CRITERIA: Criterion[] = [
@@ -152,6 +170,53 @@ describe("which output a press opens", () => {
   });
 });
 
+describe("a step whose rerun has not redone every gate", () => {
+  // `rerun_gate` and an overrule both add an attempt without re-running the
+  // Checks, and possibly before the Judge has answered again — so the step's
+  // newest attempt can hold no rows at all, and its Checks and Judge readings
+  // are the attempt before rather than nothing.
+  it("still shows a step's evidence where its latest attempt is empty", () => {
+    const held = step({
+      attempts: RERUN,
+      checks: [{ kind: "manifest_check", name: "build" }],
+      check_runs: [{ attempt: 1, name: "build", outcome: "passed" }],
+    });
+    expect(checksOf(held)[0]?.run?.outcome).toBe("passed");
+    expect(checksFromAttempt(held)).toBe(1);
+  });
+
+  // A rerun gate can bring a fresh Judge answer while the Checks stay those of
+  // the attempt before — each list is narrowed on its own, and can answer from
+  // a different attempt than the other.
+  it("reads Checks and a Judge off different attempts where only one ran again", () => {
+    const held = step({
+      attempts: RERUN,
+      checks: [{ kind: "manifest_check", name: "build" }],
+      judge_checks: [{ criteria: 1, gaming_check: false }],
+      check_runs: [{ attempt: 1, name: "build", outcome: "passed" }],
+      judged: [judged({ criterion_id: "c1", attempt: 2 })],
+    });
+    expect(checksOf(held)[0]?.run?.attempt).toBe(1);
+    expect(checksFromAttempt(held)).toBe(1);
+    const panels = panelsOf(held, CRITERIA);
+    expect(panels[0]?.members[0]?.attempt).toBe(2);
+    expect(judgeFromAttempt(held)).toBeUndefined();
+  });
+
+  // The ordinary case: one attempt, and both lists answer on it. Nothing here
+  // is behind the step's current attempt, so there is nothing to say about it.
+  it("leaves an ordinary single-attempt step unmarked", () => {
+    const held = step({
+      checks: [{ kind: "manifest_check", name: "build" }],
+      judge_checks: [{ criteria: 1, gaming_check: false }],
+      check_runs: [{ attempt: 1, name: "build", outcome: "passed" }],
+      judged: [judged({ criterion_id: "c1", attempt: 1 })],
+    });
+    expect(checksFromAttempt(held)).toBeUndefined();
+    expect(judgeFromAttempt(held)).toBeUndefined();
+  });
+});
+
 describe("what a step's suite asserted", () => {
   // `check-outcomes.toml`: a step that advanced having skipped every Check
   // verified nothing, and the record must be able to say that. `skipped`
@@ -215,6 +280,17 @@ describe("what a step's suite asserted", () => {
   // with, and the column is absent rather than invented.
   it("leaves the comparison off a first run that has nothing to compare with", () => {
     const rows = assertedIn(step({ check_runs: [{ attempt: 1, name: "a", outcome: "passed" }] }));
+    expect(rows[0]?.against).toBe(undefined);
+  });
+
+  // A rerun gate leaves attempt 2 with no Checks of its own, so `assertedIn`
+  // shows attempt 1's. The comparison has to be measured against runs before
+  // attempt 1 — the attempt actually shown — not before the step's raw
+  // current attempt, which is attempt 1 itself and would compare it to itself.
+  it("does not compare a rerun's stale attempt against itself", () => {
+    const rows = assertedIn(
+      step({ attempts: RERUN, check_runs: [{ attempt: 1, name: "build", outcome: "passed" }] }),
+    );
     expect(rows[0]?.against).toBe(undefined);
   });
 

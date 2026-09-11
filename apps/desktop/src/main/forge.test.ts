@@ -18,11 +18,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const openExternal = vi.fn(async (_url: string) => undefined);
 vi.mock("electron", () => ({ shell: { openExternal: (url: string) => openExternal(url) } }));
 
-const { openPullRequest } = await import("./forge");
+const { openPullRequest, openRemarkLink } = await import("./forge");
 
 import { NOTHING_YET } from "../shared/bridge";
 import type { BridgeState } from "../shared/bridge";
-import type { JobDetail, JobSummary } from "@armada/protocol";
+import type { JobDetail, JobRemarks, JobSummary } from "@armada/protocol";
 
 const JOB_ID = "01M1N1TJB3002E49K150S7AF2B";
 const ADDRESS = "https://forge.invalid/NickMele/armada/pull/4711";
@@ -59,6 +59,19 @@ function holding(delivery: JobDetail["delivery"]): BridgeState {
         dependencies: [],
         ...(delivery === undefined ? {} : { delivery }),
       },
+    },
+  };
+}
+
+/** Main holding one Job's remarks reading. */
+function holdingRemarks(remarks: JobRemarks["remarks"]): BridgeState {
+  return {
+    ...NOTHING_YET,
+    jobs: [summary()],
+    remarks: {
+      state: "read",
+      jobId: JOB_ID,
+      review: { job_id: JOB_ID, pull_request: ADDRESS, remarks },
     },
   };
 }
@@ -129,5 +142,52 @@ describe("opening a job's pull request", () => {
     await expect(openPullRequest(holding({ pull_request: ADDRESS }), JOB_ID)).resolves.toMatchObject(
       { why: "refused", address: ADDRESS },
     );
+  });
+});
+
+describe("opening one comment's link", () => {
+  const REMARK_ID = "IC_kwDOfirst";
+  const REMARK_ADDRESS = "https://forge.invalid/NickMele/armada/pull/4711#issuecomment-1";
+
+  function remark(url?: string) {
+    return {
+      id: REMARK_ID,
+      by: "a-reviewer",
+      at: "2026-09-08T10:00:00Z",
+      said: "the reader still stops one line early",
+      taken_up: false,
+      ...(url === undefined ? {} : { url }),
+    };
+  }
+
+  it("hands over the comment's own address, and nothing else", async () => {
+    const state = holdingRemarks([remark(REMARK_ADDRESS)]);
+    await expect(openRemarkLink(state, JOB_ID, REMARK_ID)).resolves.toEqual({ ok: true });
+    expect(openExternal).toHaveBeenCalledWith(REMARK_ADDRESS);
+  });
+
+  it("says so where the comment carries no address", async () => {
+    const state = holdingRemarks([remark()]);
+    await expect(openRemarkLink(state, JOB_ID, REMARK_ID)).resolves.toEqual({
+      ok: false,
+      why: "no_address",
+    });
+    expect(openExternal).not.toHaveBeenCalled();
+  });
+
+  it("says so where the reading names no such comment", async () => {
+    const state = holdingRemarks([]);
+    await expect(openRemarkLink(state, JOB_ID, REMARK_ID)).resolves.toEqual({
+      ok: false,
+      why: "no_address",
+    });
+    expect(openExternal).not.toHaveBeenCalled();
+  });
+
+  it("says so where it no longer holds the job", async () => {
+    await expect(openRemarkLink(NOTHING_YET, JOB_ID, REMARK_ID)).resolves.toEqual({
+      ok: false,
+      why: "unknown_job",
+    });
   });
 });

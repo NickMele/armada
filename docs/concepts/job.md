@@ -289,11 +289,13 @@ Restart Step's, which is the row above.
 
 **The words need not be the person's own.** `take_up_remarks` is the same road
 entered from the same gate, carrying the comments a person picked off the Job's
-pull request instead of a sentence they typed: the record holds them, the Job
-re-queues, the fresh Drone opens with them, and they are cleared on delivery.
-What it adds is where they came from — the forge, read again on the press — and
-one reply on the pull request saying which were picked up. [Fleet](fleet.md),
-*What Fleet knows after the merge*, has the rest.
+pull request instead of a sentence they typed. They are written whole into a
+file in the Drone's worktree rather than onto the record: the record holds a
+note pointing at that file, the Job re-queues, and the fresh Drone opens with
+the pointer and reads the file. What it adds is where the comments came from
+— the forge, read again on the press — and one reply on the pull request
+saying which were picked up. [Fleet](fleet.md), *What Fleet knows after the
+merge*, has the rest.
 
 The override is the exception and says so: the person is disagreeing with a
 verdict, which is the same act wherever the Job stands.

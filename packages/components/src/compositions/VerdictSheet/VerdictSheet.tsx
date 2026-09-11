@@ -34,6 +34,13 @@ export type VerdictFigure = {
 };
 
 export type VerdictSheetProps = {
+  /**
+   * The record's own headline, above "What you asked for". **Only where the
+   * Job is closed and a person answered it** — the fifth arrangement, beside
+   * the gate and the nothing-asked finish. Neither the word nor the moment is
+   * chosen here: both are the screen's, off the transition that closed the Job.
+   */
+  header?: { done: ReactNode; when: ReactNode };
   /** What was asked for — the Job's own title. */
   title: ReactNode;
   /** The acceptance criteria the Job was frozen with, one line each. */
@@ -67,6 +74,7 @@ export type VerdictSheetProps = {
 };
 
 export function VerdictSheet({
+  header,
   title,
   criteria,
   criteriaAbsent,
@@ -83,6 +91,12 @@ export function VerdictSheet({
 }: VerdictSheetProps) {
   return (
     <div className="armada-verdict">
+      {header === undefined ? null : (
+        <div className="armada-verdict__header">
+          <span className="armada-verdict__done">{header.done}</span>
+          <span className="armada-verdict__when">{header.when}</span>
+        </div>
+      )}
       <Block label="What you asked for">
         <p className="armada-verdict__lede">{title}</p>
         {criteria.length === 0 ? (
@@ -134,9 +148,9 @@ export function VerdictSheet({
       {note === undefined ? null : <p className="armada-verdict__said">{note}</p>}
 
       {actions === undefined ? (
-        <p className="armada-verdict__record">
+        <div className="armada-verdict__record">
           {recordNote ?? "Nothing is asked of anyone. This is the Job's record."}
-        </p>
+        </div>
       ) : (
         <div className="armada-verdict__actions">{actions}</div>
       )}
