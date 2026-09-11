@@ -1,5 +1,6 @@
 import type { KeyboardEvent as ReactKeyboardEvent, FocusEvent, ReactNode } from "react";
-import { Children, useCallback, useRef, useState } from "react";
+import { Children, Fragment, isValidElement, useCallback, useRef, useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { JOB_ROW_LIST, RovingOption } from "../JobRowStacked/JobRowStacked";
 
 /**
@@ -23,6 +24,20 @@ import { JOB_ROW_LIST, RovingOption } from "../JobRowStacked/JobRowStacked";
  * Fourteen tab stops to cross a list is what a `listitem` with an `onClick`
  * produces, and it is why the role was wrong before the keys were.
  */
+/**
+ * A run of rows under one label, where the list is drawn grouped. Folded draws
+ * the label and none of its rows; `onFold` makes the label the control that
+ * folds and unfolds it.
+ */
+export type ActiveJobsSection = {
+  id: string;
+  label: ReactNode;
+  count: number;
+  folded?: boolean;
+  onFold?: () => void;
+  rows: ReactNode[];
+};
+
 export type ActiveJobsListProps = {
   /** The surface's name. Lowercase anything countable: "Active jobs". */
   heading?: ReactNode;
@@ -46,6 +61,12 @@ export type ActiveJobsListProps = {
   controls?: ReactNode;
   /** `Job row (stacked)` rows, in the order Fleet supplied. */
   children?: ReactNode;
+  /**
+   * The rows in labelled sections, drawn instead of `children`. The rows stay
+   * direct options of the listbox, so the arrow keys walk every open section
+   * as one list, and a section's label is never an option.
+   */
+  sections?: ActiveJobsSection[];
   /** Where `Board empty state` mounts when there are no rows. */
   empty?: ReactNode;
   /**
@@ -96,6 +117,7 @@ export function ActiveJobsList({
   action,
   controls,
   children,
+  sections,
   empty,
   selectable = false,
   label,
@@ -103,7 +125,10 @@ export function ActiveJobsList({
   columns,
 }: ActiveJobsListProps) {
   const rows = Array.isArray(children) ? children.filter(Boolean) : children;
-  const isEmpty = rows === undefined || rows === null || (Array.isArray(rows) && rows.length === 0);
+  const isEmpty =
+    sections !== undefined
+      ? sections.length === 0
+      : rows === undefined || rows === null || (Array.isArray(rows) && rows.length === 0);
   const frame = useRef<HTMLDivElement>(null);
   // Where the one tab stop is. Zero is the first row, which is where a list
   // that has never been touched should put it.
@@ -196,14 +221,66 @@ export function ActiveJobsList({
         ) : null}
         {isEmpty
           ? empty
-          : roving
-            ? // A provider renders no element, so the options stay direct
-              // children of the listbox and `:scope >` still finds them.
-              Children.map(rows, (row, index) => (
-                <RovingOption.Provider value={{ index, active }}>{row}</RovingOption.Provider>
-              ))
-            : rows}
+          : sections !== undefined
+            ? drawSections(sections, roving, active)
+            : roving
+              ? // A provider renders no element, so the options stay direct
+                // children of the listbox and `:scope >` still finds them.
+                Children.map(rows, (row, index) => (
+                  <RovingOption.Provider value={{ index, active }}>{row}</RovingOption.Provider>
+                ))
+              : rows}
       </div>
     </section>
   );
+}
+
+/**
+ * The sections as direct children of the frame: each label, then its rows. A
+ * row's roving index counts across sections, so the list's one tab stop lands
+ * on the row the arrow keys hold as active.
+ */
+function drawSections(
+  sections: ActiveJobsSection[],
+  roving: boolean,
+  active: number,
+): ReactNode[] {
+  let index = 0;
+  return sections.flatMap((section) => [
+    <div className="armada-active-jobs__section" role="presentation" key={`section-${section.id}`}>
+      {section.onFold === undefined ? (
+        <span className="armada-active-jobs__section-label">
+          {section.label}
+          <span className="armada-active-jobs__section-count">{section.count}</span>
+        </span>
+      ) : (
+        <button
+          type="button"
+          className="armada-active-jobs__section-label armada-active-jobs__fold"
+          aria-expanded={!section.folded}
+          onClick={section.onFold}
+        >
+          {section.folded ? (
+            <ChevronRight size={14} strokeWidth={2} aria-hidden />
+          ) : (
+            <ChevronDown size={14} strokeWidth={2} aria-hidden />
+          )}
+          {section.label}
+          <span className="armada-active-jobs__section-count">{section.count}</span>
+        </button>
+      )}
+    </div>,
+    ...(section.folded
+      ? []
+      : section.rows.map((row, at) => {
+          const key = isValidElement(row) && row.key !== null ? row.key : `${section.id}-${at}`;
+          if (!roving) return <Fragment key={key}>{row}</Fragment>;
+          const value = { index: index++, active };
+          return (
+            <RovingOption.Provider key={key} value={value}>
+              {row}
+            </RovingOption.Provider>
+          );
+        })),
+  ]);
 }

@@ -77,10 +77,9 @@
 // strip is still a breakdown of what is on screen — and a tab that empties
 // under a search renders no count rather than a `0`.
 
-import { plural } from "@armada/components";
 import type { JobSummary } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
-import { needsYou, needsYouClause, oldest, tabOf } from "./needs-you";
+import { needsYou, oldest, tabOf } from "./needs-you";
 import type { BoardTab } from "./needs-you";
 
 /** The tab names, defined beside the rule that sorts a job into one. */
@@ -231,44 +230,40 @@ export function sorted(jobs: readonly JobSummary[], sort: BoardSort): JobSummary
 }
 
 /**
- * The count, stating both numbers.
- *
- * `4 jobs need you. 15 on the Board.` **Neither number alone says anything** —
- * the first is what a person is deciding whether to act on, the second is what
- * it is a fraction of, and a board reading `4 jobs` gives no sense of whether
- * that is the whole of it or a corner.
- *
- * Under a search the first number changes and the second does not:
- * `3 jobs match “auth”. 15 on the Board.` The needs-you count is dropped rather
- * than recomputed over the matches — the tab is suspended, so the only two
- * numbers a control on screen produced are what matched and what exists.
+ * The All tab's sections, in the order a person works down them: what needs
+ * them, what is running, what is waiting its turn, and what is over. **Done is
+ * finished and cleared together**, the owner's ruling on 11 Sep 2026: a Job
+ * whose worktree was given back is still a Job that ended.
  */
-export function countSentence(args: {
-  /** Every job Bridge holds, before any filter. */
-  total: number;
-  /** How many the text match left, where there is one. */
-  matched: number;
-  /** How many need a person. Read only when there is no search. */
-  needsYou: number;
-  /** The text match, as typed. Empty is no match. */
-  query: string;
-}): string {
-  const board = `${args.total} on the Board.`;
-  if (args.query.trim() === "") {
-    return `${needsYouClause(args.needsYou)} ${board}`;
-  }
-  // **Against the Board, not against the tab**, because the tab is suspended
-  // while a search runs and a fraction of a filter that is not applying would
-  // be a number nothing on screen produced.
-  //
-  // The query is quoted back so the sentence says what was matched rather than
-  // leaving "3 jobs match" to be read against a field the eye has already left.
-  // Curly, because these are quotation marks in a sentence and not code — the
-  // first pair in any product string here, so this is where the convention
-  // starts rather than where it breaks.
-  const quoted = `“${args.query.trim()}”`;
-  if (args.matched === 0) return `No jobs match ${quoted}. ${board}`;
-  return `${plural(args.matched)} match ${quoted}. ${board}`;
+export const BOARD_SECTIONS = [
+  { id: "needs-you", label: "Needs you" },
+  { id: "running", label: "Running" },
+  { id: "queued", label: "Queued" },
+  { id: "done", label: "Done" },
+  // A Job no tab claims, which `tabOf` answers `null` for. Drawn under its
+  // own label rather than dropped: a grouped list that loses a row is worse
+  // than one with a fifth heading.
+  { id: "other", label: "Other" },
+] as const;
+
+export type BoardSection = (typeof BOARD_SECTIONS)[number]["id"];
+
+/** Which section of the All tab a Job is drawn under. */
+export function sectionOf(job: JobSummary): BoardSection {
+  const tab = tabOf(job);
+  if (tab === "finished" || tab === "cleared") return "done";
+  return tab ?? "other";
+}
+
+/** The sections that have rows in them, each keeping the order it was given. */
+export function sectionsOf(
+  jobs: readonly JobSummary[],
+): { id: BoardSection; label: string; jobs: JobSummary[] }[] {
+  return BOARD_SECTIONS.map((section) => ({
+    id: section.id,
+    label: section.label,
+    jobs: jobs.filter((job) => sectionOf(job) === section.id),
+  })).filter((section) => section.jobs.length > 0);
 }
 
 /**

@@ -32,8 +32,8 @@ export type SplitButtonProps = {
   /** What the row could also do. Destructive last. */
   items: SplitButtonItem[];
   /**
-   * Secondary on a list row, always. `primary` is legal only on job detail,
-   * where there is one Job and one primary.
+   * Secondary on a list row, always. `primary` is legal where a surface has one
+   * primary: Job detail's header, and the Board's head.
    *
    * `destructive` is outlined, never filled — a solid red control reads as an
    * error state rather than as an act. It is for a group whose every member

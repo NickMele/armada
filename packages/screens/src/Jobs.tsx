@@ -13,13 +13,11 @@
 // so scope is not a control; origin was drawn as a filter and rejected, because
 // *what needs me*, *what is running* and *why has that not started* are all
 // state. `board.ts` owns the arithmetic — which tab a Job is in, what a search
-// matches, what order the two sorts produce, and the sentence over the top.
+// matches, what order the two sorts produce, and the sections the All tab is drawn in.
 //
-// **The count sentence moved here from the panel head.** It states both numbers
-// — `4 jobs need you. 15 on the Board.` — and both change with the filter, so
-// it belongs beside the control that changes them rather than in a head that
-// also serves the composer and the reports view. The head kept it while there
-// was no filter for it to disagree with.
+// **There is no count sentence.** `4 jobs need you. 15 on the Board.` sat over
+// the list until 11 Sep 2026, when the owner cut it: the tab counts say both
+// numbers already. The bulk acts that sat above it are in the head's menu.
 //
 // # The keyboard
 //
@@ -73,27 +71,24 @@
 import { ActiveJobsList, BoardControls, BoardEmptyState, Button } from "@armada/components";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { JOB_LIFECYCLE } from "@armada/components";
 import type { JobSummary } from "@armada/protocol";
 import type { WorkflowSummary } from "@armada/protocol";
 import {
   BOARD_COLUMNS,
   BOARD_SORTS,
   BOARD_TABS,
-  countSentence,
   DEFAULT_SORT,
   emptiedBy,
   FIRST_TAB,
   inTab,
   matches,
-  needsYou,
+  sectionsOf,
   sorted,
   tabOf,
   tabSuspended,
   type BoardSort,
   type BoardTab,
 } from "./board";
-import { ClearTerminalControl, ForgetTerminalControl } from "@armada/shell";
 import { boardPressOf, SEARCH_KEY, verbOf } from "./keys";
 import type { BoardReach } from "./keys";
 import { foldedNote, foldLineages, headlineOf } from "./lineage";
@@ -138,18 +133,6 @@ export type JobsProps = {
    * the cursor is; what it opens is `App`'s.
    */
   onCompose: () => void;
-  /**
-   * Reclaim every terminal, not-yet-reclaimed Job's worktree and branch at
-   * once. Confirmed here, before it is called — the act cannot be taken back
-   * on a per-Job basis once it lands, even though the record survives it.
-   */
-  onClearTerminal: (jobIds: readonly string[]) => void;
-  /**
-   * Delete every terminal Job's whole record at once. Confirmed here, before
-   * it is called — there is no undo on the other side of this, and unlike a
-   * kill there is no record left afterward to check the confirmation against.
-   */
-  onForgetTerminal: (jobIds: readonly string[]) => void;
   /** A clipboard write is silent, so the surface confirms every one with a toast. */
   onCopied: (value: string) => void;
   /**
@@ -173,8 +156,6 @@ export function Jobs({
   onOpen,
   onKill,
   onCompose,
-  onClearTerminal,
-  onForgetTerminal,
   onCopied,
   onCursor,
   reach,
@@ -196,6 +177,9 @@ export function Jobs({
   // now: where a person left the Board is a preference and preferences belong
   // in settings, not in a hook that quietly becomes the place they live.
   const [view, setView] = useState<"card" | "table">("card");
+  // Whether the All tab's Done section is open. Folded by default, for the
+  // reason the redispatch fold is: what is over is read on purpose.
+  const [doneOpen, setDoneOpen] = useState(false);
   // Where the cursor is, as a job id. It is set from DOM focus rather than kept
   // beside it, so `j`, the arrows, Tab and the mouse all move one cursor.
   const [cursor, setCursor] = useState<string | null>(null);
@@ -214,20 +198,6 @@ export function Jobs({
   const bounded = sorted(narrowed, sort).slice(0, DRAWN);
   const drawn = bounded.filter((job) => readingOf(job).as === "badge");
   const undrawable = bounded.filter((job) => readingOf(job).as !== "badge");
-  // Every Job Bridge holds, not just the bounded window drawn below — a Job
-  // scrolled past `DRAWN` is still reached, since the point is clearing the
-  // board Fleet holds rather than the rows currently on screen.
-  const terminalJobs = jobs.filter((job) => JOB_LIFECYCLE[job.status]?.terminal === true);
-  // `Clear` only reaches a Job that has not already given its disk back —
-  // reclaiming one a second time is not a refusal, but a bulk button that
-  // kept re-sending it would read as doing nothing on every second press.
-  const reclaimableIds = terminalJobs
-    .filter((job) => job.reclaimed_at === undefined)
-    .map((job) => job.id);
-  // `Delete record` reaches every terminal Job, reclaimed or not — deleting
-  // the record a reclaim kept is the whole of what the act is for.
-  const forgettableIds = terminalJobs.map((job) => job.id);
-
   const tabs = BOARD_TABS.map((row) => ({
     id: row.id,
     label: row.label,
@@ -377,6 +347,39 @@ export function Jobs({
 
   const why = emptiedBy(tab, query);
 
+  /** One drawn Job, as the Board's row. */
+  const rowOf = (job: JobSummary) => (
+    <Row
+      key={job.id}
+      job={job}
+      headline={headlineOf(job, board.dispatch.get(job.id))}
+      stale={stale}
+      now={now}
+      workflows={workflows}
+      selected={job.id === selected}
+      focused={job.id === cursor}
+      onOpen={onOpen}
+      onKill={onKill}
+      onCopied={onCopied}
+    />
+  );
+
+  // **The All tab is drawn in sections**: what needs you, what is running,
+  // what is waiting its turn, and what is over, folded. Only while no search
+  // runs: a search draws every match flat, so a match is never folded away.
+  const grouped = tab === "all" && !suspended;
+  const sections = grouped
+    ? sectionsOf(drawn).map((section) => ({
+        id: section.id,
+        label: section.label,
+        count: section.jobs.length,
+        ...(section.id === "done"
+          ? { folded: !doneOpen, onFold: () => setDoneOpen((was) => !was) }
+          : {}),
+        rows: section.jobs.map(rowOf),
+      }))
+    : undefined;
+
   return (
     <div
       className="armada-screen__stack"
@@ -390,39 +393,11 @@ export function Jobs({
         onCursor?.(row.dataset.jobId);
       }}
     >
-      {reclaimableIds.length === 0 && forgettableIds.length === 0 ? null : (
-        <div>
-          {reclaimableIds.length === 0 ? null : (
-            <ClearTerminalControl
-              count={reclaimableIds.length}
-              stale={stale}
-              onConfirm={() => onClearTerminal(reclaimableIds)}
-            />
-          )}
-          {forgettableIds.length === 0 ? null : (
-            <ForgetTerminalControl
-              count={forgettableIds.length}
-              stale={stale}
-              onConfirm={() => onForgetTerminal(forgettableIds)}
-            />
-          )}
-        </div>
-      )}
       <ActiveJobsList
-        // The count sentence is here rather than in the panel head, because both
-        // its numbers move with the filter directly below it and the head serves
-        // three other views. No heading: the head still names the surface, and
-        // the same name in two places is two chances to disagree.
-        //
         // Every drawn row opens a Job, so the frame is a listbox and its rows
         // are options — which is what lets "this one is open" be a state a
         // screen reader can read rather than a fill only a sighted eye catches.
-        summary={countSentence({
-          total: jobs.length,
-          matched: matched.length,
-          needsYou: narrowed.filter(needsYou).length,
-          query,
-        })}
+        sections={sections}
         selectable
         label="Job Board"
         view={view}
@@ -480,21 +455,7 @@ export function Jobs({
           )
         }
       >
-        {drawn.map((job) => (
-          <Row
-            key={job.id}
-            job={job}
-            headline={headlineOf(job, board.dispatch.get(job.id))}
-            stale={stale}
-            now={now}
-            workflows={workflows}
-            selected={job.id === selected}
-            focused={job.id === cursor}
-            onOpen={onOpen}
-            onKill={onKill}
-            onCopied={onCopied}
-          />
-        ))}
+        {grouped ? null : drawn.map(rowOf)}
       </ActiveJobsList>
 
       {/* Named whether or not it is pressed. A fold nobody is told about is

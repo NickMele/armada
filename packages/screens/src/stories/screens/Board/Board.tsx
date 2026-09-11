@@ -49,6 +49,9 @@ export function BoardFrom({
     onCloseWorktrees: noop,
     onReadWorktrees: noop,
     onRefresh: noop,
+    jobs,
+    onClearTerminal: noop,
+    onForgetTerminal: noop,
   });
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column" }}>
@@ -76,8 +79,6 @@ export function BoardFrom({
             onOpen={noop}
             onKill={noop}
             onCompose={noop}
-            onClearTerminal={noop}
-            onForgetTerminal={noop}
             onCopied={noop}
           />
         </div>
