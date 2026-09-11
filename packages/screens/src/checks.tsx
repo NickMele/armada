@@ -34,11 +34,13 @@ import { judgeOf } from "./declared";
 import { namesChapter } from "./detail-keys";
 import { span } from "./duration";
 import {
+  checksFromAttempt,
   checksOf,
   checksStand,
   didNotPass,
   isRunning,
   isWaiting,
+  notedFrom,
   outputRunOf,
   sentenceOf,
   stoppedUndecided,
@@ -109,8 +111,10 @@ export function checksChapter(
   return {
     id: CHECKS_CHAPTER,
     title: "Checks",
-    // The same sentence the phase strip's tier stands at, from the same call.
-    summary: checksStand(reads),
+    // The same sentence the phase strip's tier stands at, from the same call
+    // — with which attempt it is from, where a rerun gate has left it behind
+    // the step's own current one.
+    summary: notedFrom(checksStand(reads), checksFromAttempt(step)),
     // The preview is the whole list — four rows is not a reading. What has no
     // end is what is behind each row, and that is what a press opens.
     preview: (
