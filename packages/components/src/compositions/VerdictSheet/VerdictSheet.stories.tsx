@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { GitPullRequest, Minus, ShieldCheck } from "lucide-react";
+import { CircleX, GitPullRequest, Minus, ShieldCheck } from "lucide-react";
 import { VerdictSheet } from "./VerdictSheet";
 import { Button } from "../../primitives/Button/Button";
 import { CheckRuns } from "../CheckRuns/CheckRuns";
@@ -8,12 +8,14 @@ import { ReviewComments } from "../ReviewComments/ReviewComments";
 
 /**
  * The panel job detail shows at the one place a Job stops for a person, and
- * again once it is over with nothing left to ask. One page, read top to
- * bottom — the four states below are the whole of what changes between them.
+ * again once it is over with nothing left to ask — or answered along the way.
+ * One page, read top to bottom — the five states below are the whole of what
+ * changes between them.
  *
  * **Approved 2026-09-08, Option B.** `why-b.md`: buildable on today's wire,
- * and it moves between the four scenarios by adding or dropping a labelled
- * block rather than by redrawing the page.
+ * and it moves between the scenarios by adding or dropping a labelled block
+ * rather than by redrawing the page. The fifth was added 2026-09-11, for a
+ * Job that closed after a person answered it along the way.
  */
 const meta: Meta<typeof VerdictSheet> = {
   title: "Compositions/Verdict sheet",
@@ -234,5 +236,107 @@ export const FinishedNothingAsked: Story = {
       { label: "Steps", value: "3 of 3 advanced", mono: true },
       { label: "Pull request", value: "never, for this workflow", mono: true },
     ],
+  },
+};
+
+/**
+ * Finished, after a person answered it along the way — the fifth arrangement,
+ * added 2026-09-11. A real Job: #546, dispatched, restarted once, overruled
+ * once, approved, and merged as #630 — every value below is off Fleet's own
+ * record of it (`01M27918MN0011N9KZEV9ZWHY3`), read the same way
+ * `verdictSlotAfterAnswer` reads it, with the run tree's `tests` step open —
+ * the one step this Job's own record carries an overruled verdict on.
+ *
+ * `header.when` and the pull request's settled state are the two blocks
+ * `FinishedNothingAsked` never draws; `provesIt`'s third row and
+ * `recordNote` are new content on blocks that story already has.
+ */
+export const FinishedAfterYouAnswered: Story = {
+  args: {
+    // `absoluteOf` reads the instant in whoever's looking at it own local
+    // time zone; this is what it reads in the zone the drawing was read in
+    // (UTC-4) for the wire instant Fleet recorded, `2026-09-11T05:29:16.834Z`.
+    header: { done: "Done", when: "approved Sep 11, 2026, 1:29 AM" },
+    title: "Refuse a merge press whose chosen comments won't fit the brief",
+    criteria: [
+      // `${545}` rather than the literal `#545`: three hex digits after a `#`
+      // reads as a colour to `xtask`'s off-contract-value rule, the same
+      // signature `#4711` above dodges by having a fourth.
+      `A press whose chosen comments would not fit is refused by a new named refusal with its own wire code, beside the four #${545} added`,
+      "The refusal names which comments are too large, and Bridge shows that to the person when they press",
+      "fleet::remarks::quoted still writes whatever it is given, whole; nothing truncates a comment",
+      "A doc under docs/spikes/ states the measured room a brief leaves for comments and the bound it justifies, applied to the set of chosen comments",
+    ],
+    cameBack:
+      "A press whose chosen comments' rendered brief would exceed ROOM_FOR_COMMENTS is now " +
+      "exercised by test, at both ends of the “bound the set, not the comment” rule.",
+    pullRequest: (
+      <p className="text-xs text-fg-muted">
+        <GitPullRequest size={12} strokeWidth={2} aria-hidden className="inline" />{" "}
+        <span className="mono">{`#${630}`}</span>, merged.
+      </p>
+    ),
+    provesIt: (
+      <CheckRuns
+        rows={[
+          {
+            id: "build",
+            says: "Exit 0.",
+            identifier: "build",
+            named: "passed",
+            icon: ShieldCheck,
+          },
+          {
+            id: "test",
+            says: "All tests passed.",
+            identifier: "test",
+            named: "passed",
+            icon: ShieldCheck,
+          },
+          {
+            id: "format",
+            says: "Exit 0.",
+            identifier: "format",
+            named: "passed",
+            icon: ShieldCheck,
+          },
+          {
+            id: "judge",
+            says: "1 of 2 criteria refused",
+            identifier: "judge · 1 criterion · gaming check · overruled by you",
+            identifierIsAName: true,
+            named: "overruled",
+            icon: CircleX,
+            detail:
+              'Not met: The "Write tests" step should not modify ' +
+              "crates/ipc/operations.toml. Specification documentation for newly added " +
+              "wire codes belongs in the implement step, alongside the implementation of " +
+              "the variant and wire code handling. You: “The only unmet criterion is " +
+              "that a note documenting the new RemarksTooLarge refusal in " +
+              "crates/ipc/operations.toml landed in the tests step, not implement. The " +
+              "note is correct and needed; which step added it doesn't change the work. " +
+              "The whole change gets reviewed at handoff.”",
+          },
+        ]}
+      />
+    ),
+    leftAlone:
+      "No test exercises worth_dropping or RemarksTooLarge through Bridge's rendering of the " +
+      "WireError, since no packages/ file changed in this step.",
+    figures: [
+      { label: "Branch", value: "armada/2-refuse-a-merge-press-whose-chosen-comments", mono: true },
+      { label: "Took", value: "1h 45m · ~$3.89", mono: true },
+      { label: "Drones", value: "5", mono: true },
+      { label: "Steps", value: "4 of 4 advanced", mono: true },
+    ],
+    recordNote: (
+      <>
+        <span className="armada-verdict__label">Your answer</span>
+        <p className="armada-verdict__said">
+          You approved the work on Sep 11, 2026, 1:29 AM, and the pull request merged. Nothing is
+          asked of anyone now.
+        </p>
+      </>
+    ),
   },
 };

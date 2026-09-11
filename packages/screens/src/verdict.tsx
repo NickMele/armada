@@ -13,6 +13,9 @@
 // `artifact_exists` on a workflow with no other tier — has a run and no row.
 // `mechanicalRunsOf` is the other half of that read, and both are folded into
 // one list here so nothing a gate actually ran goes missing from the record.
+//
+// **The fifth arrangement is `verdict-answered.tsx`, not here** — a Job done
+// after a person answered along the way, reading `verdictOf` as the two below do.
 
 import type { ReactNode } from "react";
 import { Minus } from "lucide-react";
@@ -109,6 +112,8 @@ export function provesItOf(
   now: number,
   /** Fleet's own reason the gate could not decide. `checksChapter`'s own. */
   undecided?: string,
+  /** A person's own words for overruling this step, where the log kept one. */
+  reason?: string,
 ): CheckRunRow[] {
   const rows = checksOf(step).map((read) => checkRow(read, now));
   for (const run of mechanicalRunsOf(step)) {
@@ -122,7 +127,7 @@ export function provesItOf(
     });
   }
   const panels = panelsOf(step, criteria);
-  const judge = judgeRow(step, panels, undecided);
+  const judge = judgeRow(step, panels, undecided, reason);
   if (judge !== undefined) rows.push(judge);
   // **The row that says nothing else looked.** Drawn from the same data that
   // decides `provesItNoteOf`'s closing sentence, on a workflow whose only
@@ -180,6 +185,7 @@ export function figuresOf({
   diff,
   opens,
   now,
+  drones = false,
 }: {
   job: JobSummary;
   whole: JobWhole | null;
@@ -188,6 +194,8 @@ export function figuresOf({
   diff: Diff;
   opens: Opens;
   now: number;
+  /** Whether to add how many Drones ran. Off by default — the fifth arrangement's own ask. */
+  drones?: boolean;
 }): VerdictFigure[] {
   const never = neverDelivers(whole?.steps ?? []);
   const figures: VerdictFigure[] = [];
@@ -210,6 +218,9 @@ export function figuresOf({
   const took = tookOf(job, whole, now);
   if (took !== undefined) figures.push({ label: "Took", value: took, mono: true });
 
+  if (drones && whole?.spend?.drones !== undefined) {
+    figures.push({ label: "Drones", value: String(whole.spend.drones), mono: true });
+  }
   const steps = whole?.steps ?? [];
   if (steps.length > 0) {
     const advanced = steps.filter((one) => one.state === "advanced").length;
@@ -303,6 +314,10 @@ export type VerdictArgs = {
   pullRequest?: { address: string | undefined; detail: PullRequestDetail | undefined };
   /** Fleet's own reason the gate could not decide, scoped to this step. */
   undecided?: string;
+  /** A person's own words for overruling the open step, where the log kept one. */
+  reason?: string;
+  /** Whether the figures add how many Drones ran. */
+  drones?: boolean;
 };
 
 /**
@@ -320,6 +335,8 @@ export function verdictOf({
   claim,
   pullRequest,
   undecided,
+  reason,
+  drones,
 }: VerdictArgs): Omit<VerdictSheetProps, "actions" | "note" | "recordNote"> {
   const kept = keptOf(step, opens);
   const never = neverDelivers(whole?.steps ?? []);
@@ -332,17 +349,17 @@ export function verdictOf({
     ...(pullRequest === undefined
       ? {}
       : { pullRequest: pullRequestBlockOf(pullRequest.address, pullRequest.detail) }),
-    provesIt: <CheckRuns rows={provesItOf(step, whole?.acceptance_criteria ?? [], now, undecided)} />,
+    provesIt: <CheckRuns rows={provesItOf(step, whole?.acceptance_criteria ?? [], now, undecided, reason)} />,
     ...(provesItNoteOf(step, render) === undefined
       ? {}
       : { provesItNote: provesItNoteOf(step, render) }),
     leftAlone: leftAloneOf(claim),
-    figures: figuresOf({ job, whole, step, render, diff, opens, now }),
+    figures: figuresOf({ job, whole, step, render, diff, opens, now, drones }),
   };
 }
 
-/** The three readings the verdict sheet's two slots both need from the panel. */
-type VerdictReads = { diff: Diff; evidence: Evidence; remarks: Remarks };
+/** The three readings the verdict sheet's slots all need from the panel. */
+export type VerdictReads = { diff: Diff; evidence: Evidence; remarks: Remarks };
 
 export type VerdictSlotAtGateArgs = {
   job: JobSummary;
