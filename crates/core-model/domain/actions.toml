@@ -168,10 +168,22 @@ tier = "Contextual"
 verb = "Review"
 icon = "eye"
 shortcut = "r"
-scope = "list and detail"
+scope = "list"
 destructive = false
 confirms = false
-notes = "The most-pressed contextual key in the app: review is on every needs-you row, which is why it holds `r` and redirect moved to `d`. The glyph is reserved to Review and to nothing else."
+notes = "The most-pressed contextual key on the Board: review is on every needs-you row, which is why it holds `r` and redirect moved to `d`. The glyph is reserved to Review and to nothing else. Narrowed from \"list and detail\" by #624: the detail half was never built — nothing in packages/screens binds it — and Job detail's review sits inline in the panel once the Job is open, with no separate thing left for a key to open. Freed `r` at detail scope for `run`, below."
+
+[actions.run]
+kind = "Action"
+tier = "Contextual"
+verb = "Run"
+icon = ""
+icon_absent = "undecided"
+shortcut = "r"
+scope = "detail"
+destructive = false
+confirms = false
+notes = "Opens the run sheet — Journey 9's *Running one inside a Job* — nothing selected. Also opened by **Run…** on the worktree row of *Where things are* and by **Run it here** on a refused Check's row, neither of which is this binding: a control that already reads as an act does not need a second one repeated on it. No glyph — the sheet is not a Check and not evidence, so nothing in the `shield-*` or `file-*` families reads for it, and inventing one is a decision for packages/icons/icons.toml."
 
 [actions.attest]
 kind = "Action"
