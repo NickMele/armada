@@ -3,9 +3,9 @@
 // both load.
 
 import type { ReactNode } from "react";
+import { Unplug } from "lucide-react";
 import { Fragment, useCallback, useState } from "react";
 import {
-  Absent,
   JobBrief,
   JobDetailHeaderActions,
   PhaseStrip,
@@ -222,6 +222,13 @@ export type InsideAJobProps = {
   /** Why no step is open, where none is. */
   stepAbsent?: string;
   /**
+   * Why nothing about this Job could be read, where Fleet did not answer for
+   * it. **One message where the step goes, instead of an empty region per
+   * part of the screen**: every region would say the same thing, and four of
+   * them read as four failures.
+   */
+  unreachable?: string;
+  /**
    * The trailing sheet, where one is open — the step's activity log, or the
    * Job's patch.
    *
@@ -263,6 +270,7 @@ export function InsideAJob({
   briefAbsent = "No brief",
   step,
   stepAbsent = "Select a step in the run",
+  unreachable,
   sheet,
   onCopied,
 }: InsideAJobProps) {
@@ -280,9 +288,9 @@ export function InsideAJob({
             )}
           </div>
           {run.length === 0 ? (
-            <div className="armada-screen__slot">
-              <Absent name="The run" note={runAbsent} />
-            </div>
+            <p className="armada-inside__absent" role="note">
+              {unreachable ?? runAbsent}
+            </p>
           ) : (
             <RunTree
               steps={run}
@@ -310,9 +318,9 @@ export function InsideAJob({
 
           <Eyebrow spaced>{whereLabel}</Eyebrow>
           {where === undefined || where.length === 0 ? (
-            <div className="armada-screen__slot">
-              <Absent name="Where things are" note={whereAbsent} />
-            </div>
+            <p className="armada-inside__absent" role="note">
+              {unreachable ?? whereAbsent}
+            </p>
           ) : (
             <WhereRegion rows={where} onCopied={onCopied} />
           )}
@@ -331,21 +339,28 @@ export function InsideAJob({
 
         {/* The panel. Same regions in the same order at every state. */}
         <div className="armada-inside__panel">
-          <div className="armada-inside__brief">
-            <Eyebrow>Brief</Eyebrow>
-            {brief === undefined ? (
-              <div className="armada-screen__slot">
-                <Absent name="Brief" note={briefAbsent} />
-              </div>
-            ) : (
-              <JobBrief {...brief} />
-            )}
-          </div>
-
-          {step === undefined ? (
-            <div className="armada-screen__slot">
-              <Absent name="The step" note={stepAbsent} />
+          {unreachable !== undefined ? null : (
+            <div className="armada-inside__brief">
+              <Eyebrow>Brief</Eyebrow>
+              {brief === undefined ? (
+                <p className="armada-inside__absent" role="note">
+                  {briefAbsent}
+                </p>
+              ) : (
+                <JobBrief {...brief} />
+              )}
             </div>
+          )}
+
+          {unreachable !== undefined ? (
+            <div className="armada-inside__unreachable" role="status">
+              <Unplug size={20} strokeWidth={1.5} aria-hidden />
+              <span>{unreachable}</span>
+            </div>
+          ) : step === undefined ? (
+            <p className="armada-inside__absent" role="note">
+              {stepAbsent}
+            </p>
           ) : (
             <>
               <div className="armada-inside__step-head">

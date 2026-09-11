@@ -690,6 +690,9 @@ export function JobDetail({
       run={run.map(named)}
       runElapsed={span(job.created_at, now) ?? undefined}
       runAbsent={whyNoSteps(watched, job.id)}
+      unreachable={
+        watched.state === "failed" && watched.jobId === job.id ? "Fleet did not answer" : undefined
+      }
       // What it holds on this machine, below the run and above the pointers.
       // **Five lines, and the reading a press away.** It answers *is this
       // working*, which is what a person suspecting a wedged Job came with —
