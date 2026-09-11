@@ -75,8 +75,11 @@ pub struct HostPaths<'a> {
 /// table rejected "Armada's own environment" as a channel for exactly that
 /// reason. It is the only place v1's Drone spawn was worse than its check
 /// spawn.
-pub fn environment(host: HostPaths<'_>) -> Result<Environment, SpawnConfigRefused> {
-    Environment::nothing()
+pub fn environment(
+    host: HostPaths<'_>,
+    ports: &[(String, String)],
+) -> Result<Environment, SpawnConfigRefused> {
+    let mut env = Environment::nothing()
         .and("PATH", host.path)?
         .and("HOME", host.home)?
         // Deterministic text handling. Without it the child takes the C locale
@@ -94,7 +97,16 @@ pub fn environment(host: HostPaths<'_>) -> Result<Environment, SpawnConfigRefuse
         //
         // Measured against a real Drone: same binary, same `HOME`, `USER` the
         // only difference. `LOGNAME` does not substitute.
-        .and("USER", host.user)
+        .and("USER", host.user)?;
+    // **A sixth and seventh kind, added when `crate::ports` has something to
+    // add.** Empty for every repository that declares no `ports:`, which is
+    // most of them — see that module for `ARMADA_PORT_<NAME>` and why a
+    // Command's own environment is the guaranteed channel a command string is
+    // not.
+    for (name, value) in ports {
+        env = env.and(name, value)?;
+    }
+    Ok(env)
 }
 
 /// A Drone that is running.

@@ -107,6 +107,13 @@ where
             }
         };
 
+        // **Claimed before preparation, so a `setup.requires` command already
+        // sees its own `${port.NAME}`.** Here and nowhere else, for
+        // `create_worktree`'s own reason above: "once per worktree" is a
+        // property of this call site rather than of a record Fleet would have
+        // to keep. See `crate::ports`.
+        self.claimed_ports(&job).await?;
+
         // **What the repository says has to be true of a worktree before work
         // starts in one.** Here and nowhere else because this is the only
         // `create_worktree` in the workspace, which is what makes "once per
@@ -662,6 +669,15 @@ where
             .map_err(Adrift::Writing)?;
         if moved.job.status().is_terminal() {
             self.kept_footprint(&moved.job).await;
+            // **After teardown, never on a timer.** `docs/concepts/fleet.md`,
+            // *Teardown, then release*: everything Armada spawned in the
+            // worktree is a process-group kill that already happened by the
+            // time a Job reaches a terminal status, since nothing here is a
+            // server Fleet holds open past the Drone that started it — see
+            // `crate::ports` for the servers this will need to stop first once
+            // `serve:` exists. `escalated` is excluded by `is_terminal()`, so
+            // an interrupted Job keeps its span until a person answers it.
+            self.released_ports(&moved.job).await;
         }
         self.publish(ipc::Event::JobStateChanged((&moved.event).into()));
         Ok(moved.job)

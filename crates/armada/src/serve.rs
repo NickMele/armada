@@ -32,9 +32,9 @@ use adapters::{GitVcs, HeadlessAgent, IssueLookup};
 use config::Roster;
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{
-    Allowance, Bytes, CheckBudget, Clock, Concurrency, DryRuns, Fittings, Fleet, Headroom, Host,
-    JudgeBudget, Liveness, Micros, Mint, Noticing, Polling, Reclaiming, Spare, StepNorms,
-    SystemClock, TheMachine, UlidMint,
+    detect_ceiling, Allowance, Bytes, CheckBudget, Clock, Concurrency, DryRuns, Fittings, Fleet,
+    Headroom, Host, JudgeBudget, Liveness, Micros, Mint, Noticing, Polling, PortRange, Reclaiming,
+    Spare, StepNorms, SystemClock, TheMachine, UlidMint,
 };
 use ipc::PROTOCOL_VERSION;
 use store::Store;
@@ -161,6 +161,20 @@ pub const PROVISIONAL_STEP_NORMS: StepNorms =
 /// needs the silence to survive both — about six minutes, or four and a half
 /// times the longest silence any honest step produced.
 pub const PROVISIONAL_LIVENESS: Liveness = Liveness::of(Duration::from_secs(120), 2);
+
+/// The low end of the range a Job's port span is claimed from.
+/// `settings.port-range-base`. **Provisional, and measured on nothing** —
+/// chosen only to sit comfortably below every platform's ephemeral floor and
+/// above the ports a repository's own tooling conventionally claims (3000,
+/// 5432, 8080). Nothing has measured whether a real repository's `ports:`
+/// ever collides with something else running on a developer's machine here.
+pub const PORT_RANGE_BASE: u16 = 40_000;
+
+/// The rounding unit a Job's claim width is raised to. `settings.port-block-
+/// granule`. **Provisional**: `docs/concepts/machine.md` names the signal to
+/// move it — a repository where mid-Job widenings routinely fail to extend in
+/// place — and nothing has been measured against yet.
+pub const PORT_BLOCK_GRANULE: u16 = 8;
 
 /// How many times one step may ask Fleet to run its Checks.
 ///
@@ -688,6 +702,7 @@ fn assemble(
             // matches its port against. See `fleet::peer`.
             port,
         },
+        port_range: PortRange::of(PORT_RANGE_BASE, detect_ceiling(), PORT_BLOCK_GRANULE),
         // The kernel, because the question is which process holds a socket.
         // `fleet::peer` holds the measurement that chose it over `lsof`.
         peers: Arc::new(fleet::peer::Kernel),

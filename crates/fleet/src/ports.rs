@@ -19,7 +19,6 @@ use std::net::{TcpListener, TcpStream};
 use std::time::Duration;
 
 use config::Manifest;
-use core_model::JobId;
 use store::{PortClaim, PortClaimant};
 
 /// The range a Job's port span is claimed from, and the unit its width rounds
@@ -282,6 +281,37 @@ pub enum PortsRefused {
     /// a range with nothing left in it refuses rather than handing out a span
     /// the kernel might also assign.
     RangeExhausted { width: u16 },
+    /// The store would not say what is occupied. Nothing was spawned.
+    Database(store::LoadAllError),
+    /// The claim itself would not write. Nothing was spawned.
+    Write(store::WriteError),
+}
+
+impl std::fmt::Display for PortsRefused {
+    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PortsRefused::CollidingEnv { name } => {
+                write!(out, "two declared ports both name `env: {name}`")
+            }
+            PortsRefused::RangeExhausted { width } => {
+                write!(out, "no span of {width} free ports was left in the range")
+            }
+            PortsRefused::Database(cause) => {
+                write!(out, "what is already claimed could not be read: {cause}")
+            }
+            PortsRefused::Write(cause) => write!(out, "the claim would not write: {cause}"),
+        }
+    }
+}
+
+impl std::error::Error for PortsRefused {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            PortsRefused::Database(cause) => Some(cause),
+            PortsRefused::Write(cause) => Some(cause),
+            PortsRefused::CollidingEnv { .. } | PortsRefused::RangeExhausted { .. } => None,
+        }
+    }
 }
 
 /// The declared ports of one Manifest, each named and given an
@@ -343,8 +373,123 @@ pub fn port_map(manifest: &Manifest, claim: &PortClaim) -> BTreeMap<String, u16>
         .collect()
 }
 
-/// Whichever a claim belongs to, told apart before a store call rather than
-/// after: a Job's own claim, or the run of a server that has none.
-pub fn claimant_for_job(job_id: &JobId) -> PortClaimant {
-    PortClaimant::Job(job_id.clone())
+use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
+use core_model::Job;
+
+use crate::adrift::Adrift;
+use crate::daemon::Fleet;
+
+impl<H, V, W> Fleet<H, V, W>
+where
+    H: AgentHarness + Send + Sync + 'static,
+    H::Error: std::error::Error + Send + Sync + 'static,
+    V: Vcs + Delivery + Send + Sync + 'static,
+    V::Error: std::error::Error + Send + Sync + 'static,
+    V::CommitError: std::error::Error + Send + Sync + 'static,
+    W: WorkProduct + Send + Sync + 'static,
+    W::Error: std::error::Error + Send + Sync + 'static,
+{
+    /// Claim this Job's port span, sized from its Manifest's `ports:` and
+    /// rounded to the granule. **A no-op where the Manifest declares none** —
+    /// most repositories, and every fixture that plants no `ports:` of its
+    /// own.
+    ///
+    /// Called once, at worktree cut — `crate::dispatch`'s own `create_worktree`
+    /// call is the only one in the workspace, which is what makes "claim once
+    /// per worktree" a property of the call site rather than of a record this
+    /// method has to keep.
+    ///
+    /// **Escalates before returning, the same shape `crate::preparing::prepared`
+    /// takes**: nothing was spawned, so `not_configurable` reads correctly —
+    /// the Manifest's own `ports:` would not resolve to a usable span.
+    pub(crate) async fn claimed_ports(&self, job: &Job) -> Result<(), Adrift> {
+        if let Err(cause) = self.try_claim_ports(job).await {
+            self.move_job(
+                job,
+                core_model::Target::Escalated(core_model::EscalationTrigger::NotConfigurable),
+                core_model::Actor::Fleet,
+            )
+            .await?;
+            return Err(Adrift::PortsRefused {
+                job: job.id().clone(),
+                cause,
+            });
+        }
+        Ok(())
+    }
+
+    async fn try_claim_ports(&self, job: &Job) -> Result<(), PortsRefused> {
+        let declared = self.manifest().port_names();
+        if declared.is_empty() {
+            return Ok(());
+        }
+        env_names(self.manifest())?;
+        let width = rounded_width(declared.len(), self.port_range().granule());
+        let occupied: Vec<(u16, u16)> = self
+            .store()
+            .lock()
+            .await
+            .every_port_claim()
+            .map_err(PortsRefused::Database)?
+            .iter()
+            .map(|claim| (claim.base, claim.width))
+            .collect();
+        let Some(base) = pick_span(self.port_range(), width, &occupied, &BindConnectProbe) else {
+            return Err(PortsRefused::RangeExhausted { width });
+        };
+        self.store()
+            .lock()
+            .await
+            .claim_port_span(&PortClaim {
+                claimant: PortClaimant::Job(job.id().clone()),
+                base,
+                width,
+                claimed_at: self.now(),
+            })
+            .map_err(PortsRefused::Write)?;
+        Ok(())
+    }
+
+    /// This Job's declared port names, resolved to the numbers its claim
+    /// holds. Empty where it declared none, or claimed none.
+    pub(crate) async fn port_map(&self, job: &Job) -> BTreeMap<String, u16> {
+        let claim = self
+            .store()
+            .lock()
+            .await
+            .port_span_for_job(job.id())
+            .ok()
+            .flatten();
+        match claim {
+            Some(claim) => port_map(self.manifest(), &claim),
+            None => BTreeMap::new(),
+        }
+    }
+
+    /// Every variable this Job's claimed span sets: `ARMADA_PORT_<NAME>` and
+    /// any declared `env`, for every process Fleet spawns in the worktree.
+    pub(crate) async fn port_env(&self, job: &Job) -> Vec<(String, String)> {
+        let names = match env_names(self.manifest()) {
+            Ok(names) => names,
+            // Already refused at claim time, which is upstream of every spawn
+            // — a Job that reached one holds a valid claim or none at all.
+            Err(_) => return Vec::new(),
+        };
+        let ports = self.port_map(job).await;
+        env_vars(&names, &ports)
+    }
+
+    /// Release this Job's port span, if it holds one. **Best-effort**, the
+    /// same reading [`crate::footprint::Fleet::kept_footprint`] gives a
+    /// terminal Job's footprint: the move has already landed, and a Job that
+    /// ended is over whether or not its span could be released cleanly. A
+    /// claim a release missed is still reachable — `forget_job` takes it with
+    /// the rest of the record.
+    pub(crate) async fn released_ports(&self, job: &Job) {
+        let _ = self
+            .store()
+            .lock()
+            .await
+            .release_port_span(&PortClaimant::Job(job.id().clone()));
+    }
 }

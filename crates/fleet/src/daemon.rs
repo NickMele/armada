@@ -70,6 +70,9 @@ pub struct Fleet<H, V, W> {
     workflows: BTreeMap<WorkflowId, ResolvedWorkflow>,
     manifest: Manifest,
     host: Host,
+    /// The range a Job's port span is claimed from, and the granule its width
+    /// rounds up to. See [`crate::ports`].
+    port_range: crate::ports::PortRange,
     budget: CheckBudget,
     norms: StepNorms,
     liveness: Liveness,

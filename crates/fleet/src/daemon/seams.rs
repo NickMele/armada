@@ -79,6 +79,9 @@ where
     pub(crate) fn manifest(&self) -> &Manifest {
         &self.manifest
     }
+    pub(crate) fn port_range(&self) -> crate::ports::PortRange {
+        self.port_range
+    }
     /// What this repository has said about `auto_merge` and `review_gate`,
     /// folded across the Manifests gating one Job.
     ///
@@ -143,11 +146,16 @@ where
             client: Arc::clone(&self.judge),
             budget: self.judge_budget,
             default_model: self.judge_model.clone(),
-            environment: environment(HostPaths {
-                path: &self.host.path,
-                user: &self.host.user,
-                home: &self.host.home,
-            })?,
+            environment: environment(
+                HostPaths {
+                    path: &self.host.path,
+                    user: &self.host.user,
+                    home: &self.host.home,
+                },
+                // No worktree, no Manifest ports resolved against one -- a
+                // Judge and a proposer call carry neither.
+                &[],
+            )?,
             marking: Marking::on(
                 job.id().into(),
                 self.aloft.clone(),
@@ -209,11 +217,16 @@ where
             client: Arc::clone(&self.judge),
             budget: self.proposer_budget,
             model: self.proposer_model.clone(),
-            environment: environment(HostPaths {
-                path: &self.host.path,
-                user: &self.host.user,
-                home: &self.host.home,
-            })?,
+            environment: environment(
+                HostPaths {
+                    path: &self.host.path,
+                    user: &self.host.user,
+                    home: &self.host.home,
+                },
+                // No worktree, no Manifest ports resolved against one -- a
+                // Judge and a proposer call carry neither.
+                &[],
+            )?,
         })
     }
 

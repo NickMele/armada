@@ -91,6 +91,13 @@ where
             &[("requires", FieldValue::Str(named.join(", ")))],
         );
 
+        // Claimed before this runs — `crate::dispatch`'s own ordering — so a
+        // `setup.requires` command already sees its own `${port.NAME}` and
+        // `ARMADA_PORT_<NAME>`. Both empty where the Manifest declares no
+        // `ports:`, which is every repository but the ones that do.
+        let ports = self.port_map(job).await;
+        let port_env = self.port_env(job).await;
+
         let began = Instant::now();
         for command in required {
             self.noted_preparing(
@@ -106,6 +113,8 @@ where
                 command,
                 Path::new(worktree.path()),
                 self.budget().duration(),
+                &ports,
+                &port_env,
             )
             .await
             {
@@ -244,16 +253,23 @@ const SAID_LIMIT: usize = 1_500;
 /// spawn — the future being dropped, the runtime going away — produces no exit
 /// for this to read and no `Exit::TimedOut` either, which is why the bound that
 /// catches #435 is not in here. See [`crate::unattended`].
+///
+/// **`ports` and `env` are both empty for a base checkout.** A base spans
+/// every Job that shares it and holds no worktree of its own, so no claim was
+/// ever made against it — `crate::basing`'s own call passes neither.
 pub(crate) async fn prepare_one(
     command: &Preparation,
     worktree: &Path,
     budget: Duration,
+    ports: &std::collections::BTreeMap<String, u16>,
+    env: &[(String, String)],
 ) -> Result<(), NotPrepared> {
-    let attempt = checks_runner::run(command.run(), worktree, budget).await;
+    let run = crate::ports::resolve_ports(command.run(), ports);
+    let attempt = checks_runner::run_writing_with_env(&run, worktree, budget, None, env).await;
     if attempt.exit != Exit::Code(0) {
         return Err(NotPrepared {
             command: command.name().to_string(),
-            run: command.run().to_string(),
+            run,
             exit: attempt.exit,
             output: attempt.output,
         });

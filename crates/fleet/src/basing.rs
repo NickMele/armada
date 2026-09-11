@@ -291,7 +291,15 @@ where
             );
         }
         for command in required {
-            if let Err(cause) = prepare_one(command, at, self.budget().duration()).await {
+            if let Err(cause) = prepare_one(
+                command,
+                at,
+                self.budget().duration(),
+                &std::collections::BTreeMap::new(),
+                &[],
+            )
+            .await
+            {
                 // `verification::how` and not `NotPrepared`'s own `Display`:
                 // that sentence opens *the worktree was not prepared*, and this
                 // is not a worktree. The exit is the part that is the same.

@@ -49,11 +49,14 @@ pub fn config(at: &TempDir) -> DroneSpawnConfig {
         Prompt::assembled("do the work").expect("an assembled prompt"),
         McpConfig::only_these("/var/armada/01AAA/mcp.json").expect("an absolute path"),
         Toolbelt::evidence_only(),
-        environment(HostPaths {
-            path: "/usr/bin:/bin",
-            home: "/Users/user",
-            user: "someone",
-        })
+        environment(
+            HostPaths {
+                path: "/usr/bin:/bin",
+                home: "/Users/user",
+                user: "someone",
+            },
+            &[],
+        )
         .expect("a legal environment"),
     )
 }
@@ -73,11 +76,14 @@ async fn transcript_of(harness: &FakeHarness, at: &TempDir) -> String {
 
 #[test]
 fn fleet_names_every_variable_a_drone_gets() {
-    let built = environment(HostPaths {
-        path: "/usr/bin:/bin",
-        home: "/Users/user",
-        user: "someone",
-    })
+    let built = environment(
+        HostPaths {
+            path: "/usr/bin:/bin",
+            home: "/Users/user",
+            user: "someone",
+        },
+        &[],
+    )
     .expect("a legal environment");
 
     // **Five, and `USER` is the fifth.** Without it the agent CLI answers its
@@ -89,6 +95,27 @@ fn fleet_names_every_variable_a_drone_gets() {
         !built.names().contains(&"SSH_AUTH_SOCK"),
         "no credential, and no agent to ask one of — the second half of a \
          Drone that cannot push"
+    );
+}
+
+/// A declared port rides in beside the guaranteed five, so a Command a Drone
+/// runs from its own shell sees `ARMADA_PORT_<NAME>` without Fleet touching
+/// the command string at all.
+#[test]
+fn a_claimed_port_is_set_beside_the_guaranteed_five() {
+    let built = environment(
+        HostPaths {
+            path: "/usr/bin:/bin",
+            home: "/Users/user",
+            user: "someone",
+        },
+        &[("ARMADA_PORT_STORYBOOK".to_string(), "41000".to_string())],
+    )
+    .expect("a legal environment");
+    assert!(built.names().contains(&"ARMADA_PORT_STORYBOOK"));
+    assert_eq!(
+        built.vars().last(),
+        Some(&("ARMADA_PORT_STORYBOOK".to_string(), "41000".to_string()))
     );
 }
 
