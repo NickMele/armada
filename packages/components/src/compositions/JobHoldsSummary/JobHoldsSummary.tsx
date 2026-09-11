@@ -85,12 +85,11 @@ export function JobHoldsSummary({ latest, latestNote, figures, note, age }: JobH
         <p className="armada-holds-summary__note">{latestNote ?? NOTHING_RECORDED}</p>
       ) : (
         <div className="armada-holds-summary__latest" data-wrong={latest.wrong || undefined}>
-          <span className="armada-holds-summary__who">
-            {latest.actor}
-            {" · "}
+          <span className="armada-holds-summary__who">{latest.actor}</span>
+          <span className="armada-holds-summary__what">
+            <span className="armada-holds-summary__said">{latest.said}</span>
             <span className="armada-holds-summary__at">{latest.at}</span>
           </span>
-          <span className="armada-holds-summary__said">{latest.said}</span>
         </div>
       )}
       {figures === null ? (
@@ -120,7 +119,7 @@ export function JobHoldsSummary({ latest, latestNote, figures, note, age }: JobH
   );
 }
 
-/** A label and its figure, on one row. The figure is mono and right-aligned. */
+/** A label and its figure, on one row: the label's column, then the figure in mono. */
 function Figure({ label, value, wrong }: { label: string; value: string; wrong?: boolean }) {
   return (
     <div className="armada-holds-summary__figure" data-wrong={wrong || undefined}>
