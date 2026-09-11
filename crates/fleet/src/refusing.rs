@@ -338,10 +338,25 @@ where
             // 422 beside `NoRemarksChosen`: the request decoded and names a
             // set that cannot work, and asking the forge again would not
             // change that.
+            // **`fields` still carries only the handles.** The sentence
+            // above already names each by author and opening words for a
+            // person; a caller acting on this programmatically — dropping
+            // these ids and pressing again — wants exactly what it already
+            // had, and Bridge has the author and the words for these same
+            // ids from the read that drew the list a press was made against.
             Adrift::RemarksTooLarge { job, too_large } => Refusal::Unacceptable(
                 WireError::raised(REMARKS_TOO_LARGE, said, self.run_id())
                     .about_job(ipc::JobId::from(job))
-                    .with_field("remarks", WireValue::Str(too_large.join(", "))),
+                    .with_field(
+                        "remarks",
+                        WireValue::Str(
+                            too_large
+                                .iter()
+                                .map(|dropped| dropped.id.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                        ),
+                    ),
             ),
             // **The handles come back on both of these**, for
             // `NOTE_ALREADY_WAITING`'s reason: a refusal that named only a

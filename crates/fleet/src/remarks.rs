@@ -368,6 +368,27 @@ fn quoted(said: &FromOutside) -> String {
     out
 }
 
+/// One comment named to a person as one to drop, so a refusal can be read
+/// without matching a handle against a list open somewhere else.
+///
+/// **The id stays beside the words a person reads.** `take_up_remarks` still
+/// needs the handle to act — dropping it and pressing again names the same
+/// comments this struct does — and a sentence built from `by` and `excerpt`
+/// alone would have nothing for a caller to act on programmatically. Both
+/// travel together for that reason.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Dropped {
+    /// [`Remark::id`], unchanged — what a press names to act on this comment.
+    pub id: String,
+    /// [`named`]'s own bound, for [`named`]'s own reason: this reaches a
+    /// sentence nobody has checked the forge's login against.
+    pub by: String,
+    /// The comment's opening words, bounded by [`ENOUGH_OF_AN_OPENING`] and
+    /// never the whole of it — a person is choosing which to drop, not
+    /// reading the one that stays.
+    pub excerpt: String,
+}
+
 /// Which of the picked comments to drop to bring [`brief`]'s rendered output
 /// back under [`ROOM_FOR_COMMENTS`].
 ///
@@ -376,7 +397,7 @@ fn quoted(said: &FromOutside) -> String {
 /// refused — this names the fewest comments whose removal would free
 /// `over_by` characters, which is what a person can act on: drop these, press
 /// again.
-fn worth_dropping(picked: &[&Remark], over_by: usize) -> Vec<String> {
+fn worth_dropping(picked: &[&Remark], over_by: usize) -> Vec<Dropped> {
     let mut sized: Vec<(usize, &Remark)> = picked
         .iter()
         .map(|remark| (quoted(&remark.said).len(), *remark))
@@ -389,9 +410,46 @@ fn worth_dropping(picked: &[&Remark], over_by: usize) -> Vec<String> {
             break;
         }
         freed += size;
-        dropped.push(remark.id.as_written().to_string());
+        dropped.push(Dropped {
+            id: remark.id.as_written().to_string(),
+            by: named(&remark.by),
+            excerpt: opening(&remark.said),
+        });
     }
     dropped
+}
+
+/// How much of a comment's opening reaches a sentence naming it, when it has
+/// to be dropped for a press to fit.
+///
+/// **[`ENOUGH_OF_A_NAME`]'s reason, on the one other field here that names a
+/// comment to a person rather than quoting it whole.** [`brief`] and
+/// [`quoted`] still hand a Drone everything, untouched — this is the one
+/// place a comment's words are cut, and only for a sentence a person reads
+/// about which comments did not make it, never for anything a Drone sees.
+const ENOUGH_OF_AN_OPENING: usize = 80;
+
+/// A comment's opening words, cleaned enough to sit in one sentence.
+///
+/// **Cut and marked, never claimed whole.** A newline or a carriage return
+/// would let a comment break the sentence naming it; both become a space, and
+/// an ellipsis says outright where the rest was left off.
+fn opening(said: &FromOutside) -> String {
+    let cleaned: String = said
+        .as_written()
+        .chars()
+        .map(|one| match one {
+            '\n' | '\r' => ' ',
+            other => other,
+        })
+        .collect();
+    let trimmed = cleaned.trim();
+    let cut = trimmed.chars().count() > ENOUGH_OF_AN_OPENING;
+    let mut taken: String = trimmed.chars().take(ENOUGH_OF_AN_OPENING).collect();
+    if cut {
+        taken.push('…');
+    }
+    taken
 }
 
 /// The one comment Armada writes onto the pull request.
@@ -543,8 +601,20 @@ mod tests {
         let dropped = worth_dropping(&picked, 15);
         assert_eq!(
             dropped,
-            vec![String::from("IC_big"), String::from("IC_medium")],
-            "largest first, and only as many as it takes: {dropped:?}"
+            vec![
+                Dropped {
+                    id: String::from("IC_big"),
+                    by: String::from("alice"),
+                    excerpt: "x".repeat(10),
+                },
+                Dropped {
+                    id: String::from("IC_medium"),
+                    by: String::from("bob"),
+                    excerpt: "x".repeat(5),
+                },
+            ],
+            "largest first, and only as many as it takes, each carrying who wrote it \
+             and how it opens: {dropped:?}"
         );
     }
 
@@ -559,9 +629,31 @@ mod tests {
         let dropped = worth_dropping(&picked, 15);
         assert_eq!(
             dropped,
-            vec![String::from("IC_big")],
+            vec![Dropped {
+                id: String::from("IC_big"),
+                by: String::from("alice"),
+                excerpt: "x".repeat(20),
+            }],
             "the fewest comments whose removal is enough, not every large one: {dropped:?}"
         );
+    }
+
+    #[test]
+    fn an_opening_is_cut_and_says_so_rather_than_claimed_whole() {
+        let short = remark("IC_short", "alice", "rename the flag");
+        assert_eq!(
+            worth_dropping(&[&short], 1)[0].excerpt,
+            "rename the flag",
+            "nothing shorter than the bound is cut"
+        );
+        let long = remark("IC_long", "bob", &"x".repeat(ENOUGH_OF_AN_OPENING * 2));
+        let excerpt = worth_dropping(&[&long], 1)[0].excerpt.clone();
+        assert_eq!(
+            excerpt.chars().count(),
+            ENOUGH_OF_AN_OPENING + 1,
+            "the bound plus the mark that says it was cut: {excerpt}"
+        );
+        assert!(excerpt.ends_with('…'), "a cut opening says so: {excerpt}");
     }
 
     #[test]

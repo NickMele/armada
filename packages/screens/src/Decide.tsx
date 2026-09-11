@@ -53,7 +53,7 @@ import {
   type UnifiedDiffProps,
 } from "@armada/components";
 
-import type { Diff, Evidence, Remarks } from "@armada/protocol";
+import type { Diff, Evidence, Outcome, Remarks } from "@armada/protocol";
 import type { JobSummary } from "@armada/protocol";
 import type { Work } from "@armada/protocol";
 import {
@@ -66,6 +66,7 @@ import {
   whyNoDiff,
   whyNoRemarks,
 } from "./review";
+import { tooLargeIn } from "./remarksTooLarge";
 
 /**
  * Ask main for one Job's evidence and one Job's diff, or drop both.
@@ -113,6 +114,15 @@ export type DecideProps = {
   remarks: Remarks;
   /** Hand the comments picked to a drone. The handles, never the words. */
   onTakeUpRemarks: (jobId: string, remarks: string[]) => void;
+  /**
+   * What the last command answered, failure or not. **Read for one refusal
+   * only** — `fleet.remarks_too_large` on a `take_up_remarks` press — and
+   * drawn as guidance in place rather than left to the window's generic
+   * failure notice. Every other outcome is `Standing`'s, not this surface's.
+   */
+  outcome: Outcome | null;
+  /** Put a `take_up_remarks` refusal away without pressing again. */
+  onDismissOutcome: () => void;
 };
 
 /**
@@ -144,6 +154,8 @@ export function Decide({
   onRequestChanges,
   onReject,
   onTakeUpRemarks,
+  outcome,
+  onDismissOutcome,
 }: DecideProps) {
   // The reviewer's own words, held here: it is a draft until it is sent, and
   // nothing outside this region knows or cares that one is being written.
@@ -183,6 +195,7 @@ export function Decide({
 
   const off = stale || deciding;
   const why = stale ? NOT_LIVE : deciding ? IN_FLIGHT : undefined;
+  const tooLarge = tooLargeIn(outcome, job.id, remarks);
 
   return (
     <>
@@ -252,6 +265,7 @@ export function Decide({
           onTakeUp={(ids) => onTakeUpRemarks(job.id, ids)}
           disabled={off}
           {...(why === undefined ? {} : { disabledNote: why })}
+          {...(tooLarge === null ? {} : { tooLarge, onDismissTooLarge: onDismissOutcome })}
         />
       )}
 

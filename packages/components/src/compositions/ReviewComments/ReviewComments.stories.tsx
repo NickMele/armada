@@ -165,6 +165,49 @@ export const ACommentWithEverythingInIt: Story = {
 };
 
 /**
+ * A press was refused because the comments picked would not fit the room an
+ * opening brief leaves free.
+ *
+ * **Guidance, not a failure.** `fleet.remarks_too_large` used to reach a
+ * person as the generic error treatment, naming the comments by the forge's
+ * own handle — `IC_kwDO…` — which nobody can place against what they just
+ * read. This draws in place instead: the sentence names who wrote the
+ * comments to drop and how they open, and the rows themselves are marked so
+ * a person does not have to match a handle against the list by eye.
+ */
+export const RefusedForSize: Story = {
+  args: {
+    comments: [
+      {
+        id: "IC_kwDOfirst",
+        by: "a-reviewer",
+        at: "2026-09-08 10:00",
+        said: "This whole section could use a rewrite — the naming is inconsistent with the rest of the module, the error handling swallows the real cause, and I think the retry logic has an off-by-one that only shows up under load.",
+        takenUp: false,
+      },
+      {
+        id: "IC_kwDOsecond",
+        by: "a-reviewer",
+        at: "2026-09-08 10:04",
+        said: "There is no test for the case where the list is empty.",
+        takenUp: false,
+      },
+    ],
+    onTakeUp: fn(),
+    tooLarge: {
+      said: "One comment picked is too long for the drone's brief. Drop it and press again: a-reviewer — \"This whole section could use a rewrite — the naming is inconsistent with the re…\"",
+      ids: new Set(["IC_kwDOfirst"]),
+    },
+    onDismissTooLarge: fn(),
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.getByText("Too long for this press")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Dismiss" }));
+    await expect(args.onDismissTooLarge).toHaveBeenCalled();
+  },
+};
+
+/**
  * Nothing live to send it over.
  *
  * **The reason is on screen**, because a disabled control with no sentence

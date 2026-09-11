@@ -23,6 +23,7 @@
 // drawn beside the row it is about, and there can be several at once.
 
 import type { BridgeIdentity, Connection, Outcome } from "@armada/protocol";
+import { REMARKS_TOO_LARGE } from "@armada/screens";
 import type { Failure, Statement, Uncaught } from "@armada/shell";
 import { fleetFailure, refusalFailure, transportFailure, uncaughtFailure } from "@armada/shell";
 import { statementOf } from "@armada/shell";
@@ -67,7 +68,11 @@ export function failingIn(published: Published): Failing {
   const commandFailure =
     outcome === null || outcome.ok
       ? null
-      : outcome.why === "refused"
+      : // `fleet.remarks_too_large` is guidance, not a fault: `Decide` draws it
+        // in place, beside the comments it names, and it must not also reach
+        // the window's generic failure notice — that would say something had
+        // gone wrong when the fix is picking fewer comments.
+        outcome.why === "refused" && outcome.error.code !== REMARKS_TOO_LARGE
         ? refusalFailure(outcome.error, bridge)
         : outcome.why === "transport"
           ? transportFailure(outcome, bridge)

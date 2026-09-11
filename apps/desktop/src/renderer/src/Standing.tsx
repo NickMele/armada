@@ -160,7 +160,11 @@ export function Standing({
           reloadable={false}
           onDismiss={() => onOutcome(null)}
         />
-      ) : outcome === null || outcome.ok ? null : (
+      ) : // `refused` and `transport` either drew above as `commandFailure` or,
+      // for `fleet.remarks_too_large`, are guidance a screen draws in place —
+      // `said(outcome)` answers "" for both, and a band naming nothing is not
+      // a state to draw.
+      outcome === null || outcome.ok || outcome.why === "refused" || outcome.why === "transport" ? null : (
         <Alert
           tone="escalated"
           action={

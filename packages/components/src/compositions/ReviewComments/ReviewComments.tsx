@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 
+import { Alert } from "../../primitives/Alert/Alert";
 import { Button } from "../../primitives/Button/Button";
 import { Checkbox } from "../../primitives/Checkbox/Checkbox";
 
@@ -67,6 +68,24 @@ export type ReviewCommentsProps = {
   takeUpLabel?: string;
   /** What marks a comment a drone has already been handed. */
   sentNote?: string;
+  /**
+   * A press refused because the chosen comments would not fit the room a
+   * brief leaves free — guidance, drawn in place, and never the error
+   * treatment. `fleet.remarks_too_large` names it; the sentence and the ids
+   * are the caller's, read off that refusal.
+   *
+   * **Absent is the ordinary case.** Most presses succeed, and drawing a
+   * dismissable line over a list that was never refused would say something
+   * had gone wrong when nothing had.
+   */
+  tooLarge?: {
+    /** The line over the list of what to drop. */
+    said: ReactNode;
+    /** Which comments to drop, marked in the list below. */
+    ids: ReadonlySet<string>;
+  };
+  /** Put the guidance above away. */
+  onDismissTooLarge?: () => void;
 };
 
 /** One comment, as this surface draws it. */
@@ -93,6 +112,8 @@ export function ReviewComments({
   emptyNote = "Nobody has commented on this pull request.",
   takeUpLabel = "Send to a drone",
   sentNote = "Already sent to a drone",
+  tooLarge,
+  onDismissTooLarge,
 }: ReviewCommentsProps) {
   // Held here because it is a draft until it is sent, exactly as the review
   // note beside it is. Nothing outside this region knows one is being made.
@@ -114,38 +135,69 @@ export function ReviewComments({
               is read before the picking, not after it. */}
           <p className="armada-remarks__said">{note}</p>
 
+          {/* Guidance, not a failure: the press was refused for size and the
+              fix is picking fewer, so this reads like the note above rather
+              than the error treatment — no code chip, no debug payload. A
+              standing condition on this surface until the next press answers
+              it or a person puts it away by hand. */}
+          {tooLarge === undefined ? null : (
+            <Alert
+              tone="neutral"
+              action={
+                onDismissTooLarge === undefined ? undefined : (
+                  <Button variant="ghost" size="sm" onClick={onDismissTooLarge}>
+                    Dismiss
+                  </Button>
+                )
+              }
+            >
+              {tooLarge.said}
+            </Alert>
+          )}
+
           <ul className="armada-remarks__list">
-            {comments.map((comment) => (
-              <li className="armada-remarks__one" key={comment.id}>
-                <div className="armada-remarks__who">
-                  {/* The login and the instant, both as the forge wrote them.
-                      Mono, because they are machine readings and not prose. */}
-                  <span className="armada-remarks__by mono">{comment.by}</span>
-                  <span className="armada-remarks__at mono">{comment.at}</span>
-                </div>
-                {/* Somebody else's words, as a text node and nothing else.
-                    `pre-wrap` keeps the paragraphs they wrote without rendering
-                    a line of it as markup. */}
-                <p className="armada-remarks__said armada-remarks__body">{comment.said}</p>
-                {comment.takenUp ? (
-                  <p className="armada-remarks__sent">{sentNote}</p>
-                ) : (
-                  <Checkbox
-                    checked={chosen.includes(comment.id)}
-                    disabled={disabled}
-                    onChange={(event) =>
-                      setPicked((held) =>
-                        event.target.checked
-                          ? [...held, comment.id]
-                          : held.filter((id) => id !== comment.id),
-                      )
-                    }
-                  >
-                    Act on this
-                  </Checkbox>
-                )}
-              </li>
-            ))}
+            {comments.map((comment) => {
+              const overflowing = tooLarge?.ids.has(comment.id) ?? false;
+              return (
+                <li
+                  className={
+                    overflowing ? "armada-remarks__one armada-remarks__one--too-large" : "armada-remarks__one"
+                  }
+                  key={comment.id}
+                >
+                  <div className="armada-remarks__who">
+                    {/* The login and the instant, both as the forge wrote them.
+                        Mono, because they are machine readings and not prose. */}
+                    <span className="armada-remarks__by mono">{comment.by}</span>
+                    <span className="armada-remarks__at mono">{comment.at}</span>
+                  </div>
+                  {/* Somebody else's words, as a text node and nothing else.
+                      `pre-wrap` keeps the paragraphs they wrote without rendering
+                      a line of it as markup. */}
+                  <p className="armada-remarks__said armada-remarks__body">{comment.said}</p>
+                  {overflowing ? (
+                    <p className="armada-remarks__too-large">Too long for this press</p>
+                  ) : null}
+                  {comment.takenUp ? (
+                    <p className="armada-remarks__sent">{sentNote}</p>
+                  ) : (
+                    <Checkbox
+                      checked={chosen.includes(comment.id)}
+                      disabled={disabled}
+                      onChange={(event) =>
+                        setPicked((held) =>
+                          event.target.checked
+                            ? [...held, comment.id]
+                            : held.filter((id) => id !== comment.id),
+                        )
+                      }
+                    >
+                      Act on this
+                    </Checkbox>
+                  )}
+                </li>
+              );
+            })}
           </ul>
 
           {/* Off until something is picked, for the reason the drone's question

@@ -373,14 +373,27 @@ async fn a_press_with_one_comment_too_big_for_the_room_a_brief_leaves_free_is_re
         .take_up_remarks(&job_id, &[String::from("IC_big")])
         .await
         .expect_err("one comment alone is bigger than the room a brief leaves free");
+    let said = refused.to_string();
+    assert!(
+        said.contains("a-reviewer") && !said.contains("IC_big"),
+        "a person reads who wrote it, never the handle: {said}"
+    );
     let too_large = match refused {
         crate::adrift::Adrift::RemarksTooLarge { too_large, .. } => too_large,
         other => panic!("refused by name, not as anything else: {other:?}"),
     };
     assert_eq!(
-        too_large,
-        vec![String::from("IC_big")],
+        too_large.len(),
+        1,
         "the one comment that has to go: {too_large:?}"
+    );
+    let dropped = &too_large[0];
+    assert!(
+        dropped.id == "IC_big"
+            && dropped.by == "a-reviewer"
+            && dropped.excerpt.starts_with('x')
+            && dropped.excerpt.ends_with('…'),
+        "the handle to act on, who wrote it, and its opening cut and marked as cut: {dropped:?}"
     );
     let job = fleet.load(&job_id).await.unwrap();
     assert_eq!(
@@ -435,8 +448,14 @@ async fn a_press_with_several_medium_comments_that_together_overflow_is_refused_
         other => panic!("refused by name, not as anything else: {other:?}"),
     };
     assert!(
-        !too_large.is_empty() && too_large.iter().all(|id| chosen.contains(id)),
-        "names some of the comments a person picked, and nothing else: {too_large:?}"
+        !too_large.is_empty()
+            && too_large.iter().all(|dropped| {
+                chosen.contains(&dropped.id)
+                    && dropped.by == "a-reviewer"
+                    && !dropped.excerpt.is_empty()
+            }),
+        "names some of the comments a person picked, each carrying who wrote it and how it \
+         opens, and nothing else: {too_large:?}"
     );
     let job = fleet.load(&job_id).await.unwrap();
     assert_eq!(

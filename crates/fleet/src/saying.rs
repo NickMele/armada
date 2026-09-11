@@ -118,7 +118,11 @@ impl fmt::Display for Adrift {
                  opening brief leaves free. Drop {} of them and press again: {}",
                 job.as_str(),
                 too_large.len(),
-                too_large.join(", ")
+                too_large
+                    .iter()
+                    .map(|dropped| format!("{} — \"{}\"", dropped.by, dropped.excerpt))
+                    .collect::<Vec<_>>()
+                    .join("; ")
             ),
             Adrift::NothingToMerge { job } => write!(
                 out,

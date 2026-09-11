@@ -28,6 +28,7 @@ import type {
   Evidence,
   JobDetail as JobWhole,
   JobSummary,
+  Outcome,
   PullRequestDetail,
   Remarks,
   StepDetail,
@@ -364,6 +365,14 @@ export type VerdictSlotAtGateArgs = {
   onRequestChanges: (jobId: string, note: string) => void;
   onReject: (jobId: string) => void;
   onTakeUpRemarks: (jobId: string, remarks: string[]) => void;
+  /**
+   * What the last command answered, failure or not. **`Decide`'s alone**: it
+   * reads exactly one refusal off it — a `take_up_remarks` press too large for
+   * the room a brief leaves free — and draws that in place.
+   */
+  outcome: Outcome | null;
+  /** Put a `take_up_remarks` refusal away without pressing again. */
+  onDismissOutcome: () => void;
 };
 
 /**
@@ -390,6 +399,8 @@ export function verdictSlotAtGate({
   onRequestChanges,
   onReject,
   onTakeUpRemarks,
+  outcome,
+  onDismissOutcome,
 }: VerdictSlotAtGateArgs): ReactNode {
   const address = whole?.delivery?.pull_request;
   const detail = whole?.delivery?.pull_request_detail;
@@ -431,6 +442,8 @@ export function verdictSlotAtGate({
           onRequestChanges={onRequestChanges}
           onReject={onReject}
           onTakeUpRemarks={onTakeUpRemarks}
+          outcome={outcome}
+          onDismissOutcome={onDismissOutcome}
         />
       }
     />

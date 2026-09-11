@@ -244,6 +244,15 @@ export type JobDetailProps = {
    */
   onTakeUpRemarks: (jobId: string, remarks: string[]) => void;
   /**
+   * What the last command answered, failure or not. **`Decide`'s alone**: it
+   * reads exactly one refusal off it — a `take_up_remarks` press too large for
+   * the room a brief leaves free — and draws that in place. Every other
+   * outcome belongs to the window's standing band, not this screen.
+   */
+  outcome: Outcome | null;
+  /** Put a `take_up_remarks` refusal away without pressing again. */
+  onDismissOutcome: () => void;
+  /**
    * What the second socket has said. **Opened for every Job that is open**, not
    * on a press: the activity log is a chapter of the step's story and a chapter
    * that filled only after somebody asked is the tab this screen removed.
@@ -329,6 +338,8 @@ export function JobDetail({
   onRequestChanges,
   onReject,
   onTakeUpRemarks,
+  outcome,
+  onDismissOutcome,
   onCopied,
   onSaid,
 }: JobDetailProps) {
@@ -633,6 +644,8 @@ export function JobDetail({
             onRequestChanges,
             onReject,
             onTakeUpRemarks,
+            outcome,
+            onDismissOutcome,
           })
         : render === "finished" && neverAsked
           ? verdictSlotFinished({ job, whole, open, render, recorded, opensRecords, now, claimed, undecided })

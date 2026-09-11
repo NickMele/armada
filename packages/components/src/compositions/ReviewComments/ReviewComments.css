@@ -107,3 +107,19 @@
   line-height: var(--leading-xs);
   color: var(--fg-muted);
 }
+
+/* One of the comments a press was refused for size on. `--step-waiting`
+   again, not `--error` or `--degraded`: nothing failed, this is guidance
+   pointing at the same rows the banner above already named. */
+.armada-remarks__one--too-large {
+  padding-inline-start: var(--space-2);
+  border-inline-start: var(--border-width) solid var(--step-waiting);
+}
+
+.armada-remarks__too-large {
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+  font-weight: var(--weight-medium);
+}

@@ -79,6 +79,8 @@ function gate(): Sent {
       onRequestChanges={(jobId) => sent.changes.push(jobId)}
       onReject={(jobId) => sent.rejected.push(jobId)}
       onTakeUpRemarks={() => {}}
+      outcome={null}
+      onDismissOutcome={() => {}}
     />,
   );
   return sent;

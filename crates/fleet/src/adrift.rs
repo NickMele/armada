@@ -189,7 +189,10 @@ pub enum Adrift {
     /// before `brief` is asked to build anything a Drone would see — the same
     /// place [`NoRemarksChosen`](Adrift::NoRemarksChosen) and the two
     /// variants above it already stand.
-    RemarksTooLarge { job: JobId, too_large: Vec<String> },
+    RemarksTooLarge {
+        job: JobId,
+        too_large: Vec<crate::remarks::Dropped>,
+    },
     /// A merge was asked for on a Job whose record holds no pull request.
     ///
     /// **Not [`Adrift::NotMerged`]**, and the difference is whose fault it is:
