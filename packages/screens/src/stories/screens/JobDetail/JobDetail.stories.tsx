@@ -504,6 +504,50 @@ export const RunItHere: Story = {
   },
 };
 
+/** `test` running, streaming its output as it prints. */
+export const RunStreaming: Story = {
+  name: "Running test, streaming",
+  render: () => (
+    <JobDetailFrom
+      fixture={escalatedGateFailure()}
+      on={{
+        rehearsal: {
+          ...propsFor(escalatedGateFailure()).rehearsal,
+          runSheet: {
+            ...RUN_SHEET_READ,
+            sheet: {
+              ...RUN_SHEET_READ.sheet,
+              running: {
+                id: "run-1",
+                job_id: JOB_ID,
+                name: "cargo_nextest",
+                command: "cargo nextest run --workspace",
+                narrowed: false,
+                started_at: "2026-09-11T14:05:00Z",
+              },
+            },
+          },
+          runFollowed: {
+            state: "following",
+            jobId: JOB_ID,
+            runId: "run-1",
+            name: "cargo_nextest",
+            path: ".armada/runs/run-1/output.log",
+            fromLine: 1,
+            lines: ["running 2034 tests", "test settings::selectors::visible_manifests_memoises ... FAIL"],
+          },
+        },
+      }}
+    />
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: "Run it here" }));
+    await expect(
+      within(await within(document.body).findByRole("dialog", { name: "Run" })).findByText(/FAIL/),
+    ).resolves.toBeVisible();
+  },
+};
+
 export const ServingRow: Story = {
   name: "Serving row, link opens the system browser",
   render: () => (
