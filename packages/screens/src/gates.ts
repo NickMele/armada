@@ -214,6 +214,17 @@ export function askedOf(step: StepDetail): number {
 }
 
 /**
+ * Fleet's own sentence, corrected to this screen's case. Fleet writes what it
+ * logged, lower-case and unpunctuated like every other log line; everywhere
+ * this crosses onto a sentence of its own the two surfaces that draw it would
+ * otherwise punctuate it two different ways.
+ */
+export function sentenceOf(said: string): string {
+  const capped = said.charAt(0).toUpperCase() + said.slice(1);
+  return /[.!?]$/.test(capped) ? capped : `${capped}.`;
+}
+
+/**
  * How many judges answer each criterion.
  *
  * **The declaration first, the rows second.** `panel_size` is what the header
