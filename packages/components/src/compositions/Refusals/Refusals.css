@@ -146,13 +146,18 @@
 
 /* What a person may answer about this command, under it and in its column.
    They wrap rather than widen the row, so a narrow panel stacks them instead of
-   pushing the band sideways. */
+   pushing the band sideways.
+
+   Pulled back by the ghost control's own padding, so the first label starts on
+   the command's left edge rather than a step inside it: content edges align,
+   and the hover fill lands in the column gap, which is exactly that wide. */
 .armada-refusals__answers {
   grid-column: 2;
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
   min-width: 0;
+  margin-inline-start: calc(-1 * var(--space-2));
 }
 
 /* Why every row's answers are off, said once under the list. The note's values:
