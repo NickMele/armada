@@ -26,7 +26,7 @@ use git2::{Commit, IndexAddOption, Repository, Signature, Time};
 
 use crate::error::CommitWorkError;
 
-const WHO: (&str, &str) = ("Armada Fleet", "fleet@armada.invalid");
+pub(crate) const WHO: (&str, &str) = ("Armada Fleet", "fleet@armada.invalid");
 
 pub(crate) fn commit_all(
     worktree: &Worktree,

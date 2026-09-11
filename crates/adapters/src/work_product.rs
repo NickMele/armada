@@ -389,7 +389,7 @@ fn lines(diff: &Diff<'_>, index: usize) -> Option<LineCount> {
 /// `include_ignored` — so neither reaches this function. They read as
 /// `Modified` rather than as a variant of their own, because a variant that
 /// cannot arrive is a case every reader has to handle and none can produce.
-fn change(status: Delta) -> Change {
+pub(crate) fn change(status: Delta) -> Change {
     match status {
         Delta::Added | Delta::Untracked => Change::Added,
         Delta::Deleted => Change::Deleted,
