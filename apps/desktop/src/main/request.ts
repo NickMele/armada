@@ -14,9 +14,10 @@ import type {
   Outcome,
   TransportFault,
 } from "@armada/protocol";
-import type { FleetCapacity, JobSummary, ManifestReading, WireError } from "@armada/protocol";
+import type { FleetCapacity, JobSummary, ManifestReading } from "@armada/protocol";
 import type { CallArguments, CheckOutput } from "@armada/protocol";
 import type { ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
+import { refusedWith } from "@armada/protocol";
 import { HOST } from "./runtime-file";
 
 /** How long a command waits for an answer before it is a transport failure. */
@@ -114,19 +115,7 @@ export async function ask(
     });
     const text = await answer.text();
     if (!answer.ok) {
-      const error = refusal(text);
-      return {
-        ok: false,
-        outcome:
-          error === null
-            ? {
-                ok: false,
-                why: "transport",
-                detail: `Fleet answered ${answer.status}`,
-                fault: { ...asked, why: "unanswerable", status: answer.status },
-              }
-            : { ok: false, why: "refused", error },
-      };
+      return { ok: false, outcome: refusedWith(answer.status, text, asked) };
     }
     return { ok: true, body: JSON.parse(text) };
   } catch (cause) {
@@ -140,25 +129,6 @@ export async function ask(
         : { ...asked, why: "unreachable" };
     return { ok: false, outcome: { ok: false, why: "transport", detail, fault } };
   }
-}
-
-/**
- * A refusal, as the wire carries it, or `null` where the body is not one.
- *
- * **Nothing here mints a code.** A code's declaration lives beside the variant
- * that raises it and `cargo xtask verify-error-codes` collects them across both
- * languages, so a code invented here would be collected from nowhere and mean
- * nothing to the lookup Bridge does. A body that is not a `WireError` is reported as the transport
- * failure it is.
- */
-function refusal(text: string): WireError | null {
-  try {
-    const parsed = JSON.parse(text) as WireError;
-    if (typeof parsed.code === "string" && typeof parsed.message === "string") return parsed;
-  } catch {
-    return null;
-  }
-  return null;
 }
 
 /**
@@ -317,19 +287,7 @@ export async function frameOf(port: number, jobId: string, kept: string): Promis
     if (!answer.ok) {
       // The refusal is JSON even though the success is not, so it is read as
       // text here and handed to the same parser every other route uses.
-      const error = refusal(await answer.text());
-      return {
-        ok: false,
-        outcome:
-          error === null
-            ? {
-                ok: false,
-                why: "transport",
-                detail: `Fleet answered ${answer.status}`,
-                fault: { ...asked, why: "unanswerable", status: answer.status },
-              }
-            : { ok: false, why: "refused", error },
-      };
+      return { ok: false, outcome: refusedWith(answer.status, await answer.text(), asked) };
     }
     return {
       ok: true,

@@ -12,11 +12,10 @@
 
 import WebSocket from "ws";
 
-import type { JournalMessage, Journalled, JobLog, Noted } from "@armada/protocol";
+import type { JournalMessage, Journalled, JobLog } from "@armada/protocol";
+import { NO_NOTES, SOCKET_CLOSED, noteArrived } from "@armada/protocol";
 import { HOST } from "./runtime-file";
 
-/** Nothing has arrived yet, and nothing was left out. */
-const FRESH: JobLog = { skipped: 0, notes: [] };
 
 /**
  * One Job's log connection.
@@ -29,7 +28,7 @@ export class JournalSocket {
   private readonly publish: (journalled: Journalled) => void;
   private socket: WebSocket | null = null;
   private jobId: string | null = null;
-  private log: JobLog = FRESH;
+  private log: JobLog = NO_NOTES;
   /** Monotonic per connection. A note's own identity, since none carries one. */
   private seq = 0;
 
@@ -41,7 +40,7 @@ export class JournalSocket {
   open(port: number | null, jobId: string | null): void {
     this.close();
     this.jobId = jobId;
-    this.log = FRESH;
+    this.log = NO_NOTES;
     this.seq = 0;
     if (jobId === null) {
       this.publish({ state: "none" });
@@ -63,7 +62,7 @@ export class JournalSocket {
     // nothing is happening to, which is the exact reading this stream exists to
     // stop being wrong.
     socket.on("error", (cause: Error) => this.broke(cause.message));
-    socket.on("close", () => this.ended("the connection closed"));
+    socket.on("close", () => this.ended(SOCKET_CLOSED));
   }
 
   /** Whether a socket is up. A reconnecting Fleet reopens one that is not. */
@@ -98,28 +97,22 @@ export class JournalSocket {
       return;
     }
 
-    if (message.message === "opened") {
-      // `skipped` is stated once, on the first message, and is the one fact a
-      // reader needs before the first note: whether what follows is whole.
-      this.log = { ...FRESH, skipped: message.skipped };
+    // What the message does to the log is `noteArrived`'s, in the wire
+    // package, for `observe.ts`'s reason.
+    const next = noteArrived(this.log, message, this.seq);
+    if (message.message === "note") this.seq += 1;
+    this.log = next.log;
+    if (next.ended === undefined) {
       this.publish({ state: "watching", jobId, log: this.log });
       return;
     }
 
-    if (message.message === "note") {
-      const { message: _tag, ...note } = message;
-      const noted: Noted = { ...note, seq: this.seq++ };
-      this.log = { ...this.log, notes: [...this.log.notes, noted] };
-      this.publish({ state: "watching", jobId, log: this.log });
-      return;
-    }
-
-    // `closed` carries why, and the socket is let go here rather than left to
-    // close under its own event — Fleet sends `closed` and *then* closes, so a
-    // listener still attached would overwrite the reason a reader wanted with
-    // "the connection closed". `observe.ts` learned this the hard way.
+    // The socket is let go here rather than left to close under its own
+    // event — Fleet sends `closed` and *then* closes, so a listener still
+    // attached would overwrite the reason a reader wanted with "the connection
+    // closed". `observe.ts` learned this the hard way.
     this.close();
-    this.publish({ state: "ended", jobId, log: this.log, because: message.because });
+    this.publish({ state: "ended", jobId, log: this.log, because: next.ended });
   }
 
   private ended(because: string): void {
