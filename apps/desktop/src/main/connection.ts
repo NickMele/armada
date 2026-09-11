@@ -564,13 +564,9 @@ export class FleetConnection {
     }
 
     if (event.kind === "run.output" || event.kind === "run.finished") {
-      // A person's run in a Job's worktree: nothing on the Board moves. The run
-      // sheet reads these; until it is wired, the tail below must not fold them
-      // as a status move.
-      this.publish({ connection });
+      this.publish({ connection }); // a person's run moves nothing on the Board
       return;
     }
-
     if (event.kind === "manifest.reread") {
       // **Above the tail below, because there is no Job to find.** The tail
       // reads `event.job_id` and treats a Job it does not hold as a missed
