@@ -147,14 +147,22 @@ async fn refuse_and_hold_refuses_and_the_fold_sees_it() {
     let fleet = a_fleet_with(&home, a_drone_that_reached_for("c1"));
     let job = started(&fleet, &home).await;
 
-    let answer = fleet.permission(&job, &asked("Bash", "npm publish", "c1")).await;
+    let answer = fleet
+        .permission(&job, &asked("Bash", "npm publish", "c1"))
+        .await;
 
     let PermissionAnswer::Deny(words) = answer else {
         panic!("a new Job refuses and holds: {answer:?}");
     };
     assert!(words.contains("not granted `npm publish`"), "{words}");
-    assert!(refused(&heard(&fleet).await, "c1"), "the fold sees Fleet's refusal");
-    assert!(fleet.command_awaited(&job).await.is_none(), "and nobody is asked");
+    assert!(
+        refused(&heard(&fleet).await, "c1"),
+        "the fold sees Fleet's refusal"
+    );
+    assert!(
+        fleet.command_awaited(&job).await.is_none(),
+        "and nobody is asked"
+    );
 }
 
 /// **The requirement, as a case.** Ask me holds the call, a person allows it,
@@ -165,13 +173,20 @@ async fn ask_me_holds_the_call_until_a_person_allows_it() {
     let home = TempDir::new();
     let fleet = a_fleet_with(&home, a_drone_that_reached_for("c1"));
     let job = started(&fleet, &home).await;
-    fleet.set_when_blocked(&job, WhenBlocked::AskMe).await.unwrap();
+    fleet
+        .set_when_blocked(&job, WhenBlocked::AskMe)
+        .await
+        .unwrap();
     let asking = asked("Bash", "npm publish", "c1");
 
     let (answer, answered) = tokio::join!(fleet.permission(&job, &asking), async {
         let waiting = until_waiting(&fleet, &job).await;
         assert_eq!(waiting.detail, "npm publish");
-        assert_eq!(waiting.offers.len(), 3, "allow for this job, always, reject");
+        assert_eq!(
+            waiting.offers.len(),
+            3,
+            "allow for this job, always, reject"
+        );
         fleet
             .answer_command(&job, "c1", CommandAnswer::AllowForJob)
             .await
@@ -185,12 +200,7 @@ async fn ask_me_holds_the_call_until_a_person_allows_it() {
         JobStatus::Running,
         "nothing moved: the Drone never left its call"
     );
-    let allowed = fleet
-        .store()
-        .lock()
-        .await
-        .allowed_commands(&job)
-        .unwrap();
+    let allowed = fleet.store().lock().await.allowed_commands(&job).unwrap();
     assert_eq!(allowed.len(), 1);
     assert_eq!(allowed[0].run, "npm publish");
     assert_eq!(
@@ -208,12 +218,17 @@ async fn a_rejected_command_is_refused_and_the_fold_sees_it() {
     let home = TempDir::new();
     let fleet = a_fleet_with(&home, a_drone_that_reached_for("c1"));
     let job = started(&fleet, &home).await;
-    fleet.set_when_blocked(&job, WhenBlocked::AskMe).await.unwrap();
+    fleet
+        .set_when_blocked(&job, WhenBlocked::AskMe)
+        .await
+        .unwrap();
     let asking = asked("Bash", "npm publish", "c1");
 
     let (answer, answered) = tokio::join!(fleet.permission(&job, &asking), async {
         until_waiting(&fleet, &job).await;
-        fleet.answer_command(&job, "c1", CommandAnswer::Reject).await
+        fleet
+            .answer_command(&job, "c1", CommandAnswer::Reject)
+            .await
     });
 
     answered.unwrap();
@@ -238,7 +253,10 @@ async fn the_board_says_a_job_waits_on_a_command() {
     let home = TempDir::new();
     let fleet = a_fleet_with(&home, a_drone_that_reached_for("c1"));
     let job = started(&fleet, &home).await;
-    fleet.set_when_blocked(&job, WhenBlocked::AskMe).await.unwrap();
+    fleet
+        .set_when_blocked(&job, WhenBlocked::AskMe)
+        .await
+        .unwrap();
     let asking = asked("Bash", "npm publish", "c1");
 
     let (_, waiting) = tokio::join!(fleet.permission(&job, &asking), async {
@@ -257,7 +275,10 @@ async fn the_board_says_a_job_waits_on_a_command() {
 
     assert!(waiting, "a Job waiting on a command waits on a person");
     let after = Queries::list_jobs(&fleet).await.expect("a board");
-    assert!(after.jobs.iter().all(|row| !row.asking), "answered, so no longer");
+    assert!(
+        after.jobs.iter().all(|row| !row.asking),
+        "answered, so no longer"
+    );
 }
 
 /// **An answer naming another call joins to nothing**, and the question stands
@@ -267,7 +288,10 @@ async fn an_answer_naming_another_call_is_refused_and_the_question_stands() {
     let home = TempDir::new();
     let fleet = a_fleet_with(&home, a_drone_that_reached_for("c1"));
     let job = started(&fleet, &home).await;
-    fleet.set_when_blocked(&job, WhenBlocked::AskMe).await.unwrap();
+    fleet
+        .set_when_blocked(&job, WhenBlocked::AskMe)
+        .await
+        .unwrap();
     let asking = asked("Bash", "npm publish", "c1");
 
     let (answer, wrong) = tokio::join!(fleet.permission(&job, &asking), async {
@@ -294,7 +318,10 @@ async fn a_tool_that_is_not_a_command_is_refused_even_when_asking() {
     let home = TempDir::new();
     let fleet = a_fleet_with(&home, a_drone_that_reached_for("c1"));
     let job = started(&fleet, &home).await;
-    fleet.set_when_blocked(&job, WhenBlocked::AskMe).await.unwrap();
+    fleet
+        .set_when_blocked(&job, WhenBlocked::AskMe)
+        .await
+        .unwrap();
 
     let answer = fleet
         .permission(&job, &asked("WebFetch", "https://example.com", "c1"))
@@ -314,7 +341,10 @@ async fn a_second_command_waits_behind_the_first() {
     let home = TempDir::new();
     let fleet = a_fleet_with(&home, a_drone_that_reached_for("c1"));
     let job = started(&fleet, &home).await;
-    fleet.set_when_blocked(&job, WhenBlocked::AskMe).await.unwrap();
+    fleet
+        .set_when_blocked(&job, WhenBlocked::AskMe)
+        .await
+        .unwrap();
     let asking = asked("Bash", "npm publish", "c1");
 
     let (_, second) = tokio::join!(fleet.permission(&job, &asking), async {
@@ -332,6 +362,12 @@ async fn a_second_command_waits_behind_the_first() {
     let PermissionAnswer::Deny(words) = second else {
         panic!("the second waits behind the first: {second:?}");
     };
-    assert!(words.contains("whether you may run `npm publish`"), "{words}");
-    assert!(!refused(&heard(&fleet).await, "c2"), "nothing about it is final");
+    assert!(
+        words.contains("whether you may run `npm publish`"),
+        "{words}"
+    );
+    assert!(
+        !refused(&heard(&fleet).await, "c2"),
+        "nothing about it is final"
+    );
 }
