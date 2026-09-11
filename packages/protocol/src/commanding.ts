@@ -14,7 +14,7 @@
 
 /**
  * What a job does when its drone reaches for a command it was not given.
- * Since protocol 10.6.
+ * Since protocol 10.7.
  *
  * `refuse_and_hold` refuses the call and stops the job at `blocked_by_policy`
  * — **where every job starts**, because it asks nobody to be watching.
@@ -23,7 +23,7 @@
 export type WhenBlocked = "refuse_and_hold" | "ask_me";
 
 /**
- * What a person may answer about one refused command. Since protocol 10.6.
+ * What a person may answer about one refused command. Since protocol 10.7.
  *
  * `allow_for_job` runs it and lets this job run it again without asking.
  * `always_allow` does that and writes it into `armada.yml` under `commands`,
@@ -36,7 +36,7 @@ export type CommandAnswer = "allow_for_job" | "always_allow" | "reject";
 
 /**
  * One command a drone is waiting on a person to allow or reject, right now.
- * Since protocol 10.6.
+ * Since protocol 10.7.
  *
  * **Not a status.** The job and its step are `running` while the drone waits,
  * exactly as they are while a question is out, and the wait ends without
@@ -68,7 +68,7 @@ export type CommandInFlight = {
 };
 
 /**
- * The body of `answer_command`. Since protocol 10.6.
+ * The body of `answer_command`. Since protocol 10.7.
  *
  * **One body for both paths**, because the call id already says which: a call
  * a drone is waiting on is answered in place, and a refused row on a stopped
@@ -82,7 +82,7 @@ export type AnswerCommand = {
 };
 
 /**
- * The body of `set_when_blocked`. Since protocol 10.6. A live setting on one
+ * The body of `set_when_blocked`. Since protocol 10.7. A live setting on one
  * job: the next permission question reads it, and no drone is respawned.
  */
 export type SetWhenBlocked = {

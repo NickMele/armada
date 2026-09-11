@@ -166,13 +166,13 @@ export type JobDetail = {
   show_again?: ShowAgain;
   /**
    * What this job does when its drone reaches for a command it was not given.
-   * Since protocol 10.6. **Absent from an older fleet**, which draws as no
+   * Since protocol 10.7. **Absent from an older fleet**, which draws as no
    * setting at all rather than as the default.
    */
   when_blocked?: WhenBlocked;
   /**
    * The command this job's drone is waiting on a person to allow, right now.
-   * Since protocol 10.6.
+   * Since protocol 10.7.
    *
    * **Absent is the ordinary case**, and it is every job at `refuse_and_hold`:
    * nothing waits there, and a refused command is answered on `stuck.refused`.
@@ -337,7 +337,7 @@ export type Refusal = {
    */
   because: string;
   /**
-   * What a person may answer about this command. Since protocol 10.6.
+   * What a person may answer about this command. Since protocol 10.7.
    *
    * **Empty is nothing a person can allow here**; `withheld` says why where
    * fleet knows. Optional because fleet reads an absent list as empty, and a
@@ -346,7 +346,7 @@ export type Refusal = {
   offers?: CommandAnswer[];
   /**
    * Why this command cannot be allowed from here — declared destructive, or a
-   * push. Since protocol 10.6. Absent where it can be.
+   * push. Since protocol 10.7. Absent where it can be.
    */
   withheld?: string;
 };

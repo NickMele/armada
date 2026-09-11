@@ -176,7 +176,7 @@ pub struct JobDetail {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub show_again: Option<crate::showing::ShowAgain>,
     /// What this Job does when its Drone reaches for a command it was not
-    /// given. **Since 10.6**, and absent from a Fleet older than that — which a
+    /// given. **Since 10.7**, and absent from a Fleet older than that — which a
     /// reader draws as no setting at all rather than as the default.
     ///
     /// **Filled after [`JobDetail::of`] rather than handed to it**, as
@@ -369,7 +369,7 @@ pub struct Refusal {
     /// **Usually empty, and empty is the honest answer.** Nothing fills it in
     /// from the trigger: a reason Armada wrote would read as the harness's.
     pub because: String,
-    /// What a person may answer about this command. **Since 10.6.**
+    /// What a person may answer about this command. **Since 10.7.**
     ///
     /// **Empty is nothing a person can allow here**, and it is also every row
     /// from an older Fleet, which offered nothing. [`withheld`] says why where
@@ -379,7 +379,7 @@ pub struct Refusal {
     #[serde(default)]
     pub offers: Vec<CommandAnswer>,
     /// Why this command cannot be allowed from here — declared destructive, or
-    /// a push. **Since 10.6.** Absent where it can be.
+    /// a push. **Since 10.7.** Absent where it can be.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub withheld: Option<String>,
 }

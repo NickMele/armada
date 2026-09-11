@@ -260,7 +260,7 @@ export type JobAsking = {
 
 /**
  * A drone is held on a command waiting for a person, or the one it was held on
- * was answered. `crates/ipc/src/event.rs`. Since protocol 10.6.
+ * was answered. `crates/ipc/src/event.rs`. Since protocol 10.7.
  *
  * `job.asking`'s shape exactly: two messages per command, the one going out
  * carrying `waiting` and the one coming back carrying nothing. Only a job at

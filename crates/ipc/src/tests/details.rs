@@ -463,7 +463,7 @@ fn an_unmeasured_argument_carries_no_length_rather_than_nought() {
     );
 }
 
-/// **A row from before 10.6 offers nothing**, which is what it meant then too:
+/// **A row from before 10.7 offers nothing**, which is what it meant then too:
 /// nothing on it could be allowed from a screen.
 #[test]
 fn a_refusal_from_before_answers_existed_offers_nothing() {
