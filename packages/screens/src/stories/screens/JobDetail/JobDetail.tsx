@@ -19,13 +19,24 @@ import { propsFor } from "../../../fixtures/props";
  * the component library's 400px stage and drew the screen cut off below it —
  * a story that fits a drawing is not the app, and the app is what this shows.
  */
-export function JobDetailFrom({ fixture }: { fixture: JobFixture }) {
+export function JobDetailFrom({
+  fixture,
+  width,
+}: {
+  fixture: JobFixture;
+  /**
+   * The window's width, where a story is about a narrow one — `--window-floor`
+   * is the narrowest Bridge lays out for. Absent fills the story's own width.
+   */
+  width?: string;
+}) {
   return (
     <div
       style={{
         display: "flex",
         flexDirection: "column",
         height: "100vh",
+        width,
         background: "var(--bg-base)",
       }}
     >

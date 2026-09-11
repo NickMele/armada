@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect } from "storybook/test";
 
 import type { JobFixture } from "../../../fixtures/fixture";
 import {
@@ -133,3 +134,68 @@ export const Killed: Story = { name: "Killed", render: drawing(killed) };
 
 /** Replaced by a redispatch, which carries the work on under a new Job. */
 export const Superseded: Story = { name: "Superseded", render: drawing(superseded) };
+
+/**
+ * The log, open on a running Job, in the trailing sheet.
+ *
+ * **Opened by pressing the chapter's own control**, the way a person opens it —
+ * the screen holds which sheet is open, so a story that set it would be drawing
+ * a state nothing in the app can reach by that route. The control leaves the
+ * chapter once its sheet is open, which is the assertion.
+ */
+export const TheLogOpen: Story = {
+  name: "The log open",
+  render: drawing(running),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: /Open the log/ }));
+    await expect(canvas.queryByRole("button", { name: /Open the log/ })).toBeNull();
+  },
+};
+
+/** The Job's patch, open in the sheet, from the chapter that says what was produced. */
+export const TheDiffOpen: Story = {
+  name: "The diff open",
+  render: drawing(running),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: /Open the diff/ }));
+  },
+};
+
+/**
+ * The log open at `--window-floor`, the narrowest window Bridge lays out for.
+ * The sheet has the least room here, and it still has to leave the run beside it.
+ */
+export const TheLogOpenAtTheFloor: Story = {
+  name: "The log open, at the narrowest window",
+  render: () => <JobDetailFrom fixture={running()} width="var(--window-floor)" />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: /Open the log/ }));
+  },
+};
+
+/** The log open on a Job a failed Check stopped — the reason is read beside the log. */
+export const TheLogOpenOnAStoppedJob: Story = {
+  name: "The log open, on a stopped Job",
+  render: drawing(escalatedGateFailure),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: /Open the log/ }));
+  },
+};
+
+/** The failed Check's output, opened from the Checks chapter — the reason the Job stopped, whole. */
+export const TheFailedChecksOutputOpen: Story = {
+  name: "The failed Check's output open",
+  render: drawing(escalatedGateFailure),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: /Open the output/ }));
+  },
+};
+
+/** What the Job holds on the machine, read in full from the summary under the run. */
+export const TheFullReadingOpen: Story = {
+  name: "What the Job holds, read in full",
+  render: drawing(running),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: /Open the full reading/ }));
+  },
+};
