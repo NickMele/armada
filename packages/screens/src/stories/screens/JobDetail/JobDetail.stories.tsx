@@ -29,7 +29,7 @@ import {
   superseded,
   unreadable,
 } from "../../../fixtures/build/index";
-import { JOB_ID } from "../../../fixtures/build/base";
+import { JOB_ID, spend, watchedRead } from "../../../fixtures/build/base";
 import { WAITING_CALL } from "../../../fixtures/build/running";
 import { recorded } from "../../../fixtures/recorded";
 import { JobDetailFrom } from "./JobDetail";
@@ -168,6 +168,55 @@ export const JudgeRefused: Story = { name: "Judge refused", render: drawing(esca
 
 /** Every Check passed and the Judge met every criterion. A person decides next. */
 export const Review: Story = { name: "Review", render: drawing(review) };
+
+/**
+ * The review moment on a Job whose names are as long as real ones get, with the
+ * spend and turns a long run reaches. The header a person reported on 11 Sep
+ * 2026: the facts wrap into an orphaned line, and the blocked-command setting
+ * reads as the screen's main button with nothing saying what pressing it does.
+ */
+function reviewWithLongNames(): JobFixture {
+  const fixture = reviewAtDelivery();
+  if (fixture.watched.state !== "read") return fixture;
+  const handle = "3-support-attaching-screenshots-and-file-sea";
+  const renamed = {
+    ...fixture.job,
+    title: "Support attaching screenshots and file search in job context",
+    handle,
+    branch: `armada/${handle}`,
+  };
+  const whole = fixture.watched.detail;
+  return {
+    ...fixture,
+    job: renamed,
+    watched: watchedRead({
+      ...whole,
+      job: renamed,
+      branch: renamed.branch,
+      spend: spend({
+        cost_micros: 29_630_000,
+        cost_cap_micros: 60_000_000,
+        unpriced: 2,
+        turns: 580,
+        turn_cap: 1000,
+      }),
+      ...(whole.delivery === undefined
+        ? {}
+        : {
+            delivery: {
+              ...whole.delivery,
+              pull_request: "https://forge.example/armada/armada/pull/660",
+            },
+          }),
+    }),
+  };
+}
+
+/** The review header with real-length names, as reported. Kept to iterate the header against. */
+export const ReviewLongNames: Story = {
+  name: "Review, long names",
+  render: drawing(reviewWithLongNames),
+};
 
 /** At review with a pull request open and comments on it. Merge becomes a fourth answer. */
 export const ReviewWithPullRequest: Story = {
