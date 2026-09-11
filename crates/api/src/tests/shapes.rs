@@ -103,6 +103,7 @@ fn step_rail(
         check_runs: Vec::new(),
         judge_checks: Some(judge_checks),
         advance_gate: Some(ipc::AdvanceGate::from_wire(gate).expect("a gate the registry has")),
+        delivers: Some(false),
         last_verdict: None,
         overridden: false,
         judged: Vec::new(),
@@ -502,6 +503,7 @@ pub fn workflows() -> Vec<WorkflowSummary> {
                 }],
                 advance_gate: ipc::AdvanceGate::from_wire("auto_if_judge_passes")
                     .expect("a gate the registry has"),
+                delivers: false,
             },
             ipc::WorkflowStep {
                 step_id: StepId::carried("handoff"),
@@ -510,6 +512,7 @@ pub fn workflows() -> Vec<WorkflowSummary> {
                 judge_checks: Vec::new(),
                 advance_gate: ipc::AdvanceGate::from_wire("human_always")
                     .expect("a gate the registry has"),
+                delivers: true,
             },
         ],
         manifest_id: ManifestId::carried("01MF"),

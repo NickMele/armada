@@ -46,9 +46,9 @@ mod worktree;
 pub use basing::{BaseCheckout, BaseSpec, BaseSpecRefused};
 pub use commit::{CommitTime, Committed};
 pub use delivery::{
-    how_the_base_was_found, Base, BaseOnTheRemote, BroughtUpToDate, Delivery, Landing, Merged,
-    NotDelivered, NotMerged, Opened, Pushed, Rendering, Renewed, Replied, RepositoryStanding,
-    Review, Standing, WhatBecameOfIt,
+    how_the_base_was_found, Base, BaseOnTheRemote, BroughtUpToDate, Delivery, Landing, Mergeable,
+    Merged, NotDelivered, NotMerged, Opened, Pushed, Rendering, Renewed, Replied,
+    RepositoryStanding, Review, Standing, WhatBecameOfIt,
 };
 pub use event::{CallDetail, DroneEvent, Speaker};
 pub use harness::{
@@ -58,7 +58,9 @@ pub use harness::{
 pub use judge::{Ask, CallProgress, Heard, JudgeCall, ModelClient};
 pub use link_lookup::{LinkLookup, LookupCall};
 pub use secret::Secret;
-pub use under_review::{FromOutside, Remark, UnderReview, WhatPeopleSaid, WhatTheForgeRan};
+pub use under_review::{
+    FromOutside, Remark, ReviewVerdict, ReviewedBy, UnderReview, WhatPeopleSaid, WhatTheForgeRan,
+};
 pub use work_product::{
     Change, Changed, ChangedFile, Counted, CountedFile, Footprint, LineCount, Measured, Patch,
     WorkProduct,

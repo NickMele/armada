@@ -30,8 +30,9 @@ use std::sync::Mutex;
 
 use adapter_traits::{
     Base, BaseCheckout, BaseOnTheRemote, BaseSpec, BroughtUpToDate, Change, CommitTime, Committed,
-    Delivery, Landing, Merged, NotDelivered, NotMerged, Opened, Pushed, Renewed, Replied,
-    RepositoryStanding, Review, Standing, UnderReview, Vcs, WhatBecameOfIt, Worktree, WorktreeSpec,
+    Delivery, Landing, Mergeable, Merged, NotDelivered, NotMerged, Opened, Pushed, Renewed,
+    Replied, RepositoryStanding, Review, Standing, UnderReview, Vcs, WhatBecameOfIt, Worktree,
+    WorktreeSpec,
 };
 
 use crate::work_product::Holding;
@@ -234,6 +235,15 @@ pub struct Delivering {
     /// The branch the forge says the pull request merges into. `None` is a
     /// forge that answered nothing, which is what [`Landing::Unknown`] means.
     pub base_on_the_forge: Option<String>,
+    /// The forge's own number for the pull request, riding the same read as
+    /// `landed` and `base_on_the_forge`. `None` on the same grounds as
+    /// `base_on_the_forge`.
+    pub number: Option<u64>,
+    /// The pull request's title, as the forge holds it right now.
+    pub title: Option<String>,
+    /// Whether the forge can merge it as it stands. `Yes` by default, the
+    /// shape a Job that goes the whole way runs against.
+    pub mergeable: Mergeable,
     /// What the forge says about the pull request while it is still open.
     /// Unreadable by default, which is the answer on a machine with no forge —
     /// and the one every case that is not about reviews should get, so that
@@ -265,6 +275,9 @@ impl Default for Delivering {
             // every existing test's Job land the moment anything asked.
             landed: Landing::Unknown,
             base_on_the_forge: Some(String::from("main")),
+            number: Some(1),
+            title: Some(String::from("a job's pull request")),
+            mergeable: Mergeable::Yes,
             under_review: UnderReview::unreadable(),
             renewed: Renewed::Renewed,
             repository: RepositoryStanding::AlreadyHadIt {
@@ -670,6 +683,9 @@ impl Delivery for FakeVcs {
         WhatBecameOfIt {
             landing: delivery.landed.clone(),
             base: delivery.base_on_the_forge.clone(),
+            number: delivery.number,
+            title: delivery.title.clone(),
+            mergeable: delivery.mergeable,
         }
     }
 

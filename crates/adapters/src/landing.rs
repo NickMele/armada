@@ -25,30 +25,33 @@
 //! to send a person somewhere, and the wrong place is worse than the sentence.
 
 use adapter_traits::{
-    Landing, Merged, NotMerged, Rendering, Renewed, Replied, RepositoryStanding, WhatBecameOfIt,
+    Landing, Mergeable, Merged, NotMerged, Rendering, Renewed, Replied, RepositoryStanding,
+    WhatBecameOfIt,
 };
 use git2::Repository;
 
 use crate::delivery::{asked, last_line, run_in, said, FORGE};
 
-/// Ask the forge what became of one pull request, and what it is showing
-/// beside it.
+/// Ask the forge what became of one pull request, what it is showing beside
+/// it, and what a person would read about it before either of those answers
+/// mattered.
 pub(crate) fn read(in_repo: &str, pull_request: &str) -> WhatBecameOfIt {
-    // **Four fields in one call**, which is what `#427` asked for: what
-    // became of it and what the forge is rendering beside it are the same
-    // `pr view`, and two sweeps asking one thing each would be two
-    // processes where one does. The address is not among them — it is the
-    // argument, so asking for it back would be asking the forge to confirm
-    // what was just handed to it.
+    // **Seven fields in one call**, `#427`'s argument carried one field
+    // further: the number, the title and whether the forge can merge it are
+    // three more scalars on the one `pr view` this already runs, and a second
+    // call for any of them would be a process spent on an answer this one
+    // already has. The address is not among them — it is the argument, so
+    // asking for it back would be asking the forge to confirm what was just
+    // handed to it.
     let Some(said) = asked(
         in_repo,
         pull_request,
-        "state,baseRefName,baseRefOid,headRefOid",
-        "[.state, .baseRefName, .baseRefOid, .headRefOid] | @tsv",
+        "number,title,state,mergeable,baseRefName,baseRefOid,headRefOid",
+        "[.number, .title, .state, .mergeable, .baseRefName, .baseRefOid, .headRefOid] | @tsv",
     ) else {
         return WhatBecameOfIt::unknown();
     };
-    let Some([state, base, pinned, head]) = four(&said) else {
+    let Some([number, title, state, mergeable, base, pinned, head]) = fields::<7>(&said) else {
         return WhatBecameOfIt::unknown();
     };
     let url = pull_request.to_string();
@@ -66,6 +69,18 @@ pub(crate) fn read(in_repo: &str, pull_request: &str) -> WhatBecameOfIt {
     WhatBecameOfIt {
         landing,
         base: Some(base.to_string()),
+        // A number the forge printed that this cannot parse is a forge
+        // sending back something other than a number, which this reads the
+        // same as not having asked — never a guessed id.
+        number: number.parse().ok(),
+        title: Some(title.to_string()),
+        mergeable: match mergeable {
+            "MERGEABLE" => Mergeable::Yes,
+            "CONFLICTING" => Mergeable::No,
+            // `UNKNOWN` is the forge still computing it, and a word this
+            // build has no other name for is the same silence.
+            _ => Mergeable::Unreadable,
+        },
     }
 }
 
@@ -324,8 +339,3 @@ pub(crate) fn fields<const N: usize>(said: &str) -> Option<[&str; N]> {
     read.iter().all(|field| !field.is_empty()).then_some(read)
 }
 
-/// The four-field shape [`read`] asks for. Named, because its callers read
-/// better naming the count than turbofishing it.
-pub(crate) fn four(said: &str) -> Option<[&str; 4]> {
-    fields(said)
-}

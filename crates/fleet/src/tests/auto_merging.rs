@@ -66,6 +66,7 @@ fn the_forge_says(checks: WhatTheForgeRan) -> UnderReview {
         people: WhatPeopleSaid::NobodyHasLooked,
         checks,
         remarks: Vec::new(),
+        verdicts: Vec::new(),
     }
 }
 

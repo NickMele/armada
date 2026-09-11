@@ -242,12 +242,24 @@ where
                 // nothing, and the surface says different sentences for the two.
                 match came_to.is_empty() {
                     true => None,
-                    false => Some(JobDelivery {
-                        commit: came_to.commit,
-                        pushed: came_to.pushed,
-                        pull_request: came_to.pull_request,
-                        landed: came_to.landed.as_ref().and_then(crate::noticing::settled),
-                    }),
+                    false => {
+                        // **Never a forge call.** `get_job` is read on every
+                        // open of a Job; what Fleet's own rotation last read
+                        // live is served from memory — `Sweep::pr_detail` — and
+                        // absent here is a pull request the rotation has not
+                        // reached yet, or one that has already settled.
+                        let pull_request_detail = match &came_to.pull_request {
+                            Some(url) => self.sweeping().lock().await.pr_detail.get(url).cloned(),
+                            None => None,
+                        };
+                        Some(JobDelivery {
+                            commit: came_to.commit,
+                            pushed: came_to.pushed,
+                            pull_request: came_to.pull_request,
+                            pull_request_detail,
+                            landed: came_to.landed.as_ref().and_then(crate::noticing::settled),
+                        })
+                    }
                 }
             }
         };

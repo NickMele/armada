@@ -6,9 +6,9 @@
 //! a paragraph is a paragraph again, and totalling a rollup of checks written in
 //! two different shapes into the one answer a caller acts on.
 
-use adapter_traits::{WhatPeopleSaid, WhatTheForgeRan};
+use adapter_traits::{ReviewVerdict, WhatPeopleSaid, WhatTheForgeRan};
 
-use crate::under_review::{as_written, folded, what_people_said, Checks};
+use crate::under_review::{as_written, folded, what_people_said, what_review_verdict, Checks};
 
 /// The whole reason this file undoes anything: a comment is a paragraph and
 /// the wire it arrives on is one line.
@@ -148,4 +148,39 @@ fn a_pull_request_nobody_has_touched_is_an_answer() {
     assert_eq!(read.people, WhatPeopleSaid::NobodyHasLooked);
     assert_eq!(read.checks, WhatTheForgeRan::NothingRan);
     assert!(read.remarks.is_empty());
+}
+
+/// **A word this build has no name for is silence**, for [`what_people_said`]'s
+/// own reason: `COMMENTED`, `DISMISSED` and `PENDING` are real forge states and
+/// none of them is a verdict a person acts on, so the reduction's own `select`
+/// keeps them out before this is ever asked.
+#[test]
+fn a_review_state_that_is_neither_verdict_is_none() {
+    assert_eq!(
+        what_review_verdict("APPROVED"),
+        Some(ReviewVerdict::Approved)
+    );
+    assert_eq!(
+        what_review_verdict("CHANGES_REQUESTED"),
+        Some(ReviewVerdict::ChangesRequested)
+    );
+    assert_eq!(what_review_verdict("COMMENTED"), None);
+    assert_eq!(what_review_verdict(""), None);
+}
+
+/// One review that both wrote a note and landed a verdict produces both rows —
+/// a `remark` a person can pick off the pull request, and a `verdict` naming
+/// who and which — and the two are independent readings of the one record.
+#[test]
+fn a_reviewed_and_a_verdict_are_read_off_the_same_review_independently() {
+    let read = folded(&[
+        String::from("said\tAPPROVED"),
+        String::from("remark\tPRR_1\talice\t2026-09-08T10:00:00Z\tlooks good"),
+        String::from("verdict\talice\tAPPROVED"),
+    ]);
+    assert_eq!(read.remarks.len(), 1);
+    assert_eq!(read.remarks[0].by.as_written(), "alice");
+    assert_eq!(read.verdicts.len(), 1);
+    assert_eq!(read.verdicts[0].by.as_written(), "alice");
+    assert_eq!(read.verdicts[0].verdict, ReviewVerdict::Approved);
 }
