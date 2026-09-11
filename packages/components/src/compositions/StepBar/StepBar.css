@@ -38,10 +38,9 @@
   background: var(--border-default);
 }
 
-/* Past — neutral. The one stated exception to a step keeping its hue: a rail
-   shows one Job and has room for the reading, a bar does not. */
+/* Past: a finished step, in its own hue, the same as in a rail. */
 .armada-step-bar__segment[data-state="past"] {
-  background: var(--border-strong);
+  background: var(--step-advanced);
 }
 
 /* Remaining, and every segment on a Job that has not started. Same ground as
@@ -51,8 +50,8 @@
   background: var(--border-default);
 }
 
-/* The current segment is the only one that takes a hue, and it takes it from
-   the step-activity set — the same declarations `StepActivityMark` reads. */
+/* The current segment takes its activity's hue from the step-activity set,
+   the same declarations `StepActivityMark` reads. */
 .armada-step-bar__segment[data-activity="running"] {
   background: var(--step-running);
 }
