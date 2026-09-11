@@ -108,8 +108,7 @@ const BASH = "Bash";
 
 /** True of every refusal, and the reason a restart is not a fix on its own. */
 const FIXED_AT_SPAWN =
-  "A drone's toolset is fixed when it starts, and a restart builds the same one from the same " +
-  "declaration. A drone that reaches for these again is refused again.";
+  "A drone keeps the tools it started with, so a restart would be blocked the same way.";
 
 /**
  * What declares a command, where a command was refused. **No path**: Fleet may
@@ -122,8 +121,8 @@ const FIXED_AT_SPAWN =
  * a person to add an entry they already have.
  */
 const DECLARED_COMMANDS =
-  "A command is in that toolset only where the repository's armada.yml declares it under " +
-  "commands and does not mark it destructive.";
+  "To allow a command, add it under commands in the repository's armada.yml, without marking it " +
+  "destructive.";
 
 /**
  * How much of one command is on the row, where it is not all of it.

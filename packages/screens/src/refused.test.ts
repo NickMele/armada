@@ -181,7 +181,7 @@ describe("what a stopped job says it was refused", () => {
     ];
     for (const refused of shapes) {
       const drawn = refusedIn(whole({ refused, refusals: refused.length }));
-      expect(drawn?.again).toContain("a restart builds the same one");
+      expect(drawn?.again).toContain("a restart would be blocked the same way");
     }
   });
 
