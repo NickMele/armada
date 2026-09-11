@@ -162,8 +162,11 @@ impl Tree {
         let dir = self.0.join(SCREENS).join(group).join(name);
         fs::create_dir_all(&dir).expect("a screen directory");
         fs::write(dir.join(format!("{name}.stories.tsx")), story(title)).expect("a story");
-        fs::write(dir.join(format!("{name}.tsx")), "export const Thing = () => null;\n")
-            .expect("a component");
+        fs::write(
+            dir.join(format!("{name}.tsx")),
+            "export const Thing = () => null;\n",
+        )
+        .expect("a component");
         self
     }
 
@@ -321,5 +324,8 @@ fn a_screens_story_that_disagrees_with_its_directory_is_named_too() {
         .screen("screens", "JobDetail", "Screens/Job details")
         .run();
     assert_eq!(failed.len(), 1, "{failed:?}");
-    assert!(failed[0].contains(SCREENS), "names the screens root: {failed:?}");
+    assert!(
+        failed[0].contains(SCREENS),
+        "names the screens root: {failed:?}"
+    );
 }
