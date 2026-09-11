@@ -201,3 +201,53 @@
   align-items: center;
   gap: var(--space-2);
 }
+
+/* --- a server: starting, serving, or exited on its own -------------------- */
+
+/* Starting and exited are both one line of words. No status hue on either —
+   a server's activity carries no token in tokens/status.css, and words carry
+   the reading the way an unhued exit code does everywhere else on this sheet. */
+.armada-run-sheet__server-status {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--fg-default);
+}
+
+.armada-run-sheet__server {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.armada-run-sheet__server > .armada-run-sheet__server-status {
+  font-weight: var(--weight-medium);
+}
+
+.armada-run-sheet__server-address {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--fg-muted);
+}
+
+.armada-run-sheet__server-uptime {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-run-sheet__server-note {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-run-sheet__server-links {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  /* Pushes Stop to the trailing edge without a fixed width on anything
+     beside it — a second link should not shove Stop off under the fold. */
+  margin-left: auto;
+}

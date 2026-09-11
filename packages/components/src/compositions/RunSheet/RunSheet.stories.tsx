@@ -106,6 +106,14 @@ const GROUPS: RunSheetGroup[] = [
     entries: [
       { id: "fmt", name: "fmt", run: "cargo fmt --all" },
       { id: "gate", name: "gate", run: "cargo xtask verify-foundations" },
+      // A Command with `serve:` is a server. The rail row shows the `serve`
+      // line itself, resolved — `${port.storybook}` is a claim from the Job's
+      // own span, and 41207 is what that claim came to on this run.
+      {
+        id: "storybook_server",
+        name: "storybook",
+        run: "pnpm -C packages/components exec storybook dev -p 41207 --no-open --ci",
+      },
     ],
   },
 ];
@@ -307,5 +315,150 @@ export const UndoIsAbsentWhileADroneWorks: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.queryByRole("button", { name: "Undo this run" })).not.toBeInTheDocument();
     await expect(canvas.getByRole("button", { name: "Open the diff" })).toBeVisible();
+  },
+};
+
+// --- A server: a Command declaring `serve` --------------------------------
+//
+// Journey 9's "A server" section. `storybook_server` above is the fixture:
+// the Manifest's own storybook example, on a port leased from this Job's
+// span. The header is the same job every other story in this file uses.
+
+const STARTING_OUTPUT: ConsoleRow[] = [
+  { row: "line", at: 1, text: "$ pnpm -C packages/components exec storybook dev -p 41207 --no-open --ci" },
+  { row: "line", at: 2, text: "@storybook/core v10.5.10" },
+];
+
+/**
+ * Before `ready` passes: the row reads *starting*, the log streams, and
+ * **no link buttons yet** — pressing one before something answers on the port
+ * would open an address nothing is serving.
+ */
+export const ServerStarting: Story = {
+  args: {
+    open: true,
+    ...HEADER,
+    groups: GROUPS,
+    selectedId: "storybook_server",
+    onSelect: fn(),
+    onRun: fn(),
+    server: { phase: "starting" },
+    output: { rows: STARTING_OUTPUT, following: true },
+  },
+};
+
+const SERVING_OUTPUT: ConsoleRow[] = [
+  { row: "line", at: 1, text: "╭──────────────────────────────────────────────╮" },
+  { row: "line", at: 2, text: "│  Storybook 10.5.10 started                    │" },
+  { row: "line", at: 3, text: "│  Local:  http://localhost:41207/              │" },
+  { row: "line", at: 4, text: "╰──────────────────────────────────────────────╯" },
+];
+
+/** Serving, with one link: *serving*, how long it has been up, and Stop. */
+export const ServerServing: Story = {
+  args: {
+    open: true,
+    ...HEADER,
+    groups: GROUPS,
+    selectedId: "storybook_server",
+    onSelect: fn(),
+    onRun: fn(),
+    server: {
+      phase: "serving",
+      address: "localhost:41207",
+      uptime: "up 4m",
+      links: [{ url: "http://localhost:41207", name: "Storybook" }],
+    },
+    onOpenLink: fn(),
+    onStopServer: fn(),
+    output: { rows: SERVING_OUTPUT },
+  },
+};
+
+/**
+ * Serving, with two named links — a link with no `name` in the Manifest draws
+ * the bare URL instead, so the button is never unlabelled.
+ */
+export const ServerServingTwoLinks: Story = {
+  args: {
+    ...ServerServing.args,
+    server: {
+      phase: "serving",
+      address: "localhost:41207",
+      uptime: "up 12m",
+      links: [
+        { url: "http://localhost:41207", name: "Storybook" },
+        { url: "http://localhost:41207/coverage" },
+      ],
+    },
+  },
+};
+
+/** The same server, started by a Drone through Fleet's MCP tool — the same row, with Stop, and a short note. */
+export const ServerStartedByADrone: Story = {
+  args: {
+    ...ServerServing.args,
+    server: {
+      phase: "serving",
+      address: "localhost:41207",
+      uptime: "up 4m",
+      links: [{ url: "http://localhost:41207", name: "Storybook" }],
+      startedByDrone: true,
+    },
+  },
+};
+
+/**
+ * **A server that exits on its own has failed, whatever its exit code** —
+ * worded as stopped on its own, and unhued: a server's activity carries no
+ * status token, so words carry the reading the way an unhued exit code does
+ * everywhere else on this sheet.
+ */
+export const ServerExitedOnItsOwn: Story = {
+  args: {
+    open: true,
+    ...HEADER,
+    groups: GROUPS,
+    selectedId: "storybook_server",
+    onSelect: fn(),
+    onRun: fn(),
+    server: { phase: "exited", exitCode: 1 },
+    output: {
+      rows: [
+        { row: "line", at: 1, text: "Error: listen EADDRINUSE: address already in use :::41207" },
+      ],
+    },
+  },
+};
+
+/** Pressing a link reports its URL, and never navigates. */
+export const PressingALinkReportsItsUrl: Story = {
+  args: ServerServing.args,
+  play: async ({ args, canvas, userEvent }) => {
+    const link = canvas.getByRole("button", { name: "Storybook" });
+    // A link is a button, never an anchor — nothing here carries an `href`
+    // for a click to follow.
+    await expect(link.tagName).toBe("BUTTON");
+    await userEvent.click(link);
+    await expect(args.onOpenLink).toHaveBeenCalledWith("http://localhost:41207");
+  },
+};
+
+/** Stop on a serving server reports which one. */
+export const StopReportsTheServer: Story = {
+  args: ServerServing.args,
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Stop" }));
+    await expect(args.onStopServer).toHaveBeenCalledWith("storybook_server");
+  },
+};
+
+/** No link buttons while starting — there is nothing yet to press one against. */
+export const NoLinksWhileStarting: Story = {
+  args: ServerStarting.args,
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole("button", { name: "Storybook" })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole("button", { name: "Stop" })).not.toBeInTheDocument();
+    await expect(canvas.getByText("Starting.")).toBeVisible();
   },
 };

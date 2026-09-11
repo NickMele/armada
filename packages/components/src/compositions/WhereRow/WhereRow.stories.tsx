@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 import { WhereRow } from "./WhereRow";
+import { Button } from "../../primitives/Button/Button";
 
 const meta: Meta<typeof WhereRow> = {
   title: "Compositions/Where row",
@@ -162,4 +163,34 @@ export const WithRunWorktreeGone: Story = {
     const control = canvas.getByRole("button", { name: "Run…" });
     await expect(control).toBeDisabled();
   },
+};
+
+/**
+ * **A server outlives the sheet.** Closing the run sheet leaves a server
+ * running, so *Where things are* gains a *Serving* row per server, with its
+ * link buttons — `actions`, generalised from `run` for a row whose control
+ * is not the fixed shape of a single `Run…` button.
+ */
+export const WithAServingRow: Story = {
+  render: () => (
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      <WhereRow
+        label="Worktree"
+        value=".armada/worktrees/job_2d90bb"
+        act="open"
+        onAct={() => {}}
+        run={{ onRun: () => {} }}
+      />
+      <WhereRow
+        label="Serving"
+        value="storybook · localhost:41207"
+        act="open"
+        actions={
+          <Button variant="secondary" size="sm" onClick={() => {}}>
+            Open Storybook
+          </Button>
+        }
+      />
+    </div>
+  ),
 };

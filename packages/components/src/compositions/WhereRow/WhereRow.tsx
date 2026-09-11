@@ -86,6 +86,16 @@ export type WhereRowProps = {
     /** Why `Run…` is disabled — the worktree no longer exists. */
     disabledReason?: string;
   };
+  /**
+   * Trailing controls beside the row, for a row whose act is not one of the
+   * three above — a server's link buttons on its *Serving* row, one per
+   * `links` entry, each labelled by name or by the bare URL.
+   *
+   * **The same sibling shape `run` takes**, generalised: a server can offer
+   * more than one link, where `run` is always exactly one button, so this
+   * takes whatever the caller renders rather than a fixed shape.
+   */
+  actions?: ReactNode;
 };
 
 /** The trailing glyph is 12px at strokeWidth 2, as every mark on this screen is. */
@@ -129,6 +139,7 @@ export function WhereRow({
   onAct,
   actLabel,
   run,
+  actions,
 }: WhereRowProps) {
   const writes = copyValue ?? (typeof value === "string" ? value : undefined);
   const press = useCallback(() => {
@@ -189,27 +200,31 @@ export function WhereRow({
     </Tooltip>
   );
 
-  if (run === undefined) return row;
+  if (run === undefined && actions === undefined) return row;
 
   // A second control beside the row's own, so the two cannot become one
-  // button nested inside another. The run sheet's `Run…` is a sibling, and
-  // `.armada-wrow-line` is what gives the row back the width it loses to it.
+  // button nested inside another. `Run…` and a server's link buttons are
+  // siblings, and `.armada-wrow-line` is what gives the row back the width
+  // it loses to them.
   return (
     <div className="armada-wrow-line">
       {row}
-      {/* Not `asChild`: a disabled button does not reliably fire hover in
-          every browser, and the wrapping span the default form draws does. */}
-      <Tooltip label={run.disabledReason ?? "Run a Check or Command in this Job's worktree"}>
-        <Button
-          variant="secondary"
-          size="sm"
-          ground="card"
-          disabled={run.disabledReason !== undefined}
-          onClick={run.onRun}
-        >
-          Run…
-        </Button>
-      </Tooltip>
+      {run === undefined ? null : (
+        // Not `asChild`: a disabled button does not reliably fire hover in
+        // every browser, and the wrapping span the default form draws does.
+        <Tooltip label={run.disabledReason ?? "Run a Check or Command in this Job's worktree"}>
+          <Button
+            variant="secondary"
+            size="sm"
+            ground="card"
+            disabled={run.disabledReason !== undefined}
+            onClick={run.onRun}
+          >
+            Run…
+          </Button>
+        </Tooltip>
+      )}
+      {actions}
     </div>
   );
 }

@@ -78,6 +78,44 @@ export type RunSheetResult = {
   duration: ReactNode;
 };
 
+/**
+ * An address a server offers, as a button rather than a link — pressing one
+ * hands the URL to a callback, never an `<a href>` default, because no
+ * surface in Bridge navigates.
+ */
+export type RunSheetServerLink = {
+  url: string;
+  /** The button's label. Absent draws the URL itself. */
+  name?: ReactNode;
+};
+
+/**
+ * What a Command declaring `serve` is doing, for the currently selected
+ * entry. Three phases, and only `serving` carries links — pressing one before
+ * `ready` passes would open an address nothing is answering on yet.
+ *
+ * **Nothing here is hued.** A server's activity is not a Job state, and
+ * `tokens/status.css` declares no value for it — so `exited`, which reads
+ * closest to a failure, stays as neutral as `starting` and `serving`. Words
+ * carry the reading: *serving*, *stopped on its own*.
+ */
+export type RunSheetServerStatus =
+  | { phase: "starting" }
+  | {
+      phase: "serving";
+      /** `localhost:41207` — where it is, distinct from what it names. */
+      address: ReactNode;
+      uptime: ReactNode;
+      links: RunSheetServerLink[];
+      /** A Drone started this server, through Fleet's MCP tool. */
+      startedByDrone?: boolean;
+    }
+  | {
+      phase: "exited";
+      /** A server that exits on its own has failed, whatever the code. */
+      exitCode: number;
+    };
+
 export type RunSheetProps = {
   open: boolean;
   onClose?: () => void;
@@ -118,6 +156,18 @@ export type RunSheetProps = {
   /** Earlier runs from this sheet. */
   runs?: RunSheetPastRun[];
 
+  /**
+   * The selected entry's server state, where its Command declares `serve`.
+   * Present through all three phases — the resolved command and **Run**
+   * still show alongside it once `exited`, since a server that stopped on
+   * its own is started the same way any Command is.
+   */
+  server?: RunSheetServerStatus;
+  /** Reports which server was stopped. */
+  onStopServer?: (id: string) => void;
+  /** Reports a link's URL. Never navigates — the caller hands it to the OS. */
+  onOpenLink?: (url: string) => void;
+
   /** What the last run wrote, where it wrote. */
   changed?: {
     files: ChangedFile[];
@@ -144,6 +194,9 @@ export function RunSheet({
   result,
   runs = [],
   changed,
+  server,
+  onStopServer,
+  onOpenLink,
 }: RunSheetProps) {
   const selected =
     groups.flatMap((group) => group.entries).find((entry) => entry.id === selectedId) ?? null;
@@ -208,7 +261,22 @@ export function RunSheet({
           ))}
         </div>
         <div className="armada-run-sheet__main">
-          <RunSheetControl entry={selected} onToggleNarrow={onToggleNarrow} onRun={onRun} />
+          {/* A server hides the resolved command and Run while it is starting
+              or serving — pressing Run again answers a question that is not
+              being asked. Exited is the exception: a server that stopped on
+              its own is started the same way any Command is, so Run returns. */}
+          {server !== undefined && server.phase !== "exited" ? null : (
+            <RunSheetControl entry={selected} onToggleNarrow={onToggleNarrow} onRun={onRun} />
+          )}
+
+          {server === undefined || selected === null ? null : (
+            <RunSheetServer
+              id={selected.id}
+              status={server}
+              onStop={onStopServer}
+              onOpenLink={onOpenLink}
+            />
+          )}
 
           {running === undefined ? null : (
             <div className="armada-run-sheet__running">
@@ -352,6 +420,64 @@ function RunSheetControl({
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * A server's own status — starting, serving with its links and Stop, or
+ * exited on its own. Beside `RunSheetControl` rather than inside it: the
+ * control answers *what would run*, this answers *what is running*, and a
+ * server is the one entry on this sheet where both can be true together.
+ */
+function RunSheetServer({
+  id,
+  status,
+  onStop,
+  onOpenLink,
+}: {
+  id: string;
+  status: RunSheetServerStatus;
+  onStop?: (id: string) => void;
+  onOpenLink?: (url: string) => void;
+}) {
+  if (status.phase === "starting") {
+    return <p className="armada-run-sheet__server-status">Starting.</p>;
+  }
+
+  if (status.phase === "exited") {
+    return (
+      <p className="armada-run-sheet__server-status">
+        Stopped on its own. <FactChip>{`exit ${status.exitCode}`}</FactChip>
+      </p>
+    );
+  }
+
+  return (
+    <div className="armada-run-sheet__server">
+      <span className="armada-run-sheet__server-status">serving</span>
+      <span className="armada-run-sheet__server-address">{status.address}</span>
+      <span className="armada-run-sheet__server-uptime">{status.uptime}</span>
+      {status.startedByDrone ? (
+        <span className="armada-run-sheet__server-note">A Drone started this server.</span>
+      ) : null}
+      <span className="armada-run-sheet__server-links">
+        {status.links.map((link) => (
+          <Button
+            key={link.url}
+            variant="secondary"
+            size="sm"
+            onClick={() => onOpenLink?.(link.url)}
+          >
+            {link.name ?? link.url}
+          </Button>
+        ))}
+      </span>
+      {onStop === undefined ? null : (
+        <Button variant="secondary" size="sm" onClick={() => onStop(id)}>
+          Stop
+        </Button>
+      )}
     </div>
   );
 }
