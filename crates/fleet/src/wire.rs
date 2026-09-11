@@ -119,6 +119,7 @@ pub(crate) fn declared(workflow: &config::ResolvedWorkflow) -> Vec<WorkflowStep>
             // a preview that counted one would promise a call nothing makes.
             judge_checks: DeclaredJudge::firing(step.judge_checks()),
             advance_gate: step.advance_gate().into(),
+            delivers: step.delivers(),
         })
         .collect()
 }

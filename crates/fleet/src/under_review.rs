@@ -74,22 +74,26 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
-    /// Ask the forge what is happening on one open pull request, and say so in
-    /// the Job's log where it has changed since the last time this asked.
+    /// Ask the forge what is happening on one open pull request, say so in the
+    /// Job's log where it has changed since the last time this asked, and hand
+    /// the reading back so the caller can cache it for `get_job`.
     ///
-    /// **Nothing is returned and nothing raises**, which is the shape
-    /// `noticing::nudged` already has and for a stronger version of its reason:
-    /// the Job finished, it is holding at a human gate, and no answer here
-    /// moves it. A forge that would not answer is one silence and another
-    /// sweep.
-    pub(crate) async fn read_what_is_under_review(&self, job: &JobId, url: &str) {
+    /// **Nothing raises.** This is the shape `noticing::nudged` already has and
+    /// for a stronger version of its reason: the Job finished, it is holding
+    /// at a human gate, and no answer here moves it. A forge that would not
+    /// answer is `None`, one silence and another sweep.
+    pub(crate) async fn read_what_is_under_review(
+        &self,
+        job: &JobId,
+        url: &str,
+    ) -> Option<UnderReview> {
         let read = self.vcs().under_review(&self.host().repo_root, url);
         // **A forge that would not answer changes nothing that was already
         // known.** Recording the silence would erase the last real reading and
         // then write the same line again when it came back — `Landing::Unknown`
         // is not `Landing::Open`, said one type over.
         if !read.was_answered() {
-            return;
+            return None;
         }
         // **Before the line, and outside the comparison below.** What the
         // policy may do about this reading is not "is it news" — a Job whose
@@ -100,14 +104,19 @@ where
         self.merged_if_the_policy_says_so(job, url, &read.checks)
             .await;
         let stood = AsItStood::of(&read);
-        {
+        let changed = {
             let mut sweeping = self.sweeping().lock().await;
-            if sweeping.reviewed.get(url) == Some(&stood) {
-                return;
-            }
+            let changed = sweeping.reviewed.get(url) != Some(&stood);
             sweeping.reviewed.insert(url.to_string(), stood);
+            changed
+        };
+        // **The line is still only on change**, exactly as before — only the
+        // return to the caller is unconditional now, so a rotation that finds
+        // nothing new to log still refreshes `Sweep::pr_detail`.
+        if changed {
+            self.noted_the_review(job, url, &read);
         }
-        self.noted_the_review(job, url, &read);
+        Some(read)
     }
 
     /// The line in the Job's own log.
