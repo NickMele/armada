@@ -12,7 +12,6 @@
 .armada-run-sheet__rail {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
   padding: var(--space-4) 0 var(--space-4) 0;
   overflow-y: auto;
   border-right: var(--border-width) solid var(--border-subtle);
@@ -26,6 +25,7 @@
   padding: var(--space-4) var(--space-4) var(--space-4) 0;
   overflow-y: auto;
   min-width: 0;
+  min-height: 0;
 }
 
 /* --- the rail: Setup, Checks, Commands ----------------------------------- */
@@ -36,16 +36,22 @@
   min-width: 0;
 }
 
-/* A band, not a label — Nick asked for these to read apart from a row rather
-   than blend into the list above them. Its own surface against the sheet's
-   own --bg-overlay, a hairline above and below, and sans at body weight and
-   size: this is a heading, and headings in this contract are never all caps —
-   that treatment is reserved to a 13px table header, which this is not. */
+/* --space-6 between groups. The first group needs none of its own — the
+   rail's own top padding already opens the space above it — so this is a
+   sibling rule rather than a margin every group carries. */
+.armada-run-sheet__group + .armada-run-sheet__group {
+  margin-top: var(--space-6);
+}
+
+/* A heading, not a band. It first drew on --bg-sunken, the same well the
+   resolved-command box beside it uses, and read as the same kind of surface —
+   Nick's own note. The rail has no surface of its own to put it on, so it
+   takes none: sans at body weight and size, and the hairline below is what
+   separates it from the rows, not a fill. Never uppercase — that treatment is
+   reserved to a 13px table header, which this is not. */
 .armada-run-sheet__group-label {
   display: block;
-  padding: var(--space-1) var(--space-4);
-  background: var(--bg-sunken);
-  border-top: var(--border-width) solid var(--border-subtle);
+  padding: 0 var(--space-4) var(--space-2) var(--space-4);
   border-bottom: var(--border-width) solid var(--border-subtle);
   font-family: var(--font-sans);
   font-size: var(--text-sm);
@@ -153,17 +159,73 @@
   white-space: pre;
 }
 
+/* One row, and nothing in it wraps — the segmented control and Run sit at a
+   fixed width each, so the row's own width is never in question. */
 .armada-run-sheet__control-acts {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  flex-wrap: wrap;
 }
 
-.armada-run-sheet__narrow-note {
-  font-family: var(--font-sans);
-  font-size: var(--text-2xs);
-  color: var(--fg-subtle);
+/* --- the segmented control: Changed / All -------------------------------- */
+/*
+   Composed from `RadioGroup`/`Radio` — two sanctioned choices, exclusive,
+   restyled as segments. Not `Tabs`: a tab strip's underline is for a view
+   already open, and this is a choice made before pressing Run, which is what
+   a radio input already models. The detail that used to sit beside the
+   toggle as a sentence — "Narrowed to what this Job changed" — moved into a
+   `Tooltip` on each segment instead, carrying the command that segment
+   resolves to; a one-word label is what a row scanned at speed can read.
+
+   The native ring and dot are hidden rather than restyled: a segmented
+   control reads as pressed buttons, not as two radio buttons in a row, and
+   `:has()` is what lets the checked state fill the whole segment without
+   touching Radio's own stylesheet. */
+.armada-run-sheet__scope {
+  display: inline-flex;
+  flex: none;
+}
+
+.armada-run-sheet__scope .armada-radio-group {
+  flex-direction: row;
+  gap: 0;
+  border: var(--border-width) solid var(--border-default);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/* The visible caption is dropped; `RadioGroup`'s `label` still carries the
+   group's accessible name via `aria-label`, which the visible span duplicates
+   and this hides. */
+.armada-run-sheet__scope .armada-radio-group__label {
+  display: none;
+}
+
+.armada-run-sheet__scope .armada-radio {
+  gap: 0;
+  padding: 0 var(--space-3);
+  height: var(--h-control-sm);
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}
+
+.armada-run-sheet__scope .armada-radio + .armada-radio {
+  border-left: var(--border-width) solid var(--border-default);
+}
+
+.armada-run-sheet__scope .armada-radio__ring {
+  display: none;
+}
+
+.armada-run-sheet__scope .armada-radio:has(.armada-radio__input:checked) {
+  background: var(--accent);
+  color: var(--fg-inverse);
+}
+
+/* The ring took the focus ring; hidden, so the segment itself takes it. */
+.armada-run-sheet__scope .armada-radio:has(.armada-radio__input:focus-visible) {
+  outline: var(--focus-ring);
+  outline-offset: calc(var(--focus-ring-offset) * -1);
 }
 
 .armada-run-sheet__running {
@@ -176,6 +238,22 @@
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   color: var(--fg-subtle);
+}
+
+/* The output panel. `flex: 1` is what claims the remaining height of the
+   column; `min-height: 0` is what lets a flex item shrink below its
+   content's natural height at all, which a thousand lines otherwise refuses
+   to do. `ConsoleOutput`'s own well fills the panel — `min-height: 100%`
+   rather than `height`, so a short reading still reads as a bounded panel
+   and a long one is still free to grow past it into the scroll. */
+.armada-run-sheet__output {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.armada-run-sheet__output > .armada-console {
+  min-height: 100%;
 }
 
 /* Unhued: a rehearsal is not a verdict, and a Check's exit code below the Job
@@ -214,40 +292,47 @@
   color: var(--fg-default);
 }
 
+/* One row, aligned like the control row's own acts: everything left to right
+   in sequence, nothing wraps and nothing is pushed to a trailing edge — links
+   top-right and Stop alone underneath was the cramming Nick's note named. */
 .armada-run-sheet__server {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: var(--space-2);
 }
 
 .armada-run-sheet__server > .armada-run-sheet__server-status {
+  flex: none;
   font-weight: var(--weight-medium);
 }
 
 .armada-run-sheet__server-address {
+  flex: none;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   color: var(--fg-muted);
+  white-space: nowrap;
 }
 
 .armada-run-sheet__server-uptime {
+  flex: none;
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   color: var(--fg-subtle);
+  white-space: nowrap;
 }
 
 .armada-run-sheet__server-note {
+  flex: none;
   font-family: var(--font-sans);
   font-size: var(--text-2xs);
   color: var(--fg-subtle);
+  white-space: nowrap;
 }
 
 .armada-run-sheet__server-links {
   display: flex;
   align-items: center;
+  flex: none;
   gap: var(--space-2);
-  /* Pushes Stop to the trailing edge without a fixed width on anything
-     beside it — a second link should not shove Stop off under the fold. */
-  margin-left: auto;
 }

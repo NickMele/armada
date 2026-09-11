@@ -50,7 +50,12 @@ export type WhereRowProps = {
    * Sans and `--fg-subtle`, so it reads as a note about the value.
    */
   note?: ReactNode;
-  act: WhereRowAct;
+  /**
+   * Absent draws no trailing mark at all — the *Serving* row's own value
+   * names nothing that opens or copies on its own; the one thing to press is
+   * `actions`, beside it.
+   */
+  act?: WhereRowAct;
   /**
    * What `copy` writes, where `value` has been shortened for the row. Defaults
    * to `value` when that is a string; a row whose value is not a string and
@@ -156,9 +161,10 @@ export function WhereRow({
     );
   }, [act, onAct, onCopied, writes]);
 
-  const actable = act === "copy" ? writes !== undefined : onAct !== undefined;
-  const Mark = MARK[act];
-  const says = actLabel ?? SAYS[act];
+  const actable =
+    act === undefined ? false : act === "copy" ? writes !== undefined : onAct !== undefined;
+  const Mark = act === undefined ? undefined : MARK[act];
+  const says = act === undefined ? undefined : (actLabel ?? SAYS[act]);
 
   // The label column names the thing; the concept says what that thing is.
   // `asChild`, because the row is a three-track grid and a wrapper would take
@@ -179,7 +185,9 @@ export function WhereRow({
         {value}
         {note === undefined ? null : <span className="armada-wrow__note">{note}</span>}
       </span>
-      <Mark size={GLYPH} strokeWidth={STROKE} className="armada-wrow__mark" aria-hidden />
+      {Mark === undefined ? null : (
+        <Mark size={GLYPH} strokeWidth={STROKE} className="armada-wrow__mark" aria-hidden />
+      )}
     </>
   );
 
@@ -192,7 +200,9 @@ export function WhereRow({
     // is gone with it: the browser's own bubble carries no delay grouping, no
     // placement and no token, and two tooltips answering one hover is one too
     // many.
-    <Tooltip asChild label={actLabel ?? actSays(act, label) ?? says}>
+    // `act!`: this branch draws only when `actable` is true, which requires
+    // `act` to be set — see its computation above.
+    <Tooltip asChild label={actLabel ?? actSays(act!, label) ?? says}>
       <button type="button" className="armada-wrow" data-act={act} onClick={press}>
         {body}
         <span className="armada-wrow__sr">{says}</span>

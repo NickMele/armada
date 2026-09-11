@@ -1,7 +1,9 @@
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Sheet } from "../../primitives/Sheet/Sheet";
 import { Button } from "../../primitives/Button/Button";
 import { Alert } from "../../primitives/Alert/Alert";
+import { Radio, RadioGroup } from "../../primitives/Radio/Radio";
+import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 import { FactChip } from "../FactChip/FactChip";
 import { CheckRuns, type CheckRun } from "../CheckRuns/CheckRuns";
 import { ConsoleOutput, type ConsoleOutputProps } from "../ConsoleOutput/ConsoleOutput";
@@ -40,8 +42,13 @@ export type RunSheetEntry = {
   /** Its `run` line, exactly as the Manifest spells it. Mono. */
   run: string;
   /**
-   * A plain sentence, never a bare tag — where `when` skips this Check for
-   * this Job, naming its paths; `Runs fmt first.` where `requires` names one.
+   * A plain sentence, never a bare tag — `Runs fmt first.` where `requires`
+   * names a prerequisite Command.
+   *
+   * **Never the reason a `when` skips this Check for this Job.** That was a
+   * long prose sentence naming every path pattern, and Nick's own reading —
+   * this panel is for running things by hand — is that a row here is read at
+   * a glance, not audited for why the gate passed it over.
    */
   note?: ReactNode;
   /** Present where the Check declares `narrow`. The command a narrowed run resolves to. */
@@ -205,7 +212,7 @@ export function RunSheet({
   const bands = !showBands ? undefined : (
     <>
       {droneWorking ? (
-        <Alert tone="neutral" title="A Drone is working in this tree">
+        <Alert tone="caution" title="A Drone is working in this tree">
           This run shares the worktree and its build directory. Nothing locks.
         </Alert>
       ) : null}
@@ -289,7 +296,7 @@ export function RunSheet({
             </div>
           )}
 
-          {output === undefined ? null : <ConsoleOutput {...output} />}
+          {output === undefined ? null : <RunSheetOutput output={output} />}
 
           {result === undefined ? null : (
             <p className="armada-run-sheet__result">
@@ -401,24 +408,39 @@ function RunSheetControl({
 
   const narrowed = entry.narrowRun !== undefined && entry.narrowed === true;
   const command = narrowed ? entry.narrowRun! : entry.run;
+  const scopeName = `armada-run-sheet-scope-${entry.id}`;
 
   return (
     <div className="armada-run-sheet__control">
       <code className="armada-run-sheet__resolved">{command}</code>
       <div className="armada-run-sheet__control-acts">
+        {entry.narrowRun === undefined ? null : (
+          <div className="armada-run-sheet__scope">
+            <RadioGroup label="Run scope">
+              <Radio
+                name={scopeName}
+                checked={narrowed}
+                onChange={() => {
+                  if (!narrowed) onToggleNarrow?.(entry.id);
+                }}
+              >
+                <Tooltip label={<code>{entry.narrowRun}</code>}>Changed</Tooltip>
+              </Radio>
+              <Radio
+                name={scopeName}
+                checked={!narrowed}
+                onChange={() => {
+                  if (narrowed) onToggleNarrow?.(entry.id);
+                }}
+              >
+                <Tooltip label={<code>{entry.run}</code>}>All</Tooltip>
+              </Radio>
+            </RadioGroup>
+          </div>
+        )}
         <Button variant="primary" onClick={() => onRun?.({ id: entry.id, narrowed })}>
           Run
         </Button>
-        {entry.narrowRun === undefined ? null : (
-          <>
-            {narrowed ? (
-              <span className="armada-run-sheet__narrow-note">Narrowed to what this Job changed.</span>
-            ) : null}
-            <Button variant="ghost" size="sm" onClick={() => onToggleNarrow?.(entry.id)}>
-              {narrowed ? "Run the whole tree instead" : "Narrow to what this Job changed"}
-            </Button>
-          </>
-        )}
       </div>
     </div>
   );
@@ -478,6 +500,45 @@ function RunSheetServer({
           Stop
         </Button>
       )}
+    </div>
+  );
+}
+
+/**
+ * The output panel — fills whatever height is left in the main column and
+ * scrolls inside itself, so the sheet never grows for it. A thousand lines
+ * is the case this exists for: without a ceiling, the panel would simply be
+ * a thousand lines tall and the sheet along with it.
+ *
+ * **Follows the tail while streaming, and stops the moment a reader scrolls
+ * up.** `ConsoleOutput`'s own `following` prop is the caller's fact about
+ * whether the process is still writing — a different question from whether
+ * *this viewport* is pinned to the bottom, which is what this component
+ * tracks. A reader forty lines up reading a stack trace must not be dragged
+ * back to the tail by the next line arriving.
+ */
+function RunSheetOutput({ output }: { output: ConsoleOutputProps }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [followingTail, setFollowingTail] = useState(true);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (el === null || !followingTail) return;
+    el.scrollTop = el.scrollHeight;
+  }, [output.rows, followingTail]);
+
+  const onScroll = useCallback(() => {
+    const el = ref.current;
+    if (el === null) return;
+    // Within a line's reach of the bottom counts as "returned to it" —
+    // fractional scroll positions rarely land on an exact equality.
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+    setFollowingTail(atBottom);
+  }, []);
+
+  return (
+    <div className="armada-run-sheet__output" ref={ref} onScroll={onScroll}>
+      <ConsoleOutput {...output} />
     </div>
   );
 }

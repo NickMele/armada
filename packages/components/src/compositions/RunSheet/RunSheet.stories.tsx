@@ -11,8 +11,10 @@ import type { ChangedFile } from "../ChangedFiles/ChangedFiles";
  * repository's own `armada.yml`: `setup.requires` names `bootstrap` and
  * `browsers`, so those two are Setup and everything else `commands:` declares
  * — `fmt` and `gate` — falls to Commands. `checks:` is drawn whole, in
- * declaration order, with `format`'s own `requires: [fmt]` and `typecheck`'s
- * `when` both carried into the row note.
+ * declaration order, with `format`'s own `requires: [fmt]` carried into the
+ * row note. **No note for what `when` skips** — Nick's own reading: this
+ * panel is for running things by hand, and a `when` clause's whole path list
+ * is prose for auditing the gate, not for a row read at a glance.
  *
  * The sheet is laid out inside the nearest positioned ancestor, so the story
  * draws one — the same convention `JobDiffSheet`'s stories use. **`100vh`,
@@ -36,16 +38,6 @@ const meta: Meta<typeof RunSheet> = {
 export default meta;
 
 type Story = StoryObj<typeof RunSheet>;
-
-const WHEN_BRIDGE = [
-  "apps/**",
-  "packages/**",
-  "crates/core-model/domain/**",
-  "protocol-version.toml",
-  "package.json",
-  "pnpm-lock.yaml",
-  "pnpm-workspace.yaml",
-];
 
 /** This repository's own Manifest, read into the sheet's three groups. */
 const GROUPS: RunSheetGroup[] = [
@@ -79,12 +71,7 @@ const GROUPS: RunSheetGroup[] = [
         narrowRun: "cargo nextest run -p fleet -p api",
         narrowed: true,
       },
-      {
-        id: "typecheck",
-        name: "typecheck",
-        run: "pnpm typecheck",
-        note: `Skipped for this Job — no changed file is under ${WHEN_BRIDGE.join(", ")}.`,
-      },
+      { id: "typecheck", name: "typecheck", run: "pnpm typecheck" },
       { id: "bridge_build", name: "bridge_build", run: "pnpm -C apps/desktop build" },
       { id: "storybook", name: "storybook", run: "pnpm -C packages/components build-storybook" },
       { id: "bridge_test", name: "bridge_test", run: "pnpm bridge-test" },
@@ -150,6 +137,34 @@ export const Running: Story = {
     onRun: fn(),
     running: { elapsed: "6.1s elapsed", onStop: fn() },
     output: { rows: RUNNING_ROWS, following: true },
+  },
+};
+
+// A thousand lines, so the panel's own ceiling is the thing being read
+// rather than assumed. `test result: ok` never arrives — see `Running`'s own
+// note on why a streamed reading stops short of the line that claims it is
+// over.
+const THOUSAND_LINES: ConsoleRow[] = Array.from({ length: 1000 }, (_, i) => ({
+  row: "line",
+  at: i + 1,
+  text: `test perimeter::sweep_${String(i + 1).padStart(4, "0")} ... ok`,
+}));
+
+/**
+ * The output panel fills the remaining height of the main column and scrolls
+ * inside itself — the sheet never grows for it, whatever the reading holds.
+ */
+export const OutputWithAThousandLines: Story = {
+  args: {
+    open: true,
+    ...HEADER,
+    groups: GROUPS,
+    selectedId: "test",
+    onSelect: fn(),
+    onToggleNarrow: fn(),
+    onRun: fn(),
+    running: { elapsed: "38.4s elapsed", onStop: fn() },
+    output: { rows: THOUSAND_LINES, following: true },
   },
 };
 
@@ -222,17 +237,6 @@ export const ManifestDiffers: Story = {
   },
 };
 
-/** A Check the gate skips for this Job — the row's own sentence, never a bare tag. */
-export const ASkippedCheck: Story = {
-  args: {
-    open: true,
-    ...HEADER,
-    groups: GROUPS,
-    selectedId: "typecheck",
-    onSelect: fn(),
-  },
-};
-
 /**
  * Pressing **Run** reports the selected entry and whether it was narrowed.
  *
@@ -257,7 +261,7 @@ export const PressingRunReportsTheSelection: Story = {
 };
 
 /**
- * **Run the whole tree instead** changes what **Run** reports.
+ * Choosing **All** on the segmented control changes what **Run** reports.
  *
  * The sheet holds no state of its own — narrowing is the caller's — so the
  * story is the caller: `onToggleNarrow` flips a held flag, the same way
@@ -297,7 +301,7 @@ export const RunTheWholeTreeInstead: Story = {
     );
   },
   play: async ({ canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole("button", { name: "Run the whole tree instead" }));
+    await userEvent.click(canvas.getByRole("radio", { name: "All" }));
     await userEvent.click(canvas.getByRole("button", { name: "Run" }));
     await expect(canvas.getByTestId("reported")).toHaveTextContent(
       JSON.stringify({ id: "build", narrowed: false }),

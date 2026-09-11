@@ -3,12 +3,15 @@ import { expect, fn } from "storybook/test";
 import { WhereRow } from "./WhereRow";
 import { Button } from "../../primitives/Button/Button";
 
+// The real column — Job detail's own "Where things are" is `--w-run-column`,
+// not a guess. A Serving row's address read as "localh" at a narrower width
+// this file used to draw instead.
 const meta: Meta<typeof WhereRow> = {
   title: "Compositions/Where row",
   component: WhereRow,
   decorators: [
     (Story) => (
-      <div style={{ width: "calc(var(--space-12) * 8)" }}>
+      <div style={{ width: "var(--w-run-column)" }}>
         <Story />
       </div>
     ),
@@ -170,6 +173,17 @@ export const WithRunWorktreeGone: Story = {
  * running, so *Where things are* gains a *Serving* row per server, with its
  * link buttons — `actions`, generalised from `run` for a row whose control
  * is not the fixed shape of a single `Run…` button.
+ *
+ * **No `act` on the Serving row.** It first drew `open` for the trailing
+ * glyph, which put `external-link` beside `Open Storybook` saying the same
+ * thing twice — Nick's call. The value names what is serving and where; the
+ * one thing to press is the button beside it.
+ *
+ * **The value is the address alone, not `name · address`.** At the real
+ * column the name and the address together read as `storybook · local…` —
+ * cut mid-word, on a row whose whole point is that address. The button beside
+ * it is already named *Open Storybook*, which is where the server's name
+ * belongs; the row is one server, so the address does not need to repeat it.
  */
 export const WithAServingRow: Story = {
   render: () => (
@@ -183,8 +197,7 @@ export const WithAServingRow: Story = {
       />
       <WhereRow
         label="Serving"
-        value="storybook · localhost:41207"
-        act="open"
+        value="localhost:41207"
         actions={
           <Button variant="secondary" size="sm" onClick={() => {}}>
             Open Storybook
