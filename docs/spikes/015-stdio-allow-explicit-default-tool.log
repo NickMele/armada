@@ -1,0 +1,4 @@
+{"t": 1789135186.761, "event": "start", "wait": 3.0, "answer": "allow"}
+{"t": 1789135186.785, "event": "notification", "method": "notifications/initialized"}
+{"t": 1789135189.317, "event": "asked", "tool_name": "Bash", "input": {"command": "touch spike-marker.txt && echo spike-ok", "description": "Create spike-marker.txt and print spike-ok"}}
+{"t": 1789135192.323, "event": "answered", "after": 3.0, "body": {"behavior": "allow", "updatedInput": {"command": "touch spike-marker.txt && echo spike-ok", "description": "Create spike-marker.txt and print spike-ok"}}}
