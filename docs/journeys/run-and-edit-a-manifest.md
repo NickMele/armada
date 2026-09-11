@@ -42,6 +42,8 @@ Two groups, not one list with a marker. They are separate registries in the Mani
 
 **Output goes to a panel on this surface** — exit code, duration, and the output — and it stays until dismissed. There is no Job, so no Job Board row and no Evidence, and a toast would throw away the thing you ran it to read.
 
+**A server started here runs in the working tree and holds a port claim of its own.** It stops when you press Stop, when it exits, or when Fleet stops, and the claim goes with it.
+
 ### A passing Check leaves no verdict behind — but the output is a log
 
 Two different things, and the first draft of this journey conflated them.
@@ -82,7 +84,7 @@ Where the Job's worktree no longer exists, **Run…** stays in place, disabled, 
 |---|---|---|
 | Setup | The Commands `setup.requires` names | Its `run` line; re-running one repairs a broken install |
 | Checks | Every Check, in declaration order | Its `run` line, and a sentence where `when` skips it for this Job |
-| Commands | Every Command `setup.requires` does not name | Its `run` line |
+| Commands | Every Command `setup.requires` does not name | Its `run` line, or its `serve` line for a server |
 
 Setup rows show no time, because nothing records when setup finished in a worktree. The sheet's header shows when `armada.yml` was last edited before the Job froze it, which Fleet reads from git. Where the worktree's own `armada.yml` differs from the frozen one, a notice says so and offers the worktree's version.
 
@@ -99,6 +101,21 @@ Setup rows show no time, because nothing records when setup finished in a worktr
 | Stop | Ends the run's process group; the log keeps what printed |
 | A Drone working in the tree | Nothing locks; a notice says the run shares its tree and build directory |
 | Approval | None, destructive or not; `runedit-destructive-command-warning` applies |
+
+### A server
+
+A Command with `serve` stays running, on ports from the Job's span. [Manifest](../concepts/manifest.md) defines its keys and [Fleet](../concepts/fleet.md) holds it, one instance per Job.
+
+| Moment | What the sheet shows |
+|---|---|
+| Before `ready` passes | The row reads *starting*, with the log streaming |
+| Serving | *serving*, how long it has been up, a button per link, and Stop |
+| The sheet closed | Nothing stops; *Where things are* gains a row per server, with its links |
+| Started by a Drone | The same row, with Stop |
+| It exits on its own | Its exit code and log, as a failure |
+
+> **Rule.** A link hands its address to the system browser.
+> Why: no surface in Bridge navigates, per the design system's hard rules.
 
 ### What a run leaves
 

@@ -257,7 +257,7 @@ Fleet asks about **one** pull request per sweep and rotates, because the turn in
 
 ## Ports
 
-A Job claims a contiguous span of ports for the life of its worktree.
+A Job claims a contiguous span of ports for the life of its worktree. A server started from the Manifest surface, with no Job, claims its own for the life of that server.
 
 ### The range
 
@@ -271,9 +271,21 @@ This is the first place Armada reads a kernel parameter. Where that dependency b
 
 ### Claiming
 
-A claim carries a `job_id`, so which Jobs hold which spans is a query rather than an inspection of directories.
+A claim carries a `job_id`, or the run of a server started with no Job, so who holds which span is a query rather than an inspection of directories.
 
 **A bind-and-connect probe gates every hand-out**, and it is load-bearing rather than defensive. Why: teardown that silently failed, teardown never declared, and a process outside every tree are indistinguishable to the store.
+
+### Servers
+
+Fleet holds a Manifest's server Commands — the ones with `serve`, which [Manifest](manifest.md) defines. A person starts one from Bridge; a Drone starts one through Fleet's MCP tool.
+
+> **Rule.** Fleet runs at most one instance of each server Command per Job, and hands a second request the running one.
+> Why: a Job's Drones change at every step, and the one that asks second must not start another on the same port.
+
+> **Rule.** A Job's servers are stopped when the Job ends, before its span is released.
+> Why: release is gated on teardown, and a server is an in-tree process the group kill reaches.
+
+A server started with no Job holds a claim keyed to its run. Fleet releases it when the server stops — on Stop, when it exits, or when Fleet itself stops.
 
 ### Compose
 
