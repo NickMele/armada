@@ -89,9 +89,12 @@ export const PullRequestOpen: Story = {
     pullRequest: (
       <div className="flex flex-col gap-2">
         <p className="text-xs text-fg-muted">
-          <GitPullRequest size={12} strokeWidth={2} aria-hidden className="inline" />{" "}
-          <span className="mono">#4711</span> · Declare capacity.rs and gate the next undeclared
-          test file — open, mergeable, no reviews yet.
+          <span className="armada-verdict__pr-ref">
+            <GitPullRequest size={12} strokeWidth={2} aria-hidden />
+            <span className="mono">#4711</span>
+          </span>{" "}
+          · Declare capacity.rs and gate the next undeclared test file — open, mergeable, no
+          reviews yet.
         </p>
         <p className="text-2xs text-fg-subtle">
           Read it there — this page says what Armada knows that the pull request's own page does
@@ -99,9 +102,15 @@ export const PullRequestOpen: Story = {
         </p>
       </div>
     ),
-    note:
-      "This repository sets auto_merge: never. Merging here is Fleet acting on your press, and " +
-      "it runs the after-merge Checks. Merging it yourself on git.example does not.",
+    note: (
+      <>
+        <strong>Merge and take the work</strong> merges this pull request on git.example, then
+        runs the repository&rsquo;s after-merge Checks on what landed.{" "}
+        <strong>Approve the work</strong> takes it without merging — the pull request stays open.{" "}
+        <strong>Request changes</strong> sends your note to the Drone, which keeps working on this
+        same branch.
+      </>
+    ),
     actions: (
       <>
         <ReviewDecision

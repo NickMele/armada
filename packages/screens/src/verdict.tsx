@@ -18,7 +18,7 @@
 
 import { openPullRequest, type OpenPullRequest } from "./opening";
 import type { ReactNode } from "react";
-import { Minus } from "lucide-react";
+import { GitPullRequest, Minus } from "lucide-react";
 import {
   CheckRuns,
   VerdictSheet,
@@ -275,17 +275,20 @@ export function pullRequestBlockOf(
   return (
     <div className="armada-verdict__pr">
       <p className="text-xs text-fg-muted">
-        <a
-          className="armada-verdict__pr-link mono"
-          href={address}
-          title={address}
-          onClick={(event) => {
-            event.preventDefault();
-            onOpen?.();
-          }}
-        >
-          {number}
-        </a>
+        <span className="armada-verdict__pr-ref">
+          <GitPullRequest size={12} strokeWidth={2} aria-hidden />
+          <a
+            className="armada-verdict__pr-link mono"
+            href={address}
+            title={address}
+            onClick={(event) => {
+              event.preventDefault();
+              onOpen?.();
+            }}
+          >
+            {number}
+          </a>
+        </span>
         {detail === undefined ? null : pullRequestReadOf(detail)}
       </p>
     </div>
@@ -433,13 +436,22 @@ export function verdictSlotAtGate({
   const address = whole?.delivery?.pull_request;
   const detail = whole?.delivery?.pull_request_detail;
   const never = neverDelivers(whole?.steps ?? []);
-  const note =
-    never === true
-      ? "Approving ends the Job here. Nothing is merged, and no pull request is waiting on it."
-      : address !== undefined
-        ? "This repository sets auto_merge: never. Merging here is Fleet acting on your press, " +
-          `and it runs the after-merge Checks. Merging it yourself on ${hostLabel(address)} does not.`
-        : "The run tree on the left is where each step's own evidence is. This reads the Job.";
+  // Never `auto_merge`: approving here never merges regardless of that
+  // policy, which holds a later, separate gate (`fleet::gate`, `reviewing`).
+  const note: ReactNode =
+    never === true ? (
+      "Approving ends the Job here. Nothing is merged, and no pull request is waiting on it."
+    ) : address !== undefined ? (
+      <>
+        <strong>Merge and take the work</strong> merges this pull request on{" "}
+        {hostLabel(address)}, then runs the repository&rsquo;s after-merge Checks on what landed.{" "}
+        <strong>Approve the work</strong> takes it without merging — the pull request stays open.{" "}
+        <strong>Request changes</strong> sends your note to the Drone, which keeps working on this
+        same branch.
+      </>
+    ) : (
+      "The run tree on the left is where each step's own evidence is. This reads the Job."
+    );
   return (
     <VerdictSheet
       {...verdictOf({
