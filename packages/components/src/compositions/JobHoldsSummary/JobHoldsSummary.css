@@ -9,8 +9,8 @@
   flex-direction: column;
   gap: var(--space-2);
   min-width: 0;
-  padding: var(--space-2);
-  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
   background: var(--surface-well);
 }
 
@@ -18,9 +18,12 @@
    did under it. One event, because the point is the latest; the whole log is a
    press away. */
 .armada-holds-summary__latest {
-  display: flex;
-  flex-direction: column;
-  gap: calc(var(--space-1) / 2);
+  display: grid;
+  /* The label column Where things are draws, so the two cards read as one
+     list. WhereRow's own column says why it is this wide. */
+  grid-template-columns: calc(var(--space-12) * 2) minmax(0, 1fr);
+  column-gap: var(--space-2);
+  align-items: baseline;
   min-width: 0;
 }
 
@@ -35,8 +38,8 @@
 
 .armada-holds-summary__who {
   font-family: var(--font-sans);
-  font-size: var(--text-2xs);
-  line-height: var(--leading-2xs);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
   color: var(--text-label);
 }
 
@@ -65,7 +68,7 @@
 .armada-holds-summary__figures {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
   margin: 0;
   min-width: 0;
 }
@@ -73,25 +76,25 @@
 /* Label left, figure right, so three figures of different lengths still line
    up as a column a person reads down. */
 .armada-holds-summary__figure {
-  display: flex;
+  display: grid;
+  grid-template-columns: calc(var(--space-12) * 2) minmax(0, 1fr);
+  column-gap: var(--space-2);
   align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-3);
   min-width: 0;
 }
 
 .armada-holds-summary__label {
   font-family: var(--font-sans);
-  font-size: var(--text-2xs);
-  line-height: var(--leading-2xs);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
   color: var(--text-label);
 }
 
 .armada-holds-summary__value {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  line-height: var(--leading-2xs);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
   color: var(--text-body);
   font-variant-numeric: tabular-nums;
   overflow: hidden;
@@ -136,4 +139,12 @@
 
 .armada-holds-summary__foot > .armada-button {
   margin-inline-start: auto;
+}
+
+/* What they did, and when, beside who. */
+.armada-holds-summary__what {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  min-width: 0;
 }

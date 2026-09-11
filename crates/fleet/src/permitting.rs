@@ -2,12 +2,17 @@
 //!
 //! **Every such call reaches Armada.** A Drone spawns in the asking mode with
 //! Armada's permission tool, so the answer is Fleet's and the Job's setting
-//! makes it: [`WhenBlocked::RefuseAndHold`] refuses at once, and
-//! [`WhenBlocked::AskMe`] puts the call to a person.
+//! makes it: [`WhenBlocked::RefuseAndHold`] refuses at once,
+//! [`WhenBlocked::AskMe`] puts the call to a person, and
+//! [`WhenBlocked::AllowAll`] allows it.
 //!
 //! **Only a command can be allowed from here.** `armada.yml` declares commands
-//! and nothing else, so a tool outside the toolbelt is refused whatever the
-//! setting, and its row says why.
+//! and nothing else, so a tool outside the toolbelt is refused under the first
+//! two settings, and its row says why. Allow all is a person having already
+//! said yes to every call, so a tool is allowed there too.
+//!
+//! **What `armada.yml` withholds stays withheld under every setting**: a
+//! destructive command, and one the harness cannot grant.
 //!
 //! This half decides and words, and holds nothing. What a Drone is told is
 //! drafted in `docs/contracts/agent-prompt.md`, under the permission answer and
@@ -98,6 +103,11 @@ pub fn first(
     when: WhenBlocked,
 ) -> First {
     let Some(command) = command else {
+        // Nothing below can withhold a tool: destructive and ungrantable are
+        // both about a command's text.
+        if when == WhenBlocked::AllowAll {
+            return First::Allowed;
+        }
         return First::Withheld(Withheld::NotACommand {
             tool: tool.to_string(),
         });
@@ -114,6 +124,7 @@ pub fn first(
     match when {
         WhenBlocked::RefuseAndHold => First::NotGranted,
         WhenBlocked::AskMe => First::Ask,
+        WhenBlocked::AllowAll => First::Allowed,
     }
 }
 
@@ -269,7 +280,7 @@ mod tests {
     }
 
     #[test]
-    fn a_tool_that_is_not_a_command_is_withheld_whatever_the_setting() {
+    fn a_tool_that_is_not_a_command_is_withheld_unless_everything_is_allowed() {
         for when in [WhenBlocked::RefuseAndHold, WhenBlocked::AskMe] {
             assert_eq!(
                 first("WebFetch", None, &[], &[], None, when),
@@ -354,6 +365,59 @@ mod tests {
                 WhenBlocked::AskMe
             ),
             First::Ask
+        );
+        assert_eq!(
+            first(
+                "Bash",
+                Some("npm publish"),
+                &[],
+                &[],
+                None,
+                WhenBlocked::AllowAll
+            ),
+            First::Allowed
+        );
+    }
+
+    /// A person who chose Allow all said yes to every call, tools included.
+    #[test]
+    fn allow_all_allows_a_tool_that_is_not_a_command() {
+        assert_eq!(
+            first("WebFetch", None, &[], &[], None, WhenBlocked::AllowAll),
+            First::Allowed
+        );
+    }
+
+    /// **No setting widens what `armada.yml` withholds.** Destructive and
+    /// ungrantable are refused under Allow all exactly as under the others.
+    #[test]
+    fn allow_all_still_withholds_destructive_and_ungrantable_commands() {
+        let destructive = [("reset".to_string(), "rm -rf .armada".to_string())];
+        assert_eq!(
+            first(
+                "Bash",
+                Some("rm -rf .armada"),
+                &[],
+                &destructive,
+                None,
+                WhenBlocked::AllowAll
+            ),
+            First::Withheld(Withheld::Destructive {
+                name: "reset".to_string()
+            })
+        );
+        assert_eq!(
+            first(
+                "Bash",
+                Some("git push origin HEAD"),
+                &[],
+                &[],
+                Some("it would push".to_string()),
+                WhenBlocked::AllowAll
+            ),
+            First::Withheld(Withheld::Ungrantable {
+                why: "it would push".to_string()
+            })
         );
     }
 }

@@ -45,7 +45,7 @@ const WAITING_OFFERS: [CommandAnswer; 3] = [
     CommandAnswer::Reject,
 ];
 
-/// Why a person's answer was not taken.
+/// Why a person's answer, or their change to a Job's settings, was not taken.
 #[derive(Debug)]
 pub enum NotPermitted {
     /// The call names nothing waiting on this Job, and no refusal on the step
@@ -59,6 +59,12 @@ pub enum NotPermitted {
     NotDeclared { cause: String },
     /// The answer would not reach the Drone, or the step would not restart.
     NotDelivered { cause: String },
+    /// A model `list_models` does not offer, and what it does.
+    NoSuchModel { named: String, offered: Vec<String> },
+    /// Nothing a person allowed this Job is spelled this way.
+    NothingAllowed { run: String },
+    /// A setting on the Job would not write down.
+    NotChanged { cause: String },
 }
 
 impl core::fmt::Display for NotPermitted {
@@ -84,6 +90,22 @@ impl core::fmt::Display for NotPermitted {
             ),
             NotPermitted::NotDelivered { cause } => {
                 write!(out, "the answer could not reach the drone: {cause}")
+            }
+            NotPermitted::NoSuchModel { named, offered } => write!(
+                out,
+                "`{named}` is not a model a job can run as here. The models offered are {}",
+                offered.join(", ")
+            ),
+            NotPermitted::NothingAllowed { run } => write!(
+                out,
+                "`{run}` is not a command a person allowed this job, so there is nothing to \
+                 take back"
+            ),
+            NotPermitted::NotChanged { cause } => {
+                write!(
+                    out,
+                    "the change to this job could not be written down: {cause}"
+                )
             }
         }
     }
@@ -124,6 +146,8 @@ pub fn wire_setting(when: WhenBlocked) -> ipc::WhenBlocked {
     match when {
         WhenBlocked::RefuseAndHold => ipc::WhenBlocked::RefuseAndHold,
         WhenBlocked::AskMe => ipc::WhenBlocked::AskMe,
+        // Temporary: the wire has no `allow_all` yet, and replaces this arm when it does.
+        WhenBlocked::AllowAll => ipc::WhenBlocked::RefuseAndHold,
     }
 }
 

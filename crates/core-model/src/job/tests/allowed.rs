@@ -6,6 +6,8 @@ use crate::job::{Reach, WhenBlocked};
 fn every_when_blocked_reads_back_from_its_own_spelling() {
     assert_eq!(WhenBlocked::RefuseAndHold.as_wire(), "refuse_and_hold");
     assert_eq!(WhenBlocked::AskMe.as_wire(), "ask_me");
+    assert_eq!(WhenBlocked::AllowAll.as_wire(), "allow_all");
+    assert_eq!(WhenBlocked::ALL.len(), 3, "every setting is in the list");
     for setting in WhenBlocked::ALL {
         assert_eq!(WhenBlocked::from_wire(setting.as_wire()), Some(*setting));
     }

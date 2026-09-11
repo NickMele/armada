@@ -62,7 +62,7 @@
 // region could be written. The pull request link and Pilot's slot are the two
 // most recent, and both are the header's — they go in `heading.tsx` now.
 
-import { Button, JobHoldsSummary } from "@armada/components";
+import { JobHoldsSummary } from "@armada/components";
 import { ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { type RunTreeStep } from "@armada/components";
@@ -740,10 +740,10 @@ export function JobDetail({
         />
       }
       machineAct={
-        <Button variant="ghost" size="sm" onClick={() => openSheet("holds")}>
+        <button type="button" className="armada-screen__eyebrow-act" onClick={() => openSheet("holds")}>
           Details
           <ChevronRight size={12} strokeWidth={2} aria-hidden />
-        </Button>
+        </button>
       }
       // One animated mark per screen, on the thing being read — and nothing
       // pulses on a Job that is over, where "still working" is a claim no step

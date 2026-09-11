@@ -6,18 +6,19 @@
    alignment. */
 .armada-wrow {
   display: grid;
-  /* The drawn 74px. --space-12 plus --space-6 plus a half --space-1: wide
-     enough for `Transcript` and `Worktree` unwrapped, which is what set it. */
+  /* Two --space-12, 96px: wide enough for Pulse's `Size on disk` at --text-xs,
+     which is what set it once the rows went up a size. Pulse's card uses the
+     same column, so the two cards read as one list. */
   grid-template-columns:
-    calc(var(--space-12) + var(--space-6) + var(--space-1) / 2)
+    calc(var(--space-12) * 2)
     minmax(0, 1fr)
     var(--space-3);
   gap: var(--space-2);
   align-items: baseline;
   width: 100%;
-  /* The drawn 5px 8px. Tighter than a step row, because these carry no glyph
-     in the leading column and no group opens beneath them. */
-  padding: calc(var(--space-1) + var(--space-1) / 4) var(--space-2);
+  /* 4px 8px, so the rows keep the same pitch as Pulse's figures above them,
+     which are --space-2 apart. */
+  padding: var(--space-1) var(--space-2);
   border: 0;
   border-radius: var(--radius-sm);
   background: none;
@@ -40,24 +41,31 @@ button.armada-wrow:focus-visible {
 }
 
 .armada-wrow__k {
-  font-size: var(--text-2xs);
-  line-height: var(--leading-2xs);
-  color: var(--fg-subtle);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--text-label);
 }
 
-/* Mono, and clipped from the right. This is the one region on job detail
-   where an ordinary clip is correct: a worktree path and a branch are both
-   read from their start, and it is the produced-file column that needs its
-   end kept. */
+/* Mono, and cut from the right with an ellipsis. A worktree path and a branch
+   are both read from their start; it is the produced-file column that needs
+   its end kept. The value is its own span so the ellipsis has a box to end:
+   this one is a flex row, and a flex row clips its text without one. */
+.armada-wrow__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .armada-wrow__v {
   display: flex;
   align-items: baseline;
   gap: calc(var(--space-2) - var(--space-1) / 4);
   min-width: 0;
   font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  line-height: var(--leading-2xs);
-  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--text-body);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -76,13 +84,17 @@ button.armada-wrow:focus-visible {
    person actually uses it in. */
 .armada-wrow__mark {
   flex: none;
-  color: var(--border-strong);
-  transition: color var(--duration-fast) var(--ease);
+  color: var(--fg-muted);
+  /* Shown on hover and focus only, the owner's call on 11 Sep 2026: a mark on
+     every row read as a column of controls over a list of facts. Focus shows
+     it too, so a keyboard reader still sees what the row does. */
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease);
 }
 
 button.armada-wrow:hover .armada-wrow__mark,
 button.armada-wrow:focus-visible .armada-wrow__mark {
-  color: var(--fg-muted);
+  opacity: 1;
 }
 
 /* The worktree row plus the run sheet's own `Run…`, as two siblings rather

@@ -57,7 +57,7 @@ nullable = "No — zero rows is nothing allowed"
 frozen_at = "Never"
 purpose = "Commands a person allowed for this Job, each carried by every later spawn of it. `reach` says whether the person also made it permanent in the repository's `armada.yml`."
 in_code = "Yes"
-notes = "Keyed by `(job_id, run)`, so allowing one command twice is one row. A second allow at `repository` reach raises a `job`-reach row and nothing lowers one; `allowed_at` and `by` stay the first allow's, so the list keeps the order things were allowed in. No event: an allow moves no status and no step, so the table is the authority for its rows, as `job_remarks_taken_up` is. `run` is the command text as allowed, and nothing in `core-model` or `store` interprets it."
+notes = "Keyed by `(job_id, run)`, so allowing one command twice is one row. A second allow at `repository` reach raises a `job`-reach row and nothing lowers one; `allowed_at` and `by` stay the first allow's, so the list keeps the order things were allowed in. A person may take a row back from Job detail, and the next permission question answers by `when_blocked` again; a command also made permanent stays declared in `armada.yml` on the Job's branch. No event: an allow moves no status and no step, so the table is the authority for its rows, as `job_remarks_taken_up` is. `run` is the command text as allowed, and nothing in `core-model` or `store` interprets it."
 why = "An allow that lived only with the Drone that asked would be lost at its exit, and the next spawn of the same Job would meet the same refusal and ask again. A table rather than an array column so the key refuses a duplicate in the database, instead of every writer checking first."
 
 [fields.assigned_drone]
@@ -257,7 +257,18 @@ frozen_at = "Never"
 purpose = "Which model the assigned Drone is using."
 in_code = "Not yet"
 open_questions = ["Does the agent harness accept a model per invocation, and report the one it actually used?"]
-notes = "The adapter passes a model string on every spawn, so `DroneSpawnConfig` carries it whether or not anything varies it. At M1 nothing varies it — no create-form field, no picker; the value comes from configuration. When a picker arrives, two homes need reconciling: `judge_check.model`, and `policy.model` in the deferred half of the `armada.yml` schema."
+notes = "The adapter passes a model string on every spawn, so `DroneSpawnConfig` carries it whether or not anything varies it. At M1 nothing varies it — no create-form field, no picker; the value comes from configuration. When a picker arrives, two homes need reconciling: `judge_check.model`, and `policy.model` in the deferred half of the `armada.yml` schema. A person's later choice is `model_override`, not an edit of this."
+
+[fields.model_override]
+type = "string"
+table = "jobs"
+storage = "Column"
+nullable = "Yes — null is nobody having chosen"
+frozen_at = "Never"
+purpose = "The model a person chose for this Job's later steps, over each step's own and over `model`."
+in_code = "Yes"
+notes = "Read at each spawn, so a choice reaches the next step's Drone and never the one already running — a session cannot change model partway. Fleet refuses a name `list_models` does not offer; the store keeps whatever it is handed. Clearing it puts each later step back on its own model, or the Job's where the step names none. No event: a choice moves no status and no step, so the column is the authority for its field the way `when_blocked` is."
+why = "Editing `model` instead would lose what the Job was proposed as, and would still lose to a step that names its own — the case a person reaching for a picker most means to override."
 
 [fields.ordinal]
 type = "int"
@@ -438,7 +449,7 @@ notes = "Not a scale: retry limits, escalation thresholds and heartbeat interval
 why = "A scale invites triage theatre, since every Job arrives feeling urgent; gating approval on it would mean the weakest supervision path gets taken exactly when judgement is worst."
 
 [fields.when_blocked]
-type = "enum{refuse_and_hold, ask_me}"
+type = "enum{refuse_and_hold, ask_me, allow_all}"
 table = "jobs"
 storage = "Column"
 nullable = "No"

@@ -182,7 +182,9 @@ export function WhereRow({
         </Tooltip>
       )}
       <span className="armada-wrow__v">
-        {value}
+        <span className="armada-wrow__text" title={typeof value === "string" ? value : undefined}>
+          {value}
+        </span>
         {note === undefined ? null : <span className="armada-wrow__note">{note}</span>}
       </span>
       {Mark === undefined ? null : (

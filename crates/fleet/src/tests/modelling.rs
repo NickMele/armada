@@ -12,8 +12,11 @@
 //! vendor's CLI spells a model with is `adapters`' question and is asserted
 //! there.
 
-use testkit::{FakeWorkProduct, Gate, Sketch};
+use core_model::JobId;
+use testkit::{FakeHarness, FakeVcs, FakeWorkProduct, Gate, Sketch};
 
+use crate::daemon::Fleet;
+use crate::permitting::NotPermitted;
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_fleet_holding, a_proposal, diff_evidence, worktree_directory};
 use crate::tests::tmp::TempDir;
@@ -88,4 +91,98 @@ async fn each_step_is_spawned_as_the_model_its_own_step_named() {
         "the-reporting-model",
         "`summarise` names one, and the step boundary is where it takes effect"
     );
+}
+
+type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
+
+/// The two-step Job, on its first step with a Drone already spawned.
+async fn on_its_first_step(home: &TempDir) -> (Fixture, JobId) {
+    let fleet = a_fleet_holding(
+        home,
+        FakeWorkProduct::changed(&["src/log.rs"]),
+        a_diff_step_then_a_reporting_step(),
+        1,
+    );
+    let job = fleet
+        .propose(a_proposal("a person picks the model"))
+        .await
+        .expect("a proposal");
+    worktree_directory(home, &job);
+    dispatched(&fleet, job.id()).await.expect("it is approved");
+    (fleet, job.id().clone())
+}
+
+/// Evidence for the first step, and the turn that spawns the second.
+async fn onto_the_second_step(fleet: &Fixture) {
+    submitted_by_the_one(fleet, diff_evidence())
+        .await
+        .expect("evidence lands");
+    fleet.turn().await.expect("the first step advances");
+}
+
+/// **The next spawn is where a choice lands**, and it beats the model the
+/// step named for itself. The Drone already running is untouched.
+#[tokio::test]
+async fn a_chosen_model_wins_over_the_steps_own_at_the_next_spawn() {
+    let home = TempDir::new();
+    let (fleet, job) = on_its_first_step(&home).await;
+
+    fleet
+        .set_model(&job, Some("another-model"))
+        .await
+        .expect("a model this Fleet offers");
+    assert_eq!(
+        fleet.model_override_of(&job).await.as_deref(),
+        Some("another-model")
+    );
+    let before = fleet.harness().configured();
+    assert_eq!(before.len(), 1, "nothing respawned for the choice");
+    assert_eq!(before[0].model().as_str(), "a-model");
+
+    onto_the_second_step(&fleet).await;
+    let after = fleet.harness().configured();
+    assert_eq!(after.len(), 2);
+    assert_eq!(
+        after[1].model().as_str(),
+        "another-model",
+        "over `summarise`'s own the-reporting-model"
+    );
+}
+
+/// Clearing a choice puts the later step back on the model it named.
+#[tokio::test]
+async fn clearing_a_chosen_model_restores_the_steps_own() {
+    let home = TempDir::new();
+    let (fleet, job) = on_its_first_step(&home).await;
+
+    fleet
+        .set_model(&job, Some("another-model"))
+        .await
+        .expect("chosen");
+    fleet.set_model(&job, None).await.expect("cleared");
+    assert_eq!(fleet.model_override_of(&job).await, None);
+
+    onto_the_second_step(&fleet).await;
+    assert_eq!(
+        fleet.harness().configured()[1].model().as_str(),
+        "the-reporting-model"
+    );
+}
+
+/// A name `list_models` does not offer is refused, and nothing is recorded.
+#[tokio::test]
+async fn a_model_this_fleet_does_not_offer_is_refused() {
+    let home = TempDir::new();
+    let (fleet, job) = on_its_first_step(&home).await;
+
+    let refused = fleet.set_model(&job, Some("no-such-model")).await;
+
+    match refused {
+        Err(NotPermitted::NoSuchModel { named, offered }) => {
+            assert_eq!(named, "no-such-model");
+            assert_eq!(offered, vec!["a-model", "another-model"]);
+        }
+        other => panic!("an unknown model is refused: {other:?}"),
+    }
+    assert_eq!(fleet.model_override_of(&job).await, None);
 }
