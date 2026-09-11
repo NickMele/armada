@@ -258,10 +258,10 @@ describe("what a person may answer on a refused row", () => {
     const kept = refusal({
       detail: "rm -rf .armada",
       offers: [],
-      withheld: "armada.yml declares this destructive, as `reset`, and no task runs it unattended",
+      withheld: "armada.yml declares this destructive, as reset, and no job runs it unattended",
     });
     expect(refusedIn(whole({ refused: [kept], refusals: 1 }))?.refused[0]?.withheld).toBe(
-      "armada.yml declares this destructive, as `reset`, and no task runs it unattended.",
+      "armada.yml declares this destructive, as reset, and no job runs it unattended.",
     );
   });
 

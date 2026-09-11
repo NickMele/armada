@@ -77,6 +77,12 @@ export type DroneQuestionProps = {
    */
   redirectNote?: ReactNode;
   answerLabel?: string;
+  /**
+   * What the answers are, said over them. **Whose offer it is**: a drone's
+   * question offers its own answers, and a command's three are Armada's — a
+   * heading crediting the drone would say it chose them.
+   */
+  answersLabel?: string;
 };
 
 /** One answer, as this surface draws it. */
@@ -97,6 +103,7 @@ export function DroneQuestion({
   label = "The drone is waiting on you",
   redirectNote = "If none of these is right, redirect the drone instead — that is where your own words go.",
   answerLabel = "Send this answer",
+  answersLabel = "Answers the drone offered",
 }: DroneQuestionProps) {
   const [chosen, setChosen] = useState<string | null>(null);
   // One radio group per box. A drone's question and a command it is waiting
@@ -120,7 +127,7 @@ export function DroneQuestion({
           wording to it and neither does this. */}
       <p className="armada-question__asked">{question}</p>
 
-      <RadioGroup label="Answers the drone offered">
+      <RadioGroup label={answersLabel}>
         {options.map((option) => (
           <div className="armada-question__option" key={option.label}>
             <Radio

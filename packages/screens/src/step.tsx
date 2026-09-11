@@ -177,6 +177,7 @@ export function commandOf(whole: JobWhole | null, now: number, answering: Answer
       disabled={answering.stale || answering.acting}
       disabledNote={answering.stale ? STALE_NOTE : answering.acting ? SENDING_NOTE : undefined}
       redirectNote={LATE_ANSWER}
+      answersLabel="Your answers"
       onAnswer={(label) => {
         const chose = offered.find((one) => one.label === label);
         if (chose !== undefined) answering.send(waiting.call, chose.offer);

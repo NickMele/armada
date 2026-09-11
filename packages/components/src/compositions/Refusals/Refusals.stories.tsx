@@ -293,7 +293,7 @@ export const AnswersOnTheRow: Story = {
         tool: "Bash",
         detail: "rm -rf .armada",
         call: "call_rm_1",
-        withheld: "armada.yml declares this destructive, as `reset`, and no task runs it unattended.",
+        withheld: "armada.yml declares this destructive, as reset, and no job runs it unattended.",
       },
       { tool: "Bash", detail: "pnpm add -D reselect@5.1.1", call: "call_pnpm_1", answers: ANSWERS },
     ],
