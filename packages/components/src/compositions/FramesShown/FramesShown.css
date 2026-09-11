@@ -71,6 +71,42 @@ button.armada-frames__plate:focus-visible {
   object-fit: contain;
 }
 
+/* A recording, at the plate's own shape. `object-fit: contain` for the same
+   reason as the image above: a video cropped to fill the plate loses the edge
+   of the screen it recorded. */
+.armada-frames__video {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* Text and JSON do not fit the 16/10 box an image is measured for — a log is
+   tall and a plate that clipped it to a screen's shape would be worse than the
+   broken image this surface exists to replace. The plate grows to the content
+   instead of the content shrinking to the plate, and scrolls past a height a
+   panel can still hold open beside everything else in the chapter. */
+.armada-frames__plate--text {
+  display: block;
+  aspect-ratio: unset;
+  max-height: 20rem;
+  overflow: auto;
+  text-align: left;
+}
+
+/* The file's own bytes, decoded. Mono and pre-wrapped: this is quoted, never
+   laid out, and a line the harness did not break stays readable rather than
+   pushing the plate wide. */
+.armada-frames__text {
+  margin: 0;
+  padding: var(--space-2);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  color: var(--fg-default);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  text-align: left;
+}
+
 .armada-frames__plate[data-empty] {
   border-style: dashed;
   border-color: var(--border-subtle);
