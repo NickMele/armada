@@ -146,6 +146,36 @@ export function pullRequestNumber(address: string): string | null {
 }
 
 /**
+ * What a person calls the code host a pull request's address names —
+ * `GitHub` for `github.com`, never the domain itself.
+ *
+ * **Read off the address, every time.** Nothing here assumes Armada only
+ * ever opens a pull request on one host: `crates/adapters` is the one crate
+ * allowed to name a vendor, and the address already says which one this
+ * pull request is on, so this reads that rather than writing the name in a
+ * second place that could drift from it.
+ *
+ * **A host this build does not have a name for still gets one.** The domain
+ * itself is a true, readable answer — better than a word this file invented
+ * for a forge nobody thought of. Where the address does not even parse, the
+ * fallback names what it is without pretending to know where.
+ */
+const KNOWN_HOSTS: Record<string, string> = {
+  "github.com": "GitHub",
+  "gitlab.com": "GitLab",
+  "bitbucket.org": "Bitbucket",
+};
+
+export function hostLabel(address: string): string {
+  try {
+    const hostname = new URL(address).hostname;
+    return KNOWN_HOSTS[hostname] ?? hostname;
+  } catch {
+    return "the pull request's host";
+  }
+}
+
+/**
  * What became of that pull request — continuing the fact that names it, where
  * there is one to continue.
  *

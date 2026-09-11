@@ -201,11 +201,11 @@ export const MergeThePullRequest: Story = {
     title: "Merge this job's pull request?",
     confirmLabel: "Merge and take the work",
     children:
-      "The pull request merges on the forge, so the job's commits land on the base branch and " +
+      "The pull request merges on GitHub, so the job's commits land on the base branch and " +
       "everybody working from it gets them on their next pull. Armada then runs the " +
-      "repository's after-merge checks against what landed — merging on the forge instead " +
-      "skips them, and running them is the reason this button exists. The job is approved " +
-      "with it. Bridge cannot take a merge back: undoing one is a revert made in the " +
+      "repository's after-merge checks against what landed — merging it on GitHub yourself " +
+      "instead skips them, and running them is the reason this button exists. The job is " +
+      "approved with it. Bridge cannot take a merge back: undoing one is a revert made in the " +
       "repository.",
     onConfirm: fn(),
     onCancel: fn(),

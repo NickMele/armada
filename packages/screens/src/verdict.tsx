@@ -37,7 +37,7 @@ import type {
   Submitted,
 } from "@armada/protocol";
 
-import { money, pullRequestNumber } from "./facts";
+import { hostLabel, money, pullRequestNumber } from "./facts";
 import { span } from "./duration";
 import { checkRow, judgeRow, saidOf, iconOf } from "./checks";
 import { Decide } from "./Decide";
@@ -435,10 +435,12 @@ export function verdictSlotAtGate({
   const never = neverDelivers(whole?.steps ?? []);
   const note =
     never === true
-      ? "Approving ends the Job here. Nothing is merged, and nothing waits on a forge."
+      ? "Approving ends the Job here. Nothing is merged, and there is no pull request waiting " +
+        "on a decision."
       : address !== undefined
         ? "This repository sets auto_merge: never. Merging here is Fleet acting on your " +
-          "press, and it runs the after-merge Checks. Merging on the forge does not."
+          `press, and it runs the after-merge Checks. Merging it yourself on ${hostLabel(address)} ` +
+          "does not."
         : "The run tree on the left is where each step's own evidence is. This reads the Job.";
   return (
     <VerdictSheet

@@ -82,11 +82,18 @@ export type ReviewCommentsProps = {
   /** What marks a comment a drone has already been handed. */
   sentNote?: string;
   /**
-   * Open one comment on the forge. Absent where nothing here can resolve a
-   * link, in which case no comment draws the control at all — a link with
-   * nothing to open reads as a broken one, not a quiet one.
+   * Open one comment on the code host it lives on. Absent where nothing here
+   * can resolve a link, in which case no comment draws the control at all — a
+   * link with nothing to open reads as a broken one, not a quiet one.
    */
   onOpenLink?: (id: string) => void;
+  /**
+   * What a person calls the host these comments live on — `GitHub`. The
+   * caller reads it off the pull request's own address, the same one this
+   * surface's own note says it never holds; this is a word, never a URL.
+   * Absent draws a host-agnostic word instead of guessing one.
+   */
+  hostLabel?: string;
 };
 
 /** One comment, as this surface draws it. */
@@ -134,6 +141,7 @@ export function ReviewComments({
   takeUpLabel = "Send to a drone",
   sentNote = "Already sent to a drone",
   onOpenLink,
+  hostLabel = "the code host",
 }: ReviewCommentsProps) {
   // Held here because it is a draft until it is sent, exactly as the review
   // note beside it is. Nothing outside this region knows one is being made.
@@ -166,10 +174,10 @@ export function ReviewComments({
                       variant="ghost"
                       size="sm"
                       onClick={() => onOpenLink(comment.id)}
-                      aria-label={`Open ${comment.by}'s comment on the forge`}
+                      aria-label={`Open ${comment.by}'s comment on ${hostLabel}`}
                     >
                       <ExternalLink size={12} aria-hidden />
-                      Open on the forge
+                      Open on {hostLabel}
                     </Button>
                   ) : null}
                 </div>
