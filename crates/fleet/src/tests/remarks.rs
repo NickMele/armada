@@ -364,6 +364,7 @@ async fn a_press_with_one_comment_too_big_for_the_room_a_brief_leaves_free_is_re
             people: WhatPeopleSaid::ChangesRequested,
             checks: WhatTheForgeRan::AllPassed { checks: 3 },
             remarks: vec![sized_comment("IC_big", "a-reviewer", 9_000)],
+            verdicts: Vec::new(),
         },
     )
     .await;
@@ -413,6 +414,7 @@ async fn a_press_with_several_medium_comments_that_together_overflow_is_refused_
                 sized_comment("IC_4", "a-reviewer", 1_700),
                 sized_comment("IC_5", "a-reviewer", 1_700),
             ],
+            verdicts: Vec::new(),
         },
     )
     .await;
@@ -464,6 +466,7 @@ async fn one_of_the_same_medium_comments_picked_alone_is_not_refused() {
                 sized_comment("IC_1", "a-reviewer", 1_700),
                 sized_comment("IC_2", "a-reviewer", 1_700),
             ],
+            verdicts: Vec::new(),
         },
     )
     .await;
