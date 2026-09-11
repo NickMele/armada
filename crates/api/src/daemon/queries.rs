@@ -17,9 +17,10 @@ use crate::daemon::Refusal;
 use crate::observing::Observed;
 use crate::reference::Resolved;
 use ipc::{
-    CallArguments, CheckOutput, FleetCapacity, JobDetail, JobDiff, JobEvidence, JobHistory, JobId,
-    JobList, JobRemarks, JobResources, KeptFrame, ManifestReading, ManifestSummary, ModelChoices,
-    ReportList, RunList, RunOutput, RunSheet, WorkflowSummary, WorktreesHeld,
+    CallArguments, CheckOutput, FilesFound, FleetCapacity, JobDetail, JobDiff, JobEvidence,
+    JobHistory, JobId, JobList, JobRemarks, JobResources, KeptFrame, ManifestReading,
+    ManifestSummary, ModelChoices, ReportList, RunList, RunOutput, RunSheet, WorkflowSummary,
+    WorktreesHeld,
 };
 
 /// Everything a client reads.
@@ -403,4 +404,19 @@ pub trait Queries: Send + Sync + 'static {
         &self,
         server_id: String,
     ) -> impl Future<Output = Result<crate::ObservedServer, Refusal>> + Send;
+
+    /// `search_files` — paths under the checkout narrowed against typed text,
+    /// for Bridge's `@` mention popup.
+    ///
+    /// **No `manifest_id`, matching [`Queries::get_manifest_reading`].** A
+    /// Fleet serves one repository, and this reads it before any Job — and
+    /// therefore any worktree — exists to read one from instead.
+    ///
+    /// It never refuses. A directory it cannot read is skipped rather than
+    /// failing the whole search, [`Queries::get_capacity`]'s own reasoning for
+    /// answering rather than 500ing over a corner of the machine.
+    fn search_files(
+        &self,
+        query: String,
+    ) -> impl Future<Output = Result<FilesFound, Refusal>> + Send;
 }

@@ -481,6 +481,16 @@ pub struct JobRequest {
     /// with its own [`ProposalId`](crate::ProposalId).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client_ref: Option<String>,
+    /// Files a person attached to the request before dispatching it.
+    /// **Additive, like [`ProposeJob::attachments`]** — a caller that predates
+    /// this field sends nothing and decodes exactly as it did before.
+    ///
+    /// A request can become several Jobs. These land on the head of the plan
+    /// alone, not on every member: `docs/concepts/job-proposer.md`'s "a member
+    /// of a split gets its scope line and nothing else" argues against
+    /// duplicating an attachment onto Jobs that never asked for it.
+    #[serde(default)]
+    pub attachments: Vec<AttachmentRef>,
 }
 
 /// One DAG link, sequencing this Job against a peer.

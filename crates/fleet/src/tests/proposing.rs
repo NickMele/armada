@@ -576,3 +576,103 @@ async fn a_proposal_nobody_is_watching_publishes_nothing_about_the_call() {
         "a proposal nobody can see costs this channel nothing: {seen:?}"
     );
 }
+
+/// A staged file under `home`, and the [`ipc::AttachmentRef`] naming it — the
+/// same shape a caller of [`propose_from_with_attachments`] hands in.
+fn a_staged_attachment(home: &TempDir) -> ipc::AttachmentRef {
+    let staged_dir = home.path().join("staged");
+    std::fs::create_dir_all(&staged_dir).expect("a staging directory");
+    let staged_path = staged_dir.join("before.png");
+    std::fs::write(&staged_path, b"a screenshot, eleven bytes").expect("a staged file");
+    ipc::AttachmentRef {
+        staged_path: staged_path.to_string_lossy().to_string(),
+        filename: "before.png".to_string(),
+        mime_type: "image/png".to_string(),
+    }
+}
+
+/// A request that fits one workflow carries its attachment onto the one Job
+/// it becomes.
+#[tokio::test]
+async fn a_single_job_request_carries_its_attachment() {
+    let home = TempDir::new();
+    let fleet = a_fleet_proposing_through(
+        &home,
+        FakeWorkProduct::changed(&["src/log.rs"]),
+        a_catalogue(),
+        FakeJudge::saying(
+            "workflow: bug\ntitle: The log reader drops the last line\n\
+             because: a defect with a reproducible symptom\nwrites: src/log.rs",
+        ),
+    );
+    let attachment = a_staged_attachment(&home);
+
+    let made = fleet
+        .propose_from_with_attachments(A_REQUEST, None, vec![attachment])
+        .await
+        .expect("a request that fits one workflow");
+
+    let [job] = &made[..] else {
+        panic!("one Job, not {}", made.len())
+    };
+    let [carried] = job.attachments() else {
+        panic!("the one attachment, not {:?}", job.attachments())
+    };
+    assert_eq!(carried.filename, "before.png");
+    assert_eq!(carried.mime_type, "image/png");
+    assert_eq!(carried.byte_size, "a screenshot, eleven bytes".len() as u64);
+}
+
+/// **The head-only rule `docs/concepts/job-proposer.md` argues for.** A
+/// request that splits into several Jobs carries the attachment onto the
+/// first alone — a member of a split gets its scope line and nothing else,
+/// which this reads as: nothing else includes an attachment nobody asked it
+/// to carry.
+#[tokio::test]
+async fn a_split_request_carries_its_attachment_onto_the_head_job_alone() {
+    let home = TempDir::new();
+    let fleet = a_fleet_proposing_through(
+        &home,
+        FakeWorkProduct::changed(&["src/log.rs"]),
+        a_catalogue(),
+        FakeJudge::saying(crate::tests::planning::A_PLAN),
+    );
+    let attachment = a_staged_attachment(&home);
+
+    let made = fleet
+        .propose_from_with_attachments("two coupled changes", None, vec![attachment])
+        .await
+        .expect("a plan");
+
+    assert_eq!(made.len(), 2, "the plan this test relies on splits in two");
+    assert_eq!(
+        made[0].attachments().len(),
+        1,
+        "the head carries what was staged against the request"
+    );
+    assert_eq!(made[0].attachments()[0].filename, "before.png");
+    assert!(
+        made[1].attachments().is_empty(),
+        "the second member of the split gets its scope line and nothing else"
+    );
+}
+
+/// [`Fleet::propose_from`] is `propose_from_with_attachments` with nothing
+/// staged — the call every test that predates attachments still makes.
+#[tokio::test]
+async fn propose_from_carries_no_attachments() {
+    let home = TempDir::new();
+    let fleet = a_fleet_proposing_through(
+        &home,
+        FakeWorkProduct::changed(&["src/log.rs"]),
+        a_catalogue(),
+        FakeJudge::saying(
+            "workflow: bug\ntitle: The log reader drops the last line\n\
+             because: a defect with a reproducible symptom\nwrites: src/log.rs",
+        ),
+    );
+
+    let made = fleet.propose_from(A_REQUEST, None).await.expect("a plan");
+
+    assert!(made[0].attachments().is_empty());
+}

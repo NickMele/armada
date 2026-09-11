@@ -800,4 +800,14 @@ where
             skipped,
         })
     }
+
+    /// Paths under the checkout narrowed against typed text, for Bridge's `@`
+    /// mention popup. `crate::files::search` is the walk; this only names the
+    /// root it walks and cannot refuse.
+    async fn search_files(&self, query: String) -> Result<ipc::FilesFound, Refusal> {
+        let root = std::path::Path::new(&self.host().repo_root);
+        Ok(ipc::FilesFound {
+            paths: crate::files::search(root, &query),
+        })
+    }
 }

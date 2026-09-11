@@ -1,0 +1,52 @@
+/* The `@` mention popup — a narrow list under the field it opened on, the
+ * same surface treatment `CommandPalette` draws and none of its overlay: no
+ * scrim, because the field it belongs to is still the thing being edited.
+ *
+ * `.armada-mention-anchor` wraps whatever field opens it — `position:
+ * relative` is all it adds, so the popup below can lay out against the
+ * field's own box rather than the page, without pushing anything under the
+ * field down the moment it opens. */
+.armada-mention-anchor {
+  position: relative;
+}
+
+.armada-mention {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: var(--z-menu);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(var(--h-menu-item) * 6);
+  overflow-y: auto;
+  margin-top: var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--bg-overlay);
+  border: var(--border-width) solid var(--border-default);
+  box-shadow: var(--shadow-overlay);
+}
+
+.armada-mention__row {
+  display: flex;
+  align-items: center;
+  height: var(--h-menu-item);
+  padding: 0 var(--space-3);
+  color: var(--fg-default);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.armada-mention__row--active {
+  background: var(--bg-hover);
+}
+
+.armada-mention__empty {
+  padding: var(--space-2) var(--space-3);
+  color: var(--fg-subtle);
+  font-size: var(--text-xs);
+}

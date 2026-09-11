@@ -560,6 +560,19 @@ pub fn manifests() -> Vec<ManifestSummary> {
     }]
 }
 
+/// A small fixed tree, narrowed the way `fleet::files::search` narrows a real
+/// checkout — a case-insensitive substring test against the relative path.
+/// Enough for a route test to prove the query reaches the daemon and the
+/// answer reaches the wire, without a filesystem behind the fake.
+pub fn files_found(query: &str) -> Vec<String> {
+    const TREE: &[&str] = &["src/main.rs", "src/lib.rs", "README.md", "Cargo.toml"];
+    let needle = query.to_lowercase();
+    TREE.iter()
+        .filter(|path| needle.is_empty() || path.to_lowercase().contains(needle.as_str()))
+        .map(|path| path.to_string())
+        .collect()
+}
+
 /// Two models and a default, which is the shape a picker draws from.
 pub fn models() -> ModelChoices {
     ModelChoices {

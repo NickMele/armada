@@ -15,7 +15,7 @@
 // what makes "kill the Drone" a request to the daemon that spawned it.
 
 import type { BridgeState } from "../shared/bridge";
-import type { ClearOutcome, Draft, Outcome, ReclaimOutcome } from "@armada/protocol";
+import type { ClearOutcome, Draft, Outcome, ReclaimOutcome, StagedAttachment } from "@armada/protocol";
 import type { CapRaise, ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report, RestartRequested, TurnRaise } from "@armada/protocol";
 import type {
   AnswerCommand,
@@ -252,8 +252,11 @@ export class JobCommands {
    *
    * `proposing.ts` is what it is, for the reason `decide` is `review.ts`'s.
    */
-  async proposeFromRequest(request: string): Promise<Proposed> {
-    return propose(this.board, request);
+  async proposeFromRequest(
+    request: string,
+    attachments: StagedAttachment[],
+  ): Promise<Proposed> {
+    return propose(this.board, request, attachments);
   }
 
   /**
@@ -278,6 +281,25 @@ export class JobCommands {
       proposal_id: out.proposal_id,
     });
     return answer.ok === true ? { ok: true } : answer.outcome;
+  }
+
+  /**
+   * Paths under the checkout narrowed against typed text, for the `@` mention
+   * popup — a person opens it while writing a request or a brief, before any
+   * Job or worktree exists to search instead.
+   *
+   * **Empty rather than an outcome, on nothing connected or on a refusal.**
+   * This fires on every keystroke; sending a search failure through the same
+   * pipeline every other command failure uses would raise a toast for a
+   * popup nobody has to have open. `search_files` itself never refuses — see
+   * `Queries::search_files` — so what is left to answer empty for is Bridge
+   * having nowhere to ask at all.
+   */
+  async searchFiles(query: string): Promise<string[]> {
+    const port = this.board.port();
+    if (port === null) return [];
+    const answer = await ask(port, "GET", `/manifest/files?q=${encodeURIComponent(query)}`);
+    return answer.ok === true ? (answer.body as { paths: string[] }).paths : [];
   }
 
   // ------------------------------------------------------------ dispatching

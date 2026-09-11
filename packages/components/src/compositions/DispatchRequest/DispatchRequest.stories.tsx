@@ -1,5 +1,7 @@
+import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fireEvent, fn } from "storybook/test";
+import type { StagedAttachment } from "@armada/protocol";
 
 import { DispatchRequest } from "./DispatchRequest";
 import type { Proposal } from "./DispatchRequest";
@@ -24,6 +26,11 @@ const meta: Meta<typeof DispatchRequest> = {
   args: {
     request: "",
     onRequest: fn(),
+    onSearchFiles: fn(async () => []),
+    attachments: [],
+    onStage: fn(async () => ({ path: "/tmp/staged" })),
+    onAttach: fn(),
+    onRemoveAttachment: fn(),
     onDispatch: fn(),
     onEnterByHand: fn(),
     onReset: fn(),
@@ -84,6 +91,56 @@ export const Typed: Story = {
     // event still arrives here to prove the handler is not bound either.
     fireEvent.click(dispatch);
     await expect(args.onDispatch).toHaveBeenCalledOnce();
+  },
+};
+
+/**
+ * Typing `@` opens the mention popup, and picking a result inserts it into
+ * the field — the way Claude Code's own `@` file reference works.
+ *
+ * **A stateful wrapper, not static args.** Every other story here proves a
+ * callback fired; this one proves what the field holds afterward, which needs
+ * `onRequest` actually feeding back into `request` rather than a `fn()` that
+ * drops it.
+ */
+export const MentionInserted: Story = {
+  render: (args) => {
+    function Stateful() {
+      const [request, setRequest] = useState("");
+      return (
+        <DispatchRequest
+          {...args}
+          request={request}
+          onRequest={setRequest}
+          onSearchFiles={() => Promise.resolve(["README.md", "packages/components/README.md"])}
+        />
+      );
+    }
+    return <Stateful />;
+  },
+  play: async ({ canvas, userEvent }) => {
+    const field = canvas.getByRole("textbox", { name: "Request" });
+    await userEvent.type(field, "@READ");
+    await userEvent.click(await canvas.findByRole("option", { name: "README.md" }));
+    await expect(field).toHaveValue("@README.md ");
+  },
+};
+
+/**
+ * Files staged against the request, drawn as removable chips — the same
+ * `AttachmentChip` the hand-entry form already uses, on this field instead.
+ */
+export const WithAttachments: Story = {
+  args: {
+    request: REQUEST,
+    attachments: [
+      { path: "/tmp/a", filename: "before.png", mimeType: "image/png" },
+      { path: "/tmp/b", filename: "after.png", mimeType: "image/png" },
+    ] satisfies StagedAttachment[],
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Remove before.png" }));
+    await expect(args.onRemoveAttachment).toHaveBeenCalledWith("/tmp/a");
   },
 };
 

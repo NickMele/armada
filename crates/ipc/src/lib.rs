@@ -39,6 +39,8 @@ mod detail;
 mod enums;
 mod error;
 mod event;
+/// What `search_files` found under the checkout, for the `@` mention popup.
+mod files;
 mod history;
 /// What Fleet is holding disk for, and the test each one did not pass.
 /// **A piloted worktree is not on this wire at all** — `#367`.
@@ -121,6 +123,7 @@ pub use event::{
     JobRemarksChanged, JobStateChanged, JobStepAdvanced, Missed, ProposalMoved, Reason, Resync,
     StreamMessage,
 };
+pub use files::FilesFound;
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};
 pub use holding::{HeldReason, WorktreeHeld, WorktreesHeld};
 pub use ids::{

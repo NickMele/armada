@@ -21,7 +21,7 @@
 
 import { answeredAs } from "@armada/screens";
 import type { Answered } from "@armada/screens";
-import type { BridgeIdentity, WorkflowSummary } from "@armada/protocol";
+import type { BridgeIdentity, StagedAttachment, WorkflowSummary } from "@armada/protocol";
 
 /** What the reading needs from published state, and nothing else. */
 export type Proposing = {
@@ -39,8 +39,12 @@ export type Proposing = {
  * what stops a second press — see `DispatchJob` in `@armada/screens`. A guard
  * in two places is two answers about whether a request went out.
  */
-export async function proposeRequest(request: string, seen: Proposing): Promise<Answered> {
-  return answeredAs(await window.armada.proposeFromRequest(request), {
+export async function proposeRequest(
+  request: string,
+  attachments: readonly StagedAttachment[],
+  seen: Proposing,
+): Promise<Answered> {
+  return answeredAs(await window.armada.proposeFromRequest(request, attachments), {
     sent: request,
     workflows: seen.workflows,
     bridge: seen.bridge,

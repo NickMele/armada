@@ -263,6 +263,19 @@ Every fault crosses, not the first. `config::LoadError` finds them all, and a pe
 `helm_access` is `Yes` on `get_capacity`'s terms: it is one small answer about Fleet's own state, and a Helm whose dispatch is running against configuration the repository no longer describes should be able to find that out.
 """
 
+[operations.search_files]
+kind = "query"
+transport = "HTTP"
+helm_access = "No"
+description = "Paths under the checkout narrowed against typed text, for the @ mention popup"
+notes = """
+The read behind Bridge's `@` mention — a person typing a request or a brief narrows this as they type, and picking a result inserts the path rather than making them recall or paste it by hand. No manifest_id, matching get_manifest_reading: a Fleet serves one repository, and a request is written before any Job, and therefore any worktree, exists to read one from instead.
+
+It reads the checkout at rest, not a Job's worktree — crates/fleet/src/files.rs walks host().repo_root. Capped and not exhaustive, and the walk stops as soon as it has enough rather than reading the whole tree first and cutting the list after. .git, node_modules and target are excluded by name; nothing here is .gitignore-aware, and that is a real gap rather than a decision — the bound and the ignore rules both need a repository sized in the design workspace before either is settled properly, and this ships the excludes that make an uninformed walk usable in the meantime.
+
+Matching is a case-insensitive substring test against the relative path, not a fuzzy or ranked search — the simplest thing that lets "compo" find components/. It never refuses: a directory it cannot read is skipped rather than failing the whole search, on get_capacity's own reasoning that a panel which 500s over one bad subtree is one a person stops opening.
+"""
+
 [operations.get_remarks]
 kind = "query"
 transport = "HTTP"
@@ -805,6 +818,13 @@ step's, declared through declare_scope by a Drone that has read the code, and
 checked against the real diff by the drift check that already exists. A Job
 therefore reaches the gate with write_targets null — not empty — and its shape
 underivable until that step runs.
+
+attachments carries files staged against the request before it was sent, the way
+propose_job's own field does for hand entry. Additive: a caller that predates
+this field sends nothing and decodes exactly as it did before. A request can
+become several Jobs; these land on the head of the plan alone; scope stays a
+member's own, and duplicating an attachment onto every Job in a chain is not
+this field's decision to make on a caller's behalf.
 
 Where no workflow resolves the request is refused and returned unchanged, on the
 error envelope's `request` field, and no Job is created. Nothing here assigns a

@@ -58,6 +58,7 @@ import {
   readHeld,
   readReports,
   reclaimOne,
+  searchFiles,
   showAgain,
   stageAttachment,
   startRun,
@@ -482,12 +483,14 @@ export function App() {
               <DispatchJob
                 // What the reading is read against is published state, so it is
                 // handed over at the press rather than held by the command.
-                onPropose={(request) =>
-                  commands.proposeFrom(request, {
+                onPropose={(request, attachments) =>
+                  commands.proposeFrom(request, attachments, {
                     workflows: state.holds.workflows,
                     bridge: state.bridge,
                   })
                 }
+                onStage={stageAttachment}
+                onSearchFiles={searchFiles}
                 // What Fleet says the call is doing, against the same `now`
                 // every other elapsed figure on screen is drawn from.
                 watching={watchOf(state.proposing, now)}
@@ -513,6 +516,7 @@ export function App() {
                   <Composer
                     workflows={state.holds.workflows}
                     onStage={stageAttachment}
+                    onSearchFiles={searchFiles}
                     manifest={scoped}
                     models={state.holds.models}
                     disabled={!live}

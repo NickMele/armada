@@ -706,6 +706,30 @@ const A_BLANK_NOTE: &str = r#"{"note":"   "}"#;
 /// two above** — nothing downstream was asked, so it is the transport's 400.
 const NOT_A_NOTE: &str = "{";
 
+/// The `@` mention popup's own route. **Narrowed by `?q=`, and absent reads
+/// as empty** — the instant somebody types a bare `@` there is no text after
+/// it yet, and a client that sent no parameter at all must see the same
+/// unnarrowed list as one that sent `q=`.
+#[tokio::test]
+async fn manifest_files_is_narrowed_by_q_and_answers_everything_with_none() {
+    let events = Broadcaster::new();
+    let app = wired(FakeDaemon::new(events.clone()), events);
+
+    let (status, body) = call(&app, "GET", "/manifest/files?q=main", "").await;
+    assert_eq!(status, StatusCode::OK);
+    let found: ipc::FilesFound = ipc::decode("files found", &body).expect("a list of paths");
+    assert_eq!(found.paths, vec!["src/main.rs".to_string()]);
+
+    let (status, body) = call(&app, "GET", "/manifest/files", "").await;
+    assert_eq!(status, StatusCode::OK);
+    let unnarrowed: ipc::FilesFound = ipc::decode("files found", &body).expect("a list of paths");
+    assert_eq!(
+        unnarrowed.paths,
+        shapes::files_found(""),
+        "no `q` at all reads the same as `q=`, not as a refusal"
+    );
+}
+
 fn a_transition() -> ipc::Event {
     let message: StreamMessage = ipc::decode(
         "stream message",

@@ -23,6 +23,7 @@ import type {
   ReclaimOutcome,
   RunListRead,
   RunOutputRead,
+  StagedAttachment,
   StartRun,
   WhenBlocked,
 } from "@armada/protocol";
@@ -50,7 +51,10 @@ export type BridgeApi = {
    * differently or hand-entered, and a call that could not be made is simply
    * asked again.
    */
-  proposeFromRequest: (request: string) => Promise<Proposed>;
+  proposeFromRequest: (
+    request: string,
+    attachments: readonly StagedAttachment[],
+  ) => Promise<Proposed>;
   /**
    * Stop the proposal this window is waiting on.
    *
@@ -75,6 +79,14 @@ export type BridgeApi = {
     filename: string,
     mimeType: string,
   ) => Promise<{ path: string }>;
+  /**
+   * Paths under the checkout narrowed against typed text, for the `@` mention
+   * popup. **Empty rather than a fault**, on a call that could not be made or
+   * on nothing connected — a person is typing, and a toast over a popup they
+   * may not even have open would be Bridge announcing a failure nobody asked
+   * to hear about.
+   */
+  searchFiles: (query: string) => Promise<string[]>;
   approveDispatch: (jobId: string) => Promise<Outcome>;
   /**
    * Kill the failed Job and mint its replacement. **Nothing resumes** — the

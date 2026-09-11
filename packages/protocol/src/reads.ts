@@ -520,6 +520,14 @@ export type ReclaimOutcome = {
   failed: { jobId: string; outcome: Outcome }[];
 };
 
+/**
+ * One file staged through `stageAttachment` before the Job it will attach to
+ * exists — shared by the create form's `Draft.attachments` and by the
+ * describe-the-work path, which stages the same way and carries the result on
+ * `JobRequest.attachments` instead.
+ */
+export type StagedAttachment = { path: string; filename: string; mimeType: string };
+
 /** What the create form collects, before it becomes a `ProposeJob`. */
 export type Draft = {
   /** What the Job is called. Refused empty before the Job is created. */
@@ -542,5 +550,5 @@ export type Draft = {
    * the ordinary case and is sent as such — unlike `model`, there is no
    * absent-vs-empty distinction here for Fleet to fill in.
    */
-  attachments: { path: string; filename: string; mimeType: string }[];
+  attachments: StagedAttachment[];
 };
