@@ -82,6 +82,9 @@ where
     pub(crate) fn port_range(&self) -> crate::ports::PortRange {
         self.port_range
     }
+    pub(crate) fn run_log_retention(&self) -> std::time::Duration {
+        self.run_log_retention
+    }
     /// What this repository has said about `auto_merge` and `review_gate`,
     /// folded across the Manifests gating one Job.
     ///

@@ -108,6 +108,9 @@ pub struct Fittings<H, V, W> {
     /// `settings.port-range-ceiling` (`crate::ports::detect_ceiling` supplies
     /// the composition root's default) and `settings.port-block-granule`.
     pub port_range: crate::ports::PortRange,
+    /// `settings.ad-hoc-run-log-retention`. How long a run fired by hand from
+    /// the Manifest surface keeps its log — see [`mod@crate::rehearsing`].
+    pub run_log_retention: std::time::Duration,
     /// How a caller is placed: which process holds the connection a tool call
     /// arrived on. **A seam so a test can plant one** — the shipped answer is
     /// [`peer::Kernel`](crate::peer::Kernel), and a fixture has no sockets to
@@ -215,6 +218,7 @@ where
             manifest: fittings.manifest,
             host: fittings.host,
             port_range: fittings.port_range,
+            run_log_retention: fittings.run_log_retention,
             budget: fittings.budget,
             norms: fittings.norms,
             liveness: fittings.liveness,

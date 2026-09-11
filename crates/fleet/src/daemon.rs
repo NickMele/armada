@@ -73,6 +73,9 @@ pub struct Fleet<H, V, W> {
     /// The range a Job's port span is claimed from, and the granule its width
     /// rounds up to. See [`crate::ports`].
     port_range: crate::ports::PortRange,
+    /// `settings.ad-hoc-run-log-retention`. How long a run fired by hand from
+    /// the Manifest surface keeps its log — see [`mod@crate::rehearsing`].
+    run_log_retention: std::time::Duration,
     budget: CheckBudget,
     norms: StepNorms,
     liveness: Liveness,

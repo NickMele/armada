@@ -135,9 +135,15 @@ where
             return Err(refused(Unrehearsable::AlreadyRunning { name: entry.name }));
         };
         let (root, handle) = (&self.host().records_root, job.handle());
-        records::swept(root, &handle, &self.now(), |reference| {
-            let _ = adapters::snapshot::forget(&tree.path, reference);
-        });
+        records::swept(
+            root,
+            &handle,
+            &self.now(),
+            self.run_log_retention(),
+            |reference| {
+                let _ = adapters::snapshot::forget(&tree.path, reference);
+            },
+        );
         let dir = records::made(root, &handle, &underway.id).map_err(|why| {
             refused(Unrehearsable::NotKept {
                 why: why.to_string(),

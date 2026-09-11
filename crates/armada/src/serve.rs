@@ -176,6 +176,12 @@ pub const PORT_RANGE_BASE: u16 = 40_000;
 /// place — and nothing has been measured against yet.
 pub const PORT_BLOCK_GRANULE: u16 = 8;
 
+/// `settings.ad-hoc-run-log-retention`, at its own default: 30 days. How long
+/// a Check or Command run fired by hand from the Manifest surface keeps its
+/// log — see `crates/config/settings.toml` for the reasoning against the Job
+/// retention window this deliberately does not share.
+pub const RUN_LOG_RETENTION: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+
 /// How many times one step may ask Fleet to run its Checks.
 ///
 /// **Provisional, and nothing has measured it** — there is no history of a
@@ -714,6 +720,7 @@ fn assemble(
             port,
         },
         port_range: PortRange::of(PORT_RANGE_BASE, detect_ceiling(), PORT_BLOCK_GRANULE),
+        run_log_retention: RUN_LOG_RETENTION,
         // The kernel, because the question is which process holds a socket.
         // `fleet::peer` holds the measurement that chose it over `lsof`.
         peers: Arc::new(fleet::peer::Kernel),
