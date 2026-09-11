@@ -2,11 +2,12 @@
 //!
 //! **These keys, and nothing else.** `version`, `id`, `base`; `run`,
 //! `expect_exit_code`, `when`, `requires` and `narrow` under `checks.<name>`;
-//! `run` and `destructive` under `commands.<name>`; `setup.requires`; the
-//! three keys [`drone`] reads, the one section here that is a dial rather than
-//! a registry; and the two policies a `manifest_rule:<key>` gate names,
+//! `run` and `destructive` under `commands.<name>`; `container` and `env`
+//! under `ports.<name>`, a fourth registry; `setup.requires`; the three keys
+//! [`drone`] reads, the one section here that is a dial rather than a
+//! registry; and the two policies a `manifest_rule:<key>` gate names,
 //! `auto_merge` and `review_gate`. Every other section the concept page
-//! describes is refused: permissions, secrets, ports, skills, budget, dispatch
+//! describes is refused: permissions, secrets, skills, budget, dispatch
 //! freeze.
 //!
 //! **A key nothing reads is worse than a key that is not there.** A `budget:
@@ -30,7 +31,7 @@ mod referring;
 
 use referring::{after_merge, preparation, required_by};
 
-pub use declared::{Check, Command, Preparation};
+pub use declared::{Check, Command, Port, Preparation};
 pub use declaring::{Declared, NotDeclared};
 pub use harness::Harness;
 
@@ -54,6 +55,7 @@ const TOP_LEVEL: &[&str] = &[
     "base",
     "checks",
     "commands",
+    "ports",
     "evidence",
     "setup",
     "drone",
@@ -72,6 +74,8 @@ const CHECK_KEYS: &[&str] = &["run", "expect_exit_code", "when", "requires", "na
 const NARROW_KEYS: &[&str] = &["run", "each", "from", "under", "except"];
 /// The keys M1 reads inside `commands.<name>`.
 const COMMAND_KEYS: &[&str] = &["run", "destructive"];
+/// The keys M1 reads inside `ports.<name>`.
+const PORT_KEYS: &[&str] = &["container", "env"];
 /// The keys M1 reads inside `setup`.
 pub(super) const SETUP_KEYS: &[&str] = &["requires"];
 
@@ -106,6 +110,11 @@ pub struct Manifest {
     /// which is the whole reason both exist.
     checks_as_written: Vec<String>,
     commands: BTreeMap<String, Command>,
+    /// The fourth registry. **Shares no namespace check with Checks or
+    /// Commands** — nothing in the concept page says a port name may not
+    /// repeat one, and `${port.NAME}` is its own vocabulary in a Command
+    /// string, unambiguous beside `${...}` forms neither registry defines.
+    ports: BTreeMap<String, Port>,
     prepared_by: Vec<Preparation>,
     /// How this repository shows its work, where it says. **Not behind the
     /// cell**, for `exclude_paths`' reason one field down: a workflow's
@@ -241,6 +250,18 @@ impl Manifest {
     /// Every declared Command name, sorted.
     pub fn command_names(&self) -> Vec<String> {
         self.commands.keys().cloned().collect()
+    }
+
+    /// A declared port by name, or [`None`]. Fleet's claim-time lookup for
+    /// `${port.NAME}` and for what a Job's Manifest set asks it to size and
+    /// name.
+    pub fn port(&self, name: &str) -> Option<&Port> {
+        self.ports.get(name)
+    }
+
+    /// Every declared port name, sorted. What Fleet sizes a claim from.
+    pub fn port_names(&self) -> Vec<String> {
+        self.ports.keys().cloned().collect()
     }
 
     /// The Commands that have to run in a fresh worktree before the first
@@ -400,6 +421,13 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         Some(value) => registry(value, "commands", COMMAND_KEYS, out, command_entry),
         None => (BTreeMap::new(), Vec::new()),
     };
+    // Independent of both registries above: a port is a fourth thing this
+    // file declares, not a property of a Check or a Command, and nothing
+    // downstream resolves one against `checks` or `commands`.
+    let (ports, _) = match top.optional("ports") {
+        Some(value) => registry(value, "ports", PORT_KEYS, out, port_entry),
+        None => (BTreeMap::new(), Vec::new()),
+    };
     // Both `requires` keys are resolved after `commands`, because every entry
     // is resolved against it. **Which section comes first does not matter** —
     // `Table` reads by name, so an author never has to put `commands:` above
@@ -461,6 +489,7 @@ fn read(path: &Path, root: &Value, out: &mut Vec<Refusal>) -> Option<Manifest> {
         checks,
         checks_as_written,
         commands,
+        ports,
         prepared_by,
         harness,
         proved_after_a_merge,
@@ -713,4 +742,21 @@ fn command_entry(
         run: run?,
         destructive: destructive.unwrap_or(false),
     })
+}
+
+fn port_entry(
+    at: &str,
+    value: &Value,
+    known: &'static [&'static str],
+    out: &mut Vec<Refusal>,
+) -> Option<Port> {
+    let mut table = Table::open(at, value, out)?;
+    let container = table
+        .optional("container")
+        .and_then(|value| yaml::positive(&table.at("container"), value, out));
+    let env = table
+        .optional("env")
+        .and_then(|value| yaml::text(&table.at("env"), value, out));
+    table.close(known, out);
+    Some(Port { container, env })
 }

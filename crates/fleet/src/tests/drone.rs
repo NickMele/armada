@@ -43,23 +43,36 @@ const PLANTED: &str = "ARMADA_TEST_PLANTED_CREDENTIAL";
 /// Shared with `crate::tests::transcript`, which needs a real child on a real
 /// pipe for the same reason this module does.
 pub fn config(at: &TempDir) -> DroneSpawnConfig {
+    config_with_ports(at, &[])
+}
+
+/// [`config`], with a claimed span's environment handed to the Drone the same
+/// way `crate::spawning::spawn_config` builds a real one — see `crate::ports`.
+pub fn config_with_ports(at: &TempDir, ports: &[(String, String)]) -> DroneSpawnConfig {
     DroneSpawnConfig::spawn_in(
         &Worktree::at(at.path().to_string_lossy(), "armada/01AAA"),
         Model::named("a-model").expect("a named model"),
         Prompt::assembled("do the work").expect("an assembled prompt"),
         McpConfig::only_these("/var/armada/01AAA/mcp.json").expect("an absolute path"),
         Toolbelt::evidence_only(),
-        environment(HostPaths {
-            path: "/usr/bin:/bin",
-            home: "/Users/user",
-            user: "someone",
-        })
+        environment(
+            HostPaths {
+                path: "/usr/bin:/bin",
+                home: "/Users/user",
+                user: "someone",
+            },
+            ports,
+        )
         .expect("a legal environment"),
     )
 }
 
 async fn transcript_of(harness: &FakeHarness, at: &TempDir) -> String {
-    let mut started = start(harness, &config(at))
+    transcript_of_config(harness, &config(at)).await
+}
+
+async fn transcript_of_config(harness: &FakeHarness, config: &DroneSpawnConfig) -> String {
+    let mut started = start(harness, config)
         .await
         .expect("a shell starts and reads its first turn");
     let mut said = String::new();
@@ -73,11 +86,14 @@ async fn transcript_of(harness: &FakeHarness, at: &TempDir) -> String {
 
 #[test]
 fn fleet_names_every_variable_a_drone_gets() {
-    let built = environment(HostPaths {
-        path: "/usr/bin:/bin",
-        home: "/Users/user",
-        user: "someone",
-    })
+    let built = environment(
+        HostPaths {
+            path: "/usr/bin:/bin",
+            home: "/Users/user",
+            user: "someone",
+        },
+        &[],
+    )
     .expect("a legal environment");
 
     // **Five, and `USER` is the fifth.** Without it the agent CLI answers its
@@ -89,6 +105,27 @@ fn fleet_names_every_variable_a_drone_gets() {
         !built.names().contains(&"SSH_AUTH_SOCK"),
         "no credential, and no agent to ask one of — the second half of a \
          Drone that cannot push"
+    );
+}
+
+/// A declared port rides in beside the guaranteed five, so a Command a Drone
+/// runs from its own shell sees `ARMADA_PORT_<NAME>` without Fleet touching
+/// the command string at all.
+#[test]
+fn a_claimed_port_is_set_beside_the_guaranteed_five() {
+    let built = environment(
+        HostPaths {
+            path: "/usr/bin:/bin",
+            home: "/Users/user",
+            user: "someone",
+        },
+        &[("ARMADA_PORT_STORYBOOK".to_string(), "41000".to_string())],
+    )
+    .expect("a legal environment");
+    assert!(built.names().contains(&"ARMADA_PORT_STORYBOOK"));
+    assert_eq!(
+        built.vars().last(),
+        Some(&("ARMADA_PORT_STORYBOOK".to_string(), "41000".to_string()))
     );
 }
 
@@ -136,6 +173,27 @@ async fn the_drone_gets_the_environment_fleet_built_and_not_the_one_fleet_had() 
         inherited,
         vec!["TERM", "USER", "PATH", "LANG", "HOME"],
         "something reached the Drone that Fleet did not name:\n{said}"
+    );
+}
+
+/// **A spawned Drone's own process carries `ARMADA_PORT_<NAME>`.** The
+/// pure case above (`a_claimed_port_is_set_beside_the_guaranteed_five`) shows
+/// the value going into the [`Environment`] Fleet builds; this is the read
+/// from inside a real child that a Drone's own shell — and so a Command it
+/// runs — would see.
+#[tokio::test]
+async fn a_spawned_drones_own_process_carries_its_claimed_port() {
+    let at = TempDir::new();
+    let config = config_with_ports(
+        &at,
+        &[("ARMADA_PORT_STORYBOOK".to_string(), "41234".to_string())],
+    );
+
+    let said = transcript_of_config(&FakeHarness::that_reports_its_environment(), &config).await;
+
+    assert!(
+        said.contains("ARMADA_PORT_STORYBOOK=41234"),
+        "the claimed port did not reach the Drone's own process:\n{said}"
     );
 }
 

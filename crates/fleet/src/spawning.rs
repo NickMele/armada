@@ -138,7 +138,10 @@ where
         // and what kind of section each one is.
         let headings = brief.headings().to_vec();
         let kinds = brief.kinds().to_vec();
-        let config = match self.spawn_config(job, step, &worktree, brief.prompt()) {
+        let config = match self
+            .spawn_config(job, step, &worktree, brief.prompt())
+            .await
+        {
             Ok(config) => config,
             Err(cause) => {
                 // A model name no roster row carries is the case this is
@@ -315,24 +318,28 @@ where
     /// that it is, a step that only runs a suite and reports stops paying for
     /// one that reasons. `Job::model_at` is where absent falls back to the
     /// Job's, and this asks it rather than deciding for itself.
-    fn spawn_config(
+    async fn spawn_config(
         &self,
         job: &Job,
         step: &StepId,
         worktree: &Worktree,
         brief: Prompt,
     ) -> Result<DroneSpawnConfig, SpawnConfigRefused> {
+        let ports = self.port_env(job).await;
         Ok(DroneSpawnConfig::spawn_in(
             worktree,
             Model::named(job.model_at(step).as_str())?,
             brief,
             McpConfig::only_these(&self.host().mcp_config)?,
             self.toolbelt(job, step),
-            environment(HostPaths {
-                path: &self.host().path,
-                home: &self.host().home,
-                user: &self.host().user,
-            })?,
+            environment(
+                HostPaths {
+                    path: &self.host().path,
+                    home: &self.host().home,
+                    user: &self.host().user,
+                },
+                &ports,
+            )?,
         ))
     }
 

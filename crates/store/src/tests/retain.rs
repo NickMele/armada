@@ -8,7 +8,7 @@
 
 use core_model::{Actor, DroneId, JobId, StepId, Target, Timestamp};
 
-use crate::schema::tables_pointing_at_a_job;
+use crate::migrations::tables_pointing_at_a_job;
 use crate::tests::attempt::{on_its_first_run, record_a_whole_run, run_it_again};
 use crate::tests::{at, job_id, open, top_level, ulid, TempDir};
 use crate::{DroneProcess, Store};

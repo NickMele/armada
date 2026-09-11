@@ -5,6 +5,8 @@
 //! eight and listed nine. Counting again would only move the number, so the
 //! counts are gone and the list lives in `crate::manifest`.
 
+mod ports;
+
 use crate::error::Fault;
 use crate::manifest::Manifest;
 use crate::tests::{fault_at, named, refusals, refused as refused_at};
@@ -91,15 +93,9 @@ fn a_workspace_that_gates_nothing_is_legal() {
 fn a_section_m1_does_not_read_hard_fails_and_names_what_it_does_read() {
     // Every deferred section of the concept page arrives this way. Refusing it
     // is what keeps the section additive later rather than a migration.
-    let refused = refusals(parse(
-        "version: 1\nid: armada\nbudget:\n  cap: 40\nports:\n  web:\n    container: 3000\n",
-    ));
-    assert!(matches!(
-        fault_at(&refused, "budget"),
-        Fault::Unknown { .. }
-    ));
-    let Fault::Unknown { known } = fault_at(&refused, "ports") else {
-        panic!("ports should be an unknown key");
+    let refused = refusals(parse("version: 1\nid: armada\nbudget:\n  cap: 40\n"));
+    let Fault::Unknown { known } = fault_at(&refused, "budget") else {
+        panic!("budget should be an unknown key");
     };
     assert_eq!(
         *known,
@@ -109,6 +105,7 @@ fn a_section_m1_does_not_read_hard_fails_and_names_what_it_does_read() {
             "base",
             "checks",
             "commands",
+            "ports",
             // The third registry, beside the Checks that decide whether work
             // advances and the Commands a Drone may run: how this repository
             // demonstrates that a change did what was asked.

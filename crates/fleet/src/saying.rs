@@ -72,6 +72,11 @@ impl fmt::Display for Adrift {
                 job.as_str(),
                 cause.said()
             ),
+            Adrift::PortsRefused { job, cause } => write!(
+                out,
+                "{}'s worktree has no port span and nothing was spawned: {cause}",
+                job.as_str()
+            ),
             Adrift::NoDrone { job, cause } => {
                 write!(out, "{} has no Drone: {cause}", job.as_str())
             }
@@ -498,6 +503,7 @@ impl Adrift {
             | Adrift::NoWorktree { job, .. }
             | Adrift::NotPrepared { job, .. }
             | Adrift::NotConfigurable { job, .. }
+            | Adrift::PortsRefused { job, .. }
             | Adrift::NoDrone { job, .. }
             | Adrift::NoTranscript { job, .. }
             | Adrift::NotTold { job, .. }
@@ -585,6 +591,7 @@ impl Error for Adrift {
             | Adrift::NoDrone { cause, .. }
             | Adrift::NotCommitted { cause, .. } => Some(cause.as_ref()),
             Adrift::NotPrepared { cause, .. } => Some(cause),
+            Adrift::PortsRefused { cause, .. } => Some(cause),
             Adrift::NotTold { cause, .. }
             | Adrift::NotReaped { cause, .. }
             | Adrift::NoTranscript { cause, .. }

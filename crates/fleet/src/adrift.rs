@@ -87,6 +87,13 @@ pub enum Adrift {
         job: JobId,
         cause: SpawnConfigRefused,
     },
+    /// The worktree was cut and its Manifest's `ports:` could not be claimed —
+    /// two ports collide on one `env`, or the range has no free span left.
+    /// **Nothing was spawned**, the same reading [`Adrift::NotPrepared`] gives.
+    PortsRefused {
+        job: JobId,
+        cause: crate::ports::PortsRefused,
+    },
     /// No Drone is running. Every reason is in the chain beneath.
     NoDrone {
         job: JobId,

@@ -18,6 +18,7 @@
 //! `armada.yml`. Nothing could make the fix run. The first test below is that
 //! Job, in miniature.
 
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use adapter_traits::{Footprint, Worktree};
@@ -52,6 +53,31 @@ async fn ruled(
     requires: &[(&str, &[&str])],
     touched: &[&str],
 ) -> Ruling {
+    ruled_with_ports(
+        home,
+        gates,
+        commands,
+        requires,
+        touched,
+        &BTreeMap::new(),
+        &[],
+    )
+    .await
+}
+
+/// [`ruled`], with a claimed span's ports and environment handed to every
+/// prerequisite the same way a real dispatch does — see `crate::ports`, and
+/// `crate::checking::beforehand`, which is the whole of what this exercises.
+#[allow(clippy::too_many_arguments)]
+async fn ruled_with_ports(
+    home: &TempDir,
+    gates: &[Gate<'_>],
+    commands: &[(&str, &str)],
+    requires: &[(&str, &[&str])],
+    touched: &[&str],
+    ports: &BTreeMap<String, u16>,
+    env: &[(String, String)],
+) -> Ruling {
     let workflow = testkit::requiring(
         &[Sketch {
             id: "implement",
@@ -85,6 +111,8 @@ async fn ruled(
         &keeping_nowhere(),
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
+        ports,
+        env,
     )
     .await
 }
@@ -250,4 +278,40 @@ async fn prerequisites_run_in_the_order_the_manifest_names_them() {
     .await;
 
     assert_eq!(recorded(&ruling)[0].1, CheckOutcome::Passed);
+}
+
+/// **A `requires:` Command sees the Job's claimed port, both channels.**
+/// `beforehand` resolves `${port.storybook}` in the prerequisite's own text
+/// before it runs, and sets `ARMADA_PORT_STORYBOOK` in its environment — the
+/// prerequisite writes both readings to a file, and the file is what a person
+/// reads after the fix if this ever regresses.
+#[tokio::test]
+async fn a_prerequisite_command_sees_its_own_resolved_port_and_the_env_var_together() {
+    let home = TempDir::new();
+    let mut ports = BTreeMap::new();
+    ports.insert("storybook".to_string(), 41_234u16);
+    let env = vec![("ARMADA_PORT_STORYBOOK".to_string(), "41234".to_string())];
+
+    let ruling = ruled_with_ports(
+        &home,
+        &[check("e2e", "/usr/bin/true")],
+        &[(
+            "write_port",
+            "/bin/sh -c 'echo ${port.storybook} $ARMADA_PORT_STORYBOOK > port.txt'",
+        )],
+        &[("e2e", &["write_port"])],
+        &["src/lib.rs"],
+        &ports,
+        &env,
+    )
+    .await;
+
+    assert_eq!(recorded(&ruling)[0].1, CheckOutcome::Passed);
+    let written =
+        std::fs::read_to_string(home.path().join("port.txt")).expect("write_port wrote it");
+    assert_eq!(
+        written.trim(),
+        "41234 41234",
+        "${{port.storybook}} and $ARMADA_PORT_STORYBOOK named the same claim"
+    );
 }

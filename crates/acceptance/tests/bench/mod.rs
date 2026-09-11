@@ -440,6 +440,8 @@ impl Bench {
             &Keeping::of(REPO_ROOT, &run.job.handle()),
             Policies::unstated(),
             &fleet::Announcing::nowhere(),
+            &std::collections::BTreeMap::new(),
+            &[],
         )
         .await;
         // What `fleet::dispatch` does with the store, done with a list: the

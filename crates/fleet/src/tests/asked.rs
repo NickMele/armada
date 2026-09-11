@@ -84,6 +84,8 @@ async fn ruled(judge: Arc<FakeJudge>, asked: Asked, worktree: &Worktree) -> Ruli
         &keeping_nowhere(),
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
+        &std::collections::BTreeMap::new(),
+        &[],
     )
     .await
 }

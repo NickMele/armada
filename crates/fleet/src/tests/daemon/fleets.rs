@@ -33,6 +33,7 @@ use crate::headroom::{Bytes, Headroom, Polling, Spare};
 use crate::holding::Reclaiming;
 use crate::judging::JudgeBudget;
 use crate::noticing::Noticing;
+use crate::ports::PortRange;
 use crate::slots::Concurrency;
 use crate::tests::tmp::TempDir;
 
@@ -87,6 +88,14 @@ pub fn fitted_with(
                 .to_string_lossy()
                 .to_string(),
         },
+        // Wide, and far from any port a test fixture or this machine's own
+        // services are likely to hold — no fixture here declares `ports:`, so
+        // nothing claims from it, and the one suite that does plants its own.
+        port_range: PortRange::of(41_000, 41_999, 8),
+        // The production default. No fixture here asserts on the sweep
+        // window, so this is the number that ships rather than one invented
+        // for the test.
+        run_log_retention: Duration::from_secs(30 * 24 * 60 * 60),
         // Nothing to place. A fake harness opens no sockets, so a fixture that
         // answered otherwise would be asserting against the machine rather than
         // against Fleet. `crate::tests::peer` plants one where the subject is

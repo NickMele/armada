@@ -6,7 +6,7 @@
 //! each of those is a way to leave a Job standing over a history that no longer
 //! explains it — and the fold would then read back a Job that never happened.
 //! The database holds the same rule from underneath: `job_events` refuses a
-//! delete while its Job row exists, per [`schema::MIGRATIONS`]'s fourth entry.
+//! delete while its Job row exists, per [`migrations::MIGRATIONS`]'s fourth entry.
 //!
 //! **One transaction, with foreign keys deferred inside it.** The Job row goes
 //! first so the trigger lets the events go, which violates the foreign key for
@@ -22,13 +22,13 @@
 //! **`armada clean` no longer reaches for this**, because a sweep is not a
 //! person asking: it calls [`Store::retain_job`](crate::Store::retain_job).
 //!
-//! [`schema::MIGRATIONS`]: crate::schema::MIGRATIONS
+//! [`migrations::MIGRATIONS`]: crate::migrations::MIGRATIONS
 
 use core_model::JobId;
 
 use crate::error::{fault, WriteError};
+use crate::migrations::tables_pointing_at_a_job;
 use crate::open::Store;
-use crate::schema::tables_pointing_at_a_job;
 
 /// What forgetting one Job removed.
 ///
@@ -85,6 +85,11 @@ pub struct Forgotten {
     pub drone_process: usize,
     /// The commands a person allowed for the Job, one row each.
     pub allowed_commands: usize,
+    /// The port span the Job's worktree held. One row while the Job holds a
+    /// claim, none for a Job that declared no `ports:` or already released
+    /// one at teardown — see `docs/concepts/fleet.md`, *Ports*: forgetting is
+    /// the safety net behind that release, not the release itself.
+    pub port_claims: usize,
     /// Rows removed from a table this build has no field for.
     ///
     /// Always zero today, and a test says so. It exists because the delete is
@@ -124,6 +129,7 @@ impl Forgotten {
             "job_drone_spend" => &mut self.drone_spend,
             "job_remarks_taken_up" => &mut self.remarks_taken_up,
             "job_allowed_commands" => &mut self.allowed_commands,
+            "port_claims" => &mut self.port_claims,
             _ => return None,
         })
     }

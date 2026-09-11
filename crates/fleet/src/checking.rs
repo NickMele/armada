@@ -4,26 +4,24 @@
 //! # One observation per declared Check, in the step's order
 //!
 //! `Ran::of` refuses a list shorter than the step's declaration, which is how a
-//! vacuous pass is made unconstructible. Appending each result as it finished
-//! would satisfy the count and lose the order, and a Job that reads differently
-//! on two runs is that defect wearing a better disguise.
-//!
-//! So nothing here appends. The vector is sized from the declaration before
-//! anything is spawned and each Check is written into its own slot, skips
-//! included, which makes the order of the report a property of the type rather
-//! than of the scheduler.
+//! vacuous pass is made unconstructible. So nothing here appends: the vector is
+//! sized from the declaration before anything is spawned and each Check is
+//! written into its own slot, skips included, which makes the order of the
+//! report a property of the type rather than of the scheduler.
 //!
 //! # Each Check keeps its own budget, and nothing stops early
 //!
-//! `checks_runner::run` holds the timeout and is given the whole budget per
-//! call. A batch-wide deadline would let the slowest Check fail the others by
-//! spending their time — a false failure, and the worst kind, because it moves
-//! when the machine is busy. The clock starts when a Check starts: one waiting
-//! for a slot spends nothing, since its future is not polled until spawned.
+//! `checks_runner::run` holds the timeout, given whole per call rather than
+//! shared over the batch — a false failure moves when the machine is busy. A
+//! failing Check cancels none of the others; the second failure often explains
+//! the first.
 //!
-//! A failing Check cancels none of the others. Someone reading a failed step
-//! wants every result, and the second failure often explains the first.
+//! **Over 500 lines.** `ports` and `env` thread through both halves already
+//! here, for `docs/concepts/manifest.md`'s Ports section: it reaches every
+//! Command, and splitting by function would separate a Check from the
+//! prerequisite it waits behind.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -33,6 +31,7 @@ use tokio::task::JoinSet;
 use tokio::time::Instant;
 use verification::{Artifact, Exit, NeverRan, Observed};
 
+use crate::ports::resolve_ports;
 use crate::underway::Announcing;
 
 /// How many of a step's Checks may run at once.
@@ -227,17 +226,26 @@ impl NotMet {
 /// **First occurrence wins, by name.** Two Checks naming `migrate` run it once.
 /// So `requires` guarantees *has run*, not *has just run* — a Check needing
 /// genuinely fresh state resets what it needs in its own command.
+///
+/// **`ports` and `env` are the same pair every Check-running caller hands
+/// in.** A prerequisite is a Command, and `docs/concepts/manifest.md`'s Ports
+/// section reaches every Command string, not only a `setup.requires` one —
+/// see `crate::ports::resolve_ports` for the substitution and
+/// `crate::ports::env_vars` for what `env` holds.
 async fn beforehand(
     needed: &[&Prerequisite],
     worktree: &Path,
     budget: Duration,
+    ports: &BTreeMap<String, u16>,
+    env: &[(String, String)],
 ) -> (Vec<String>, Option<NotMet>) {
     let mut met = Vec::new();
     for prerequisite in needed {
         if met.iter().any(|had: &String| had == prerequisite.name()) {
             continue;
         }
-        let attempt = checks_runner::run(prerequisite.run(), worktree, budget).await;
+        let run = resolve_ports(prerequisite.run(), ports);
+        let attempt = checks_runner::run_writing_with_env(&run, worktree, budget, None, env).await;
         // **Nothing but zero passes**, for `prepare`'s reason: `expect_exit_code`
         // is a Check's field, and there is no reading of *the fix failed and
         // that was expected* that leaves a worktree the Check can measure.
@@ -246,7 +254,7 @@ async fn beforehand(
                 met,
                 Some(NotMet {
                     command: prerequisite.name().to_string(),
-                    run: prerequisite.run().to_string(),
+                    run,
                     exit: attempt.exit,
                     output: attempt.output,
                 }),
@@ -294,6 +302,15 @@ fn looked_for(worktree: &Path, target: &str) -> Artifact {
 /// nothing until the ruling. **Told and never asked**: nothing here reads it
 /// back, and what this returns is built exactly as it was before —
 /// `crate::underway`.
+///
+/// `ports` and `env` are the claimed span's name-to-port map and the
+/// environment it sets, **handed in and never read here** — for
+/// `gate::rule_on`'s own reason beside `policies`: a caller with a Job in hand
+/// can resolve a claim and nothing else here can, and every call site is a
+/// Fleet method with a store to ask. Both are empty where the Job declared no
+/// `ports:`, or where there is no Job at all — `crate::proving`'s own call,
+/// proving a merged commit nothing dispatched.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn ran(
     checks: &[ResolvedCheck],
     touched: &[String],
@@ -302,6 +319,8 @@ pub(crate) async fn ran(
     worktree: &Path,
     budget: Duration,
     announcing: &Announcing,
+    ports: &BTreeMap<String, u16>,
+    env: &[(String, String)],
 ) -> Vec<Completed> {
     let mut planned: Vec<Planned> = checks
         .iter()
@@ -344,7 +363,7 @@ pub(crate) async fn ran(
         .collect();
     let (met, not_met) = match needed.is_empty() {
         true => (Vec::new(), None),
-        false => beforehand(&needed, worktree, budget).await,
+        false => beforehand(&needed, worktree, budget, ports, env).await,
     };
     // A Check whose prerequisites all ran still runs, even where another
     // Check's did not: a broken `migrate` is not a reason to stop asking `lint`.
@@ -378,10 +397,16 @@ pub(crate) async fn ran(
             // say the two differed.
             Planned::Command {
                 run, narrowed_to, ..
-            } => Some((at, narrowed_to.clone().unwrap_or_else(|| run.clone()))),
+            } => Some((
+                at,
+                resolve_ports(&narrowed_to.clone().unwrap_or_else(|| run.clone()), ports),
+            )),
             Planned::Already(_) | Planned::Blocked { .. } => None,
         });
     let worktree = worktree.to_path_buf();
+    // Owned, so each spawned Check can move its own copy — the env slice this
+    // function borrows does not outlive the batch, and a spawned future must.
+    let env: Vec<(String, String)> = env.to_vec();
     // Refilled as each one finishes rather than run in batches of four: a batch
     // costs the slowest member of it, and a step whose Checks are 17s and 1s
     // would spend the fast slot idle for sixteen of them.
@@ -392,12 +417,19 @@ pub(crate) async fn ran(
                 break;
             };
             let worktree: PathBuf = worktree.clone();
+            let env = env.clone();
             let log = announcing.log_for(at);
             let writing = log.clone();
             running.spawn(async move {
                 let began = Instant::now();
-                let attempt =
-                    checks_runner::run_writing(&run, &worktree, budget, writing.as_deref()).await;
+                let attempt = checks_runner::run_writing_with_env(
+                    &run,
+                    &worktree,
+                    budget,
+                    writing.as_deref(),
+                    &env,
+                )
+                .await;
                 (at, attempt, began.elapsed())
             });
             announcing.started(at, log.as_deref());

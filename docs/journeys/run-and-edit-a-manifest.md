@@ -42,7 +42,7 @@ A monorepo's root `armada.yml` appears as its own entry in the switcher, since i
 > **Rule.** Output goes to a panel on this surface — exit code, duration, and the output — and stays until dismissed.
 > Why: there is no Job, so no Job Board row and no Evidence, and a toast would throw away the thing you ran it to read.
 
-A server started here runs in the working tree and holds a port claim of its own. It stops when you press Stop, when it exits, or when Fleet stops, and the claim goes with it.
+A server started here runs in the main checkout and draws its ports from that checkout's span; it stops on Stop, exit, or Fleet stopping.
 
 ### A passing Check leaves no verdict behind — but the output is a log
 

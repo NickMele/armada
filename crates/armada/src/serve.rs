@@ -32,9 +32,9 @@ use adapters::{GitVcs, HeadlessAgent, IssueLookup};
 use config::Roster;
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{
-    Allowance, Bytes, CheckBudget, Clock, Concurrency, DryRuns, Fittings, Fleet, Headroom, Host,
-    JudgeBudget, Liveness, Micros, Mint, Noticing, Polling, Reclaiming, Spare, StepNorms,
-    SystemClock, TheMachine, UlidMint,
+    detect_ceiling, Allowance, Bytes, CheckBudget, Clock, Concurrency, DryRuns, Fittings, Fleet,
+    Headroom, Host, JudgeBudget, Liveness, Micros, Mint, Noticing, Polling, PortRange, Reclaiming,
+    Spare, StepNorms, SystemClock, TheMachine, UlidMint,
 };
 use ipc::PROTOCOL_VERSION;
 use store::Store;
@@ -161,6 +161,26 @@ pub const PROVISIONAL_STEP_NORMS: StepNorms =
 /// needs the silence to survive both — about six minutes, or four and a half
 /// times the longest silence any honest step produced.
 pub const PROVISIONAL_LIVENESS: Liveness = Liveness::of(Duration::from_secs(120), 2);
+
+/// The low end of the range a Job's port span is claimed from.
+/// `settings.port-range-base`. **Provisional, and measured on nothing** —
+/// chosen only to sit comfortably below every platform's ephemeral floor and
+/// above the ports a repository's own tooling conventionally claims (3000,
+/// 5432, 8080). Nothing has measured whether a real repository's `ports:`
+/// ever collides with something else running on a developer's machine here.
+pub const PORT_RANGE_BASE: u16 = 40_000;
+
+/// The rounding unit a Job's claim width is raised to. `settings.port-block-
+/// granule`. **Provisional**: `docs/concepts/machine.md` names the signal to
+/// move it — a repository where mid-Job widenings routinely fail to extend in
+/// place — and nothing has been measured against yet.
+pub const PORT_BLOCK_GRANULE: u16 = 8;
+
+/// `settings.ad-hoc-run-log-retention`, at its own default: 30 days. How long
+/// a Check or Command run fired by hand from the Manifest surface keeps its
+/// log — see `crates/config/settings.toml` for the reasoning against the Job
+/// retention window this deliberately does not share.
+pub const RUN_LOG_RETENTION: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
 /// How many times one step may ask Fleet to run its Checks.
 ///
@@ -504,6 +524,11 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     // over. **Nothing else on this side knows where the logs are**, which is
     // why it comes from Fleet rather than from the root resolved above.
     let job_logs = Arc::new(fleet.job_logs());
+    // Kept past the move below, for the main checkout's own port span: its
+    // release happens here, once, after the turn loop has drained — not from
+    // inside a Fleet method the way a Job's own release is, because there is
+    // no Job whose transition would carry it. See `fleet::ports`.
+    let fleet_for_shutdown = Arc::clone(&fleet);
     let app = api::router(api::Served::sharing(fleet, run_id, events).reading(job_logs));
     println!("serving {} on {bound}", api::SERVED.len());
 
@@ -523,6 +548,12 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     // whole Check budget and a terminal that has gone quiet reads as a wedge.
     println!("stopping: letting the turn in flight finish");
     turning.stopped().await;
+
+    // After teardown, never before it: the turn in flight has finished, so
+    // nothing this process spawned in the main checkout is still running.
+    // `docs/concepts/fleet.md`, *Servers* — held for as long as Fleet runs,
+    // released once, here.
+    fleet_for_shutdown.released_main_checkout_ports().await;
 
     // Dropping it removes the file, which is what makes this a clean exit. An
     // exit that skips the drop leaves the file stale, and the next start
@@ -688,6 +719,8 @@ fn assemble(
             // matches its port against. See `fleet::peer`.
             port,
         },
+        port_range: PortRange::of(PORT_RANGE_BASE, detect_ceiling(), PORT_BLOCK_GRANULE),
+        run_log_retention: RUN_LOG_RETENTION,
         // The kernel, because the question is which process holds a socket.
         // `fleet::peer` holds the measurement that chose it over `lsof`.
         peers: Arc::new(fleet::peer::Kernel),

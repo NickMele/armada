@@ -62,6 +62,8 @@ async fn heard_over(checks: &[ResolvedCheck], repo: &TempDir) -> (Vec<ipc::JobCh
         repo.path(),
         Duration::from_secs(30),
         &announcing,
+        &std::collections::BTreeMap::new(),
+        &[],
     )
     .await;
     drop(announcing);
@@ -208,6 +210,8 @@ async fn saying_each_check_changes_nothing_the_gate_rules_on() {
             repo.path(),
             Duration::from_secs(30),
             &announcing,
+            &std::collections::BTreeMap::new(),
+            &[],
         )
         .await
     };
@@ -219,6 +223,8 @@ async fn saying_each_check_changes_nothing_the_gate_rules_on() {
         repo.path(),
         Duration::from_secs(30),
         &Announcing::nowhere(),
+        &std::collections::BTreeMap::new(),
+        &[],
     )
     .await;
 

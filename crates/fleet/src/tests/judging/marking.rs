@@ -61,6 +61,8 @@ async fn while_judging(judge: FakeJudge, worktree: &Worktree) -> (Vec<ipc::JobJu
         &keeping_nowhere(),
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
+        &std::collections::BTreeMap::new(),
+        &[],
     )
     .await;
     drop(judging);

@@ -30,7 +30,7 @@ use std::path::Path;
 use rusqlite::Connection;
 
 use crate::error::{fault, OpenError};
-use crate::schema::{KNOWN_SCHEMA_VERSION, MIGRATIONS, SCHEMA_VERSION_KEY};
+use crate::migrations::{KNOWN_SCHEMA_VERSION, MIGRATIONS, SCHEMA_VERSION_KEY};
 
 /// The database, open and checked.
 ///

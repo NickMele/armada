@@ -248,3 +248,70 @@ async fn a_manifest_that_names_none_runs_nothing_after_a_merge() {
         .already_proved(MERGED_INTO)
         .unwrap());
 }
+
+/// A Manifest declaring one port, whose `after_merge` Check writes what it
+/// read of both channels to a file in the checkout itself — the proof run has
+/// no worktree of its own, so this is where it runs.
+fn proving_manifest_with_a_port() -> Manifest {
+    Manifest::parse(
+        std::path::Path::new("armada.yml"),
+        "version: 1\nid: 01FIXTUREMANIFEST\nports:\n  storybook: {}\n\
+         checks:\n  wrote_port:\n    run: >-\n      /bin/sh -c 'echo ${port.storybook} \
+         $ARMADA_PORT_STORYBOOK > port.txt'\nafter_merge:\n  checks: [wrote_port]\n",
+    )
+    .expect("a manifest declaring one port")
+}
+
+fn a_fleet_that_proves_ports(home: &TempDir) -> Fixture {
+    let mut fittings = fittings(home, FakeWorkProduct::changed(&["src/log.rs"]));
+    fittings.noticing = Noticing::every(Duration::ZERO);
+    fittings.manifest = proving_manifest_with_a_port();
+    Fleet::assembled(fittings)
+}
+
+fn read_port_txt(home: &TempDir) -> String {
+    std::fs::read_to_string(home.path().join("port.txt")).expect("wrote_port wrote it")
+}
+
+/// **A proof Check sees `${port.NAME}` and `ARMADA_PORT_<NAME>` from the main
+/// checkout.** Both channels read back the same number, resolved before the
+/// command ran and set in its own environment — the same pair the gate's
+/// Checks and a sheet's own run already get, drawn from the checkout's own
+/// span rather than from a Job's, since this run has no worktree of its own.
+///
+/// The other half of the claim — that a second, independent proof run draws
+/// from the *same* span rather than claiming a new one — is
+/// `tests::ports_dispatch::the_main_checkouts_span_is_reused_rather_than_reclaimed`,
+/// asked directly of `Fleet::main_checkout_ports` rather than through two
+/// full simulated merges: `crate::noticing`'s sweep is not written to revisit
+/// a second, independent landing inside one test, and that is a fact about
+/// the fixture rather than about the span.
+#[tokio::test]
+async fn a_proof_check_sees_the_main_checkouts_port() {
+    let home = TempDir::new();
+    let fleet = a_fleet_that_proves_ports(&home);
+    a_finished_job(&fleet, &home).await;
+
+    fleet
+        .vcs()
+        .repository_standing(RepositoryStanding::MovedOn {
+            base: String::from("main"),
+            commits: 1,
+            head: String::from(MERGED_INTO),
+        });
+    fleet.vcs().now_landed(Landing::Merged {
+        url: String::from(PULL_REQUEST),
+    });
+    turned_until_proved(&fleet).await;
+
+    let written = read_port_txt(&home);
+    let mut halves = written.trim().split_whitespace();
+    let (resolved, from_env) = (
+        halves.next().expect("${port.storybook}"),
+        halves.next().expect("$ARMADA_PORT_STORYBOOK"),
+    );
+    assert_eq!(
+        resolved, from_env,
+        "${{port.storybook}} and $ARMADA_PORT_STORYBOOK named the same claim"
+    );
+}

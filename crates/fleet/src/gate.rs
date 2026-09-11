@@ -24,6 +24,7 @@
 //! caller. Keeping the decision apart from the write is what lets every case
 //! below be tested with no database.
 
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::Read;
@@ -101,6 +102,7 @@ pub use crate::ruling::Ruling;
 /// | `entered_with` | What the worktree held when this step began, **after the boundary rebase that started it**, which is `crate::dispatch::Fleet::marked`'s to place and not this function's. `diff_nonempty` is decided by comparing it against a second reading taken here — which is what catches the step that advanced having written nothing, where the check used to read the whole branch and count an earlier step's file as this step's work |
 /// | `policies` | What this repository has said about `auto_merge` and `review_gate`, folded across the Job's gating Manifests. **Handed in and never read here**, for `lifted`'s reason and one more: both settings are `Live`, so the answer is only true at the instant it is taken, and a gate that read the file for itself would be a second reader of a value the caller has already resolved. `crate::policy` is where it is built |
 /// | `announcing` | Where each Check is said to start and to finish while it runs. **Told, never read**: nothing below decides on it, and the ruling is what `crate::checking` hands back. Handed in because the entry it writes has to stand until the caller has written the ruling down, which is after this returns — `crate::underway` |
+/// | `ports`, `port_env` | The Job's claimed span, resolved to a name-to-port map and to the environment it sets. **Handed in for `lifted`'s reason** — this function is given a step and not a Job, and only a caller holding one can ask the store for its claim. `crate::ports` |
 #[allow(clippy::too_many_arguments)]
 pub async fn rule_on<W>(
     at: AtStep<'_>,
@@ -116,6 +118,8 @@ pub async fn rule_on<W>(
     keeping: &Keeping,
     policies: Policies,
     announcing: &Announcing,
+    ports: &BTreeMap<String, u16>,
+    port_env: &[(String, String)],
 ) -> Ruling
 where
     W: WorkProduct,
@@ -207,6 +211,8 @@ where
         Path::new(at.worktree().path()),
         budget.duration(),
         announcing,
+        ports,
+        port_env,
     )
     .await
     {

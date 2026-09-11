@@ -141,6 +141,8 @@ where
         // an easier reading would not be the reading that failed — and that
         // includes saying each Check as it runs, until the rows are written.
         let announcing = self.announcing(&job, &step, attempt);
+        let ports = self.port_map(&job).await;
+        let port_env = self.port_env(&job).await;
         let ruling = rule_on(
             at.on_attempt(attempt, spent),
             Request::of(&job),
@@ -158,6 +160,8 @@ where
             // file said the first time would be the one thing `Live` forbids.
             self.gating_policies(),
             &announcing,
+            &ports,
+            &port_env,
         )
         .await;
 

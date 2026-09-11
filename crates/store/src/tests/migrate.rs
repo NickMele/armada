@@ -20,9 +20,9 @@
 use core_model::{Actor, JobStatus, Target, TransitionReason};
 use rusqlite::Connection;
 
-use crate::schema::{MIGRATIONS, SCHEMA_VERSION_KEY};
+use crate::migrations::{MIGRATIONS, SCHEMA_VERSION_KEY};
 use crate::tests::{created_at, job_id, open, top_level_numbered, TempDir};
-use crate::{Moved, RowError, Store, KNOWN_SCHEMA_VERSION};
+use crate::{Moved, PortClaim, PortClaimant, RowError, Store, KNOWN_SCHEMA_VERSION};
 
 /// A file at version 1, with `ids` Jobs on it and no title column anywhere.
 fn version_one(dir: &TempDir, ids: &[&str]) {
@@ -776,5 +776,54 @@ fn version_twenty_five_refuses_half_a_count() {
     assert!(
         refused.is_err(),
         "a file counted for what it gained and not for what it lost"
+    );
+}
+
+/// **The migration order this branch chose.** `main`'s own V44 —
+/// `job_allowed_commands` and `jobs.when_blocked` — has already shipped, so a
+/// file at that version is exactly what a real database on `main` looks like.
+/// `port_claims` is V45, the one after it, never before: a file already
+/// migrated to 44 by an earlier build must still find its next migration
+/// where it left off, not have one inserted underneath it.
+fn version_forty_four(dir: &TempDir) {
+    let conn = Connection::open(dir.db()).expect("a file to put version 44 in");
+    for migration in &MIGRATIONS[..44] {
+        conn.execute_batch(migration).expect("a migration");
+    }
+    conn.execute(
+        "INSERT INTO armada_meta (key, value) VALUES (?1, '44')",
+        (SCHEMA_VERSION_KEY,),
+    )
+    .expect("recorded as version 44");
+}
+
+/// A store already at `main`'s shipped schema version migrates forward to
+/// include `port_claims`, and the table it adds works once it has.
+#[test]
+fn a_store_at_version_forty_four_migrates_forward_to_port_claims() {
+    let dir = TempDir::new();
+    version_forty_four(&dir);
+
+    let mut store = Store::open(&dir.db()).expect("a version 44 file opens and is migrated");
+    assert_eq!(
+        recorded_version(&store),
+        KNOWN_SCHEMA_VERSION.to_string(),
+        "migrated all the way, not stopped at 44"
+    );
+
+    // V45's own table, reachable and correct once the migration that adds it
+    // has actually run.
+    let claim = PortClaim {
+        claimant: PortClaimant::MainCheckout,
+        base: 41_000,
+        width: 8,
+        claimed_at: created_at(),
+    };
+    store.claim_port_span(&claim).expect("port_claims exists");
+    assert_eq!(
+        store
+            .port_span_for_main_checkout()
+            .expect("the read succeeds"),
+        Some(claim)
     );
 }

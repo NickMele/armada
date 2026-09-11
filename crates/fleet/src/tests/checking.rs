@@ -9,6 +9,7 @@
 //! what order, or on whose budget — so three of the four cases below assert
 //! that something stayed exactly as it was.
 
+use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use adapter_traits::{Footprint, Worktree};
@@ -35,6 +36,19 @@ fn recorded(ruling: &Ruling) -> Vec<(&str, CheckOutcome)> {
 /// Rule on a step declaring `gates`, against a worktree that touched
 /// `touched`.
 async fn ruled<'a>(gates: &'a [Gate<'a>], budget: Duration, touched: &[&str]) -> Ruling {
+    ruled_with_ports(gates, budget, touched, &BTreeMap::new(), &[]).await
+}
+
+/// [`ruled`], with a claimed span's ports and environment handed to every
+/// Check the same way `crate::regating` and `crate::settling` hand them in
+/// against a real dispatch — see `crate::ports`.
+async fn ruled_with_ports<'a>(
+    gates: &'a [Gate<'a>],
+    budget: Duration,
+    touched: &[&str],
+    ports: &BTreeMap<String, u16>,
+    env: &[(String, String)],
+) -> Ruling {
     let workflow = testkit::resolved(&[Sketch {
         id: "implement",
         label: "Implement",
@@ -61,6 +75,8 @@ async fn ruled<'a>(gates: &'a [Gate<'a>], budget: Duration, touched: &[&str]) ->
         &keeping_nowhere(),
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
+        ports,
+        env,
     )
     .await
 }
@@ -251,6 +267,8 @@ async fn ruled_on_a_file(target: &str, write: impl FnOnce(&std::path::Path)) -> 
         &keeping_nowhere(),
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
+        &std::collections::BTreeMap::new(),
+        &[],
     )
     .await
 }
@@ -318,5 +336,63 @@ async fn the_file_is_looked_for_in_the_jobs_worktree_and_not_beside_the_daemon()
     assert!(
         !ruling.advanced(),
         "a file in another worktree advanced this step: {ruling:?}"
+    );
+}
+
+/// **The gate's own Check sees the Job's claimed port**, both channels —
+/// `${port.storybook}` resolved in the command line before it is split, and
+/// `ARMADA_PORT_STORYBOOK` read from the environment `checks_runner` set.
+///
+/// If resolution never ran, the Check's own text still names
+/// `${port.storybook}` literally, which is not `sh`'s parameter-expansion
+/// syntax — a dot may not appear in a shell variable name — so the Check
+/// would exit non-zero on a syntax error rather than quietly comparing two
+/// unresolved strings.
+#[tokio::test]
+async fn a_gate_check_sees_its_own_resolved_port_and_the_env_var_together() {
+    let mut ports = BTreeMap::new();
+    ports.insert("storybook".to_string(), 41_234u16);
+    let env = vec![("ARMADA_PORT_STORYBOOK".to_string(), "41234".to_string())];
+    let gates = [Gate::Check {
+        name: "reads_its_port",
+        run: "/bin/sh -c 'test $ARMADA_PORT_STORYBOOK = ${port.storybook}'",
+        expect_exit_code: 0,
+        when: &[],
+    }];
+
+    let ruling = ruled_with_ports(
+        &gates,
+        Duration::from_secs(5),
+        &["src/lib.rs"],
+        &ports,
+        &env,
+    )
+    .await;
+
+    assert_eq!(
+        recorded(&ruling),
+        vec![("reads_its_port", CheckOutcome::Passed)],
+        "the Check's own text and its environment named the same claim: {ruling:?}"
+    );
+}
+
+/// A Job whose Manifest declares no `ports:` hands the gate's Checks an empty
+/// map and an empty environment, which is what [`ruled`] already exercises on
+/// every other case in this file — named once, explicitly, so the absence is
+/// asserted rather than assumed from every other test's silence about it.
+#[tokio::test]
+async fn a_check_against_no_claimed_port_gets_neither_channel() {
+    let gates = [Gate::Check {
+        name: "asks_for_nothing",
+        run: "/bin/sh -c 'test x$ARMADA_PORT_STORYBOOK = x'",
+        expect_exit_code: 0,
+        when: &[],
+    }];
+
+    let ruling = ruled(&gates, Duration::from_secs(5), &["src/lib.rs"]).await;
+
+    assert_eq!(
+        recorded(&ruling),
+        vec![("asks_for_nothing", CheckOutcome::Passed)]
     );
 }

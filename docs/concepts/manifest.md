@@ -257,6 +257,7 @@ Rules that follow:
 - **A Check's own `when` is not consulted.** `when` answers *did this step touch anything I cover*, and after a merge there is no step to ask it of. The list is the filter.
 - **Nothing depends on the answer.** The work is merged. A red cannot fail the Job, cannot reopen it — `completed_success` is terminal — and rolls nothing back; the response is a person filing a new Job pointing back through `subject`. See [Fleet](fleet.md).
 - **A merge Fleet declined to fast-forward proves nothing.** A dirty worktree or a checkout on another branch leaves no updated tree, and a run against whatever was there would be reporting on somebody's uncommitted work.
+- **Its Checks see `${port.NAME}` too.** The proof run has no worktree of its own — it runs in the main checkout — so `${port.NAME}` resolves from that checkout's own span, the one [Fleet](fleet.md)'s Ports section describes as held while Fleet runs.
 
 ### Check timeout
 
@@ -352,7 +353,7 @@ Each entry has a name and these fields:
 
 Exact key naming and nesting is tracked in `../contracts/configuration.md`.
 
-**A span outlives an interrupted Job and is released by the Job ending, not by anything about ports.** A claim lasts as long as its worktree; an interrupted Job holds both until a person answers its escalation and it reaches a terminal, after which retention sweeps the worktree and the span goes. A server started with no Job holds a claim of its own, released when the server stops.
+**A span outlives an interrupted Job and is released by the Job ending, not by anything about ports.** A claim lasts as long as its worktree; an interrupted Job holds both until a person answers its escalation and it reaches a terminal, after which retention sweeps the worktree and the span goes. The main checkout holds a span of its own while Fleet runs, which the proof run and servers started with no Job draw from.
 
 Nothing here asks a person to release a port — there is no such action, and adding one would offer a control for a decision they are already making elsewhere. Past a threshold Fleet surfaces the hold so accumulation is not discovered at exhaustion. [Fleet](fleet.md) owns the mechanism.
 

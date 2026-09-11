@@ -17,10 +17,6 @@ use crate::check_output::one_component;
 pub(crate) const LOG: &str = "output.log";
 const RECORD: &str = "run.json";
 
-/// The Machine setting `ad-hoc-run-log-retention`, at its default. Held here
-/// until `config` resolves it — `crates/config/settings.toml` declares it.
-const KEPT_FOR: Duration = Duration::from_secs(30 * 24 * 60 * 60);
-
 /// Lines and bytes of a log one read carries — `check_output`'s two bounds.
 const A_READING: usize = 2_000;
 const MOST: usize = 256 * 1024;
@@ -110,13 +106,24 @@ pub(crate) fn every(
     (runs, unreadable)
 }
 
-/// Take away this Job's runs that ended longer ago than retention allows,
+/// Take away this Job's runs that ended longer ago than `kept_for` allows,
 /// letting each one's snapshot go with it.
-pub(crate) fn swept(root: &str, handle: &str, now: &Timestamp, forget: impl Fn(&str)) {
+///
+/// `kept_for` is `settings.ad-hoc-run-log-retention`, resolved by the
+/// composition root — [`Fleet::run_log_retention`](crate::daemon::Fleet) —
+/// and handed in rather than read from a constant here, the same reason every
+/// other Machine setting is.
+pub(crate) fn swept(
+    root: &str,
+    handle: &str,
+    now: &Timestamp,
+    kept_for: Duration,
+    forget: impl Fn(&str),
+) {
     let Some(now) = now.epoch_millis() else {
         return;
     };
-    let kept_for = i64::try_from(KEPT_FOR.as_millis()).unwrap_or(i64::MAX);
+    let kept_for = i64::try_from(kept_for.as_millis()).unwrap_or(i64::MAX);
     for run in every(root, handle, None).0 {
         let ended = Timestamp::from_rfc3339(run.ended_at.as_str()).epoch_millis();
         if !ended.is_some_and(|ended| now.saturating_sub(ended) > kept_for) {

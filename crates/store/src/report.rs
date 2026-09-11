@@ -8,7 +8,7 @@
 //!
 //! **It outlives the Job, which is why there is no foreign key.** Every other
 //! table under a Job points at `jobs(job_id)`, which is what
-//! [`tables_pointing_at_a_job`](crate::schema::tables_pointing_at_a_job) reads
+//! [`tables_pointing_at_a_job`](crate::migrations::tables_pointing_at_a_job) reads
 //! and [`forget_job`](Store::forget_job) empties. This one points at nothing,
 //! so `armada clean` cannot reach it — and a report about a Job you have since
 //! cleaned up is exactly the report still worth having. `job_id` is therefore a

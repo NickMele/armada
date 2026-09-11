@@ -8,7 +8,7 @@
 use core_model::{Actor, AllowedCommand, Reach, WhenBlocked};
 use rusqlite::Connection;
 
-use crate::schema::{MIGRATIONS, SCHEMA_VERSION_KEY};
+use crate::migrations::{MIGRATIONS, SCHEMA_VERSION_KEY};
 use crate::tests::{at, created_at, job_id, open, top_level, TempDir};
 use crate::{LoadJobError, Store, WriteError, KNOWN_SCHEMA_VERSION};
 

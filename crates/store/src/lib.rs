@@ -39,6 +39,9 @@ mod forget;
 mod gaming;
 /// Where a verdict's own question was kept, and the column that points at it.
 mod judged;
+/// The migration list, and where a file stands against it. `V1`..`V16` stay in
+/// `schema`; this is only what had to move to keep that file under the gate.
+mod migrations;
 /// The note a boundary is holding, and the column it waits in.
 mod note;
 mod numbering;
@@ -46,6 +49,8 @@ mod open;
 /// What a step said its work would be, kept after the slot that held it is
 /// gone.
 mod plan;
+/// The span of ports a Job's worktree holds, or a no-Job server run holds.
+mod ports;
 /// Which operating-system process is working a Job, so a restart can ask.
 mod process;
 mod proposing;
@@ -83,15 +88,16 @@ pub use error::{DatabaseFault, LoadAllError, LoadJobError, OpenError, RowError, 
 pub use fold::{Moved, RecordedEvent};
 pub use footprint::Footprinted;
 pub use forget::Forgotten;
+pub use migrations::KNOWN_SCHEMA_VERSION;
 pub use open::Store;
 pub use plan::DeclaredPlan;
+pub use ports::{PortClaim, PortClaimant};
 pub use process::DroneProcess;
 pub use proving::Proved;
 pub use read::{Loaded, RowIdentity, StatusRepair, UnreadableRow};
 pub use report::Report;
 pub use resolving::{NamedJob, ResolveJobError};
 pub use retain::Retained;
-pub use schema::KNOWN_SCHEMA_VERSION;
 pub use showing::KeptFrame;
 pub use shown_again::{ShownAgain, SpecNamed};
 pub use spend::{DroneSpend, Spend};

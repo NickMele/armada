@@ -61,6 +61,10 @@ where
     /// and a row in the Drone's own transcript saying how long nothing was read
     /// and that nothing will be read from here.
     pub async fn reconcile(&self) -> Result<Reconciled, Adrift> {
+        // Before anything else: a main-checkout claim a crashed Fleet left
+        // behind is re-probed before this process trusts it. See
+        // `crate::ports::Fleet::reconciled_main_checkout_ports`.
+        self.reconciled_main_checkout_ports().await;
         let (loaded, unreadable) = self.every_job().await?;
         // Before anything else reads a path: every Job's name, and the rename
         // of what an older Fleet wrote under a ULID. See
