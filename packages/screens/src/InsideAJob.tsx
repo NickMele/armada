@@ -7,12 +7,16 @@ import { Unplug } from "lucide-react";
 import { Fragment, useCallback, useState } from "react";
 import {
   JobBrief,
+  JobBriefSkeleton,
   JobDetailHeaderActions,
   PhaseStrip,
   RunTree,
+  RunTreeSkeleton,
+  Skeleton,
   StepStory,
   Tooltip,
   WhereRow,
+  WhereRowSkeleton,
   conceptSaid,
   type JobBriefProps,
   type JobDetailField,
@@ -140,6 +144,10 @@ export type InsideAJobProps = {
   runElapsed?: ReactNode;
   /** Why there is no run to draw, where there is none. */
   runAbsent?: string;
+  /** The run has been asked for and has not come back yet. Takes the slot
+   * over `run`/`runAbsent`: a skeleton shaped like the tree, not a claim
+   * about what is missing. */
+  runLoading?: boolean;
   /**
    * The Job's pulse, in a few lines: the last thing anyone did on it, the process
    * count, the worktree, the disk. `JobHoldsSummary`, and the full reading is a
@@ -201,6 +209,9 @@ export type InsideAJobProps = {
   whereLabel?: ReactNode;
   /** Why nothing can be named there, where nothing can. */
   whereAbsent?: string;
+  /** This region has been asked for and has not come back yet. Takes the
+   * slot over `where`/`whereAbsent`. */
+  whereLoading?: boolean;
   /**
    * Everything the Job left behind, folded — its moves, its Drone's turns, what
    * it touched, what it changed, what it claimed.
@@ -217,10 +228,16 @@ export type InsideAJobProps = {
   brief?: JobBriefProps;
   /** Why there is no brief, where there is none. */
   briefAbsent?: string;
+  /** The brief has been asked for and has not come back yet. Takes the slot
+   * over `brief`/`briefAbsent`. */
+  briefLoading?: boolean;
   /** The step the panel is showing. */
   step?: StepPanel;
   /** Why no step is open, where none is. */
   stepAbsent?: string;
+  /** The run has been asked for and has not come back yet, so which step
+   * would open is not known either. Takes the slot over `step`/`stepAbsent`. */
+  stepLoading?: boolean;
   /**
    * Why nothing about this Job could be read, where Fleet did not answer for
    * it. **One message where the step goes, instead of an empty region per
@@ -246,12 +263,18 @@ export type InsideAJobProps = {
   onCopied?: (value: string) => void;
 };
 
+/** How wide each "where" row runs while the read is in flight. Five: the
+ * baseline set `workOf` always pushes — Worktree, Branch, Manifest, Workflow,
+ * Drone — before Job log and Transcript, which vary by state. */
+const WHERE_SKELETON_WIDTHS = ["45%", "60%", "35%", "30%", "50%"];
+
 export function InsideAJob({
   heading,
   run,
   runLabel = "The run",
   runElapsed,
   runAbsent = "Steps unknown",
+  runLoading = false,
   machine,
   machineLabel = "Pulse",
   machineAct,
@@ -264,12 +287,15 @@ export function InsideAJob({
   where,
   whereLabel = "Where things are",
   whereAbsent = "Paths unknown",
+  whereLoading = false,
   record,
   recordLabel = "What it left behind",
   brief,
   briefAbsent = "No brief",
+  briefLoading = false,
   step,
   stepAbsent = "Select a step in the run",
+  stepLoading = false,
   unreachable,
   sheet,
   onCopied,
@@ -283,11 +309,15 @@ export function InsideAJob({
         <div className="armada-inside__run">
           <div className="armada-inside__region-head">
             <Eyebrow>{runLabel}</Eyebrow>
-            {runElapsed === undefined ? null : (
+            {runLoading ? (
+              <Skeleton style={{ width: "3rem", height: "var(--text-xs)" }} />
+            ) : runElapsed === undefined ? null : (
               <span className="armada-inside__elapsed">{runElapsed}</span>
             )}
           </div>
-          {run.length === 0 ? (
+          {runLoading ? (
+            <RunTreeSkeleton />
+          ) : run.length === 0 ? (
             <p className="armada-inside__absent" role="note">
               {unreachable ?? runAbsent}
             </p>
@@ -317,7 +347,18 @@ export function InsideAJob({
           )}
 
           <Eyebrow spaced>{whereLabel}</Eyebrow>
-          {where === undefined || where.length === 0 ? (
+          {whereLoading ? (
+            <div
+              className="armada-inside__where"
+              role="status"
+              aria-label="Reading where things are"
+              aria-busy
+            >
+              {WHERE_SKELETON_WIDTHS.map((width, r) => (
+                <WhereRowSkeleton key={r} valueWidth={width} />
+              ))}
+            </div>
+          ) : where === undefined || where.length === 0 ? (
             <p className="armada-inside__absent" role="note">
               {unreachable ?? whereAbsent}
             </p>
@@ -342,7 +383,9 @@ export function InsideAJob({
           {unreachable !== undefined ? null : (
             <div className="armada-inside__brief">
               <Eyebrow>Brief</Eyebrow>
-              {brief === undefined ? (
+              {briefLoading ? (
+                <JobBriefSkeleton />
+              ) : brief === undefined ? (
                 <p className="armada-inside__absent" role="note">
                   {briefAbsent}
                 </p>
@@ -352,7 +395,9 @@ export function InsideAJob({
             </div>
           )}
 
-          {unreachable !== undefined ? (
+          {stepLoading ? (
+            <StepPanelSkeleton />
+          ) : unreachable !== undefined ? (
             <div className="armada-inside__unreachable" role="status">
               <Unplug size={20} strokeWidth={1.5} aria-hidden />
               <span>{unreachable}</span>
@@ -443,6 +488,56 @@ export function InsideAJob({
       </div>
 
       {sheet}
+    </div>
+  );
+}
+
+/**
+ * Shapes for the step panel's loading placeholder. Six phase chips and three
+ * chapters, matching a typical step rather than a round number.
+ */
+const STEP_SKELETON_PHASES = ["5rem", "6rem", "4rem", "5.5rem"];
+const STEP_SKELETON_CHAPTERS = ["Drone instructions", "Activity log", "Produced"];
+
+/**
+ * The step panel, before a step has come back. **Same head, same phase row,
+ * same three chapters** — the name and its fields in `.armada-inside__step-*`,
+ * a strip of `.armada-phases__node` chips, three closed `.armada-chapter`
+ * shells — so the panel does not reflow once a step lands in these slots.
+ */
+function StepPanelSkeleton() {
+  return (
+    <div role="status" aria-label="Reading the step" aria-busy>
+      <div className="armada-inside__step-head">
+        <div className="armada-inside__step-titles">
+          <Skeleton style={{ width: "40%", height: "var(--text-lg)" }} />
+          <div className="armada-inside__step-fields">
+            <Skeleton style={{ width: "5rem", height: "var(--text-2xs)" }} />
+            <Skeleton style={{ width: "3rem", height: "var(--text-2xs)" }} />
+          </div>
+        </div>
+      </div>
+      <div className="armada-phases">
+        <div style={{ display: "flex", gap: "var(--space-2)" }}>
+          {STEP_SKELETON_PHASES.map((width, n) => (
+            <div className="armada-phases__node" key={n}>
+              <Skeleton width={width} />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="armada-story">
+        {STEP_SKELETON_CHAPTERS.map((chapter) => (
+          <section className="armada-chapter" key={chapter}>
+            <div className="armada-chapter__line">
+              <div className="armada-chapter__head">
+                <Skeleton style={{ width: "var(--space-3)", height: "var(--text-2xs)" }} />
+                <Skeleton style={{ width: "8rem", height: "var(--text-xs)" }} />
+              </div>
+            </div>
+          </section>
+        ))}
+      </div>
     </div>
   );
 }

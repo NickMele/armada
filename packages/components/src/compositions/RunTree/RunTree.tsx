@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
+import { Skeleton } from "../../primitives/Skeleton/Skeleton";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 import { FactChip, type FactChipNamed } from "../FactChip/FactChip";
 import { PathChip } from "../PathChip/PathChip";
@@ -401,6 +402,67 @@ export function RunTree({
           />
         </li>
       ))}
+    </ol>
+  );
+}
+
+/** How wide a loading row's name bar runs, one per row. Varied so the well
+ * reads as a tree of different-length names rather than a repeated block.
+ * Six, matching a typical workflow rather than a round number. */
+const RUN_SKELETON_NAME_WIDTHS = ["70%", "45%", "85%", "55%", "65%", "40%"];
+
+/**
+ * Which row stands for the step you are on. **Job detail opens with the
+ * current step's facts already open** — that is the ordinary reading, not
+ * an edge case — so a skeleton with every row collapsed is missing the row
+ * that is usually the tallest one in the well.
+ */
+const RUN_SKELETON_CURRENT_ROW = 2;
+
+/** How wide each of the current row's loading fact lines runs — a label and
+ * a value, the shape `Produced`, `Checks` and `Judge` take. */
+const RUN_SKELETON_FACTS = [
+  { label: "30%", value: "40%" },
+  { label: "25%", value: "20%" },
+  { label: "20%", value: "35%" },
+];
+
+/**
+ * The run, before it has come back. **Same well, same four-column row grid
+ * `StepRow` draws** — chevron, mark, name, duration — reusing `.armada-run`
+ * and `.armada-srow` rather than a shape of its own, so nothing moves once a
+ * step lands in place of a row here. One row's facts are open, in the same
+ * `.armada-srow__facts` well a real expanded row draws its own in, for the
+ * same reason: it is usually there.
+ */
+export function RunTreeSkeleton() {
+  return (
+    <ol className="armada-run" role="status" aria-label="Reading the run" aria-busy>
+      {RUN_SKELETON_NAME_WIDTHS.map((width, r) => {
+        const current = r === RUN_SKELETON_CURRENT_ROW;
+        return (
+          <li className="armada-run__step" key={r}>
+            <div className="armada-srow-group">
+              <div className="armada-srow" data-sel={current || undefined}>
+                <span className="armada-srow__chevron" />
+                <Skeleton style={{ width: "var(--space-3)", height: "var(--space-3)" }} />
+                <Skeleton width={width} />
+                <Skeleton width="2rem" />
+              </div>
+              {current ? (
+                <div className="armada-srow__facts">
+                  {RUN_SKELETON_FACTS.map((fact, f) => (
+                    <div className="armada-srow__fact" key={f}>
+                      <Skeleton width={fact.label} />
+                      <Skeleton width={fact.value} />
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </li>
+        );
+      })}
     </ol>
   );
 }

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Skeleton } from "../../primitives/Skeleton/Skeleton";
 import { Clamped } from "../Clamped/Clamped";
 
 /**
@@ -169,4 +170,61 @@ export function JobBrief({
 function Label({ children }: { children: ReactNode }) {
   if (children === null) return null;
   return <span className="armada-job-brief__label">{children}</span>;
+}
+
+/** How wide a loading criterion's text bar runs, one per row. */
+const CRITERION_SKELETON_WIDTHS = ["80%", "60%"];
+/** How wide each loading line of the brief's own words runs. Two: what a
+ * real brief on this screen wraps to, not a round number. */
+const FACTS_SKELETON_WIDTHS = ["90%", "60%"];
+
+/**
+ * The brief, before it has come back. **Same blocks, same grids** —
+ * `.armada-job-brief__criteria`'s subgrid and `.armada-job-brief__facts`'
+ * paragraph — reusing the real classes rather than a shape of its own, so
+ * nothing moves once the criteria and the facts land.
+ *
+ * **No criteria block by default, and no facts label.** `screens/work.ts`'s
+ * `briefOf` always sends `criteria: []` and `factsLabel: null` here — a
+ * criterion's verdict is drawn where the Judge stage opens it, not in this
+ * block — so a skeleton that shows either by default is guessing wrong on
+ * every real Job this screen draws. `criteriaRows` is left as an escape
+ * hatch rather than deleted outright, for a caller that one day knows a
+ * count in advance.
+ */
+export function JobBriefSkeleton({
+  criteriaRows = 0,
+  criteriaLabel = "Done means",
+  factsLabel = null,
+}: {
+  criteriaRows?: number;
+  criteriaLabel?: ReactNode;
+  factsLabel?: ReactNode;
+}) {
+  return (
+    <div className="armada-job-brief" role="status" aria-label="Reading the brief" aria-busy>
+      {criteriaRows === 0 ? null : (
+        <div className="armada-job-brief__block">
+          <Label>{criteriaLabel}</Label>
+          <ol className="armada-job-brief__criteria">
+            {CRITERION_SKELETON_WIDTHS.slice(0, criteriaRows).map((width, i) => (
+              <li className="armada-job-brief__criterion" key={i}>
+                <span className="armada-job-brief__ordinal">{i + 1}</span>
+                <Skeleton width={width} />
+                <span />
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+      <div className="armada-job-brief__block">
+        <Label>{factsLabel}</Label>
+        <div className="armada-job-brief__facts armada-skeleton-text">
+          {FACTS_SKELETON_WIDTHS.map((width, i) => (
+            <Skeleton key={i} width={width} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
