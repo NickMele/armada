@@ -127,6 +127,17 @@ pub struct ManifestSummary {
     /// The absolute path of the `armada.yml`, for the case where two
     /// repositories share a directory name.
     pub path: String,
+    /// Where this repository's Job records live: a Judge's brief, a Drone's
+    /// transcript, a Job's log, a Check's output, a kept deliverable. **Never
+    /// under `path`'s directory.** `crate::checks::CheckRun::output_path`,
+    /// `Judged::brief_path` and `KeptDeliverable::path` are relative to this,
+    /// not to the repository — Fleet moved these off the checkout entirely,
+    /// into a folder of its own per repository, so a Bridge that still joined
+    /// them onto `path`'s parent would open nothing. Absolute, on
+    /// `ManifestSummary::path`'s own ground: two processes on one machine
+    /// agreeing where a file is, never written down, so `$HOME` appearing
+    /// here is not the leak `fleet::redaction` refuses elsewhere.
+    pub records_root: String,
     pub version: u32,
     /// The Checks it declares, by name. What gates a Job here.
     pub checks: Vec<String>,

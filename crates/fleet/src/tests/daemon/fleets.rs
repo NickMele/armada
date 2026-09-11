@@ -70,6 +70,10 @@ pub fn fitted_with(
         host: Host {
             user: String::from("someone"),
             repo_root: root.clone(),
+            // Same value as `repo_root` in this fixture — the fixtures that
+            // exercise the seam between the two on purpose plant their own,
+            // distinct `records_root`; see `crate::tests::records`.
+            records_root: root.clone(),
             path: "/usr/bin:/bin".to_string(),
             home: root,
             mcp_config: "/etc/armada/mcp.json".to_string(),

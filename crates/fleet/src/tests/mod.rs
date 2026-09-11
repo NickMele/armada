@@ -85,6 +85,7 @@ mod questioning;
 mod queued;
 mod raising;
 mod reclaim;
+mod records;
 mod redirect;
 mod redispatch;
 mod refused;
@@ -111,7 +112,10 @@ mod stuck;
 mod sub_dispatch;
 mod superseding;
 mod terms;
-mod tmp;
+// `pub(crate)`, not `mod`: `crate::records::migrating`'s own tests are not a
+// descendant of this module and need the same temporary directory every
+// fixture here already uses, rather than a second one invented beside it.
+pub(crate) mod tmp;
 mod tools;
 mod transcript;
 mod unattended;

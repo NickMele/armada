@@ -417,7 +417,7 @@ CREATE TABLE job_step_checks (
 /// | Column | What it holds |
 /// |---|---|
 /// | `jobs.workflow` | The whole WorkflowDef the Job froze at creation, as JSON. Fleet reads this and never the file, so editing `.armada/workflows/` changes the next Job rather than a running one |
-/// | `job_step_checks.output_path` | Where that Check's stdout and stderr were written, relative to the repository root. The reference, never the bytes |
+/// | `job_step_checks.output_path` | Where that Check's stdout and stderr were written, relative to this repository's own share of Fleet's data directory. The reference, never the bytes |
 /// | `job_events.drone_id` | Which Drone the row is about. Set on the two drone rows and null on every other |
 /// | `job_events.kind` (values) | Admits `drone_spawned` and `drone_exited`, which the V3 shape trigger refused |
 ///

@@ -50,16 +50,16 @@ impl Rekeyed {
 /// **Takes the Jobs the boot read already produced.** Nothing here reads the
 /// store: the handle is derived from two frozen columns and the caller is
 /// holding every record.
-pub async fn rekeyed(repo_root: &str, jobs: &[Job]) -> Rekeyed {
+pub async fn rekeyed(records_root: &str, jobs: &[Job]) -> Rekeyed {
     let mut moved = Rekeyed::default();
     for job in jobs {
         let handle = job.handle();
         // The transcripts first, because the *old* log is what names them and
         // renaming it first would leave the names unfindable if the boot were
         // interrupted between the two.
-        let named = drones_named_in(repo_root, job.id().as_str(), &handle).await;
-        move_transcripts(repo_root, &handle, &named, &mut moved).await;
-        move_log(repo_root, job.id().as_str(), &handle, &mut moved).await;
+        let named = drones_named_in(records_root, job.id().as_str(), &handle).await;
+        move_transcripts(records_root, &handle, &named, &mut moved).await;
+        move_log(records_root, job.id().as_str(), &handle, &mut moved).await;
     }
     moved
 }
@@ -70,10 +70,10 @@ pub async fn rekeyed(repo_root: &str, jobs: &[Job]) -> Rekeyed {
 /// **The file name and never the path.** A line written before this rename
 /// gives the path the file was at when it was opened, and that is exactly the
 /// path this pass is taking away.
-async fn drones_named_in(repo_root: &str, job_id: &str, handle: &str) -> Vec<String> {
-    let at = match fs::try_exists(log_of(repo_root, job_id)).await {
-        Ok(true) => log_of(repo_root, job_id),
-        _ => log_of(repo_root, handle),
+async fn drones_named_in(records_root: &str, job_id: &str, handle: &str) -> Vec<String> {
+    let at = match fs::try_exists(log_of(records_root, job_id)).await {
+        Ok(true) => log_of(records_root, job_id),
+        _ => log_of(records_root, handle),
     };
     let Ok(text) = fs::read_to_string(&at).await else {
         return Vec::new();
@@ -100,10 +100,10 @@ async fn drones_named_in(repo_root: &str, job_id: &str, handle: &str) -> Vec<Str
     named
 }
 
-async fn move_transcripts(repo_root: &str, handle: &str, named: &[String], moved: &mut Rekeyed) {
-    let under = transcripts_dir(repo_root, handle);
+async fn move_transcripts(records_root: &str, handle: &str, named: &[String], moved: &mut Rekeyed) {
+    let under = transcripts_dir(records_root, handle);
     for name in named {
-        let was = Path::new(repo_root)
+        let was = Path::new(records_root)
             .join(".armada")
             .join("transcripts")
             .join(name);
@@ -131,14 +131,14 @@ async fn move_transcripts(repo_root: &str, handle: &str, named: &[String], moved
     }
 }
 
-async fn move_log(repo_root: &str, job_id: &str, handle: &str, moved: &mut Rekeyed) {
-    let was = log_of(repo_root, job_id);
+async fn move_log(records_root: &str, job_id: &str, handle: &str, moved: &mut Rekeyed) {
+    let was = log_of(records_root, job_id);
     // A Job whose title reduced to nothing has a handle that is its number, and
     // a Job whose id and handle are somehow one has nothing to move.
     if job_id == handle || !matches!(fs::try_exists(&was).await, Ok(true)) {
         return;
     }
-    let now = log_of(repo_root, handle);
+    let now = log_of(records_root, handle);
     match fs::try_exists(&now).await {
         Ok(true) => moved
             .refused

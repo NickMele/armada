@@ -47,7 +47,7 @@ What that gives up is a payload the vocabulary has no variant for: `Unrecognised
 
 ## Where a transcript lives
 
-**`<repo>/.armada/transcripts/<handle>/<drone-id>.jsonl` — a separate artifact, not a wrapped log line.** The Job log at `<repo>/.armada/logs/<handle>.jsonl` keeps its envelope unchanged. Both are named by the handle, like the four directories beside them: a Drone has one file and a Job has several over its life, so the Drone is the file name and the Job is the directory. Why: a transcript is far larger than everything else a Job emits and carries its own retention question, so wrapping it would leave the Job log neither readable nor greppable.
+**`<records>/.armada/transcripts/<handle>/<drone-id>.jsonl` — a separate artifact, not a wrapped log line.** `<records>` is this repository's own share of Fleet's data directory, never the repository itself — `fleet::records::root` resolves it. The Job log at `<records>/.armada/logs/<handle>.jsonl` keeps its envelope unchanged. Both are named by the handle, like the other kinds beside them: a Drone has one file and a Job has several over its life, so the Drone is the file name and the Job is the directory. Why: a transcript is far larger than everything else a Job emits and carries its own retention question, so wrapping it would leave the Job log neither readable nor greppable.
 
 **A retry is a second `drone_id` under one `job_id`**, which [Log Envelope](log-envelope.md) already states — so a retry gets its own file rather than interleaving with the first, and nothing ever appends to a transcript whose Drone is gone.
 

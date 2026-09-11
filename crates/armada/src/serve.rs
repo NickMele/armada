@@ -394,8 +394,32 @@ pub async fn serve(repository: Option<PathBuf>) -> Result<(), Box<dyn Error>> {
     // Two things need this Fleet and both get it. The router serves it and the
     // loop below turns it; a Fleet only one of them could hold would be either
     // unserved or — as it was — dispatched and never settled.
-    let Assembled { fleet, reloads } = assemble(&machine, setup, bound.port(), machine_facts)?;
+    let Assembled {
+        fleet,
+        reloads,
+        migrated,
+    } = assemble(&machine, setup, bound.port(), machine_facts)?;
     let fleet = Arc::new(fleet);
+
+    // Said whatever it found, including nothing: a boot that stayed quiet
+    // about six directories it checked is a boot nobody can tell moved
+    // anything from one that never had to.
+    if migrated.moved_nothing() {
+        println!("records: nothing to move out of the repository");
+    } else {
+        println!(
+            "records: moved {} file(s) out of the repository{}",
+            migrated.files,
+            if migrated.refused.is_empty() {
+                String::new()
+            } else {
+                format!(", {} could not move", migrated.refused.len())
+            }
+        );
+        for why in &migrated.refused {
+            eprintln!("  {why}");
+        }
+    }
 
     // **Started before anything is dispatched**, so an edit made while the
     // reconciliation runs is in force at the first step boundary after it. A
@@ -574,6 +598,11 @@ fn machine_facts() -> Result<MachineFacts, Box<dyn Error>> {
 struct Assembled {
     fleet: Fleet<HeadlessAgent, GitVcs, GitVcs>,
     reloads: config::Reloads,
+    /// What the one-time move out of the repository found and did. Always
+    /// present, even where there was nothing to move — a boot after the
+    /// first reports that too, rather than saying nothing about the six
+    /// directories it checked.
+    migrated: fleet::records::migrating::Migrated,
 }
 
 fn assemble(
@@ -623,6 +652,19 @@ fn assemble(
     // worktree is cut beneath it, so it is the disk that actually fills.
     let repo_root = root.canonicalize()?.to_string_lossy().to_string();
 
+    // Where this repository's Job records live — never under `repo_root`. See
+    // `fleet::records`. Created before the move below runs, and before
+    // anything writes a first brief, transcript, log, Check output,
+    // deliverable or frame under it.
+    let records_root = fleet::records::root(machine, &repo_root);
+    std::fs::create_dir_all(&records_root)?;
+    // A no-op after the first boot: `migrate` reads six directories that are
+    // not there and returns having moved nothing. See
+    // `fleet::records::migrating` for what "moved" means across volumes and
+    // what a boot does when a file is already at the destination.
+    let migrated = fleet::records::migrating::migrate(&repo_root, &records_root);
+    let records_root = records_root.to_string_lossy().to_string();
+
     let fleet = Fleet::assembled(Fittings {
         store: Store::open(&machine.join(STORE_FILE))?,
         harness: agent,
@@ -634,6 +676,7 @@ fn assemble(
         manifest,
         host: Host {
             repo_root: repo_root.clone(),
+            records_root,
             path,
             home,
             user,
@@ -675,7 +718,11 @@ fn assemble(
         models,
         events: api::Broadcaster::new(),
     });
-    Ok(Assembled { fleet, reloads })
+    Ok(Assembled {
+        fleet,
+        reloads,
+        migrated,
+    })
 }
 
 /// The two per-user directories on a Drone's `PATH`, before the system ones.

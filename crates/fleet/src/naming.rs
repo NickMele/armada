@@ -89,6 +89,6 @@ where
         let Some(handle) = self.name_of(job) else {
             return;
         };
-        let _ = crate::transcript::note(&self.host().repo_root, &handle, envelope);
+        let _ = crate::transcript::note(&self.host().records_root, &handle, envelope);
     }
 }

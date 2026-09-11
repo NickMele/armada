@@ -66,7 +66,7 @@ where
         // of what an older Fleet wrote under a ULID. See
         // [`mod@crate::naming`] and `crate::transcript::migrating`.
         self.names().learn_all(&loaded.jobs);
-        let rekeyed = crate::transcript::rekeyed(&self.host().repo_root, &loaded.jobs).await;
+        let rekeyed = crate::transcript::rekeyed(&self.host().records_root, &loaded.jobs).await;
         let mut reconciled = Reconciled {
             repaired: loaded.repaired.len(),
             unreadable,

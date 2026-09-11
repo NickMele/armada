@@ -10,9 +10,16 @@
 # 4 below and it is the reason this file exists.
 #
 # **Two sources, and it says which answered.** Fleet holds the Job record and
-# is asked for it over HTTP; `.armada/` holds the Drone transcripts and the
-# Job's log, which no route serves. A post-mortem is usually done with Fleet
-# down or wedged, so every section that can be answered from disk still is.
+# is asked for it over HTTP; the repository's own share of Fleet's data
+# directory holds the Drone transcripts and the Job's log, which no route
+# serves. A post-mortem is usually done with Fleet down or wedged, so every
+# section that can be answered from disk still is.
+#
+# **Records and worktree are two different directories now.** The worktree is
+# still `<repo>/.armada/worktrees/<handle>`; the log and the transcripts are
+# under `records_root(repo)` below, which mirrors `fleet::records::root` —
+# same key, same `~/Library/Application Support/Armada/repos/` — so this reads
+# what Fleet actually wrote rather than a second guess at where.
 #
 # **Not a Rust verb, and the reason is the dependency graph.** `crates/armada`
 # may not call `serde_json::from_*` — `xtask` rule five and the write-hook both
@@ -27,6 +34,7 @@
 # reads to interpret the output.
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -54,11 +62,12 @@ EXCERPT = 500
 
 
 def repository_root(given):
-    """The checkout Fleet is serving, which is where `.armada/` is.
+    """The checkout Fleet is serving, which is where the worktree is.
 
     `--git-common-dir` rather than `--show-toplevel`: an agent runs from a
-    worktree, whose own `.armada/` holds only the tracked workflows. The
-    records are under the main checkout.
+    worktree, whose own `.armada/workflows/` holds only the tracked
+    definitions. The worktree this command reports on is under the main
+    checkout; the records are not under either — see `records_root`.
     """
     if given:
         return os.path.abspath(given)
@@ -72,6 +81,22 @@ def repository_root(given):
     except (subprocess.CalledProcessError, FileNotFoundError):
         return os.getcwd()
     return os.path.dirname(common)
+
+
+def records_root(root):
+    """Where this repository's Job log and Drone transcripts live now.
+
+    **Mirrors `fleet::records::root` exactly**, not a fact read off Fleet: the
+    key is a SHA-1 of the canonicalized repository root, which is what a
+    Fleet down or wedged still needs this command to compute for itself.
+    `os.path.realpath` is this process's `canonicalize` — both resolve
+    symlinks to one absolute path with no trailing slash.
+    """
+    canonical = os.path.realpath(root)
+    key = hashlib.sha1(canonical.encode("utf-8")).hexdigest()
+    return os.path.join(
+        os.path.expanduser("~/Library/Application Support/Armada"), "repos", key
+    )
 
 
 def fleet_port():
@@ -120,8 +145,9 @@ def ask(port, path):
         return "unreachable", None
 
 
-def handle_on_disk(root, said):
-    """The handle a ULID, a handle or a bare number names, from `.armada/logs/`.
+def handle_on_disk(records, said):
+    """The handle a ULID, a handle or a bare number names, from `.armada/logs/`
+    under this repository's records.
 
     **The fallback, for a Fleet that is down.** Fleet resolves all three itself
     and answers with the handle it found; this is the same three answers taken
@@ -132,7 +158,7 @@ def handle_on_disk(root, said):
     more than one is refused rather than guessed — the same rule the resolver
     in `store` keeps for a number outside a Manifest.
     """
-    logs = os.path.join(root, ".armada", "logs")
+    logs = os.path.join(records, ".armada", "logs")
     try:
         named = sorted(name[:-6] for name in os.listdir(logs) if name.endswith(".jsonl"))
     except OSError:
@@ -489,8 +515,13 @@ def main():
     args = parser.parse_args()
 
     root = repository_root(args.repo)
+    records = records_root(root)
     port, why = fleet_port()
-    sources = [why, f"{os.path.join(root, '.armada')}"]
+    sources = [
+        why,
+        f"{os.path.join(root, '.armada', 'worktrees')} (worktree)",
+        f"{os.path.join(records, '.armada')} (log, transcripts)",
+    ]
 
     # **Fleet takes all three forms**, so the same text goes on every route.
     # What comes back names the Job the way `.armada/` does, which is what the
@@ -498,12 +529,12 @@ def main():
     standing, detail = ask(port, f"/jobs/{args.job}")
     _, events = ask(port, f"/jobs/{args.job}/events")
     _, evidence = ask(port, f"/jobs/{args.job}/evidence")
-    handle = ((detail or {}).get("job") or {}).get("handle") or handle_on_disk(root, args.job)
+    handle = ((detail or {}).get("job") or {}).get("handle") or handle_on_disk(records, args.job)
 
-    log_path = os.path.join(root, ".armada", "logs", f"{handle or args.job}.jsonl")
+    log_path = os.path.join(records, ".armada", "logs", f"{handle or args.job}.jsonl")
     log_rows = read_jsonl(log_path)
     transcripts = []
-    under = os.path.join(root, ".armada", "transcripts", handle or args.job)
+    under = os.path.join(records, ".armada", "transcripts", handle or args.job)
     for drone_id in drones_of(events, log_rows):
         rows = read_jsonl(os.path.join(under, f"{drone_id}.jsonl"))
         if rows:

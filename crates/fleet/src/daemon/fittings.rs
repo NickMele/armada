@@ -51,6 +51,13 @@ use crate::underway::Underway;
 pub struct Host {
     /// The repository every worktree is added to. Absolute.
     pub repo_root: String,
+    /// Where this repository's Job records live: a Judge's brief, a Drone's
+    /// transcript, a Job's log, a Check's output, a kept deliverable, a kept
+    /// frame. **Never under `repo_root`.** `crate::records::root` is what
+    /// resolves it, once, at the composition root — this field exists so
+    /// nothing below `Host` has to resolve it again or hold a second opinion
+    /// about where it is.
+    pub records_root: String,
     /// What a Drone's `PATH` is set to. Fleet's choice, not Fleet's own.
     pub path: String,
     /// The home directory the agent CLI reads its credentials from. **The

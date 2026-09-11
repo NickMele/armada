@@ -155,7 +155,7 @@ where
                 Arc::clone(&self.clock),
                 self.judge_budget,
             ),
-            asked: Asked::under(self.host.repo_root.clone(), job.handle()),
+            asked: Asked::under(self.host.records_root.clone(), job.handle()),
         })
     }
     /// The Judge call that is out, for `serving` to put on `get_job`.

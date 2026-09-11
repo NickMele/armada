@@ -56,7 +56,8 @@ pub struct KeptFrame {
     /// `1.png` has not. That is the repository's choice to make and Armada
     /// neither renames nor supplies a default.
     pub name: String,
-    /// Where the copy is, relative to the repository root.
+    /// Where the copy is, relative to `ManifestSummary::records_root` — never
+    /// to the repository.
     ///
     /// **Fleet checked it was there when the answer was built**, which is
     /// [`KeptDeliverable::path`]'s property and the one thing no client can

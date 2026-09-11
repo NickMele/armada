@@ -244,7 +244,7 @@ pub(crate) fn workflow_summary(
 /// — so what is carried is the directory the file was read from, which is a
 /// fact rather than an invention. A person reading a Job wants to know which
 /// project it runs against, and a ULID does not say.
-pub(crate) fn manifest_summary(manifest: &config::Manifest) -> ManifestSummary {
+pub(crate) fn manifest_summary(manifest: &config::Manifest, records_root: &str) -> ManifestSummary {
     let path = manifest.path();
     ManifestSummary {
         id: ManifestId::from(manifest.id()),
@@ -255,19 +255,24 @@ pub(crate) fn manifest_summary(manifest: &config::Manifest) -> ManifestSummary {
             // A Manifest at the filesystem root has no directory to name. Its
             // own path is the next most useful true thing.
             .unwrap_or_else(|| path.to_string_lossy().to_string()),
-        // **Absolute, and it has to be.** Bridge derives every artifact path
-        // from this one — the worktree, the Job log, the transcripts — and then
-        // hands the result to the OS to open. A relative path answers a
-        // question about Fleet's working directory, which is not a fact about
-        // the repository and is not a directory Bridge is in: served as
-        // `./armada.yml`, every one of those opens resolved against the
-        // Electron process and found nothing.
+        // **Absolute, and it has to be.** Bridge derives the worktree from
+        // this one and then hands the result to the OS to open. A relative
+        // path answers a question about Fleet's working directory, which is
+        // not a fact about the repository and is not a directory Bridge is
+        // in: served as `./armada.yml`, every one of those opens resolved
+        // against the Electron process and found nothing.
         //
         // `$HOME` therefore appears on this wire, which the log envelope and
         // the failure record both refuse. It is a different surface: those are
         // written down and read later, and this is two processes on one machine
         // agreeing where a file is.
         path: canonical(path),
+        // **Absolute for the same reason, and never derived from `path`.**
+        // Fleet's Job log, its Drones' transcripts, a Check's output, a
+        // Judge's brief and a kept deliverable no longer sit anywhere under
+        // the repository, so there is no arithmetic on `path` that would find
+        // them — this is the one value Bridge can join them against.
+        records_root: records_root.to_string(),
         version: manifest.version(),
         checks: manifest.check_names(),
     }
@@ -383,7 +388,7 @@ fn narrowed(events: &[RecordedEvent]) -> Vec<StepMove> {
 pub(crate) fn step_facts(
     aloft: &Aloft,
     underway: &Underway,
-    repo_root: &str,
+    records_root: &str,
     job: &Job,
     ran: Vec<Attempted<Vec<core_model::StepCheck>>>,
     judged: Vec<Attempted<Vec<core_model::Judgment>>>,
@@ -450,7 +455,7 @@ pub(crate) fn step_facts(
                     .workflow()
                     .step(step.step_id())
                     .and_then(|declared| declared.deliverable())
-                    .map(|target| kept_for(repo_root, job, step.step_id(), &attempts, target))
+                    .map(|target| kept_for(records_root, job, step.step_id(), &attempts, target))
                     .unwrap_or_default(),
                 // **Read off the record, unlike `deliverables` above.** A
                 // frame's name is the harness's own — the repository's spec
@@ -595,7 +600,7 @@ pub(crate) fn reclaimed(job_id: &core_model::JobId, gave_back: Reclaimed) -> Wor
 /// a document too big to put in a call, a disk that refused. `keeping` checks
 /// each name, so what comes back is what a person can open.
 fn kept_for(
-    repo_root: &str,
+    records_root: &str,
     job: &Job,
     step: &core_model::StepId,
     attempts: &[ipc::StepAttempt],
@@ -605,7 +610,7 @@ fn kept_for(
         .iter()
         .filter_map(|run| Some((run.attempt, core_model::Attempt::stored(run.attempt)?)))
         .flat_map(|(number, attempt)| {
-            crate::keeping::kept_deliverables(repo_root, &job.handle(), step, attempt, target)
+            crate::keeping::kept_deliverables(records_root, &job.handle(), step, attempt, target)
                 .into_iter()
                 .map(move |path| KeptDeliverable {
                     attempt: number,

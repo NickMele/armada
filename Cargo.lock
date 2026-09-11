@@ -326,6 +326,7 @@ dependencies = [
  "libc",
  "rand",
  "serde",
+ "sha1",
  "store",
  "testkit",
  "tokio",

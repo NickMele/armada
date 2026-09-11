@@ -89,7 +89,8 @@ where
     /// file under `.armada/transcripts/` is what survives, and the Job's log is
     /// what names it.
     async fn refused(&self, job: &Job) -> Refusals {
-        crate::transcript::refusals(&self.host().repo_root, &job.handle(), stopped_step(job)).await
+        crate::transcript::refusals(&self.host().records_root, &job.handle(), stopped_step(job))
+            .await
     }
 
     /// What the gate said when it could not decide, where that is why the

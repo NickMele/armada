@@ -305,7 +305,7 @@ where
             &step_facts(
                 self.aloft(),
                 self.underway(),
-                &self.host().repo_root,
+                &self.host().records_root,
                 &job,
                 ran_every_attempt,
                 judged_every_attempt,
@@ -510,7 +510,7 @@ where
             .load(&job_id.to_domain())
             .await
             .map_err(|why| self.refusal(why))?;
-        crate::transcript::arguments(&self.host().repo_root, &job.handle(), &call_id)
+        crate::transcript::arguments(&self.host().records_root, &job.handle(), &call_id)
             .await
             .ok_or_else(|| self.refusal(Adrift::NoSuchCall { named: call_id }))
     }
@@ -544,7 +544,7 @@ where
                 .step_checks_every_attempt(&id)
                 .map_err(|why| self.refusal(Adrift::Reading(why)))?
         };
-        crate::check_output::kept_output(&self.host().repo_root, &kept, &ran)
+        crate::check_output::kept_output(&self.host().records_root, &kept, &ran)
             .ok_or_else(|| self.refusal(Adrift::NoSuchCheckOutput { named: kept }))
     }
 
@@ -610,7 +610,7 @@ where
             ));
             frames
         };
-        let (held, bytes) = crate::showing::frame_bytes(&self.host().repo_root, &kept, &frames)
+        let (held, bytes) = crate::showing::frame_bytes(&self.host().records_root, &kept, &frames)
             .ok_or_else(|| self.refusal(Adrift::NoSuchFrame { named: kept }))?;
         // The same row the detail carries, built the one way it is built.
         Ok((
@@ -640,7 +640,10 @@ where
 
     /// The one Manifest this Fleet was started against.
     async fn list_manifests(&self) -> Result<Vec<ManifestSummary>, Refusal> {
-        Ok(vec![manifest_summary(self.manifest())])
+        Ok(vec![manifest_summary(
+            self.manifest(),
+            &self.host().records_root,
+        )])
     }
 
     /// What a Job may be spawned as, resolved once by the composition root.
@@ -711,7 +714,7 @@ where
             .map_err(|why| self.refusal(why))?;
         let live = self.turns().watching(&job_id);
         let (history, skipped) =
-            crate::transcript::history(&self.host().repo_root, &job.handle()).await;
+            crate::transcript::history(&self.host().records_root, &job.handle()).await;
         Ok(Observed {
             job_id,
             live,

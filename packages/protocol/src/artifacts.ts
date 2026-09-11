@@ -1,9 +1,9 @@
 // Where a Job's artifacts are, derived once for both sides of the wire.
 //
-// The architecture fixes the layout — `<repo>/.armada/worktrees/<job-id>`,
-// `logs/<job-id>.jsonl`, `transcripts/<drone-id>.jsonl` — and says it is not
-// configurable, so a path derived here is the path Fleet wrote rather than a
-// guess. Only `branch` is served, and it is not a path.
+// The architecture fixes the layout — `<repo>/.armada/worktrees/<job-id>` for
+// the worktree, and `.armada/logs/`, `.armada/transcripts/` and the three kept
+// records under `ManifestSummary.records_root` instead, since Fleet moved them
+// off the checkout. Only `branch` is served, and it is not a path.
 //
 // **One derivation, because there are two callers.** The renderer derives to
 // draw a row; main derives to open one, and main derives it again from the Job
@@ -15,7 +15,7 @@
 // **Three paths are not derivable and are served instead.** A Check's output, a
 // Judge's brief and a step's deliverable are keyed by step, run, ordinal and
 // criterion, which is Fleet's arithmetic and not a layout rule — `get_job`
-// carries each as a path relative to the repository root. The rule above still
+// carries each as a path relative to `records_root`. The rule above still
 // holds for them, one level up: main does not trust the string, it checks the
 // string is one Fleet named for that Job. A set membership rather than a
 // derivation, because there is nothing here to derive from.
@@ -66,13 +66,17 @@ export function isKept(what: Artifact): what is Kept {
 }
 
 /**
- * The repository a Job's artifacts sit under, or `null`.
+ * The repository a Job's worktree sits under, or `null`.
  *
  * The Manifest's `path` is the absolute `armada.yml`, and its parent is the
  * workspace root Fleet canonicalises into `repo_root` — `Host.repo_root` is
  * not on the wire, so this is the same value read from the same place. `null`
  * where Fleet holds no Manifest by that id: an older Job, or one whose
  * Manifest was removed.
+ *
+ * **Only the worktree derives from this now.** The Job log, the transcripts
+ * and the three kept records moved off the repository; [`recordsOf`] is what
+ * they resolve against.
  */
 export function repoOf(manifest: ManifestSummary | undefined): string | null {
   if (manifest === undefined) return null;
@@ -81,7 +85,23 @@ export function repoOf(manifest: ManifestSummary | undefined): string | null {
 }
 
 /**
+ * Where this repository's records live, or `null`.
+ *
+ * `ManifestSummary.records_root` is already absolute — Fleet resolves it, not
+ * this — so this is a lookup and not arithmetic, unlike [`repoOf`].
+ */
+export function recordsOf(manifest: ManifestSummary | undefined): string | null {
+  return manifest?.records_root ?? null;
+}
+
+/**
  * Where one artifact of one Job is.
+ *
+ * **`repo` and `records` are two different homes now.** Only `worktree`
+ * derives from `repo`; everything else — the log, the transcripts, and every
+ * [`Kept`] record — derives from `records`, because Fleet moved those off the
+ * checkout. Passing one where the other belongs would resolve to a path
+ * nothing wrote.
  *
  * **The transcript is a directory where the drone id is unknown.**
  * `assigned_drone` has no event that sets it, so on most Jobs the only record
@@ -91,22 +111,23 @@ export function repoOf(manifest: ManifestSummary | undefined): string | null {
 export function artifactPath(
   what: Artifact,
   repo: string,
+  records: string,
   jobId: string,
   droneId: string | undefined,
 ): string {
-  // A kept record's path is Fleet's own, relative to the repository root, so
-  // this only joins the two halves. Deciding the string is one Fleet named is
+  // A kept record's path is Fleet's own, relative to `records_root`, so this
+  // only joins the two halves. Deciding the string is one Fleet named is
   // main's, not this function's — the renderer reaches here too, to draw a row.
-  if (isKept(what)) return `${repo}/${what.kept}`;
+  if (isKept(what)) return `${records}/${what.kept}`;
   switch (what) {
     case "worktree":
       return `${repo}/${ARMADA}/worktrees/${jobId}`;
     case "log":
-      return `${repo}/${ARMADA}/logs/${jobId}.jsonl`;
+      return `${records}/${ARMADA}/logs/${jobId}.jsonl`;
     case "transcript":
       return droneId === undefined
-        ? `${repo}/${ARMADA}/transcripts/`
-        : `${repo}/${ARMADA}/transcripts/${droneId}.jsonl`;
+        ? `${records}/${ARMADA}/transcripts/`
+        : `${records}/${ARMADA}/transcripts/${droneId}.jsonl`;
   }
 }
 

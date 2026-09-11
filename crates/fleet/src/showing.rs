@@ -164,7 +164,8 @@ impl NotShown {
     }
 }
 
-/// Where one Job's kept frames live, under the repository it ran in.
+/// Where one Job's kept frames live, under this repository's own share of
+/// Fleet's data directory.
 ///
 /// The same shape as `check_output::checks_dir` and `keeping::deliverables_dir`,
 /// and public for their reason: reading the record back needs the path and must
@@ -176,8 +177,8 @@ impl NotShown {
 /// would have to be parsed back apart at some point — and `keeping`'s comment
 /// on exactly that says a name holding dots cannot be. A directory makes the
 /// listing exact instead of a guess.
-pub fn frames_dir(repo_root: &str, handle: &str) -> PathBuf {
-    Path::new(repo_root)
+pub fn frames_dir(records_root: &str, handle: &str) -> PathBuf {
+    Path::new(records_root)
         .join(".armada")
         .join("frames")
         .join(handle)
@@ -414,7 +415,7 @@ fn collected(harness: &Harness, worktree: &Path, side: Side) -> Shown {
 /// which is what a person reads, and the run directory carries the side — so
 /// [`tail`] is still two components and the bytes route is unchanged.
 pub fn kept(
-    repo_root: &str,
+    records_root: &str,
     handle: &str,
     step: &StepId,
     attempt: Attempt,
@@ -426,7 +427,7 @@ pub fn kept(
     let Some(relative) = run_dir(handle, step, attempt, side) else {
         return Vec::new();
     };
-    let dir = Path::new(repo_root).join(&relative);
+    let dir = Path::new(records_root).join(&relative);
     // A re-gate of one attempt re-runs the harness and writes over its own
     // frames, which is right: the rows are replaced in the same transaction, so
     // the record and the directory move together. This is the one place that
@@ -541,12 +542,12 @@ pub fn named(kept: &str, frames: &[store::KeptFrame]) -> Option<store::KeptFrame
 /// image. What bounds this is [`StepFrame::bytes`] on the row a caller already
 /// holds — it asked for this one knowing what it weighs.
 pub fn frame_bytes(
-    repo_root: &str,
+    records_root: &str,
     kept: &str,
     frames: &[store::KeptFrame],
 ) -> Option<(store::KeptFrame, Vec<u8>)> {
     let held = named(kept, frames)?;
-    let bytes = std::fs::read(Path::new(repo_root).join(&held.frame.path)).ok()?;
+    let bytes = std::fs::read(Path::new(records_root).join(&held.frame.path)).ok()?;
     Some((held, bytes))
 }
 
@@ -651,7 +652,7 @@ where
             Shown::Nothing => (Vec::new(), None),
             Shown::Frames(frames) => {
                 let copied = kept(
-                    &self.host().repo_root,
+                    &self.host().records_root,
                     handle,
                     step,
                     attempt,
@@ -716,7 +717,7 @@ where
             Shown::NotShown(why) => return Before::instead(WhyNoPair::NotShown(why)),
         };
         let kept = kept(
-            &self.host().repo_root,
+            &self.host().records_root,
             handle,
             step,
             attempt,

@@ -1,5 +1,5 @@
 //! The copy of a step's deliverable that outlives the worktree it was written
-//! in.
+//! in — and now outlives the repository too.
 //!
 //! A step's deliverable is a real file at the path the frozen workflow names —
 //! `.armada/artifacts/<step>.md` in every shipped workflow — inside the Job's
@@ -11,10 +11,11 @@
 //!
 //! **The mechanism that spares a transcript is not a rule about transcripts.**
 //! `crate::transcript::transcript_of`, `log_of` and
-//! `crate::check_output::checks_dir` build their paths from the repository
-//! root, so they are not in the thing that gets deleted. This puts the
-//! deliverable in the same place for the same reason, and adds nothing to
-//! `armada clean`.
+//! `crate::check_output::checks_dir` build their paths from
+//! `crate::records::root`, so they are not in the thing that gets deleted —
+//! not the worktree, on `#223`'s ground, and not the repository at all, on
+//! this change's. This puts the deliverable in the same place for the same
+//! reason, and adds nothing to `armada clean`.
 //!
 //! When the copy is made, what it is named and what expires are on the items.
 
@@ -23,7 +24,8 @@ use std::path::{Path, PathBuf};
 
 use core_model::{Attempt, StepId};
 
-/// Where one Job's kept deliverables live, under the repository it ran in.
+/// Where one Job's kept deliverables live, under this repository's own share
+/// of Fleet's data directory.
 ///
 /// The same shape as `check_output::checks_dir`, and public for the same
 /// reason: reading the record back needs the path and must not need the
@@ -34,8 +36,8 @@ use core_model::{Attempt, StepId};
 /// path missing the attempt let a second run write over the first while both
 /// runs' rows survived, leaving the first attempt's record pointing at the
 /// second attempt's bytes.
-pub fn deliverables_dir(repo_root: &str, handle: &str) -> PathBuf {
-    Path::new(repo_root)
+pub fn deliverables_dir(records_root: &str, handle: &str) -> PathBuf {
+    Path::new(records_root)
         .join(".armada")
         .join("deliverables")
         .join(handle)
@@ -63,13 +65,13 @@ pub fn deliverables_dir(repo_root: &str, handle: &str) -> PathBuf {
 /// holding one is the capability to write a copy, and reading a record back
 /// must not need it.
 pub fn kept_deliverables(
-    repo_root: &str,
+    records_root: &str,
     handle: &str,
     step: &StepId,
     attempt: Attempt,
     target: &str,
 ) -> Vec<String> {
-    let dir = deliverables_dir(repo_root, handle);
+    let dir = deliverables_dir(records_root, handle);
     (0..ROTATIONS)
         .map_while(|nth| file_name(step, attempt, target, nth))
         .take_while(|name| dir.join(name).is_file())
@@ -118,10 +120,11 @@ pub struct Keeping {
 }
 
 impl Keeping {
-    /// Copies for one Job, under the repository it is running in.
-    pub fn of(repo_root: &str, handle: &str) -> Keeping {
+    /// Copies for one Job, under this repository's own share of Fleet's data
+    /// directory.
+    pub fn of(records_root: &str, handle: &str) -> Keeping {
         Keeping {
-            dir: deliverables_dir(repo_root, handle),
+            dir: deliverables_dir(records_root, handle),
         }
     }
 

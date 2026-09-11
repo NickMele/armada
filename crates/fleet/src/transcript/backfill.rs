@@ -55,10 +55,10 @@ pub const REFUSALS: usize = 50;
 const OPENED: &str = "drone transcript opened";
 
 /// What was already said, oldest first, and how many older rows were left out.
-pub async fn history(repo_root: &str, handle: &str) -> (Vec<TranscriptRow>, u64) {
+pub async fn history(records_root: &str, handle: &str) -> (Vec<TranscriptRow>, u64) {
     let mut kept: VecDeque<TranscriptRow> = VecDeque::with_capacity(0);
     let mut skipped = 0u64;
-    for at in transcripts(repo_root, handle).await {
+    for at in transcripts(records_root, handle).await {
         let Ok(file) = fs::File::open(&at).await else {
             continue;
         };
@@ -101,8 +101,8 @@ pub async fn history(repo_root: &str, handle: &str) -> (Vec<TranscriptRow>, u64)
 /// says so, and does not guess a size. That is the one case where what comes
 /// back is less than the argument, and it is a fact about the record rather
 /// than about the transport.
-pub async fn arguments(repo_root: &str, handle: &str, call: &str) -> Option<CallArguments> {
-    for at in transcripts(repo_root, handle).await {
+pub async fn arguments(records_root: &str, handle: &str, call: &str) -> Option<CallArguments> {
+    for at in transcripts(records_root, handle).await {
         let Ok(file) = fs::File::open(&at).await else {
             continue;
         };
@@ -164,8 +164,8 @@ pub async fn arguments(repo_root: &str, handle: &str, call: &str) -> Option<Call
 ///
 /// A Job with no log, a transcript that was reclaimed and a Drone refused
 /// nothing all answer [`Refusals::none`]. None is an error.
-pub async fn refusals(repo_root: &str, handle: &str, step: Option<&StepId>) -> Refusals {
-    let files = transcripts(repo_root, handle).await;
+pub async fn refusals(records_root: &str, handle: &str, step: Option<&StepId>) -> Refusals {
+    let files = transcripts(records_root, handle).await;
     let step = step.map(ipc::StepId::from);
     let (mut kept, in_all) = refused_calls(&files, step.as_ref()).await;
     if kept.is_empty() {
@@ -308,8 +308,8 @@ async fn against(files: &[PathBuf], kept: &mut [Refusal]) {
 /// It reads the whole file rather than seeking, for the reason `history` reads
 /// it: a JSONL file has no index, the last line is not at a known offset, and
 /// this is asked once per adopted Drone at a boot.
-pub async fn last_heard(repo_root: &str, handle: &str, drone: &DroneId) -> Option<Timestamp> {
-    let file = fs::File::open(transcript_of(repo_root, handle, drone))
+pub async fn last_heard(records_root: &str, handle: &str, drone: &DroneId) -> Option<Timestamp> {
+    let file = fs::File::open(transcript_of(records_root, handle, drone))
         .await
         .ok()?;
     let mut lines = BufReader::new(file).lines();
@@ -333,11 +333,11 @@ pub async fn last_heard(repo_root: &str, handle: &str, drone: &DroneId) -> Optio
 /// before `crate::transcript::migrating` moved these files gives the path the
 /// file was at when it was opened; what identifies a transcript is the Drone's
 /// own minted id, which is the name, and where it lives is this Fleet's answer.
-async fn transcripts(repo_root: &str, handle: &str) -> Vec<PathBuf> {
-    let Ok(log) = fs::File::open(log_of(repo_root, handle)).await else {
+async fn transcripts(records_root: &str, handle: &str) -> Vec<PathBuf> {
+    let Ok(log) = fs::File::open(log_of(records_root, handle)).await else {
         return Vec::new();
     };
-    let under = transcripts_dir(repo_root, handle);
+    let under = transcripts_dir(records_root, handle);
     let mut named = Vec::new();
     let mut lines = BufReader::new(log).lines();
     while let Ok(Some(line)) = lines.next_line().await {

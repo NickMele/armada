@@ -228,7 +228,7 @@ where
             self.work(),
             self.budget(),
             &judging,
-            &Keeping::of(&self.host().repo_root, &job.handle()),
+            &Keeping::of(&self.host().records_root, &job.handle()),
             self.gating_policies(),
             &announcing,
         )

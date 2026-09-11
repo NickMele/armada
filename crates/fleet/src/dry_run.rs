@@ -392,7 +392,7 @@ where
                 cause: cause.to_string(),
             })?;
         let rows = check_output::kept_dry(
-            &self.host().repo_root,
+            &self.host().records_root,
             &plan.record.handle(),
             &plan.step,
             on,

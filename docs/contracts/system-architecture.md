@@ -389,22 +389,18 @@ Decisions.
 
 ### Per-repo — `<repo>/.armada/`
 
-A Job's artifacts live beside the repo they act on, not in a hidden
-application directory.
+**Only a Job's working copy of the repository lives here now.** Its records
+do not — see "Per-repository records" below, which is where the argument for
+the split is made.
 
 | Path | Holds | Written by |
 | --- | --- | --- |
 | `worktrees/<job-id>` | The Drone's checkout | `adapters`, via git2 |
-| `logs/<job-id>.jsonl` | That Job's structured log, redacted at three sinks | `fleet` |
-| `transcripts/<drone-id>.jsonl` | One row per event a Drone emitted | `fleet` |
-| `checks/<job-id>/<step-id>.<n>.log` | What one declared Check printed. `<n>` is its position in the step, which is also its key in `job_step_checks` — so a rerun replaces the file and the row together | `fleet` |
 
 **The deciding argument is discoverability.** Rung 3 of the Intervention
 Ladder is a raw terminal takeover in that worktree. Burying it under
 `~/Library/Application Support/` makes break-glass harder exactly when
-things are already going badly, and it splits a Job's worktree from its
-log across two places the user has to know about separately. See the
-decision in Armada Decisions.
+things are already going badly. See the decision in Armada Decisions.
 
 **The path is not configurable, and any path Fleet needs is derived rather
 than stored.** A `Worktree root path` settings row existed and is tracked
@@ -425,6 +421,48 @@ monorepo a root `armada.yml` holds Commands, and Checks for the artefacts
 the root itself owns, gated to diffs that touch root paths. Path ownership
 is nearest-ancestor: the nearest `armada.yml` up the tree owns a path, and
 the root owns whatever no Workspace claims.
+
+### Per-repository records — `~/Library/Application Support/Armada/repos/<key>/`
+
+**A Job's log, its Drones' transcripts, a Check's output, a kept
+deliverable, a kept frame and a Judge's brief.** These sat beside the
+worktree, under `<repo>/.armada/`, until none of the six turned out to be a
+working copy of the repository — a `git clean -fdx` run inside a Job's
+checkout could take a record the Board still pointed at. The discoverability
+argument above never applied to these — Rung 3 is a takeover of the
+*worktree*, and none of the six is opened by hand mid-Job — so moving them
+costs nothing the worktree's placement was bought for. See the decision in
+Armada Decisions.
+
+| Path | Holds | Written by |
+| --- | --- | --- |
+| `.armada/logs/<handle>.jsonl` | That Job's structured log, redacted at three sinks | `fleet` |
+| `.armada/transcripts/<handle>/<drone-id>.jsonl` | One row per event a Drone emitted | `fleet` |
+| `.armada/checks/<handle>/<step-id>.<attempt>.<n>.log` | What one declared Check printed. `<n>` is its position in the step, which is also its key in `job_step_checks` — so a rerun replaces the file and the row together | `fleet` |
+| `.armada/briefs/<handle>/<step-id>.<attempt>.<criterion-id>.txt` | What a Judge was asked, kept beside what it answered | `fleet` |
+| `.armada/deliverables/<handle>/<step-id>.<attempt>.<name>` | The copy of a step's deliverable a Judge read, since the original is in the worktree `armada clean` reclaims | `fleet` |
+| `.armada/frames/<handle>/<step-id>.<attempt>.<side>/<name>` | The copy of a frame `evidence.frames` produced, for the same reason | `fleet` |
+
+**`<key>` is a SHA-1 of the repository root, canonicalized** —
+`fleet::records::root` and its module doc argue the choice; the short form is
+that two repositories must never share a key, and a general-purpose `Hasher`
+does not promise the same digest across a Rust upgrade the way a named,
+published algorithm does. `.armada/` still prefixes every relative path one
+level under this root, because a row already written — `job_step_checks
+.output_path`, `KeptDeliverable.path` — spells it, and nothing rewrites a row
+on migration.
+
+**Not configurable, for `Worktree root path`'s reason above**: `fleet::runtime
+::machine_path` names the one Application Support directory, and every
+repository gets a folder under it, keyed rather than named, so two
+repositories sharing a directory name never collide.
+
+**A Fleet that boots over the old layout moves what it finds, once.**
+`fleet::records::migrating` walks the six old directories file by file,
+renaming what it can and falling back to a verified copy where the repository
+and `~/Library/Application Support/Armada/` are not one filesystem. Nothing
+is overwritten; what did not move is counted and printed at boot rather than
+silently left behind.
 
 **Retention.** `audit.jsonl` rotates by size; rotation segments the file
 rather than deleting anything. Per-Job logs are **pruned on terminal status

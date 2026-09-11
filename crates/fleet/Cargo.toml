@@ -39,6 +39,13 @@ rand = "0.8"
 # Derives only, on this crate's own types. The runtime file is written and read
 # through `ipc`'s codec, which is why no `serde_json` appears here.
 serde = { version = "1", features = ["derive"] }
+# The per-repository key under Fleet's data directory — see `crate::records`.
+# Already resolved in the workspace lockfile through another crate's dependency
+# graph, so this adds no new supply chain, only a direct line to it. Not a
+# security boundary: the key only has to be stable and practically
+# collision-free, which a cryptographic digest is regardless of the reason it
+# was written.
+sha1 = "0.10"
 
 [dev-dependencies]
 # Fixtures and fakes. `testkit` never ships and nothing that ships depends on it.
