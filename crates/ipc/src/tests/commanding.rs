@@ -4,7 +4,57 @@
 //! pin the spellings Bridge mirrors by hand — and both sets are ones Bridge
 //! matches on, so a spelling that drifted would be a control that never draws.
 
-use crate::{decode, encode, CommandAnswer, WhenBlocked};
+use crate::{decode, encode, CommandAnswer, CommandInFlight, Instant, StepId, WhenBlocked};
+
+/// A Drone held on one shell command, with all three answers on offer.
+fn waiting() -> CommandInFlight {
+    CommandInFlight {
+        call: String::from("toolu_01"),
+        step_id: StepId::carried("implement"),
+        asked_at: Instant::carried("2026-09-11T09:00:00.000Z"),
+        tool: String::from("Bash"),
+        detail: String::from("cargo nextest run -p ipc"),
+        truncated: false,
+        length: Some(24),
+        offers: vec![
+            CommandAnswer::AllowForJob,
+            CommandAnswer::AlwaysAllow,
+            CommandAnswer::Reject,
+        ],
+    }
+}
+
+/// The call id is what an answer names and the offers are what it may say, so
+/// both cross whole and in order.
+#[test]
+fn a_waiting_command_crosses_with_the_answers_a_person_may_give() {
+    let json = encode(&waiting()).expect("plain data");
+    assert!(json.contains("\"call\":\"toolu_01\""), "{json}");
+    assert!(
+        json.contains("\"offers\":[\"allow_for_job\",\"always_allow\",\"reject\"]"),
+        "{json}"
+    );
+    assert_eq!(
+        decode::<CommandInFlight>("a waiting command", json.as_bytes()).expect("it reads back"),
+        waiting()
+    );
+}
+
+/// An argument Fleet could not measure carries no length, which is a different
+/// answer from an argument of no length.
+#[test]
+fn an_unmeasured_command_carries_no_length_rather_than_nought() {
+    let unmeasured = CommandInFlight {
+        length: None,
+        ..waiting()
+    };
+    let json = encode(&unmeasured).expect("plain data");
+    assert!(!json.contains("\"length\""), "absent, never null: {json}");
+    assert_eq!(
+        decode::<CommandInFlight>("a waiting command", json.as_bytes()).expect("it reads back"),
+        unmeasured
+    );
+}
 
 #[test]
 fn each_setting_is_spelled_as_the_operations_name_it() {

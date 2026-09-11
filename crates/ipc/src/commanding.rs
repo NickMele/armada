@@ -17,6 +17,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::ids::{Instant, StepId};
+
 /// What a Job does when its Drone reaches for a command it was not given.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -49,4 +51,58 @@ pub enum CommandAnswer {
     AlwaysAllow,
     /// Do not run it. The Drone is told, and goes on without it.
     Reject,
+}
+
+/// One command a Drone is waiting on a person to allow or reject, right now.
+///
+/// # It is not a status, and neither registry is touched
+///
+/// [`QuestionInFlight`](crate::QuestionInFlight)'s argument exactly: the Job is
+/// `running` and its step is `running` while the Drone waits, and the wait ends
+/// without either moving. So this rides beside the state rather than being one.
+///
+/// # Only under [`WhenBlocked::AskMe`]
+///
+/// Under the default the call is refused the moment it arrives and nothing
+/// waits; what a person answers then is a [`Refusal`](crate::Refusal) on a
+/// stopped Job. **`asked_at` crosses once and every surface subtracts for
+/// itself**, as a question's does.
+///
+/// # The whole argument stays in the file
+///
+/// [`Refusal`](crate::Refusal)'s rule, for its reason: [`detail`] is one line,
+/// [`truncated`] and [`length`] say so, and `get_call` serves the rest by
+/// [`call`] — which matters more here, because what a person is being asked to
+/// allow is the whole command and not its first line.
+///
+/// [`detail`]: CommandInFlight::detail
+/// [`truncated`]: CommandInFlight::truncated
+/// [`length`]: CommandInFlight::length
+/// [`call`]: CommandInFlight::call
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CommandInFlight {
+    /// The harness's id for the call. **What an answer names**, and what makes
+    /// an answer from a window left open across it a refusal rather than a
+    /// coincidence.
+    pub call: String,
+    /// Which step's Drone is waiting. A Job runs one step at a time.
+    pub step_id: StepId,
+    /// When the harness asked, by Fleet's clock.
+    pub asked_at: Instant,
+    /// The tool reached for, in the harness's own spelling — a string for
+    /// [`Refusal::tool`](crate::Refusal::tool)'s reason.
+    pub tool: String,
+    /// The command, or the argument, bounded to one line. **Empty is a tool
+    /// whose argument this vocabulary has no name for**, never an invented one.
+    pub detail: String,
+    /// Whether [`detail`](CommandInFlight::detail) is less than what was sent.
+    pub truncated: bool,
+    /// How many characters the argument had before anything was cut. `None`
+    /// where Fleet could not measure it, which a surface says rather than
+    /// inventing a size.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub length: Option<usize>,
+    /// What a person may answer, in the order a surface draws them. An answer
+    /// that is not here is refused.
+    pub offers: Vec<CommandAnswer>,
 }

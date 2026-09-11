@@ -95,7 +95,7 @@ pub use attempt::{Move, StepAttempt};
 pub use capacity::{AdmissionHold, FleetCapacity};
 pub use checks::{CheckOutput, CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
-pub use commanding::{CommandAnswer, WhenBlocked};
+pub use commanding::{CommandAnswer, CommandInFlight, WhenBlocked};
 pub use detail::{
     Criterion, Dependency, JobDelivery, JobDetail, JobSpend, JudgeInFlight, PullRequestDetail,
     Refusal, ReviewedBy, Settled, StepDetail, StepFacts, Stuck, Verdict,
