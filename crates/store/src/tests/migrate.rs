@@ -827,3 +827,69 @@ fn a_store_at_version_forty_four_migrates_forward_to_port_claims() {
         Some(claim)
     );
 }
+
+/// A file at version 45, with one Job on it — written before
+/// `manifest_snapshot` existed, so the column is not in the insert at all.
+fn version_forty_five(dir: &TempDir, id: &str) {
+    let conn = Connection::open(dir.db()).expect("a file to put version 45 in");
+    for migration in &MIGRATIONS[..45] {
+        conn.execute_batch(migration).expect("a migration");
+    }
+    conn.execute(
+        "INSERT INTO armada_meta (key, value) VALUES (?1, '45')",
+        (SCHEMA_VERSION_KEY,),
+    )
+    .expect("recorded as version 45");
+    conn.execute(
+        "INSERT INTO jobs (
+             job_id, title, status, workflow_id, owner_manifest_id, origin, urgency,
+             atomic, model, acceptance_criteria, dependencies, facts, scope_revisions,
+             write_targets_known, created_at
+         ) VALUES (?1, 'a job from before the manifest snapshot', 'running', '01WORKFLOW',
+                   '01OWNERMANIFEST', 'manual', 'normal', 0, 'a-model-name', '[]', '[]',
+                   '', '[]', 0, '2026-08-26T09:00:00.000Z')",
+        (id,),
+    )
+    .expect("a Job as version 45 wrote it");
+}
+
+/// A store at `main`'s shipped schema version migrates forward to carry
+/// `jobs.manifest_snapshot`. A Job written before it reads back `None`, never
+/// a blank string standing in for one, and a Job written after can be given a
+/// snapshot and read it back.
+#[test]
+fn a_store_at_version_forty_five_migrates_forward_to_the_manifest_snapshot() {
+    let dir = TempDir::new();
+    version_forty_five(&dir, "01BEFORETHESNAPSHOT");
+
+    let mut store = Store::open(&dir.db()).expect("a version 45 file opens and is migrated");
+    assert_eq!(
+        recorded_version(&store),
+        KNOWN_SCHEMA_VERSION.to_string(),
+        "migrated all the way, not stopped at 45"
+    );
+
+    assert_eq!(
+        store
+            .manifest_snapshot(&job_id("01BEFORETHESNAPSHOT"))
+            .expect("the column reads"),
+        None,
+        "a pre-migration Job never had one to lose"
+    );
+
+    store
+        .insert_job(
+            &top_level_numbered(&store, "01AFTERTHESNAPSHOT"),
+            &created_at(),
+        )
+        .expect("a Job written after the migration");
+    store
+        .set_manifest_snapshot(&job_id("01AFTERTHESNAPSHOT"), "version: 1\nid: 01M\n")
+        .expect("the new column takes a write");
+    assert_eq!(
+        store
+            .manifest_snapshot(&job_id("01AFTERTHESNAPSHOT"))
+            .expect("the column reads"),
+        Some("version: 1\nid: 01M\n".to_string())
+    );
+}

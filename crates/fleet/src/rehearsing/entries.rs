@@ -28,9 +28,31 @@ pub(crate) struct Listed {
 }
 
 /// What the Job froze, and what Fleet's Manifest holds for everything it did
-/// not. **A Check the workflow names is the Job's own**: the gate judges
-/// against that, so the sheet lists it rather than the file.
-pub(crate) fn frozen(job: &Job, held: &Manifest) -> Listed {
+/// not.
+///
+/// **`has_snapshot` is the whole of `#650`'s change to this function.** Where
+/// a Job carries a Manifest snapshot, `manifest` **is** that snapshot,
+/// already parsed, and every entry it declares is the Job's own — so the
+/// sheet is `declared(manifest)` with nothing left to merge and nothing left
+/// unfrozen. Where it does not — a Job created before the migration —
+/// `manifest` is Fleet's live one, the way every Job used to be read, and
+/// what follows is that reading, unchanged: **a Check the workflow names is
+/// the Job's own** even there, because the gate judges against that, so the
+/// sheet lists it rather than the file.
+pub(crate) fn frozen(job: &Job, manifest: &Manifest, has_snapshot: bool) -> Listed {
+    if has_snapshot {
+        let mut listed = declared(manifest);
+        for entry in listed
+            .setup
+            .iter_mut()
+            .chain(listed.checks.iter_mut())
+            .chain(listed.commands.iter_mut())
+        {
+            entry.frozen = true;
+        }
+        return listed;
+    }
+    let held = manifest;
     let mut froze: Vec<Entry> = Vec::new();
     for step in job.workflow().steps() {
         for check in step.checks() {

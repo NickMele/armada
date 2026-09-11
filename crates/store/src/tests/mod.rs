@@ -22,6 +22,7 @@ mod footprint;
 mod forget;
 mod gaming;
 mod iteration;
+mod manifest_snapshot;
 mod migrate;
 mod plan;
 mod ports;

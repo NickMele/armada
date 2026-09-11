@@ -210,6 +210,7 @@ where
         let child = Job::create_sub_dispatched(new, dispatching.origin(), at.clone());
         store.insert_job(&child, &at).map_err(Adrift::Writing)?;
         self.learn_the_name(&child);
+        self.manifest_snapshotted(&mut store, &child).await;
         drop(store);
         // After the write, for `Fleet::proposed_job`'s reason: a client told
         // about a row the store then refused would hold a Job that is not
