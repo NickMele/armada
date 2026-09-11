@@ -600,4 +600,23 @@ pub trait Commands: Send + Sync + 'static {
         job_id: JobId,
         run: NamedRun,
     ) -> impl Future<Output = Result<RunRecord, Refusal>> + Send;
+
+    /// `start_server` — start a server the Manifest declares, in a Job's
+    /// worktree on its span or in the main checkout on its own, **or answer
+    /// with the instance already up**: one per Job per server.
+    ///
+    /// **By `Arc`, for [`Commands::show_again`]'s reason**: the server is a task
+    /// of its own and outlives the request. It answers `starting`; the rest
+    /// arrives as `server.*` events.
+    fn start_server(
+        self: std::sync::Arc<Self>,
+        asked: ipc::StartServer,
+    ) -> impl Future<Output = Result<ipc::ServerState, Refusal>> + Send;
+
+    /// `stop_server` — end a server's process group, and answer with the
+    /// instance once it has ended. [`Refusal::IllegalMove`] on one not running.
+    fn stop_server(
+        &self,
+        named: ipc::NamedServer,
+    ) -> impl Future<Output = Result<ipc::ServerState, Refusal>> + Send;
 }

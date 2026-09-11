@@ -154,6 +154,14 @@ async fn called<D: Tools>(
             Ok(report) => Answered::Checked { id, report },
             Err(why) => Answered::Refused { id, why },
         },
+        // **Held open a bounded while**, so the answer can carry an address
+        // that answers. By `Arc`, because the server outlives this call.
+        Incoming::StartServer { id, name } => {
+            match served.shared().start_server(caller, name).await {
+                Ok(report) => Answered::Served { id, report },
+                Err(why) => Answered::Refused { id, why },
+            }
+        }
         // **The one arm whose success is another Job.** It goes through the
         // daemon like the rest and is refused the same way — a tool error the
         // Drone reads — because a Drone told "no" by a status code has nothing
