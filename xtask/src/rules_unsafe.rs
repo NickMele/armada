@@ -59,6 +59,12 @@ const UNSAFE_SITES: &[(&str, &str)] = &[
         "proc_pidfdinfo over the Drones Fleet spawned — the only route that can match a \
          connection's port pair, and the one that is not a 64ms subprocess",
     ),
+    (
+        "crates/fleet/src/ports.rs",
+        "sysctlbyname over net.inet.ip.portrange.first on macOS, to detect the port range \
+         ceiling at daemon start — no safe wrapper reads a named sysctl, and the write is \
+         bounded to one c_int the local already owns",
+    ),
 ];
 
 /// What counts as speaking it. `unsafe_code` in a comment or an attribute name

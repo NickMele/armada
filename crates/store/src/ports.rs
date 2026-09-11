@@ -26,24 +26,19 @@ use crate::row::column;
 /// refuses at.
 ///
 /// **`job_id` and `run_id` are both nullable and the `CHECK` admits exactly
-/// one.** [`PortClaimant`] is what makes the wrong shape unspeakable from
-/// Rust; the `CHECK` is the same rule held from underneath, for a row this
-/// crate did not write — a hand migration, a future caller in the same crate
-/// that skipped the type. Same argument as `job_events_hold_one_whole_shape`.
+/// one.** [`PortClaimant`] makes the wrong shape unspeakable from Rust; the
+/// `CHECK` holds the same rule from underneath, for a row this crate did not
+/// write. Same argument as `job_events_hold_one_whole_shape`.
 ///
-/// **One claim per Job and one per run**, each a partial unique index rather
-/// than a column in a composite primary key: a `job_id` claim and a `run_id`
-/// claim never compare to each other, so there is no one key that spans both
-/// shapes. `job_drone_process` uses a plain primary key for the same
-/// single-shape reason; this table has two shapes and needs two indexes.
+/// **One claim per Job and one per run**, each its own partial unique index
+/// rather than one column in a composite key: the two shapes never compare to
+/// each other, so there is no one key that spans both.
 ///
 /// **The foreign key on `job_id` is what makes this table one
 /// [`tables_pointing_at_a_job`](crate::migrations::tables_pointing_at_a_job)
 /// finds**, so `forget_job` takes a Job's claim with it if one was never
 /// released — a safety net behind the explicit release
-/// `docs/concepts/fleet.md` describes at teardown, not a substitute for it: a
-/// forgotten Job that still held a live process would leak the process
-/// either way, and this only stops the row from outliving the sweep too.
+/// `docs/concepts/fleet.md` describes at teardown, not a substitute for it.
 ///
 /// Nothing is backfilled: no claim was recorded before this table existed,
 /// which is what zero rows says.

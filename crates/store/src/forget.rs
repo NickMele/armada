@@ -6,8 +6,7 @@
 //! each of those is a way to leave a Job standing over a history that no longer
 //! explains it — and the fold would then read back a Job that never happened.
 //! The database holds the same rule from underneath: `job_events` refuses a
-//! delete while its Job row exists, per [`migrations::MIGRATIONS`]'s fourth
-//! entry.
+//! delete while its Job row exists, per [`migrations::MIGRATIONS`]'s fourth entry.
 //!
 //! **One transaction, with foreign keys deferred inside it.** The Job row goes
 //! first so the trigger lets the events go, which violates the foreign key for

@@ -1,16 +1,14 @@
-//! `V1`..`V16`, the earliest of the tables and the only thing that changes
-//! them.
+//! `V1`..`V16`, the earliest of the tables. **The list they are applied from
+//! now lives in [`crate::migrations`]**, with `KNOWN_SCHEMA_VERSION`,
+//! `SCHEMA_VERSION_KEY` and `tables_pointing_at_a_job` — this file was at the
+//! 900 lines the gate refuses at. `V1` through `V16` are `pub(crate)` so that
+//! module can name them.
 //!
 //! **A schema with no version is a schema nobody can change later**: the first
 //! migration has to answer "what is already there?" and, with nothing recorded,
-//! the honest answer is a guess. [`crate::migrations::MIGRATIONS`] is an
-//! ordered list and `armada_meta.schema_version` records how many of them a
-//! file has had applied, so adding one is appending a `&str`. The table serves
-//! a second purpose that costs nothing: **its presence is what distinguishes an
-//! Armada store from some other database that happens to be at the path.** A
-//! file with tables and no `armada_meta` is refused rather than migrated into,
-//! which is the difference between opening the wrong file loudly and writing
-//! Jobs in it.
+//! the honest answer is a guess. The table also distinguishes an Armada store
+//! from some other database that happens to be at the path: a file with tables
+//! and no `armada_meta` is refused rather than migrated into.
 //!
 //! **`job_events` is append-only in the database, not in the code.** Two
 //! triggers refuse `UPDATE` on it, and `DELETE` while the Job it belongs to
@@ -25,14 +23,6 @@
 //! instant, and a test may hand back an earlier one. `AUTOINCREMENT` rather
 //! than a bare rowid so a key is never reused, which matters for a log whose
 //! whole value is that entries do not move.
-//!
-//! **`MIGRATIONS` itself, `KNOWN_SCHEMA_VERSION`, `SCHEMA_VERSION_KEY` and
-//! `tables_pointing_at_a_job` live in [`crate::migrations`]**, not here — this
-//! file is at the 900 lines the gate refuses at, and they are the part that
-//! moves cleanly: nothing below reads them, and every migration after `V16`
-//! already lived beside the table it creates rather than in this file. `V1`
-//! through `V16` are `pub(crate)` so that module can name them; nothing else
-//! about them changed.
 
 /// Version 1 — the Job record, the rows beneath it, and the log.
 pub(crate) const V1: &str = r#"

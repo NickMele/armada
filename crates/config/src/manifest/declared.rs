@@ -122,9 +122,8 @@ pub struct Port {
 }
 
 impl Port {
-    /// The container-side port — the join key the Docker adapter matches a
-    /// compose document's published port against. `None` where the file
-    /// declares no `container`.
+    /// The container-side port — the join key the compose adapter matches a
+    /// published port against. `None` where the file declares no `container`.
     pub fn container(&self) -> Option<u32> {
         self.container
     }

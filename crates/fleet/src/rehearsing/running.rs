@@ -153,6 +153,7 @@ where
                 path,
                 budget,
                 Writing::Appending(log),
+                &[],
                 until(stopped.clone()),
             )
             .await;
@@ -178,6 +179,7 @@ where
             path,
             budget,
             Writing::Appending(log),
+            &[],
             until(stopped.clone()),
         )
         .await;

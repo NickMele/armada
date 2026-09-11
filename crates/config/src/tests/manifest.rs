@@ -5,6 +5,8 @@
 //! eight and listed nine. Counting again would only move the number, so the
 //! counts are gone and the list lives in `crate::manifest`.
 
+mod ports;
+
 use crate::error::Fault;
 use crate::manifest::Manifest;
 use crate::tests::{fault_at, named, refusals, refused as refused_at};
@@ -115,32 +117,6 @@ fn a_section_m1_does_not_read_hard_fails_and_names_what_it_does_read() {
             "review_gate"
         ]
     );
-}
-
-#[test]
-fn ports_is_a_fourth_registry_with_two_optional_fields() {
-    let manifest = parse(
-        "version: 1\nid: armada\nports:\n  storybook: {}\n  api:\n    container: 3000\n    env: API_PORT\n",
-    )
-    .expect("ports parses");
-    assert_eq!(manifest.port_names(), ["api", "storybook"]);
-    let storybook = manifest.port("storybook").expect("storybook");
-    assert_eq!(storybook.container(), None);
-    assert_eq!(storybook.env(), None);
-    let api = manifest.port("api").expect("api");
-    assert_eq!(api.container(), Some(3000));
-    assert_eq!(api.env(), Some("API_PORT"));
-}
-
-#[test]
-fn an_unknown_key_inside_a_port_hard_fails() {
-    let refused = refusals(parse(
-        "version: 1\nid: armada\nports:\n  storybook:\n    protocol: http\n",
-    ));
-    assert!(matches!(
-        fault_at(&refused, "ports.storybook.protocol"),
-        Fault::Unknown { .. }
-    ));
 }
 
 #[test]

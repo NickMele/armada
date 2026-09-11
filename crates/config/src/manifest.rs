@@ -3,10 +3,9 @@
 //! **These keys, and nothing else.** `version`, `id`, `base`; `run`,
 //! `expect_exit_code`, `when`, `requires` and `narrow` under `checks.<name>`;
 //! `run` and `destructive` under `commands.<name>`; `container` and `env`
-//! under `ports.<name>`, the fourth registry, defining rather than narrowing
-//! and so refusing nothing a Check or Command name refuses; `setup.requires`;
-//! the three keys [`drone`] reads, the one section here that is a dial rather
-//! than a registry; and the two policies a `manifest_rule:<key>` gate names,
+//! under `ports.<name>`, a fourth registry; `setup.requires`; the three keys
+//! [`drone`] reads, the one section here that is a dial rather than a
+//! registry; and the two policies a `manifest_rule:<key>` gate names,
 //! `auto_merge` and `review_gate`. Every other section the concept page
 //! describes is refused: permissions, secrets, skills, budget, dispatch
 //! freeze.
