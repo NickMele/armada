@@ -6,6 +6,7 @@
 //! counts are gone and the list lives in `crate::manifest`.
 
 mod ports;
+mod servers;
 
 use crate::error::Fault;
 use crate::manifest::Manifest;
