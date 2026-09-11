@@ -57,6 +57,20 @@
   margin: 0;
 }
 
+/* The settled pull request's own number, followed onto the forge. `--accent`
+   is the token the design contract gives a link; the sentence beside it stays
+   `--fg-muted`, because "merged" is a fact read here and not itself a place
+   to go. */
+.armada-verdict__pr-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.armada-verdict__pr-link:hover,
+.armada-verdict__pr-link:focus-visible {
+  text-decoration: underline;
+}
+
 .armada-verdict__said {
   font-size: var(--text-xs);
   line-height: var(--leading-xs);

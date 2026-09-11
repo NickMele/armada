@@ -14,8 +14,7 @@
 // `mechanicalRunsOf` is the other half of that read, and both are folded into
 // one list here so nothing a gate actually ran goes missing from the record.
 //
-// **The fifth arrangement is `verdict-answered.tsx`, not here** — a Job done
-// after a person answered along the way, reading `verdictOf` as the two below do.
+// **The fifth arrangement is `verdict-answered.tsx`, not here.**
 
 import type { ReactNode } from "react";
 import { Minus } from "lucide-react";
@@ -112,8 +111,7 @@ export function provesItOf(
   now: number,
   /** Fleet's own reason the gate could not decide. `checksChapter`'s own. */
   undecided?: string,
-  /** A person's own words for overruling this step, where the log kept one. */
-  reason?: string,
+  /** A person's own words for overruling this step, where the log kept one. */ reason?: string,
 ): CheckRunRow[] {
   const rows = checksOf(step).map((read) => checkRow(read, now));
   for (const run of mechanicalRunsOf(step)) {
@@ -218,9 +216,8 @@ export function figuresOf({
   const took = tookOf(job, whole, now);
   if (took !== undefined) figures.push({ label: "Took", value: took, mono: true });
 
-  if (drones && whole?.spend?.drones !== undefined) {
+  if (drones && whole?.spend?.drones !== undefined)
     figures.push({ label: "Drones", value: String(whole.spend.drones), mono: true });
-  }
   const steps = whole?.steps ?? [];
   if (steps.length > 0) {
     const advanced = steps.filter((one) => one.state === "advanced").length;

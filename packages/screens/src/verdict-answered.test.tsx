@@ -1,14 +1,15 @@
 // The fifth arrangement's own data, tested as the answer it is.
 //
-// **The fixture is the real Job the drawing used**, `01M27918MN0011N9KZEV9ZWHY3`
-// — dispatched, restarted once, its `tests` step overruled, approved at
-// `handoff`, and merged as #630. `slotFor` builds the two shapes that Job took
-// on the way: `overriddenStep(false)` is any ordinary approve, and `true` is
-// what the run tree shows a reader who opens the `tests` step.
+// **The fixture is shaped like the real Job the drawing used**,
+// `01M27918MN0011N9KZEV9ZWHY3` — four steps, `scope` and `implement` and
+// `tests` and `handoff`, `tests` overruled and `handoff` the delivering step a
+// person approves at. **Every test here builds the whole Job and never picks
+// a step** — that is the one thing this arrangement is not allowed to depend
+// on, and a test that passed `open` would not catch its return.
 
 import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
-import type { VerdictSheetProps } from "@armada/components";
+import type { CheckRun as CheckRunRow, VerdictSheetProps } from "@armada/components";
 import type { Diff, Evidence, JobDetail as JobWhole, JobSummary, Noted, Remarks, StepDetail } from "@armada/protocol";
 
 import { humanGateStepOf, overruleReasonOf, verdictSlotAfterAnswer } from "./verdict-answered";
@@ -18,7 +19,7 @@ function step(over: Partial<StepDetail> = {}): StepDetail {
     step_id: "land",
     label: "Land",
     ordinal: 3,
-    state: "awaiting_human",
+    state: "advanced",
     check_runs: [],
     overridden: false,
     judged: [],
@@ -31,7 +32,6 @@ function step(over: Partial<StepDetail> = {}): StepDetail {
   };
 }
 
-/** A wall clock reading, for the one row that elapses while it runs. */
 const NOW = Date.parse("2026-09-11T05:45:00Z");
 
 function overruleNote(over: Partial<Noted> = {}): Noted {
@@ -106,31 +106,93 @@ describe("the verdict sheet once a Job is done and a person answered it", () => 
     };
   }
 
-  const NO_DIFF: Diff = { state: "none" };
-  const NO_EVIDENCE: Evidence = { state: "none" };
-  const NO_REMARKS: Remarks = { state: "none" };
+  const PASSED_MANIFEST_CHECKS: StepDetail["checks"] = [
+    { kind: "manifest_check", name: "build" },
+    { kind: "manifest_check", name: "test" },
+    { kind: "manifest_check", name: "format" },
+  ];
+  const PASSED_RUNS: StepDetail["check_runs"] = [
+    { attempt: 1, name: "build", outcome: "passed" },
+    { attempt: 1, name: "test", outcome: "passed" },
+    { attempt: 1, name: "format", outcome: "passed" },
+  ];
 
-  function slotFor(overriddenStep: boolean): ReactElement<VerdictSheetProps> {
-    const testsStep = step({
-      step_id: "tests",
-      advance_gate: "auto_if_judge_passes",
-      overridden: overriddenStep,
-      judge_checks: [{ criteria: 1, gaming_check: true }],
-      judged: overriddenStep
-        ? [{ attempt: 1, criterion_id: "c1", verdict: "not_met", expected: "Stay in scope." }]
-        : [],
+  function scopeStep(): StepDetail {
+    return step({
+      step_id: "scope",
+      ordinal: 0,
+      judge_checks: [{ criteria: 2, gaming_check: false }],
+      judged: [
+        { attempt: 1, criterion_id: "addresses_the_request", verdict: "met" },
+        { attempt: 1, criterion_id: "names_what_it_will_touch", verdict: "met" },
+      ],
     });
-    const gateStep = step({
+  }
+
+  function implementStep(): StepDetail {
+    return step({
+      step_id: "implement",
+      ordinal: 1,
+      checks: PASSED_MANIFEST_CHECKS,
+      check_runs: PASSED_RUNS,
+    });
+  }
+
+  function testsStep(overridden: boolean): StepDetail {
+    return step({
+      step_id: "tests",
+      ordinal: 2,
+      checks: PASSED_MANIFEST_CHECKS,
+      check_runs: PASSED_RUNS,
+      judge_checks: [{ criteria: 1, gaming_check: true }],
+      judged: [
+        { attempt: 1, criterion_id: "tests_exercise_behaviour", verdict: "met" },
+        {
+          attempt: 1,
+          criterion_id: "declared_plan_drift",
+          verdict: "not_met",
+          expected: "The step should not touch crates/ipc/operations.toml.",
+        },
+      ],
+      overridden,
+    });
+  }
+
+  function handoffStep(): StepDetail {
+    return step({
       step_id: "handoff",
+      ordinal: 3,
       advance_gate: "human_always",
       delivers: true,
-      state: "advanced",
       updated_at: "2026-09-11T05:29:16.834Z",
     });
+  }
+
+  const NO_DIFF: Diff = { state: "none" };
+  const NO_REMARKS: Remarks = { state: "none" };
+
+  function evidenceWith(...steps: { step_id: string; claimed: string }[]): Evidence {
+    return {
+      state: "read",
+      jobId: job().id,
+      steps: steps.map((one) => ({
+        step_id: one.step_id,
+        evidence_type: "diff",
+        claimed: one.claimed,
+        shown_by: "a run",
+      })),
+    };
+  }
+
+  function slotFor(args: {
+    overridden?: boolean;
+    evidence?: Evidence;
+    notes?: readonly Noted[];
+  }): ReactElement<VerdictSheetProps> {
     const whole: JobWhole = {
       job: job(),
       created_at: "2026-09-11T03:43:58.613Z",
-      steps: [testsStep, gateStep],
+      steps: [scopeStep(), implementStep(), testsStep(args.overridden ?? true), handoffStep()],
       acceptance_criteria: [],
       dependencies: [],
       spend: {
@@ -146,30 +208,106 @@ describe("the verdict sheet once a Job is done and a person answered it", () => 
     return verdictSlotAfterAnswer({
       job: job(),
       whole,
-      open: testsStep,
-      render: "finished",
-      recorded: { diff: NO_DIFF, evidence: NO_EVIDENCE, remarks: NO_REMARKS },
+      recorded: {
+        diff: NO_DIFF,
+        evidence:
+          args.evidence ??
+          evidenceWith(
+            { step_id: "tests", claimed: "The tests step's own claim." },
+            { step_id: "handoff", claimed: "The delivering step's own claim." },
+          ),
+        remarks: NO_REMARKS,
+      },
       opensRecords: { jobId: job().id, open: async () => ({ ok: true }), onSaid: () => {} },
       now: NOW,
-      claimed: undefined,
-      notes: overriddenStep
-        ? [
-            {
-              seq: 1,
-              at: "2026-09-11T05:16:03.465Z",
-              by: "fleet",
-              level: "warn",
-              msg: "a person overruled the gate and the step advanced",
-              step: "tests",
-              fields: [{ name: "said", value: "The note is correct and needed." }],
-            },
-          ]
-        : [],
+      notes: args.notes ?? [overruleNote({ fields: [{ name: "said", value: "The note is correct and needed." }] })],
+      onOpenPullRequest: async () => ({ ok: true }),
     }) as ReactElement<VerdictSheetProps>;
   }
 
+  function rowsOf(slot: ReactElement<VerdictSheetProps>): CheckRunRow[] {
+    const provesIt = slot.props.provesIt as ReactElement<{ rows: CheckRunRow[] }>;
+    return provesIt.props.rows;
+  }
+
+  // Item 1 — "what came back" reads the whole Job, not the open step.
+  describe("what came back", () => {
+    it("reads the delivering step's own claim", () => {
+      const slot = slotFor({});
+      expect(slot.props.cameBack).toBe("The delivering step's own claim.");
+    });
+
+    it("falls back to the last step that claimed anything, where the delivering step claimed nothing", () => {
+      const slot = slotFor({ evidence: evidenceWith({ step_id: "tests", claimed: "What tests found." }) });
+      expect(slot.props.cameBack).toBe("What tests found.");
+    });
+  });
+
+  // Item 2 — "what proves it" reads every step, and an overruled verdict from
+  // any step always appears, whichever step is open by default.
+  describe("what proves it, across the whole Job", () => {
+    it("folds every passing step's Checks into one row naming which steps and which Checks", () => {
+      const rows = rowsOf(slotFor({}));
+      const passed = rows.find((row) => row.id === "checks-passed");
+      expect(passed?.says).toBe("Implement and tests passed their Checks");
+      expect(passed?.identifier).toBe("build · test · format");
+    });
+
+    it("gives every judged criterion, on every step, its own row", () => {
+      const rows = rowsOf(slotFor({}));
+      const metOnScope = rows.filter(
+        (row) => row.identifier === "Judge: met" && (row.says === "addresses_the_request" || row.says === "names_what_it_will_touch"),
+      );
+      expect(metOnScope).toHaveLength(2);
+      expect(rows.some((row) => row.says === "tests_exercise_behaviour" && row.identifier === "Judge: met")).toBe(
+        true,
+      );
+    });
+
+    it("carries the overruled step's row even though the delivering step — the default open one — carries none", () => {
+      const rows = rowsOf(slotFor({ overridden: true }));
+      const overruled = rows.find((row) => row.named === "overruled");
+      expect(overruled?.says).toBe("declared_plan_drift");
+      expect(overruled?.identifier).toBe("Judge: not met · overruled by you");
+    });
+
+    it("draws the ordinary not-met row, and no overruled row, where the step was not overridden", () => {
+      const rows = rowsOf(slotFor({ overridden: false }));
+      expect(rows.some((row) => row.named === "overruled")).toBe(false);
+      const refused = rows.find((row) => row.says === "declared_plan_drift");
+      expect(refused?.identifier).toBe("Judge: not met");
+    });
+  });
+
+  // Item 3 — plain words, no counts, no jargon.
+  describe("the overruled criterion's own row, in plain words", () => {
+    it("says the criterion, then the verdict, never a count or the internal jargon", () => {
+      const rows = rowsOf(slotFor({ overridden: true }));
+      const overruled = rows.find((row) => row.named === "overruled");
+      expect(overruled?.says).not.toMatch(/refused|of \d+ criteri|gaming check/i);
+      expect(overruled?.identifier).toBe("Judge: not met · overruled by you");
+    });
+
+    it("labels the Judge's own reason and the person's own reason apart", () => {
+      const rows = rowsOf(slotFor({ overridden: true }));
+      const overruled = rows.find((row) => row.named === "overruled");
+      const detail = overruled?.detail as ReactElement | undefined;
+      const text = JSON.stringify(detail);
+      expect(text).toMatch(/Judge’s reason: The step should not touch crates\/ipc\/operations\.toml\./);
+      expect(text).toMatch(/Your reason: “The note is correct and needed\.”/);
+    });
+
+    it("carries the Judge's own reason alone where the log kept no reason", () => {
+      const rows = rowsOf(slotFor({ overridden: true, notes: [] }));
+      const overruled = rows.find((row) => row.named === "overruled");
+      const text = JSON.stringify(overruled?.detail);
+      expect(text).toMatch(/Judge’s reason:/);
+      expect(text).not.toMatch(/Your reason:/);
+    });
+  });
+
   it("carries the header off the human gate step, and the settled pull request", () => {
-    const slot = slotFor(false);
+    const slot = slotFor({});
     expect(slot.props.header).toEqual({ done: "Done", when: expect.stringContaining("approved") });
     expect(slot.props.pullRequest).toBeDefined();
     expect(slot.props.actions).toBeUndefined();
@@ -177,14 +315,7 @@ describe("the verdict sheet once a Job is done and a person answered it", () => 
   });
 
   it("adds how many Drones ran to the figures", () => {
-    const slot = slotFor(false);
+    const slot = slotFor({});
     expect(slot.props.figures.some((figure) => figure.label === "Drones" && figure.value === "5")).toBe(true);
-  });
-
-  it("carries the overrule reason through to the open step's overruled row, where the open step is the one overruled", () => {
-    const slot = slotFor(true);
-    const provesIt = slot.props.provesIt as ReactElement<{ rows: { detail?: string }[] }>;
-    const overruled = provesIt.props.rows.find((row) => "detail" in row && row.detail?.includes("You:"));
-    expect(overruled?.detail).toMatch(/You: “The note is correct and needed\.”/);
   });
 });

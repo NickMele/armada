@@ -652,20 +652,7 @@ export function JobDetail({
           })
         : render === "finished" && neverAsked
           ? verdictSlotFinished({ job, whole, open, render, recorded, opensRecords, now, claimed, undecided })
-          : render === "finished"
-            ? verdictSlotAfterAnswer({
-                job,
-                whole,
-                open,
-                render,
-                recorded,
-                opensRecords,
-                now,
-                claimed,
-                undecided,
-                notes: noted?.notes ?? [],
-              })
-            : undefined;
+          : render === "finished" ? verdictSlotAfterAnswer({ job, whole, recorded, opensRecords, now, notes: noted?.notes ?? [], onOpenPullRequest }) : undefined;
 
   // The Job header, and everything that goes in it. `heading.tsx` holds what
   // it is made of — the badge, the facts, the acts that end or replace the Job,
