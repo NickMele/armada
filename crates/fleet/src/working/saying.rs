@@ -61,31 +61,34 @@ impl Working {
                 // One block of prose, so there is no heading to name. Every
                 // occasion but the opening brief is one of these.
                 headings: Vec::new(),
+                kinds: Vec::new(),
             },
         );
     }
 
-    /// Write down the brief a step opened with, and which of its lines
-    /// `crate::briefing` wrote as block headings.
+    /// Write down the brief a step opened with, which of its lines
+    /// `crate::briefing` wrote as block headings, and what kind of section
+    /// each one is.
     ///
     /// **A sibling of [`Working::instructed`] rather than an argument on it.**
     /// The opening brief is the one turn assembled out of headed blocks, so a
-    /// `headings` argument on the common path would be six call sites saying
-    /// they have none. What the field is for is
-    /// `ipc::Saw::Instructed::headings`.
+    /// `headings`/`kinds` argument on the common path would be six call sites
+    /// saying they have none. What the fields are for is
+    /// `ipc::Saw::Instructed::headings` and `::kinds`.
     /// **It does not touch [`told_after`](Working::at_rest), and it must not.**
     /// The opening brief went down the pipe inside `drone::start`, before this
     /// slot existed — so by the time this runs the Drone may already have
     /// finished the run that turn began, and taking a reading here would move
     /// the baseline past an ending nobody had acted on. Zero is the reading the
     /// opening turn deserves, and the field starts there.
-    pub(crate) fn briefed(&self, text: &str, headings: Vec<usize>) {
+    pub(crate) fn briefed(&self, text: &str, headings: Vec<usize>, kinds: Vec<ipc::BlockKind>) {
         self.told(
             ipc::Voice::Armada,
             ipc::Saw::Instructed {
                 occasion: Occasion::Opening.as_wire().to_string(),
                 text: text.to_string(),
                 headings,
+                kinds,
             },
         );
     }
