@@ -1,29 +1,17 @@
-//! The Manifest a Job actually sees — what was snapshotted at its creation,
-//! never whatever `armada.yml` says by the time somebody asks.
+//! The Manifest a Job actually sees — what was snapshotted at its creation
+//! (`docs/concepts/drone.md`), never whatever `armada.yml` says by the time
+//! somebody asks.
 //!
-//! **`docs/concepts/drone.md`'s rule, carried past Checks and Commands.** A
-//! Job used to freeze only the Checks its workflow named and the Commands
-//! those Checks required; everything else — the rest of the Commands
-//! registry, every other declared Check, `setup.requires` — came off
-//! whatever Fleet held live. [`effective_manifest`](Fleet::effective_manifest)
-//! is the one place that gap closes: every reader named in `#650` —
-//! [`crate::spawning`]'s toolbelt, [`crate::preparing`]'s worktree setup,
-//! [`crate::rehearsing`]'s run sheet — resolves through it rather than
-//! through `Fleet::manifest` directly.
+//! [`effective_manifest`](Fleet::effective_manifest) is where every reader
+//! `#650` names — `crate::spawning`'s toolbelt, `crate::preparing`'s setup,
+//! `crate::rehearsing`'s run sheet — resolves instead of reading
+//! `Fleet::manifest` live.
 //!
-//! **Text, stored once, re-parsed on every read.** `crate::store` is not this
-//! crate's to hold a `config::Manifest` in — it sits under `config`, not
-//! beside it — so what it keeps is `armada.yml`'s own bytes, and this module
-//! is where they become a Manifest again. Parsing a few kilobytes of YAML on
-//! a toolbelt build or a run-sheet read is not the hook `docs/practices/rust.md`
-//! section 8 names: that one rebuilds a Cargo target, this reads a file already
-//! validated once at Job creation.
-//!
-//! **A store failure or a stale file degrades to the live Manifest, and does
-//! not fail the Job.** A Job whose snapshot could not be read is a Job read
-//! the way every Job was read before this existed, which is the answer this
-//! crate already gave for the five migrations before it that added a column
-//! and backfilled nothing.
+//! **Text, re-parsed on every read.** `crate::store` sits under `config`, not
+//! beside it, so it cannot hold a `config::Manifest` — only `armada.yml`'s own
+//! bytes, which this module turns back into one. A snapshot that cannot be
+//! taken or will not parse degrades to the live Manifest rather than failing
+//! the Job: the same reading every Job got before this existed.
 
 use config::Manifest;
 use core_model::{Component, Envelope, FieldValue, Job, Level};
