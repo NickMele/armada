@@ -204,10 +204,10 @@ pub struct StepDetail {
     /// above — and the first that is not an argument about a verdict. Nothing
     /// gates on a frame: it is what a person looks at on a step whose evidence
     /// is what it looks like, which is the whole of what `evidence_type:
-    /// visual` means.
+    /// shown` means.
     ///
     /// **Empty is the ordinary case and it is not a gap.** Every step of every
-    /// other type captures nothing, and so does a `visual` step whose harness
+    /// other type captures nothing, and so does a `shown` step whose harness
     /// would not run — what happened there is a line in the Job's own log,
     /// because a client cannot tell a repository with a broken harness from one
     /// with a spec that photographed nothing, and neither can this field.

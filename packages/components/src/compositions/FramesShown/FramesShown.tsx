@@ -63,7 +63,7 @@ export type FramesShownProps = {
    * What to say where there are none.
    *
    * **A step with no frames is the ordinary case**, not a failure: most steps
-   * declare no `visual` evidence at all. A caller that knows which silence this
+   * declare no `shown` evidence at all. A caller that knows which silence this
    * is says so; this draws whatever it is given.
    */
   emptyNote?: ReactNode;

@@ -368,7 +368,7 @@ impl fmt::Display for SetupRefused {
                 // would read as several.
                 write!(
                     f,
-                    "\n  declare `evidence:` in {}, or drop `evidence_type: visual`",
+                    "\n  declare `evidence:` in {}, or drop `evidence_type: shown`",
                     manifest.display()
                 )
             }

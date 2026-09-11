@@ -53,7 +53,7 @@ pub use handed_in::{
     worktree_directory_named,
 };
 pub use workflows::{
-    manifest, one, two_steps_both_gated_on_a_diff, two_steps_gated_on_a_manifest_rule,
+    manifest, one, shown_step, two_steps_both_gated_on_a_diff, two_steps_gated_on_a_manifest_rule,
     two_steps_gated_on_a_person, workflow_named, workflow_named_gated_on_diff, NEVER_QUIET,
     UNTRIPPABLE,
 };
@@ -410,5 +410,80 @@ async fn a_second_step_that_writes_nothing_is_not_credited_with_the_first_step_s
     assert_eq!(
         fleet.load(job.id()).await.unwrap().status(),
         JobStatus::AwaitingRepair
+    );
+}
+
+/// **A step whose evidence is what it looks like runs the harness once,
+/// against the Job's own worktree, and asks `FakeVcs` for no base checkout at
+/// all.** `show()` alone cannot prove the second half — it never made one even
+/// before `#602`, because `before_this_job` was the caller that did, one layer
+/// up, and only `showed` could reach it. Driving a real settling turn is what
+/// puts that caller back in the loop and lets `FakeVcs::bases` answer for it.
+#[tokio::test]
+async fn a_shown_step_runs_its_spec_once_and_makes_no_base_checkout() {
+    use crate::evidence::Call;
+    use config::EvidenceType;
+    use verification::{Claimed, NotClaimed, ShownBy};
+
+    let home = TempDir::new();
+    // A base ref really is there to be asked for, so `fleet.vcs().bases()`
+    // staying empty below is the before-run code never running rather than a
+    // repository with nothing to compare against.
+    let (workflow, armada_yml) = shown_step(
+        "sh -c 'mkdir -p shots && printf ok > shots/frame.txt'",
+        "shots",
+        Some("main"),
+    );
+    let mut fittings = fittings(&home, FakeWorkProduct::untouched());
+    fittings.workflows = one(workflow);
+    fittings.manifest = armada_yml;
+    fittings.vcs =
+        testkit::FakeVcs::new().with_ref_at("main", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+    let fleet = Fleet::assembled(fittings);
+
+    let job = fleet
+        .propose(a_proposal_for("show what it looks like", "fixture-shown"))
+        .await
+        .unwrap();
+    worktree_directory(&home, &job);
+    dispatched(&fleet, job.id()).await.unwrap();
+
+    submitted_by_the_one(
+        &fleet,
+        Call {
+            evidence_type: EvidenceType::Shown,
+            claimed: Claimed("the panel now collapses"),
+            shown_by: ShownBy("e2e/panel.spec.ts"),
+            not_claimed: NotClaimed(""),
+        },
+    )
+    .await
+    .unwrap();
+    let turned = fleet.turn().await.unwrap();
+    assert!(
+        matches!(
+            turned.ruled(),
+            Some(Ruling::Advanced { .. }) | Some(Ruling::Finished { .. })
+        ),
+        "a step with no mechanical check and no Judge advances on the evidence \
+         alone: {:?}",
+        turned.ruled()
+    );
+
+    let kept = fleet
+        .store()
+        .lock()
+        .await
+        .step_frames_every_attempt(job.id())
+        .expect("the frame record reads back");
+    assert_eq!(
+        kept.len(),
+        1,
+        "the harness ran once and the frame it wrote was kept"
+    );
+
+    assert!(
+        fleet.vcs().bases().is_empty(),
+        "no base checkout was ever asked for — the before run stays off"
     );
 }

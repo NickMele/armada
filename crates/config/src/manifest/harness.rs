@@ -2,12 +2,16 @@
 //! its Commands.
 //!
 //! **A repository says how it shows its work, and Armada grows no capture
-//! stack.** `checks:` holds no opinion about cargo versus pnpm; this holds none
-//! about Playwright versus anything else. Five keys — how to serve the thing,
-//! how to know it is up, what runs one spec, where the frames land, and the
-//! short list of paths nothing may ever visit — and every one of them is a
-//! command line or a path the repository wrote. Nothing here knows what a
-//! browser is.
+//! stack.** Five keys — how to serve the thing, how to know it is up, what
+//! runs one spec, where the frames land, and the short list of paths nothing
+//! may ever visit — and every one is a command line or a path the repository
+//! wrote. Nothing here knows what a browser is.
+//!
+//! **`run` and `frames` are the common denominator; `serve` and `ready` are one
+//! row's detail.** A repository with nothing to serve — a desktop app, a CLI, a
+//! library — names neither, and the two that remain are what every kind of
+//! software shares. `serve` and `ready` are a pair where named at all: a server
+//! nothing confirms came up is worse than none.
 //!
 //! **Not a route list.** The section says how a spec is run, never which
 //! screens exist: nobody hand-writes a hundred of those, and a list that had to
@@ -37,27 +41,29 @@ const SUBSTITUTION: &str = "{}";
 
 /// How a repository shows what its work looks like.
 ///
-/// **Four commands and a boundary, and not one of them is Armada's.** A
-/// repository that serves itself with one command and runs a spec with another
-/// has said everything Fleet needs; a repository that needs a pipeline writes a
-/// script and names the script, which is `checks-runner`'s rule and holds here
-/// for its reason — there is no shell, so `run` cannot pipe or chain.
+/// **A run, a place to look, and a boundary — none of them Armada's.** A
+/// repository that reaches its state with `run` alone has said everything
+/// Fleet needs; one that serves itself over a port says two things more.
+/// Either way a repository that needs a pipeline writes a script and names the
+/// script, which is `checks-runner`'s rule and holds here for its reason —
+/// there is no shell, so `run` cannot pipe or chain.
 ///
 /// Fields are `pub(super)` for [`super::declared`]'s reason: the walk below is
 /// the only thing that builds one, and every reader outside this crate goes
 /// through an accessor, which is where what a value means is written down.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Harness {
-    pub(super) serve: String,
-    pub(super) ready: String,
+    pub(super) serve: Option<String>,
+    pub(super) ready: Option<String>,
     pub(super) run: String,
     pub(super) frames: RepoPath,
     pub(super) never: Vec<String>,
 }
 
 impl Harness {
-    /// The command that serves the thing being shown. **Long-running on
-    /// purpose** — it is started, held for the run, and ended after it.
+    /// The command that serves the thing being shown, where the repository
+    /// declared one. **Long-running on purpose** — it is started, held for the
+    /// run, and ended after it.
     ///
     /// **It names its own port, and Armada does not assign one.**
     /// `crates/config/settings.toml` carries three port rows and nothing
@@ -65,19 +71,25 @@ impl Harness {
     /// half of that design nobody has built. A repository already knows which
     /// port its own preview server takes, and writing it here keeps the one
     /// place it is spelled inside the repository that owns it.
-    pub fn serve(&self) -> &str {
-        &self.serve
+    ///
+    /// **`None` where the repository has nothing to serve.** A desktop app, a
+    /// CLI, a library or a data pipeline reaches its state without a port, and
+    /// `read` refuses this without [`ready`](Harness::ready) — the two are a
+    /// pair or neither is here.
+    pub fn serve(&self) -> Option<&str> {
+        self.serve.as_deref()
     }
 
     /// The command that exits zero once [`serve`](Harness::serve) is up.
+    /// `None` on the same terms `serve` is.
     ///
-    /// **Required, and there is no sleep to fall back on.** A duration would
-    /// be a number somebody guessed against a machine they were not using, and
-    /// the failure it produces is a frame of a blank page that looks exactly
-    /// like a frame of a broken one. A command that answers is the only reading
-    /// that distinguishes them.
-    pub fn ready(&self) -> &str {
-        &self.ready
+    /// **No sleep to fall back on, where it is declared.** A duration would be
+    /// a number somebody guessed against a machine they were not using, and the
+    /// failure it produces is a frame of a blank page that looks exactly like a
+    /// frame of a broken one. A command that answers is the only reading that
+    /// distinguishes them.
+    pub fn ready(&self) -> Option<&str> {
+        self.ready.as_deref()
     }
 
     /// The command that runs one spec, with `{}` where the spec's path goes.
@@ -135,12 +147,31 @@ impl Harness {
 /// and the refusal is already in `out` — no Manifest carrying one loads at all.
 pub(super) fn read(value: &Value, out: &mut Vec<Refusal>) -> Option<Harness> {
     let mut table = Table::open("evidence", value, out)?;
+    // **Presence read before the value, and kept apart from it.** `optional`
+    // answers `None` both for a key never written and for one written with the
+    // wrong shape, and the pairing rule below has to tell those apart: a
+    // `serve` that is present and malformed still means the author meant to
+    // pair it, so `ready`'s absence is still refused, on top of whatever
+    // `WrongType` the malformed value already earned.
+    let has_serve = table.present("serve");
+    let has_ready = table.present("ready");
     let serve = table
-        .required("serve", out)
+        .optional("serve")
         .and_then(|value| yaml::text(&table.at("serve"), value, out));
     let ready = table
-        .required("ready", out)
+        .optional("ready")
         .and_then(|value| yaml::text(&table.at("ready"), value, out));
+    match (has_serve, has_ready) {
+        (true, false) => out.push(Refusal::new(
+            table.at("ready"),
+            Fault::ServeReadyMustPair { present: "serve" },
+        )),
+        (false, true) => out.push(Refusal::new(
+            table.at("serve"),
+            Fault::ServeReadyMustPair { present: "ready" },
+        )),
+        _ => {}
+    }
     let run_key = table.at("run");
     let run = table
         .required("run", out)
@@ -173,8 +204,12 @@ pub(super) fn read(value: &Value, out: &mut Vec<Refusal>) -> Option<Harness> {
         .unwrap_or_default();
     table.close(EVIDENCE_KEYS, out);
     Some(Harness {
-        serve: serve?,
-        ready: ready?,
+        // **Not `serve?` and `ready?`.** `Option<String>` is the field's own
+        // type now, so a `None` here — whether the key was never written or
+        // was written and refused above — is not a reason to give up on the
+        // rest of the section the way a malformed `run` or `frames` is.
+        serve,
+        ready,
         run: run?,
         frames: frames?,
         never,
@@ -223,7 +258,7 @@ impl Manifest {
     /// How this repository shows its work, or `None` where it does not say.
     ///
     /// **Absent is not a default and there is nothing to fall back to.** A
-    /// repository that declares no harness cannot run a `visual` step, which is
+    /// repository that declares no harness cannot run a `shown` step, which is
     /// what `ResolvedWorkflow::resolve` refuses before anything is dispatched —
     /// so absence reaches a Job as a refusal a person reads, never as a capture
     /// that quietly produced nothing.

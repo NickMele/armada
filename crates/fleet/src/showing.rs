@@ -1,6 +1,6 @@
 //! Running the repository's own harness, and keeping what it produced.
 //!
-//! A step whose `evidence_type` is `visual` is reviewed by looking at it, and
+//! A step whose `evidence_type` is `shown` is reviewed by looking at it, and
 //! this is what there is to look at. The repository declared how — `evidence:`
 //! in `armada.yml` — and the Drone wrote the spec, which scopes the run:
 //! `shown_by` names it and is refused when empty, so a capture of nothing is
@@ -18,11 +18,10 @@
 //! exactly like one of the right state, and what makes a frame checkable is the
 //! spec — code, in the diff. It names one, Fleet runs it, Fleet owns the frames.
 //!
-//! **Two runs, and the spec never moves.** `#209` asks for the base as well as
-//! the branch, so [`show`] takes an [`Aimed`]: the base checkout serves and the
-//! branch's own spec shoots, because that spec is code in the patch and does
-//! not exist at base. `crate::basing` holds where the base checkout comes from
-//! and how the two sets read as pairs.
+//! **One run, in the Job's own worktree, and no base checkout.** `#209` shipped
+//! a base run too, served from a checkout of the old code — `#602` switches it
+//! off, because nothing tells a spec which tree it is aimed at. `before_this_job`
+//! below says why it stays rather than being deleted.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -228,7 +227,8 @@ impl<'a> Aimed<'a> {
     }
 }
 
-/// Serve the thing, wait for it, run the spec against it, and end the server.
+/// Serve the thing if there is one, wait for it, run the spec, and end the
+/// server if one was started.
 ///
 /// **No error return, and the step is not failed on any of these.** A harness
 /// that will not run has established nothing about the work, exactly as a Check
@@ -236,9 +236,15 @@ impl<'a> Aimed<'a> {
 /// something to look at, not a fifth thing that can refuse a step. What comes
 /// back is a fact for a person to read, and [`NotShown`] is that fact.
 ///
-/// **The server is ended on every path**, including the ones that return early:
-/// [`Served`] signals its group on drop, so a readiness budget that expires
-/// leaves nothing holding the port.
+/// **`evidence.serve` is optional, and `run` is what every repository has.** A
+/// repository with nothing to serve — a desktop app, a CLI, a library — names
+/// no `serve`, and `config` refuses one that names it without a `ready`. So a
+/// `None` here means there is nothing to spawn or wait for, and `run` is asked
+/// to reach its own state.
+///
+/// **The server is ended on every path that started one**, including the ones
+/// that return early: [`Served`] signals its group on drop, so a readiness
+/// budget that expires leaves nothing holding the port.
 pub async fn show(
     harness: &Harness,
     spec: &str,
@@ -247,18 +253,29 @@ pub async fn show(
     coming_up: ComingUp,
     budget: Duration,
 ) -> Shown {
-    let mut serving = match Served::spawn(harness.serve(), aimed.served_from) {
-        Ok(serving) => serving,
-        Err(why) => return Shown::NotShown(NotShown::NotServed(why)),
+    let mut serving = match harness.serve() {
+        Some(serve) => match Served::spawn(serve, aimed.served_from) {
+            Ok(serving) => Some(serving),
+            Err(why) => return Shown::NotShown(NotShown::NotServed(why)),
+        },
+        None => None,
     };
-    if let Some(why) = ready(harness, aimed.served_from, coming_up, &mut serving).await {
-        return Shown::NotShown(why);
+    // `harness.ready()` is `Some` exactly when `harness.serve()` is —
+    // `config::manifest::harness::read` refuses one without the other — so a
+    // `serve` with no matching `ready` here would be a Manifest that loaded
+    // wrong rather than a case to handle.
+    if let (Some(active), Some(ready_cmd)) = (serving.as_mut(), harness.ready()) {
+        if let Some(why) = ready(ready_cmd, aimed.served_from, coming_up, active).await {
+            return Shown::NotShown(why);
+        }
     }
     // **The spec is substituted by the Harness and never composed here.** The
     // two characters that mark the hole are `config`'s, and a second place that
     // knew them would be a second spelling of the same rule.
     let ran = checks_runner::run(&harness.running(spec), aimed.shot_from, budget).await;
-    serving.end().await;
+    if let Some(active) = serving {
+        active.end().await;
+    }
     match ran.exit {
         // Zero and nothing else. A harness has no `expect_exit_code` — that key
         // is a Check's, and it exists because a linter's clean state is
@@ -277,12 +294,16 @@ pub async fn show(
 /// value to unwrap and the caller reads as a sequence of things that can stop
 /// it.
 ///
+/// **The command rather than the `Harness`**, unlike every other reader here —
+/// so a caller holding `Some(ready)` already knows there is one to ask, and
+/// this never has to re-decide whether `evidence.ready` was declared.
+///
 /// **The server is checked before every ask, not only at the start.** A serve
 /// command that dies three seconds in is the ordinary way a port conflict
 /// shows up, and a loop that only probed readiness would spend the whole budget
 /// asking a port nothing is listening on and then report a timeout.
 async fn ready(
-    harness: &Harness,
+    ready_cmd: &str,
     worktree: &Path,
     coming_up: ComingUp,
     serving: &mut Served,
@@ -300,10 +321,7 @@ async fn ready(
         if left.is_zero() {
             return Some(NotShown::NeverReady { after: waiting });
         }
-        if let Exit::Code(0) = checks_runner::run(harness.ready(), worktree, left)
-            .await
-            .exit
-        {
+        if let Exit::Code(0) = checks_runner::run(ready_cmd, worktree, left).await.exit {
             return None;
         }
         tokio::time::sleep_until((tokio::time::Instant::now() + ASKING_EVERY).min(deadline)).await;
@@ -559,7 +577,7 @@ where
     ///
     /// **Nothing happens on any other step.** The three conditions are read
     /// here rather than at the caller so there is one place that says when a
-    /// harness runs: the step declares `visual`, the repository declares a
+    /// harness runs: the step declares `shown`, the repository declares a
     /// harness, and the submission named a spec. The third cannot fail —
     /// `shown_by` is refused when empty — and is checked anyway, because the
     /// consequence of a blank one is a command with a hole in it.
@@ -573,12 +591,11 @@ where
     /// is one drop-oldest channel carrying every Job — the split
     /// `get_check_output` was made on, and `ipc::showing` holds the argument.
     ///
-    /// **Two runs, base first**, and the order is not arbitrary: both write
-    /// into the one directory `evidence.frames` names, so the earlier run has
-    /// to be kept and reaped before the later one is listed. The base run is
-    /// skipped and never faked — each way it can be missing is said in the
-    /// Job's log by `WhyNoPair::said`, and a pair with an invented half would
-    /// be worse than no pair.
+    /// **One run, branch only.** `#602` retired the base run this once made
+    /// first into the same `evidence.frames` directory — see the module doc.
+    /// `job` is still taken and not read: every other caller of a Fleet method
+    /// on a settling Job passes it, and `before_this_job` below is the reader
+    /// that will want it back.
     pub(crate) async fn showed(
         &self,
         job_id: &JobId,
@@ -587,14 +604,14 @@ where
         declared: &ResolvedStep,
         attempt: Attempt,
         submission: &Submission,
-        job: &Job,
+        _job: &Job,
         worktree: &Path,
     ) -> Result<Option<NotShown>, Adrift> {
-        if declared.evidence_type() != Some(EvidenceType::Visual) {
+        if declared.evidence_type() != Some(EvidenceType::Shown) {
             return Ok(None);
         }
         // Unreachable on a Job that was resolved — `ResolvedWorkflow::resolve`
-        // refuses a `visual` step against a Manifest with no harness — and
+        // refuses a `shown` step against a Manifest with no harness — and
         // checked because the Job froze its workflow and the Manifest is read
         // live. A repository that deleted the section under a running Job
         // reaches here, and saying so beats capturing nothing quietly.
@@ -617,9 +634,6 @@ where
         // worktree, and both of these are that. `ComingUp` stays a type of its
         // own so a dial has somewhere to land without moving a call site.
         let budget = self.budget().duration();
-        let before = self
-            .before_this_job(job, harness, spec, worktree, attempt, step, handle, budget)
-            .await;
         let shown = show(
             harness,
             spec,
@@ -629,12 +643,7 @@ where
             budget,
         )
         .await;
-        let (after, refused) = match shown {
-            // **The branch run's refusal is what is returned, and the base
-            // run's frames are still written.** A base set with no after is a
-            // legible thing — every frame in it is `Pairing::Removed` — and
-            // throwing it away because the second run failed would spend the
-            // minutes and keep nothing.
+        let (frames, refused) = match shown {
             Shown::NotShown(why) => (Vec::new(), Some(why)),
             Shown::Nothing => (Vec::new(), None),
             Shown::Frames(frames) => (
@@ -651,22 +660,11 @@ where
                 None,
             ),
         };
-        // **One write for both sides**, because `record_step_frames` replaces
-        // the whole run: two calls would have the second clear the first, and
-        // the ordinals are a single sequence over the pair.
-        let both: Vec<StepFrame> = before.frames.into_iter().chain(after).collect();
         self.store()
             .lock()
             .await
-            .record_step_frames(job_id, step, &both, &self.now())
+            .record_step_frames(job_id, step, &frames, &self.now())
             .map_err(Adrift::Writing)?;
-        self.noted_paired(
-            job_id,
-            step,
-            &both,
-            before.instead.as_ref(),
-            refused.is_none(),
-        );
         Ok(refused)
     }
 
@@ -676,7 +674,12 @@ where
     /// design: the spec is code in the patch and does not exist at base, so the
     /// only way to run it against the old code is to serve the old code and
     /// shoot from the new checkout.
-    #[allow(clippy::too_many_arguments)]
+    ///
+    /// **Unreachable, on purpose.** `#602` stopped `showed` calling this — see
+    /// the module doc for why. Kept rather than deleted: it is the hardest part
+    /// of `#209` to get right, and it comes back once something can tell a spec
+    /// which tree it is aimed at.
+    #[allow(dead_code, clippy::too_many_arguments)]
     async fn before_this_job(
         &self,
         job: &Job,
@@ -732,6 +735,12 @@ where
     /// frames on each side is not the interesting fact; *two paired, one added,
     /// none removed* is, because it says what the change did to the screen — and
     /// it is the reading `#209` asks for, available before any surface draws it.
+    ///
+    /// **Unreachable, on purpose.** `#602` stopped `showed` calling this: a
+    /// branch-only set has no pair to report, and a line saying *added* for
+    /// every frame on every step reads as a comparison that ran rather than
+    /// one that was switched off. It comes back with [`before_this_job`].
+    #[allow(dead_code)]
     fn noted_paired(
         &self,
         job_id: &JobId,

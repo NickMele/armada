@@ -270,6 +270,54 @@ pub fn manifest() -> Manifest {
     .expect("a manifest that parses")
 }
 
+/// A one-step workflow whose evidence is what it looks like, and the Manifest
+/// it resolves against — declaring `evidence:` with `run` and `frames` alone,
+/// the shape a repository with nothing to serve writes.
+///
+/// **Not built through [`Sketch`].** A harness section is not among the
+/// fields that helper writes, and this is the one fixture that needs one — so
+/// it is parsed here, through the same two real parsers, the way
+/// [`workflow_named_and`] already is for its own reason.
+///
+/// **The manifest is returned as well as the workflow**, because the two are
+/// separate parses of the same text: this one is what `ResolvedWorkflow`
+/// checks a `shown` step against, and the caller still has to plant a second
+/// copy on `Fittings::manifest`, which is what Fleet actually reads at
+/// runtime.
+///
+/// **`base` names a branch, or names none.** A fixture with a base declared
+/// and a matching ref on its `FakeVcs` is what makes "no base checkout was
+/// made" a claim the before-run code could have failed — `base_to_show_from`
+/// answers `NoBase::Unnamed` before ever asking `FakeVcs` for one otherwise,
+/// which would pass whether or not the caller that used to reach it still did.
+pub fn shown_step(
+    run: &str,
+    frames: &str,
+    base: Option<&str>,
+) -> (config::ResolvedWorkflow, Manifest) {
+    let def = config::WorkflowDef::parse(
+        std::path::Path::new("fixture-shown.yml"),
+        "version: 1\nworkflow_id: fixture-shown\nname: fixture\nstructure: linear\nsteps:\n  \
+         - id: show\n    label: \"Show\"\n    evidence_type: shown\n    delivers: false\n    \
+         advance_gate: auto\n",
+        &config::Roster::offering_nothing(),
+    )
+    .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
+    let base_line = base
+        .map(|name| format!("base: {name}\n"))
+        .unwrap_or_default();
+    let armada_yml = Manifest::parse(
+        std::path::Path::new("fixture-shown-armada.yml"),
+        &format!(
+            "version: 1\nid: 01FIXTUREMANIFEST\n{base_line}evidence:\n  run: {run} {{}}\n  frames: {frames}\n"
+        ),
+    )
+    .unwrap_or_else(|refused| panic!("the fixture manifest did not parse: {refused}"));
+    let resolved = config::ResolvedWorkflow::resolve(&def, &armada_yml)
+        .unwrap_or_else(|refused| panic!("the fixture did not resolve: {refused}"));
+    (resolved, armada_yml)
+}
+
 /// Norms no fixture trips. A step's turn count, its wall clock and the grace
 /// after a forced report are all put out of reach, so every test but
 /// `converging`'s own behaves exactly as it did before the chain existed.

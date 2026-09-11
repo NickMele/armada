@@ -107,7 +107,7 @@ pub struct Manifest {
     prepared_by: Vec<Preparation>,
     /// How this repository shows its work, where it says. **Not behind the
     /// cell**, for `exclude_paths`' reason one field down: a workflow's
-    /// `visual` steps were resolved against its presence at daemon start.
+    /// `shown` steps were resolved against its presence at daemon start.
     harness: Option<Harness>,
     proved_after_a_merge: Vec<ResolvedCheck>,
     /// **Not behind the cell**, because it is not live: every workflow was
