@@ -1,7 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, within } from "storybook/test";
 
+import type { ServerState } from "@armada/protocol";
 import type { JobFixture } from "../../../fixtures/fixture";
+import { propsFor } from "../../../fixtures/props";
 import {
   awaitingApproval,
   awaitingAttestation,
@@ -410,5 +412,73 @@ export const FullReadingOpen: Story = {
   render: drawing(running),
   play: async ({ canvas, userEvent }) => {
     await userEvent.click(await canvas.findByRole("button", { name: /^Details/ }));
+  },
+};
+
+// Journey 9's run sheet — #624. `r` opens it, one sheet replaces another, and
+// a server's link never navigates.
+
+/** `r` opens the run sheet, nothing selected. */
+export const RunOpen: Story = {
+  name: "Run sheet open",
+  render: drawing(running),
+  play: async ({ userEvent }) => {
+    await userEvent.keyboard("r");
+    await expect(within(document.body).findByRole("dialog", { name: "Run" })).resolves.toBeVisible();
+  },
+};
+
+/** Opening the run sheet while the log is open replaces it — one sheet at a time. */
+export const RunReplacesLog: Story = {
+  name: "Run sheet replaces the log",
+  render: drawing(running),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(await canvas.findByRole("button", { name: /Open the log/ }));
+    await expect(within(document.body).findByRole("dialog", { name: "Activity log" })).resolves.toBeVisible();
+
+    await userEvent.keyboard("r");
+    await expect(within(document.body).findByRole("dialog", { name: "Run" })).resolves.toBeVisible();
+    expect(within(document.body).queryByRole("dialog", { name: "Activity log" })).toBeNull();
+  },
+};
+
+/** A server this Job started, serving. Its link hands the address to the
+ * system browser rather than navigating — the design system's hard rule. */
+const SERVING: ServerState = {
+  id: "srv-storybook",
+  name: "storybook",
+  job_id: propsFor(running()).job.id,
+  phase: "serving",
+  serve: "pnpm storybook",
+  ports: [{ name: "PORT", port: 6006 }],
+  links: [{ url: "http://localhost:6006", name: "Storybook" }],
+  started_by: "person",
+  started_at: "2026-09-10T18:00:00Z",
+  serving_since: "2026-09-10T18:00:05Z",
+  stopped: false,
+  log: "run/storybook.log",
+};
+
+const openServerLink = fn(async () => ({ ok: true }) as const);
+
+export const ServingRow: Story = {
+  name: "Serving row, link opens the system browser",
+  render: () => (
+    <JobDetailFrom
+      fixture={running()}
+      on={{
+        rehearsal: {
+          ...propsFor(running()).rehearsal,
+          servers: { servers: [SERVING] },
+          onOpenServerLink: openServerLink,
+        },
+      }}
+    />
+  ),
+  play: async ({ canvas, userEvent }) => {
+    openServerLink.mockClear();
+    const link = await canvas.findByRole("button", { name: "Storybook" });
+    await userEvent.click(link);
+    await expect(openServerLink).toHaveBeenCalledWith(SERVING.id, SERVING.links[0]!.url);
   },
 };
