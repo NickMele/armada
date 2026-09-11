@@ -667,6 +667,38 @@ where
         Ok(moved.job)
     }
 
+    /// A Job as an event publish carries it, with the reason its last
+    /// transition stored.
+    ///
+    /// **`From<&core_model::Job>` cannot make this redaction.** That
+    /// conversion is right the instant a Job is created, advances a step or
+    /// gains or loses a Drone while still `running` — none of those have a
+    /// reason to carry, and the doc on that `impl` says so. It stops being
+    /// right the moment the Job it is handed is `escalated`: the reason is
+    /// what `escalation` in `packages/screens/src/render.ts` reads to draw
+    /// the dead-end render at all, a client replaces its whole row on every
+    /// one of these events rather than patching it, and there is no event
+    /// after the one that drops it to put the reason back — the Job sits
+    /// `escalated` until a person acts, and so does the hole in what Bridge
+    /// can draw.
+    ///
+    /// **`queued_reason`, `budget_hold`, `asking` and `resumption` stay
+    /// `None`, for `From`'s own reason.** Nothing publishes an event about a
+    /// Job in `queued` — creation, a step advancing and a Drone arriving or
+    /// leaving are none of them a `queued` Job — so there is no board to read
+    /// those from here either.
+    pub(crate) async fn published(&self, job: &Job) -> Result<ipc::JobSummary, Adrift> {
+        let reason = self.last_reason(job.id()).await?;
+        Ok(ipc::JobSummary::of(
+            job,
+            reason.as_ref(),
+            None,
+            None,
+            false,
+            None,
+        ))
+    }
+
     /// Move one step of the frozen workflow, write it to the same log, and
     /// publish it. **The only path**, like [`move_job`](Fleet::move_job).
     ///
@@ -743,10 +775,15 @@ where
             .await
             .record_step_transition(&moved)
             .map_err(Adrift::Writing)?;
-        // The row whole, so a client replaces it rather than re-reading it.
+        // The row whole, so a client replaces it rather than re-reading it —
+        // with the reason its last transition stored, for `published`'s
+        // reason: a redirect can revisit a step on a Job still `escalated`
+        // the instant this fires, ahead of the `move_job` that returns it to
+        // `running` a line below the caller.
+        let summary = self.published(&moved.job).await?;
         self.publish(ipc::Event::JobStepAdvanced(ipc::JobStepAdvanced::of(
             &moved.event,
-            ipc::JobSummary::from(&moved.job),
+            summary,
         )));
         Ok(moved.job)
     }

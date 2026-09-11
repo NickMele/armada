@@ -57,25 +57,27 @@ export function renderFor(job: JobSummary): Render {
   const life = JOB_LIFECYCLE[job.status];
   if (base === undefined || life === undefined) return "unrenderable";
   // An escalated Job has stopped and is waiting on a person, whatever its
-  // reason says. Where the reason is absent, or names a spelling this
-  // build's `ESCALATION_REASON` has no row for, the dead-end render has
-  // nothing to state — the same gap `base`/`life` above answers the same
-  // way, for the same reason: `unrenderable` says this build cannot
-  // describe the Job, not that nothing is wrong with it. Falling through to
-  // `working` would draw a live rail and a running clock over a Job that
-  // has stopped.
-  if (job.status === "escalated") return escalation(job) === undefined ? "unrenderable" : "stopped";
+  // reason says. **`escalated` has its own verb and glyph** —
+  // `docs/contracts/iconography.md`, "escalated's reasons — the same
+  // handover, one status over" — and a reason's replaces both only where
+  // one is both present and known to this build's `ESCALATION_REASON`.
+  // Where it is absent, or names a spelling this build has no row for, the
+  // status's own badge still stands: not every surface is served a reason
+  // (the same doc section's held-worktrees example), and a blank cannot be
+  // told from a finished Job. Falling through to `working` would still be
+  // wrong — a live rail and a running clock over a Job that has stopped —
+  // which is the one thing this status must never draw as, known reason or
+  // not.
+  if (job.status === "escalated") return "stopped";
   // **`awaiting_repair` is the line above one status over**, and it is here
   // rather than a row down because the failure is identical: a step spent its
   // retry budget, the Job is waiting on a person, and falling through to
   // `working` would draw the same live rail and running clock over it. #208.
   //
-  // **No `unrenderable` arm, and that is the difference.** `escalated` renders
-  // its reason's verb and glyph, so a reason this build cannot name leaves the
-  // dead-end render nothing to state. This status has a verb and a glyph of its
-  // own — `needs repair`, `wrench` — and what stopped the work is on the
-  // stopped step's `last_verdict` rather than on the Job's transition, which
-  // `escalation` deliberately does not read.
+  // This status has a verb and a glyph of its own — `needs repair`, `wrench`
+  // — the same way `escalated` above does, and what stopped the work is on
+  // the stopped step's `last_verdict` rather than on the Job's transition,
+  // which `escalation` deliberately does not read.
   //
   // Keyed on the status and not on a token, unlike the two rules below: the
   // registry key is the wire value, and a token is a rendering choice that
