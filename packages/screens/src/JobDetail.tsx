@@ -101,11 +101,11 @@ import { DetailSheet, holdOf, type HeldAt, type OpenSheet } from "./Sheets";
 import { chaptersOf } from "./chapters";
 import { againOf, useShowAgain, type ShowAgainCall } from "./again";
 import { span } from "./duration";
-import { Decide } from "./Decide";
 import { ordered } from "./facts";
 import { headingOf, Unrenderable } from "./heading";
 import { detailOf, holdingOf, logOf, lookOf, turnsOf } from "./mine";
 import { phasesOf } from "./phases";
+import { neverAsksAPerson, verdictSlotAtGate, verdictSlotFinished } from "./verdict";
 // Which Check's output `o` opens. **The same call the Checks chapter's own act
 // makes**, so the key and the control cannot open different files.
 import { outputOf } from "./gates";
@@ -601,6 +601,43 @@ export function JobDetail({
           undecided: whole?.stuck?.step_id === open.step_id ? whole?.stuck?.undecided : undefined,
         });
 
+  // The verdict sheet's slot: `Decide`'s place at the gate, and the finished
+  // Job's own place where the workflow never asked anybody anything. Neither
+  // is drawn without an open step — a Job with no steps has nothing this
+  // screen is built to read.
+  const neverAsked = neverAsksAPerson(whole?.steps ?? []) === true;
+  // Scoped the same way the Checks chapter's own read is, and for the same
+  // reason: a reader may have navigated to a different step, and
+  // `stuck.undecided` is not that step's reason for anything.
+  const undecided = whole?.stuck?.step_id === open?.step_id ? whole?.stuck?.undecided : undefined;
+  const verdictSlot =
+    open === undefined
+      ? undefined
+      : render === "reviewing"
+        ? verdictSlotAtGate({
+            job,
+            whole,
+            open,
+            render,
+            recorded,
+            opensRecords,
+            now,
+            claimed,
+            undecided,
+            onNeedMaterial,
+            onNeedRemarks,
+            stale,
+            deciding,
+            onMergePullRequest,
+            onApproveReview,
+            onRequestChanges,
+            onReject,
+            onTakeUpRemarks,
+          })
+        : render === "finished" && neverAsked
+          ? verdictSlotFinished({ job, whole, open, render, recorded, opensRecords, now, claimed, undecided })
+          : undefined;
+
   // The Job header, and everything that goes in it. `heading.tsx` holds what
   // it is made of — the badge, the facts, the acts that end or replace the Job,
   // and the way out to the pull request — which is where the next thing added
@@ -723,27 +760,10 @@ export function JobDetail({
               onOpenChapter: keys.onOpenChapter,
               // Review and reply are one loop: the decision is the block under
               // the story, one scroll from the diff it is made against, never a
-              // second surface and never a second panel.
-              after:
-                render === "reviewing" ? (
-                  <Decide
-                    job={job}
-                    onNeedMaterial={onNeedMaterial}
-                    onNeedRemarks={onNeedRemarks}
-                    evidence={recorded.evidence}
-                    remarks={recorded.remarks}
-                    stale={stale}
-                    deciding={deciding}
-                    {...(whole?.delivery?.pull_request === undefined
-                      ? {}
-                      : { pullRequest: whole.delivery.pull_request })}
-                    onMerge={onMergePullRequest}
-                    onApprove={onApproveReview}
-                    onRequestChanges={onRequestChanges}
-                    onReject={onReject}
-                    onTakeUpRemarks={onTakeUpRemarks}
-                  />
-                ) : undefined,
+              // second surface and never a second panel. The verdict sheet is
+              // what draws that block now — `Decide`'s acts sit inside it,
+              // unchanged, at `verdictSlot`'s `actions`.
+              after: verdictSlot,
             }
       }
       stepAbsent={whyNoSteps(watched, job.id)}

@@ -285,7 +285,7 @@ function LiveChecksOutput({ kept, following }: { kept: string; following: Follow
  * elapsed time is counted here from when it started, against `now`: the wire
  * sends one message when it starts and one when it finishes, never a tick.
  */
-function checkRow(read: CheckRead, now: number): CheckRunRow {
+export function checkRow(read: CheckRead, now: number): CheckRunRow {
   const { name, run, live } = read;
   if (isWaiting(read)) {
     return {
@@ -330,7 +330,7 @@ function checkRow(read: CheckRead, now: number): CheckRunRow {
  * the column beside it. Nothing here invents a word: `check-outcomes.toml` owns
  * all six.
  */
-function saidOf(run: CheckRun | undefined): string {
+export function saidOf(run: CheckRun | undefined): string {
   if (run === undefined) return NOTHING_HAS_RUN_IT;
   const verb = CHECK_OUTCOME[run.outcome]?.verb ?? run.outcome;
   return run.expected === undefined
@@ -344,7 +344,7 @@ function saidOf(run: CheckRun | undefined): string {
  * carries one per outcome and `criterion_verdict_check` carries the one for a
  * tier nothing has reached.
  */
-function iconOf(run: CheckRun | undefined): CheckRunRow["icon"] {
+export function iconOf(run: CheckRun | undefined): CheckRunRow["icon"] {
   const held =
     run === undefined ? CRITERION_VERDICT_CHECK.not_reached?.icon : CHECK_OUTCOME[run.outcome]?.icon;
   return held ?? undefined;
@@ -358,7 +358,7 @@ function iconOf(run: CheckRun | undefined): CheckRunRow["icon"] {
  * `judge_checks[]` entry on a step — so the row says what was declared, in
  * words, and claims nothing about being joinable.
  */
-function judgeRow(step: StepDetail, panels: Panel[], undecided?: string): CheckRunRow | undefined {
+export function judgeRow(step: StepDetail, panels: Panel[], undecided?: string): CheckRunRow | undefined {
   const declared = step.judge_checks;
   if (declared === undefined || declared.length === 0) return undefined;
   const identifier = declared.map(judgeOf).join(" · ");

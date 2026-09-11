@@ -537,6 +537,9 @@ triangle-alert Doctor only, plus generic warnings in toasts. A release on
                This line said RELEASED until 10 Sep 2026, four days after the
                withdrawal it was describing, and packages/icons/icons.toml has
                carried the withdrawal the whole time
+minus          nothing checked this — a verdict-sheet row where no Judge and no
+               Check beyond artifact_exists ruled. Never a Check outcome
+               (shield-*) or a Judge outcome (circle-*)
 ```
 
 ---

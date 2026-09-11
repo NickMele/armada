@@ -320,6 +320,13 @@
   status = "Specified"
   notes = "No nautical iconography. A wheel or compass for Helm is decoration, and metaphor is confined to proper nouns."
 
+[icons.minus]
+  means = "A plain horizontal dash"
+  group = "Step and Verdict"
+  size = "12px"
+  status = "Specified"
+  reserved = "Nothing checked this — a verdict-sheet row where no Judge and no Check beyond artifact_exists ruled. Never a Check outcome (shield-*) or a Judge outcome (circle-*)."
+
 [icons.octagon-alert]
   means = "An octagon with an exclamation mark — the only octagon in the system"
   group = "Escalation reason"
