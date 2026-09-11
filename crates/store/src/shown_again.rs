@@ -50,7 +50,9 @@ CREATE TABLE job_shown_again (
 "#;
 
 fn unreadable(cause: rusqlite::Error) -> LoadJobError {
-    LoadJobError::Unreadable(RowError::Database(fault("reading what a press kept")(cause)))
+    LoadJobError::Unreadable(RowError::Database(fault("reading what a press kept")(
+        cause,
+    )))
 }
 
 impl Store {

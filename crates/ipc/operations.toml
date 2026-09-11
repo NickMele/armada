@@ -1047,6 +1047,11 @@ and takes no slot lock across it; the store is locked only to read the spec and
 to write the set. The request waits for the task, and a client that stops
 waiting does not stop the run — `#428` was a dispatch that died with its request.
 
+**The shape rejected is `crate::proving`'s**: spawn, answer at once, and let a
+later turn record what came back. It keeps the store write on the loop and gives
+the person nothing to wait on, and the frames would appear whenever an unrelated
+event next made Bridge re-read the Job.
+
 **A press adds a set and never replaces one.** The owner's decision on #603: the
 step's frames stay what the step produced, and each press is a set told apart by
 when it ran. So the frames go into `job_shown_again` under a press number, and

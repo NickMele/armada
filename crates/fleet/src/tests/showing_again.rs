@@ -47,8 +47,8 @@ fn a_fleet_showing(home: &TempDir, run: &str) -> Arc<Fixture> {
 }
 
 fn worktree_of(home: &TempDir, job: &Job) -> PathBuf {
-    let spec = WorktreeSpec::for_job(&home.path().to_string_lossy(), &job.handle())
-        .expect("a legal spec");
+    let spec =
+        WorktreeSpec::for_job(&home.path().to_string_lossy(), &job.handle()).expect("a legal spec");
     PathBuf::from(spec.worktree_path())
 }
 
@@ -109,7 +109,11 @@ async fn a_press_keeps_a_set_of_its_own_while_the_other_jobs_keep_turning() {
     let home = TempDir::new();
     let fleet = a_fleet_showing(&home, SLOW_WHEN_ASKED);
     let first = shown_once(&fleet, &home, "show the panel", "the step's own picture").await;
-    assert!(first.status().is_terminal(), "a one-step Job finishes: {:?}", first.status());
+    assert!(
+        first.status().is_terminal(),
+        "a one-step Job finishes: {:?}",
+        first.status()
+    );
 
     // What the step photographed, before anything is pressed.
     let own = fleet
@@ -140,7 +144,9 @@ async fn a_press_keeps_a_set_of_its_own_while_the_other_jobs_keep_turning() {
     std::fs::create_dir_all(other.join("e2e")).expect("its spec's directory");
     std::fs::write(other.join(SPEC), b"its spec").expect("its spec");
     std::fs::write(other.join("marker"), "the other Job").expect("its marker");
-    dispatched(&fleet, second.id()).await.expect("admitted beside the press");
+    dispatched(&fleet, second.id())
+        .await
+        .expect("admitted beside the press");
     submitted_by_the_one(&fleet, shown(SPEC))
         .await
         .expect("the second Drone submits");
@@ -250,7 +256,10 @@ fn why(refused: Result<ipc::ShownAgain, Adrift>) -> Unshowable {
 #[tokio::test]
 async fn a_repository_that_declares_no_harness_is_told_so() {
     let home = TempDir::new();
-    let fleet = Arc::new(Fleet::assembled(fittings(&home, FakeWorkProduct::untouched())));
+    let fleet = Arc::new(Fleet::assembled(fittings(
+        &home,
+        FakeWorkProduct::untouched(),
+    )));
     let job = fleet
         .propose(crate::tests::daemon::a_proposal("show the panel"))
         .await
@@ -263,7 +272,10 @@ async fn a_repository_that_declares_no_harness_is_told_so() {
     assert_eq!(refused.status(), 409);
     assert_eq!(refused.error().code, "fleet.cannot_show_again");
     assert!(
-        refused.error().message.contains("declares no evidence harness"),
+        refused
+            .error()
+            .message
+            .contains("declares no evidence harness"),
         "a person is told what is missing: {}",
         refused.error().message
     );

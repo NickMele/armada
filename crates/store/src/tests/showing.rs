@@ -49,7 +49,12 @@ fn a_press_never_overwrites_the_frames_the_step_itself_produced() {
     let mut store = open(&dir);
     on_its_first_run(&mut store, JOB);
     let id = crate::tests::job_id(JOB);
-    submitted(&mut store, EvidenceType::Shown, "e2e/panel.spec.ts", "2026-08-26T10:03:00.000Z");
+    submitted(
+        &mut store,
+        EvidenceType::Shown,
+        "e2e/panel.spec.ts",
+        "2026-08-26T10:03:00.000Z",
+    );
     store
         .record_step_frames(
             &id,
@@ -73,7 +78,11 @@ fn a_press_never_overwrites_the_frames_the_step_itself_produced() {
                 &id,
                 press,
                 &named,
-                &[frame(&format!("fix.again{press}.1.branch"), "home.png", digest)],
+                &[frame(
+                    &format!("fix.again{press}.1.branch"),
+                    "home.png",
+                    digest,
+                )],
                 &at(when),
             )
             .expect("the press is recorded");
@@ -99,7 +108,10 @@ fn a_press_never_overwrites_the_frames_the_step_itself_produced() {
         "each set says when it ran"
     );
     assert_eq!(sets[1].frames[0].digest, "cccc");
-    assert_eq!(sets[0].frames[0].digest, "bbbb", "the second press left the first alone");
+    assert_eq!(
+        sets[0].frames[0].digest, "bbbb",
+        "the second press left the first alone"
+    );
     assert_eq!(sets[0].step, step_id());
     assert_eq!(sets[0].attempt, 1, "the run whose spec was rerun");
 }
@@ -110,14 +122,22 @@ fn a_press_that_captured_nothing_writes_no_set_and_takes_no_number() {
     let mut store = open(&dir);
     on_its_first_run(&mut store, JOB);
     let id = crate::tests::job_id(JOB);
-    submitted(&mut store, EvidenceType::Shown, "e2e/panel.spec.ts", "2026-08-26T10:03:00.000Z");
+    submitted(
+        &mut store,
+        EvidenceType::Shown,
+        "e2e/panel.spec.ts",
+        "2026-08-26T10:03:00.000Z",
+    );
     let named = store.spec_last_named(&id).expect("reads").expect("named");
 
     store
         .record_shown_again(&id, 1, &named, &[], &at("2026-08-26T11:00:00.000Z"))
         .expect("nothing to write is not a failure");
 
-    assert!(store.shown_again_every_press(&id).expect("reads").is_empty());
+    assert!(store
+        .shown_again_every_press(&id)
+        .expect("reads")
+        .is_empty());
     assert_eq!(store.next_press(&id).expect("reads"), 1);
 }
 
@@ -127,14 +147,24 @@ fn the_spec_a_press_reruns_is_the_last_one_a_shown_step_named() {
     let mut store = open(&dir);
     let job = on_its_first_run(&mut store, JOB);
     let id = crate::tests::job_id(JOB);
-    submitted(&mut store, EvidenceType::Shown, "e2e/first.spec.ts", "2026-08-26T10:03:00.000Z");
+    submitted(
+        &mut store,
+        EvidenceType::Shown,
+        "e2e/first.spec.ts",
+        "2026-08-26T10:03:00.000Z",
+    );
     run_it_again(
         &mut store,
         &job,
         "2026-08-26T10:05:00.000Z",
         "2026-08-26T10:06:00.000Z",
     );
-    submitted(&mut store, EvidenceType::Shown, "e2e/renamed.spec.ts", "2026-08-26T10:07:00.000Z");
+    submitted(
+        &mut store,
+        EvidenceType::Shown,
+        "e2e/renamed.spec.ts",
+        "2026-08-26T10:07:00.000Z",
+    );
 
     let named = store.spec_last_named(&id).expect("reads").expect("named");
     assert_eq!(named.spec, "e2e/renamed.spec.ts");
@@ -150,7 +180,12 @@ fn a_job_whose_steps_never_asked_to_be_shown_names_no_spec() {
     let mut store = open(&dir);
     on_its_first_run(&mut store, JOB);
     let id = crate::tests::job_id(JOB);
-    submitted(&mut store, EvidenceType::Diff, "src/log.rs, six lines", "2026-08-26T10:03:00.000Z");
+    submitted(
+        &mut store,
+        EvidenceType::Diff,
+        "src/log.rs, six lines",
+        "2026-08-26T10:03:00.000Z",
+    );
 
     assert_eq!(store.spec_last_named(&id).expect("reads"), None);
 }

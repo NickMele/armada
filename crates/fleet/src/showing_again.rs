@@ -1,45 +1,23 @@
-//! Asking a Job to show its work, on a person's say-so.
+//! A person asking a Job to show its work, off the turn loop.
 //!
-//! A step whose evidence is `shown` runs the repository's harness while it
-//! settles. This is the other half of `#603`'s *both*: a person presses a
-//! control on a Job whose worktree is still on disk, and the harness reruns the
-//! last spec a Drone named. [`show`] and [`kept`] are the mechanism, unchanged;
-//! what is here is where they run from and where what they produce is kept.
+//! The other half of `#603`'s *both*: a step whose evidence is `shown` runs the
+//! harness while it settles, and this reruns the last spec a Drone named when a
+//! person presses. [`show`] and [`kept`] are the mechanism, unchanged.
 //!
-//! # Off the turn loop, and that is the design
+//! **A task of its own, never the turn.** A step's harness runs under `turn`,
+//! which awaits each Job in order, so a press there would stop the Fleet for as
+//! long as the app takes to start. [`show_again`](Fleet::show_again) spawns the
+//! run on the `Arc` the listener holds and takes no slot lock; the request
+//! waits for the task, and a client that stops waiting does not stop the run.
+//! The shape this rejected is in `show_again`'s row in `operations.toml`.
 //!
-//! A step's harness runs inside `settle`, under `turning_one`, under `turn`,
-//! which awaits each Job in order. A press run there would stop every Job in
-//! the Fleet for as long as the app takes to start and the spec to finish.
+//! **A set of its own, beside the step's.** Rows go to `job_shown_again` under
+//! a press number, and `kept` is handed `<step>.again<press>` so the copies
+//! land beside the step's run directory rather than in it.
 //!
-//! **So the press is a task of its own**, spawned by
-//! [`show_again`](Fleet::show_again) on the `Arc` the listener holds Fleet by.
-//! It takes no slot lock at all — the slot is what the turn walks — and the
-//! store only to read the spec before and to write the set after, which is what
-//! a Drone's own tool call costs. The request that asked waits for the task;
-//! a client that stops waiting drops the wait and not the run, which is the
-//! lesson `#428` taught about a dispatch that died with its request.
-//!
-//! The alternative was `crate::proving`'s shape — spawn, answer at once, and
-//! let a later turn record what came back. It keeps the store write on the
-//! loop, and a person pressing would get nothing to wait on; the frames would
-//! appear whenever an unrelated event next made Bridge re-read the Job.
-//!
-//! # A set of its own, beside the step's
-//!
-//! The owner's decision on `#603`: a press never replaces the step's frames.
-//! The rows go to `store`'s `job_shown_again` under a press number, and the
-//! copies to a run directory of their own — `kept` names that directory from
-//! the step id it is handed, so it is handed `<step>.again<press>` and the copy
-//! lands beside `<step>.<attempt>.branch` rather than in it.
-//!
-//! # What it does not do
-//!
-//! **It does not clear what an earlier run left in `evidence.frames`.** Neither
-//! does a step's own run: the directory is the repository's, and a press on a
-//! Job under review deleting files from its worktree would be a change to the
-//! work somebody is deciding on. A spec that stopped writing a frame an earlier
-//! run wrote will see that file listed again. Reported on the pull request.
+//! **It clears nothing an earlier run left in `evidence.frames`**, and neither
+//! does a step's own run: the directory is the repository's, and deleting from
+//! a worktree under review would change the work being decided on.
 //!
 //! [`show`]: crate::showing::show
 //! [`kept`]: crate::showing::kept
@@ -108,9 +86,9 @@ impl Unshowable {
                 "a Drone is working in this Job's worktree. Show its work again once the Job \
                  stops",
             ),
-            Unshowable::AlreadyShowing => String::from(
-                "this Job is already showing its work. Wait for that run to finish",
-            ),
+            Unshowable::AlreadyShowing => {
+                String::from("this Job is already showing its work. Wait for that run to finish")
+            }
         }
     }
 }
@@ -152,7 +130,9 @@ impl Pressing {
     /// A poisoned lock is a press that panicked holding a map of Job ids, and
     /// the map is still the truth about which presses are out.
     fn held(&self) -> MutexGuard<'_, BTreeMap<JobId, Timestamp>> {
-        self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
