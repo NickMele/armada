@@ -5,7 +5,6 @@
 //! because whether a port answers and is free again is what a fake cannot
 //! stand in for — `crate::tests::ports_dispatch`'s reason, one module over.
 
-use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -50,9 +49,22 @@ commands:
 "#;
 
 fn a_fleet_serving(home: &TempDir, events: &api::Broadcaster) -> Arc<Fixture> {
+    a_fleet_holding(home, events, MANIFEST, MANIFEST)
+}
+
+/// `on_disk` is what a Job snapshots when it is created; `held` is what Fleet
+/// runs on. **The two differ where `armada.yml` changed after a Job froze
+/// it**, which is the case a Job's servers must not follow.
+fn a_fleet_holding(
+    home: &TempDir,
+    events: &api::Broadcaster,
+    on_disk: &str,
+    held: &str,
+) -> Arc<Fixture> {
+    let path = home.path().join("armada.yml");
+    std::fs::write(&path, on_disk).expect("the file a Job snapshots");
     let mut fittings = fittings(home, FakeWorkProduct::changed(&["src/log.rs"]));
-    fittings.manifest =
-        Manifest::parse(Path::new("armada.yml"), MANIFEST).expect("the fixture manifest");
+    fittings.manifest = Manifest::parse(&path, held).expect("the Manifest Fleet holds");
     fittings.events = events.clone();
     fittings.concurrency = Concurrency::of(2);
     fittings.port_range = a_range_of_its_own();
@@ -323,7 +335,7 @@ async fn a_server_that_falls_over_shows_as_stopped_on_its_own_with_its_log() {
         [one] if one.id == started.id && one.phase == ServerPhase::Exited
     ));
     let on_the_sheet = fleet
-        .declared_servers(job.id())
+        .declared_servers(job.id(), &fleet.effective_manifest(&job).await.0)
         .into_iter()
         .find(|entry| entry.name == "falls_over")
         .and_then(|entry| entry.instance);
@@ -433,4 +445,93 @@ async fn a_command_or_an_undeclared_name_is_not_a_server() {
     };
     assert_eq!(servers, ["falls_over", "never_built", "storybook"]);
     assert!(fleet.server_list().servers.is_empty());
+}
+
+/// `armada.yml` as Fleet holds it after a server was added under a Job that
+/// had already frozen the file without it.
+fn with_a_later_server() -> String {
+    format!("{MANIFEST}  late:\n    serve: \"/bin/sh -c 'exec sleep 30'\"\n")
+}
+
+/// **A Job's servers are the ones it froze.** Every key a server declares
+/// survives the snapshot, and a server added to `armada.yml` after the Job was
+/// created is offered to nothing of that Job's — a person's start, a Drone's
+/// tool, the run sheet — while the main checkout, which froze nothing, reads
+/// the file Fleet holds.
+#[tokio::test]
+async fn a_jobs_servers_are_the_ones_it_froze() {
+    let home = TempDir::new();
+    let events = api::Broadcaster::new();
+    let fleet = a_fleet_holding(&home, &events, MANIFEST, &with_a_later_server());
+    let job = a_running_job(&fleet, &home).await;
+
+    let (froze, frozen) = fleet.effective_manifest(&job).await;
+    assert!(frozen, "the Job carries a snapshot");
+    assert_eq!(
+        froze.server("storybook"),
+        fleet.manifest().server("storybook"),
+        "`serve`, `ready` and `links` survive the snapshot whole"
+    );
+    let storybook = froze.server("storybook").expect("snapshotted");
+    assert_eq!(
+        storybook.ready(),
+        Some("curl -sf http://127.0.0.1:${port.storybook}/")
+    );
+    assert_eq!(storybook.links().len(), 1);
+    assert!(froze.server("late").is_none());
+
+    let person = Arc::clone(&fleet)
+        .hold_server(Place::Job(job.clone()), "late", StartedBy::Person)
+        .await;
+    assert!(
+        matches!(person, Err(Unservable::NotAServer { .. })),
+        "{person:?}"
+    );
+    let drone = Arc::clone(&fleet)
+        .server_for_drone(job.clone(), "late")
+        .await;
+    assert!(
+        matches!(drone, Err(Unservable::NotAServer { .. })),
+        "{drone:?}"
+    );
+    assert!(!fleet
+        .declared_servers(job.id(), &froze)
+        .iter()
+        .any(|entry| entry.name == "late"));
+
+    let (main, _) = Arc::clone(&fleet)
+        .hold_server(Place::MainCheckout, "late", StartedBy::Person)
+        .await
+        .expect("the file Fleet holds declares it");
+    fleet.stopped_server(&main.id).await.expect("it stops");
+}
+
+/// **A Job with no snapshot it can read falls back to the live file**, as
+/// `crate::snapshotting` does for every reader — so a Job created before the
+/// snapshot existed still finds its servers. An unreadable snapshot takes the
+/// same branch as an absent one, and is the one the store lets a test write.
+#[tokio::test]
+async fn a_job_with_no_readable_snapshot_finds_its_servers_in_the_live_file() {
+    let home = TempDir::new();
+    let events = api::Broadcaster::new();
+    let fleet = a_fleet_holding(&home, &events, MANIFEST, &with_a_later_server());
+    let job = a_running_job(&fleet, &home).await;
+    fleet
+        .store()
+        .lock()
+        .await
+        .set_manifest_snapshot(job.id(), "{ not: a manifest")
+        .expect("written");
+
+    let (read, frozen) = fleet.effective_manifest(&job).await;
+    assert!(!frozen, "nothing frozen to read");
+    assert!(fleet
+        .declared_servers(job.id(), &read)
+        .iter()
+        .any(|entry| entry.name == "late"));
+    let (started, _) = Arc::clone(&fleet)
+        .hold_server(Place::Job(job.clone()), "late", StartedBy::Person)
+        .await
+        .expect("offered from the live file");
+    fleet.stopped_server(&started.id).await.expect("it stops");
 }

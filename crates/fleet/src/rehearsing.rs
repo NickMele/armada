@@ -89,7 +89,7 @@ where
             worktree_unreadable,
             drone_working: job.status() == JobStatus::Running,
             running: self.rehearsals().in_flight(job_id),
-            servers: self.declared_servers(job_id),
+            servers: self.declared_servers(job_id, &manifest),
         })
     }
 
@@ -103,7 +103,8 @@ where
         let refused = |why| self.run_refusal(job_id, why);
         // A server never exits, so a run of one would hold the Job's one run
         // slot for good — and Fleet would not know to hand it on or stop it.
-        if self.manifest().server(&asked.name).is_some() {
+        let (froze, _) = self.effective_manifest(&job).await;
+        if froze.server(&asked.name).is_some() {
             return Err(refused(Unrehearsable::IsAServer { name: asked.name }));
         }
         let Some(tree) = self.tree_of(&job) else {

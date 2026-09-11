@@ -72,16 +72,22 @@ where
     /// Start `name` at `place`, **or answer with the instance already up** —
     /// `true` beside the state where this call started it.
     ///
-    /// **Read from the Manifest Fleet holds**, the way the run sheet reads its
-    /// Commands. `${port.NAME}` is resolved in every field from the span the
-    /// server runs under, and the claim's variables ride in its environment.
+    /// **A Job's servers are what it froze** — `crate::snapshotting`, falling
+    /// back to the live file for a Job whose snapshot is absent or will not
+    /// read, as every other reader there does. The main checkout froze
+    /// nothing, and reads the Manifest Fleet holds. `${port.NAME}` is resolved
+    /// in every field from the span the server runs under, and the claim's
+    /// variables ride in its environment.
     pub(crate) async fn hold_server(
         self: Arc<Self>,
         place: Place,
         name: &str,
         by: StartedBy,
     ) -> Result<(ServerState, bool), Unservable> {
-        let manifest = self.manifest();
+        let manifest = match &place {
+            Place::Job(job) => self.effective_manifest(job).await.0,
+            Place::MainCheckout => self.manifest().clone(),
+        };
         let Some(server) = manifest.server(name).cloned() else {
             return Err(match manifest.command(name) {
                 Some(_) => Unservable::IsACommand {
@@ -93,6 +99,13 @@ where
                 },
             });
         };
+        // Against the same Manifest the server was found in, so a flag the
+        // Job froze is the flag that gates its Drone.
+        if by == StartedBy::Drone && server.is_destructive() {
+            return Err(Unservable::NeedsAPerson {
+                name: name.to_string(),
+            });
+        }
         let (holder, job_id, worktree, ports, env, under) = match &place {
             Place::Job(job) => {
                 if job.status().is_terminal() {
@@ -206,15 +219,6 @@ where
         job: Job,
         name: &str,
     ) -> Result<ServerReport, Unservable> {
-        if self
-            .manifest()
-            .server(name)
-            .is_some_and(|server| server.is_destructive())
-        {
-            return Err(Unservable::NeedsAPerson {
-                name: name.to_string(),
-            });
-        }
         let holder = Holder::Job(job.id().clone());
         let (mut state, fresh) = Arc::clone(&self)
             .hold_server(Place::Job(job), name, StartedBy::Drone)
@@ -296,10 +300,14 @@ where
         })
     }
 
-    /// The servers the Manifest declares, as the run sheet lists them, each
-    /// with this Job's instance.
-    pub(crate) fn declared_servers(&self, job: &JobId) -> Vec<ServerEntry> {
-        let manifest = self.manifest();
+    /// The servers `manifest` declares — the one the run sheet resolved for
+    /// this Job, so what it lists is what the Job froze — each with this Job's
+    /// instance.
+    pub(crate) fn declared_servers(
+        &self,
+        job: &JobId,
+        manifest: &config::Manifest,
+    ) -> Vec<ServerEntry> {
         let holder = Holder::Job(job.clone());
         manifest
             .server_names()
