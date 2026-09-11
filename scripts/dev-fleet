@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+#
+# A Fleet of your own, for development: its own home, its own store, its own
+# copy of the repository, and a Drone that does nothing.
+#
+# **Why nothing here may touch the owner's Fleet.** A Fleet started over the
+# real store reconciles at boot, and every Job it finds `running` with its Drone
+# gone is escalated `interrupted` — written into the owner's record. One served
+# against the real checkout appends to the transcripts under its `.armada/`.
+# So this points `HOME` at a scratch directory, because Fleet's store and its
+# runtime file live under `$HOME/Library/Application Support/Armada` and nothing
+# else moves them. It serves a local clone with the Fleet data copied in, and
+# sets `ARMADA_AGENT_BINARY` to a program that exits at once, so a Job it
+# dispatches escalates instead of spending anything.
+#
+#   scripts/dev-fleet <scratch-dir>               an empty store
+#   scripts/dev-fleet <scratch-dir> --copy-store  a copy of the owner's store
+#
+# It ends by running `armada serve`, so it holds the terminal until signalled.
+# Start it in the background and keep the handle. The port is in
+# `<scratch-dir>/home/user/Library/Application Support/Armada/fleet.json`.
+# `.claude/skills/dev-fleet/SKILL.md` says when to reach for it, and
+# `docs/practices/running-locally.md` says what it prints.
+
+set -euo pipefail
+
+usage() {
+  echo "usage: scripts/dev-fleet <scratch-dir> [--copy-store]" >&2
+  exit 2
+}
+[ $# -ge 1 ] || usage
+dir=$1
+shift
+copy_store=false
+for arg in "$@"; do
+  case $arg in
+    --copy-store) copy_store=true ;;
+    *) usage ;;
+  esac
+done
+
+here=$(git rev-parse --show-toplevel)
+# The checkout Fleet's data lives under — the main one, from whichever worktree
+# this ran in. `.armada/` is gitignored, so a worktree has none of its own.
+main=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
+armada="$here/target/debug/armada"
+if [ ! -x "$armada" ]; then
+  echo "dev-fleet: no built armada here — run \`cargo build --workspace\` first" >&2
+  exit 1
+fi
+
+mkdir -p "$dir"
+dir=$(cd "$dir" && pwd)
+# Inside the repository, a copy of the owner's transcripts is one `git add -A`
+# from a public commit.
+case "$dir/" in
+  "$main"/* | "$here"/*)
+    echo "dev-fleet: $dir is inside the repository — use a scratch directory outside it" >&2
+    exit 1
+    ;;
+esac
+
+# `home/user`, because a committed path naming a home directory names `user`
+# and the docs have to spell this one.
+home="$dir/home/user"
+machine="$home/Library/Application Support/Armada"
+runtime="$machine/fleet.json"
+
+# Already up is an answer, not a fault — `armada serve` says the same.
+if [ -f "$runtime" ]; then
+  pid=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("pid", ""))' "$runtime")
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+    echo "dev-fleet: already running as pid $pid — $runtime"
+    exit 0
+  fi
+fi
+
+if [ ! -d "$dir/repo" ]; then
+  git clone --local --quiet "$main" "$dir/repo"
+  # Without the worktrees: they are other Jobs' checkouts, many gigabytes of
+  # them, and a git worktree copied file by file is a directory git no longer
+  # knows. The transcripts, logs and Check outputs are what a Job is read from.
+  rsync -a --exclude worktrees "$main/.armada/" "$dir/repo/.armada/"
+fi
+
+mkdir -p "$machine" "$dir/bin"
+if $copy_store && [ ! -f "$machine/armada.db" ]; then
+  # `.backup` rather than `cp`, because the store is in WAL mode and a copy of
+  # the main file alone can miss whatever has not been checkpointed. It is
+  # SQLite's online backup, so it is safe while the owner's Fleet is up.
+  sqlite3 "$HOME/Library/Application Support/Armada/armada.db" ".backup '$machine/armada.db'"
+fi
+
+agent="$dir/bin/agent"
+printf '#!/bin/sh\n# A Drone that does nothing. dev-fleet dispatches this instead of a real agent.\nexit 0\n' >"$agent"
+chmod +x "$agent"
+
+cd "$dir/repo"
+exec env HOME="$home" ARMADA_AGENT_BINARY="$agent" "$armada" serve "$dir/repo"

@@ -111,6 +111,50 @@ A terminal gone quiet after `stopping: letting the turn in flight finish` is
 working. The runtime file is removed on the way out; a SIGKILL leaves it behind
 and the next start replaces it, saying so.
 
+## A Fleet of your own
+
+**`scripts/dev-fleet <scratch-dir>` starts a Fleet that cannot touch yours.** It
+has its own home, its own store, a local clone of this repository with the Fleet
+data copied in, and a Drone that exits at once — so a Job it dispatches
+escalates rather than doing work or spending anything. Add `--copy-store` to
+start it on a copy of your Jobs; leave it off for an empty store.
+
+**Reach for it when you want a Job as Fleet serves it, without your Fleet** — to
+record one for Storybook with `scripts/record-job.mjs`, or to point a surface at a
+real daemon. A second plain `armada serve` is not the same thing on another
+port: Fleet's store is found through `HOME`, so it would share yours, and its
+boot reconciliation would escalate your running Jobs as `interrupted`.
+
+It needs a built workspace (`cargo build --workspace`); `--copy-store` also
+needs `sqlite3`, which macOS ships. **It prints what `armada serve` prints**,
+because it ends by running it, and the port is also in
+`<scratch-dir>/home/user/Library/Application Support/Armada/fleet.json`. It refuses a
+scratch directory inside the repository and answers a second start with the pid
+already running. Stop it the way you stop Fleet, then delete the directory — it
+holds a copy of your transcripts.
+
+## Recording a Job for Storybook
+
+**`node scripts/record-job.mjs <job> <slug> "<the state, as a sentence>"` records
+one Job off a running Fleet** into `packages/screens/src/fixtures/recorded/<slug>/`,
+and Storybook draws it as a story of `Screens/Job detail`. It writes what Fleet
+answered — every read the job-detail screen makes, and every message on the
+Job's two sockets — and the story replays that through the same fold Bridge
+runs, so what you see there is what the app would draw.
+
+**Run it when a Job is sitting in a state the stories do not have yet.** Pass
+`--dev-fleet <scratch-dir>` to read a dev Fleet (above) rather than yours. It
+needs a running Fleet and nothing else. A Job still running is recorded as far
+as it had got: each socket is cut after two quiet seconds, and the story draws
+it still watching.
+
+**It scrubs before it writes, and writes nothing it could not scrub.** Home paths
+become `~`, your account name `owner`, and the machine's name and any email
+address are replaced. A line naming what was left means nothing was written —
+this repository is public. On success it prints each read's status and how many
+messages each socket carried. A read that answered 409 is recorded as the
+refusal it was, and the story draws it that way.
+
 ## Running a Check or a Command by hand
 
 **`armada check` and `armada run` need no Fleet.** They read `armada.yml` and

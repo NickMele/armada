@@ -19,6 +19,10 @@ wrong way in because it rebuilds and interleaves with the daemon's output.
 one store is the failure the runtime file exists to prevent, and `serve` answers
 it for free.
 
+**A Fleet of your own is `scripts/dev-fleet`, not a second `serve`.** The store
+is found through `HOME`, so a second `serve` on another port still shares the
+owner's, and its boot escalates his running Jobs. `.claude/skills/dev-fleet/`.
+
 **Run `serve` in the background and keep the handle.** It runs until it is
 signalled, and SIGTERM is what it waits for.
 
