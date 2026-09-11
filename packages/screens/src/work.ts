@@ -218,6 +218,19 @@ function workspaceOf(path: string): string {
 /** A file that will exist, named before it does. Never a count. */
 const NOT_WRITTEN = "not written yet";
 
+/**
+ * Whether this Job's own detail read has not yet answered — neither `read`
+ * nor `failed` for this `jobId`. The one signal `runLoading`, `briefLoading`
+ * and `stepLoading` share: those three regions all come from `whole`, which
+ * is `null` for exactly this reason and for "Fleet answered and said no" —
+ * two different things to draw, and this is only the first of them.
+ */
+export function stillReading(watched: Watched, jobId: string): boolean {
+  if (watched.state === "none") return true;
+  if (watched.jobId !== jobId) return true;
+  return watched.state !== "read" && watched.state !== "failed";
+}
+
 /** Why there is no region to draw, which is never the same sentence twice. */
 export function whyNoWork(watched: Watched, jobId: string): string {
   if (watched.state === "failed" && watched.jobId === jobId) {

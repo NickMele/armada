@@ -120,7 +120,7 @@ import { StepActs } from "./StepActs";
 import { whyNoNotes } from "./notes";
 import { entriesOf, hideUnread, whyNotWatching } from "./story";
 import { LOOK_FAILED, NOTHING_HAPPENED_YET, latestOf, movesOf, nothingToAsk, summarised, whyNoReading } from "./resources";
-import { briefOf, whyNoBrief, whyNoWork, workOf } from "./work";
+import { briefOf, stillReading, whyNoBrief, whyNoWork, workOf } from "./work";
 
 export type { ConfirmableAct, JobAct } from "./Acts";
 export { renderFor } from "./render";
@@ -716,6 +716,7 @@ export function JobDetail({
       run={run.map(named)}
       runElapsed={span(job.created_at, now) ?? undefined}
       runAbsent={whyNoSteps(watched, job.id)}
+      runLoading={stillReading(watched, job.id)}
       unreachable={
         watched.state === "failed" && watched.jobId === job.id ? "Fleet did not answer" : undefined
       }
@@ -766,6 +767,7 @@ export function JobDetail({
       whereAbsent={whyNoWork(watched, job.id)}
       brief={whole === null ? undefined : briefOf(whole)}
       briefAbsent={whyNoBrief(watched, job.id)}
+      briefLoading={stillReading(watched, job.id)}
       step={
         open === undefined
           ? undefined
@@ -813,6 +815,7 @@ export function JobDetail({
             }
       }
       stepAbsent={whyNoSteps(watched, job.id)}
+      stepLoading={stillReading(watched, job.id)}
       sheet={
         open === undefined ? null : (
           <DetailSheet
