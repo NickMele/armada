@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn } from "storybook/test";
+import { expect, fireEvent, fn } from "storybook/test";
 
 import { ShownAgain } from "./ShownAgain";
 
@@ -56,10 +56,13 @@ export const Ready: Story = {
  */
 export const Showing: Story = {
   args: { offer: { state: "showing", spec: SPEC } },
-  play: async ({ args, canvas, userEvent }) => {
+  play: async ({ args, canvas }) => {
     const control = canvas.getByRole("button", { name: "Showing…" });
     await expect(control).toBeDisabled();
-    await userEvent.click(control);
+    // Dispatched rather than clicked. The app's base styles take a disabled
+    // control out of pointer reach, so a pointer cannot press it at all; the
+    // event still arrives here to prove the handler is not bound either.
+    fireEvent.click(control);
     await expect(args.onShow).not.toHaveBeenCalled();
   },
 };
@@ -76,11 +79,14 @@ export const Cannot: Story = {
       why: "This Job's worktree is gone, so there is nowhere to run the harness. A clean or a reclaim took it.",
     },
   },
-  play: async ({ args, canvas, userEvent }) => {
+  play: async ({ args, canvas }) => {
     const control = canvas.getByRole("button", { name: "Show again" });
     await expect(control).toBeDisabled();
     await expect(canvas.getByText(/worktree is gone/)).toBeInTheDocument();
-    await userEvent.click(control);
+    // Dispatched rather than clicked. The app's base styles take a disabled
+    // control out of pointer reach, so a pointer cannot press it at all; the
+    // event still arrives here to prove the handler is not bound either.
+    fireEvent.click(control);
     await expect(args.onShow).not.toHaveBeenCalled();
   },
 };
