@@ -11,7 +11,7 @@
 
 import type { BriefStep } from "@armada/components";
 import type { StepDetail } from "@armada/protocol";
-import { nameOf } from "./declared";
+import { isSweepMarker, nameOf } from "./declared";
 
 /**
  * The Job's steps, read against the one a Drone is working now.
@@ -40,6 +40,6 @@ export function briefStepsOf(steps: readonly StepDetail[], currentStepId: string
  * back to the section's own words rather than an empty row of chips.
  */
 export function briefChecksOf(step: StepDetail): readonly string[] | undefined {
-  const checks = step.checks;
+  const checks = step.checks?.filter((check) => !isSweepMarker(check));
   return checks === undefined || checks.length === 0 ? undefined : checks.map(nameOf);
 }

@@ -24,7 +24,7 @@
 import { CHECK_ADVANCES, CRITERION_VERDICT_CHECK } from "@armada/components";
 import type { CheckRun, Criterion, DeclaredCheck, Judged, StepDetail } from "@armada/protocol";
 
-import { nameOf } from "./declared";
+import { isSweepMarker, nameOf } from "./declared";
 import { onlyCurrentAttempt } from "./facts";
 
 /**
@@ -54,7 +54,11 @@ export type CheckRead = {
  * caller draw nothing rather than an empty region.
  */
 export function checksOf(step: StepDetail): CheckRead[] {
-  const declared = step.checks ?? [];
+  // The sweep marker never counts as a Check and never draws as one — it
+  // declares that the step gates on everything the repository declares, and
+  // nothing ever runs it. `run.ts`'s tier count reads this same filter, on
+  // this same list, for the reason atop this file.
+  const declared = (step.checks ?? []).filter((check) => !isSweepMarker(check));
   const runs = onlyCurrentAttempt(step, step.check_runs);
   return declared.map((check) => {
     const name = nameOf(check);

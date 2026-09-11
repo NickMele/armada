@@ -18,6 +18,27 @@ import { ADVANCE_GATE } from "@armada/components";
 import type { DeclaredCheck, DeclaredJudge } from "@armada/protocol";
 
 /**
+ * Fleet's own marker for "this step gates on every Check the repository
+ * declares", prepended ahead of the Checks it expanded to. `crates/fleet/src/
+ * wire.rs`'s `declared_checks` says why it is on the wire at all.
+ */
+const EVERY_MANIFEST_CHECK = "every_manifest_check";
+
+/**
+ * Whether a declared entry is that marker rather than a Check with a name, a
+ * command and a run of its own.
+ *
+ * **It is not one of the step's Checks and must not be counted or drawn as
+ * one.** It carries no `name`, no `run` and nothing ever runs it, so a caller
+ * that maps `checks` straight into rows draws it as a Check declared and never
+ * run — `nameOf` falls back to `kind` for it same as for `diff_nonempty`, and
+ * the kind here is this marker's own spelling rather than a Check's.
+ */
+export function isSweepMarker(check: DeclaredCheck): boolean {
+  return check.kind === EVERY_MANIFEST_CHECK;
+}
+
+/**
  * The Check's name, or the built-in's kind where it names none.
  * `diff_nonempty` is an assertion rather than a Manifest Check, so it carries
  * the kind and nothing invents a name for it.
