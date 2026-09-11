@@ -154,6 +154,11 @@ approximations.
   — what one gate's reading of a Job's worktree costs, and whether the size of
   the diff or the load on the machine is what decides it. The measurement `#431`
   waited on.
+- [`spikes/014-how-much-room-does-a-brief-leave-for-comments.md`](spikes/014-how-much-room-does-a-brief-leave-for-comments.md)
+  — how much of an opening brief a merge press's chosen comments could take
+  before they are most of what the Drone reads, read cold against `assemble`
+  in `crates/fleet/src/briefing.rs`, and the character bound on the whole set
+  that follows from it. Not measured in this session; handed over.
 
 Raw transcripts sit beside each record. A negative result is a result and stays.
 

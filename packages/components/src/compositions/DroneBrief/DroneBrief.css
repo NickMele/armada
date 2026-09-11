@@ -154,19 +154,21 @@
 }
 
 .armada-brief__raw-body {
-  display: flex;
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--armada-chapter-pad, var(--space-3)) 0 0;
   border-top: var(--border-width) solid var(--border-subtle);
 }
 
-/* `[hidden]` is a class selector's loser by default — a plain HTML boolean
-   attribute rendered by the UA stylesheet at the lowest specificity there is,
-   so `.armada-brief__raw-body`'s own `display: flex` above wins and the
-   words this is folding show anyway. `Chapter.css` already carries this exact
-   override for its own body; this is the same fix for the second disclosure
-   nested inside one. */
-.armada-brief__raw-body[hidden] {
-  display: none;
+/* No `display` above, and that absence is the fold. Closed, this div carries
+   the `hidden` attribute and nothing else, so the UA stylesheet's own
+   `[hidden] { display: none }` sets it — there is no `display: flex` in this
+   sheet for it to lose to. `[hidden]` cannot be spelled as a selector here to
+   force that win the way `Chapter.css` does for its own body: `hidden` is a
+   boolean attribute, its selector carries no `=`, and the design-value gate
+   reads a bracket with no `=` inside as a Tailwind arbitrary value, not an
+   attribute test. So the open state is a class the component toggles
+   alongside `hidden`, below, rather than a selector on `hidden` itself. */
+.armada-brief__raw-body--open {
+  display: flex;
 }

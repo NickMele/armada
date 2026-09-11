@@ -11,7 +11,8 @@ import { EvidenceStrip } from "../../compositions/EvidenceStrip/EvidenceStrip";
 import { JudgeCitations } from "../../compositions/JudgeCitations/JudgeCitations";
 import { JudgeVerdicts } from "../../compositions/JudgeVerdicts/JudgeVerdicts";
 import { Absent } from "../absent";
-import { CHAPTERS, JOB, WHOLE, chapterAct } from "./fixtures";
+import { JOB } from "./fixtures";
+import { CHAPTERS, WHOLE, chapterAct } from "./chapters";
 import {
   API_OUTPUT,
   ATTEMPT,

@@ -9,12 +9,11 @@ import type { RunTreeStep } from "../../compositions/RunTree/RunTree";
 import type { StepChapter } from "../../compositions/StepStory/StepStory";
 import { JOB_STATUS } from "../../generated/vocabulary";
 import { badgeOf } from "../badge";
+import { BEHIND, HEADING } from "../InsideAJobOneArrangementAtEveryState/fixtures";
 import {
-  BEHIND,
   chapterAct,
-  HEADING,
   PRODUCED_FILES,
-} from "../InsideAJobOneArrangementAtEveryState/fixtures";
+} from "../InsideAJobOneArrangementAtEveryState/chapters";
 
 /**
  * The two Jobs this sheet draws, and the one difference between them.

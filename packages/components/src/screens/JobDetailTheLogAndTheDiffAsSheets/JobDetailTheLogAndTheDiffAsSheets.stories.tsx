@@ -11,15 +11,14 @@ import { SplitButton } from "../../primitives/SplitButton/SplitButton";
 import { JobDetailWithASheet } from "./JobDetailTheLogAndTheDiffAsSheets";
 import {
   BRIEF,
-  CHAPTERS,
   ESCALATED_HEADING,
   escalatedHeading,
   HEADING,
   JOB,
   RUN_RUNNING,
   WHERE,
-  WHOLE,
 } from "../InsideAJobOneArrangementAtEveryState/fixtures";
+import { CHAPTERS, WHOLE } from "../InsideAJobOneArrangementAtEveryState/chapters";
 
 /**
  * **The same Job, with one thing on top of it.** Every story here is the Bug
