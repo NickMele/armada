@@ -19,6 +19,7 @@ import {
   piloted,
   preparing,
   queued,
+  reading,
   rejected,
   retryingCheckFailure,
   review,
@@ -250,6 +251,22 @@ export const NoReport: Story = { name: "No report", render: drawing(escalatedNoR
 
 /** Fleet would not answer for this Job's detail. Each region says what it could not read. */
 export const FleetUnreachable: Story = { name: "Fleet unreachable", render: drawing(unreadable) };
+
+/**
+ * This Job's own detail asked for and not back yet. **What the Board already
+ * holds draws at once** — the run's step names, the open step's name, every row
+ * of where things are — and only what the read answers waits.
+ */
+export const StillReading: Story = {
+  name: "Still reading",
+  render: drawing(reading),
+  play: async ({ canvas }) => {
+    const run = canvas.getByRole("status", { name: "Reading the run" });
+    await expect(within(run).getByText("Reproduction")).toBeVisible();
+    await expect(canvas.getByText("Branch")).toBeVisible();
+    await expect(canvas.queryByText("Reading this job.")).toBeNull();
+  },
+};
 
 /** Landed. */
 export const Landed: Story = { name: "Landed", render: drawing(completedSuccess) };

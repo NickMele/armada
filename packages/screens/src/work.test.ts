@@ -97,32 +97,25 @@ function workflow(): WorkflowSummary {
 }
 
 describe("where the work is", () => {
-  it("names the worktree, the manifest, the workflow and the drone before the job's own read answers", () => {
-    // Four of five rows come off `JobSummary` and the holds already loaded
-    // for every job on the board — none of them need this job's own detail
-    // read, so they draw before it lands rather than waiting beside Branch,
-    // the one row that does.
-    const rows = workOf(noOpen, job(), null, manifest(), workflow());
-    const labels = rows.map((row) => row.iconLabel);
-    expect(labels).toEqual(["Worktree", "Manifest", "Workflow"]);
-  });
-
-  it("names the drone once the job has one, still with no read in hand", () => {
+  it("names every row before the job's own read answers", () => {
+    // The Board's row carries the branch and the Drone, and the Manifest and
+    // workflow holds are loaded for every job, so nothing here waits on the read.
     const withDrone: JobSummary = { ...job(), assigned_drone: "01M10B1V2A0011VRS6RA2SKPQ7" };
     const rows = workOf(noOpen, withDrone, null, manifest(), workflow());
-    expect(rows.map((row) => row.iconLabel)).toContain("Drone");
+    expect(rows.map((row) => row.iconLabel)).toEqual(["Worktree", "Branch", "Manifest", "Workflow", "Drone"]);
   });
 
-  it("says nothing about whether the worktree is written yet until the read answers", () => {
-    const rows = workOf(noOpen, job(), null, manifest(), workflow());
-    const worktree = rows.find((row) => row.iconLabel === "Worktree");
-    expect(worktree?.meta).toBeUndefined();
+  it("says the worktree is not written yet where the board's row has no branch", () => {
+    const undispatched: JobSummary = { ...job() };
+    delete undispatched.branch;
+    const rows = workOf(noOpen, undispatched, null, manifest(), workflow());
+    expect(rows.find((row) => row.iconLabel === "Worktree")?.meta).toBe("not written yet");
+    expect(rows.map((row) => row.iconLabel)).not.toContain("Branch");
   });
 
-  it("adds the branch once the job's own read comes back", () => {
+  it("takes the branch from the job's own read once it answers", () => {
     const rows = workOf(noOpen, job(), detail({ branch: "fix/settings-split-selectors" }), manifest(), workflow());
-    const branch = rows.find((row) => row.iconLabel === "Branch");
-    expect(branch?.value).toBe("fix/settings-split-selectors");
+    expect(rows.find((row) => row.iconLabel === "Branch")?.value).toBe("fix/settings-split-selectors");
   });
 
   it("falls back to the wire's own ids while the manifest and workflow holds are not there yet", () => {

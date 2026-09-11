@@ -31,6 +31,7 @@ import {
   superseded,
 } from "./terminal";
 import { preparing } from "./preparing";
+import { reading } from "./reading";
 import { unreadable } from "./unreadable";
 import { retryingCheckFailure, runningAtGate } from "./gating";
 import { reviewAtDelivery } from "./delivering";
@@ -58,6 +59,7 @@ export {
   killed,
   superseded,
   preparing,
+  reading,
   unreadable,
   retryingCheckFailure,
   runningAtGate,
@@ -85,6 +87,7 @@ export const FIXTURES = [
   killed(),
   superseded(),
   preparing(),
+  reading(),
   unreadable(),
   retryingCheckFailure(),
   runningAtGate(),

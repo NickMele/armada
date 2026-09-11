@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { useCallback } from "react";
 import { conceptSaid } from "../../concepts";
 import { Button } from "../../primitives/Button/Button";
-import { Skeleton } from "../../primitives/Skeleton/Skeleton";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 
 /**
@@ -238,23 +237,6 @@ export function WhereRow({
         </Tooltip>
       )}
       {actions}
-    </div>
-  );
-}
-
-/**
- * One row of *Where things are*, before it has come back. **Same three-column
- * grid** — label, value, trailing mark — reusing `.armada-wrow` rather than a
- * shape of its own, so a row does not shift once its label and value land.
- */
-export function WhereRowSkeleton({ valueWidth }: { valueWidth: string }) {
-  return (
-    <div className="armada-wrow">
-      <Skeleton width="70%" />
-      <span className="armada-wrow__v">
-        <Skeleton width={valueWidth} />
-      </span>
-      <Skeleton style={{ width: "var(--space-3)", height: "var(--space-3)" }} />
     </div>
   );
 }

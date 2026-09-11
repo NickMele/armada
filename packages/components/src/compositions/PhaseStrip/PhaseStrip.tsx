@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
+import { Skeleton } from "../../primitives/Skeleton/Skeleton";
 import { Tooltip } from "../../primitives/Tooltip/Tooltip";
 import { PhaseCard, phaseGlyph } from "../PhaseCard/PhaseCard";
 import type { PhaseCardRow, PhaseStageKind, PhaseStageState } from "../PhaseCard/PhaseCard";
@@ -601,5 +602,29 @@ function Loop({ loop, lane, says }: { loop: Drawn; lane: number; says: string })
         <span className="armada-phases__stem" />
       </span>
     </div>
+  );
+}
+
+/** Instructed, Working, Submitted and You: the stages every step has. */
+const SKELETON_NODES = 4;
+
+/**
+ * The strip, before the step it draws has come back. **Unnamed**, because a
+ * node's look is its state and a named node drawn before that is known would
+ * claim the step had not reached it.
+ */
+export function PhaseStripSkeleton() {
+  return (
+    <section className="armada-phases" role="status" aria-label="Reading the gates" aria-busy>
+      <div className="armada-phases__frame">
+        <div className="armada-phases__skeleton">
+          {Array.from({ length: SKELETON_NODES }, (_, at) => (
+            <div className="armada-phases__node" key={at}>
+              <Skeleton className="armada-phases__node-skeleton" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }

@@ -406,53 +406,65 @@ export function RunTree({
   );
 }
 
-/** How wide a loading row's name bar runs, one per row. Varied so the well
- * reads as a tree of different-length names rather than a repeated block.
- * Six, matching a typical workflow rather than a round number. */
-const RUN_SKELETON_NAME_WIDTHS = ["70%", "45%", "85%", "55%", "65%", "40%"];
+/** A step of the run, named before the run itself has come back. */
+export type RunTreeSkeletonStep = {
+  id: string;
+  label: ReactNode;
+  labelIsAnIdentifier?: boolean;
+};
 
-/**
- * Which row stands for the step you are on. **Job detail opens with the
- * current step's facts already open** — that is the ordinary reading, not
- * an edge case — so a skeleton with every row collapsed is missing the row
- * that is usually the tallest one in the well.
- */
-const RUN_SKELETON_CURRENT_ROW = 2;
+export type RunTreeSkeletonProps = {
+  /** The workflow's steps, in order. Absent or empty draws unnamed rows. */
+  steps?: RunTreeSkeletonStep[];
+  /** The step the Job is on — the row the real tree opens. */
+  current?: string;
+};
 
-/** How wide each of the current row's loading fact lines runs — a label and
- * a value, the shape `Produced`, `Checks` and `Judge` take. */
-const RUN_SKELETON_FACTS = [
+/** Rows for a run whose workflow is not known either. */
+const UNNAMED_WIDTHS = ["70%", "45%", "55%"];
+
+/** The current row's facts, a label and a value each. */
+const FACT_WIDTHS = [
   { label: "30%", value: "40%" },
   { label: "25%", value: "20%" },
   { label: "20%", value: "35%" },
 ];
 
 /**
- * The run, before it has come back. **Same well, same four-column row grid
- * `StepRow` draws** — chevron, mark, name, duration — reusing `.armada-run`
- * and `.armada-srow` rather than a shape of its own, so nothing moves once a
- * step lands in place of a row here. One row's facts are open, in the same
- * `.armada-srow__facts` well a real expanded row draws its own in, for the
- * same reason: it is usually there.
+ * The run, before this Job's own read has answered. **The names are known and
+ * drawn; where each step stands is not, and waits.** The same well and the same
+ * `StepRow` grid, so nothing moves when the run lands.
  */
-export function RunTreeSkeleton() {
+export function RunTreeSkeleton({ steps = [], current }: RunTreeSkeletonProps) {
+  const rows =
+    steps.length > 0
+      ? steps.map((step) => ({
+          id: step.id,
+          name: (
+            <span className="armada-srow__name" data-identifier={step.labelIsAnIdentifier || undefined}>
+              {step.label}
+            </span>
+          ),
+          open: step.id === current,
+        }))
+      : UNNAMED_WIDTHS.map((width, at) => ({ id: String(at), name: <Skeleton width={width} />, open: false }));
+
   return (
-    <ol className="armada-run" role="status" aria-label="Reading the run" aria-busy>
-      {RUN_SKELETON_NAME_WIDTHS.map((width, r) => {
-        const current = r === RUN_SKELETON_CURRENT_ROW;
-        return (
-          <li className="armada-run__step" key={r}>
+    <div role="status" aria-label="Reading the run" aria-busy>
+      <ol className="armada-run">
+        {rows.map((row) => (
+          <li className="armada-run__step" key={row.id}>
             <div className="armada-srow-group">
-              <div className="armada-srow" data-sel={current || undefined}>
-                <span className="armada-srow__chevron" />
-                <Skeleton style={{ width: "var(--space-3)", height: "var(--space-3)" }} />
-                <Skeleton width={width} />
-                <Skeleton width="2rem" />
+              <div className="armada-srow" data-sel={row.open || undefined}>
+                <span className="armada-srow__chevron" aria-hidden />
+                <Skeleton className="armada-run__mark-skeleton" />
+                {row.name}
+                <Skeleton className="armada-run__dur-skeleton" />
               </div>
-              {current ? (
+              {row.open ? (
                 <div className="armada-srow__facts">
-                  {RUN_SKELETON_FACTS.map((fact, f) => (
-                    <div className="armada-srow__fact" key={f}>
+                  {FACT_WIDTHS.map((fact, at) => (
+                    <div className="armada-srow__fact" key={at}>
                       <Skeleton width={fact.label} />
                       <Skeleton width={fact.value} />
                     </div>
@@ -461,8 +473,8 @@ export function RunTreeSkeleton() {
               ) : null}
             </div>
           </li>
-        );
-      })}
-    </ol>
+        ))}
+      </ol>
+    </div>
   );
 }

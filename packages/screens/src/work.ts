@@ -94,16 +94,9 @@ function opener(open: OpenArtifact, jobId: string, what: Artifact, label: string
 /**
  * The rows: where the work is, and the identifiers that name it.
  *
- * **Never `undefined`, because four of five rows never needed `whole` to
- * begin with.** Worktree is derived from `job.id`/`job.assigned_drone` and
- * the independently-loaded `manifests` hold; Manifest and Workflow fall back
- * to `job.owner_manifest_id`/`job.workflow_id` the instant those holds are
- * not there yet, and Drone is `job.assigned_drone` — all on `JobSummary`,
- * which is the board row already in memory when this screen opens, not a
- * second read. **Branch is the one row this Job's own detail read actually
- * answers**, and Overlaps is read off the same place, so those two alone
- * wait for `whole` and appear once it lands rather than holding the other
- * three back until it does.
+ * **None of them waits on this Job's own read** but Overlaps. The rest come off
+ * the `JobSummary` the Board already holds and the Manifest and workflow holds
+ * loaded for every Job, so the region draws the moment the screen opens.
  */
 export function workOf(
   open: OpenArtifact,
@@ -117,10 +110,10 @@ export function workOf(
   // see `artifactPath`'s own doc for which word reads which. Resolved anyway
   // so a row added here later does not have to learn where it comes from.
   const records = recordsOf(manifest) ?? "";
-  // `undefined` here is "not yet known", not "no" — a worktree row drawn
-  // before the read lands must not claim the file exists yet, and must not
-  // claim it doesn't either.
-  const dispatched = whole === null ? undefined : whole.branch !== undefined;
+  // The read's answer once it is in, and the Board's row until then. Both are
+  // Fleet's word for whether a worktree exists yet.
+  const branch = whole === null ? job.branch : whole.branch;
+  const dispatched = branch !== undefined;
   const rows: JobLogReferenceRow[] = [];
 
   if (repo !== null) {
@@ -133,18 +126,18 @@ export function workOf(
       value: where,
       copyValue: where,
       open: opener(open, job.id, "worktree", "Open the worktree"),
-      meta: dispatched === false ? NOT_WRITTEN : undefined,
+      meta: dispatched ? undefined : NOT_WRITTEN,
     });
   }
 
-  if (whole !== null && whole.branch !== undefined) {
+  if (branch !== undefined) {
     // No `open`, and none is coming. A branch is served rather than derived,
     // it is not a path, and copying it is the whole of what it is for.
     rows.push({
       icon: GitBranch,
       iconLabel: "Branch",
-      value: whole.branch,
-      copyValue: whole.branch,
+      value: branch,
+      copyValue: branch,
     });
   }
 
@@ -219,24 +212,14 @@ function workspaceOf(path: string): string {
 const NOT_WRITTEN = "not written yet";
 
 /**
- * Whether this Job's own detail read has not yet answered — neither `read`
- * nor `failed` for this `jobId`. The one signal `runLoading`, `briefLoading`
- * and `stepLoading` share: those three regions all come from `whole`, which
- * is `null` for exactly this reason and for "Fleet answered and said no" —
- * two different things to draw, and this is only the first of them.
+ * Whether this Job's own read has yet to answer, `read` or `failed`. `whole` is
+ * `null` both while it has not and once Fleet refused, and only the first draws
+ * as waiting.
  */
 export function stillReading(watched: Watched, jobId: string): boolean {
   if (watched.state === "none") return true;
   if (watched.jobId !== jobId) return true;
   return watched.state !== "read" && watched.state !== "failed";
-}
-
-/** Why there is no region to draw, which is never the same sentence twice. */
-export function whyNoWork(watched: Watched, jobId: string): string {
-  if (watched.state === "failed" && watched.jobId === jobId) {
-    return "Fleet did not answer";
-  }
-  return "Reading this job.";
 }
 
 /**

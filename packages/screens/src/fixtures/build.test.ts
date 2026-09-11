@@ -46,6 +46,7 @@ const EXPECTED_RENDER: Record<string, Render> = {
     "stopped",
   "running — before the first Drone turn, the worktree is being prepared": "working",
   "running — Fleet would not answer for this Job's own detail": "working",
+  "running — this Job's own detail was asked for and has not come back": "working",
   "running — a Check failed and the Drone is retrying, attempt 2 of 3": "working",
   "running — Regression check: nextest passed, the build Check is queued behind it": "working",
   "awaiting_review — the branch is pushed, a pull request is open, and the fourth answer appears":

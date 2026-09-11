@@ -25,6 +25,18 @@
   gap: calc(var(--space-1) / 2);
 }
 
+/* A row's mark and duration while the run is read. The bar is the mark's 12px
+   glyph in its 16px slot, so the names beside it sit where they will land. */
+.armada-run__mark-skeleton {
+  width: var(--space-3);
+  height: var(--space-3);
+  justify-self: center;
+}
+
+.armada-run__dur-skeleton {
+  width: var(--space-6);
+}
+
 
 /* A fact that opens the artifact behind it.
 

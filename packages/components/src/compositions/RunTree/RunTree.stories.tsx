@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { RunTree, type RunTreeStep } from "./RunTree";
+import { RunTree, RunTreeSkeleton, type RunTreeStep } from "./RunTree";
 
 /**
  * The run, drawn from the Bug workflow — the reference sample, seven steps,
@@ -337,4 +337,17 @@ export const SpentAttemptsFold: Story = {
       { id: "summarise", label: "Summarise", activity: "not_started", status: "not started", facts: [] },
     ],
   },
+};
+
+/**
+ * The run while it is read. The workflow's names are drawn, and each row's mark
+ * and duration wait, with the current step's facts held open where they land.
+ */
+export const Reading: Story = {
+  render: () => <RunTreeSkeleton steps={BUG.map(({ id, label }) => ({ id, label }))} current="fix" />,
+};
+
+/** The run while it is read, with no workflow to name its steps from either. */
+export const ReadingUnnamed: Story = {
+  render: () => <RunTreeSkeleton />,
 };
