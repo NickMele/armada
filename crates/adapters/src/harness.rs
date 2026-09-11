@@ -265,7 +265,11 @@ fn allowlist(config: &DroneSpawnConfig) -> Result<String, HarnessRefused> {
                 allowed.push("Edit".into());
                 allowed.push("Write".into());
             }
-            Grant::RunADeclaredCommand(run) => allowed.push(command_rule(run)?),
+            // One rule for both, so a push a person allowed is refused here
+            // exactly as a declared one is.
+            Grant::RunADeclaredCommand(run) | Grant::RunAnAllowedCommand(run) => {
+                allowed.push(command_rule(run)?)
+            }
             Grant::DispatchAJob => allowed.push(DISPATCH_TOOL.into()),
         }
     }

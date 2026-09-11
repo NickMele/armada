@@ -23,6 +23,10 @@
 //! [`DroneSpawnConfig`], [`Launch`] and [`McpConfig`] each say what they
 //! refuse.
 
+//! **Over 500 lines, on purpose.** Every type here is a field of
+//! [`DroneSpawnConfig`] or what one renders into, and "no escape hatch at any
+//! level" is a claim a reader should be able to check in one file.
+
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::time::Duration;
@@ -133,12 +137,10 @@ impl McpConfig {
 
 /// How a Drone is answered when it reaches for something it was not granted.
 ///
-/// **One variant, and Armada is always who answers.** Whether that answer is
-/// a refusal at once or a question held for a person is the Job's setting,
-/// read by Fleet — not a second variant here, which would put the choice
-/// where nobody looking at a Job can see it. A prompt at the Drone's own end
-/// has nobody to answer it, since a detached Drone has no terminal; leaving the
-/// mode off inherits the operator's, which was measured as `auto`.
+/// **One variant: Armada always answers.** Refusing at once or holding the
+/// question for a person is the Job's setting, read by Fleet, not a second
+/// variant here. A detached Drone has no terminal to be asked at, and leaving
+/// the mode off inherits the operator's, measured as `auto`.
 ///
 /// **It fails closed, measured.** A permission tool that errors, or a server
 /// that cannot be reached, leaves the call unrun.
@@ -151,10 +153,8 @@ pub enum Prompting {
 
 /// How long the harness waits on Armada's answer to one permission question.
 ///
-/// **Fleet holds a question for less than this**, so a question nobody answers
-/// ends in Fleet's refusal, which says why. A harness that gave up first would
-/// leave the call unrun while the question was still in front of a person, and
-/// their answer would reach nobody.
+/// **Fleet holds a question for less than this**, so an unanswered one ends in
+/// Fleet's refusal, which says why, rather than in a call abandoned unrun.
 pub const PERMISSION_WAIT: Duration = Duration::from_secs(30 * 60);
 
 /// One thing a Drone may do, named for the capability rather than for the tool.
@@ -180,6 +180,11 @@ pub enum Grant {
     /// The string comes from a `commands.<name>.run` in an `armada.yml` that a
     /// person committed, never from a Drone.
     RunADeclaredCommand(String),
+    /// Run one command a person allowed for this Job, spelled as it was asked.
+    ///
+    /// **Rendered as a declared command is, push refusal included** — a person
+    /// answering a question is not reviewing a Manifest.
+    RunAnAllowedCommand(String),
     /// Create Jobs, as children of the one being worked.
     ///
     /// **The only grant whose effect outlives the Drone that holds it.** Every
@@ -423,13 +428,9 @@ impl Launch {
         }
     }
 
-    /// Add the harness's own name for how long it waits on a permission
-    /// answer, set to [`PERMISSION_WAIT`] in milliseconds.
-    ///
-    /// **The one variable a harness adds, and the value is not the harness's
-    /// to choose.** It goes onto the config's environment, which started at
-    /// [`Environment::nothing`], and a name already there is refused rather
-    /// than overwritten.
+    /// The harness's name for its permission wait, set to [`PERMISSION_WAIT`]
+    /// in milliseconds. **The one variable a harness adds, and not a value it
+    /// chooses**; a name the config already holds is refused, not overwritten.
     pub fn waiting_on_permission(mut self, variable: &str) -> Result<Launch, SpawnConfigRefused> {
         let millis = PERMISSION_WAIT.as_millis().to_string();
         self.environment = self.environment.and(variable, &millis)?;

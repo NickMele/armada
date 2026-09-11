@@ -387,6 +387,33 @@ fn a_command_that_would_break_the_rule_is_refused_rather_than_rendered() {
     );
 }
 
+/// **A command a person allowed is spelled as a declared one, and refused as
+/// one.** A push allowed at a question is still not a push a Drone can make.
+#[test]
+fn a_command_a_person_allowed_renders_as_a_declared_one_and_a_push_is_still_refused() {
+    let declared = rendered(
+        Toolbelt::evidence_only().and(Grant::RunADeclaredCommand(String::from("npm install"))),
+    );
+    let allowed = rendered(
+        Toolbelt::evidence_only().and(Grant::RunAnAllowedCommand(String::from("npm install"))),
+    );
+    assert_eq!(allowed, declared);
+    let list = value_after(&allowed, "--allowedTools").expect("an allowlist is rendered");
+    assert!(
+        list.split(',').any(|entry| entry == "Bash(npm install:*)"),
+        "{list}"
+    );
+
+    let refused =
+        HeadlessAgent::at("/usr/local/bin/agent").render(&config(Toolbelt::evidence_only().and(
+            Grant::RunAnAllowedCommand(String::from("git push origin main")),
+        )));
+    assert!(
+        matches!(refused, Err(HarnessRefused::CommandWouldPush { .. })),
+        "{refused:?}"
+    );
+}
+
 #[test]
 fn a_relative_mcp_path_is_refused_where_it_is_written() {
     // It would resolve against the Drone's own working directory, which is the
