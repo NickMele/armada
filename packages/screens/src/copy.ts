@@ -289,7 +289,7 @@ export const WHEN_BLOCKED_MEANS: Record<WhenBlocked, string> = {
   ask_me: "The drone waits while you decide, then carries on. The job shows under Needs you.",
   allow_all:
     "Any command runs without asking, so the job finishes however it can. Pushing stays " +
-    "Armada's, and commands armada.yml marks destructive still stop for you.",
+    "Armada's, and anything armada.yml marks destructive still stops for you.",
 };
 
 /**

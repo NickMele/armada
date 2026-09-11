@@ -260,8 +260,8 @@ export function JobSettings({
                           because that is where somebody reads what Remove will do. */}
                       {row.reach === "repository" ? (
                         <span className="armada-job-settings__means">
-                          Also in armada.yml. Remove takes away only this job's allow, and
-                          armada.yml keeps it.
+                          Also always allowed in armada.yml. Removing it here leaves that in
+                          place.
                         </span>
                       ) : null}
                     </div>

@@ -58,7 +58,7 @@ const CHOICES: JobSettingsChoice[] = [
     label: "Run it",
     means:
       "Any command runs without asking, so the job finishes however it can. Pushing stays " +
-      "Armada's, and commands armada.yml marks destructive still stop for you.",
+      "Armada's, and anything armada.yml marks destructive still stops for you.",
   },
 ];
 
