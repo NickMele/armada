@@ -40,6 +40,7 @@ use crate::queries::{
     get_job_events, get_job_resources, get_manifest_reading, get_remarks, list_jobs,
     list_manifests, list_models, list_reports, list_workflows, list_worktrees,
 };
+use crate::rehearsing::{get_run_output, get_run_sheet, list_runs, start_run, stop_run, undo_run};
 use crate::sockets::{events, job_log, observe_check_output, observe_job};
 use crate::stream::Broadcaster;
 
@@ -284,6 +285,39 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/jobs/:job_id/show_again",
     },
+    // The run sheet: what can be run in a Job's worktree, a person's run of one
+    // entry, and what the runs left. A rehearsal, so nothing here moves the Job.
+    // `runs/:run_id/output` is `checks/:kept/output`'s shape one record over.
+    Route {
+        operation: "get_run_sheet",
+        method: "GET",
+        path: "/jobs/:job_id/run_sheet",
+    },
+    Route {
+        operation: "list_runs",
+        method: "GET",
+        path: "/jobs/:job_id/runs",
+    },
+    Route {
+        operation: "get_run_output",
+        method: "GET",
+        path: "/jobs/:job_id/runs/:run_id/output",
+    },
+    Route {
+        operation: "start_run",
+        method: "POST",
+        path: "/jobs/:job_id/start_run",
+    },
+    Route {
+        operation: "stop_run",
+        method: "POST",
+        path: "/jobs/:job_id/stop_run",
+    },
+    Route {
+        operation: "undo_run",
+        method: "POST",
+        path: "/jobs/:job_id/undo_run",
+    },
     // The one act on this table that changes what a Job may spend, and its own
     // route because nothing else on the Job is a number a person sets. It is
     // not a field on some general update: there is no general update, and the
@@ -472,6 +506,18 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/events",
     },
+    // A person's run, streaming and then ending. Both name a Job and move
+    // nothing on it.
+    Route {
+        operation: "run.output",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "run.finished",
+        method: "GET",
+        path: "/events",
+    },
 ];
 
 /// Everything a handler needs. Cloned per request, so nothing here may be
@@ -542,8 +588,8 @@ impl<D> Served<D> {
         &self.daemon
     }
 
-    /// The daemon as the `Arc` this listener holds it by, for the one command
-    /// that hands its work to a task of its own — `show_again`. A spawned task
+    /// The daemon as the `Arc` this listener holds it by, for the commands that
+    /// hand their work to a task of their own — `show_again`, `start_run`. A spawned task
     /// has to own what it runs on, and a borrow of the state does not outlive
     /// the request.
     pub(crate) fn shared(&self) -> Arc<D> {
@@ -608,6 +654,15 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         )
         .route("/jobs/:job_id/rerun_gate", post(rerun_gate::<D>))
         .route("/jobs/:job_id/show_again", post(show_again::<D>))
+        .route("/jobs/:job_id/run_sheet", get(get_run_sheet::<D>))
+        .route("/jobs/:job_id/runs", get(list_runs::<D>))
+        .route(
+            "/jobs/:job_id/runs/:run_id/output",
+            get(get_run_output::<D>),
+        )
+        .route("/jobs/:job_id/start_run", post(start_run::<D>))
+        .route("/jobs/:job_id/stop_run", post(stop_run::<D>))
+        .route("/jobs/:job_id/undo_run", post(undo_run::<D>))
         .route(
             "/jobs/:job_id/approve_dispatch",
             post(approve_dispatch::<D>),

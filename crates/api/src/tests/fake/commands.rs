@@ -87,6 +87,27 @@ impl Commands for FakeDaemon {
     ) -> Result<ipc::ShownAgain, Refusal> {
         self.fake_show_again(job_id).await
     }
+    async fn start_run(
+        self: std::sync::Arc<Self>,
+        job_id: JobId,
+        _run: ipc::StartRun,
+    ) -> Result<ipc::RunUnderway, Refusal> {
+        self.runs_nothing(&job_id)
+    }
+    async fn stop_run(
+        &self,
+        job_id: JobId,
+        _run: ipc::NamedRun,
+    ) -> Result<ipc::RunRecord, Refusal> {
+        self.runs_nothing(&job_id)
+    }
+    async fn undo_run(
+        &self,
+        job_id: JobId,
+        _run: ipc::NamedRun,
+    ) -> Result<ipc::RunRecord, Refusal> {
+        self.runs_nothing(&job_id)
+    }
     async fn raise_cost_cap(
         &self,
         job_id: JobId,

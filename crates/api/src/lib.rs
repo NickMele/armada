@@ -36,6 +36,9 @@ mod observing;
 mod queries;
 /// The `:job_id` a route carries, resolved before a handler can reach it.
 mod reference;
+/// The run sheet's routes: a person's run of one Manifest entry in a Job's
+/// worktree, and what the runs left.
+mod rehearsing;
 mod routes;
 mod sockets;
 mod stream;

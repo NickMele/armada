@@ -62,6 +62,9 @@ mod reading;
 /// What giving one Job's worktree and branch back did, half by half.
 /// **Two halves, because half of it happening is a real outcome.**
 mod reclaimed;
+/// A person's run of one Manifest entry in a Job's worktree. **A rehearsal,
+/// never a verdict** — nothing in it is a Check row or Evidence.
+mod rehearsal;
 /// What people wrote on a Job's pull request, and which of it a person picks.
 /// **The one place this seam carries text from outside this machine.**
 mod remarks;
@@ -126,6 +129,10 @@ pub use proposing::{ProposalInFlight, ProposalReach, ProposalStopped, StopPropos
 pub use raising::{CapRaise, RaisedBy, TurnRaise};
 pub use reading::{ManifestFault, ManifestMoved, ManifestReading, ManifestRefused};
 pub use reclaimed::{ReclaimedBranch, ReclaimedWorktree, WorktreeReclaimed};
+pub use rehearsal::{
+    NamedRun, RunEntry, RunList, RunOutput, RunOutputLines, RunRecord, RunSheet, RunUnderway,
+    StartRun, UnreadableRun,
+};
 pub use remarks::{JobRemarks, Remark, RemarksTakenUp};
 pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, ReportOrigin};
 pub use resources::{

@@ -1098,6 +1098,77 @@ rule for a look that found something wrong.
 person to look at, and Helm reads none of them.
 """
 
+# Journey 9, *Running one inside a Job*: the run sheet's six operations, kept
+# together because they are one subject. The two events are with the events.
+
+[operations.get_run_sheet]
+kind = "query"
+transport = "HTTP"
+helm_access = "No"
+description = "What a person can run in one Job's worktree — its Setup, Checks and Commands — and the facts the run sheet's header draws"
+notes = """
+**The Job's frozen Manifest, not the file on disk.** A Check the Job's workflow names is listed as the Job froze it at creation — `run`, `requires`, `narrow` and the bar — because the gate judges the Job against that, and rehearsing anything else answers a question the gate never asks. Nothing a Job holds freezes a Command, or a Check its workflow does not name, so those come from the Manifest Fleet holds now and say so: `frozen` is false on each.
+
+`narrow_run` is resolved the way a Drone's dry run resolves it — the worktree's own diff through `checks_runner::narrowed` — so the command shown is the one a Drone narrowing the same Check would run.
+
+`worktree_differs` compares the worktree's own `armada.yml` against these lists; `start_run` runs that version only when asked. `manifest_edited_at` is read from git: the newest commit at or before the Job's creation that changed the file.
+
+`helm_access` is `No`: the reader is a person at the run sheet.
+"""
+
+[operations.list_runs]
+kind = "query"
+transport = "HTTP"
+helm_access = "No"
+description = "One Job's earlier runs from the run sheet: name, exit code, when, how long, what changed, and the log"
+notes = """
+**Read off the run directories, not a table.** Each run keeps a directory under the repository's records root — its log and a small record — and this lists them, newest first. A run from the sheet is a rehearsal and writes no `job_step_checks` row and no Evidence, so there is no row to read. A record that will not read is answered in `unreadable` rather than dropped.
+
+Kept for the Machine's ad-hoc run log retention, thirty days, swept when the Job's sheet next starts a run.
+"""
+
+[operations.get_run_output]
+kind = "query"
+transport = "HTTP"
+helm_access = "No"
+description = "One run's log, read back as a window that says it is one"
+notes = """
+`get_check_output`'s shape and its reasons: the tail, because a test runner prints its failures last, bounded by lines and bytes, numbered as the file numbers it. `:run_id` names a run this Job recorded or the one in flight, resolved against the Job's own run directories before anything is opened.
+"""
+
+[operations.start_run]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Run one Check or Command in a Job's worktree, narrowed or whole — a rehearsal that records nothing on the Job"
+notes = """
+**The request names an entry, never a command line.** What runs is what the Job froze, or the worktree's `armada.yml` where `worktree_version` asks for it, and a Check's `requires` run first into the same log. **No shell**: `checks_runner` spawns the program directly, in a process group of its own. **No verdict**: no Evidence, no `job_step_checks` row, and nothing on the Job moves.
+
+It answers at once with the run underway; output arrives as `run.output` and the end as `run.finished`. The run is a task of its own, so a client that goes away does not stop it — `stop_run` does. A snapshot of the tree is taken first, so what the run changed can be named and put back.
+
+Refused where the worktree is gone, where a run is already out on this Job, where nothing declares the name, and where a narrowed run has nothing to narrow to. A Drone working in the tree is not a refusal: nothing locks, and the sheet says the run shares the tree.
+"""
+
+[operations.stop_run]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "End a run's process group; its log keeps what printed"
+notes = """
+Answers with the run's record once it is written, so the caller does not wait on the event for an end it asked for. Refused on a run that is not in flight on this Job.
+"""
+
+[operations.undo_run]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Put back the files one run changed, from the snapshot taken just before it"
+notes = """
+**Never a plain discard.** A Drone's work is uncommitted until delivery (`crates/fleet/src/landing.rs`), so a checkout would take it with the run's. Undo writes back only the paths the run changed, as the snapshot held them.
+
+Refused while a Drone is working in the tree, while a run is in flight, on a run already undone or with no snapshot, and where a path the run changed has moved since — writing the older version over it would take somebody's later work.
+"""
+
 [operations.restart_fleet]
 kind = "command"
 transport = "HTTP"
@@ -1285,6 +1356,26 @@ It carries `ManifestReading` itself rather than a payload wrapping one, which is
 No actor and no `at` on the envelope. `at` would be a second copy of the reading's own, and an actor would have to claim either that Fleet decided something — it read a file — or that a person did, when nobody pressed anything in Armada at all.
 
 It publishes at the rate somebody saves a file, behind a settle window, so it costs the shared backlog nothing worth stating. A save that moved nothing Fleet reads live is still published: the reading is what Fleet now holds, and a client asks `worth_saying` whether it is news rather than being told only about the readings somebody else judged interesting.
+"""
+
+[operations."run.output"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "Whole lines a person's run printed since the last message"
+notes = """
+**On `/events`, and bounded twice there**, because output is the fastest thing this stream carries: at most one message a quarter-second per run, each capped by lines and bytes, keeping the tail and saying how many lines it left out. The log keeps everything and `get_run_output` reads it, so a drop costs a live line and never the record. `docs/practices/protocol.md` keeps Drone-speed rows off this stream for eviction's sake; this bound is what makes one run's output tolerable beside it.
+
+Names a Job and moves nothing on it.
+"""
+
+[operations."run.finished"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "A person's run ended: its record, with exit code, duration and what it changed"
+notes = """
+Carries the whole `RunRecord` — the row `list_runs` answers — so the sheet draws the result and the changed files without a read. Published after the record is written, so a reader that re-reads on it finds the run in the history.
 """
 
 [operations."review.ready"]

@@ -19,6 +19,23 @@ use crate::tests::shapes;
 use crate::tests::shapes::run_id;
 use crate::{Observed, Queries, Refusal, Resolved};
 
+impl FakeDaemon {
+    /// The run sheet's six operations, which the fake does not run: a 404 for
+    /// a Job it does not hold, and a 422 naming that for one it does. What the
+    /// routes prove is that each is wired, and `fleet` proves what they do.
+    pub(super) fn runs_nothing<T>(&self, job_id: &JobId) -> Result<T, Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        if !jobs.iter().any(|job| &job.id == job_id) {
+            return Err(self.no_such_job(job_id));
+        }
+        Err(Refusal::Unacceptable(ipc::WireError::raised(
+            "fleet.cannot_run_here",
+            "the fake daemon runs nothing in a worktree",
+            run_id(),
+        )))
+    }
+}
+
 impl Queries for FakeDaemon {
     /// **The three forms, against the summaries the fake is holding.** A real
     /// daemon asks the store; this asks the list, which is the same three
@@ -179,6 +196,22 @@ impl Queries for FakeDaemon {
                 run_id(),
             ))),
         }
+    }
+
+    async fn get_run_sheet(&self, job_id: JobId) -> Result<ipc::RunSheet, Refusal> {
+        self.runs_nothing(&job_id)
+    }
+
+    async fn list_runs(&self, job_id: JobId) -> Result<ipc::RunList, Refusal> {
+        self.runs_nothing(&job_id)
+    }
+
+    async fn get_run_output(
+        &self,
+        job_id: JobId,
+        _run_id: String,
+    ) -> Result<ipc::RunOutput, Refusal> {
+        self.runs_nothing(&job_id)
     }
 
     /// **The same two refusals again**, and nothing here opens a file: what the

@@ -19,7 +19,7 @@ use crate::reference::Resolved;
 use ipc::{
     CallArguments, CheckOutput, FleetCapacity, JobDetail, JobDiff, JobEvidence, JobHistory, JobId,
     JobList, JobRemarks, JobResources, KeptFrame, ManifestReading, ManifestSummary, ModelChoices,
-    ReportList, WorkflowSummary, WorktreesHeld,
+    ReportList, RunList, RunOutput, RunSheet, WorkflowSummary, WorktreesHeld,
 };
 
 /// Everything a client reads.
@@ -354,4 +354,29 @@ pub trait Queries: Send + Sync + 'static {
         job_id: JobId,
         kept: String,
     ) -> impl Future<Output = Result<crate::LiveOutput, Refusal>> + Send;
+
+    /// `get_run_sheet` — what a person can run in this Job's worktree, as the
+    /// Job froze it, and the facts the sheet's header and notices draw.
+    ///
+    /// [`Refusal::NoSuchJob`] where the id names no Job. A worktree that is gone
+    /// is an answer, `worktree_on_disk: false`, not a refusal.
+    fn get_run_sheet(
+        &self,
+        job_id: JobId,
+    ) -> impl Future<Output = Result<RunSheet, Refusal>> + Send;
+
+    /// `list_runs` — this Job's earlier runs from the sheet, newest first, with
+    /// the records that would not read answered beside them, never dropped.
+    fn list_runs(&self, job_id: JobId) -> impl Future<Output = Result<RunList, Refusal>> + Send;
+
+    /// `get_run_output` — one run's log, as a window that says it is one.
+    ///
+    /// **`run_id` names a run of this Job or reaches nothing**: it is resolved
+    /// against the Job's own runs before a file is opened.
+    /// [`Refusal::Unacceptable`] where it names none.
+    fn get_run_output(
+        &self,
+        job_id: JobId,
+        run_id: String,
+    ) -> impl Future<Output = Result<RunOutput, Refusal>> + Send;
 }
