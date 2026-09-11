@@ -42,7 +42,7 @@ pub struct RunSheet {
     pub running: Option<RunUnderway>,
     /// The Commands declaring `serve`, with this Job's instance of each. Not
     /// in `commands`: a server is started with `start_server`, never
-    /// `start_run`. Since protocol 10.9.
+    /// `start_run`. Since protocol 10.10.
     #[serde(default)]
     pub servers: Vec<crate::servers::ServerEntry>,
 }

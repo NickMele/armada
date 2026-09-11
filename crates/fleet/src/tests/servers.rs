@@ -511,6 +511,35 @@ async fn a_jobs_servers_are_the_ones_it_froze() {
     fleet.stopped_server(&main.id).await.expect("it stops");
 }
 
+/// **A `ports:` edit after a Job was created does not move its port.** A
+/// name's number is its offset in the sorted list, so `api` added ahead of
+/// `storybook` would make it the span's second port if the live file were read.
+#[tokio::test]
+async fn a_ports_edit_after_the_job_froze_does_not_move_its_port() {
+    let home = TempDir::new();
+    let events = api::Broadcaster::new();
+    let held = MANIFEST.replace("ports:\n", "ports:\n  api: {}\n");
+    let fleet = a_fleet_holding(&home, &events, MANIFEST, &held);
+    let job = a_running_job(&fleet, &home).await;
+    let claim = fleet
+        .store()
+        .lock()
+        .await
+        .port_span_for_job(job.id())
+        .expect("the read succeeds")
+        .expect("the Job claimed a span");
+
+    let ports = fleet.port_map(&job).await;
+    assert_eq!(ports.get("storybook"), Some(&claim.base), "{ports:?}");
+    assert_eq!(ports.get("api"), None, "not a port the Job froze");
+    let (started, _) = Arc::clone(&fleet)
+        .hold_server(Place::Job(job.clone()), "storybook", StartedBy::Person)
+        .await
+        .expect("it starts");
+    assert_eq!(started.ports.first().map(|one| one.port), Some(claim.base));
+    fleet.stopped_every_server().await;
+}
+
 /// **A Job with no snapshot it can read falls back to the live file**, as
 /// `crate::snapshotting` does for every reader — so a Job created before the
 /// snapshot existed still finds its servers. An unreadable snapshot takes the

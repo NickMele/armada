@@ -1,5 +1,5 @@
 // A Command that stays running, held by Fleet — `crates/ipc/src/servers.rs`.
-// Since protocol 10.9.
+// Since protocol 10.10.
 //
 // **Lifecycle on `/events`, output on a socket of its own**, the run socket's
 // reason one subject over. The header rules in `events.ts` hold: hand-written,

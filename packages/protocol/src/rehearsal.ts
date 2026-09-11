@@ -30,7 +30,7 @@ export type RunSheet = {
   running?: RunUnderway;
   /**
    * The Commands declaring `serve`, each with this Job's instance. Not in
-   * `commands`: a server is started with `start_server`. Since protocol 10.9.
+   * `commands`: a server is started with `start_server`. Since protocol 10.10.
    */
   servers?: ServerEntry[];
 };
