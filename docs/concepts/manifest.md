@@ -276,7 +276,7 @@ evidence:
 
 **`ready` is a command and not a duration, where it is declared.** A number would be a guess against a machine somebody else is using, and what it produces is a frame of a blank page that looks exactly like a frame of a broken one.
 
-**Starting a server is one row's detail, not the shape.** `serve` and `ready` describe a web application; a desktop app's driver launches its own process and owns it directly, a CLI's `run` is the whole invocation, and neither needs a port — which is why Armada's own Bridge, and every other repository with nothing to serve, declares `evidence:` with `run` and `frames` alone.
+**Starting a server is one row's detail, not the shape.** `serve` and `ready` describe a web application; a desktop app's driver launches its own process and owns it directly, a CLI's `run` is the whole invocation, and neither needs a port — so a repository with nothing to serve declares `evidence:` with `run` and `frames` alone. How Armada shows its own Bridge is still open, at #606.
 
 ### One run, in the Job's own worktree
 

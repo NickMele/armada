@@ -665,12 +665,6 @@ where
             .await
             .record_step_frames(job_id, step, &frames, &self.now())
             .map_err(Adrift::Writing)?;
-        // **No `instead` to report.** `#602` switched off the run that would
-        // have produced one — see the module doc — so there is never a pair to
-        // read and never a `WhyNoPair` to log. What `paired` counts on a
-        // branch-only set is honest besides: every frame reads as `Added`,
-        // which is the true state of a set with no before.
-        self.noted_paired(job_id, step, &frames, None, refused.is_none());
         Ok(refused)
     }
 
@@ -741,6 +735,12 @@ where
     /// frames on each side is not the interesting fact; *two paired, one added,
     /// none removed* is, because it says what the change did to the screen — and
     /// it is the reading `#209` asks for, available before any surface draws it.
+    ///
+    /// **Unreachable, on purpose.** `#602` stopped `showed` calling this: a
+    /// branch-only set has no pair to report, and a line saying *added* for
+    /// every frame on every step reads as a comparison that ran rather than
+    /// one that was switched off. It comes back with [`before_this_job`].
+    #[allow(dead_code)]
     fn noted_paired(
         &self,
         job_id: &JobId,
