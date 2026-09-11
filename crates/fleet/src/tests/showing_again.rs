@@ -12,7 +12,7 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use adapter_traits::WorktreeSpec;
 use config::EvidenceType;
@@ -22,7 +22,7 @@ use verification::{Claimed, NotClaimed, ShownBy};
 
 use crate::daemon::Fleet;
 use crate::evidence::Call;
-use crate::gate::Ruling;
+use crate::gate::{CheckBudget, Ruling};
 use crate::showing_again::Unshowable;
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal_for, fittings, one, shown_step, worktree_directory};
@@ -32,17 +32,21 @@ use crate::Adrift;
 
 const SPEC: &str = "e2e/panel.spec.ts";
 
-/// Waits `pause` seconds where the worktree holds one, then copies `marker`
-/// into the frames directory. The pause is what makes a press slow enough for
-/// the rest of the Fleet to be seen turning while it runs.
-const SLOW_WHEN_ASKED: &str =
-    "sh -c 'sleep $(cat pause 2>/dev/null || echo 0); mkdir -p shots && cp marker shots/frame.txt'";
+/// Waits for as long as the worktree holds `hold`, then copies `marker` into
+/// the frames directory under the name `name` holds. **The hold is the test's
+/// to lift**, so a press is out for exactly as long as a case needs and no
+/// clock decides whether it passed.
+const HELD_WHILE_ASKED: &str =
+    "sh -c 'while [ -f hold ]; do sleep 0.05; done; mkdir -p shots && cp marker shots/$(cat name)'";
 
 fn a_fleet_showing(home: &TempDir, run: &str) -> Arc<Fixture> {
     let (workflow, armada_yml) = shown_step(run, "shots", None);
     let mut fittings = fittings(home, FakeWorkProduct::untouched());
     fittings.workflows = one(workflow);
     fittings.manifest = armada_yml;
+    // A press held on a file is bounded by the Check budget, and the fixture's
+    // five seconds would end one on a loaded machine before the test lifts it.
+    fittings.budget = CheckBudget::of(Duration::from_secs(600));
     Arc::new(Fleet::assembled(fittings))
 }
 
@@ -74,6 +78,7 @@ async fn shown_once(fleet: &Fixture, home: &TempDir, title: &str, marker: &str) 
     std::fs::create_dir_all(tree.join("e2e")).expect("the spec's directory");
     std::fs::write(tree.join(SPEC), b"the Drone's spec").expect("the spec");
     std::fs::write(tree.join("marker"), marker).expect("what the harness photographs");
+    std::fs::write(tree.join("name"), "a.txt").expect("what the spec calls its frame");
     dispatched(fleet, job.id()).await.expect("released to run");
     submitted_by_the_one(fleet, shown(SPEC))
         .await
@@ -100,14 +105,15 @@ fn read(home: &TempDir, path: &str) -> String {
 /// the Job's worktree and its frames come back as a set of their own — and
 /// while it runs, the Fleet's other Jobs keep turning.
 ///
-/// The press is made slow on purpose, by a file only its worktree holds. The
-/// second Job is dispatched, worked and ruled on through ordinary turns while
-/// the press is still out, and each of those turns is measured: a press on the
-/// turn loop would hold every one of them for the whole of its pause.
+/// **Order, not a clock.** The press is held on a file only its worktree holds
+/// and only the test lifts. The second Job is proposed, worked and ruled on
+/// while the press is still held — `Pressing::since` answers for that — and
+/// only then is the hold lifted and the set read. A press on the turn loop
+/// could never let that turn come back, so this would hang rather than pass.
 #[tokio::test]
 async fn a_press_keeps_a_set_of_its_own_while_the_other_jobs_keep_turning() {
     let home = TempDir::new();
-    let fleet = a_fleet_showing(&home, SLOW_WHEN_ASKED);
+    let fleet = a_fleet_showing(&home, HELD_WHILE_ASKED);
     let first = shown_once(&fleet, &home, "show the panel", "the step's own picture").await;
     assert!(
         first.status().is_terminal(),
@@ -126,15 +132,23 @@ async fn a_press_keeps_a_set_of_its_own_while_the_other_jobs_keep_turning() {
 
     let tree = worktree_of(&home, &first);
     std::fs::write(tree.join("marker"), "a press's picture").expect("the screen changed");
-    std::fs::write(tree.join("pause"), "3").expect("a slow app");
+    std::fs::write(tree.join("hold"), b"").expect("an app still starting");
 
     let id = first.id().clone();
     let pressing = tokio::spawn({
         let fleet = Arc::clone(&fleet);
         async move { fleet.show_again(&id).await }
     });
+    // Until the press is out: taken for this Job, and waiting on the hold.
+    while fleet.pressing().since(first.id()).is_none() {
+        assert!(
+            !pressing.is_finished(),
+            "the press ended before it was ever held"
+        );
+        tokio::task::yield_now().await;
+    }
 
-    // The second Job, start to finish, while the press sleeps.
+    // The second Job, start to finish, while the press is held.
     let second = fleet
         .propose(a_proposal_for("show the other panel", "fixture-shown"))
         .await
@@ -144,32 +158,29 @@ async fn a_press_keeps_a_set_of_its_own_while_the_other_jobs_keep_turning() {
     std::fs::create_dir_all(other.join("e2e")).expect("its spec's directory");
     std::fs::write(other.join(SPEC), b"its spec").expect("its spec");
     std::fs::write(other.join("marker"), "the other Job").expect("its marker");
+    std::fs::write(other.join("name"), "a.txt").expect("its frame's name");
     dispatched(&fleet, second.id())
         .await
         .expect("admitted beside the press");
     submitted_by_the_one(&fleet, shown(SPEC))
         .await
         .expect("the second Drone submits");
-    let began = Instant::now();
     let turned = fleet.turn().await.expect("a turn while the press is out");
-    let took = began.elapsed();
 
     assert!(
         matches!(
             turned.ruled(),
             Some(Ruling::Advanced { .. }) | Some(Ruling::Finished { .. })
         ),
-        "the other Job was ruled on while the press ran: {:?}",
+        "the other Job was ruled on while the press was held: {:?}",
         turned.ruled()
     );
     assert!(
-        took < Duration::from_secs(2),
-        "the turn took {took:?} — a press on the turn loop would have held it for its pause"
+        fleet.pressing().since(first.id()).is_some() && !pressing.is_finished(),
+        "and the press was still held when that Job was ruled on"
     );
-    assert!(
-        !pressing.is_finished(),
-        "and the press was still out when that turn came back"
-    );
+
+    std::fs::remove_file(tree.join("hold")).expect("the app is up");
 
     let answered = pressing
         .await
@@ -217,7 +228,7 @@ async fn a_press_keeps_a_set_of_its_own_while_the_other_jobs_keep_turning() {
 #[tokio::test]
 async fn two_presses_are_two_sets_told_apart_by_when_each_ran() {
     let home = TempDir::new();
-    let fleet = a_fleet_showing(&home, SLOW_WHEN_ASKED);
+    let fleet = a_fleet_showing(&home, HELD_WHILE_ASKED);
     let job = shown_once(&fleet, &home, "show the panel", "the step's own picture").await;
     let tree = worktree_of(&home, &job);
 
@@ -239,6 +250,50 @@ async fn two_presses_are_two_sets_told_apart_by_when_each_ran() {
     assert_ne!(sets[0].pressed_at, sets[1].pressed_at);
     assert_eq!(read(&home, &sets[0].frames[0].path), "first press");
     assert_eq!(read(&home, &sets[1].frames[0].path), "second press");
+}
+
+/// **A press keeps what its own spec wrote and nothing an earlier run left.**
+/// Every run shoots into the one `evidence.frames` directory, so the step's
+/// frame, or an earlier press's, would otherwise be listed again and filed
+/// under a press that never produced it. Both reaps are proved here: the
+/// step's run writes `a.txt`, then two presses write `b.txt` and `c.txt`.
+#[tokio::test]
+async fn a_press_keeps_only_what_its_own_spec_wrote() {
+    let home = TempDir::new();
+    let fleet = a_fleet_showing(&home, HELD_WHILE_ASKED);
+    let job = shown_once(&fleet, &home, "show the panel", "the step's own picture").await;
+    let tree = worktree_of(&home, &job);
+
+    for name in ["b.txt", "c.txt"] {
+        std::fs::write(tree.join("name"), name).expect("the spec names another frame");
+        Arc::clone(&fleet)
+            .show_again(job.id())
+            .await
+            .expect("the press ran");
+    }
+
+    let names = |frames: &[core_model::StepFrame]| {
+        frames
+            .iter()
+            .map(|frame| frame.name.clone())
+            .collect::<Vec<_>>()
+    };
+    let store = fleet.store().lock().await;
+    let own = store.step_frames_every_attempt(job.id()).expect("reads");
+    assert_eq!(own.len(), 1);
+    assert_eq!(own[0].frame.name, "a.txt", "the step kept what it wrote");
+    let sets = store.shown_again_every_press(job.id()).expect("reads");
+    assert_eq!(
+        sets.iter()
+            .map(|set| names(&set.frames))
+            .collect::<Vec<_>>(),
+        vec![vec!["b.txt".to_string()], vec!["c.txt".to_string()]],
+        "each press kept only the frame its own spec wrote"
+    );
+    assert!(
+        !tree.join("shots").join("a.txt").exists(),
+        "the step's frame left the worktree once it was kept"
+    );
 }
 
 // -------------------------------------------------------- what refuses
@@ -284,7 +339,7 @@ async fn a_repository_that_declares_no_harness_is_told_so() {
 #[tokio::test]
 async fn a_job_whose_worktree_is_gone_is_told_so() {
     let home = TempDir::new();
-    let fleet = a_fleet_showing(&home, SLOW_WHEN_ASKED);
+    let fleet = a_fleet_showing(&home, HELD_WHILE_ASKED);
     let job = fleet
         .propose(a_proposal_for("show the panel", "fixture-shown"))
         .await
@@ -299,7 +354,7 @@ async fn a_job_whose_worktree_is_gone_is_told_so() {
 #[tokio::test]
 async fn a_job_whose_drone_never_named_a_spec_is_told_so() {
     let home = TempDir::new();
-    let fleet = a_fleet_showing(&home, SLOW_WHEN_ASKED);
+    let fleet = a_fleet_showing(&home, HELD_WHILE_ASKED);
     let job = fleet
         .propose(a_proposal_for("show the panel", "fixture-shown"))
         .await
@@ -314,7 +369,7 @@ async fn a_job_whose_drone_never_named_a_spec_is_told_so() {
 #[tokio::test]
 async fn a_spec_a_later_run_deleted_is_named_rather_than_run() {
     let home = TempDir::new();
-    let fleet = a_fleet_showing(&home, SLOW_WHEN_ASKED);
+    let fleet = a_fleet_showing(&home, HELD_WHILE_ASKED);
     let job = shown_once(&fleet, &home, "show the panel", "the step's own picture").await;
     std::fs::remove_file(worktree_of(&home, &job).join(SPEC)).expect("the spec went");
 
@@ -331,7 +386,7 @@ async fn a_spec_a_later_run_deleted_is_named_rather_than_run() {
 #[tokio::test]
 async fn a_job_whose_drone_is_working_is_not_photographed_mid_edit() {
     let home = TempDir::new();
-    let fleet = a_fleet_showing(&home, SLOW_WHEN_ASKED);
+    let fleet = a_fleet_showing(&home, HELD_WHILE_ASKED);
     let job = fleet
         .propose(a_proposal_for("show the panel", "fixture-shown"))
         .await

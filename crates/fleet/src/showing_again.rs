@@ -35,7 +35,7 @@ use core_model::{
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
-use crate::showing::{kept, show, tail, Aimed, ComingUp, Shown};
+use crate::showing::{kept, reaped, show, tail, Aimed, ComingUp, Shown};
 
 /// Why a press cannot run. **Each is checked before anything runs**, so a
 /// control offering a press that fails is never the only way to find out.
@@ -280,6 +280,9 @@ where
                     harness.frames().as_str(),
                     Side::Branch,
                 );
+                // Out of the worktree once kept, so the next press lists only
+                // what its own spec wrote — `showing::reaped`.
+                reaped(worktree, harness.frames().as_str(), &copied);
                 let nothing = copied.is_empty().then(|| String::from(NOTHING_COPIED));
                 (copied, nothing)
             }
