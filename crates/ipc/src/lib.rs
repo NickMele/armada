@@ -32,6 +32,9 @@ mod attempt;
 mod capacity;
 mod checks;
 mod codec;
+/// A command a Drone was not given, and what a person answers about it. **Two
+/// paths to one answer** — while the Drone waits, or after the Job stopped.
+mod commanding;
 mod detail;
 mod enums;
 mod error;
@@ -92,6 +95,7 @@ pub use attempt::{Move, StepAttempt};
 pub use capacity::{AdmissionHold, FleetCapacity};
 pub use checks::{CheckOutput, CheckRun, DeclaredCheck, DeclaredJudge};
 pub use codec::{decode, encode, Undecodable, Unencodable};
+pub use commanding::{CommandAnswer, WhenBlocked};
 pub use detail::{
     Criterion, Dependency, JobDelivery, JobDetail, JobSpend, JudgeInFlight, PullRequestDetail,
     Refusal, ReviewedBy, Settled, StepDetail, StepFacts, Stuck, Verdict,

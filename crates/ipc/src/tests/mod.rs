@@ -17,6 +17,8 @@
 //! take is refused rather than ignored.
 
 mod capacity;
+/// A refused command, and the answers a person has for it.
+mod commanding;
 /// One Job, whole: the step rows, the gates' answers and the fields a Board
 /// row leaves behind.
 mod details;
