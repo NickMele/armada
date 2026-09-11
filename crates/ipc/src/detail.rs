@@ -159,6 +159,15 @@ pub struct JobDetail {
     /// those would offer acts against a Job nothing is wrong with.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stuck: Option<Stuck>,
+    /// Whether a person can ask this Job to show its work again, and every
+    /// time somebody did. **Since 10.1**, and absent from a Fleet older than
+    /// that — which a reader draws as no control at all rather than a refusal.
+    ///
+    /// **Filled after [`JobDetail::of`] rather than handed to it**, because it
+    /// is read off the worktree and the Manifest as well as the record, and the
+    /// constructor takes only what the record and the workflow say.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub show_again: Option<crate::showing::ShowAgain>,
 }
 
 /// Why a Job stopped, and what moves it.
@@ -450,6 +459,7 @@ impl JobDetail {
             // working it out needs every other Job's record.
             write_scope_overlaps,
             stuck: stuck.map(Stuck::of),
+            show_again: None,
         }
     }
 }

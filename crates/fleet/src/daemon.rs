@@ -135,6 +135,9 @@ pub struct Fleet<H, V, W> {
     /// Which commit is being proved and what came back. Never written down, for
     /// `sweeping`'s reason; an `Arc` because the run is spawned — `crate::proving`.
     proving: Arc<Mutex<crate::proving::Proving>>,
+    /// Which Jobs have a person's press out. Never written down, for
+    /// `proving`'s reason; shared because the press's own task gives it back.
+    pressing: crate::showing_again::Pressing,
     /// What one Job may spend. **Held rather than read** — like every other
     /// dial here, the composition root resolves it and nothing below Fleet
     /// reads configuration.

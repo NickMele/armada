@@ -228,6 +228,9 @@ pub fn detail(job: JobSummary) -> JobDetail {
         // a slot, a filesystem and a store, and this daemon has none of the
         // three.
         stuck: None,
+        // Absent for the same reason: whether a press could run is read off a
+        // worktree and a Manifest, and this daemon has neither.
+        show_again: None,
     }
 }
 

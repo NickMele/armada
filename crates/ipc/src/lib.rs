@@ -129,7 +129,7 @@ pub use resources::{
     Asked, Finding, Held, JobExamined, JobProcess, JobResources, Look, WorktreeOnDisk,
 };
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
-pub use showing::KeptFrame;
+pub use showing::{KeptFrame, NamedSpec, ShowAgain, ShownAgain, ShownSet};
 pub use turn::{
     BlockKind, CallArguments, Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage,
     Voice, Withheld,

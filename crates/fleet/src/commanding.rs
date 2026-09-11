@@ -186,6 +186,18 @@ where
         self.summarised(&job).await
     }
 
+    /// A person asking a Job to show its work. **The `Arc` is handed on**, so
+    /// the press runs on a task of its own — `crate::showing_again`.
+    async fn show_again(
+        self: std::sync::Arc<Self>,
+        job_id: JobId,
+    ) -> Result<ipc::ShownAgain, Refusal> {
+        let refusing = std::sync::Arc::clone(&self);
+        Fleet::show_again(self, &job_id.to_domain())
+            .await
+            .map_err(|why| refusing.refusal(why))
+    }
+
     /// More money for one Job, and nothing else changes.
     ///
     /// **The summary is re-read rather than folded from the raise.** Nothing
