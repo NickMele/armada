@@ -8,8 +8,7 @@ import { CHANNELS, NOTHING_YET } from "../shared/bridge";
 import type { BridgeState, Summons } from "../shared/bridge";
 import type { Draft } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
-import type { Artifact } from "@armada/protocol";
-import type { CommandAnswer, WhenBlocked } from "@armada/protocol";
+import type { Artifact, CommandAnswer, WhenBlocked } from "@armada/protocol";
 import { FleetConnection } from "./connection";
 import { openArtifact } from "./open";
 import { openPullRequest } from "./forge";
@@ -317,8 +316,7 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.answerQuestion, (_event, jobId: string, questionId: string, chose: string) =>
     connection?.commands.answerQuestion(jobId, questionId, chose),
   );
-  // A command the drone was not given, allowed or rejected — waiting in place,
-  // or refused on a stopped job. The call id says which, and Fleet decides.
+  // A command the drone was not given, answered where it waits or where it was refused.
   ipcMain.handle(CHANNELS.answerCommand, (_event, jobId: string, call: string, answer: CommandAnswer) =>
     connection?.commands.answerCommand(jobId, call, answer),
   );
