@@ -519,6 +519,39 @@ not a lost row but a `Missed` and a full resync of every Job, paid
 continuously. This is the one place a per-Job subscription is right, and
 `docs/concepts/observe.md` is why.
 
+## The run socket: one person's run
+
+`GET /jobs/:job_id/runs/:run_id/observe` is the second socket's shape one
+subject over: a run a person started from the run sheet, and
+`crates/api/src/watching_run.rs`. It answers with what the run's log already
+holds, then the lines the run prints next, then `closed`.
+
+**Who reads it.** The run sheet showing that run, and nothing else.
+`helm_access` is `No`.
+
+**Per run, not per Job's runs.** The sheet holds the run's id from
+`start_run`'s answer, a run has an end to close on, and a Job has one run out
+at a time. A per-Job channel would need the second socket's hand-over between
+runs, for a reader nobody has.
+
+| What happened | What the viewer is told |
+| --- | --- |
+| The run is going | `opened` with `live: true`, the log so far, then lines, then `closed` / `finished` |
+| The run has ended | `opened` with `live: false`, the log, `closed` / `finished` |
+| The log will not read | `opened`, then `closed` / `unreadable` |
+| The id names no run of this Job | **422 before the upgrade**, through the error contract |
+
+**Back-pressure.** The channel is per run and drop-oldest, and a viewer that
+falls behind is sent `missed` with the count. The run's log keeps every line
+and `get_run_output` reads it, so a drop costs a live line and never the
+record. Each live line carries the byte offset just past it, which is what
+keeps a line the opening read sent from being sent again.
+
+**It is deliberately not `/events`.** Output is the fastest thing a run makes,
+and on the global stream it would evict the state the Board is drawn from.
+`/events` carries the run's end, `run.finished`, because that is a fact about a
+Job a surface may care about; it never carries a line.
+
 ## Other things specific to this seam
 
 **Bridge finds Fleet through a runtime file, not a fixed port.** The file

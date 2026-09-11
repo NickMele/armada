@@ -114,6 +114,33 @@ pub async fn run_writing(
     budget: Duration,
     live: Option<&Path>,
 ) -> Attempt {
+    let writing = live.map_or(Writing::Nowhere, Writing::Fresh);
+    run_until(command, worktree, budget, writing, std::future::pending()).await
+}
+
+/// Where a run's output is written as it arrives.
+#[derive(Clone, Copy, Debug)]
+pub enum Writing<'p> {
+    Nowhere,
+    /// Truncated first: one run, one file.
+    Fresh(&'p Path),
+    /// Added to the end, so a Check's prerequisites and the Check itself read
+    /// as one log in the order they ran.
+    Appending(&'p Path),
+}
+
+/// [`run_writing`], ended early the moment `stop` completes.
+///
+/// **A stop ends the whole group**, for the budget's reason: the test runner a
+/// command started would otherwise outlive the person pressing Stop. What
+/// printed before it is kept, and the exit is the signal that ended it.
+pub async fn run_until<S: std::future::Future<Output = ()>>(
+    command: &str,
+    worktree: &Path,
+    budget: Duration,
+    writing: Writing<'_>,
+    stop: S,
+) -> Attempt {
     let Some((program, args)) = split(command) else {
         return Attempt::never(NeverRan::NothingToRun);
     };
@@ -147,7 +174,11 @@ pub async fn run_writing(
 
     let mut out = Vec::new();
     let mut err = Vec::new();
-    let live = Mutex::new(live.and_then(Live::create));
+    let live = Mutex::new(match writing {
+        Writing::Nowhere => None,
+        Writing::Fresh(path) => Live::create(path),
+        Writing::Appending(path) => Live::append(path),
+    });
     let finished = {
         let reading = async {
             let (_, _, status) = tokio::try_join!(
@@ -157,19 +188,33 @@ pub async fn run_writing(
             )?;
             Ok::<std::process::ExitStatus, std::io::Error>(status)
         };
-        tokio::time::timeout(budget, reading).await
+        tokio::select! {
+            ran = tokio::time::timeout(budget, reading) => Some(ran),
+            () = stop => None,
+        }
     };
 
     match finished {
-        Ok(Ok(status)) => Attempt {
+        Some(Ok(Ok(status))) => Attempt {
             exit: ended(&status),
             output: captured(&out, &err),
         },
-        Ok(Err(error)) => Attempt::never(NeverRan::NotSpawned {
+        Some(Ok(Err(error))) => Attempt::never(NeverRan::NotSpawned {
             program,
             kind: error.kind(),
         }),
-        Err(_) => {
+        // Stopped from outside. The group first, for the ordering below.
+        None => {
+            end_the_group(group);
+            let _ = child.kill().await;
+            Attempt {
+                exit: Exit::Signalled {
+                    signal: libc::SIGKILL,
+                },
+                output: captured(&out, &err),
+            }
+        }
+        Some(Err(_)) => {
             // The group first and the child second. A group signalled after
             // its leader has been reaped can land on a recycled group id, and
             // the ordering is what makes that unreachable rather than rare.
@@ -227,6 +272,22 @@ impl Live {
         std::fs::File::create(path).ok().map(|file| Live {
             file,
             written: 0,
+            cut: false,
+        })
+    }
+
+    /// Added to rather than truncated, counting what is already there against
+    /// the limit so a run of several commands is bounded as one file.
+    fn append(path: &Path) -> Option<Live> {
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .ok()?;
+        let written = file.metadata().map(|held| held.len()).unwrap_or_default();
+        Some(Live {
+            file,
+            written,
             cut: false,
         })
     }

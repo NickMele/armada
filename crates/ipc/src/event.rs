@@ -23,6 +23,7 @@ use crate::ids::{CriterionId, DroneId, Instant, JobId, StepId};
 use crate::job::{JobForgotten, JobList, JobSummary};
 use crate::proposing::ProposalInFlight;
 use crate::reading::ManifestReading;
+use crate::rehearsal::RunRecord;
 use crate::underway::ChecksUnderway;
 use crate::version::ProtocolVersion;
 use crate::waiting::QuestionInFlight;
@@ -117,6 +118,8 @@ pub enum Event {
     ProposalMoved(ProposalMoved),
     #[serde(rename = "manifest.reread")]
     ManifestReread(ManifestReading),
+    #[serde(rename = "run.finished")]
+    RunFinished(RunRecord),
 }
 
 // `manifest.reread` carries [`ManifestReading`] itself rather than a payload

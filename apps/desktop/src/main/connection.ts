@@ -582,6 +582,11 @@ export class FleetConnection {
       return;
     }
 
+    if (event.kind !== "job.state_changed") {
+      // A newer Fleet's kind, or one that moves no row: never folded as a move.
+      this.publish({ connection });
+      return;
+    }
     const held = this.current.jobs.find((job) => job.id === event.job_id);
     if (held === undefined) {
       // `job.created` covers the ordinary case, so a move about a Job this

@@ -16,6 +16,7 @@ mod reference;
 mod served;
 mod shapes;
 mod stream;
+mod watching_run;
 
 use axum::Router;
 use hyper::service::service_fn;

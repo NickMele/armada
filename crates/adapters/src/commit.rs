@@ -29,7 +29,7 @@ use git2::{Commit, FileMode, Index, IndexAddOption, Oid, Repository, Signature, 
 
 use crate::error::CommitWorkError;
 
-const WHO: (&str, &str) = ("Armada Fleet", "fleet@armada.invalid");
+pub(crate) const WHO: (&str, &str) = ("Armada Fleet", "fleet@armada.invalid");
 
 pub(crate) fn commit_all(
     worktree: &Worktree,
