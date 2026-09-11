@@ -275,11 +275,19 @@ async fn a_command_taken_back_is_no_longer_allowed() {
             .await,
         PermissionAnswer::Allow
     );
+    let listed: Vec<String> = fleet
+        .allowed_of(&job)
+        .await
+        .into_iter()
+        .map(|allow| allow.run)
+        .collect();
+    assert_eq!(listed, vec!["npm publish"], "what Job detail lists");
 
     fleet
         .remove_allowed_command(&job, "npm publish")
         .await
         .expect("a person allowed it");
+    assert!(fleet.allowed_of(&job).await.is_empty(), "and lists no more");
 
     let answer = fleet
         .permission(&job, &asked("Bash", "npm publish", "c2"))

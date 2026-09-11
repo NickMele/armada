@@ -6,7 +6,7 @@
 //! question, and each change is a line in the Job's log.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
-use core_model::{Component, Envelope, FieldValue, JobId, Level};
+use core_model::{AllowedCommand, Component, Envelope, FieldValue, JobId, Level};
 
 use crate::daemon::Fleet;
 use crate::permitting::NotPermitted;
@@ -94,6 +94,17 @@ where
         )
         .await;
         Ok(())
+    }
+
+    /// Every command a person allowed this Job, oldest first, for `get_job`.
+    /// **Empty where the store will not read**, which is what the next
+    /// permission question reads too.
+    pub async fn allowed_of(&self, job: &JobId) -> Vec<AllowedCommand> {
+        self.store()
+            .lock()
+            .await
+            .allowed_commands(job)
+            .unwrap_or_default()
     }
 
     /// The model a person chose for this Job's later steps, for `get_job` and
