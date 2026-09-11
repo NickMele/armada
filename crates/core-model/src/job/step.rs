@@ -369,10 +369,14 @@ pub struct StepFrame {
 /// which. Nothing else on [`StepFrame`] could: the name is the harness's, and
 /// both runs are one attempt of one step.
 ///
-/// **Two variants and no third for "the only one there was".** A repository
-/// with no base, or a base run that would not start, produces branch frames and
-/// no base frames — which is a set with one side in it, readable from what is
-/// there, and a variant for it would be a second way to say the same thing.
+/// **Two variants and no third for "the only one there was".** `#602` switched
+/// the base run off, so every Job today produces branch frames and no base
+/// frames — a set with one side in it, readable from what is there, and a
+/// variant for it would be a second way to say the same thing. The variant
+/// stays rather than being deleted: a repository with no base, or a base run
+/// that would not start, was always this same shape, and it is the shape a
+/// base run reaches again once something can tell a spec which tree it is
+/// aimed at.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Side {
     /// The base checkout — what the screen looked like before this Job.
