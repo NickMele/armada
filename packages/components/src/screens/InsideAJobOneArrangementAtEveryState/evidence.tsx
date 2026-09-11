@@ -16,9 +16,9 @@ import type { PhaseStripProps } from "../../compositions/PhaseStrip/PhaseStrip";
 import type { StepChapter } from "../../compositions/StepStory/StepStory";
 import type { JobDetailField } from "../../compositions/JobDetailHeaderActions/JobDetailHeaderActions";
 import { InsideAJob, type StepPanel } from "./InsideAJobOneArrangementAtEveryState";
-import { BRIEF, CHAPTERS, ESCALATED_HEADING, JOB, RUN_STOPPED, WHERE } from "./fixtures";
+import { BRIEF, ESCALATED_HEADING, JOB, RUN_STOPPED, WHERE } from "./fixtures";
 import { Button } from "../../primitives/Button/Button";
-import { chapterAct } from "./fixtures";
+import { CHAPTERS, chapterAct } from "./chapters";
 
 /**
  * The evidence half of a step's story — the Checks and the panel that read

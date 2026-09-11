@@ -9,7 +9,6 @@ import { TheAnswers } from "../HoldingAtTheGateEveryAnswerItTakes/HoldingAtTheGa
 import { InsideAJob } from "./InsideAJobOneArrangementAtEveryState";
 import {
   BRIEF,
-  CHAPTERS,
   ESCALATED_HEADING,
   escalatedHeading,
   EXAMINED_WORKING,
@@ -17,7 +16,6 @@ import {
   HEADING,
   HOLDS_RUNNING,
   OnAScreen,
-  REPAIR_CHAPTERS,
   RUN_FAILED,
   RUN_NOT_STARTED,
   RUN_REPAIRING,
@@ -34,6 +32,7 @@ import {
   WAITING_HEADING,
   WHERE,
 } from "./fixtures";
+import { CHAPTERS, REPAIR_CHAPTERS } from "./chapters";
 import {
   CONSOLE_SHEET,
   INPUTS_SHEET,

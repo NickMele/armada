@@ -362,8 +362,12 @@ function RawWords({ blocks }: { blocks: readonly BriefBlock[] }): ReactNode {
         {open ? "Hide the words Armada sent" : "Read the words Armada sent"}
       </button>
       {/* `hidden`, not unmounted — on `Chapter`'s own rule: what the Drone was
-          told stays in the DOM whether or not this disclosure is open. */}
-      <div className="armada-brief__raw-body" hidden={!open}>
+          told stays in the DOM whether or not this disclosure is open.
+          `--open` is a class, not a `[hidden]` selector: see DroneBrief.css. */}
+      <div
+        className={`armada-brief__raw-body${open ? " armada-brief__raw-body--open" : ""}`}
+        hidden={!open}
+      >
         <BriefBody blocks={blocks} />
       </div>
     </div>
