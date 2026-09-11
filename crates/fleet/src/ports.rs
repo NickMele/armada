@@ -170,18 +170,23 @@ pub struct BindConnectProbe;
 
 impl PortProbe for BindConnectProbe {
     fn free(&self, port: u16) -> bool {
-        let Ok(listener) = TcpListener::bind(("127.0.0.1", port)) else {
+        let addr = std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, port));
+        // **Connect first.** Binding before connecting would put this
+        // process's own probe into LISTEN and then dial itself — the kernel
+        // answers a socket in LISTEN whether or not anyone ever calls
+        // `accept`, so that order finds every port "held" including the one
+        // it just opened. Asking first is what makes the second check mean
+        // anything.
+        if TcpStream::connect_timeout(&addr, Duration::from_millis(50)).is_ok() {
             return false;
-        };
-        let addr = match listener.local_addr() {
-            Ok(addr) => addr,
-            Err(_) => return false,
-        };
-        // A short timeout: nothing is expected to answer, and the ordinary
-        // case is a fast refusal rather than a wait.
-        let answered = TcpStream::connect_timeout(&addr, Duration::from_millis(50)).is_ok();
-        drop(listener);
-        !answered
+        }
+        // Nothing answered — but a bind can still succeed under
+        // `SO_REUSEADDR` while something is finishing teardown, so the port
+        // is not handed out on the connect's silence alone. Binding and
+        // dropping immediately is what confirms it, load-bearing rather than
+        // defensive: teardown that silently failed, teardown never declared,
+        // and a process outside every tree are otherwise indistinguishable.
+        TcpListener::bind(addr).is_ok()
     }
 }
 
