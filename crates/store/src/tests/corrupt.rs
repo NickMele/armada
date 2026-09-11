@@ -12,7 +12,7 @@
 use core_model::{Actor, JobStatus, StepId, StepState, Target};
 use rusqlite::Connection;
 
-use crate::schema::SCHEMA_VERSION_KEY;
+use crate::migrations::SCHEMA_VERSION_KEY;
 use crate::tests::{created_at, job_id, open, top_level, TempDir};
 use crate::{OpenError, RowError, Store, KNOWN_SCHEMA_VERSION};
 

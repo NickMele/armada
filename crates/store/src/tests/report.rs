@@ -9,7 +9,7 @@
 
 use core_model::{Actor, CriterionId, StepId, Target};
 
-use crate::schema::tables_pointing_at_a_job;
+use crate::migrations::tables_pointing_at_a_job;
 use crate::tests::{at, job_id, open, top_level, TempDir};
 use crate::{Report, Store};
 

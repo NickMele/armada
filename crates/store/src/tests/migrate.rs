@@ -20,7 +20,7 @@
 use core_model::{Actor, JobStatus, Target, TransitionReason};
 use rusqlite::Connection;
 
-use crate::schema::{MIGRATIONS, SCHEMA_VERSION_KEY};
+use crate::migrations::{MIGRATIONS, SCHEMA_VERSION_KEY};
 use crate::tests::{created_at, job_id, open, top_level_numbered, TempDir};
 use crate::{Moved, RowError, Store, KNOWN_SCHEMA_VERSION};
 

@@ -39,6 +39,9 @@ mod forget;
 mod gaming;
 /// Where a verdict's own question was kept, and the column that points at it.
 mod judged;
+/// The migration list, and where a file stands against it. `V1`..`V16` stay in
+/// `schema`; this is only what had to move to keep that file under the gate.
+mod migrations;
 /// The note a boundary is holding, and the column it waits in.
 mod note;
 mod numbering;
@@ -83,6 +86,7 @@ pub use error::{DatabaseFault, LoadAllError, LoadJobError, OpenError, RowError, 
 pub use fold::{Moved, RecordedEvent};
 pub use footprint::Footprinted;
 pub use forget::Forgotten;
+pub use migrations::KNOWN_SCHEMA_VERSION;
 pub use open::Store;
 pub use plan::DeclaredPlan;
 pub use process::DroneProcess;
@@ -91,7 +95,6 @@ pub use read::{Loaded, RowIdentity, StatusRepair, UnreadableRow};
 pub use report::Report;
 pub use resolving::{NamedJob, ResolveJobError};
 pub use retain::Retained;
-pub use schema::KNOWN_SCHEMA_VERSION;
 pub use showing::KeptFrame;
 pub use shown_again::{ShownAgain, SpecNamed};
 pub use spend::{DroneSpend, Spend};

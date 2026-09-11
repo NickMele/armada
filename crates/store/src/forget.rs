@@ -6,7 +6,8 @@
 //! each of those is a way to leave a Job standing over a history that no longer
 //! explains it — and the fold would then read back a Job that never happened.
 //! The database holds the same rule from underneath: `job_events` refuses a
-//! delete while its Job row exists, per [`schema::MIGRATIONS`]'s fourth entry.
+//! delete while its Job row exists, per [`migrations::MIGRATIONS`]'s fourth
+//! entry.
 //!
 //! **One transaction, with foreign keys deferred inside it.** The Job row goes
 //! first so the trigger lets the events go, which violates the foreign key for
@@ -22,13 +23,13 @@
 //! **`armada clean` no longer reaches for this**, because a sweep is not a
 //! person asking: it calls [`Store::retain_job`](crate::Store::retain_job).
 //!
-//! [`schema::MIGRATIONS`]: crate::schema::MIGRATIONS
+//! [`migrations::MIGRATIONS`]: crate::migrations::MIGRATIONS
 
 use core_model::JobId;
 
 use crate::error::{fault, WriteError};
+use crate::migrations::tables_pointing_at_a_job;
 use crate::open::Store;
-use crate::schema::tables_pointing_at_a_job;
 
 /// What forgetting one Job removed.
 ///

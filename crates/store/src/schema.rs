@@ -1,14 +1,16 @@
-//! The tables, and the only thing that changes them.
+//! `V1`..`V16`, the earliest of the tables and the only thing that changes
+//! them.
 //!
 //! **A schema with no version is a schema nobody can change later**: the first
 //! migration has to answer "what is already there?" and, with nothing recorded,
-//! the honest answer is a guess. [`MIGRATIONS`] is an ordered list and
-//! `armada_meta.schema_version` records how many of them a file has had
-//! applied, so adding one is appending a `&str`. The table serves a second
-//! purpose that costs nothing: **its presence is what distinguishes an Armada
-//! store from some other database that happens to be at the path.** A file with
-//! tables and no `armada_meta` is refused rather than migrated into, which is
-//! the difference between opening the wrong file loudly and writing Jobs in it.
+//! the honest answer is a guess. [`crate::migrations::MIGRATIONS`] is an
+//! ordered list and `armada_meta.schema_version` records how many of them a
+//! file has had applied, so adding one is appending a `&str`. The table serves
+//! a second purpose that costs nothing: **its presence is what distinguishes an
+//! Armada store from some other database that happens to be at the path.** A
+//! file with tables and no `armada_meta` is refused rather than migrated into,
+//! which is the difference between opening the wrong file loudly and writing
+//! Jobs in it.
 //!
 //! **`job_events` is append-only in the database, not in the code.** Two
 //! triggers refuse `UPDATE` on it, and `DELETE` while the Job it belongs to
@@ -23,107 +25,17 @@
 //! instant, and a test may hand back an earlier one. `AUTOINCREMENT` rather
 //! than a bare rowid so a key is never reused, which matters for a log whose
 //! whole value is that entries do not move.
-
-use rusqlite::Connection;
-
-/// The key under which [`MIGRATIONS`]' applied count is recorded.
-pub const SCHEMA_VERSION_KEY: &str = "schema_version";
-
-/// How many migrations this build knows. A file recording more than this was
-/// written by a newer Armada, and is refused rather than read with the older
-/// crate's assumptions.
-pub const KNOWN_SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
-
-/// Applied in order. Index `n` takes a file from version `n` to `n + 1`.
-///
-/// **Nothing is ever edited here.** Changing entry zero changes what an already
-/// migrated file is assumed to contain, which is the one thing the version
-/// number exists to stop.
-pub const MIGRATIONS: &[&str] = &[
-    V1,
-    V2,
-    V3,
-    V4,
-    V5,
-    V6,
-    V7,
-    V8,
-    V9,
-    V10,
-    V11,
-    V12,
-    V13,
-    V14,
-    V15,
-    V16,
-    // Beside the table each creates, because this file is at the 900 lines the
-    // gate refuses at. The order lives here, and may not be anywhere else.
-    crate::report::V17,
-    crate::plan::V18,
-    crate::drone::V19,
-    crate::note::V20,
-    crate::delivery::V21,
-    crate::judged::V22,
-    crate::spend::V23,
-    crate::gaming::V24,
-    crate::footprint::V25,
-    crate::delivery::V26,
-    crate::process::V27,
-    crate::attempt::V28,
-    crate::proving::V29,
-    crate::judged::V30,
-    crate::remarks::V31,
-    crate::spend::V32,
-    crate::spend::V33,
-    crate::proposing::V34,
-    crate::judged::V35,
-    crate::numbering::V36,
-    crate::showing::V37,
-    crate::retain::V38,
-    crate::gaming::V39,
-    crate::spend::V40,
-    crate::showing::V41,
-    crate::showing::V42,
-    crate::shown_again::V43,
-    crate::allowing::V44,
-];
-
-/// Every table whose rows belong to one Job, asked of the file rather than
-/// listed here.
-///
-/// [`forget_job`](crate::Store::forget_job) deletes from each. It asks because
-/// a list is a thing somebody has to remember to extend, and three times in a
-/// row nobody did: `job_step_judgments`, `job_step_gaming_flags` and
-/// `job_step_evidence` arrived in [`V8`], [`V12`] and [`V10`] and none of them
-/// reached the delete. Nothing failed while no shipped workflow declared a
-/// `judge_check` and the tables stayed empty; the day nine of them went live,
-/// every Job that reached a gate became one `armada clean` could not forget,
-/// because the `jobs` row it deletes first is the parent those rows point at.
-/// A catalog cannot fall behind the schema it is the schema of.
-///
-/// **The file's catalog, not the constants above it.** [`V13`] builds four
-/// tables under `_wide` names and renames them over the originals, so the
-/// `CREATE TABLE` text in this module names four tables no migrated file has
-/// and misses the four every one of them does.
-///
-/// `job_events` is in this set and belongs there — it is append-only by
-/// trigger only while its Job row still exists, which by then it does not. See
-/// [`V4`], and the ordering it forces on `forget_job`.
-pub(crate) fn tables_pointing_at_a_job(conn: &Connection) -> rusqlite::Result<Vec<String>> {
-    conn.prepare(
-        r#"SELECT m.name
-           FROM sqlite_master AS m
-           JOIN pragma_foreign_key_list(m.name) AS fk
-           WHERE m.type = 'table' AND fk."table" = 'jobs'
-           GROUP BY m.name
-           ORDER BY m.name"#,
-    )?
-    .query_map([], |row| row.get(0))?
-    .collect()
-}
+//!
+//! **`MIGRATIONS` itself, `KNOWN_SCHEMA_VERSION`, `SCHEMA_VERSION_KEY` and
+//! `tables_pointing_at_a_job` live in [`crate::migrations`]**, not here — this
+//! file is at the 900 lines the gate refuses at, and they are the part that
+//! moves cleanly: nothing below reads them, and every migration after `V16`
+//! already lived beside the table it creates rather than in this file. `V1`
+//! through `V16` are `pub(crate)` so that module can name them; nothing else
+//! about them changed.
 
 /// Version 1 — the Job record, the rows beneath it, and the log.
-const V1: &str = r#"
+pub(crate) const V1: &str = r#"
 CREATE TABLE armada_meta (
     key   TEXT PRIMARY KEY NOT NULL,
     value TEXT NOT NULL
@@ -245,7 +157,7 @@ END;
 /// the column on every write and [`Title`](core_model::Title) cannot hold a
 /// blank, so nothing in this crate can trip them — which is the point, the same
 /// way `job_events`' append-only triggers are.
-const V2: &str = r#"
+pub(crate) const V2: &str = r#"
 ALTER TABLE jobs ADD COLUMN title TEXT NOT NULL DEFAULT '';
 
 -- Named after itself rather than after a constant. `job_id` is already on the
@@ -286,7 +198,7 @@ END;
 /// | A step row puts the Job's status in **both** status columns | They are `NOT NULL` and a step move is honestly described by them — the Job did not move — which is also what makes the row checkable. `SQLite` cannot drop a `NOT NULL` without rebuilding the table, and rebuilding an append-only log means copying it out and dropping the original past its own triggers, so weakening them was never the cheaper option either |
 /// | No backfill | V2 had to name every existing Job per row, because a constant would have lost a distinction. V3 has no such row to fill: `read.rs` refused a `job_steps` row that was not `not_started` and refused a non-null `current_step_id`, so every step in every existing store is at the state creation wrote and no move has been lost. The `DEFAULT` on `kind` is therefore not a guess about old rows — it is the only thing an old row could be |
 /// | A shape trigger | One table holding two shapes is one table that can hold a third by accident. The trigger refuses an insert that is neither shape whole: a job transition carrying step columns, a step move missing one, a step move claiming the Job changed status, or a `kind` nobody declared. Same argument as the append-only triggers — a rule the database holds is not a rule a later query can quietly break |
-const V3: &str = r#"
+pub(crate) const V3: &str = r#"
 ALTER TABLE job_events ADD COLUMN kind TEXT NOT NULL DEFAULT 'job_transition';
 ALTER TABLE job_events ADD COLUMN step_id TEXT;
 ALTER TABLE job_events ADD COLUMN state_from TEXT;
@@ -331,7 +243,7 @@ END;
 ///
 /// `store::forget` does it in one transaction with `defer_foreign_keys`, so the
 /// window in which a Job row is gone and its events are not never reaches disk.
-const V4: &str = r#"
+pub(crate) const V4: &str = r#"
 DROP TRIGGER job_events_are_never_removed;
 
 CREATE TRIGGER job_events_are_never_removed_from_a_job_that_exists
@@ -353,7 +265,7 @@ END;
 ///
 /// It also corrects V1's note on `created_at`: that column is a field of the
 /// record now, and a whole-Job elapsed is read from it.
-const V5: &str = r#"
+pub(crate) const V5: &str = r#"
 ALTER TABLE jobs ADD COLUMN branch TEXT;
 
 UPDATE jobs SET branch = 'armada/' || job_id
@@ -392,7 +304,7 @@ END;
 ///
 /// Nothing recorded a Check result before this table existed, so every step in
 /// every existing store has none — which is exactly what zero rows says.
-const V6: &str = r#"
+pub(crate) const V6: &str = r#"
 -- One row per Check a step declared, in the order the step declares them.
 -- `name` is the Manifest Check's name, or the built-in's kind where it names
 -- none. `expected` and `produced` are the sentences the failure carried and are
@@ -435,7 +347,7 @@ CREATE TABLE job_step_checks (
 /// and writing the whole condition again. The rule is unchanged in kind: one
 /// row is one whole shape, and a drone row is a `drone_id` beneath an unchanged
 /// status with no step columns and no reason.
-const V7: &str = r#"
+pub(crate) const V7: &str = r#"
 ALTER TABLE jobs ADD COLUMN workflow TEXT;
 ALTER TABLE job_step_checks ADD COLUMN output_path TEXT;
 ALTER TABLE job_events ADD COLUMN drone_id TEXT;
@@ -489,7 +401,7 @@ END;
 ///
 /// No Judge ran before this table existed, so every step in every existing
 /// store has none — which is what zero rows says.
-const V8: &str = r#"
+pub(crate) const V8: &str = r#"
 -- One row per criterion a step's Judge answered, in the order asked. `expected`,
 -- `produced` and `consequence` are the three named fields a refusal owes and are
 -- all null on `met`, where nothing is being refused on.
@@ -523,7 +435,7 @@ CREATE TABLE job_step_judgments (
 /// No Job carried an attachment before this table existed, so every Job in
 /// every existing store has none — which is what zero rows says, the same
 /// refusal V6 and V8 both make.
-const V9: &str = r#"
+pub(crate) const V9: &str = r#"
 CREATE TABLE job_attachments (
     job_id      TEXT NOT NULL REFERENCES jobs(job_id),
     filename    TEXT NOT NULL,
@@ -549,7 +461,7 @@ CREATE TABLE job_attachments (
 ///
 /// No step's evidence was written down before this table existed, which is what
 /// zero rows says — the same refusal V6, V8 and V9 make.
-const V10: &str = r#"
+pub(crate) const V10: &str = r#"
 CREATE TABLE job_step_evidence (
     job_id        TEXT NOT NULL REFERENCES jobs(job_id),
     step_id       TEXT NOT NULL,
@@ -574,7 +486,7 @@ CREATE TABLE job_step_evidence (
 /// `StepTarget::arriving_at` said in SQL. The trigger is rewritten whole
 /// because `SQLite` cannot alter one. **Nothing to backfill**: no step could
 /// stop before this, so every existing row satisfies the unqualified arm.
-const V11: &str = r#"
+pub(crate) const V11: &str = r#"
 DROP TRIGGER job_events_hold_one_whole_shape;
 
 CREATE TRIGGER job_events_hold_one_whole_shape
@@ -622,7 +534,7 @@ END;
 /// **Nothing to backfill** — no flag was written down before this table
 /// existed, which is what zero rows says, the same refusal V6, V8, V9 and V10
 /// make.
-const V12: &str = r#"
+pub(crate) const V12: &str = r#"
 -- One row per pattern flagged, in the order the check answered them. `cited`
 -- names the file, line or assertion the flag is about and is the whole value of
 -- the row; a flag that cited nothing would be unactionable.
@@ -662,7 +574,7 @@ CREATE TABLE job_step_gaming_flags (
 /// append-only triggers' argument — zero is not an attempt and `Attempt` cannot
 /// hold one, so the database refuses such a row rather than reading it as a
 /// first run.
-const V13: &str = r#"
+pub(crate) const V13: &str = r#"
 CREATE TABLE job_step_checks_wide (
     job_id      TEXT NOT NULL REFERENCES jobs(job_id),
     step_id     TEXT NOT NULL,
@@ -769,7 +681,7 @@ ALTER TABLE job_step_evidence_wide RENAME TO job_step_evidence;
 /// rewritten whole because `SQLite` cannot alter one. **Nothing to backfill**:
 /// no step could advance from `stopped` before this, so every existing row
 /// satisfies one of the first three arms.
-const V14: &str = r#"
+pub(crate) const V14: &str = r#"
 DROP TRIGGER job_events_hold_one_whole_shape;
 
 CREATE TRIGGER job_events_hold_one_whole_shape
@@ -840,7 +752,7 @@ END;
 /// the step being watched. [`crate::plan::V18`] is what made the record
 /// answerable without a column here: every step's promise is kept beside this,
 /// named by the step and the run that made it, and compared where served.
-const V15: &str = r#"
+pub(crate) const V15: &str = r#"
 CREATE TABLE job_footprint (
     job_id      TEXT PRIMARY KEY NOT NULL REFERENCES jobs(job_id),
     recorded_at TEXT NOT NULL
@@ -868,8 +780,9 @@ CREATE TABLE job_footprint_files (
 /// standing, so the gap outlives the state.
 ///
 /// The step arm is one `CASE` where [`V14`] had four `OR`s: three moves carry a
-/// reason, every other carries none, written short for this file's 900 lines.
-const V16: &str = r#"
+/// reason, every other carries none. Written short because this file sits on
+/// the 900 the gate refuses at, and the next migration will not fit in it.
+pub(crate) const V16: &str = r#"
 DROP TRIGGER job_events_hold_one_whole_shape;
 
 CREATE TRIGGER job_events_hold_one_whole_shape
