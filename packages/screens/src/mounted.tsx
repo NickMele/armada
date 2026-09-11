@@ -37,6 +37,20 @@ export function mount(screen: ReactElement): void {
   root.render(screen);
 }
 
+/**
+ * Put new props on the screen already on the page, on the same root.
+ *
+ * **What `mount` cannot do, because it always tears down first.** A test
+ * proving a screen's own state survives an unrelated prop change — a person's
+ * ticked comments surviving a fresh `remarks` reading, `#661` — needs React to
+ * see the same component instance across the two renders, which only holds
+ * where the root is not rebuilt.
+ */
+export function rerender(screen: ReactElement): void {
+  if (held === null) throw new Error("rerender called with nothing mounted");
+  held.root.render(screen);
+}
+
 /** Take it down. Called before each mount and after each test. */
 export function unmount(): void {
   if (held === null) return;

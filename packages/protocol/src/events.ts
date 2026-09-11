@@ -52,6 +52,7 @@ export type Event =
   | ({ kind: "job.command_waiting" } & JobCommandWaiting)
   | ({ kind: "job.forgotten" } & JobForgotten)
   | ({ kind: "job.landed" } & JobLanded)
+  | ({ kind: "job.remarks_changed" } & JobRemarksChanged)
   | ({ kind: "proposal.moved" } & ProposalMoved)
   | ({ kind: "manifest.reread" } & ManifestReading)
   | ({ kind: "run.finished" } & RunRecord);
@@ -90,6 +91,26 @@ export type JobLanded = {
    * When Fleet **read** this, not when the merge happened. The two differ by up
    * to one sweep, and the forge is where the exact instant lives.
    */
+  at: string;
+};
+
+/**
+ * The forge's answer about one job's pull request comments changed since the
+ * last sweep found it open: a comment was added, edited or removed, or a
+ * review landed. `crates/ipc/src/event.rs`. Since protocol 10.9.
+ *
+ * **Carries the id and nothing else.** Fleet's own read is deliberately
+ * narrow and does not bring in line comments; `get_remarks` already answers
+ * what changed and brings those too, so a copy of its answer riding this
+ * event would be a second shape to keep in step with the first.
+ *
+ * **Never on the first sweep that reads a given pull request.** A first read
+ * has nothing to compare against, so this never fires for every open pull
+ * request the moment Fleet starts.
+ */
+export type JobRemarksChanged = {
+  job_id: string;
+  actor: string;
   at: string;
 };
 

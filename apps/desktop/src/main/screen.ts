@@ -72,6 +72,16 @@ type Reviewed = {
  * call's arguments answer the caller and are never held, so nothing can go
  * stale. A region added to a Job's screen belongs on the table or in this
  * paragraph.
+ *
+ * **The comments half of the row above has a fourth trigger the table does
+ * not carry.** `job.remarks_changed` (`#661`) re-takes the remarks alone,
+ * where they are the ones open — `connection.ts` calls
+ * `ReviewMaterial.remarksChanged` straight off that event rather than
+ * routing it through an `Again` occasion here. It is narrower than every
+ * occasion above: those classify a whole screen's worth of reads by what
+ * caused the moment, and this is one route woken by one event naming one
+ * Job's pull request, which the classification this file exists for has
+ * nothing to add to.
  */
 export type Screen = {
   detail: Region;

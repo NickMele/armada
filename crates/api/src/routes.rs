@@ -519,6 +519,13 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/events",
     },
+    // The forge's comments on a Job's pull request changed since the last
+    // sweep found it open. `#661`.
+    Route {
+        operation: "job.remarks_changed",
+        method: "GET",
+        path: "/events",
+    },
     // The one kind on this stream that names no Job. A proposal is the interval
     // before any exists, which is why it carries an id of its own.
     Route {

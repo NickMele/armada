@@ -430,7 +430,6 @@ export class FleetConnection {
       this.fold(event.job);
       return;
     }
-
     if (event.kind === "job.step_advanced") {
       // **The row is replaced, not patched.** `current_step_id` has already
       // moved on the Job travelling with the event, and `event.status` is the
@@ -441,7 +440,6 @@ export class FleetConnection {
       this.refresh(fleet.port, event.job.id);
       return;
     }
-
     if (event.kind === "drone.spawned" || event.kind === "drone.exited") {
       // **`job.step_advanced`'s shape, and for its reason.** `assigned_drone`
       // is a field of the row, so the summary travels whole and the Board gains
@@ -463,7 +461,6 @@ export class FleetConnection {
       this.refresh(fleet.port, event.job.id);
       return;
     }
-
     if (event.kind === "job.files_changed") {
       // **Only the open Job's, and the whole list rather than a fold.** The
       // reading replaces what is held, so a file that stopped being changed
@@ -477,7 +474,6 @@ export class FleetConnection {
       });
       return;
     }
-
     if (event.kind === "job.judging" || event.kind === "job.checking") {
       // `job.checking` is the same answer one tier along: `StepDetail.checking`
       // is re-read, and a running Check's elapsed time is counted, not re-read.
@@ -520,7 +516,6 @@ export class FleetConnection {
       this.refresh(fleet.port, event.job_id);
       return;
     }
-
     if (event.kind === "proposal.moved") {
       // **This window's own, matched on the token it sent.** Fleet publishes
       // every proposal on one stream and two windows may be dispatching at
@@ -541,7 +536,6 @@ export class FleetConnection {
       this.publish({ connection });
       return;
     }
-
     if (event.kind === "job.landed") {
       // **`job.step_advanced`'s shape, and for its reason.** The row travels
       // whole with `landed` already on it, so the board redraws without a
@@ -553,7 +547,13 @@ export class FleetConnection {
       this.refresh(fleet.port, event.job.id);
       return;
     }
-
+    if (event.kind === "job.remarks_changed") {
+      // Moves no row, `job.files_changed`'s terms — `review.ts` owns whether
+      // anybody is looking, and this only wakes that read where they are.
+      this.publish({ connection });
+      void this.material.remarksChanged(fleet.port, event.job_id);
+      return;
+    }
     if (event.kind === "job.forgotten") {
       // The opposite of `job.created`: the id, and nothing to fold — the row
       // is gone at Fleet by the time this arrives, so it is dropped here
@@ -563,7 +563,6 @@ export class FleetConnection {
       this.forget(event.job_id);
       return;
     }
-
     if (event.kind === "manifest.reread") {
       // **Above the tail below, because there is no Job to find.** The tail
       // reads `event.job_id` and treats a Job it does not hold as a missed
