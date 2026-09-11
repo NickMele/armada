@@ -130,9 +130,17 @@ where
     }
 
     /// A Check's prerequisites, in order, then the command — into one log.
+    ///
+    /// **The Job's own claimed span, the same way the gate's Checks get it.**
+    /// `${port.NAME}` is resolved in each command before it runs and
+    /// `ARMADA_PORT_<NAME>` plus any declared `env` ride in the process's own
+    /// environment — see `crate::ports`. Both are empty where the Job's
+    /// Manifest declares no `ports:`.
     async fn ran(&self, plan: &Plan, log: &Path, stopped: watch::Receiver<bool>) -> Outcome {
         let budget = self.budget().duration();
         let path = plan.tree.path.as_path();
+        let ports = self.port_map(&plan.job).await;
+        let env = self.port_env(&plan.job).await;
         let mut required = Vec::new();
         for needed in &plan.entry.requires {
             if *stopped.borrow() {
@@ -144,16 +152,14 @@ where
                     required,
                 };
             }
-            marked(
-                log,
-                &format!("--- `{}` first: {} ---", needed.name(), needed.run()),
-            );
+            let run = crate::ports::resolve_ports(needed.run(), &ports);
+            marked(log, &format!("--- `{}` first: {} ---", needed.name(), run));
             let attempt = checks_runner::run_until(
-                needed.run(),
+                &run,
                 path,
                 budget,
                 Writing::Appending(log),
-                &[],
+                &env,
                 until(stopped.clone()),
             )
             .await;
@@ -163,7 +169,7 @@ where
                 return Outcome {
                     exit: Exit::NeverRan(NeverRan::PrerequisiteFailed {
                         command: needed.name().to_string(),
-                        run: needed.run().to_string(),
+                        run,
                         exit: Box::new(attempt.exit),
                     }),
                     stopped: was_stopped,
@@ -171,15 +177,16 @@ where
                 };
             }
         }
+        let command = crate::ports::resolve_ports(&plan.underway.command, &ports);
         if !required.is_empty() {
-            marked(log, &format!("--- {} ---", plan.underway.command));
+            marked(log, &format!("--- {command} ---"));
         }
         let attempt = checks_runner::run_until(
-            &plan.underway.command,
+            &command,
             path,
             budget,
             Writing::Appending(log),
-            &[],
+            &env,
             until(stopped.clone()),
         )
         .await;
