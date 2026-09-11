@@ -4,6 +4,11 @@
 //! **A real server and a real `ready`**: `python3 -m http.server` and `curl`,
 //! because whether a port answers and is free again is what a fake cannot
 //! stand in for — `crate::tests::ports_dispatch`'s reason, one module over.
+//!
+//! **Over 500 lines and one file**, for `crate::tests::rehearsing`'s reason:
+//! every case stands on the one fixture above it — a Manifest, a Fleet on a
+//! range of its own, a running Job — and split files would each import it to
+//! assert one line of the definition of done.
 
 use std::sync::Arc;
 use std::time::Duration;
