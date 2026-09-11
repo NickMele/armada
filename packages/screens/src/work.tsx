@@ -35,14 +35,39 @@
 // asks the question.
 
 import { File, Folder, GitBranch } from "lucide-react";
+import { Button } from "@armada/components";
 import type { JobBriefProps, JobLogReferenceRow, NotOpened } from "@armada/components";
 
-import type { Watched } from "@armada/protocol";
+import type { ServerState, Watched } from "@armada/protocol";
 import { artifactPath, recordsOf, repoOf } from "@armada/protocol";
 import type { Artifact } from "@armada/protocol";
 import { openArtifact, type OpenArtifact } from "./opening";
 import type { JobDetail as JobWhole, JobSummary } from "@armada/protocol";
 import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
+import type { RunSheetSlice } from "./rehearsal";
+
+/**
+ * What the worktree row's **Run…** and a *Serving* row need — Journey 9, on
+ * the one surface both open onto besides the sheet itself.
+ */
+export type WorkRehearsal = {
+  /** Opens the run sheet with nothing selected. */
+  onRun: () => void;
+  /** Every server Fleet holds. Filtered to this Job and to the live ones. */
+  servers: readonly ServerState[];
+  onStopServer: (serverId: string) => void;
+  onOpenServerLink: (serverId: string, url: string) => void;
+};
+
+/** Builds `WorkRehearsal` off `RunSheetSlice`, so a caller passes one line. */
+export function workRehearsalOf(onRun: () => void, slice: RunSheetSlice): WorkRehearsal {
+  return {
+    onRun,
+    servers: slice.servers.servers,
+    onStopServer: (serverId) => void slice.onStopServer(serverId),
+    onOpenServerLink: (serverId, url) => void slice.onOpenServerLink(serverId, url),
+  };
+}
 
 export { repoOf };
 
@@ -104,6 +129,7 @@ export function workOf(
   whole: JobWhole | null,
   manifest: ManifestSummary | undefined,
   workflow: WorkflowSummary | undefined,
+  rehearsal: WorkRehearsal,
 ): JobLogReferenceRow[] {
   const repo = repoOf(manifest);
   // Only `worktree` is drawn on this screen, which never reads `records` —
@@ -127,6 +153,12 @@ export function workOf(
       copyValue: where,
       open: opener(open, job.id, "worktree", "Open the worktree"),
       meta: dispatched ? undefined : NOT_WRITTEN,
+      // **Run…**, Journey 9. Disabled with a reason rather than hidden where
+      // this Job never dispatched a worktree — reported: the journey also
+      // disables it where a dispatched worktree was later reclaimed, which
+      // this row cannot tell from one still on disk without the run sheet's
+      // own `worktree_on_disk`, not read until the sheet opens.
+      run: { onRun: rehearsal.onRun, disabledReason: dispatched ? undefined : NOT_DISPATCHED },
     });
   }
 
@@ -165,7 +197,42 @@ export function workOf(
   }
 
   if (whole !== null) rows.push(...overlapRows(whole));
+  rows.push(...servingRows(job.id, rehearsal));
   return rows;
+}
+
+/**
+ * A row per server this Job is running or has running — Journey 9's *A
+ * server*. **The sheet closed stops nothing**, so this draws for as long as
+ * the server itself is up, independent of whether anybody has the sheet
+ * open. Exited servers are the sheet's own business, not this region's.
+ */
+function servingRows(jobId: string, rehearsal: WorkRehearsal): JobLogReferenceRow[] {
+  return rehearsal.servers
+    .filter((server) => server.job_id === jobId && server.phase !== "exited")
+    .map((server) => ({
+      iconLabel: "Serving",
+      value: server.name,
+      meta: server.phase === "serving" ? "serving" : "starting",
+      separated: true,
+      actions: (
+        <>
+          {server.links.map((link) => (
+            <Button
+              key={link.url}
+              variant="secondary"
+              size="sm"
+              onClick={() => rehearsal.onOpenServerLink(server.id, link.url)}
+            >
+              {link.name ?? link.url}
+            </Button>
+          ))}
+          <Button variant="secondary" size="sm" onClick={() => rehearsal.onStopServer(server.id)}>
+            Stop
+          </Button>
+        </>
+      ),
+    }));
 }
 
 /**
@@ -221,6 +288,9 @@ export function stillReading(watched: Watched, jobId: string): boolean {
   if (watched.jobId !== jobId) return true;
   return watched.state !== "read" && watched.state !== "failed";
 }
+
+/** Why **Run…** is disabled on a Job that has not dispatched a worktree yet. */
+const NOT_DISPATCHED = "This Job has no worktree yet.";
 
 /**
  * Why there is no brief. **Two sentences, and neither describes the wire** —

@@ -18,6 +18,7 @@
 // | `f` | `open_diff`, scope `detail` | open the Produced chapter to the diff |
 // | `g` | `open_stage`, scope `detail` | open a stage of the phase strip |
 // | `b` | `report_job`, scope `detail` | open the dialog that says this job failed in error |
+// | `r` | `run`, scope `detail` | open the run sheet, nothing selected — Journey 9 |
 // | `Esc` | `back`, scope `detail` | the list, and `App.tsx` owns it |
 //
 // # It names what it opens, and holds what it opened
@@ -137,7 +138,9 @@ export type DetailPress =
   /** `B` — give this job a higher cost ceiling. */
   | { act: "raise" }
   /** `T` — let this job take more turns. */
-  | { act: "raiseTurns" };
+  | { act: "raiseTurns" }
+  /** `r` — open the run sheet, nothing selected. */
+  | { act: "run" };
 
 /**
  * What a keypress means on job detail, or `null` for nothing.
@@ -197,6 +200,11 @@ export function detailPressOf(event: KeyboardEvent): DetailPress | null {
     // that opened a dialog about a ceiling would be a mistype away from one.
     case "T":
       return { act: "raiseTurns" };
+    // Plain, freed by `actions.toml`'s narrowing of `review` to scope `list` —
+    // #624. `Journey 9` and the Board's `r` never contend: one is the list's
+    // key on a row, this is detail's on the whole screen.
+    case "r":
+      return { act: "run" };
     default:
       return null;
   }
@@ -257,6 +265,12 @@ export type DetailShape = {
   onOpenLog: () => void;
   /** Open a Check's output on the trailing layer — `o`. Required, for `onOpenLog`'s reason. */
   onOpenOutput: () => void;
+  /**
+   * Open the run sheet, nothing selected — `r`, Journey 9. `onOpenLog`'s
+   * shape and its reason: a sheet this file does not build, on a layer the
+   * screen owns.
+   */
+  onOpenRun: () => void;
   /**
    * Open the report dialog. **The one entry here that moves nothing on the
    * screen** — every other act opens something this file already holds, and
@@ -437,6 +451,8 @@ function act(press: DetailPress, shape: DetailShape, on: Moves): boolean {
       return raise(shape);
     case "raiseTurns":
       return raiseTurns(shape);
+    case "run":
+      return sheet(shape.onOpenRun);
   }
 }
 

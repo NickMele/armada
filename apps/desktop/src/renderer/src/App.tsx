@@ -43,6 +43,8 @@ import {
   openArtifact,
   openPullRequest,
   openRemarkLink,
+  openServerLink,
+  observeRun,
   readCall,
   readCheckOutput,
   followCheckOutput,
@@ -55,8 +57,13 @@ import {
   reclaimOne,
   showAgain,
   stageAttachment,
+  startRun,
+  startServer,
+  stopRun,
+  stopServer,
   useCommands,
   useWatching,
+  watchRunSheet,
 } from "./commands";
 import { Palette, useCommandPalette } from "@armada/shell";
 import { copyDebugInfoFor } from "@armada/shell";
@@ -416,6 +423,19 @@ export function App() {
                 onOpenRemarkLink={(jobId, remarkId) => void openRemarkLink(jobId, remarkId)}
                 onCopied={setCopied}
                 onSaid={setTelling}
+                // The run sheet — Journey 9 — and the servers it starts.
+                rehearsal={{
+                  runSheet: state.runSheet,
+                  runFollowed: state.runFollowed,
+                  servers: state.servers,
+                  onWatchRunSheet: watchRunSheet,
+                  onObserveRun: observeRun,
+                  onStartRun: startRun,
+                  onStopRun: stopRun,
+                  onStartServer: startServer,
+                  onStopServer: stopServer,
+                  onOpenServerLink: openServerLink,
+                }}
               />
             </Boundary>
           ) : auditing ? (

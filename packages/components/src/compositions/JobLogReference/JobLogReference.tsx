@@ -4,6 +4,7 @@ import type { MouseEvent, ReactNode } from "react";
 import { Fragment, useCallback, useState } from "react";
 
 import { Button } from "../../primitives/Button/Button";
+import type { WhereRowProps } from "../WhereRow/WhereRow";
 
 /**
  * Job log reference — where the work is, and where the log is.
@@ -60,6 +61,18 @@ export type JobLogReferenceRow = {
   meta?: ReactNode;
   /** A rule above this row, where it starts a second group. */
   separated?: boolean;
+  /**
+   * The run sheet's own entry point — **Run…** on the worktree row, Journey
+   * 9. `WhereRow`'s own field, carried through: this component draws it and
+   * `JobLogReference` ignores it, since only `InsideAJob`'s `WhereRegion`
+   * opens a run sheet.
+   */
+  run?: WhereRowProps["run"];
+  /**
+   * Trailing controls beside the row — a server's link buttons and Stop, on
+   * its *Serving* row. `WhereRow`'s own field, `run`'s reason.
+   */
+  actions?: ReactNode;
 };
 
 /**

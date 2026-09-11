@@ -604,13 +604,19 @@ function WhereRegion({
               label={row.iconLabel}
               value={row.value}
               note={row.meta}
-              act={opens === undefined ? "copy" : "open"}
+              // A *Serving* row names nothing that opens or copies on its
+              // own — the one thing to press is `actions`, beside it — so a
+              // row with neither `open` nor a value to copy draws no act at
+              // all, rather than defaulting to a copy of nothing.
+              act={opens !== undefined ? "open" : row.copyValue !== undefined ? "copy" : undefined}
               copyValue={row.copyValue}
               onCopied={onCopied}
               actLabel={opens?.label}
               onAct={
                 opens === undefined || opening !== null ? undefined : () => open(at, opens.go)
               }
+              run={row.run}
+              actions={row.actions}
             />
             {failed === null ? null : (
               <p className="armada-inside__where-unopened" role="status">

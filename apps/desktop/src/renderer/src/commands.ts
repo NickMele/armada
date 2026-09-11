@@ -29,7 +29,7 @@ import { useEffect, useState } from "react";
 
 import type { BridgeState } from "../../shared/bridge";
 import type { Artifact, Draft, FileReport, Outcome, WorktreeReclaimed } from "@armada/protocol";
-import type { CommandAnswer, WhenBlocked } from "@armada/protocol";
+import type { CommandAnswer, StartRun, WhenBlocked } from "@armada/protocol";
 import type { Answered, ConfirmableAct } from "@armada/screens";
 import { proposeRequest } from "./dispatch";
 import type { Proposing } from "./dispatch";
@@ -64,6 +64,16 @@ export const openPullRequest = (jobId: string) => window.armada.openPullRequest(
 export const openRemarkLink = (jobId: string, remarkId: string) =>
   window.armada.openRemarkLink(jobId, remarkId);
 export const examine = (jobId: string): void => void window.armada.examineJob(jobId);
+// The run sheet — Journey 9. Opened by the sheet, not the Job.
+export const watchRunSheet = (jobId: string | null): void => void window.armada.watchRunSheet(jobId);
+export const observeRun = (jobId: string | null, runId: string | null): void =>
+  void window.armada.observeRun(jobId, runId);
+export const startRun = (jobId: string, body: StartRun) => window.armada.startRun(jobId, body);
+export const stopRun = (jobId: string, runId: string) => window.armada.stopRun(jobId, runId);
+export const startServer = (name: string, jobId?: string) => window.armada.startServer(name, jobId);
+export const stopServer = (serverId: string) => window.armada.stopServer(serverId);
+export const openServerLink = (serverId: string, url: string) =>
+  window.armada.openServerLink(serverId, url);
 export const stageAttachment = (bytes: ArrayBuffer, filename: string, mimeType: string) =>
   window.armada.stageAttachment(bytes, filename, mimeType);
 

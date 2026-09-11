@@ -104,6 +104,7 @@ import { ordered } from "./facts";
 import { headingOf, Unrenderable } from "./heading";
 import { detailOf, holdingOf, logOf, lookOf, turnsOf, type FoldedReads } from "./mine";
 import { phasesOf } from "./phases";
+import { checkEntryId, useRunSheet, type RunSheetSlice } from "./rehearsal";
 import { neverAsksAPerson, verdictSlotAtGate, verdictSlotFinished } from "./verdict";
 import { verdictSlotAfterAnswer } from "./verdict-answered";
 // Which Check's output `o` opens. **The same call the Checks chapter's own act
@@ -117,7 +118,7 @@ import { StepActs } from "./StepActs";
 import { whyNoNotes } from "./notes";
 import { entriesOf, hideUnread, whyNotWatching } from "./story";
 import { LOOK_FAILED, NOTHING_HAPPENED_YET, latestOf, movesOf, nothingToAsk, summarised, whyNoReading } from "./resources";
-import { briefOf, whyNoBrief, workOf } from "./work";
+import { briefOf, whyNoBrief, workOf, workRehearsalOf } from "./work";
 
 export type { ConfirmableAct, JobAct } from "./Acts";
 export type { FoldedReads } from "./mine";
@@ -312,6 +313,7 @@ export type JobDetailProps = {
    * front of them.
    */
   onSaid: (sentence: string) => void;
+  rehearsal: RunSheetSlice; // The run sheet, Journey 9 — bundled, `recorded`'s precedent
 };
 
 export function JobDetail({
@@ -365,6 +367,7 @@ export function JobDetail({
   onOpenRemarkLink,
   onCopied,
   onSaid,
+  rehearsal,
 }: JobDetailProps) {
   // Which step the panel is showing. **The whole of navigation inside a Job**:
   // `null` means the one Fleet says is current, so a Job that moves on carries
@@ -385,6 +388,7 @@ export function JobDetail({
   // be read. `held` is how many rows the step had when the reading was taken,
   // and `Jump to now` takes it again.
   const [held, setHeld] = useState<HeldAt | null>(null);
+  const runHook = useRunSheet({ ...rehearsal, jobId: job.id, jobTitle: job.title, sheet, now, setSheet });
 
   // Whether the report dialog is up. **Here rather than in `Acts`**, because
   // two controls open it — the Job header's menu entry and `b` — and the
@@ -503,6 +507,7 @@ export function JobDetail({
     // never bound. `DetailShape` requires both openers now, so the next one
     // cannot go missing quietly.
     onOpenLog: () => openSheet("log"),
+    onOpenRun: () => runHook.open(), // `r`, Journey 9 — freed from `review`
     // `o` — a Check's output, from the open step. The failed Check first: a
     // person reaching for an output on a step that stopped wants the one that
     // says why, and on a step where nothing failed the key opens the first
@@ -575,6 +580,7 @@ export function JobDetail({
     if (which === "log") setHeld(holdOf(now, rows.length));
   }
 
+
   /**
    * Close it, and put focus back where it came from. **The chapter line is the
    * way back** — `4k`'s third still — so `[` `]` carry on from the chapter the
@@ -636,6 +642,7 @@ export function JobDetail({
           // navigated to a different step, and `stuck.undecided` is not that
           // step's reason for anything.
           undecided: whole?.stuck?.step_id === open.step_id ? whole?.stuck?.undecided : undefined,
+          onRunHere: (checkId) => runHook.open(checkEntryId(checkId)), // Journey 9
         });
 
   // The verdict sheet's slot: `Decide`'s place at the gate, and the finished
@@ -774,7 +781,7 @@ export function JobDetail({
       // the reason the two are separate props at all.
       openSteps={keys.openSteps}
       onOpenStep={keys.onOpenStep}
-      where={workOf(onOpenArtifact, job, whole, manifest, workflow)}
+      where={workOf(onOpenArtifact, job, whole, manifest, workflow, workRehearsalOf(runHook.open, rehearsal))}
       brief={whole === null ? undefined : briefOf(whole)}
       briefAbsent={whyNoBrief(watched, job.id)}
       briefLoading={reading !== undefined}
@@ -861,6 +868,7 @@ export function JobDetail({
               models, stale, acting, onSetWhenBlocked, onSetModel,
               onRemoveAllowedCommand, onRaiseCap, onRaiseTurnCap,
             }}
+            run={runHook.slot}
             floor={floor}
             onClose={closeSheet}
           />
