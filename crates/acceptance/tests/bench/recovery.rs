@@ -71,7 +71,7 @@ pub fn opened(
     standing: Standing,
     steps: &[StepFacts],
 ) -> JobDetail {
-    let stuck = Stuck::of(job, reason, standing, Refusals::none());
+    let stuck = Stuck::of(job, reason, standing, Refusals::none(), None);
     JobDetail::of(
         job,
         reason,

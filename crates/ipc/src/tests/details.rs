@@ -330,6 +330,7 @@ fn blocked() -> Stuck {
             because: String::new(),
         }],
         refusals: 1,
+        undecided: None,
     }
 }
 
@@ -382,6 +383,33 @@ fn the_count_crosses_beside_the_list_and_a_job_with_none_says_so() {
         json.contains("\"refused\":[]") && json.contains("\"refusals\":0"),
         "empty is a Drone that was refused nothing, and it is stated rather \
          than left to a missing key: {json}"
+    );
+}
+
+/// **Absent, not `null`.** Every trigger but `gate_undecided` carries no
+/// sentence to say, and a client reading `undecided: null` could not tell that
+/// from a Fleet that simply had not sent the field yet.
+#[test]
+fn the_gates_sentence_crosses_only_where_it_timed_out() {
+    let json = encode(&blocked()).expect("a classification is plain data");
+    assert!(
+        !json.contains("undecided"),
+        "gate_failure carries no sentence about a timeout: {json}"
+    );
+
+    let timed_out = Stuck {
+        stopped_by: Some(String::from("gate_undecided")),
+        undecided: Some(String::from("the Judge did not answer inside its budget")),
+        ..blocked()
+    };
+    let json = encode(&timed_out).expect("a classification is plain data");
+    assert!(
+        json.contains("\"undecided\":\"the Judge did not answer inside its budget\""),
+        "{json}"
+    );
+    assert_eq!(
+        decode::<Stuck>("a classification", json.as_bytes()).expect("it reads back"),
+        timed_out
     );
 }
 

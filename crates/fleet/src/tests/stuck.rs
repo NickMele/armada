@@ -31,8 +31,11 @@ use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::resume::Redirection;
 use crate::tests::admitted::dispatched;
-use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
+use crate::tests::daemon::{
+    a_fleet, a_proposal, diff_evidence, fitted_with, one, worktree_directory,
+};
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 
 type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 
@@ -334,6 +337,45 @@ async fn a_refused_step_leads_with_the_act_that_takes_nothing_away() {
         spelled(&stuck),
         ["override_verdict", "redirect_drone", "redispatch_job"]
     );
+}
+
+/// **The half issue `#633` is about.** A Judge that ran out of time carries no
+/// verdict, so before this the sentence saying why reached only the Job's log
+/// — the wire carried the trigger and nothing of the cause.
+#[tokio::test]
+async fn a_gate_that_could_not_decide_carries_the_reason_on_the_wire() {
+    let home = TempDir::new();
+    let fleet = a_fleet(
+        &home,
+        FakeWorkProduct::refusing("a worktree that would not read"),
+    );
+
+    let job = fleet.propose(a_proposal("fix the reader")).await.unwrap();
+    worktree_directory(&home, &job);
+    dispatched(&fleet, job.id()).await.unwrap();
+    submitted_by_the_one(&fleet, diff_evidence()).await.unwrap();
+    fleet.turn().await.unwrap();
+
+    let stuck = detail(&fleet, job.id()).await.stuck.expect("it stopped");
+    assert_eq!(stuck.stopped_by.as_deref(), Some("gate_undecided"));
+    assert_eq!(
+        stuck.undecided.as_deref(),
+        Some("refused, standing in for a worktree that would not read"),
+        "the sentence that used to reach only the log"
+    );
+}
+
+/// A step stopped for a decided reason carries no sentence about a timeout —
+/// there was one, and it is not why this Job is stuck.
+#[tokio::test]
+async fn a_gate_failure_carries_no_undecided_sentence() {
+    let home = TempDir::new();
+    let fleet = a_fleet_with(&home, a_drone_that_stays());
+    let job = refused(&fleet, &home).await;
+
+    let stuck = detail(&fleet, &job).await.stuck.expect("it stopped");
+    assert_eq!(stuck.stopped_by.as_deref(), Some("gate_failure"));
+    assert!(stuck.undecided.is_none());
 }
 
 /// The classification reads the slot rather than the record, for the reason

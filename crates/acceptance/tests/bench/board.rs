@@ -123,7 +123,7 @@ pub fn standing(checks_passed: bool) -> Standing {
 /// `core-model` from the Job rather than described here, so nothing in this
 /// file can claim a recourse the domain would not offer.
 pub fn detail(job: &Job, reason: Option<&TransitionReason>, steps: &[StepFacts]) -> JobDetail {
-    let stuck = Stuck::of(job, reason, standing(true), Refusals::none());
+    let stuck = Stuck::of(job, reason, standing(true), Refusals::none(), None);
     JobDetail::of(
         job,
         reason,
@@ -153,7 +153,7 @@ pub fn delivered(
     steps: &[StepFacts],
     delivery: JobDelivery,
 ) -> JobDetail {
-    let stuck = Stuck::of(job, reason, standing(true), Refusals::none());
+    let stuck = Stuck::of(job, reason, standing(true), Refusals::none(), None);
     JobDetail::of(
         job,
         reason,

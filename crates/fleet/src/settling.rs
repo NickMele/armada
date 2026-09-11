@@ -41,6 +41,11 @@ use crate::keeping::Keeping;
 use crate::turning::{Turned, Worked};
 use crate::working::Working;
 
+/// The `msg` [`Fleet::noted_undecided`] writes. `crate::stuck` reads a Job's
+/// log back for exactly this line, so the two carry one string rather than two
+/// that are supposed to agree.
+pub(crate) const UNDECIDED: &str = "the gate could not read what it needed to rule";
+
 /// What the gate did about a submission this turn.
 ///
 /// **Never both, and ordinarily neither.** A submission is ruled on or it is
@@ -431,7 +436,7 @@ where
             Level::Warn,
             Component::Fleet,
             self.run().clone(),
-            "the gate could not read what it needed to rule",
+            UNDECIDED,
         )
         .in_job(job.as_ulid().clone())
         .at_step(step.as_str())
