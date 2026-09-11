@@ -454,6 +454,13 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.stopRun, (_event, jobId: string, runId: string) =>
     connection?.rehearsal.stopRun(jobId, runId),
   );
+  ipcMain.handle(CHANNELS.undoRun, (_event, jobId: string, runId: string) =>
+    connection?.rehearsal.undoRun(jobId, runId),
+  );
+  ipcMain.handle(CHANNELS.listRuns, (_event, jobId: string) => connection?.rehearsal.listRuns(jobId));
+  ipcMain.handle(CHANNELS.getRunOutput, (_event, jobId: string, runId: string) =>
+    connection?.rehearsal.getRunOutput(jobId, runId),
+  );
   // A declared server, for this Job's worktree or the main checkout where no
   // Job is named. `servers` on the published state is what keeps a *Serving*
   // row on screen after the sheet that started it closes.

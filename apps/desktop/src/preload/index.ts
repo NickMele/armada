@@ -15,7 +15,7 @@ import type {
 } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
 import type { Artifact, Followed, Opened } from "@armada/protocol";
-import type { ProtocolVersion, StartRun } from "@armada/protocol";
+import type { ProtocolVersion, RunListRead, RunOutputRead, StartRun } from "@armada/protocol";
 import type { CommandAnswer, WhenBlocked } from "@armada/protocol";
 import { PROTOCOL_VERSION } from "@armada/protocol";
 
@@ -215,6 +215,14 @@ const api: BridgeApi = {
 
   stopRun: (jobId: string, runId: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.stopRun, jobId, runId),
+
+  undoRun: (jobId: string, runId: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.undoRun, jobId, runId),
+
+  listRuns: (jobId: string): Promise<RunListRead> => ipcRenderer.invoke(CHANNELS.listRuns, jobId),
+
+  getRunOutput: (jobId: string, runId: string): Promise<RunOutputRead> =>
+    ipcRenderer.invoke(CHANNELS.getRunOutput, jobId, runId),
 
   // Start a declared server, for this Job's worktree or, with no Job, the
   // main checkout — the one capability on this seam Manifest's own surface

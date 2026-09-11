@@ -53,16 +53,25 @@ import type { RunSheetSlice } from "./rehearsal";
 export type WorkRehearsal = {
   /** Opens the run sheet with nothing selected. */
   onRun: () => void;
+  /** The sheet's own reading of whether the worktree is on disk, once it has
+   * one — `undefined` before anybody has opened the sheet, which falls back
+   * to whether the Job has dispatched a worktree at all. */
+  worktreeOnDisk: boolean | undefined;
   /** Every server Fleet holds. Filtered to this Job and to the live ones. */
   servers: readonly ServerState[];
   onStopServer: (serverId: string) => void;
   onOpenServerLink: (serverId: string, url: string) => void;
 };
 
-/** Builds `WorkRehearsal` off `RunSheetSlice`, so a caller passes one line. */
-export function workRehearsalOf(onRun: () => void, slice: RunSheetSlice): WorkRehearsal {
+/** Builds `WorkRehearsal` off `useRunSheet`'s own return, so a caller passes one line. */
+export function workRehearsalOf(
+  onRun: () => void,
+  worktreeOnDisk: boolean | undefined,
+  slice: RunSheetSlice,
+): WorkRehearsal {
   return {
     onRun,
+    worktreeOnDisk,
     servers: slice.servers.servers,
     onStopServer: (serverId) => void slice.onStopServer(serverId),
     onOpenServerLink: (serverId, url) => void slice.onOpenServerLink(serverId, url),
@@ -153,12 +162,11 @@ export function workOf(
       copyValue: where,
       open: opener(open, job.id, "worktree", "Open the worktree"),
       meta: dispatched ? undefined : NOT_WRITTEN,
-      // **Run…**, Journey 9. Disabled with a reason rather than hidden where
-      // this Job never dispatched a worktree — reported: the journey also
-      // disables it where a dispatched worktree was later reclaimed, which
-      // this row cannot tell from one still on disk without the run sheet's
-      // own `worktree_on_disk`, not read until the sheet opens.
-      run: { onRun: rehearsal.onRun, disabledReason: dispatched ? undefined : NOT_DISPATCHED },
+      // **Run…**, Journey 9. Disabled with a reason rather than hidden.
+      // `worktree_on_disk` is the sheet's own reading and wins once it
+      // exists; before the sheet has ever been opened this falls back to
+      // whether the Job has dispatched a worktree at all.
+      run: { onRun: rehearsal.onRun, disabledReason: disabledReasonOf(dispatched, rehearsal.worktreeOnDisk) },
     });
   }
 
@@ -291,6 +299,20 @@ export function stillReading(watched: Watched, jobId: string): boolean {
 
 /** Why **Run…** is disabled on a Job that has not dispatched a worktree yet. */
 const NOT_DISPATCHED = "This Job has no worktree yet.";
+
+/** Why **Run…** is disabled on a Job whose worktree the sheet found gone. */
+const WORKTREE_GONE = "This Job's worktree is gone.";
+
+/**
+ * Why **Run…** is disabled, or `undefined` where it is not. `worktreeOnDisk`
+ * is the run sheet's own reading and wins once it exists — it is the only
+ * signal that tells a reclaimed worktree from one still there — and the
+ * cheaper `dispatched` guess carries the row until somebody opens the sheet.
+ */
+function disabledReasonOf(dispatched: boolean, worktreeOnDisk: boolean | undefined): string | undefined {
+  if (worktreeOnDisk !== undefined) return worktreeOnDisk ? undefined : WORKTREE_GONE;
+  return dispatched ? undefined : NOT_DISPATCHED;
+}
 
 /**
  * Why there is no brief. **Two sentences, and neither describes the wire** —

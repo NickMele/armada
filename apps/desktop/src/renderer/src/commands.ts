@@ -70,6 +70,9 @@ export const observeRun = (jobId: string | null, runId: string | null): void =>
   void window.armada.observeRun(jobId, runId);
 export const startRun = (jobId: string, body: StartRun) => window.armada.startRun(jobId, body);
 export const stopRun = (jobId: string, runId: string) => window.armada.stopRun(jobId, runId);
+export const undoRun = (jobId: string, runId: string) => window.armada.undoRun(jobId, runId);
+export const listRuns = (jobId: string) => window.armada.listRuns(jobId);
+export const getRunOutput = (jobId: string, runId: string) => window.armada.getRunOutput(jobId, runId);
 export const startServer = (name: string, jobId?: string) => window.armada.startServer(name, jobId);
 export const stopServer = (serverId: string) => window.armada.stopServer(serverId);
 export const openServerLink = (serverId: string, url: string) =>

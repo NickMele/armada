@@ -14,6 +14,7 @@ import type {
   ConsoleOutputProps,
   RunSheetEntry,
   RunSheetGroup,
+  RunSheetPastRun,
   RunSheetProps,
   RunSheetServerStatus,
 } from "@armada/components";
@@ -22,6 +23,9 @@ import type {
   Outcome,
   RunEntry,
   RunFollowed,
+  RunListRead,
+  RunOutputRead,
+  RunRecord,
   RunSheet,
   RunSheetRead,
   ServerEntry,
@@ -138,6 +142,35 @@ export function runOutputOf(followed: RunFollowed): ConsoleOutputProps | undefin
   };
 }
 
+/** One row of *Earlier runs* — unhued, because a rehearsal carries no verdict. */
+export function pastRunOf(record: RunRecord, onOpen: (id: string) => void): RunSheetPastRun {
+  return {
+    id: record.id,
+    name: record.name,
+    result:
+      record.exit_code === undefined
+        ? record.ended
+        : `exit ${record.exit_code} (expects ${record.expect_exit_code})`,
+    time: clockOf(record.started_at),
+    duration: `${(record.duration_ms / 1000).toFixed(1)}s`,
+    onOpen: () => onOpen(record.id),
+  };
+}
+
+/** `HH:MM:SS`, off an ISO instant — the sheet's own run rows carry no date. */
+function clockOf(at: string): string {
+  return new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+/**
+ * The newest run that wrote something and has not been undone — the one a
+ * changed-files panel offers **Open the diff** and **Undo this run** for.
+ * `undefined` where nothing has, or the one that did has already been undone.
+ */
+export function changedRunOf(runs: readonly RunRecord[]): RunRecord | undefined {
+  return runs.find((run) => run.changed.length > 0 && run.undone_at === undefined);
+}
+
 /** Whether the sheet should draw a running strip, and what it says. */
 export function runningOf(
   sheet: RunSheet | undefined,
@@ -158,6 +191,9 @@ export type RunSheetSlice = {
   onObserveRun: (jobId: string | null, runId: string | null) => void;
   onStartRun: (jobId: string, body: StartRun) => Promise<Outcome>;
   onStopRun: (jobId: string, runId: string) => Promise<Outcome>;
+  onUndoRun: (jobId: string, runId: string) => Promise<Outcome>;
+  onListRuns: (jobId: string) => Promise<RunListRead>;
+  onGetRunOutput: (jobId: string, runId: string) => Promise<RunOutputRead>;
   onStartServer: (name: string, jobId: string) => Promise<Outcome>;
   onStopServer: (serverId: string) => Promise<Outcome>;
   onOpenServerLink: (serverId: string, url: string) => Promise<Followed>;
@@ -173,11 +209,11 @@ export function useRunSheet(
   slice: RunSheetSlice & {
     jobId: string;
     jobTitle: string;
-    /** Which sheet is open. Only `"run"` matters here. */
+    /** Which sheet is open. `"run"` and `"diff"` both matter here. */
     sheet: string | null;
     now: number;
-    /** Puts the run sheet up — `JobDetail`'s own sheet state. */
-    setSheet: (which: "run") => void;
+    /** Puts a sheet up — `JobDetail`'s own sheet state. `diff` is **Open the diff**'s. */
+    setSheet: (which: "run" | "diff") => void;
     /** Says why a server's link did not open. `JobDetail`'s own toast. */
     onSaid: (sentence: string) => void;
   },
@@ -185,6 +221,10 @@ export function useRunSheet(
   /** Open the sheet, with `undefined` for nothing selected. */
   open: (entryId?: string) => void;
   slot: Omit<RunSheetProps, "open" | "floor" | "onClose">;
+  /** The sheet's own reading of whether the worktree is still there. `undefined`
+   * before the sheet has ever been opened — the worktree row falls back to
+   * whether the Job has dispatched one at all. */
+  worktreeOnDisk: boolean | undefined;
 } {
   const {
     jobId,
@@ -199,16 +239,32 @@ export function useRunSheet(
     onObserveRun,
     onStartRun,
     onStopRun,
+    onUndoRun,
+    onListRuns,
+    onGetRunOutput,
     onStartServer,
     onStopServer,
     onOpenServerLink,
   } = slice;
   const [selected, setSelected] = useState<string | null>(null);
   const [wide, setWide] = useState<ReadonlySet<string>>(new Set());
+  // Earlier runs, newest first, read alongside the sheet — `list_runs`.
+  const [runs, setRuns] = useState<readonly RunRecord[]>([]);
+  // A past run's own log, opened from *Earlier runs*. Replaces the live pane
+  // until a fresh run starts or the sheet closes.
+  const [viewing, setViewing] = useState<{ runId: string; output: ConsoleOutputProps } | null>(null);
   useEffect(() => {
     setSelected(null);
     setWide(new Set());
+    setRuns([]);
+    setViewing(null);
   }, [jobId]);
+
+  const refreshRuns = (): void => {
+    void onListRuns(jobId).then((read) => {
+      if (read.ok) setRuns(read.runs.runs);
+    });
+  };
 
   // Opened with the sheet and dropped when it closes, `diff`'s reason: most
   // Jobs are never rehearsed, so nothing pays for a Job nobody opened the
@@ -216,6 +272,7 @@ export function useRunSheet(
   useEffect(() => {
     if (sheet !== "run") return;
     onWatchRunSheet(jobId);
+    refreshRuns();
     return () => onWatchRunSheet(null);
   }, [sheet, jobId]);
 
@@ -230,19 +287,31 @@ export function useRunSheet(
     if (sheet !== "run" || runningId === undefined) return;
     onObserveRun(jobId, runningId);
   }, [sheet, jobId, runningId]);
+  // The run sheet's own reading moves the instant a run finishes — see
+  // `RehearsalConnection.onRunFinished` — which is the signal that *Earlier
+  // runs* has one more row.
+  useEffect(() => {
+    if (sheet === "run" && runningId === undefined) refreshRuns();
+  }, [sheet, runningId]);
 
   const runningNow = runningOf(data, now);
+  const changedRun = changedRunOf(runs);
 
   return {
+    worktreeOnDisk: data?.worktree_on_disk,
     open: (entryId) => {
       setSheet("run");
       setSelected(entryId ?? null);
+      setViewing(null);
     },
     slot: {
       jobName: jobTitle,
       groups: data === undefined ? [] : runSheetGroupsOf(data, wide),
       selectedId: selected,
-      onSelect: setSelected,
+      onSelect: (id) => {
+        setSelected(id);
+        setViewing(null);
+      },
       onToggleNarrow: (id) =>
         setWide((prior) => {
           const next = new Set(prior);
@@ -255,9 +324,26 @@ export function useRunSheet(
         else void onStartRun(jobId, { name: nameOf(id), narrowed });
       },
       droneWorking: data?.drone_working ?? false,
-      // `onUseWorktreeVersion` is not offered in this change — reported.
-      ...(data?.worktree_differs === true ? { manifestDiffers: {} } : {}),
-      output: runOutputOf(runFollowed),
+      ...(data?.worktree_differs !== true
+        ? {}
+        : {
+            manifestDiffers: {
+              // The selected entry, run again against the worktree's own
+              // `armada.yml` rather than what the Job froze — `start_run`'s
+              // own `worktree_version` flag.
+              ...(selected === null || isServerEntry(selected)
+                ? {}
+                : {
+                    onUseWorktreeVersion: () =>
+                      void onStartRun(jobId, {
+                        name: nameOf(selected),
+                        narrowed: !wide.has(selected),
+                        worktree_version: true,
+                      }),
+                  }),
+            },
+          }),
+      output: viewing?.output ?? runOutputOf(runFollowed),
       ...(runningNow === undefined
         ? {}
         : {
@@ -266,6 +352,20 @@ export function useRunSheet(
               ...(data?.running === undefined
                 ? {}
                 : { onStop: () => void onStopRun(jobId, data.running!.id) }),
+            },
+          }),
+      ...(runs.length === 0
+        ? {}
+        : { runs: runs.map((record) => pastRunOf(record, (id) => openPastRun(id))) }),
+      ...(changedRun === undefined
+        ? {}
+        : {
+            changed: {
+              files: changedRun.changed,
+              onOpenDiff: () => setSheet("diff"),
+              ...(data?.drone_working === true
+                ? {}
+                : { onUndo: () => void onUndoRun(jobId, changedRun.id).then(refreshRuns) }),
             },
           }),
       server: serverStatusOf(data, selected, now),
@@ -282,4 +382,20 @@ export function useRunSheet(
       },
     },
   };
+
+  /** *Earlier runs*' own control — reads that run's log into the output pane. */
+  function openPastRun(runId: string): void {
+    void onGetRunOutput(jobId, runId).then((read) => {
+      if (!read.ok) return;
+      const output = read.output;
+      setViewing({
+        runId,
+        output: {
+          rows: output.lines.map((text, at) => ({ row: "line" as const, at: output.from_line + at, text })),
+          region: { says: output.name, path: output.path },
+          emptyNote: "Printed nothing.",
+        },
+      });
+    });
+  }
 }

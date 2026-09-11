@@ -760,7 +760,14 @@ export function JobDetail({
       // the reason the two are separate props at all.
       openSteps={keys.openSteps}
       onOpenStep={keys.onOpenStep}
-      where={workOf(onOpenArtifact, job, whole, manifest, workflow, workRehearsalOf(runHook.open, rehearsal))}
+      where={workOf(
+        onOpenArtifact,
+        job,
+        whole,
+        manifest,
+        workflow,
+        workRehearsalOf(runHook.open, runHook.worktreeOnDisk, rehearsal),
+      )}
       brief={whole === null ? undefined : briefOf(whole)}
       briefAbsent={whyNoBrief(watched, job.id)}
       briefLoading={reading !== undefined}

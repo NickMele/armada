@@ -5,7 +5,7 @@
 // and nothing here moves a Job, so no field maps onto a status colour.
 
 import type { ChangedFile } from "./events";
-import type { JobRead } from "./reads";
+import type { JobRead, Outcome } from "./reads";
 import type { ProtocolVersion } from "./version";
 import type { ServerEntry } from "./servers";
 
@@ -126,6 +126,16 @@ export type RunOutput = {
 
 /** `stop_run`'s and `undo_run`'s body. */
 export type NamedRun = { id: string };
+
+/**
+ * What `list_runs` came back as. **Answered to the caller rather than held
+ * as state**, `CallRead`'s reason: the sheet asks for it once, when a person
+ * opens *Earlier runs*, and it does not move once Fleet has answered.
+ */
+export type RunListRead = { ok: true; runs: RunList } | { ok: false; outcome: Outcome };
+
+/** What `get_run_output` came back as. `RunListRead`'s shape and reason. */
+export type RunOutputRead = { ok: true; output: RunOutput } | { ok: false; outcome: Outcome };
 
 /**
  * One message on a run's socket, `GET /jobs/:job_id/runs/:run_id/observe`.

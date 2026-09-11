@@ -21,6 +21,8 @@ import type {
   Proposed,
   ProtocolVersion,
   ReclaimOutcome,
+  RunListRead,
+  RunOutputRead,
   StartRun,
   WhenBlocked,
 } from "@armada/protocol";
@@ -350,6 +352,14 @@ export type BridgeApi = {
   startRun: (jobId: string, body: StartRun) => Promise<Outcome>;
   /** End a run's process group. Its log keeps what printed. */
   stopRun: (jobId: string, runId: string) => Promise<Outcome>;
+  /** Put back the files one run changed, from the snapshot taken just before
+   * it. Refused while a Drone is working, while a run is in flight, on a run
+   * already undone or with no snapshot. */
+  undoRun: (jobId: string, runId: string) => Promise<Outcome>;
+  /** Every earlier run from the sheet, newest first, and what would not read. */
+  listRuns: (jobId: string) => Promise<RunListRead>;
+  /** One run's log, read back as a window that says it is one. */
+  getRunOutput: (jobId: string, runId: string) => Promise<RunOutputRead>;
   /** Start a declared server — this Job's worktree, or the main checkout with
    * no Job. `server.serving`/`server.exited` follow as events. */
   startServer: (name: string, jobId?: string) => Promise<Outcome>;

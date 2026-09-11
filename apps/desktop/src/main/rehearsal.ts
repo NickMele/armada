@@ -11,7 +11,19 @@
 
 import WebSocket from "ws";
 
-import type { NamedRun, RunFollowed, RunMessage, RunSheet, RunUnderway, ServerState, StartRun } from "@armada/protocol";
+import type {
+  NamedRun,
+  RunFollowed,
+  RunList,
+  RunListRead,
+  RunMessage,
+  RunOutput,
+  RunOutputRead,
+  RunSheet,
+  RunUnderway,
+  ServerState,
+  StartRun,
+} from "@armada/protocol";
 import type { Outcome } from "@armada/protocol";
 import type { BridgeState } from "../shared/bridge";
 import { ask, route, serversOf } from "./request";
@@ -28,9 +40,8 @@ export type RunBoard = {
   refreshSheet: (port: number) => Promise<void>;
 };
 
-/** `start_run` and `stop_run`. **`undo_run` and `list_runs` are not here** — the
- * sheet does not yet draw a run's history or its changed files, so there is
- * nothing on this side of the wire to call them from. Reported. */
+/** `start_run`, `stop_run`, `undo_run`, and the two reads the sheet's own
+ * history draws from — `list_runs` and `get_run_output`. */
 export class RunCommands {
   private readonly board: RunBoard;
 
@@ -63,6 +74,39 @@ export class RunCommands {
     if (answer.ok !== true) return answer.outcome;
     await this.board.refreshSheet(port);
     return { ok: true };
+  }
+
+  /**
+   * Put back the files one run changed, from the snapshot taken just before
+   * it. Refused while a Drone is working, while a run is in flight, on a run
+   * already undone or with no snapshot, and where a changed path has moved
+   * since. The sheet's own reading of the run — its `undone_at` — comes from
+   * `list_runs` read again, not from this answer.
+   */
+  async undoRun(jobId: string, id: string): Promise<Outcome> {
+    const port = this.board.port();
+    if (port === null) return { ok: false, why: "not_connected" };
+    const body: NamedRun = { id };
+    const answer = await ask(port, "POST", route(jobId, "undo_run"), body);
+    return answer.ok === true ? { ok: true } : answer.outcome;
+  }
+
+  /** Every earlier run from the sheet, newest first, and what would not read. */
+  async listRuns(jobId: string): Promise<RunListRead> {
+    const port = this.board.port();
+    if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
+    const answer = await ask(port, "GET", route(jobId, "runs"));
+    if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
+    return { ok: true, runs: answer.body as RunList };
+  }
+
+  /** One run's log, read back as a window that says it is one — `get_check_output`'s shape. */
+  async getRunOutput(jobId: string, runId: string): Promise<RunOutputRead> {
+    const port = this.board.port();
+    if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
+    const answer = await ask(port, "GET", route(jobId, `runs/${encodeURIComponent(runId)}/output`));
+    if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
+    return { ok: true, output: answer.body as RunOutput };
   }
 }
 
@@ -259,6 +303,21 @@ export class RehearsalConnection {
   /** End a run's process group. Its log keeps what printed. */
   stopRun(jobId: string, id: string): Promise<Outcome> {
     return this.runs.stopRun(jobId, id);
+  }
+
+  /** Put back the files one run changed, from the snapshot taken just before it. */
+  undoRun(jobId: string, id: string): Promise<Outcome> {
+    return this.runs.undoRun(jobId, id);
+  }
+
+  /** Every earlier run from the sheet, newest first. */
+  listRuns(jobId: string): Promise<RunListRead> {
+    return this.runs.listRuns(jobId);
+  }
+
+  /** One run's log, read back as a window that says it is one. */
+  getRunOutput(jobId: string, runId: string): Promise<RunOutputRead> {
+    return this.runs.getRunOutput(jobId, runId);
   }
 
   /** Start a declared server, for a Job's worktree or the main checkout. */
