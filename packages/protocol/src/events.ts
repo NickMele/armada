@@ -15,6 +15,7 @@ import type { ManifestReading } from "./reading";
 import type { ProposalInFlight } from "./proposing";
 import type { ChecksUnderway } from "./underway";
 import type { QuestionInFlight } from "./waiting";
+import type { CommandInFlight } from "./commanding";
 import type { ProtocolVersion } from "./version";
 
 /** One message from Fleet to a connected client. `crates/ipc/src/event.rs`. */
@@ -47,6 +48,7 @@ export type Event =
   | ({ kind: "job.judging" } & JobJudging)
   | ({ kind: "job.checking" } & JobChecking)
   | ({ kind: "job.asking" } & JobAsking)
+  | ({ kind: "job.command_waiting" } & JobCommandWaiting)
   | ({ kind: "job.forgotten" } & JobForgotten)
   | ({ kind: "job.landed" } & JobLanded)
   | ({ kind: "proposal.moved" } & ProposalMoved)
@@ -250,6 +252,23 @@ export type JobAsking = {
   step_id: string;
   /** The question that went out, or absent because it was answered. */
   asking?: QuestionInFlight;
+  actor: string;
+  at: string;
+};
+
+/**
+ * A drone is held on a command waiting for a person, or the one it was held on
+ * was answered. `crates/ipc/src/event.rs`. Since protocol 10.6.
+ *
+ * `job.asking`'s shape exactly: two messages per command, the one going out
+ * carrying `waiting` and the one coming back carrying nothing. Only a job at
+ * `ask_me` produces it — under the default nothing waits.
+ */
+export type JobCommandWaiting = {
+  job_id: string;
+  step_id: string;
+  /** The command the drone is held on, or absent because it was answered. */
+  waiting?: CommandInFlight;
   actor: string;
   at: string;
 };

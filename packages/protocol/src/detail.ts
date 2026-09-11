@@ -35,6 +35,7 @@ import type {
   Subject,
 } from "./protocol";
 import type { QuestionInFlight, RedirectInFlight, RedirectWaiting } from "./waiting";
+import type { CommandAnswer, CommandInFlight, WhenBlocked } from "./commanding";
 
 /**
  * One Job, whole. The answer to `GET /jobs/:job_id`. `crates/ipc/src/detail.rs`.
@@ -163,6 +164,20 @@ export type JobDetail = {
    * no control at all rather than a refusal.
    */
   show_again?: ShowAgain;
+  /**
+   * What this job does when its drone reaches for a command it was not given.
+   * Since protocol 10.6. **Absent from an older fleet**, which draws as no
+   * setting at all rather than as the default.
+   */
+  when_blocked?: WhenBlocked;
+  /**
+   * The command this job's drone is waiting on a person to allow, right now.
+   * Since protocol 10.6.
+   *
+   * **Absent is the ordinary case**, and it is every job at `refuse_and_hold`:
+   * nothing waits there, and a refused command is answered on `stuck.refused`.
+   */
+  command_waiting?: CommandInFlight;
 };
 
 /**
@@ -321,6 +336,19 @@ export type Refusal = {
    * meaning.
    */
   because: string;
+  /**
+   * What a person may answer about this command. Since protocol 10.6.
+   *
+   * **Empty is nothing a person can allow here**; `withheld` says why where
+   * fleet knows. Optional because fleet reads an absent list as empty, and a
+   * reader here does the same rather than drawing a gap.
+   */
+  offers?: CommandAnswer[];
+  /**
+   * Why this command cannot be allowed from here — declared destructive, or a
+   * push. Since protocol 10.6. Absent where it can be.
+   */
+  withheld?: string;
 };
 
 /**
