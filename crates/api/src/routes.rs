@@ -431,6 +431,11 @@ pub const SERVED: &[Route] = &[
         path: "/events",
     },
     Route {
+        operation: "job.checking",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
         operation: "job.asking",
         method: "GET",
         path: "/events",

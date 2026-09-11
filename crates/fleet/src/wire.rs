@@ -476,6 +476,7 @@ pub(crate) fn step_facts(
                 // The one fact here that is not a row. Read from the live slot
                 // as the answer is assembled, because nothing writes it down.
                 judging: aloft.on(&ipc::JobId::from(job.id()), &StepId::from(step.step_id())),
+                checking: None,
             }
         })
         .collect()

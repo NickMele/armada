@@ -74,6 +74,9 @@ mod setup;
 /// What a step's harness produced, as a client is told about it.
 mod showing;
 mod turn;
+/// A step's Checks while the gate is running them, and the socket a running
+/// Check's log is read over.
+mod underway;
 /// The two numbers both sides read, and what a mismatch between them means.
 /// `build.rs` embeds them from `protocol-version.toml`.
 mod version;
@@ -101,8 +104,8 @@ pub use enums::{
 pub use error::{RunId, WireError, WireValue};
 pub use event::{
     ChangeKind, ChangedFile, Cursor, Delivered, DroneExited, DroneSpawned, Event, JobAsking,
-    JobCreated, JobFilesChanged, JobJudging, JobLanded, JobStateChanged, JobStepAdvanced, Missed,
-    ProposalMoved, Reason, Resync, StreamMessage,
+    JobChecking, JobCreated, JobFilesChanged, JobJudging, JobLanded, JobStateChanged,
+    JobStepAdvanced, Missed, ProposalMoved, Reason, Resync, StreamMessage,
 };
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};
 pub use holding::{HeldReason, WorktreeHeld, WorktreesHeld};
@@ -133,6 +136,10 @@ pub use showing::{KeptFrame, NamedSpec, ShowAgain, ShownAgain, ShownSet};
 pub use turn::{
     BlockKind, CallArguments, Closed, Opened, Saw, Shown, Silence, TranscriptRow, TurnMessage,
     Voice, Withheld,
+};
+pub use underway::{
+    CheckUnderway, ChecksUnderway, OutputClosed, OutputEnded, OutputLines, OutputMessage,
+    OutputOpened,
 };
 pub use version::{ProtocolVersion, Skew, PROTOCOL_VERSION};
 pub use waiting::{AskedOption, ChosenAnswer, QuestionInFlight, RedirectInFlight, RedirectWaiting};

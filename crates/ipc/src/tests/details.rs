@@ -35,6 +35,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
             attempts: Vec::new(),
             verdicts: Vec::new(),
             judging: None,
+            checking: None,
         }],
     );
     let json = encode(&ungated).expect("a detail is plain data");
@@ -54,6 +55,7 @@ fn an_ungated_step_says_so_and_an_unanswerable_one_carries_no_key() {
             attempts: Vec::new(),
             verdicts: Vec::new(),
             judging: None,
+            checking: None,
         }],
     );
     let json = encode(&unanswerable).expect("a detail is plain data");
@@ -86,6 +88,7 @@ fn a_step_with_no_label_reads_as_its_id() {
             attempts: Vec::new(),
             verdicts: Vec::new(),
             judging: None,
+            checking: None,
         }],
     );
     assert_eq!(detail.steps[0].label, "repro");
@@ -124,6 +127,7 @@ fn a_check_run_crosses_with_which_of_the_five_outcomes_it_was() {
             attempts: Vec::new(),
             verdicts: Vec::new(),
             judging: None,
+            checking: None,
         }],
     );
     let json = encode(&detail).expect("a detail is plain data");
@@ -197,6 +201,7 @@ fn a_judge_refusal_crosses_with_the_three_lines_it_cited() {
             attempts: Vec::new(),
             verdicts: Vec::new(),
             judging: None,
+            checking: None,
         }],
     );
     let json = encode(&detail).expect("a detail is plain data");
@@ -425,5 +430,84 @@ fn an_unmeasured_argument_carries_no_length_rather_than_nought() {
     assert_eq!(
         decode::<Stuck>("a classification", json.as_bytes()).expect("it reads back"),
         old
+    );
+}
+
+/// **A gate running its Checks says so, beside the state and never as one.**
+/// Absent on the ordinary step, which is what keeps a Bridge that does not know
+/// the field reading exactly what it read before; present, a waiting Check
+/// carries no start and a finished one carries the row the ruling will write.
+#[test]
+fn a_gate_running_its_checks_rides_beside_the_state() {
+    use crate::{CheckUnderway, ChecksUnderway, Event, Instant, JobChecking};
+
+    let job = job();
+    let facts = |checking| StepFacts {
+        step_id: crate::StepId::carried("repro"),
+        label: None,
+        declares: Some(Vec::new()),
+        ran: Vec::new(),
+        judged: Vec::new(),
+        flagged: Vec::new(),
+        deliverables: Vec::new(),
+        frames: Vec::new(),
+        attempts: Vec::new(),
+        verdicts: Vec::new(),
+        judging: None,
+        checking,
+    };
+
+    let quiet = encode(&detail_of(&job, &[facts(None)])).expect("plain data");
+    assert!(
+        !quiet.contains("\"checking\""),
+        "absent, never null: {quiet}"
+    );
+
+    let underway = ChecksUnderway {
+        attempt: 2,
+        checks: vec![
+            CheckUnderway {
+                name: "build".to_string(),
+                started_at: Some(Instant::carried("2026-09-11T09:00:00.000Z")),
+                took_ms: Some(1_200),
+                ran: Some(CheckRun {
+                    attempt: 2,
+                    name: "build".to_string(),
+                    outcome: core_model::CheckOutcome::Passed.into(),
+                    expected: None,
+                    produced: None,
+                    output_path: None,
+                }),
+                output_path: Some(".armada/checks/j/repro.2.live.0.log".to_string()),
+            },
+            CheckUnderway {
+                name: "test".to_string(),
+                started_at: None,
+                took_ms: None,
+                ran: None,
+                output_path: None,
+            },
+        ],
+    };
+    let running =
+        encode(&detail_of(&job, &[facts(Some(underway.clone()))])).expect("plain data");
+    assert!(running.contains("\"checking\":{\"attempt\":2"), "{running}");
+    assert!(
+        running.contains("{\"name\":\"test\"}"),
+        "a waiting Check is its name and nothing else: {running}"
+    );
+
+    let told = Event::JobChecking(JobChecking {
+        job_id: crate::JobId::carried("01JOB"),
+        step_id: crate::StepId::carried("repro"),
+        checking: Some(underway),
+        actor: core_model::Actor::Fleet.into(),
+        at: Instant::carried("2026-09-11T09:00:01.000Z"),
+    });
+    let wire = encode(&told).expect("plain data");
+    assert!(wire.contains("\"kind\":\"job.checking\""), "{wire}");
+    assert_eq!(
+        decode::<Event>("an event", wire.as_bytes()).expect("it reads back"),
+        told
     );
 }

@@ -445,6 +445,23 @@ Not `/events` either, for `observe_job`'s reason: one drop-oldest channel carryi
 `helm_access` is `No` for `observe_job`'s reason: a stream pulled into a Helm session stays in that session for the rest of it, and `get_job_events` is the snapshot of what a Job did.
 """
 
+[operations.observe_check_output]
+kind = "query"
+transport = "WebSocket"
+helm_access = "No"
+description = "One running Check's log — what it has printed so far, then what it prints next"
+notes = """
+**`observe_job_log`'s shape, one file over.** A Check's stdout and stderr used to be read into memory and written down only after the Judge answered, so a Check that ran for four minutes had nothing to show for four minutes. The runner now appends each chunk to a file as it arrives, and this reads that file the way `observe_job_log` reads a Job's log: what is already there, then what is appended, a quarter-second behind.
+
+Not `get_check_output`. That reads a recorded log, which is finished, and is fetched once; this is a file still growing, and a request-response shape would need Bridge to poll it.
+
+**The live set is the allowlist.** `:kept` is the last component of a `CheckUnderway.output_path`, and Fleet resolves it against the Checks it is running for that Job before it opens anything — `get_check_output`'s rule, with the live set standing in for the rows. A name no running gate of this Job wrote reaches no file, whatever it spells.
+
+It ends with a sentence: `finished` once the Check has exited and every line it wrote has been sent. The recorded Check log is `get_check_output`'s from the ruling on.
+
+`helm_access` is `No` for `get_check_output`'s reason.
+"""
+
 [operations.approve_command]
 kind = "command"
 transport = "HTTP"
@@ -1224,6 +1241,21 @@ Two messages per call and never a third. The one going out carries the instant i
 It names which call of how many, because one step is several calls: criteria times panel size, plus the drift look. "Judging" without saying what is judging is the spinner one level up.
 
 Unlike `job.files_changed` it does not ask whether anybody is watching. That one declines because producing the value is a repository read; this value is already in hand when the call goes out, so there is nothing to decline and a publish nobody is subscribed to is a free drop.
+"""
+
+[operations."job.checking"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "One of a step's Checks starts or finishes, or the gate's ruling on them is written down"
+notes = """
+The gate said nothing between the Drone exiting and the ruling being recorded. A step whose Checks had been running for minutes read as a step nothing had reached, and every Check flipped at once when the Judge answered — even one that had finished long before. `#628` is that.
+
+Not a step state, for `job.judging`'s reason and in its exact shape: a step whose gate is running Checks is still `running`, and it stops without moving. The set rides beside the state as `StepDetail.checking`.
+
+One message when a Check starts and one when it finishes, and never one per second. Each carries the step's whole set as it stands; a surface counts elapsed time from `started_at`. A Check waiting for one of the gate's four slots reads as waiting because it has no start. The last message carries nothing and is sent after `job_step_checks` is written, so a surface re-reading on it goes from the live result to the recorded one without a gap.
+
+**A view of the run, not a record of it.** Nothing published here is stored, and the ruling and the rows it writes do not read any of it.
 """
 
 [operations."job.state_changed"]
