@@ -30,6 +30,7 @@ export * from "./proposing";
 export * from "./reading";
 export * from "./reads";
 export * from "./reclaimed";
+export * from "./rehearsal";
 export * from "./remarks";
 export * from "./report";
 export * from "./resources";

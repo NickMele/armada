@@ -142,6 +142,9 @@ pub struct Fleet<H, V, W> {
     /// Which Jobs have a person's press out. Never written down, for
     /// `proving`'s reason; shared because the press's own task gives it back.
     pressing: crate::showing_again::Pressing,
+    /// Which Jobs have a person's run out in their worktree, and how to stop
+    /// it. Never written down, for `pressing`'s reason — `crate::rehearsing`.
+    rehearsals: crate::rehearsing::Rehearsals,
     /// What one Job may spend. **Held rather than read** — like every other
     /// dial here, the composition root resolves it and nothing below Fleet
     /// reads configuration.

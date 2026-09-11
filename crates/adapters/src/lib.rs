@@ -47,6 +47,8 @@ mod judge;
 mod landing;
 mod mcp;
 mod reclaim;
+/// A worktree before a person's run, and putting back what the run changed.
+pub mod snapshot;
 mod transcript;
 mod under_review;
 mod watching;

@@ -300,6 +300,9 @@ where
     pub(crate) fn pressing(&self) -> &crate::showing_again::Pressing {
         &self.pressing
     }
+    pub(crate) fn rehearsals(&self) -> &crate::rehearsing::Rehearsals {
+        &self.rehearsals
+    }
     pub(crate) fn noticing(&self) -> Noticing {
         self.noticing
     }

@@ -13,6 +13,7 @@ import type { JudgeInFlight, Settled } from "./detail";
 import type { JobForgotten, JobList, JobSummary, Reason } from "./protocol";
 import type { ManifestReading } from "./reading";
 import type { ProposalInFlight } from "./proposing";
+import type { RunRecord } from "./rehearsal";
 import type { ChecksUnderway } from "./underway";
 import type { QuestionInFlight } from "./waiting";
 import type { ProtocolVersion } from "./version";
@@ -50,7 +51,8 @@ export type Event =
   | ({ kind: "job.forgotten" } & JobForgotten)
   | ({ kind: "job.landed" } & JobLanded)
   | ({ kind: "proposal.moved" } & ProposalMoved)
-  | ({ kind: "manifest.reread" } & ManifestReading);
+  | ({ kind: "manifest.reread" } & ManifestReading)
+  | ({ kind: "run.finished" } & RunRecord);
 
 /**
  * A Job exists that did not before, carrying the row whole.

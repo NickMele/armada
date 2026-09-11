@@ -20,8 +20,8 @@ use std::future::Future;
 use crate::daemon::Refusal;
 use ipc::{
     CapRaise, ChangesRequested, ChosenAnswer, FileReport, JobExamined, JobForgotten, JobId,
-    JobSummary, ProposeJob, Redirection, Redispatched, RemarksTakenUp, Report, RestartRequested,
-    TurnRaise, WorktreeReclaimed,
+    JobSummary, NamedRun, ProposeJob, Redirection, Redispatched, RemarksTakenUp, Report,
+    RestartRequested, RunRecord, RunUnderway, StartRun, TurnRaise, WorktreeReclaimed,
 };
 
 /// Everything a client asks Fleet to do.
@@ -539,4 +539,38 @@ pub trait Commands: Send + Sync + 'static {
         job_id: JobId,
         answer: ChosenAnswer,
     ) -> impl Future<Output = Result<JobSummary, Refusal>> + Send;
+
+    /// `start_run` — run one Check or Command in this Job's worktree, as a
+    /// rehearsal: no Evidence, no Check row, nothing on the Job moves.
+    ///
+    /// **By `Arc`, for [`Commands::show_again`]'s reason**: the run is a task of
+    /// its own and outlives the request. It answers once the run is underway;
+    /// the output and the end arrive as events.
+    ///
+    /// [`Refusal::IllegalMove`] where the worktree is gone or a run is already
+    /// out on this Job; [`Refusal::Unacceptable`] where nothing declares the
+    /// name, or a narrowed run has nothing to narrow to.
+    fn start_run(
+        self: std::sync::Arc<Self>,
+        job_id: JobId,
+        run: StartRun,
+    ) -> impl Future<Output = Result<RunUnderway, Refusal>> + Send;
+
+    /// `stop_run` — end the run's process group, and answer with its record
+    /// once it is written. [`Refusal::IllegalMove`] on a run not in flight.
+    fn stop_run(
+        &self,
+        job_id: JobId,
+        run: NamedRun,
+    ) -> impl Future<Output = Result<RunRecord, Refusal>> + Send;
+
+    /// `undo_run` — put back what one run changed, from the snapshot taken
+    /// before it. **Never a discard**: a Drone's work is uncommitted until
+    /// delivery. [`Refusal::IllegalMove`] while a Drone works in the tree, while
+    /// a run is in flight, or where a path the run changed has moved since.
+    fn undo_run(
+        &self,
+        job_id: JobId,
+        run: NamedRun,
+    ) -> impl Future<Output = Result<RunRecord, Refusal>> + Send;
 }

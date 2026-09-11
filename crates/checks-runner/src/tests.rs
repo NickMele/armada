@@ -104,6 +104,67 @@ async fn a_check_whose_child_outlives_it_is_ended_with_it() {
     );
 }
 
+/// A path under the system's temporary directory that no other test names.
+fn scratch(name: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!(
+        "armada-{name}-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|at| at.as_nanos())
+            .unwrap_or_default()
+    ))
+}
+
+/// Stop is a person's, and it ends the group the way the budget does: the
+/// child the command left behind never gets to write its marker.
+#[tokio::test]
+async fn a_stopped_run_ends_its_group_and_keeps_what_printed() {
+    let dir = scratch("stopped");
+    std::fs::create_dir_all(&dir).expect("a directory to run in");
+    let started = Instant::now();
+    let ran = crate::run::run_until(
+        "/bin/sh -c '(sleep 1; touch marker) & echo before; wait'",
+        &dir,
+        Duration::from_secs(60),
+        crate::run::Writing::Nowhere,
+        tokio::time::sleep(Duration::from_millis(300)),
+    )
+    .await;
+    assert!(started.elapsed() < Duration::from_secs(10));
+    tokio::time::sleep(Duration::from_millis(1_500)).await;
+    let marker = dir.join("marker").exists();
+    let _ = std::fs::remove_dir_all(&dir);
+
+    assert_eq!(
+        ran.exit,
+        Exit::Signalled {
+            signal: libc::SIGKILL
+        }
+    );
+    assert_eq!(ran.output.stdout, "before\n", "what printed before is kept");
+    assert!(!marker, "the child outlived the stop");
+}
+
+/// A Check's prerequisites and the Check itself read as one log.
+#[tokio::test]
+async fn an_appended_log_keeps_what_was_there() {
+    let live = scratch("appended.log");
+    std::fs::write(&live, "earlier\n").expect("a log with a line in it");
+    let ran = crate::run::run_until(
+        "/bin/echo later",
+        anywhere(),
+        Duration::from_secs(10),
+        crate::run::Writing::Appending(&live),
+        std::future::pending(),
+    )
+    .await;
+    let whole = std::fs::read_to_string(&live).unwrap_or_default();
+    let _ = std::fs::remove_file(&live);
+    assert_eq!(ran.exit, Exit::Code(0));
+    assert_eq!(whole, "earlier\nlater\n");
+}
+
 #[tokio::test]
 async fn output_comes_back_for_a_person_to_read() {
     let ran = attempt("/bin/echo the suite is unhappy", Duration::from_secs(10)).await;
