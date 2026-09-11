@@ -7,29 +7,26 @@
 //
 // **Bridge never talks to a Drone.** Everything below names Fleet.
 //
-// What is here is the socket, the runtime file and the state machine. What is
-// none of those sits beside it and is handed a port: `request.ts` sends,
-// `command.ts` acts on a Job, `reader.ts` holds one Job's read and the rule
-// that drops a stale one, `review.ts` reads the work, `observe.ts` holds the
-// second socket, `screen.ts` says which of the per-Job reads each way of coming
-// back takes again.
+// What is here is the state machine and the socket that feeds it. The socket's
+// own lifecycle — the runtime file, the pid check, connecting, retrying — is
+// `socket.ts`. What is none of those sits beside it and is handed a port:
+// `request.ts` sends, `command.ts` acts on a Job, `reader.ts` holds one Job's
+// read and the rule that drops a stale one, `review.ts` reads the work,
+// `observe.ts` holds the second socket, `screen.ts` says which of the per-Job
+// reads each way of coming back takes again.
 //
-// # Over 500 lines, and left whole
+// # Over 500 lines, and split once more since
 //
-// Seven files have already been taken out of it, and what is left is one thing:
-// a state machine, plus the arrival handler that folds each message into it.
-// Every remaining split runs along a message kind rather than a subject — the
-// resync here, the state changes there — and each half would still have to
-// reach `this.current` and `this.publish`. That is a state machine with its
-// transitions in two files, which is worse than a long one. The next real seam
-// is the socket lifecycle itself, and it is not one this change opened.
+// Seven files had already been taken out of it when the socket lifecycle
+// became the eighth — `socket.ts`, the seam this file's own history had
+// already named. What is left is the state machine and the arrival handler
+// that folds each message into it, together, because both reach `this.current`
+// and `this.publish` and a split along message kind would put one machine's
+// transitions in two files.
 
-import WebSocket from "ws";
-
-import { PROTOCOL_VERSION } from "@armada/protocol";
 import { identifying, NOTHING_YET } from "../shared/bridge";
 import { connectedTo } from "@armada/protocol";
-import { connects, skew } from "@armada/protocol";
+import { connects, PROTOCOL_VERSION, skew } from "@armada/protocol";
 import type { BridgeState } from "../shared/bridge";
 import type { CallRead, CheckOutputRead, Connection, FrameRead } from "@armada/protocol";
 import type { JobHistory, Recorded } from "@armada/protocol";
@@ -51,11 +48,9 @@ import {
   manifestReadingOf,
 } from "./request";
 import { ReviewMaterial } from "./review";
-import { HOST, machinePath, read, startingIdentity } from "./runtime-file";
+import { startingIdentity } from "./runtime-file";
 import { takeAgain, type Again } from "./screen";
-
-/** How long to wait before reading the runtime file again. */
-const RETRY_MS = 2000;
+import { FleetSocket, type BridgeStateFleet } from "./socket";
 
 /** Time is injected, never read: a connection that calls the clock cannot be replayed. */
 export type Clock = () => number;
@@ -69,9 +64,8 @@ export type Wiring = {
 export class FleetConnection {
   private readonly wiring: Wiring;
   private current: BridgeState = NOTHING_YET;
-  private socket: WebSocket | null = null;
-  private retry: ReturnType<typeof setTimeout> | null = null;
-  private unreachableSince: number | null = null;
+  /** The socket lifecycle — reading the runtime file, connecting, retrying. */
+  private readonly socket: FleetSocket;
   /**
    * Whether the resync now arriving is a later one on a socket already up.
    *
@@ -160,13 +154,21 @@ export class FleetConnection {
    * nine of them would be nine places for the reasoning to go missing.
    */
   readonly commands: JobCommands;
-  private stopped = false;
 
   constructor(wiring: Wiring) {
     this.wiring = wiring;
     // Resolved once, from the home main can see. A failure that cannot say
     // where its log is is half a failure.
     this.current = { ...NOTHING_YET, bridge: startingIdentity(wiring.home) };
+    this.socket = new FleetSocket({
+      home: wiring.home,
+      now: wiring.now,
+      settle: (connection) => this.settle(connection),
+      opened: () => {
+        this.greeted = false;
+      },
+      arrived: (text, fleet) => this.arrived(text, fleet),
+    });
     this.turns = new ObserveSocket((observed) => this.publish({ observed }));
     this.notes = new JournalSocket((journalled) => this.publish({ journalled }));
     this.follow = new FollowSocket((followed) => this.publish({ followed }));
@@ -249,16 +251,11 @@ export class FleetConnection {
 
   /** Read the runtime file, verify the pid, connect. That order, always. */
   start(): void {
-    this.stopped = false;
-    void this.attach();
+    this.socket.start();
   }
 
   stop(): void {
-    this.stopped = true;
-    if (this.retry !== null) clearTimeout(this.retry);
-    this.retry = null;
-    this.socket?.close();
-    this.socket = null;
+    this.socket.stop();
     // Watching ends with the window; the Job does not, because nothing observed
     // is written onto it.
     this.observing = null;
@@ -272,92 +269,6 @@ export class FleetConnection {
     this.held.close();
   }
 
-  // -------------------------------------------------------------- connecting
-  private async attach(): Promise<void> {
-    if (this.stopped) return;
-    const path = machinePath(this.wiring.home);
-    if (path === null) {
-      this.settle({
-        state: "runtime_file_refused",
-        fault: {
-          why: "unreadable",
-          path: "",
-          detail: "HOME is not set, so the machine directory cannot be resolved",
-        },
-      });
-      return this.later();
-    }
-
-    const presence = await read(path);
-    if (this.stopped) return;
-
-    if (presence.at === "absent" || presence.at === "stale") {
-      // Both render as "Fleet is not running", and the screen says which.
-      // Neither opens a socket: a stale file's port may not be Fleet's.
-      this.unreachableSince = null;
-      this.settle({ state: "not_running", absence: presence.absence });
-      return this.later();
-    }
-    if (presence.at === "refused") {
-      this.unreachableSince = null;
-      this.settle({ state: "runtime_file_refused", fault: presence.fault });
-      return this.later();
-    }
-
-    const fleet = presence.fleet;
-    // Read before connecting, so a version Bridge will not speak is a refusal
-    // rather than a bad first message. A minor gap one way round is not one.
-    const reading = skew({ fleet: fleet.protocolVersion, bridge: PROTOCOL_VERSION });
-    if (!connects(reading)) {
-      const speaks = fleet.protocolVersion;
-      const expected = PROTOCOL_VERSION;
-      this.settle({ state: "version_skew", fleet, why: reading, speaks, expected });
-      return this.later();
-    }
-
-    this.settle(
-      this.unreachableSince === null
-        ? { state: "connecting", fleet }
-        : {
-            state: "unreachable",
-            fleet,
-            detail: "the socket has not answered",
-            sinceMs: this.unreachableSince,
-          },
-    );
-    this.open(fleet.port, fleet);
-  }
-
-  private open(port: number, fleet: BridgeStateFleet): void {
-    const socket = new WebSocket(`ws://${HOST}:${port}/events`);
-    this.socket = socket;
-    // The next resync to arrive is this socket's first, so it is Fleet coming
-    // back rather than a gap in a stream that never stopped.
-    this.greeted = false;
-
-    socket.on("message", (data: WebSocket.RawData) => this.arrived(String(data), fleet));
-    socket.on("error", (cause: Error) => this.dropped(fleet, cause.message));
-    socket.on("close", () => this.dropped(fleet, "the connection closed"));
-  }
-
-  /** A drop says so. It never leaves stale state reading as live. */
-  private dropped(fleet: BridgeStateFleet, detail: string): void {
-    if (this.socket === null || this.stopped) return;
-    this.socket.removeAllListeners();
-    this.socket = null;
-    if (this.unreachableSince === null) this.unreachableSince = this.wiring.now();
-    this.settle({ state: "unreachable", fleet, detail, sinceMs: this.unreachableSince });
-    this.later();
-  }
-
-  private later(): void {
-    if (this.stopped || this.retry !== null) return;
-    this.retry = setTimeout(() => {
-      this.retry = null;
-      void this.attach();
-    }, RETRY_MS);
-  }
-
   // --------------------------------------------------------------- arrivals
   private arrived(text: string, fleet: BridgeStateFleet): void {
     let message: StreamMessage;
@@ -366,7 +277,7 @@ export class FleetConnection {
     } catch {
       // The stream carries no error message, so an unparseable one is a
       // connection to drop rather than a state to fold.
-      this.socket?.close();
+      this.socket.close();
       return;
     }
 
@@ -375,13 +286,13 @@ export class FleetConnection {
       // the runtime file described.
       const reading = skew({ fleet: message.protocol_version, bridge: PROTOCOL_VERSION });
       if (!connects(reading)) {
-        this.socket?.close();
+        this.socket.close();
         const speaks = message.protocol_version;
         const expected = PROTOCOL_VERSION;
         this.settle({ state: "version_skew", fleet, why: reading, speaks, expected });
         return;
       }
-      this.unreachableSince = null;
+      this.socket.resetUnreachable();
       // Read before it is set, because both readings arrive as this message and
       // only the order tells them apart. See the field.
       const cameBack = !this.greeted;
@@ -895,5 +806,3 @@ export class FleetConnection {
     this.wiring.publish(this.current);
   }
 }
-
-type BridgeStateFleet = Extract<Connection, { state: "connected" }>["fleet"];
