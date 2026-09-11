@@ -99,7 +99,11 @@ mod tests {
     #[test]
     fn every_declared_kind_answers_its_own_media_type() {
         assert_eq!(media_type("home.png"), "image/png");
-        assert_eq!(media_type("home.PNG"), "image/png", "the extension, cased either way");
+        assert_eq!(
+            media_type("home.PNG"),
+            "image/png",
+            "the extension, cased either way"
+        );
         assert_eq!(media_type("home.jpg"), "image/jpeg");
         assert_eq!(media_type("home.jpeg"), "image/jpeg");
         assert_eq!(media_type("home.webp"), "image/webp");
