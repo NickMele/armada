@@ -28,6 +28,7 @@ mod step;
 
 use serde::{Deserialize, Serialize};
 
+use crate::commanding::{CommandAnswer, CommandInFlight, WhenBlocked};
 use crate::enums::{CriterionSource, DependencyDirection, Recourse};
 use crate::ids::{CriterionId, Instant, JobId, StepId};
 use crate::job::{JobSummary, Subject};
@@ -174,6 +175,24 @@ pub struct JobDetail {
     /// constructor takes only what the record and the workflow say.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub show_again: Option<crate::showing::ShowAgain>,
+    /// What this Job does when its Drone reaches for a command it was not
+    /// given. **Since 10.6**, and absent from a Fleet older than that — which a
+    /// reader draws as no setting at all rather than as the default.
+    ///
+    /// **Filled after [`JobDetail::of`] rather than handed to it**, as
+    /// `show_again` is. `of` already takes thirteen positional arguments, and
+    /// another is where one lands in the wrong slot silently — the defect
+    /// `tests::detail_of` exists for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub when_blocked: Option<WhenBlocked>,
+    /// The command this Job's Drone is waiting on a person to allow, right now.
+    ///
+    /// **Absent is the ordinary case**, and it is every Job at
+    /// [`WhenBlocked::RefuseAndHold`]: nothing waits there, and a refused
+    /// command is answered on [`Stuck::refused`] instead. Filled after
+    /// [`JobDetail::of`], like `when_blocked`. See [`CommandInFlight`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command_waiting: Option<CommandInFlight>,
 }
 
 /// Why a Job stopped, and what moves it.
@@ -350,6 +369,19 @@ pub struct Refusal {
     /// **Usually empty, and empty is the honest answer.** Nothing fills it in
     /// from the trigger: a reason Armada wrote would read as the harness's.
     pub because: String,
+    /// What a person may answer about this command. **Since 10.6.**
+    ///
+    /// **Empty is nothing a person can allow here**, and it is also every row
+    /// from an older Fleet, which offered nothing. [`withheld`] says why where
+    /// Fleet knows.
+    ///
+    /// [`withheld`]: Refusal::withheld
+    #[serde(default)]
+    pub offers: Vec<CommandAnswer>,
+    /// Why this command cannot be allowed from here — declared destructive, or
+    /// a push. **Since 10.6.** Absent where it can be.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub withheld: Option<String>,
 }
 
 impl From<&core_model::Refusal> for Refusal {
@@ -361,6 +393,11 @@ impl From<&core_model::Refusal> for Refusal {
             truncated: refusal.truncated,
             length: refusal.length,
             because: refusal.because.clone(),
+            // Fleet fills both after the classification: whether a command may
+            // be allowed is the Manifest's and the policy's answer, and a
+            // transcript row knows neither.
+            offers: Vec::new(),
+            withheld: None,
         }
     }
 }
@@ -477,6 +514,8 @@ impl JobDetail {
             write_scope_overlaps,
             stuck: stuck.map(Stuck::of),
             show_again: None,
+            when_blocked: None,
+            command_waiting: None,
         }
     }
 }

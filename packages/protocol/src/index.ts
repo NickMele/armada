@@ -14,6 +14,7 @@
 export * from "./acts";
 export * from "./artifacts";
 export * from "./attempt";
+export * from "./commanding";
 export * from "./connection";
 export * from "./detail";
 export * from "./events";

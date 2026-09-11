@@ -478,9 +478,14 @@ export class FleetConnection {
       return;
     }
 
-    if (event.kind === "job.judging" || event.kind === "job.checking") {
+    if (
+      event.kind === "job.judging" ||
+      event.kind === "job.checking" ||
+      event.kind === "job.command_waiting"
+    ) {
       // `job.checking` is the same answer one tier along: `StepDetail.checking`
       // is re-read, and a running Check's elapsed time is counted, not re-read.
+      // `job.command_waiting` is the same again: `JobDetail.command_waiting`.
       // **Re-read rather than fold.** The call is served on the open Job's own
       // field, `StepDetail.judging`, which is what a Bridge opened mid-call
       // already reads — so folding it into a second copy would give one fact

@@ -462,11 +462,37 @@ It ends with a sentence: `finished` once the Check has exited and every line it 
 `helm_access` is `No` for `get_check_output`'s reason.
 """
 
-[operations.approve_command]
+[operations.answer_command]
 kind = "command"
 transport = "HTTP"
 helm_access = "No"
-description = "Confirm-before-destructive"
+description = "A person allows or rejects a command a Drone was not given"
+notes = """
+**It answers two things, and the call id says which.** A command a Drone is waiting on right now — its Job is set to `ask_me`, so the harness is holding it inside the permission call — is answered in place, and the Drone carries on in the same session. A refused row on a Job stopped at `blocked_by_policy` — the default, `refuse_and_hold` — is answered after the fact: an allow records the command for the Job and restarts the step, and a reject reaches the Drone as a turn.
+
+`always_allow` does what `allow_for_job` does and also writes the command into `armada.yml` under `commands`, as its own commit on the Job's branch.
+
+The body is `call` and `answer`, and there is no field for prose — words reach a Drone through `redirect_drone`. The answer is one of the offers the command carries, `CommandInFlight.offers` or `Refusal.offers`. A command offered nothing is one no person may allow from here, and `Refusal.withheld` says why: declared destructive, or a push.
+
+Refused with a 409 where the call names nothing waiting or refused on that Job, and where the answer is not among its offers. The id is what makes a window left open across an answered command a refusal rather than a coincidence.
+
+It replaces `approve_command`, a placeholder row for confirm-before-destructive that nothing served. A command declared destructive is offered nothing here.
+
+`helm_access` is `No`, on `answer_question`'s argument: an allow becomes something a Drone runs, and `always_allow` a line every later Job is given.
+"""
+
+[operations.set_when_blocked]
+kind = "command"
+transport = "HTTP"
+helm_access = "No"
+description = "Whether one Job asks a person about a command it was not given, or refuses it and holds"
+notes = """
+A live setting on one Job. The next permission question the Job's Drone raises reads it, and no Drone is respawned for it.
+
+The body is `when_blocked`: `refuse_and_hold` or `ask_me`. A new Job starts at `refuse_and_hold`, because that asks nobody to be watching; `ask_me` holds a Drone inside the call until somebody answers. `JobDetail.when_blocked` reads it back, and is absent from a Fleet older than 10.6.
+
+`helm_access` is `No`, for `answer_command`'s reason: whether a Drone is held waiting on the owner is the owner's to decide.
+"""
 
 [operations.approve_dispatch]
 kind = "command"
@@ -1210,6 +1236,21 @@ Two messages per question and never a third. The one going out carries the quest
 **The actor differs between the two, which no other kind here does.** Going out it is `drone` and coming back it is `human`, because those are the two ends of the act. Fleet caused neither.
 
 It produces at the rate a person answers, which is the slowest rate on this channel, and it holds no queue of its own — the outstanding question lives on the working slot. So it adds nothing to the unbounded-sink risk `docs/practices/protocol.md` names.
+"""
+
+[operations."job.command_waiting"]
+kind = "event"
+transport = "WebSocket"
+helm_access = "Bridge only"
+description = "A Drone is held on a command waiting for a person, or the one it was held on is answered"
+notes = """
+`job.asking`'s shape and reasoning, one tool over. Not a step state and not a Job status: the step is `running` while the Drone waits and stops waiting without moving, so the command rides beside the state as `JobDetail.command_waiting`.
+
+Two messages per command and never a third. The one going out carries `waiting` — the command, one line of it, and the answers on offer — and the one coming back carries nothing. A surface ages the wait from `asked_at`. The actor is `drone` going out and whoever answered coming back.
+
+Only a Job at `ask_me` produces it. Under the default the call is refused on arrival, the Job stops at `blocked_by_policy`, and the refused command reaches Bridge on `Stuck.refused` through that state change instead.
+
+It produces at the rate a person answers and holds no queue of its own, so it adds nothing to the unbounded-sink risk `docs/practices/protocol.md` names.
 """
 
 [operations."proposal.moved"]

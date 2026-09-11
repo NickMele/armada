@@ -23,6 +23,7 @@
 //! field means.
 mod ask;
 mod dispatch;
+mod permission;
 mod report;
 mod tools;
 mod widening;
@@ -34,6 +35,7 @@ use crate::codec::{encode, Unencodable};
 
 pub use ask::{AskQuestion, AskedOption, ASK_FIELDS, ASK_TOOL, FEWEST_OPTIONS, MOST_OPTIONS};
 pub use dispatch::{DispatchJob, DISPATCH_FIELDS, DISPATCH_TOOL};
+pub use permission::{PermissionAsked, PERMISSION_FIELDS, PERMISSION_TOOL};
 pub use report::{CheckRan, CheckReport};
 pub use tools::{
     DeclareScope, NotAnArgument, SubmitEvidence, CHECKS_FIELDS, CHECKS_TOOL, EVIDENCE_FIELDS,
@@ -148,6 +150,20 @@ pub enum Incoming {
         id: CallId,
         asking: AskQuestion,
     },
+    /// The harness asking whether a call outside the Drone's allowlist may run.
+    /// Whether it may is the daemon's answer, not this module's.
+    ///
+    /// **The third call held open, and the only one held open on a person.**
+    /// The harness reads its decision out of this call's reply and nothing else
+    /// — the Drone is stopped inside the call, so there is no turn to put an
+    /// answer into, which is what lets [`Ask`](Incoming::Ask) be receipted
+    /// instead. So the reply is [`Answered::Permitted`] or
+    /// [`Answered::Withheld`], never a receipt, and how long it is held is
+    /// Fleet's to bound.
+    Permission {
+        id: CallId,
+        asked: PermissionAsked,
+    },
     /// A tool call this server would not take. **Answered as a tool error and
     /// never as a transport failure** — a Drone reads a tool error and can act
     /// on it, and a 500 is something it can only retry.
@@ -221,6 +237,22 @@ pub enum Answered {
     Refused {
         id: CallId,
         why: NotRecorded,
+    },
+    /// A permission question answered yes. `input` is what the call runs with:
+    /// the input the harness sent, handed back.
+    ///
+    /// **A success either way, with the decision in the text.** The harness
+    /// reads `behavior` out of the one text item, and `isError` would read as
+    /// the tool breaking rather than as an answer.
+    Permitted {
+        id: CallId,
+        input: Value,
+    },
+    /// A permission question answered no. The harness hands `message` to the
+    /// Drone as why the call did not run, so it is written for the Drone.
+    Withheld {
+        id: CallId,
+        message: String,
     },
     NoSuchMethod {
         id: CallId,
@@ -350,6 +382,12 @@ fn called(id: CallId, params: Option<&Value>) -> Incoming {
             Err(why) => Incoming::NotASubmission { id, why },
         };
     }
+    if tool == PERMISSION_TOOL {
+        return match permission::asked(arguments) {
+            Ok(asked) => Incoming::Permission { id, asked },
+            Err(why) => Incoming::NotASubmission { id, why },
+        };
+    }
     match tools::submission(arguments) {
         Ok(submission) => Incoming::Submit { id, submission },
         Err(why) => Incoming::NotASubmission { id, why },
@@ -372,6 +410,20 @@ pub fn answer(answered: Answered) -> Result<String, Unencodable> {
         Answered::Recorded { id, receipt } => result(id, said(&receipt.word, false)),
         Answered::Checked { id, report } => result(id, said(&report.to_string(), false)),
         Answered::Refused { id, why } => result(id, said(&why.because, true)),
+        Answered::Permitted { id, input } => result(
+            id,
+            said(
+                &encode(&json!({ "behavior": "allow", "updatedInput": input }))?,
+                false,
+            ),
+        ),
+        Answered::Withheld { id, message } => result(
+            id,
+            said(
+                &encode(&json!({ "behavior": "deny", "message": message }))?,
+                false,
+            ),
+        ),
         Answered::NoSuchMethod { id, named } => {
             failed(Some(id), NO_SUCH_METHOD, format!("no such method: {named}"))
         }
