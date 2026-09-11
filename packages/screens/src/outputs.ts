@@ -118,7 +118,7 @@ function settled(read: CheckOutputRead): OutputState {
 const NOT_IN_THE_RECORD = "This Check's output is no longer in the record.";
 
 /** Fleet did not answer. The same sentence the brief and the run already use. */
-const NOT_ANSWERED = "Fleet did not answer for this Check's output.";
+const NOT_ANSWERED = "Fleet did not answer";
 
 // ---------------------------------------------------------- what it draws as
 //

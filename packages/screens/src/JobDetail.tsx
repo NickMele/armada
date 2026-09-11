@@ -872,7 +872,7 @@ function whyNoSteps(watched: Watched, jobId: string): string | undefined {
       : undefined;
   }
   if (watched.state === "failed" && watched.jobId === jobId) {
-    return "Fleet did not answer for this Job, so its steps are unknown.";
+    return "Fleet did not answer";
   }
   return "Reading this Job.";
 }
@@ -884,7 +884,7 @@ function whyNoSteps(watched: Watched, jobId: string): string | undefined {
  */
 function whyNoBrief(watched: Watched, jobId: string): string {
   if (watched.state === "failed" && watched.jobId === jobId) {
-    return "Fleet did not answer for this job.";
+    return "Fleet did not answer";
   }
   return "Reading this job.";
 }

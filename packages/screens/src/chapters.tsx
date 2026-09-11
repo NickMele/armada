@@ -595,8 +595,6 @@ const DOCUMENTS_NOTE =
  * repository rather than the drone besides. #307.
  */
 function nothingTouched(documents: number): string {
-  if (documents === 0) return "Nothing in the repository has changed yet.";
-  return documents === 1
-    ? "Nothing in the repository changed. This step's product is the document below."
-    : "Nothing in the repository changed. This step's product is the documents below.";
+  if (documents === 0) return "No changes yet";
+  return "No repository changes";
 }

@@ -140,4 +140,4 @@ function Figure({ label, value, wrong }: { label: string; value: string; wrong?:
 const NOTHING_RECORDED = "Armada has not recorded anything about this Job yet.";
 
 /** What stands in for the figures when no reading has arrived. */
-const NOTHING_READ_YET = "Nothing has been read from this machine yet.";
+const NOTHING_READ_YET = "Not read yet";

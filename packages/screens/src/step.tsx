@@ -84,7 +84,6 @@ export function askingOf(whole: JobWhole | null): StepNotice | undefined {
   return {
     tone: "waiting",
     title: "The drone asked a question and is waiting for you.",
-    children: "Nothing advances until you answer, and nothing is wrong.",
   };
 }
 

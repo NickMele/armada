@@ -149,7 +149,7 @@ function isEcho(row: Turn): boolean {
 
 /** What a step with no rows says. Ordinary, and never an error. */
 export const NOTHING_YET_ON_THIS_STEP =
-  "Nothing has happened on this step yet.";
+  "Nothing yet";
 
 /**
  * What the socket says about its own reading, or nothing while it is reading.
@@ -172,7 +172,7 @@ export function whyNotWatching(observed: Observed): string | undefined {
     case "opening":
       return "Armada is opening this job's transcript.";
     case "none":
-      return "Armada is not reading this job's transcript.";
+      return "Not reading the transcript";
     case "failed":
       // The detail is main's own sentence — which port, which peer, which
       // frame — and it is the half a reader can act on.

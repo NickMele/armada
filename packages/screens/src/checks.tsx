@@ -411,10 +411,10 @@ function asSentence(verb: string): string {
 const JUDGE_ROW = "judge";
 
 /** What a declared Check with no run on this attempt says. */
-const NOTHING_HAS_RUN_IT = "Nothing has run this Check yet.";
+const NOTHING_HAS_RUN_IT = "Not run yet";
 
 /** What the Judge's row says before a call has gone out. */
-const NOT_ASKED_YET = "Waiting for every Check to finish.";
+const NOT_ASKED_YET = "Waiting on the Checks";
 
 /** What it says while a call is out. `judging` is what makes the two different. */
 const ASKING_NOW = "The panel is answering now.";

@@ -80,7 +80,7 @@ export function whyNoNotes(journalled: Journalled): string | undefined {
     case "opening":
       return "Armada is opening this job's log.";
     case "none":
-      return "Armada is not reading this job's log.";
+      return "Not reading the log";
     case "failed":
       return `This job's log could not be read. ${journalled.detail}`;
     case "ended":

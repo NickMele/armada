@@ -123,4 +123,4 @@ function settled(read: CallRead): CallState {
 const NOT_IN_THE_RECORD = "This call is not in the record.";
 
 /** Fleet did not answer. The same sentence the brief and the run already use. */
-const NOT_ANSWERED = "Fleet did not answer for this call.";
+const NOT_ANSWERED = "Fleet did not answer";

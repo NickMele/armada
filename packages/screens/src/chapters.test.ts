@@ -535,7 +535,7 @@ describe("produced, on a step whose product is a document", () => {
   it("stops claiming the drone changed nothing", () => {
     const markup = renderToStaticMarkup(chapters({ step: kept })[2]!.preview);
     expect(markup).not.toContain("has not changed anything");
-    expect(markup).toContain("This step&#x27;s product is the document below.");
+    expect(markup).toContain("No repository changes");
   });
 
   it("offers the document as a control that opens it", () => {
@@ -622,7 +622,7 @@ describe("a step whose transcript is not being read", () => {
   it("says which reading failed instead of that nothing has happened", () => {
     const markup = renderToStaticMarkup(chapters({ transcript: NOT_READ })[1]!.preview);
     expect(markup).toContain("The transcript could not be read.");
-    expect(markup).not.toContain("Nothing has happened on this step yet.");
+    expect(markup).not.toContain(">Nothing yet<");
   });
 
   it("says it in chapter one too, where the instruction would be", () => {
@@ -641,7 +641,7 @@ describe("a step whose transcript is not being read", () => {
 
   it("leaves the ordinary sentence alone while the socket is reading", () => {
     const markup = renderToStaticMarkup(chapters()[1]!.preview);
-    expect(markup).toContain("Nothing has happened on this step yet.");
+    expect(markup).toContain(">Nothing yet<");
   });
 });
 

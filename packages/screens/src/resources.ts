@@ -52,11 +52,11 @@ export const LOOK_FAILED = "Fleet did not answer the look. Nothing here is a fin
 export function whyNoReading(resources: Holds): string | undefined {
   switch (resources.state) {
     case "none":
-      return "Nothing is being read.";
+      return "Not reading";
     case "reading":
       return "Reading the machine.";
     case "failed":
-      return "Fleet did not answer, so what this Job holds is unknown.";
+      return "Fleet did not answer";
     case "read":
       return undefined;
   }
@@ -214,7 +214,7 @@ export function movesOf(history: History | undefined, jobId: string): Recorded[]
 }
 
 /** What to say where nothing has happened on the Job yet. */
-export const NOTHING_HAPPENED_YET = "Nothing has happened on this Job yet.";
+export const NOTHING_HAPPENED_YET = "Nothing yet";
 
 function lineOf(row: LogRow): HoldsLine {
   return {

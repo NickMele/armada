@@ -244,7 +244,7 @@ export function InsideAJob({
   run,
   runLabel = "The run",
   runElapsed,
-  runAbsent = "Nothing serves this Job's workflow, so its steps are unknown.",
+  runAbsent = "Steps unknown",
   machine,
   machineLabel = "Pulse",
   machineAct,
@@ -256,13 +256,13 @@ export function InsideAJob({
   onOpenChapter,
   where,
   whereLabel = "Where things are",
-  whereAbsent = "Nothing serves this Job's paths or its branch.",
+  whereAbsent = "Paths unknown",
   record,
   recordLabel = "What it left behind",
   brief,
-  briefAbsent = "Nothing serves this Job's brief or its acceptance criteria.",
+  briefAbsent = "No brief",
   step,
-  stepAbsent = "No step is open. Select one in the run.",
+  stepAbsent = "Select a step in the run",
   sheet,
   onCopied,
 }: InsideAJobProps) {
@@ -398,7 +398,7 @@ export function InsideAJob({
               {step.phases === undefined ? (
                 <p className="armada-inside__absent" role="note">
                   {step.phasesAbsent ??
-                    "Nothing serves this step's gates, so where it stands is unknown."}
+                    "Gates unknown"}
                 </p>
               ) : (
                 // The screen's own handler falls through to the strip unless

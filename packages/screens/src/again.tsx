@@ -220,7 +220,7 @@ const NO_WORKTREE =
 const DRONE_WORKING =
   "A Drone is working in this Job's worktree. Show its work again once the Job stops.";
 /** The call itself rejected, which is main gone rather than Fleet answering. */
-const NOT_ANSWERED = "Fleet did not answer. The Job's log says whether the run finished.";
+const NOT_ANSWERED = "Fleet did not answer";
 
 function specGone(spec: string): string {
   return `${spec} is no longer in this Job's worktree. A later run renamed or deleted it.`;

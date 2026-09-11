@@ -281,7 +281,7 @@ export function StepRow({
       <div className="armada-srow__facts" id={factsId} hidden={!open}>
         {facts.length === 0 ? (
           <p className="armada-srow__absent">
-            {factsAbsent ?? "Nothing was recorded against this step."}
+            {factsAbsent ?? "Nothing recorded"}
           </p>
         ) : (
           facts.map((fact, at) => <Fact fact={fact} key={at} />)

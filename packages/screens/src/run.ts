@@ -87,7 +87,7 @@ export function runOf(
  * What a step with no facts says. **Not "nothing happened"** — a step that has
  * not started has produced nothing, and that is ordinary rather than a gap.
  */
-const NOTHING_RECORDED = "Nothing is recorded against this step yet.";
+const NOTHING_RECORDED = "Nothing recorded yet";
 
 /**
  * The short facts beneath a step: what its Checks came to, what its Judge came

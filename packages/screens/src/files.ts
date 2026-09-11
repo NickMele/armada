@@ -70,6 +70,6 @@ export function readingFor(footprint: Footprint, jobId: string): JobFilesChanged
  */
 export function whyNoFootprint(hasDrone: boolean): string {
   return hasDrone
-    ? "Nothing has been written yet."
-    : "No drone is on this job yet.";
+    ? "Nothing written yet"
+    : "No drone yet";
 }

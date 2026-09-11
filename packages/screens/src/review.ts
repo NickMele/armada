@@ -258,7 +258,7 @@ function labelOf(stepId: string, whole: JobWhole | null): string {
  */
 export function whyNoDiff(diff: Diff, jobId: string): string {
   if (diff.state === "failed" && diff.jobId === jobId) {
-    return "Fleet did not answer for this job's diff.";
+    return "Fleet did not answer";
   }
   return "Reading this job's diff.";
 }
@@ -365,7 +365,7 @@ export function diffNote(work: Work, planReadable: boolean, markedInRecord = fal
 /** Why there are no claims on screen, which is never the same sentence twice. */
 export function whyNoClaims(evidence: Evidence, jobId: string): string {
   if (evidence.state === "failed" && evidence.jobId === jobId) {
-    return "Fleet did not answer for this job's evidence, so what its drones claimed is unknown.";
+    return "Fleet did not answer";
   }
   return "Reading what this job's drones claimed.";
 }
@@ -375,9 +375,7 @@ export function whyNoClaims(evidence: Evidence, jobId: string): string {
  * that reached a human gate having claimed nothing is exactly the case the
  * submission schema exists to make visible.
  */
-export const CLAIMED_NOTHING =
-  "No step on this job has submitted evidence. The work is here to read, and nothing states " +
-  "what it was meant to do.";
+export const CLAIMED_NOTHING = "No evidence submitted";
 
 /**
  * Why there is no conversation on screen, which is never the same sentence

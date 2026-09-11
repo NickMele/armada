@@ -136,7 +136,7 @@ export function ActivityLog({
   entries,
   maxLines = MAX_LINES,
   cut,
-  emptyNote = "Nothing has been recorded against this step yet.",
+  emptyNote = "Nothing recorded yet",
   openId,
 }: ActivityLogProps) {
   const [open, setOpen] = useState<ReadonlySet<string>>(() =>
