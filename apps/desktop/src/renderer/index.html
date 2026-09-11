@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <!--
       `default-src 'self'` and one addition: a frame a step's harness produced
-      is drawn from a `blob:` this window made itself.
+      — an image or a video — is drawn from a `blob:` this window made itself.
 
       The bytes come over the preload from main, which is the rule every read
       here follows — the renderer never opens a socket. So this widens to the
@@ -16,7 +16,7 @@
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; img-src 'self' blob:"
+      content="default-src 'self'; img-src 'self' blob:; media-src 'self' blob:"
     />
     <title>Armada</title>
   </head>
