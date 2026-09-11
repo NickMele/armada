@@ -84,11 +84,17 @@ pub struct JobDetail {
     pub footprint: Option<JobFootprint>,
     /// What the Job's branch came to: the commit, the push, the pull request.
     ///
-    /// **Absent is three different facts and the surface must say which.** A
-    /// Job still running has none of it. A Job that finished before Fleet wrote
-    /// it down has none of it either — and that is most of the Jobs on this
-    /// machine, because the result was assembled and dropped for a long time
-    /// before it was ever stored.
+    /// **Present from the step that delivers, not from the Job finishing.** A
+    /// workflow's delivering step commits, pushes and opens the pull request
+    /// when the step is *entered* and then holds for a person —
+    /// `crates/fleet/src/landing.rs`, `#520` — so a Job sitting at that gate,
+    /// long before any terminal status, already has this. **Absent is three
+    /// different facts and the surface must say which.** A Job that has not
+    /// reached a delivering step has none of it. A Job on a workflow with no
+    /// delivering step has none of it either, by design. A Job that finished
+    /// before Fleet wrote this down has none of it either — and that was most
+    /// of the Jobs on this machine, because the result was once assembled and
+    /// dropped rather than stored.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delivery: Option<JobDelivery>,
     /// What the Job has spent, against what it is allowed to.
@@ -522,7 +528,10 @@ impl From<&core_model::DependencyEdge> for Dependency {
     }
 }
 
-/// What a finished Job's branch came to.
+/// What a Job's branch came to. **Present once the Job has entered its
+/// delivering step**, which for most workflows is before the Job finishes —
+/// a Job holding at `awaiting_review` with its pull request open already has
+/// this.
 ///
 /// **Three independent absences.** A commit with no push is a repository that
 /// names no remote; a push with no pull request is a machine with nothing that

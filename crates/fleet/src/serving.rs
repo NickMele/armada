@@ -225,49 +225,47 @@ where
                 kept.map(|footprint| (footprint, plans))
             }
         };
-        // Read on the same terms as the footprint and for the same reason: a
-        // Job that has not finished has nothing here, and a read spent on every
-        // running Job would buy three nulls.
-        let delivery = match job.status().is_terminal() {
-            false => None,
-            true => {
-                let came_to = self
-                    .store()
-                    .lock()
-                    .await
-                    .delivery_for(job.id())
-                    .map_err(|why| self.refusal(Adrift::Reading(why)))?;
-                // Absent rather than three nulls: a Job that finished before
-                // Fleet wrote this down is not a Job whose branch came to
-                // nothing, and the surface says different sentences for the two.
-                match came_to.is_empty() {
-                    true => None,
-                    false => {
-                        // **Never a forge call.** `get_job` is read on every
-                        // open of a Job; what Fleet's own rotation last read
-                        // live is served from memory — `Sweep::pr_detail` — and
-                        // absent here is a pull request the rotation has not
-                        // reached yet, or one that has already settled.
-                        let pull_request_detail = match &came_to.pull_request {
-                            Some(url) => self.sweeping().lock().await.pr_detail.get(url).cloned(),
-                            None => None,
-                        };
-                        Some(JobDelivery {
-                            commit: came_to.commit,
-                            pushed: came_to.pushed,
-                            pull_request: came_to.pull_request,
-                            pull_request_detail,
-                            landed: came_to.landed.as_ref().and_then(crate::noticing::settled),
-                        })
-                    }
-                }
+        // Read for every Job, not only a finished one. Delivery is written when
+        // the Job *enters* its delivering step — `crate::landing`'s module
+        // doc, since #520 — so a Job holding at its handoff gate has a record
+        // here well before it reaches a terminal status, and that is exactly
+        // the read the gate wants: the pull request it is meant to review.
+        let came_to = self
+            .store()
+            .lock()
+            .await
+            .delivery_for(job.id())
+            .map_err(|why| self.refusal(Adrift::Reading(why)))?;
+        // Absent rather than three nulls: a Job with no delivering step, or one
+        // that has not reached its delivering step yet, is not a Job whose
+        // branch came to nothing, and the surface says different sentences for
+        // the two.
+        let delivery = match came_to.is_empty() {
+            true => None,
+            false => {
+                // **Never a forge call.** `get_job` is read on every
+                // open of a Job; what Fleet's own rotation last read
+                // live is served from memory — `Sweep::pr_detail` — and
+                // absent here is a pull request the rotation has not
+                // reached yet, or one that has already settled.
+                let pull_request_detail = match &came_to.pull_request {
+                    Some(url) => self.sweeping().lock().await.pr_detail.get(url).cloned(),
+                    None => None,
+                };
+                Some(JobDelivery {
+                    commit: came_to.commit,
+                    pushed: came_to.pushed,
+                    pull_request: came_to.pull_request,
+                    pull_request_detail,
+                    landed: came_to.landed.as_ref().and_then(crate::noticing::settled),
+                })
             }
         };
         let queued = self.queued_reason(&job).await?;
-        // **Read for every Job, unlike the footprint and the delivery above.**
-        // Those two are absent until a Job finishes; this one is what a person
-        // watching a running Job wants most, and it is one indexed query. The
-        // cap travels with the figure because neither half is readable alone.
+        // **Read for every Job, unlike the footprint above.** That one is
+        // absent until a Job finishes; this one is what a person watching a
+        // running Job wants most, and it is one indexed query. The cap
+        // travels with the figure because neither half is readable alone.
         // **The allowance this Job is held to, not the installation's.** A
         // person who raised this Job's cap reads the figure they set beside the
         // spend, and a detail still drawing the machine-wide number would say
