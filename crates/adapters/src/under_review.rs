@@ -57,9 +57,9 @@ const FIELDS: &str = "reviewDecision,statusCheckRollup,comments,reviews";
 /// mints it and it is the only handle that survives an edit between the two
 /// reads.
 ///
-/// **A review reaches this reduction twice.** Its body decides its `remark`
-/// row and its `.state` decides its `verdict` row, independently — a review
-/// may approve with no comment, or comment with no verdict this names.
+/// **A review reaches this reduction twice**, its body deciding a `remark` row
+/// and its `.state` a `verdict` row, independently. **`.url` trails every
+/// `remark` row**, empty the same way any missing field here is.
 const REDUCTION: &str = "\
     ([\"said\", (.reviewDecision // \"\")]), \
     (.statusCheckRollup // [] | .[] | \
@@ -67,10 +67,10 @@ const REDUCTION: &str = "\
          (.conclusion // .state // \"\")]), \
     (.comments // [] | .[] | select((.body // \"\") != \"\") | \
         [\"remark\", (.id // \"\"), (.author.login // \"\"), (.createdAt // \"\"), \
-         (.body // \"\")]), \
+         (.body // \"\"), (.url // \"\")]), \
     (.reviews // [] | .[] | select((.body // \"\") != \"\") | \
         [\"remark\", (.id // \"\"), (.author.login // \"\"), (.submittedAt // \"\"), \
-         (.body // \"\")]), \
+         (.body // \"\"), (.url // \"\")]), \
     (.reviews // [] | .[] | \
         select(.state == \"APPROVED\" or .state == \"CHANGES_REQUESTED\") | \
         [\"verdict\", (.author.login // \"\"), (.state // \"\")]) \
@@ -112,18 +112,23 @@ pub(crate) fn folded(lines: &[String]) -> UnderReview {
                 let by = field.next().unwrap_or_default();
                 let at = field.next().unwrap_or_default();
                 let said = field.next().unwrap_or_default();
+                let url = field.next().unwrap_or_default();
                 // **A comment the forge named nothing is dropped.** The whole
                 // road this reading feeds is a person picking comments and
                 // pressing, and a comment with no handle cannot be picked
                 // without the press meaning some other one. Counting it would
                 // put a row on a screen that no act could reach.
                 if !id.is_empty() {
-                    remarks.push(Remark::written(
+                    let mut remark = Remark::written(
                         as_written(id),
                         as_written(by),
                         as_written(at),
                         as_written(said),
-                    ));
+                    );
+                    if !url.is_empty() {
+                        remark = remark.with_url(as_written(url));
+                    }
+                    remarks.push(remark);
                 }
             }
             Some("verdict") => {

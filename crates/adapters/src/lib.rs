@@ -42,6 +42,7 @@ mod commit;
 mod delivery;
 mod error;
 mod harness;
+mod inline_comments;
 mod issue_lookup;
 mod judge;
 mod landing;

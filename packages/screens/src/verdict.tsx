@@ -364,6 +364,7 @@ export type VerdictSlotAtGateArgs = {
   onRequestChanges: (jobId: string, note: string) => void;
   onReject: (jobId: string) => void;
   onTakeUpRemarks: (jobId: string, remarks: string[]) => void;
+  onOpenRemarkLink: (jobId: string, remarkId: string) => void;
 };
 
 /**
@@ -390,6 +391,7 @@ export function verdictSlotAtGate({
   onRequestChanges,
   onReject,
   onTakeUpRemarks,
+  onOpenRemarkLink,
 }: VerdictSlotAtGateArgs): ReactNode {
   const address = whole?.delivery?.pull_request;
   const detail = whole?.delivery?.pull_request_detail;
@@ -431,6 +433,7 @@ export function verdictSlotAtGate({
           onRequestChanges={onRequestChanges}
           onReject={onReject}
           onTakeUpRemarks={onTakeUpRemarks}
+          onOpenRemarkLink={onOpenRemarkLink}
         />
       }
     />

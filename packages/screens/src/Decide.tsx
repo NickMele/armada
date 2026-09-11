@@ -113,6 +113,12 @@ export type DecideProps = {
   remarks: Remarks;
   /** Hand the comments picked to a drone. The handles, never the words. */
   onTakeUpRemarks: (jobId: string, remarks: string[]) => void;
+  /**
+   * Open one comment on the forge. A Job id and a comment id, never an
+   * address — `ReviewComments`'s own note on why this surface never holds a
+   * URL.
+   */
+  onOpenRemarkLink: (jobId: string, remarkId: string) => void;
 };
 
 /**
@@ -144,6 +150,7 @@ export function Decide({
   onRequestChanges,
   onReject,
   onTakeUpRemarks,
+  onOpenRemarkLink,
 }: DecideProps) {
   // The reviewer's own words, held here: it is a draft until it is sent, and
   // nothing outside this region knows or cares that one is being written.
@@ -250,6 +257,7 @@ export function Decide({
         <ReviewComments
           comments={mineRemarks(remarks, job.id) ?? []}
           onTakeUp={(ids) => onTakeUpRemarks(job.id, ids)}
+          onOpenLink={(remarkId) => onOpenRemarkLink(job.id, remarkId)}
           disabled={off}
           {...(why === undefined ? {} : { disabledNote: why })}
         />
@@ -287,6 +295,8 @@ function mineRemarks(remarks: Remarks, jobId: string) {
     at: remark.at,
     said: remark.said,
     takenUp: remark.taken_up,
+    hasLink: remark.url !== undefined,
+    ...(remark.inline === undefined ? {} : { inline: remark.inline }),
   }));
 }
 

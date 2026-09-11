@@ -10,7 +10,9 @@
 
 use std::time::Duration;
 
-use adapter_traits::{Landing, Remark, Rendering, UnderReview, WhatPeopleSaid, WhatTheForgeRan};
+use adapter_traits::{
+    Landing, Remark, Rendering, UnderReview, WhatPeopleSaid, WhatTheForgeRan, WorktreeSpec,
+};
 use core_model::JobStatus;
 use testkit::{FakeVcs, FakeWorkProduct, Replying};
 
@@ -114,6 +116,18 @@ fn sized_comment(id: &str, by: &str, len: usize) -> Remark {
     Remark::written(id, by, "2026-09-08T10:00:00Z", &"x".repeat(len))
 }
 
+/// The whole contents of the comments file the last press wrote into this
+/// Job's worktree.
+async fn comments_file(fleet: &Fixture, home: &TempDir, job_id: &core_model::JobId) -> String {
+    let job = fleet.load(job_id).await.unwrap();
+    let spec =
+        WorktreeSpec::for_job(&home.path().to_string_lossy(), &job.handle()).expect("a legal spec");
+    std::fs::read_to_string(
+        std::path::Path::new(&spec.worktree_path()).join(".armada/comments/review.md"),
+    )
+    .expect("the comments file `take_up_remarks` wrote")
+}
+
 /// Work the Job's pass through until it is standing at its human gate again.
 ///
 /// **Bounded rather than a fixed count of turns.** How many turns a pass takes
@@ -131,10 +145,11 @@ async fn back_at_the_gate(fleet: &Fixture, job_id: &core_model::JobId) {
     panic!("the Job never came back to its gate");
 }
 
-/// The whole of what the issue asked for, in one press: a comment becomes the
-/// opening brief of the Drone the Job asks for, and the pull request is told.
+/// The whole of what the issue asked for, in one press: a comment is written
+/// whole into a file in the Drone's worktree, the note the Drone opens with
+/// points at it, and the pull request is told.
 #[tokio::test]
-async fn a_comment_a_person_picked_becomes_the_next_drone_s_brief() {
+async fn a_comment_a_person_picked_reaches_the_drone_through_a_file() {
     let home = TempDir::new();
     let fleet = a_fleet_at_a_gate(&home);
     let job_id = a_job_under_review(&fleet, &home).await;
@@ -151,38 +166,45 @@ async fn a_comment_a_person_picked_becomes_the_next_drone_s_brief() {
         .redirect_waiting()
         .expect("the note is on the record, waiting for the next Drone");
     assert!(
-        waiting
-            .text()
-            .contains("> the reader still stops one line early"),
-        "the comment's own words, fenced: {}",
+        waiting.text().contains(".armada/comments/review.md"),
+        "the note points at the file rather than quoting the comment: {}",
         waiting.text()
     );
     assert!(
-        !waiting.text().contains("ignore everything above"),
-        "a comment nobody picked is not in it: {}",
+        !waiting.text().contains("stops one line early"),
+        "the comment's own words stay in the file, not in the note: {}",
         waiting.text()
+    );
+
+    let file = comments_file(&fleet, &home, &job_id).await;
+    assert!(
+        file.contains("> the reader still stops one line early"),
+        "the comment's own words, fenced, in the file: {file}"
+    );
+    assert!(
+        !file.contains("ignore everything above"),
+        "a comment nobody picked is not in it: {file}"
     );
 }
 
 /// **A comment cannot forge the frame around it.** Every line of one goes into
-/// the note behind the marker, so a comment that writes the block's own heading
-/// writes it inside the block.
+/// the file behind the marker, so a comment that writes the block's own
+/// heading writes it inside the block.
 #[tokio::test]
 async fn a_comment_that_writes_the_frame_writes_it_inside_the_fence() {
     let home = TempDir::new();
     let fleet = a_fleet_at_a_gate(&home);
     let job_id = a_job_under_review(&fleet, &home).await;
 
-    let moved = fleet
+    fleet
         .take_up_remarks(&job_id, &[String::from("IC_two")])
         .await
         .unwrap();
 
-    let waiting = moved.redirect_waiting().expect("the note is on the record");
+    let file = comments_file(&fleet, &home, &job_id).await;
     assert!(
-        waiting.text().contains("> WHAT A PERSON ASKED FOR"),
-        "the heading it wrote is quoted, not obeyed: {}",
-        waiting.text()
+        file.contains("> WHAT A PERSON ASKED FOR"),
+        "the heading it wrote is quoted, not obeyed: {file}"
     );
 }
 
@@ -350,55 +372,12 @@ async fn a_press_that_picked_nothing_is_refused_before_the_forge_is_asked() {
     );
 }
 
-/// **One comment can be the whole reason a press does not fit.** The bound is
-/// on the rendered set, so a set with one huge member fails it same as any
-/// other, and nothing moves while it does.
+/// **`#648`: there is no size a chosen set can be too large to press.** A
+/// press of a comment set well over the old 8,000-character
+/// `ROOM_FOR_COMMENTS` bound is taken up, not refused, and every character of
+/// it lands in the file whole.
 #[tokio::test]
-async fn a_press_with_one_comment_too_big_for_the_room_a_brief_leaves_free_is_refused() {
-    let home = TempDir::new();
-    let fleet = a_fleet_at_a_gate(&home);
-    let job_id = a_job_under_review_with(
-        &fleet,
-        &home,
-        UnderReview {
-            people: WhatPeopleSaid::ChangesRequested,
-            checks: WhatTheForgeRan::AllPassed { checks: 3 },
-            remarks: vec![sized_comment("IC_big", "a-reviewer", 9_000)],
-            verdicts: Vec::new(),
-        },
-    )
-    .await;
-
-    let refused = fleet
-        .take_up_remarks(&job_id, &[String::from("IC_big")])
-        .await
-        .expect_err("one comment alone is bigger than the room a brief leaves free");
-    let too_large = match refused {
-        crate::adrift::Adrift::RemarksTooLarge { too_large, .. } => too_large,
-        other => panic!("refused by name, not as anything else: {other:?}"),
-    };
-    assert_eq!(
-        too_large,
-        vec![String::from("IC_big")],
-        "the one comment that has to go: {too_large:?}"
-    );
-    let job = fleet.load(&job_id).await.unwrap();
-    assert_eq!(
-        job.status(),
-        JobStatus::AwaitingReview,
-        "the Job is where the press found it: nothing moved"
-    );
-    assert!(
-        fleet.vcs().replies().is_empty(),
-        "and nothing was written onto the pull request"
-    );
-}
-
-/// **Several comments, none of them alarming alone, are the same problem
-/// together.** The bound is on the whole set a person chose, not on whichever
-/// one of them is largest.
-#[tokio::test]
-async fn a_press_with_several_medium_comments_that_together_overflow_is_refused_too() {
+async fn a_press_well_over_the_old_bound_is_taken_up_not_refused() {
     let home = TempDir::new();
     let fleet = a_fleet_at_a_gate(&home);
     let job_id = a_job_under_review_with(
@@ -408,50 +387,30 @@ async fn a_press_with_several_medium_comments_that_together_overflow_is_refused_
             people: WhatPeopleSaid::ChangesRequested,
             checks: WhatTheForgeRan::AllPassed { checks: 3 },
             remarks: vec![
-                sized_comment("IC_1", "a-reviewer", 1_700),
-                sized_comment("IC_2", "a-reviewer", 1_700),
-                sized_comment("IC_3", "a-reviewer", 1_700),
-                sized_comment("IC_4", "a-reviewer", 1_700),
-                sized_comment("IC_5", "a-reviewer", 1_700),
+                sized_comment("IC_1", "a-reviewer", 9_000),
+                sized_comment("IC_2", "a-reviewer", 9_000),
             ],
             verdicts: Vec::new(),
         },
     )
     .await;
-    let chosen = [
-        String::from("IC_1"),
-        String::from("IC_2"),
-        String::from("IC_3"),
-        String::from("IC_4"),
-        String::from("IC_5"),
-    ];
+    let chosen = [String::from("IC_1"), String::from("IC_2")];
 
-    let refused = fleet
+    let moved = fleet
         .take_up_remarks(&job_id, &chosen)
         .await
-        .expect_err("five comments nobody would call huge, summed past the room a brief leaves");
-    let too_large = match refused {
-        crate::adrift::Adrift::RemarksTooLarge { too_large, .. } => too_large,
-        other => panic!("refused by name, not as anything else: {other:?}"),
-    };
+        .expect("no size refuses a press a person chose on purpose");
+    assert_eq!(moved.status(), JobStatus::Queued);
+
+    let file = comments_file(&fleet, &home, &job_id).await;
     assert!(
-        !too_large.is_empty() && too_large.iter().all(|id| chosen.contains(id)),
-        "names some of the comments a person picked, and nothing else: {too_large:?}"
-    );
-    let job = fleet.load(&job_id).await.unwrap();
-    assert_eq!(
-        job.status(),
-        JobStatus::AwaitingReview,
-        "the Job is where the press found it: nothing moved"
-    );
-    assert!(
-        fleet.vcs().replies().is_empty(),
-        "and nothing was written onto the pull request"
+        file.len() > 18_000,
+        "both comments, whole, well past the old bound: {}",
+        file.len()
     );
 }
 
-/// **The same comment, picked on its own, is not too big for anything.** A
-/// bound on the set is not a bound in disguise on any one member of it.
+/// **The same comment, picked on its own, is not too big for anything.**
 #[tokio::test]
 async fn one_of_the_same_medium_comments_picked_alone_is_not_refused() {
     let home = TempDir::new();

@@ -1,3 +1,4 @@
+import { ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 
@@ -23,8 +24,20 @@ import { Tooltip } from "../../primitives/Tooltip/Tooltip";
  *
  * A comment is written by whoever can see the pull request. It is drawn as a
  * text node and as nothing else — no markdown is rendered, no link is made
- * clickable, no attribute carries one. What a person does with it is pick it or
- * not, and the only value that goes back is the handle the forge gave it.
+ * clickable *out of its own text*, no attribute carries one. What a person
+ * does with it is pick it or not, and the only value that goes back on a pick
+ * is the handle the forge gave it.
+ *
+ * # Two things Armada adds, and neither is drawn from the comment's words
+ *
+ * **The code an inline comment is about** — its file, its line, and the diff
+ * around it — comes ahead of the words, exactly as the forge answered it: no
+ * syntax highlighting, a `pre` block same as the comment's own paragraphs are
+ * `pre-wrap`. **A link to the comment on the forge** is its own control, drawn
+ * from `id` through `onOpenLink` rather than from a `url` string handed
+ * straight to an anchor — the same discipline `WhereRow`'s `open` act keeps,
+ * so nothing this surface was given reaches the OS without main resolving it
+ * again.
  *
  * # A comment already sent is drawn and cannot be picked
  *
@@ -68,11 +81,18 @@ export type ReviewCommentsProps = {
   takeUpLabel?: string;
   /** What marks a comment a drone has already been handed. */
   sentNote?: string;
+  /**
+   * Open one comment on the forge. Absent where nothing here can resolve a
+   * link, in which case no comment draws the control at all — a link with
+   * nothing to open reads as a broken one, not a quiet one.
+   */
+  onOpenLink?: (id: string) => void;
 };
 
 /** One comment, as this surface draws it. */
 export type ReviewComment = {
-  /** What the forge calls it. Never drawn; it is what the press names. */
+  /** What the forge calls it. Never drawn as text; it is what the press names
+   *  and what `onOpenLink` is called with. */
   id: string;
   /** The login of whoever wrote it, as the forge spells it. */
   by: string;
@@ -82,6 +102,25 @@ export type ReviewComment = {
   said: string;
   /** Whether a drone on this job has already been handed it. */
   takenUp: boolean;
+  /**
+   * Whether the forge answered an address for this comment. **A boolean, not
+   * the address itself** — this surface never holds a URL, so it cannot draw
+   * one into anything that would reach the OS.
+   */
+  hasLink?: boolean;
+  /** The code this comment is about, where it is attached to one line of the
+   *  diff. Absent for a comment on the pull request's own conversation. */
+  inline?: ReviewCommentCode;
+};
+
+/** The code one inline comment is about, exactly as the forge answered it. */
+export type ReviewCommentCode = {
+  /** The file the comment is on, relative to the repository root. */
+  path: string;
+  /** The line of the current diff the comment sits on. */
+  line: number;
+  /** The diff around that line, `@@` header included. */
+  hunk: string;
 };
 
 export function ReviewComments({
@@ -94,6 +133,7 @@ export function ReviewComments({
   emptyNote = "No comments",
   takeUpLabel = "Send to a drone",
   sentNote = "Already sent to a drone",
+  onOpenLink,
 }: ReviewCommentsProps) {
   // Held here because it is a draft until it is sent, exactly as the review
   // note beside it is. Nothing outside this region knows one is being made.
@@ -121,7 +161,29 @@ export function ReviewComments({
                       Mono, because they are machine readings and not prose. */}
                   <span className="armada-remarks__by mono">{comment.by}</span>
                   <span className="armada-remarks__at mono">{comment.at}</span>
+                  {comment.hasLink && onOpenLink !== undefined ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onOpenLink(comment.id)}
+                      aria-label={`Open ${comment.by}'s comment on the forge`}
+                    >
+                      <ExternalLink size={12} aria-hidden />
+                      Open on the forge
+                    </Button>
+                  ) : null}
                 </div>
+                {/* The code this comment is about, ahead of its words: a
+                    person reading "this leaks a handle" wants the line it is
+                    about in view before the sentence, not after. */}
+                {comment.inline === undefined ? null : (
+                  <div className="armada-remarks__code">
+                    <span className="armada-remarks__file mono">
+                      {comment.inline.path}:{comment.inline.line}
+                    </span>
+                    <pre className="armada-remarks__hunk mono">{comment.inline.hunk}</pre>
+                  </div>
+                )}
                 {/* Somebody else's words, as a text node and nothing else.
                     `pre-wrap` keeps the paragraphs they wrote without rendering
                     a line of it as markup. */}

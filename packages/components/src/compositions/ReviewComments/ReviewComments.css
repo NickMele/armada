@@ -83,6 +83,38 @@
   color: var(--fg-muted);
 }
 
+/* The code an inline comment is about, ahead of its words. A frame of its own
+   — not the tie the whole surface already carries — because this is a second
+   kind of quoted material, the forge's diff rather than a reviewer's prose. */
+.armada-remarks__code {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-2);
+  background: var(--bg-sunken);
+  border-radius: var(--radius-sm);
+}
+
+.armada-remarks__file {
+  min-width: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+}
+
+/* The diff hunk itself, exactly as the forge answered it — no highlighting,
+   `pre` because a `@@` header and its indentation are the point. */
+.armada-remarks__hunk {
+  min-width: 0;
+  margin: 0;
+  overflow-x: auto;
+  color: var(--fg-default);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  white-space: pre;
+}
+
 /* Somebody else's words.
  *
  * **`pre-wrap`, so the paragraphs they wrote survive**, and `break-word` so a

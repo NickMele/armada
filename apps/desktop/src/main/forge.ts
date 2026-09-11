@@ -60,6 +60,19 @@ function addressable(address: string): boolean {
 }
 
 /**
+ * One comment's own address, off the remarks reading main is holding.
+ *
+ * **Read off `remarks` alone**, for `addressOf`'s reason: `readRemarks` is
+ * asked once per Job a surface opens the comments of, and the one surface
+ * that opens a comment's link is the same one drawing that reading.
+ */
+function remarkAddressOf(state: BridgeState, jobId: string, remarkId: string): string | undefined {
+  const remarks = state.remarks;
+  if (remarks.state !== "read" || remarks.jobId !== jobId) return undefined;
+  return remarks.review.remarks.find((remark) => remark.id === remarkId)?.url;
+}
+
+/**
  * Open one Job's pull request.
  *
  * **Refusals are named, never silent.** Three of the four arms are states a
@@ -74,6 +87,29 @@ export async function openPullRequest(state: BridgeState, jobId: string): Promis
   if (!job) return { ok: false, why: "unknown_job" };
 
   const address = addressOf(state, jobId);
+  return opened(address);
+}
+
+/**
+ * Open one comment's address on the forge. `addressOf`'s reason applies here
+ * too, with the comment's own reading standing in for the pull request's.
+ */
+export async function openRemarkLink(
+  state: BridgeState,
+  jobId: string,
+  remarkId: string,
+): Promise<Followed> {
+  const job =
+    state.jobs.some((row) => row.id === jobId) ||
+    (state.watched.state === "read" && state.watched.jobId === jobId);
+  if (!job) return { ok: false, why: "unknown_job" };
+
+  const address = remarkAddressOf(state, jobId, remarkId);
+  return opened(address);
+}
+
+/** The one act both entries above end with, once each has its own address. */
+async function opened(address: string | undefined): Promise<Followed> {
   if (address === undefined) return { ok: false, why: "no_address" };
   if (!addressable(address)) return { ok: false, why: "not_addressable", address };
 

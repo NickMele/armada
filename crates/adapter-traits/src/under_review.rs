@@ -193,11 +193,13 @@ impl WhatTheForgeRan {
 /// out of a remote's text, and nothing here orders remarks or measures anything
 /// from one.
 ///
-/// **Comments left on individual lines of the diff are not here.** What a
-/// forge answers in one read of a pull request is the conversation on the pull
-/// request itself and the note a reviewer wrote with their review; the inline
-/// ones are a second query per review, and a read that fetched them would stop
-/// being the one call this sweep can afford.
+/// **Comments left on individual lines of the diff are not here, on the read
+/// this struct's own module doc calls "one call."** The sweep still asks for
+/// only the conversation and the review bodies, for the reason above — inline
+/// comments are a second query per review, and the sweep's budget is one call.
+/// Where an inline comment is wanted, `Delivery::inline_remarks` is the second
+/// query, asked only where a person opens the comments or presses on them —
+/// never from the rotation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Remark {
     /// What the forge calls this one comment.
@@ -215,6 +217,14 @@ pub struct Remark {
     pub by: FromOutside,
     pub at: FromOutside,
     pub said: FromOutside,
+    /// Where this comment lives on the forge, for a person to follow. `None`
+    /// where the forge answered nothing under this name — a caller draws no
+    /// link rather than one that would not resolve.
+    pub url: Option<FromOutside>,
+    /// The code this comment is about, where it is attached to one line of the
+    /// diff rather than to the conversation. `None` for a conversation comment
+    /// or a review's own note, which are about the pull request as a whole.
+    pub inline: Option<InlineContext>,
 }
 
 impl Remark {
@@ -229,8 +239,51 @@ impl Remark {
             by: FromOutside::verbatim(by),
             at: FromOutside::verbatim(at),
             said: FromOutside::verbatim(said),
+            url: None,
+            inline: None,
         }
     }
+
+    /// Say where this comment lives on the forge. A builder rather than a
+    /// constructor argument, so [`written`](Remark::written)'s call sites —
+    /// most of a review, which carries no address per comment worth naming
+    /// twice — do not all grow a fifth argument for the one caller that has
+    /// one.
+    pub fn with_url(mut self, url: impl Into<String>) -> Remark {
+        self.url = Some(FromOutside::verbatim(url));
+        self
+    }
+
+    /// Attach the code this comment is about, for [`with_url`](Remark::with_url)'s
+    /// reason.
+    pub fn with_inline(
+        mut self,
+        path: impl Into<String>,
+        line: u32,
+        hunk: impl Into<String>,
+    ) -> Remark {
+        self.inline = Some(InlineContext {
+            path: FromOutside::verbatim(path),
+            line,
+            hunk: FromOutside::verbatim(hunk),
+        });
+        self
+    }
+}
+
+/// The code one inline comment is about: the file, the line, and the diff
+/// around it, exactly as the forge answered.
+///
+/// **`hunk` is [`FromOutside`] and `path` is too**, for [`Remark::said`]'s
+/// reason — a diff hunk is lines somebody's commit wrote, and a path is a
+/// string the forge is merely repeating from that commit. `line` is not: it is
+/// the forge's own count of where the comment sits, never rendered as
+/// anything but a number.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InlineContext {
+    pub path: FromOutside,
+    pub line: u32,
+    pub hunk: FromOutside,
 }
 
 /// One reviewer's verdict, apart from the forge's own rollup.

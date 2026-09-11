@@ -330,7 +330,7 @@ which is an assembled prompt and therefore governed here.
 | **The gate's outcome** | A step passed its gate and its Drone is still there | Drafted, not sanctioned |
 | **The part-before block** | The same fact, where the Drone that would have read it has ended | Drafted, not sanctioned |
 | **The waiting-instruction block** | `redirect_drone` or `request_changes` arrived where no Drone was there to take it | The person writes the words; the frame around them is drafted |
-| **The picked-comments block** | A person picked comments off the Job's pull request and pressed. The same block, assembled from somebody else's words rather than typed | Whoever commented writes the words; Armada writes the frame and the fence, and neither is sanctioned |
+| **The picked-comments block** | A person picked comments off the Job's pull request and pressed. Points at the file the words were written into rather than carrying them | Armada names the file, the count, and who wrote them; nothing in the block is sanctioned |
 | **The permission answer** | A Drone reached for a call outside its toolbelt and Armada's permission tool said no. **It is the tool's reply, and injected into nothing** | Drafted, not sanctioned |
 | **The permission turn** | A person answered a permission question after the tool had already told the Drone to wait, or answered a refused row on a stopped Job whose Drone is still there | Drafted, not sanctioned |
 
@@ -341,20 +341,27 @@ is drafted: an opening brief has to say who wrote the instruction and that it
 is not part of the step's definition, where an injected turn arrives in the
 middle of a conversation and does not.
 
-**The last row is the one place a prompt carries text somebody outside this
-machine wrote**, and it is why the frame says *left this* rather than *wrote
-this*: a person typing a note wrote the words, and a person picking comments off
-a pull request picked somebody else's. The block itself opens by saying which of
-the two it is.
+**Text from outside this machine no longer reaches a prompt at all, for the
+picked-comments row — `#648`.** It used to be the one row where a prompt
+carried words somebody outside this machine wrote, quoted directly into the
+block. Now the words are written whole into a file in the Drone's worktree and
+the block is a pointer to it — the count, who wrote each one, and the path —
+so what an assembled prompt carries about a pull request's comments is
+Armada's own sentence, sanctioned like every other row above it. The waiting-
+instruction row above is the one place left where a prompt carries outside
+words directly, because a person's own note has nowhere else to go.
 
 > **Rule.** Text from outside this machine is fenced by a prefix on every line,
-> never by a delimiter around the whole.
+> never by a delimiter around the whole — wherever it is written, prompt or
+> file.
 > Why: a delimiter is something the text can write for itself and therefore
 > close. A prefix cannot be removed from inside — a comment may write a line
 > that *starts* with the marker and may not write one that lacks it — so where
 > the quoted text begins and ends stays Armada's to state. `fleet::remarks` is
 > the fence, and it is deliberately not an escaper: what authorises the words is
-> that a person picked them.
+> that a person picked them. It now fences the file the comments are written
+> into rather than the turn itself, and the rule does not move with where the
+> text lands.
 The gate's outcome was the one exception — the mechanism was decided and the
 wording never written — and its last two rows close that.
 

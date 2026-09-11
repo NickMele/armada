@@ -294,6 +294,8 @@ pub fn remarks(job_id: JobId) -> JobRemarks {
                 at: "2026-09-08T10:00:00Z".to_string(),
                 said: "the log reader still stops one line early".to_string(),
                 taken_up: false,
+                url: Some("https://forge.invalid/armada/pull/1#issuecomment-1".to_string()),
+                inline: None,
             },
             ipc::Remark {
                 id: "IC_kwDOsecond".to_string(),
@@ -301,6 +303,21 @@ pub fn remarks(job_id: JobId) -> JobRemarks {
                 at: "2026-09-08T10:05:00Z".to_string(),
                 said: "and this one has already been sent".to_string(),
                 taken_up: true,
+                url: None,
+                inline: None,
+            },
+            ipc::Remark {
+                id: "PRRC_kwDOthird".to_string(),
+                by: "a-reviewer".to_string(),
+                at: "2026-09-08T10:10:00Z".to_string(),
+                said: "this leaks a file handle on the error path".to_string(),
+                taken_up: false,
+                url: Some("https://forge.invalid/armada/pull/1#discussion_r1".to_string()),
+                inline: Some(ipc::InlineContext {
+                    path: "src/log.rs".to_string(),
+                    line: 42,
+                    hunk: "@@ -40,3 +40,3 @@ fn read() {\n     let file = File::open(path)?;\n-    Ok(file)\n+    Ok(file) // leaked on early return above\n".to_string(),
+                }),
             },
         ],
     }
