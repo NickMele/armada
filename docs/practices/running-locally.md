@@ -176,11 +176,14 @@ Check prints nothing while it runs, which reads as a hang and is not one.
 **A name in the wrong registry is refused with the verb that would have
 worked**, and a name in neither is refused by listing what is declared.
 
-**A Check's `requires` runs here too, before the Check does.** `armada check
-format` runs `cargo fmt --all` and then reads, which is what the gate does — so
-it rewrites files in your working tree, and that is the point rather than a
-surprise. A prerequisite that fails is reported as itself: the line names the
-Command and the line it ran, and says the Check never started.
+**A Check's `requires` runs here too, before the Check does, for any Check
+that declares one.** A prerequisite that fails is reported as itself: the line
+names the Command and the line it ran, and says the Check never started.
+`format` declares none — it once did, and that meant `armada check format`
+rewrote your working tree and then read what it had just written, so it could
+never fail. `armada.yml` says why it does not any more. A failing `format`
+says `armada run fmt`, which is a step you take, not one the Check takes for
+you.
 
 **Prefer these over retyping the command they wrap.** The Check a person runs is
 the Check a Drone is measured by.
