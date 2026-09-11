@@ -59,7 +59,8 @@ pub use judge::{Ask, CallProgress, Heard, JudgeCall, ModelClient};
 pub use link_lookup::{LinkLookup, LookupCall};
 pub use secret::Secret;
 pub use under_review::{
-    FromOutside, Remark, ReviewVerdict, ReviewedBy, UnderReview, WhatPeopleSaid, WhatTheForgeRan,
+    FromOutside, InlineContext, Remark, ReviewVerdict, ReviewedBy, UnderReview, WhatPeopleSaid,
+    WhatTheForgeRan,
 };
 pub use work_product::{
     Change, Changed, ChangedFile, Counted, CountedFile, Footprint, LineCount, Measured, Patch,

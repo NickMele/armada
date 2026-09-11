@@ -717,6 +717,19 @@ export type BridgeApi = {
    */
   openPullRequest: (jobId: string) => Promise<Followed>;
   /**
+   * Open one comment on the pull request, in whatever browses the web on this
+   * machine.
+   *
+   * **A Job id and a comment id, never an address** — `openPullRequest`'s rule
+   * exactly. Main looks the comment up in the remarks reading it published,
+   * reads its own `url` off that and checks it is a web address before handing
+   * it over, so the renderer never holds the string that decides what opens.
+   *
+   * `undefined` where the comment carries no address: the caller draws no link
+   * for one, rather than a link that opens nothing.
+   */
+  openRemarkLink: (jobId: string, remarkId: string) => Promise<Followed>;
+  /**
    * Where a pressed notification says to go.
    *
    * **The one entry here the renderer cannot initiate.** Every other capability
@@ -813,5 +826,6 @@ export const CHANNELS = {
   takeUpRemarks: "bridge:take-up-remarks",
   openArtifact: "bridge:open-artifact",
   openPullRequest: "bridge:open-pull-request",
+  openRemarkLink: "bridge:open-remark-link",
   summoned: "bridge:summoned",
 } as const;

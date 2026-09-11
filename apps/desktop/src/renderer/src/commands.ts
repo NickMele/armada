@@ -60,6 +60,8 @@ export const readFrame = (jobId: string, kept: string) => window.armada.readFram
 export const showAgain = (jobId: string) => window.armada.showAgain(jobId);
 export const openArtifact = (jobId: string, what: Artifact) => window.armada.openArtifact(jobId, what);
 export const openPullRequest = (jobId: string) => window.armada.openPullRequest(jobId);
+export const openRemarkLink = (jobId: string, remarkId: string) =>
+  window.armada.openRemarkLink(jobId, remarkId);
 export const examine = (jobId: string): void => void window.armada.examineJob(jobId);
 export const stageAttachment = (bytes: ArrayBuffer, filename: string, mimeType: string) =>
   window.armada.stageAttachment(bytes, filename, mimeType);

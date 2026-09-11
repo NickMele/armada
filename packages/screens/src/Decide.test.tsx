@@ -79,6 +79,7 @@ function gate(): Sent {
       onRequestChanges={(jobId) => sent.changes.push(jobId)}
       onReject={(jobId) => sent.rejected.push(jobId)}
       onTakeUpRemarks={() => {}}
+      onOpenRemarkLink={() => {}}
     />,
   );
   return sent;

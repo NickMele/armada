@@ -11,7 +11,7 @@ import type { FileReport } from "@armada/protocol";
 import type { Artifact } from "@armada/protocol";
 import { FleetConnection } from "./connection";
 import { openArtifact } from "./open";
-import { openPullRequest } from "./forge";
+import { openPullRequest, openRemarkLink } from "./forge";
 import { Attention } from "./telling";
 
 // Bridge's window, and the one connection under it.
@@ -466,6 +466,12 @@ void app.whenReady().then(() => {
   // no string the renderer composed reaches `shell.openExternal`. `forge.ts`.
   ipcMain.handle(CHANNELS.openPullRequest, (_event, jobId: string) =>
     openPullRequest(published, jobId),
+  );
+  // The third channel that leaves this machine, `openPullRequest`'s reason:
+  // the comment's own address is read here off the remarks reading main
+  // published, never off a string the renderer sent.
+  ipcMain.handle(CHANNELS.openRemarkLink, (_event, jobId: string, remarkId: string) =>
+    openRemarkLink(published, jobId, remarkId),
   );
 
   createWindow();

@@ -64,4 +64,24 @@ export type Remark = {
    * choosable is offering a press that will be refused.
    */
   taken_up: boolean;
+  /**
+   * Where this comment lives on the forge, for a link to open. `undefined`
+   * where the forge answered no address under this name.
+   */
+  url?: string;
+  /**
+   * The code this comment is about, where it is attached to one line of the
+   * diff. `undefined` for a comment on the pull request's own conversation.
+   */
+  inline?: InlineContext;
+};
+
+/** The code one inline comment is about, exactly as the forge answered. */
+export type InlineContext = {
+  /** The file the comment is on, relative to the repository root. */
+  path: string;
+  /** The line of the current diff the comment sits on. */
+  line: number;
+  /** The diff around that line, as the forge's own patch renders it. */
+  hunk: string;
 };

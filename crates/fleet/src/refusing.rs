@@ -98,6 +98,11 @@ const NOT_RECLAIMED: &str = "fleet.not_reclaimed";
 /// again is reasonable. It is never an empty list — a pull request nobody has
 /// commented on and a forge nobody could reach are opposite answers.
 const REVIEW_UNREADABLE: &str = "fleet.review_unreadable";
+/// The comments a person picked would not write to a file in the Drone's
+/// worktree. **A 500**, for [`REVIEW_UNREADABLE`]'s reason: nothing about the
+/// request is wrong, and the worktree existed a moment ago — `surviving_worktree`
+/// already refused otherwise.
+const REMARKS_FILE_UNWRITABLE: &str = "fleet.remarks_file_unwritable";
 /// A press that named no comment at all. **A 422**, like a blank note: the
 /// request decoded and names something that cannot work.
 const NO_REMARKS_CHOSEN: &str = "fleet.no_remarks_chosen";
@@ -110,11 +115,6 @@ const REMARKS_GONE: &str = "fleet.remarks_gone";
 /// is a note nothing has collected yet and this is one already delivered, and a
 /// client telling a person what to do next has to tell them apart.
 const REMARKS_ALREADY_TAKEN_UP: &str = "fleet.remarks_already_taken_up";
-/// A press whose chosen comments would not fit the room an opening brief
-/// leaves free. A 422 like [`NO_REMARKS_CHOSEN`]: the request decoded and
-/// names a set that cannot work, which is true independent of anything the
-/// forge might say a moment later.
-const REMARKS_TOO_LARGE: &str = "fleet.remarks_too_large";
 /// A merge asked for on a Job whose record holds no pull request. A 409 like
 /// the status conflicts above: nothing was ever opened, so the act a person
 /// wants is an approval and the message says so.
@@ -333,15 +333,12 @@ where
                 WireError::raised(NO_REMARKS_CHOSEN, said, self.run_id())
                     .about_job(ipc::JobId::from(job)),
             ),
-            // A press whose chosen comments, rendered the way `brief` builds
-            // them, would not fit the room an opening brief leaves free. A
-            // 422 beside `NoRemarksChosen`: the request decoded and names a
-            // set that cannot work, and asking the forge again would not
-            // change that.
-            Adrift::RemarksTooLarge { job, too_large } => Refusal::Unacceptable(
-                WireError::raised(REMARKS_TOO_LARGE, said, self.run_id())
-                    .about_job(ipc::JobId::from(job))
-                    .with_field("remarks", WireValue::Str(too_large.join(", "))),
+            // The comments a person picked would not write to disk. A 500,
+            // for `ReviewUnreadable`'s reason: nothing about the request is
+            // wrong.
+            Adrift::RemarksFileUnwritable { job, .. } => Refusal::Fault(
+                WireError::raised(REMARKS_FILE_UNWRITABLE, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
             ),
             // **The handles come back on both of these**, for
             // `NOTE_ALREADY_WAITING`'s reason: a refusal that named only a

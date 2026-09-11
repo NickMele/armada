@@ -20,7 +20,7 @@
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
-use crate::{UnderReview, Worktree};
+use crate::{Remark, UnderReview, Worktree};
 
 /// The branch a Job's work merges into, and where the name came from.
 ///
@@ -634,6 +634,25 @@ pub trait Delivery {
     /// `in_repo` is the repository every worktree was cut from, for
     /// [`landed`](Delivery::landed)'s reason.
     fn under_review(&self, in_repo: &str, pull_request: &str) -> UnderReview;
+
+    /// The comments left on individual lines of the diff — the ones
+    /// [`under_review`](Delivery::under_review) does not fetch, because they
+    /// are a second query per review and the sweep has one call to spend.
+    ///
+    /// **Asked on demand and never from the sweep.** The two callers are a
+    /// person opening a Job's comments and a press taking some of them up —
+    /// both already cost a process for [`under_review`](Delivery::under_review),
+    /// so this is the one place fetching inline comments is affordable.
+    ///
+    /// **Empty rather than a `Result`.** A forge that would not answer this
+    /// second question leaves a person with the comments
+    /// [`under_review`](Delivery::under_review) already found and none of
+    /// their code — worse than not asking would be refusing the whole read
+    /// over a query that is strictly additional to it.
+    ///
+    /// `in_repo` is the repository every worktree was cut from, for
+    /// [`landed`](Delivery::landed)'s reason.
+    fn inline_remarks(&self, in_repo: &str, pull_request: &str) -> Vec<Remark>;
 
     /// Merge a pull request Armada opened.
     ///

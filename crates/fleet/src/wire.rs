@@ -8,13 +8,17 @@
 //! so the field-by-field decision is written here, where every type involved
 //! is in scope.
 
+use std::collections::BTreeSet;
+
+use adapter_traits::Remark as ForgeRemark;
 use adapters::{BranchGone, Reclaimed, WorktreeGone};
 use core_model::Job;
 use ipc::mcp::NotRecorded;
 use ipc::{
-    CheckRun, DeclaredCheck, DeclaredJudge, Flagged, HeldReason, Judged, KeptDeliverable,
-    ManifestId, ManifestSummary, ReclaimedBranch, ReclaimedWorktree, StepFacts, StepId, Submitted,
-    WorkflowId, WorkflowStep, WorkflowSummary, WorktreeHeld, WorktreeReclaimed,
+    CheckRun, DeclaredCheck, DeclaredJudge, Flagged, HeldReason, InlineContext, Judged,
+    KeptDeliverable, ManifestId, ManifestSummary, ReclaimedBranch, ReclaimedWorktree, Remark,
+    StepFacts, StepId, Submitted, WorkflowId, WorkflowStep, WorkflowSummary, WorktreeHeld,
+    WorktreeReclaimed,
 };
 
 use crate::holding::{Held, Holding};
@@ -671,4 +675,28 @@ fn held_reason(held: &Held) -> Option<HeldReason> {
             detail: why.clone(),
         },
     })
+}
+
+/// One comment, redacted onto the wire. **`adapter_traits::FromOutside` is
+/// called by hand here, four or seven times depending on whether the comment
+/// is inline** — see `crate::serving::get_remarks`'s own note on why that is
+/// the visible step this file exists to make people take.
+///
+/// `taken_up` is read off the set beside the reading, for the same reason
+/// `get_remarks` reads it beside `what_was_said`'s answer: it is Armada's own
+/// fact and the forge never wrote it.
+pub(crate) fn redacted(remark: &ForgeRemark, taken_up: &BTreeSet<String>) -> Remark {
+    Remark {
+        id: remark.id.as_written().to_string(),
+        by: remark.by.as_written().to_string(),
+        at: remark.at.as_written().to_string(),
+        said: remark.said.as_written().to_string(),
+        taken_up: taken_up.contains(remark.id.as_written()),
+        url: remark.url.as_ref().map(|url| url.as_written().to_string()),
+        inline: remark.inline.as_ref().map(|inline| InlineContext {
+            path: inline.path.as_written().to_string(),
+            line: inline.line,
+            hunk: inline.hunk.as_written().to_string(),
+        }),
+    }
 }

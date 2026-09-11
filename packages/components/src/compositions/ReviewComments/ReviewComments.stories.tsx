@@ -165,6 +165,54 @@ export const ACommentWithEverythingInIt: Story = {
 };
 
 /**
+ * One inline comment, with the code it is about, and one on the pull
+ * request's own conversation, with a link.
+ *
+ * **The code comes before the words.** A person reading "this leaks a file
+ * handle" wants the line it is about in view first. **The link opens through
+ * `onOpenLink`, never through a `url` this surface holds** — the story's
+ * `onOpenLink` stands in for main resolving the address again.
+ */
+export const OneInlineAndOneOnTheConversation: Story = {
+  args: {
+    comments: [
+      {
+        id: "PRRC_kwDOfirst",
+        by: "a-reviewer",
+        at: "2026-09-08 10:00",
+        said: "This leaks a file handle on the early-return path above.",
+        takenUp: false,
+        hasLink: true,
+        inline: {
+          path: "src/log.rs",
+          line: 42,
+          hunk: "@@ -40,3 +40,3 @@ fn read() {\n     let file = File::open(path)?;\n-    Ok(file)\n+    Ok(file) // leaked on early return above\n",
+        },
+      },
+      {
+        id: "IC_kwDOsecond",
+        by: "somebody-else",
+        at: "2026-09-08 10:31",
+        said: "Unrelated, but did the store migration ever land? I cannot see it on main.",
+        takenUp: false,
+        hasLink: true,
+      },
+    ],
+    onTakeUp: fn(),
+    onOpenLink: fn(),
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.getByText("src/log.rs:42")).toBeVisible();
+    await expect(canvas.getByText(/leaked on early return above/)).toBeVisible();
+
+    const links = canvas.getAllByRole("button", { name: /Open .*comment on the forge/ });
+    await expect(links).toHaveLength(2);
+    await userEvent.click(links[0]!);
+    await expect(args.onOpenLink).toHaveBeenCalledWith("PRRC_kwDOfirst");
+  },
+};
+
+/**
  * Nothing live to send it over.
  *
  * **The reason is on screen**, because a disabled control with no sentence

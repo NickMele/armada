@@ -285,6 +285,11 @@ const api: BridgeApi = {
   openPullRequest: (jobId: string): Promise<Followed> =>
     ipcRenderer.invoke(CHANNELS.openPullRequest, jobId),
 
+  // One comment's own link, `openPullRequest`'s reason exactly: a Job id and a
+  // comment id, never an address the renderer composed.
+  openRemarkLink: (jobId: string, remarkId: string): Promise<Followed> =>
+    ipcRenderer.invoke(CHANNELS.openRemarkLink, jobId, remarkId),
+
   // Where a pressed notification says to go. **The only entry here that the
   // renderer does not initiate** — every other one is the window asking, and
   // this is main handing over a press that happened outside it, possibly with

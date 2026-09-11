@@ -30,7 +30,7 @@ use std::sync::Mutex;
 
 use adapter_traits::{
     Base, BaseCheckout, BaseOnTheRemote, BaseSpec, BroughtUpToDate, Change, CommitTime, Committed,
-    Delivery, Landing, Mergeable, Merged, NotDelivered, NotMerged, Opened, Pushed, Renewed,
+    Delivery, Landing, Mergeable, Merged, NotDelivered, NotMerged, Opened, Pushed, Remark, Renewed,
     Replied, RepositoryStanding, Review, Standing, UnderReview, Vcs, WhatBecameOfIt, Worktree,
     WorktreeSpec,
 };
@@ -197,6 +197,9 @@ pub enum Delivered {
     /// not tell a sweep that asks once from one that asks about a merged pull
     /// request it should have stopped asking about.
     AskedWhatIsUnderReview { pull_request: String },
+    /// The forge was asked for inline diff comments. Counted apart from
+    /// [`AskedWhatIsUnderReview`]: the sweep must never pay for this call.
+    AskedForInlineRemarks { pull_request: String },
     /// The forge was asked to compare a pull request afresh. **Counted for
     /// [`AskedWhatBecameOfIt`](Delivered::AskedWhatBecameOfIt)'s reason and
     /// then some**: this one closes and reopens a person's pull request, so a
@@ -254,6 +257,9 @@ pub struct Delivering {
     /// and the one every case that is not about reviews should get, so that
     /// nothing reads an approval nobody scripted.
     pub under_review: UnderReview,
+    /// The forge's answer for inline diff comments. Empty by default, and
+    /// never inferred from `under_review` — a real forge does not either.
+    pub inline_remarks: Vec<Remark>,
     /// What closing and reopening comes to. Renewed by default, because the
     /// case a test has to write out is the one where it was left closed.
     pub renewed: Renewed,
@@ -284,6 +290,7 @@ impl Default for Delivering {
             title: Some(String::from("a job's pull request")),
             mergeable: Mergeable::Yes,
             under_review: UnderReview::unreadable(),
+            inline_remarks: Vec::new(),
             renewed: Renewed::Renewed,
             repository: RepositoryStanding::AlreadyHadIt {
                 base: String::from("main"),
@@ -404,6 +411,18 @@ impl FakeVcs {
     /// loop is counting these against those.
     pub fn times_asked_what_is_under_review(&self) -> usize {
         self.counted(|it| matches!(it, Delivered::AskedWhatIsUnderReview { .. }))
+    }
+
+    /// Say what the forge answers for inline diff comments. `&self` for
+    /// [`now_under_review`](FakeVcs::now_under_review)'s reason.
+    pub fn now_inline_remarks(&self, remarks: Vec<Remark>) {
+        self.delivery.lock().expect("not poisoned").inline_remarks = remarks;
+    }
+
+    /// How many times the forge has been asked for inline comments — the
+    /// query the sweep must never make.
+    pub fn times_asked_for_inline_remarks(&self) -> usize {
+        self.counted(|it| matches!(it, Delivered::AskedForInlineRemarks { .. }))
     }
 
     /// Say what the forge does when it is asked to merge.
@@ -667,6 +686,20 @@ impl Delivery for FakeVcs {
             .lock()
             .expect("not poisoned")
             .under_review
+            .clone()
+    }
+
+    fn inline_remarks(&self, _in_repo: &str, pull_request: &str) -> Vec<Remark> {
+        self.delivered
+            .lock()
+            .expect("not poisoned")
+            .push(Delivered::AskedForInlineRemarks {
+                pull_request: pull_request.to_string(),
+            });
+        self.delivery
+            .lock()
+            .expect("not poisoned")
+            .inline_remarks
             .clone()
     }
 

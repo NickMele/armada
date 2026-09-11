@@ -137,7 +137,7 @@ pub use rehearsal::{
     NamedRun, RunEntry, RunList, RunMessage, RunOpened, RunOutput, RunRecord, RunSheet,
     RunUnderway, StartRun, UnreadableRun,
 };
-pub use remarks::{JobRemarks, Remark, RemarksTakenUp};
+pub use remarks::{InlineContext, JobRemarks, Remark, RemarksTakenUp};
 pub use report::{Calibration, Claim, FileReport, Report, ReportId, ReportList, ReportOrigin};
 pub use resources::{
     Asked, Finding, Held, JobExamined, JobProcess, JobResources, Look, WorktreeOnDisk,

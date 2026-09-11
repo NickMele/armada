@@ -184,3 +184,26 @@ fn a_reviewed_and_a_verdict_are_read_off_the_same_review_independently() {
     assert_eq!(read.verdicts[0].by.as_written(), "alice");
     assert_eq!(read.verdicts[0].verdict, ReviewVerdict::Approved);
 }
+
+/// A conversation comment's own address on the forge, carried where the forge
+/// answers one; a comment the reduction printed no sixth field for carries
+/// none.
+#[test]
+fn a_remarks_url_is_carried_where_the_forge_answers_one() {
+    let read = folded(&[
+        String::from("said\t"),
+        String::from(
+            "remark\tIC_1\talice\t2026-09-08T10:00:00Z\tlooks good\thttps://forge.invalid/pull/1#issuecomment-1",
+        ),
+        String::from("remark\tPRR_1\tbob\t2026-09-08T11:00:00Z\tone more thing"),
+    ]);
+    assert_eq!(read.remarks.len(), 2);
+    assert_eq!(
+        read.remarks[0].url.as_ref().map(|url| url.as_written()),
+        Some("https://forge.invalid/pull/1#issuecomment-1")
+    );
+    assert!(
+        read.remarks[1].url.is_none(),
+        "no sixth field, so no address to carry"
+    );
+}

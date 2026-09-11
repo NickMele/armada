@@ -246,6 +246,9 @@ export type JobDetailProps = {
    * told.
    */
   onTakeUpRemarks: (jobId: string, remarks: string[]) => void;
+  /** Open one comment on the forge. `Decide`'s own note on why this is a Job
+   *  id and a comment id, never an address. */
+  onOpenRemarkLink: (jobId: string, remarkId: string) => void;
   /**
    * What the second socket has said. **Opened for every Job that is open**, not
    * on a press: the activity log is a chapter of the step's story and a chapter
@@ -338,6 +341,7 @@ export function JobDetail({
   onRequestChanges,
   onReject,
   onTakeUpRemarks,
+  onOpenRemarkLink,
   onCopied,
   onSaid,
 }: JobDetailProps) {
@@ -643,6 +647,7 @@ export function JobDetail({
             onRequestChanges,
             onReject,
             onTakeUpRemarks,
+            onOpenRemarkLink,
           })
         : render === "finished" && neverAsked
           ? verdictSlotFinished({ job, whole, open, render, recorded, opensRecords, now, claimed, undecided })
