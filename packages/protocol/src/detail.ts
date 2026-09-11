@@ -193,6 +193,14 @@ export type JobDetail = {
    * job holds it whichever way it was allowed.
    */
   allowed_commands?: AllowedCommandRow[];
+  /**
+   * The model a person chose for this job's later steps. Since protocol 11.0.
+   *
+   * **Absent is no choice**: each step runs on the model its workflow gives
+   * it. Present, the next step's drone is spawned on it, and the step running
+   * when it was chosen keeps its own. `set_model` moves it.
+   */
+  model_override?: string;
 };
 
 /**

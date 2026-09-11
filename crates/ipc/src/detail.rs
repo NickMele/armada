@@ -203,6 +203,14 @@ pub struct JobDetail {
     /// [`JobDetail::of`], like `when_blocked`.
     #[serde(default)]
     pub allowed_commands: Vec<crate::AllowedCommandRow>,
+    /// The model a person chose for this Job's later steps. **Since 11.0.**
+    ///
+    /// **Absent is no choice**, and each step runs on the model its workflow
+    /// gives it. Present, the next step's Drone is spawned on it; the step
+    /// running when it was chosen keeps its own. `set_model` moves it. Filled
+    /// after [`JobDetail::of`], like `when_blocked`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_override: Option<String>,
 }
 
 /// Why a Job stopped, and what moves it.
@@ -527,6 +535,7 @@ impl JobDetail {
             when_blocked: None,
             command_waiting: None,
             allowed_commands: Vec::new(),
+            model_override: None,
         }
     }
 }
