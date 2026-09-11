@@ -33,7 +33,7 @@ import type {
   ServerState,
   StartRun,
 } from "@armada/protocol";
-import { span } from "./duration";
+import { absoluteOf, span } from "./duration";
 import { openServerLink } from "./opening";
 
 export const SETUP_PREFIX = "setup:";
@@ -306,6 +306,9 @@ export function useRunSheet(
     },
     slot: {
       jobName: jobTitle,
+      ...(data?.manifest_edited_at === undefined
+        ? {}
+        : { manifestEditedAt: `armada.yml last edited ${absoluteOf(data.manifest_edited_at) ?? "—"}` }),
       groups: data === undefined ? [] : runSheetGroupsOf(data, wide),
       selectedId: selected,
       onSelect: (id) => {

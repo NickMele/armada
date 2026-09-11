@@ -418,13 +418,56 @@ export const FullReadingOpen: Story = {
 // Journey 9's run sheet — #624. `r` opens it, one sheet replaces another, and
 // a server's link never navigates.
 
-/** `r` opens the run sheet, nothing selected. */
+/**
+ * This repository's own `armada.yml` — Setup, Checks and Commands as they are
+ * declared at the root of this repository — read as the Job's frozen
+ * Manifest. A story with an empty rail draws what shipping the wire and
+ * never loading it into a fixture looks like on screen, so this is the real
+ * file rather than a name invented for the story.
+ */
+const ARMADA_RUN_SHEET_READ = {
+  state: "read" as const,
+  jobId: JOB_ID,
+  sheet: {
+    job_id: JOB_ID,
+    setup: [
+      { name: "bootstrap", run: "pnpm install --frozen-lockfile", narrows: false, requires: [], expect_exit_code: 0, destructive: false, frozen: true },
+      { name: "browsers", run: "pnpm -C packages/components exec playwright install chromium --only-shell", narrows: false, requires: [], expect_exit_code: 0, destructive: false, frozen: true },
+    ],
+    checks: [
+      { name: "build", run: "cargo build --workspace --locked", narrows: true, narrow_run: "cargo build --locked -p screens", requires: [], expect_exit_code: 0, destructive: false, frozen: true },
+      { name: "test", run: "cargo nextest run --workspace --exclude acceptance", narrows: true, narrow_run: "cargo nextest run -p screens", requires: [], expect_exit_code: 0, destructive: false, frozen: true },
+      { name: "typecheck", run: "pnpm typecheck", narrows: false, requires: [], expect_exit_code: 0, destructive: false, frozen: true },
+      { name: "bridge_build", run: "pnpm -C apps/desktop build", narrows: false, requires: [], expect_exit_code: 0, destructive: false, frozen: true },
+      { name: "storybook", run: "pnpm -C packages/components build-storybook", narrows: false, requires: [], expect_exit_code: 0, destructive: false, frozen: true },
+      { name: "bridge_test", run: "pnpm bridge-test", narrows: false, requires: [], expect_exit_code: 0, destructive: false, frozen: true },
+      { name: "format", run: "cargo fmt --all --check", narrows: true, narrow_run: "rustfmt --check --edition 2021 packages/screens/src/JobDetail.tsx", requires: ["fmt"], expect_exit_code: 0, destructive: false, frozen: true },
+    ],
+    commands: [
+      { name: "fmt", run: "cargo fmt --all", narrows: false, requires: [], expect_exit_code: 0, destructive: false, frozen: true },
+      { name: "gate", run: "cargo xtask verify-foundations", narrows: false, requires: [], expect_exit_code: 0, destructive: true, frozen: true },
+    ],
+    manifest_edited_at: "2026-09-08T16:40:00Z",
+    worktree_on_disk: true,
+    worktree_differs: false,
+    drone_working: true,
+  },
+};
+
+/** `r` opens the run sheet, nothing selected — Setup, Checks and Commands as
+ * this repository's own `armada.yml` declares them. */
 export const RunOpen: Story = {
   name: "Run sheet open",
-  render: drawing(running),
+  render: () => (
+    <JobDetailFrom
+      fixture={running()}
+      on={{ rehearsal: { ...propsFor(running()).rehearsal, runSheet: ARMADA_RUN_SHEET_READ } }}
+    />
+  ),
   play: async ({ userEvent }) => {
     await userEvent.keyboard("r");
-    await expect(within(document.body).findByRole("dialog", { name: "Run" })).resolves.toBeVisible();
+    const dialog = within(await within(document.body).findByRole("dialog", { name: "Run" }));
+    await expect(dialog.findByText("bridge_test")).resolves.toBeVisible();
   },
 };
 

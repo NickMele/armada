@@ -220,8 +220,11 @@ function servingRows(jobId: string, rehearsal: WorkRehearsal): JobLogReferenceRo
     .filter((server) => server.job_id === jobId && server.phase !== "exited")
     .map((server) => ({
       iconLabel: "Serving",
-      value: server.name,
-      meta: server.phase === "serving" ? "serving" : "starting",
+      // The address, not the name — `WhereRow`'s own rule for a mono value,
+      // and what reads in full beside the link buttons and Stop. The name is
+      // still on the label's tooltip and on the sheet itself.
+      value: server.ports[0] === undefined ? server.serve : `localhost:${server.ports[0].port}`,
+      meta: server.phase === "serving" ? server.name : `${server.name} · starting`,
       separated: true,
       actions: (
         <>
