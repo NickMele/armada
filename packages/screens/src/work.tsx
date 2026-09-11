@@ -220,12 +220,13 @@ function servingRows(jobId: string, rehearsal: WorkRehearsal): JobLogReferenceRo
     .filter((server) => server.job_id === jobId && server.phase !== "exited")
     .map((server) => ({
       iconLabel: "Serving",
-      // The address, not the name — `WhereRow`'s own rule for a mono value,
-      // and what reads in full beside the link buttons and Stop. The name is
-      // still on the label's tooltip and on the sheet itself.
+      // The address, not the name — `WhereRow`'s own rule for a mono value.
+      // **No `meta` beside it**: the shared label column `853da1d9` fixed
+      // wide enough for "Size on disk" leaves this row's value area narrow,
+      // and a note here squeezed the address down to one character before
+      // its own ellipsis. The name is still on the sheet and on hover.
       value: server.ports[0] === undefined ? server.serve : `localhost:${server.ports[0].port}`,
-      meta: server.phase === "serving" ? server.name : `${server.name} · starting`,
-      separated: true,
+      ...(server.phase === "starting" ? { meta: "starting" } : {}),
       actions: (
         <>
           {server.links.map((link) => (
