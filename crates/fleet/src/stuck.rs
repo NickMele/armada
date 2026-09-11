@@ -65,7 +65,7 @@ where
         )
     }
 
-    /// What this Job's Drones reached for and were refused.
+    /// What the Drone on the stopped step reached for and was refused.
     ///
     /// **Read for every stopped Job and not only a `blocked_by_policy` one.**
     /// A Drone denied the command it needed goes on to escalate as `stalled` or
@@ -73,12 +73,18 @@ where
     /// classification already named a policy would be missing from exactly the
     /// Jobs the classification got wrong.
     ///
+    /// **Scoped to the step this Job stopped on, not every step it ever ran.**
+    /// A Job's transcripts span its whole run, and a refusal on an earlier step
+    /// that passed is not evidence for why the current step is stuck —
+    /// [`stopped_step`] is the same reading [`Stuck::of`](core_model::Stuck::of)
+    /// makes of the record, so the two cannot disagree about which step this is.
+    ///
     /// **The Drone's process is long gone by the time a person opens this.**
     /// The events are not in memory and nothing on the record kept them; the
     /// file under `.armada/transcripts/` is what survives, and the Job's log is
     /// what names it.
     async fn refused(&self, job: &Job) -> Refusals {
-        crate::transcript::refusals(&self.host().repo_root, &job.handle()).await
+        crate::transcript::refusals(&self.host().repo_root, &job.handle(), stopped_step(job)).await
     }
 
     /// What Fleet knows about this Job that its record does not say.
@@ -150,4 +156,15 @@ fn checks_passed(ran: &[(StepId, Vec<StepCheck>)], step: Option<&StepId>) -> boo
         .filter(|(id, _)| id == step)
         .flat_map(|(_, checks)| checks.iter())
         .all(|check| check.outcome.advances())
+}
+
+/// The step a person opening this Job asking why it stopped is asking about.
+///
+/// `Job::stopped_on`'s step where one stopped, or the Job's current step for a
+/// Job-level escalation — `stalled` and `interrupted` stop no step, and it is
+/// still the step the Job is holding.
+fn stopped_step(job: &Job) -> Option<&StepId> {
+    job.stopped_on()
+        .map(|(step, _)| step)
+        .or_else(|| job.current_step().map(|step| step.step_id()))
 }
