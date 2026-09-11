@@ -102,11 +102,10 @@ import { againOf, useShowAgain, type ShowAgainCall } from "./again";
 import { span } from "./duration";
 import { ordered } from "./facts";
 import { headingOf, Unrenderable } from "./heading";
-import { detailOf, holdingOf, logOf, lookOf, turnsOf, type FoldedReads } from "./mine";
+import { detailOf, holdingOf, logOf, lookOf, turnsOf } from "./mine";
 import { phasesOf } from "./phases";
 import { checkEntryId, useRunSheet, type RunSheetSlice } from "./rehearsal";
-import { neverAsksAPerson, verdictSlotAtGate, verdictSlotFinished } from "./verdict";
-import { verdictSlotAfterAnswer } from "./verdict-answered";
+import { verdictSlotOf } from "./verdict-answered";
 // Which Check's output `o` opens. **The same call the Checks chapter's own act
 // makes**, so the key and the control cannot open different files.
 import { outputOf } from "./gates";
@@ -121,6 +120,7 @@ import { LOOK_FAILED, NOTHING_HAPPENED_YET, latestOf, movesOf, nothingToAsk, sum
 import { briefOf, whyNoBrief, workOf, workRehearsalOf } from "./work";
 
 export type { ConfirmableAct, JobAct } from "./Acts";
+import type { FoldedReads } from "./mine";
 export type { FoldedReads } from "./mine";
 export { renderFor } from "./render";
 export type { Render } from "./render";
@@ -373,42 +373,34 @@ export function JobDetail({
   // `null` means the one Fleet says is current, so a Job that moves on carries
   // the reader with it until they choose a step themselves.
   const [selected, setSelected] = useState<string | null>(null);
-  // A selection belongs to the Job it was made in. Carried into the next Job it
-  // would name a step that Job may not have.
   useEffect(() => setSelected(null), [job.id]);
 
   // Which sheet is open, or none. **One value rather than two booleans**: the
   // two cannot both be open, and a pair of flags is a state that says they can.
-  // Dropped with the Job, as every reading of one Job is.
   const [sheet, setSheet] = useState<OpenSheet>(null);
   useEffect(() => setSheet(null), [job.id]);
 
   // Where the log's reading was held, and what has arrived since. **The tail is
   // not followed while a sheet is open**: a stream that scrolls itself cannot
   // be read. `held` is how many rows the step had when the reading was taken,
-  // and `Jump to now` takes it again.
+  // and `Jump to now` takes it again. No reset effect: `closeSheet` clears it.
   const [held, setHeld] = useState<HeldAt | null>(null);
-  const runHook = useRunSheet({ ...rehearsal, jobId: job.id, jobTitle: job.title, sheet, now, setSheet, onSaid });
 
-  // Whether the report dialog is up. **Here rather than in `Acts`**, because
-  // two controls open it — the Job header's menu entry and `b` — and the
-  // keyboard is bound at this level. Dropped with the Job for the reason a
-  // selection is: a half-written report is about the Job it was written on.
+  // Whether the report dialog is up. Two controls open it — the Job header's
+  // menu entry and `b` — and the keyboard is bound at the screen's level.
   const [reporting, setReporting] = useState(false);
   useEffect(() => setReporting(false), [job.id]);
 
-  // Whether the raise dialog is up, on `reporting`'s terms and for its reasons:
-  // two controls open it — the header's button and `B` — and the keyboard is
-  // bound at this level. Dropped with the Job, because a figure half typed is
-  // about the Job it was typed on.
+  // Whether the raise dialog is up, on `reporting`'s terms: the header's
+  // button and `B` both open it.
   const [raising, setRaising] = useState(false);
   useEffect(() => setRaising(false), [job.id]);
 
   // Whether the turn-cap dialog is up. Its own state beside the cost cap's:
-  // `budget_hold` offers one control or the other, never both, and one flag
-  // would open whichever dialog happened to be mounted.
+  // `budget_hold` offers one control or the other, never both.
   const [raisingTurns, setRaisingTurns] = useState(false);
   useEffect(() => setRaisingTurns(false), [job.id]);
+  const runHook = useRunSheet({ ...rehearsal, jobId: job.id, jobTitle: job.title, sheet, now, setSheet, onSaid });
 
   // The diff, for every Job that is open rather than only for one at review.
   // **A produced file opens to what it actually wrote**, and it did that on one
@@ -646,47 +638,34 @@ export function JobDetail({
         });
 
   // The verdict sheet's slot: `Decide`'s place at the gate, and the finished
-  // Job's own place where the workflow never asked anybody anything. Neither
-  // is drawn without an open step — a Job with no steps has nothing this
-  // screen is built to read.
-  const neverAsked = neverAsksAPerson(whole?.steps ?? []) === true;
-  // Scoped the same way the Checks chapter's own read is, and for the same
-  // reason: a reader may have navigated to a different step, and
-  // `stuck.undecided` is not that step's reason for anything.
-  const undecided = whole?.stuck?.step_id === open?.step_id ? whole?.stuck?.undecided : undefined;
+  // Job's own place, whichever of the three arrangements the render is —
+  // `verdictSlotOf`, in `verdict-answered.tsx`.
   const atGate = render === "reviewing";
   const question = questionOf(whole, job.id, now, stale, acting, onAnswer);
-  const verdictSlot =
-    open === undefined
-      ? undefined
-      : render === "reviewing"
-        ? verdictSlotAtGate({
-            job,
-            whole,
-            open,
-            render,
-            recorded,
-            opensRecords,
-            now,
-            claimed,
-            undecided,
-            onNeedMaterial,
-            onNeedRemarks,
-            stale,
-            deciding,
-            onMergePullRequest,
-            onResolvePullRequestConflict,
-            onApproveReview,
-            onRequestChanges,
-            onReject,
-            onTakeUpRemarks,
-            onOpenRemarkLink,
-            onOpenPullRequest,
-            onSaid,
-          })
-        : render === "finished" && neverAsked
-          ? verdictSlotFinished({ job, whole, open, render, recorded, opensRecords, now, claimed, undecided })
-          : render === "finished" ? verdictSlotAfterAnswer({ job, whole, recorded, opensRecords, now, notes: noted?.notes ?? [], onOpenPullRequest }) : undefined;
+  const verdictSlot = verdictSlotOf({
+    job,
+    whole,
+    open,
+    render,
+    recorded,
+    opensRecords,
+    now,
+    claimed,
+    onNeedMaterial,
+    onNeedRemarks,
+    stale,
+    deciding,
+    onMergePullRequest,
+    onResolvePullRequestConflict,
+    onApproveReview,
+    onRequestChanges,
+    onReject,
+    onTakeUpRemarks,
+    onOpenRemarkLink,
+    onOpenPullRequest,
+    onSaid,
+    notes: noted?.notes ?? [],
+  });
 
   // One way to answer a command the Drone was not given, for both places a
   // person meets one: the command it is waiting on, and a refused row.

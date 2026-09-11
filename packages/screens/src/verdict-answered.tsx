@@ -47,7 +47,16 @@ import { absoluteOf, span } from "./duration";
 import { checkRow, saidOf, iconOf } from "./checks";
 import { checksOf, didNotPass, mechanicalRunsOf, panelsOf } from "./gates";
 import { basename, keptOf, type Opens } from "./phases";
-import { cameBackOf, criteriaOf, leftAloneOf, neverDelivers } from "./verdict";
+import {
+  cameBackOf,
+  criteriaOf,
+  leftAloneOf,
+  neverAsksAPerson,
+  neverDelivers,
+  verdictSlotAtGate,
+  verdictSlotFinished,
+  type VerdictSlotAtGateArgs,
+} from "./verdict";
 import { openPullRequest, type OpenPullRequest } from "./opening";
 import { LANDED } from "./Row";
 
@@ -445,4 +454,31 @@ export function verdictSlotAfterAnswer({
       recordNote={yourAnswerOf(gate, landed)}
     />
   );
+}
+
+/**
+ * The verdict sheet's slot, wherever the render is — the three arrangements
+ * `JobDetail.tsx` used to choose between inline. **Not this file's whole
+ * subject** — `verdictSlotAtGate` and `verdictSlotFinished` still read one
+ * step, and this arrangement still reads the whole Job — but which of the
+ * three answers a given moment is one question, asked once, from `JobDetail`.
+ */
+export type VerdictSlotOfArgs = Omit<VerdictSlotAtGateArgs, "undecided" | "open"> &
+  Pick<VerdictSlotAfterAnswerArgs, "notes"> & {
+    /** `undefined` where the panel has no open step to answer for. */
+    open: StepDetail | undefined;
+  };
+
+export function verdictSlotOf({ open, render, whole, notes, ...rest }: VerdictSlotOfArgs): ReactNode {
+  if (open === undefined) return undefined;
+  const undecided = whole?.stuck?.step_id === open.step_id ? whole?.stuck?.undecided : undefined;
+  if (render === "reviewing") {
+    return verdictSlotAtGate({ ...rest, whole, open, render, undecided });
+  }
+  if (render !== "finished") return undefined;
+  if (neverAsksAPerson(whole?.steps ?? []) === true) {
+    return verdictSlotFinished({ ...rest, whole, open, render, undecided });
+  }
+  const { job, recorded, opensRecords, now, onOpenPullRequest } = rest;
+  return verdictSlotAfterAnswer({ job, whole, recorded, opensRecords, now, notes, onOpenPullRequest });
 }
