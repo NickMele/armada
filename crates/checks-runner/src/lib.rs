@@ -32,5 +32,5 @@ mod serving;
 mod tests;
 
 pub use narrow::{narrowed, Narrowed};
-pub use run::{run, run_until, run_writing, Attempt, Output, Writing};
+pub use run::{run, run_until, run_writing, run_writing_with_env, Attempt, Output, Writing};
 pub use serving::Served;

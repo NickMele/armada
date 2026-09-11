@@ -128,6 +128,7 @@ async fn a_stopped_run_ends_its_group_and_keeps_what_printed() {
         &dir,
         Duration::from_secs(60),
         crate::run::Writing::Nowhere,
+        &[],
         tokio::time::sleep(Duration::from_millis(300)),
     )
     .await;
@@ -156,6 +157,7 @@ async fn an_appended_log_keeps_what_was_there() {
         anywhere(),
         Duration::from_secs(10),
         crate::run::Writing::Appending(&live),
+        &[],
         std::future::pending(),
     )
     .await;

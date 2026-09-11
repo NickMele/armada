@@ -114,8 +114,34 @@ pub async fn run_writing(
     budget: Duration,
     live: Option<&Path>,
 ) -> Attempt {
+    run_writing_with_env(command, worktree, budget, live, &[]).await
+}
+
+/// [`run_writing`], with additional environment variables set on the spawned
+/// process.
+///
+/// **Additive over whatever this process already has, never a clear.** Unlike
+/// a Drone's own spawn — `crate::drone::environment`'s `env_clear` argument —
+/// a Check or a preparation command already inherits Fleet's own environment,
+/// so setting `ARMADA_PORT_<name>` here is one more variable on top of that
+/// rather than a second policy about what a spawned process sees.
+pub async fn run_writing_with_env(
+    command: &str,
+    worktree: &Path,
+    budget: Duration,
+    live: Option<&Path>,
+    env: &[(String, String)],
+) -> Attempt {
     let writing = live.map_or(Writing::Nowhere, Writing::Fresh);
-    run_until(command, worktree, budget, writing, std::future::pending()).await
+    run_until(
+        command,
+        worktree,
+        budget,
+        writing,
+        env,
+        std::future::pending(),
+    )
+    .await
 }
 
 /// Where a run's output is written as it arrives.
@@ -129,16 +155,23 @@ pub enum Writing<'p> {
     Appending(&'p Path),
 }
 
-/// [`run_writing`], ended early the moment `stop` completes.
+/// [`run_writing_with_env`], ended early the moment `stop` completes.
 ///
 /// **A stop ends the whole group**, for the budget's reason: the test runner a
 /// command started would otherwise outlive the person pressing Stop. What
 /// printed before it is kept, and the exit is the signal that ended it.
+///
+/// **The one function every other entry point in this module delegates to.**
+/// `run`, `run_writing` and `run_writing_with_env` are this with `Writing::
+/// Nowhere` or a `Fresh` file and a `stop` that never completes; a run started
+/// from the sheet is this with `Writing::Appending`, a Job's own port
+/// environment, and a stop a person's own press can complete.
 pub async fn run_until<S: std::future::Future<Output = ()>>(
     command: &str,
     worktree: &Path,
     budget: Duration,
     writing: Writing<'_>,
+    env: &[(String, String)],
     stop: S,
 ) -> Attempt {
     let Some((program, args)) = split(command) else {
@@ -149,6 +182,10 @@ pub async fn run_until<S: std::future::Future<Output = ()>>(
     spawning
         .args(&args)
         .current_dir(worktree)
+        .envs(
+            env.iter()
+                .map(|(name, value)| (name.as_str(), value.as_str())),
+        )
         // A Check that waits on input waits forever, and the budget would be
         // the only thing that ended it. Null is what makes it fail fast.
         .stdin(Stdio::null())
