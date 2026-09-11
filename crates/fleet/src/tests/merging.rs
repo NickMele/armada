@@ -19,7 +19,7 @@ use std::time::Duration;
 use adapter_traits::{Landing, NotMerged, RepositoryStanding};
 use config::Manifest;
 use core_model::{JobId, JobStatus, StepId, StepState};
-use testkit::{FakeHarness, FakeVcs, FakeWorkProduct, Merging};
+use testkit::{Delivered, FakeHarness, FakeVcs, FakeWorkProduct, Merging};
 
 use crate::adrift::Adrift;
 use crate::daemon::Fleet;
@@ -123,6 +123,50 @@ async fn landed(fleet: &Fixture, job_id: &JobId) -> Option<Landing> {
         .delivery_for(job_id)
         .expect("the delivery reads back")
         .landed
+}
+
+/// **One composition, two readers — `#665`.** The pull request's own Markdown
+/// body and the structured review `get_job` will serve both come out of the
+/// one call `opened_for_review` makes; this pins that the four sections
+/// stored for the wire are not a second, independent telling of the same
+/// story.
+#[tokio::test]
+async fn the_pull_request_and_the_stored_review_come_from_one_composition() {
+    let home = TempDir::new();
+    let fleet = a_fleet_holding_the_work_for_a_person(&home);
+    let job_id = at_the_gate_having_delivered(&fleet, &home).await;
+
+    let opened = fleet
+        .vcs()
+        .delivered()
+        .into_iter()
+        .find_map(|event| match event {
+            Delivered::OpenedForReview { review, .. } => Some(review),
+            _ => None,
+        })
+        .expect("the delivering step opened a pull request");
+
+    let stored = fleet
+        .store()
+        .lock()
+        .await
+        .review_for(&job_id)
+        .expect("the review reads back");
+    assert!(!stored.is_empty(), "the delivering step composed a review");
+
+    for section in [
+        stored.why.as_deref(),
+        stored.outcome.as_deref(),
+        stored.risks.as_deref(),
+        stored.evidence.as_deref(),
+    ] {
+        let section = section.expect("every section is composed together");
+        assert!(
+            opened.body().contains(section.trim()),
+            "the pull request's body does not carry the same words the wire \
+             holds: {section:?}"
+        );
+    }
 }
 
 /// The whole of what the issue asked for: a person presses, Fleet merges, and

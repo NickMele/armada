@@ -14,11 +14,11 @@ use core_model::JobId;
 use crate::error::{fault, LoadJobError, WriteError};
 use crate::open::Store;
 
-/// Version 47 — the model a person chose for a Job's later steps.
+/// Version 48 — the model a person chose for a Job's later steps.
 ///
 /// **Nullable, and no `DEFAULT`**: `NULL` is nobody having chosen, which is
 /// every Job written before this and most written after it.
-pub(crate) const V47: &str = r#"
+pub(crate) const V48: &str = r#"
 ALTER TABLE jobs ADD COLUMN model_override TEXT;
 "#;
 

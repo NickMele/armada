@@ -6,9 +6,18 @@
 // wire actually calls "cannot say".
 
 import { describe, expect, it } from "vitest";
-import type { StepDetail, Submitted } from "@armada/protocol";
+import type { JobDetail as JobWhole, StepDetail, Submitted } from "@armada/protocol";
 
-import { cameBackOf, leftAloneOf, neverAsksAPerson, neverDelivers, provesItNoteOf, provesItOf } from "./verdict";
+import {
+  briefOf,
+  cameBackOf,
+  leftAloneOf,
+  neverAsksAPerson,
+  neverDelivers,
+  provesItNoteOf,
+  provesItOf,
+  risksOf,
+} from "./verdict";
 
 function step(over: Partial<StepDetail> = {}): StepDetail {
   return {
@@ -192,6 +201,42 @@ describe("what came back, and what it left alone", () => {
 
   it("names the absence where the submission drew none", () => {
     expect(leftAloneOf({ ...claim, not_claimed: undefined })).toMatch(/drew no boundary/);
+  });
+});
+
+/** A `whole` fixture carrying only the served review — the one field these two read. */
+function withReview(review: JobWhole["review"]): JobWhole {
+  return { review } as JobWhole;
+}
+
+describe("the served review — one builder, issue 665", () => {
+  it("reads the brief Fleet composed, with the pull request's Markdown stripped", () => {
+    const whole = withReview({
+      why: "The **export** button the brief asked for, over `src/export.ts`.",
+      outcome: "",
+      risks: "",
+      evidence: "",
+    });
+    expect(briefOf(whole)).toBe("The export button the brief asked for, over src/export.ts.");
+  });
+
+  it("is absent where Fleet has composed no review yet", () => {
+    expect(briefOf(withReview(undefined))).toBeUndefined();
+    expect(briefOf(null)).toBeUndefined();
+  });
+
+  it("reads the risks Fleet composed, trimmed and with Markdown stripped", () => {
+    const whole = withReview({
+      why: "",
+      outcome: "",
+      risks: "Every line below is something Fleet ran.\n\n",
+      evidence: "",
+    });
+    expect(risksOf(whole)).toBe("Every line below is something Fleet ran.");
+  });
+
+  it("is absent where the review carries nothing to say", () => {
+    expect(risksOf(withReview(undefined))).toBeUndefined();
   });
 });
 

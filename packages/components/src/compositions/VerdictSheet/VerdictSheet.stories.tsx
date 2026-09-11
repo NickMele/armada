@@ -49,6 +49,15 @@ const PROVES_IT_ROWS = [
 export const AtAGate: Story = {
   args: {
     title: "Declare undeclared test files and add a gate rule to prevent recurrence",
+    // `review.why` and `review.risks`, the same words the pull request's own
+    // "Why was the change needed?" and "Risks" sections carry — one builder,
+    // `#665`.
+    brief:
+      "Three test files under src/tests/ were never declared in the suite, so their cases never " +
+      "ran. Declare them, and add a gate rule that fails the next file like it.",
+    risks:
+      "Every line below is something Fleet ran, not something the agent reported. What no Check " +
+      "covered is not covered here either.",
     criteria: [
       "Every test file under src/tests/ is declared and its cases run as part of the suite.",
       "A gate rule fails the next undeclared file.",
@@ -136,6 +145,15 @@ export const PullRequestOpen: Story = {
 export const GateWithoutAPullRequest: Story = {
   args: {
     title: "Decide how Fleet should handle a review comment too long for a Drone's brief",
+    // Composed with no pull request behind it — a workflow that never
+    // delivers still reaches a person at its gate, and says the same things
+    // there. `#665`.
+    brief:
+      "A comment longer than what a Drone's brief leaves room for is dropped today, silently. " +
+      "Propose a rule for what Fleet does instead, and what it should be measured against.",
+    risks:
+      "Every line below is something Fleet ran, not something the agent reported. What no Check " +
+      "covered is not covered here either.",
     criteria: ["Propose a rule, and say what it should be measured against."],
     cameBack:
       "A two-page draft. Fleet refuses a merge press whose chosen comments would not fit in " +
@@ -270,6 +288,15 @@ export const FinishedAfterYouAnswered: Story = {
     // (UTC-4) for the wire instant Fleet recorded, `2026-09-11T05:29:16.834Z`.
     header: { done: "Done", when: "approved Sep 11, 2026, 1:29 AM" },
     title: "Refuse a merge press whose chosen comments won't fit the brief",
+    // `review.why` and `review.risks` for this real Job — the same words its
+    // pull request carries, one builder, `#665`.
+    brief:
+      "A press whose chosen remarks render past what a Drone's brief leaves room for silently " +
+      "drops the ones that do not fit. Refuse the press instead, and name which comments are too " +
+      "large so a person can choose fewer.",
+    risks:
+      "Every line below is something Fleet ran, not something the agent reported. What no Check " +
+      "covered is not covered here either.",
     criteria: [
       // `${545}` rather than the literal `#545`: three hex digits after a `#`
       // reads as a colour to `xtask`'s off-contract-value rule, the same

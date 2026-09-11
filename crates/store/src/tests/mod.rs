@@ -33,6 +33,7 @@ mod reconstruct;
 mod report;
 mod resolving;
 mod retain;
+mod review;
 mod revision;
 mod roundtrip;
 mod showing;

@@ -280,7 +280,19 @@ where
         // stop. `gate_undecided` says the gate could not decide; only this says
         // what about.
         self.noted_undecided(&job_id, &step, &ruling);
+        let holds_for_review = matches!(ruling, Ruling::HeldForReview { .. });
         self.act_on(&ruling, &job_id, &step, working).await?;
+        // **After `act_on`, and reloaded**, on the step this ruling holds for
+        // a person. The delivering step composes its own review at entry —
+        // `crate::delivery::opened_for_review` — and is skipped here; every
+        // other gate has no pull request to draw one from, and this is where
+        // the review area's text comes from instead. The reload is what lets
+        // `evidence_of` say this step "is waiting for a person" rather than
+        // the state it held before `act_on` moved it there — `#665`.
+        if holds_for_review {
+            let held = self.load(&job_id).await?;
+            self.compose_review_at_gate(&held, &step, &worktree).await;
+        }
         Ok(Settled::ruling(ruling))
     }
 

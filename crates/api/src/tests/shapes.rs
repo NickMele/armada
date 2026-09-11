@@ -241,6 +241,9 @@ pub fn detail(job: JobSummary) -> JobDetail {
         // Absent for the same reason: whether a press could run is read off a
         // worktree and a Manifest, and this daemon has neither.
         show_again: None,
+        // Absent for the same reason again: the review is composed and kept
+        // beside a store's own record, and this daemon holds no store.
+        review: None,
     }
 }
 

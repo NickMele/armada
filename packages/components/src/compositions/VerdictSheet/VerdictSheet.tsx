@@ -43,11 +43,17 @@ export type VerdictSheetProps = {
   header?: { done: ReactNode; when: ReactNode };
   /** What was asked for — the Job's own title. */
   title: ReactNode;
+  /**
+   * The brief — Fleet's own `why` section, the same words the pull request's
+   * "Why was the change needed?" carries. Absent where Fleet has composed no
+   * review yet, which draws as the title alone, unchanged from before `#665`.
+   */
+  brief?: ReactNode;
   /** The acceptance criteria the Job was frozen with, one line each. */
   criteria: readonly ReactNode[];
   /** What stands in for the criteria list where the Job carries none. */
   criteriaAbsent?: ReactNode;
-  /** What came back — the Drone's own claim, `Submitted.claimed`. */
+  /** What the Drone says it did — the Drone's own claim, `Submitted.claimed`. */
   cameBack: ReactNode;
   /** The deliverable this step kept, as a control that opens it. */
   deliverable?: ReactNode;
@@ -61,7 +67,13 @@ export type VerdictSheetProps = {
   provesIt: ReactNode;
   /** The line under the checklist, where a step's evidence is the whole of it. */
   provesItNote?: ReactNode;
-  /** What it left alone — `Submitted.not_claimed`, or why there is nothing here. */
+  /**
+   * What nothing checked, and what the base carries that this Job did not
+   * write — Fleet's own `risks` section, the same words the pull request's
+   * "Risks" carries. Absent where Fleet has composed no review yet.
+   */
+  risks?: ReactNode;
+  /** What the Drone says it left alone — `Submitted.not_claimed`, or why there is nothing here. */
   leftAlone: ReactNode;
   /** The figures, in the order the drawing runs them. */
   figures: readonly VerdictFigure[];
@@ -76,6 +88,7 @@ export type VerdictSheetProps = {
 export function VerdictSheet({
   header,
   title,
+  brief,
   criteria,
   criteriaAbsent,
   cameBack,
@@ -83,6 +96,7 @@ export function VerdictSheet({
   pullRequest,
   provesIt,
   provesItNote,
+  risks,
   leftAlone,
   figures,
   note,
@@ -99,6 +113,7 @@ export function VerdictSheet({
       )}
       <Block label="What you asked for">
         <p className="armada-verdict__lede">{title}</p>
+        {brief === undefined ? null : <p className="armada-verdict__said">{brief}</p>}
         {criteria.length === 0 ? (
           criteriaAbsent === undefined ? null : (
             <p className="armada-verdict__said">{criteriaAbsent}</p>
@@ -112,7 +127,7 @@ export function VerdictSheet({
         )}
       </Block>
 
-      <Block label="What came back">
+      <Block label="What the Drone says it did">
         <p className="armada-verdict__said">{cameBack}</p>
         {deliverable === undefined ? null : (
           <div className="armada-verdict__document">{deliverable}</div>
@@ -123,6 +138,12 @@ export function VerdictSheet({
         <Block label="The pull request">{pullRequest}</Block>
       )}
 
+      {risks === undefined ? null : (
+        <Block label="What nothing checked">
+          <p className="armada-verdict__said">{risks}</p>
+        </Block>
+      )}
+
       <Block label="What proves it">
         {provesIt}
         {provesItNote === undefined ? null : (
@@ -130,7 +151,7 @@ export function VerdictSheet({
         )}
       </Block>
 
-      <Block label="What it left alone">
+      <Block label="What the Drone says it left alone">
         <p className="armada-verdict__said">{leftAlone}</p>
       </Block>
 

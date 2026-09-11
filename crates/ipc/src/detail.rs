@@ -211,6 +211,38 @@ pub struct JobDetail {
     /// after [`JobDetail::of`], like `when_blocked`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_override: Option<String>,
+    /// The review Fleet composed at this Job's gate — the same text a pull
+    /// request carries, where this Job has one. **Since 10.11**, and absent
+    /// from a Fleet older than that, which a reader draws as no review at all
+    /// rather than a Job that changed nothing.
+    ///
+    /// **One builder.** `crates/fleet/src/review.rs` composes this and the
+    /// pull request's Markdown body from the one reading of the record; the
+    /// review area draws these sections instead of assembling its own copy of
+    /// them — `#665`.
+    ///
+    /// **Absent is a Job that has not reached a gate yet**, not an empty
+    /// review: a Job still running, or one that finished with no `human_always`
+    /// step at all, carries nothing here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review: Option<JobReview>,
+}
+
+/// The review Fleet composed, in the four parts it is made of. No heading
+/// crosses — a heading is how a surface draws a section, not what the section
+/// is, and the pull request's own Markdown adds its headings back at render
+/// time from the same four parts.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JobReview {
+    /// The brief, in the requester's own words.
+    pub why: String,
+    /// What the Job's worktree changed, as far as a diff can say it.
+    pub outcome: String,
+    /// What nothing checked, and what the base carries that this Job did not
+    /// write, where there was a base to ask.
+    pub risks: String,
+    /// Every step and every Check that ran against it, with its outcome.
+    pub evidence: String,
 }
 
 /// Why a Job stopped, and what moves it.
@@ -468,6 +500,7 @@ impl JobDetail {
         write_scope_overlaps: Option<Vec<ScopeOverlap>>,
         delivery: Option<JobDelivery>,
         spend: Option<JobSpend>,
+        review: Option<JobReview>,
     ) -> JobDetail {
         JobDetail {
             // **`asking` from the question this call was already handed**,
@@ -536,6 +569,7 @@ impl JobDetail {
             command_waiting: None,
             allowed_commands: Vec::new(),
             model_override: None,
+            review,
         }
     }
 }

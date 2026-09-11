@@ -72,6 +72,9 @@ mod report;
 mod resolving;
 /// Giving a Job's resources back without giving up its record.
 mod retain;
+/// The review Fleet composed at a Job's gate — the one builder's text, kept
+/// beside the Job rather than only in the pull request it may also carry.
+mod review;
 mod revision;
 mod row;
 mod schema;
@@ -103,6 +106,7 @@ pub use read::{Loaded, RowIdentity, StatusRepair, UnreadableRow};
 pub use report::Report;
 pub use resolving::{NamedJob, ResolveJobError};
 pub use retain::Retained;
+pub use review::Review;
 pub use showing::KeptFrame;
 pub use shown_again::{ShownAgain, SpecNamed};
 pub use spend::{DroneSpend, Spend};

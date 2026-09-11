@@ -201,6 +201,41 @@ export type JobDetail = {
    * when it was chosen keeps its own. `set_model` moves it.
    */
   model_override?: string;
+  /**
+   * The review Fleet composed at this job's gate — the same text a pull
+   * request carries, where this job has one. Since protocol 10.11.
+   *
+   * **One builder.** `crates/fleet/src/review.rs` composes this and the pull
+   * request's Markdown body from the one reading of the record; the review
+   * area draws these sections instead of assembling its own copy of them —
+   * `#665`.
+   *
+   * **Absent is a job that has not reached a gate yet**, not an empty review:
+   * a job still running, or one that finished with no `human_always` step at
+   * all, carries nothing here. It is also every job read from a Fleet older
+   * than 10.11, which draws the same as one that has not reached a gate.
+   */
+  review?: JobReview;
+};
+
+/**
+ * The review Fleet composed, in the four parts it is made of. No heading
+ * crosses — a heading is how a surface draws a section, not what the section
+ * is, and the pull request's own Markdown adds its headings back at render
+ * time from the same four parts. `crates/ipc/src/detail.rs`.
+ */
+export type JobReview = {
+  /** The brief, in the requester's own words. */
+  why: string;
+  /** What the job's worktree changed, as far as a diff can say it. */
+  outcome: string;
+  /**
+   * What nothing checked, and what the base carries that this job did not
+   * write, where there was a base to ask.
+   */
+  risks: string;
+  /** Every step and every Check that ran against it, with its outcome. */
+  evidence: string;
 };
 
 /**
