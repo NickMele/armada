@@ -86,6 +86,11 @@ pub struct Forgotten {
     pub drone_process: usize,
     /// The commands a person allowed for the Job, one row each.
     pub allowed_commands: usize,
+    /// The port span the Job's worktree held. One row while the Job holds a
+    /// claim, none for a Job that declared no `ports:` or already released
+    /// one at teardown — see `docs/concepts/fleet.md`, *Ports*: forgetting is
+    /// the safety net behind that release, not the release itself.
+    pub port_claims: usize,
     /// Rows removed from a table this build has no field for.
     ///
     /// Always zero today, and a test says so. It exists because the delete is
@@ -125,6 +130,7 @@ impl Forgotten {
             "job_drone_spend" => &mut self.drone_spend,
             "job_remarks_taken_up" => &mut self.remarks_taken_up,
             "job_allowed_commands" => &mut self.allowed_commands,
+            "port_claims" => &mut self.port_claims,
             _ => return None,
         })
     }

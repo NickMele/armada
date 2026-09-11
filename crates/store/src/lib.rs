@@ -49,6 +49,8 @@ mod open;
 /// What a step said its work would be, kept after the slot that held it is
 /// gone.
 mod plan;
+/// The span of ports a Job's worktree holds, or a no-Job server run holds.
+mod ports;
 /// Which operating-system process is working a Job, so a restart can ask.
 mod process;
 mod proposing;
@@ -89,6 +91,7 @@ pub use forget::Forgotten;
 pub use migrations::KNOWN_SCHEMA_VERSION;
 pub use open::Store;
 pub use plan::DeclaredPlan;
+pub use ports::{PortClaim, PortClaimant};
 pub use process::DroneProcess;
 pub use proving::Proved;
 pub use read::{Loaded, RowIdentity, StatusRepair, UnreadableRow};

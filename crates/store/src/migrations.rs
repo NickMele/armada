@@ -3,7 +3,7 @@
 //!
 //! **Moved out of `schema.rs`, faithfully.** That file holds `V1`..`V16` and
 //! sits at the 900 lines the gate refuses at — see its own header, and
-//! [`crate::ports::V44`]'s. `MIGRATIONS`, [`KNOWN_SCHEMA_VERSION`],
+//! [`crate::ports::V45`]'s. `MIGRATIONS`, [`KNOWN_SCHEMA_VERSION`],
 //! [`SCHEMA_VERSION_KEY`] and [`tables_pointing_at_a_job`] behave exactly as
 //! they did there; nothing about what they do changed, only where they live.
 //! `V1`..`V16` stay in `schema.rs`, `pub(crate)` so this module can name them
@@ -73,6 +73,7 @@ pub const MIGRATIONS: &[&str] = &[
     crate::showing::V42,
     crate::shown_again::V43,
     crate::allowing::V44,
+    crate::ports::V45,
 ];
 
 /// Every table whose rows belong to one Job, asked of the file rather than
