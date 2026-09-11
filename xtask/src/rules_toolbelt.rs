@@ -15,10 +15,7 @@
 //! **`dispatch_job` is granted, not given, and that is not a mismatch.** The
 //! question here is whether a name can *ever* be rendered, so [`rendered_from`]
 //! reads the whole of `allowlist`'s body and not which branch a name is in.
-//!
-//! **`permission` is served and never granted, and that is not a mismatch
-//! either.** [`OFF_THE_ALLOWLIST`] says why; for it the rule runs the other way,
-//! and refuses the allowlist entry rather than requiring one.
+//! **`permission` is the reverse**: [`OFF_THE_ALLOWLIST`] refuses its entry.
 //!
 //! The two spellings are joined in [`prefixed`] and nowhere else here; the
 //! server half is read from the source rather than written down, in [`server`].

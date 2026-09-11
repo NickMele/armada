@@ -70,15 +70,10 @@ pub enum CommandAnswer {
 ///
 /// # The whole argument stays in the file
 ///
-/// [`Refusal`](crate::Refusal)'s rule, for its reason: [`detail`] is one line,
-/// [`truncated`] and [`length`] say so, and `get_call` serves the rest by
-/// [`call`] — which matters more here, because what a person is being asked to
-/// allow is the whole command and not its first line.
-///
-/// [`detail`]: CommandInFlight::detail
-/// [`truncated`]: CommandInFlight::truncated
-/// [`length`]: CommandInFlight::length
-/// [`call`]: CommandInFlight::call
+/// [`Refusal`](crate::Refusal)'s rule, for its reason: `detail` is one line,
+/// `truncated` and `length` say so, and `get_call` serves the rest by `call` —
+/// which matters more here, because what a person is being asked to allow is
+/// the whole command and not its first line.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommandInFlight {
     /// The harness's id for the call. **What an answer names**, and what makes
