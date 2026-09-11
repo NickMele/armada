@@ -1,0 +1,195 @@
+/* The run sheet — Journey 9's rehearsal, run in the Job's own worktree. Two
+   columns like the diff sheet's rail and patch: the Manifest's own list on the
+   left, the selected entry's control and its output on the right. */
+.armada-run-sheet {
+  display: grid;
+  grid-template-columns: calc(var(--space-12) * 5) minmax(0, 1fr);
+  gap: var(--space-4);
+  height: 100%;
+  min-height: 0;
+}
+
+.armada-run-sheet__rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) 0 var(--space-4) var(--space-4);
+  overflow-y: auto;
+  border-right: var(--border-width) solid var(--border-subtle);
+  min-width: 0;
+}
+
+.armada-run-sheet__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-4) var(--space-4) 0;
+  overflow-y: auto;
+  min-width: 0;
+}
+
+/* --- the rail: Setup, Checks, Commands ----------------------------------- */
+
+.armada-run-sheet__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Clearly distinct from a row beneath it: the same weight, size and tracking
+   the check-runs list already uses for its own heading, so two lists of a
+   Manifest's own commands read as one family. */
+.armada-run-sheet__group-label {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  font-weight: var(--weight-medium);
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+}
+
+.armada-run-sheet__entries {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.armada-run-sheet__entry {
+  padding: var(--space-1) 0;
+}
+
+.armada-run-sheet__entry + .armada-run-sheet__entry {
+  border-top: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-run-sheet__entry-select {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.armada-run-sheet__entry-select:hover {
+  background: var(--bg-hover);
+}
+
+.armada-run-sheet__entry-select:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.armada-run-sheet__entry-select[aria-current="true"] {
+  background: var(--accent-muted);
+}
+
+.armada-run-sheet__entry-name {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+}
+
+.armada-run-sheet__entry-run {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A plain sentence, never a bare tag. */
+.armada-run-sheet__entry-note {
+  margin: 0 var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* --- the main pane: control, output, result, changed files, run list ----- */
+
+.armada-run-sheet__control-empty {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--fg-subtle);
+}
+
+.armada-run-sheet__control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.armada-run-sheet__resolved {
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-well);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.armada-run-sheet__control-acts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.armada-run-sheet__narrow-note {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-run-sheet__running {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.armada-run-sheet__elapsed {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--fg-subtle);
+}
+
+/* Unhued: a rehearsal is not a verdict, and a Check's exit code below the Job
+   never carries status colour. */
+.armada-run-sheet__result {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--fg-default);
+}
+
+.armada-run-sheet__changed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.armada-run-sheet__changed-acts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}

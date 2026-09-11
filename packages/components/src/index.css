@@ -200,3 +200,6 @@
 
 /* Asking a Job to show its work again, and the sets it kept. */
 @import "./compositions/ShownAgain/ShownAgain.css";
+/* Journey 9's rehearsal, run in the Job's own worktree — Setup, Checks and
+   Commands, a control, the streamed output and what a run left behind. */
+@import "./compositions/RunSheet/RunSheet.css";
