@@ -33,6 +33,8 @@ type Fixture = Fleet<FakeHarness, FakeVcs, FakeWorkProduct>;
 /// it is stopped; whole, it exits 3. `format` requires `fmt`, which writes.
 const MANIFEST: &str = r#"version: 1
 id: 01FIXTUREMANIFEST
+ports:
+  storybook: {}
 checks:
   test:
     run: "/bin/sh -c 'echo whole; exit 3'"
@@ -47,6 +49,8 @@ commands:
     run: /usr/bin/true
   fmt:
     run: "/bin/sh -c 'echo formatted > src/lib.rs; echo made > generated.rs'"
+  write_port:
+    run: "/bin/sh -c 'echo ${port.storybook} $ARMADA_PORT_STORYBOOK > port.txt'"
 setup:
   requires: [bootstrap]
 "#;
@@ -463,7 +467,7 @@ async fn the_sheet_lists_what_the_job_froze_and_the_worktrees_version_runs_only_
     };
     assert_eq!(names(&sheet.setup), vec!["bootstrap"]);
     assert_eq!(names(&sheet.checks), vec!["test", "format"]);
-    assert_eq!(names(&sheet.commands), vec!["fmt"]);
+    assert_eq!(names(&sheet.commands), vec!["fmt", "write_port"]);
     assert!(sheet.checks[0].frozen && sheet.checks[0].narrows);
     assert_eq!(sheet.checks[0].narrow_run.as_deref(), Some(NARROWED));
     assert!(sheet.commands[0].frozen, "a frozen Check requires `fmt`");
@@ -561,4 +565,43 @@ async fn a_name_nothing_declares_a_second_run_and_a_narrowing_of_nothing_are_ref
         .await
         .expect_err("already over");
     assert_eq!(again.status(), 409);
+}
+
+/// **A sheet run of a Command sees the Job's own claimed port.** The same
+/// `${port.NAME}` resolution and `ARMADA_PORT_<NAME>` environment the gate's
+/// Checks and `setup.requires` already get — `crate::ports` — reach a
+/// person's own run from the sheet too.
+#[tokio::test]
+async fn a_sheet_run_of_a_command_sees_the_jobs_claimed_port() {
+    let home = TempDir::new();
+    let events = api::Broadcaster::new();
+    let fleet = a_fleet_rehearsing(&home, &events);
+    let (job, tree) = a_job_with_work_in_it(&fleet, &home).await;
+    let claimed_at = fleet.now();
+    fleet
+        .store()
+        .lock()
+        .await
+        .claim_port_span(&store::PortClaim {
+            claimant: store::PortClaimant::Job(job.id().clone()),
+            base: 41_234,
+            width: 8,
+            claimed_at,
+        })
+        .expect("the span is claimed");
+    let mut watching = events.subscribe();
+
+    let underway = Arc::clone(&fleet)
+        .start_rehearsal(job.id(), asked("write_port", false))
+        .await
+        .expect("underway");
+    let record = finished(&mut watching, &underway.id).await;
+
+    assert_eq!(record.ended, "exited 0", "{record:?}");
+    let written = read(&tree, "port.txt");
+    assert_eq!(
+        written.trim(),
+        "41234 41234",
+        "${{port.storybook}} and $ARMADA_PORT_STORYBOOK named the same claim"
+    );
 }
