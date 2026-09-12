@@ -498,6 +498,18 @@ impl fmt::Display for Adrift {
                 "{}'s attachment `{filename}` could not be made ready: {cause}",
                 job.as_str()
             ),
+            Adrift::CommandTimedOut { job: Some(job), waited } => write!(
+                out,
+                "Fleet gave up waiting on this after {waited:?}, which is its own limit and \
+                 not Bridge's — the command was not cancelled and may still be finishing \
+                 against {}, whose log will say so if it lands",
+                job.as_str()
+            ),
+            Adrift::CommandTimedOut { job: None, waited } => write!(
+                out,
+                "Fleet gave up waiting on this after {waited:?}, which is its own limit and \
+                 not Bridge's — the command was not cancelled and may still be finishing"
+            ),
         }
     }
 }
@@ -571,6 +583,7 @@ impl Adrift {
             | Adrift::DroneStillThere { job }
             | Adrift::WorktreeGone { job, .. }
             | Adrift::AttachmentUnreadable { job, .. } => Some(job),
+            Adrift::CommandTimedOut { job, .. } => job.as_ref(),
             Adrift::BootRead(_)
             | Adrift::Reading(_)
             | Adrift::Writing(_)
@@ -704,6 +717,10 @@ impl Error for Adrift {
             // cannot be rather than wrapping a failure — so it prints into the
             // message above and has nothing to chain to.
             | Adrift::NotProposable(_)
+            // A budget that ran out says how long it waited, not what failed
+            // underneath — nothing failed, and what was running is still
+            // running.
+            | Adrift::CommandTimedOut { .. }
             | Adrift::Modelless => None,
             Adrift::NotProposed { cause, .. } => Some(cause),
             Adrift::NoReading { cause, .. }

@@ -155,6 +155,10 @@ const MERGE_NO_TOOL: &str = "fleet.merge_no_tool";
 /// message — which is the honest answer where a guess would send a person to
 /// fix the wrong thing.
 const MERGE_REFUSED: &str = "fleet.merge_refused";
+/// A plain command outran Fleet's own bound on it. **A 500, and never a
+/// caller mistake** — asking again is reasonable, and the command that timed
+/// out may already have landed. `#712`.
+const COMMAND_TIMED_OUT: &str = "fleet.command_timed_out";
 
 impl<H, V, W> Fleet<H, V, W>
 where
@@ -409,6 +413,17 @@ where
                     NotMerged::NoTool { .. } => Refusal::Fault(raised(MERGE_NO_TOOL)),
                     NotMerged::Refused { .. } => Refusal::Fault(raised(MERGE_REFUSED)),
                 }
+            }
+            // Fleet's own bound on a plain command, spent. The message already
+            // says whose limit it was; the wire code is a fault's rather than
+            // any of the other three, because nothing about the request was
+            // wrong and asking again is reasonable.
+            Adrift::CommandTimedOut { job, .. } => {
+                let raised = WireError::raised(COMMAND_TIMED_OUT, said, self.run_id());
+                Refusal::Fault(match job {
+                    Some(job) => raised.about_job(ipc::JobId::from(job)),
+                    None => raised,
+                })
             }
             _ => Refusal::Fault(WireError::raised(FAULT, said, self.run_id())),
         }

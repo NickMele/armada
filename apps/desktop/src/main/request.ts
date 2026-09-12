@@ -22,9 +22,14 @@ import { refusedWith } from "@armada/protocol";
 import { HOST } from "./runtime-file";
 
 /**
- * How long an ordinary command waits before it is a transport failure —
- * margin over the worst queueing measured (`#693`: `GET /jobs` at 18s behind
- * blocking calls now off Fleet's runtime), not a bound Fleet enforces.
+ * How long an ordinary command waits before it is a transport failure.
+ *
+ * **Derived, not guessed.** `#712`: Fleet's own bound on a plain command is
+ * `PROVISIONAL_COMMAND_BUDGET` in `crates/armada/src/serve.rs` — fifteen
+ * seconds — and this is that plus a five-second margin, so a timeout here
+ * means Fleet gave up first and answered in words, the way `MODEL_CALL_MS`
+ * already reads for the two routes with a model call inside them. Nothing
+ * generates this from the Rust constant; the two are coupled by this comment.
  */
 export const COMMAND_MS = 20_000;
 

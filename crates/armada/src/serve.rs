@@ -33,9 +33,9 @@ use adapters::{GitVcs, HeadlessAgent, IssueLookup};
 use config::Roster;
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{
-    detect_ceiling, Allowance, BindConnectProbe, Bytes, CheckBudget, Clock, Concurrency, DryRuns,
-    Fittings, Fleet, Headroom, Host, JudgeBudget, Liveness, Micros, Mint, Noticing, Polling,
-    PortRange, Reclaiming, Spare, StepNorms, SystemClock, TheMachine, UlidMint,
+    detect_ceiling, Allowance, BindConnectProbe, Bytes, CheckBudget, Clock, CommandBudget,
+    Concurrency, DryRuns, Fittings, Fleet, Headroom, Host, JudgeBudget, Liveness, Micros, Mint,
+    Noticing, Polling, PortRange, Reclaiming, Spare, StepNorms, SystemClock, TheMachine, UlidMint,
 };
 use ipc::PROTOCOL_VERSION;
 use store::Store;
@@ -92,6 +92,20 @@ pub const PROVISIONAL_CHECK_BUDGET: Duration = Duration::from_secs(900);
 /// --max-turns 1` and emits no result envelope, so nothing can read what one
 /// cost. A dollar cap there would be enforced by nothing.
 pub const PROVISIONAL_JUDGE_BUDGET: Duration = Duration::from_secs(120);
+
+/// How long a plain command may take — one that only reads and writes the
+/// store, or does a small amount of local work beside it, such as
+/// `approve_review`'s occasional commit and push on a workflow's last step.
+/// Paired with `COMMAND_MS` in `apps/desktop/src/main/request.ts`: Bridge
+/// waits this plus a five-second margin, so a Bridge timeout means Fleet gave
+/// up first and said so — `crates/fleet/src/commanding.rs`'s `CommandBudget`
+/// is what enforces it. `#712`.
+///
+/// **Provisional, replacing rather than repeating `#693`'s finding**: an 18s
+/// `GET /jobs` under load, which is what the old margin was sized against
+/// before `#693` moved Fleet's blocking `git`/`gh` calls off the async
+/// runtime and made that number stop describing the system.
+pub const PROVISIONAL_COMMAND_BUDGET: Duration = Duration::from_secs(15);
 
 /// How long the Job proposer's call may take.
 ///
@@ -779,6 +793,7 @@ fn assemble(
         judge: Arc::new(HeadlessAgent::at(judge_binary)),
         judge_budget: JudgeBudget::of(PROVISIONAL_JUDGE_BUDGET),
         proposer_budget: JudgeBudget::of(PROVISIONAL_PROPOSER_BUDGET),
+        command_budget: CommandBudget::of(PROVISIONAL_COMMAND_BUDGET),
         judge_model,
         proposer_model,
         // The one link shape resolved before dispatch. See

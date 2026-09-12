@@ -563,12 +563,12 @@ async fn a_restart_with_no_note_delivers_the_one_already_waiting() {
 #[tokio::test]
 async fn a_blank_note_is_refused_and_an_absent_one_restarts() {
     let home = TempDir::new();
-    let fleet = a_fleet_with(&home, a_drone_that_leaves(), FakeVcs::new());
+    let fleet = std::sync::Arc::new(a_fleet_with(&home, a_drone_that_leaves(), FakeVcs::new()));
     let job = stopped(&fleet, &home).await;
     until_reaped(&fleet).await;
 
     let refusal = api::Commands::restart_step(
-        &fleet,
+        std::sync::Arc::clone(&fleet),
         ipc::JobId::from(&job),
         Some(ipc::RestartRequested {
             note: String::from("   "),
@@ -583,7 +583,7 @@ async fn a_blank_note_is_refused_and_an_absent_one_restarts() {
         "a refused note restarted the step anyway"
     );
 
-    api::Commands::restart_step(&fleet, ipc::JobId::from(&job), None)
+    api::Commands::restart_step(std::sync::Arc::clone(&fleet), ipc::JobId::from(&job), None)
         .await
         .expect("no note at all is the act it always was");
 }

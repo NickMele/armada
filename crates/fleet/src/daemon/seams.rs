@@ -106,6 +106,11 @@ where
     pub(crate) fn budget(&self) -> CheckBudget {
         self.budget
     }
+    /// How long a plain command may take. See
+    /// [`crate::commanding::CommandBudget`].
+    pub(crate) fn command_budget(&self) -> crate::commanding::CommandBudget {
+        self.command_budget
+    }
     /// What this Job may spend: the composition root's constant, then
     /// `armada.yml`'s `drone.cost_cap_micros_per_job`, then the Job's own
     /// column. `Allowance::at` is where the order is written.
