@@ -25,7 +25,7 @@
 //! second vocabulary that agrees with the log only until something changes.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
-use api::{Observed, Queries, Refusal, Resolved};
+use api::{FramePart, FrameSpan, Observed, Queries, Refusal, Resolved};
 use core_model::JobReference;
 use ipc::{
     AlertList, CallArguments, DroneDetail, DroneId, DroneList, FleetCapacity, FleetHealth,
@@ -706,35 +706,34 @@ where
     ) -> Result<(ipc::KeptFrame, Vec<u8>), Refusal> {
         let id = job_id.to_domain();
         self.load(&id).await.map_err(|why| self.refusal(why))?;
-        let frames = {
-            let store = self.store().lock().await;
-            let mut frames = store
-                .step_frames_every_attempt(&id)
-                .map_err(|why| self.refusal(Adrift::Reading(why)))?;
-            // And every frame a person's press kept, which is the second list
-            // the allowlist is — see `crate::showing_again`.
-            frames.extend(crate::showing_again::pressed_rows(
-                store
-                    .shown_again_every_press(&id)
-                    .map_err(|why| self.refusal(Adrift::Reading(why)))?,
-            ));
-            frames
-        };
+        // Every frame the record holds, including a person's presses — the
+        // second list the allowlist is. `showing::frames_held` composes it.
+        let frames = self.frames_held(&id).await?;
         let (held, bytes) = crate::showing::frame_bytes(&self.host().records_root, &kept, &frames)
             .ok_or_else(|| self.refusal(Adrift::NoSuchFrame { named: kept }))?;
-        // The same row the detail carries, built the one way it is built.
-        Ok((
-            ipc::KeptFrame {
-                attempt: held.attempt,
-                name: held.frame.name.clone(),
-                path: held.frame.path.clone(),
-                bytes: held.frame.bytes,
-                kept: crate::showing::tail(&held.frame.path),
-                side: held.frame.side.into(),
-                digest: held.frame.digest.clone(),
-            },
-            bytes,
-        ))
+        Ok((crate::showing::as_wire(&held), bytes))
+    }
+
+    /// One span of a recording, resolved against the same record.
+    ///
+    /// **[`Self::get_frame`]'s allowlist and a seek instead of a read.** The
+    /// name is resolved before a file is opened, exactly as the whole read
+    /// does; what changes is that a two-minute capture costs the window rather
+    /// than its length. A span past the end of a file that is there is not a
+    /// refusal — the caller answers it as a 416.
+    async fn get_frame_part(
+        &self,
+        job_id: JobId,
+        kept: String,
+        span: FrameSpan,
+    ) -> Result<(ipc::KeptFrame, FramePart), Refusal> {
+        let id = job_id.to_domain();
+        self.load(&id).await.map_err(|why| self.refusal(why))?;
+        let frames = self.frames_held(&id).await?;
+        let (held, part) =
+            crate::showing::frame_part(&self.host().records_root, &kept, &frames, span)
+                .ok_or_else(|| self.refusal(Adrift::NoSuchFrame { named: kept }))?;
+        Ok((crate::showing::as_wire(&held), part))
     }
 
     /// The run sheet and what its runs left — `crate::rehearsing`.

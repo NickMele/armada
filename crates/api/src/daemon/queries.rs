@@ -24,6 +24,38 @@ use ipc::{
     WorkflowSummary, WorktreesHeld,
 };
 
+/// What a caller asked for of a frame's bytes.
+///
+/// **Only the two shapes a media element sends.** A player asks from a byte
+/// to the end, or for the last few so it can read a container's index. A
+/// request naming several spans at once is answered whole instead, because the
+/// multipart body that would carry them is a second encoding nothing on this
+/// seam reads.
+pub enum FrameSpan {
+    /// From this byte through that one, or to the end where there is no last.
+    From { first: u64, last: Option<u64> },
+    /// The last this many bytes.
+    Last(u64),
+}
+
+/// One span of a frame, and what the whole file weighs.
+pub enum FramePart {
+    /// The bytes, the byte they start at, and the file's own length.
+    ///
+    /// **Fewer bytes than were asked for is a legal answer**, and it is the
+    /// one a long span gets. A read that took a whole file into memory to
+    /// answer a range would be the defect this exists to fix, so the
+    /// implementation windows it and the player asks again.
+    Span {
+        first: u64,
+        bytes: Vec<u8>,
+        total: u64,
+    },
+    /// The span begins at or past the end of the file. The length is the whole
+    /// of what a caller can act on, which is what makes it the 416's body.
+    Beyond { total: u64 },
+}
+
 /// Everything a client reads.
 ///
 /// # No `list_jobs` variant that returns a bare list
@@ -381,6 +413,27 @@ pub trait Queries: Send + Sync + 'static {
         job_id: JobId,
         kept: String,
     ) -> impl Future<Output = Result<(KeptFrame, Vec<u8>), Refusal>> + Send;
+
+    /// `get_frame`, a span at a time — what a recording is watched through.
+    ///
+    /// **The same row and the same allowlist, a different amount of it.** Every
+    /// rule [`Queries::get_frame`] states holds: `kept` names a row, the record
+    /// resolves it before a file is opened, and a name no row of this Job
+    /// carries reaches nothing. Its refusals are that method's exactly.
+    ///
+    /// **A long span is windowed rather than honoured.** A player opens a
+    /// recording by asking for everything from byte zero, and a read that
+    /// obeyed would load the file this exists to stop loading. Fewer bytes than
+    /// were asked for is a legal answer, and the player asks again.
+    ///
+    /// A span past the end of a file that is there is no refusal at all: it is
+    /// [`FramePart::Beyond`], which the caller answers as a 416.
+    fn get_frame_part(
+        &self,
+        job_id: JobId,
+        kept: String,
+        span: FrameSpan,
+    ) -> impl Future<Output = Result<(KeptFrame, FramePart), Refusal>> + Send;
 
     /// `list_workflows` — the workflows Fleet holds, with their steps.
     ///

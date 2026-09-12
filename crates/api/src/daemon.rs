@@ -29,7 +29,7 @@ mod queries;
 mod tools;
 
 pub use commands::Commands;
-pub use queries::Queries;
+pub use queries::{FramePart, FrameSpan, Queries};
 pub use tools::{PermissionAnswer, Tools};
 
 use ipc::WireError;

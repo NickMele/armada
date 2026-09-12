@@ -17,7 +17,7 @@ import { page } from "vitest/browser";
 
 import type { FrameRead, KeptFrame } from "@armada/protocol";
 
-import { useFrames, type ReadFrame } from "./frames";
+import { useFrames, type FrameSrc, type ReadFrame } from "./frames";
 import { mount, unmount } from "./mounted";
 
 function frame(over: Partial<KeptFrame> = {}): KeptFrame {
@@ -37,6 +37,15 @@ const got: FrameRead = {
   bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
   type: "image/png",
 };
+
+/**
+ * Where a recording streams from, spelled the way the app spells it.
+ *
+ * **Module scope, because the hook depends on it.** One rebuilt per render
+ * would make `want` a new function every time, which is the loop the stable
+ * host calls exist to prevent.
+ */
+const streamed: FrameSrc = (jobId, kept) => `armada-frame://frame/${jobId}/${kept}`;
 
 /** Every URL handed back, counted. The minting stays the browser's own. */
 let revoked: string[] = [];
@@ -63,7 +72,7 @@ afterEach(() => {
  * here would make a failure ambiguous between the two.
  */
 function Probe({ read, jobId, rows }: { read: ReadFrame; jobId: string; rows: KeptFrame[] }) {
-  const frames = useFrames(read, jobId);
+  const frames = useFrames(read, jobId, streamed);
   useEffect(() => {
     if (rows.length > 0) frames.want(rows);
   }, [rows, frames]);
@@ -237,37 +246,55 @@ test("says it does not know how to draw a kind it cannot place", async () => {
 });
 
 /**
- * **A video over the bound is never asked for.** The record already says what
- * it weighs, so this is decided before `read` is ever called — proved here by
- * asserting `read` was not invoked for it, rather than by anything about what
- * it would have answered.
+ * **A recording is never read, whatever it weighs.** The twenty-mebibyte skip
+ * this replaced was a decision made off `KeptFrame.bytes`; there is no size
+ * here to decide anything, because what a plate gets is an address main
+ * streams a span at a time. Proved by asserting `read` was never called and
+ * that what is held is that address rather than a `blob:`.
  */
-test("holds a video back by its recorded size rather than reading it", async () => {
+test("points at a video rather than reading it, however large it is", async () => {
   const read = vi.fn(async () => got);
   const heavy = frame({
     kept: "implement.1/walkthrough.webm",
     name: "walkthrough.webm",
-    bytes: 21 * 1024 * 1024,
+    bytes: 900 * 1024 * 1024,
   });
   mount(<Probe read={read} jobId="01JOB" rows={[heavy]} />);
   await expect
-    .element(page.getByText("This video is 21.0 MB — too large to read here."))
+    .element(page.getByText("got armada-frame://frame/01JOB/implement.1/walkthrough.webm"))
     .toBeInTheDocument();
   expect(read).not.toHaveBeenCalled();
+  // Nothing was minted for it, so there is nothing to give back either.
+  expect(revoked).toHaveLength(0);
 });
 
-/** A video under the bound is read like anything else. */
-test("reads a video under the bound", async () => {
-  const read: ReadFrame = async () => ({
-    ok: true,
-    bytes: new Uint8Array([1, 2, 3]),
-    type: "video/webm",
-  });
+/** A small one goes the same way: the size decides nothing any more. */
+test("points at a small recording too", async () => {
+  const read = vi.fn(async () => got);
   const light = frame({
     kept: "implement.1/walkthrough.webm",
     name: "walkthrough.webm",
     bytes: 1024,
   });
   mount(<Probe read={read} jobId="01JOB" rows={[light]} />);
+  await expect
+    .element(page.getByText("got armada-frame://frame/01JOB/implement.1/walkthrough.webm"))
+    .toBeInTheDocument();
+  expect(read).not.toHaveBeenCalled();
+});
+
+/**
+ * A recording beside an image: one is pointed at and the other is fetched, in
+ * the same pass over the same step's rows.
+ */
+test("asks only for what it does not stream", async () => {
+  const read = vi.fn(async () => got);
+  const recording = frame({
+    kept: "implement.1/walkthrough.webm",
+    name: "walkthrough.webm",
+    bytes: 41_002,
+  });
+  mount(<Probe read={read} jobId="01JOB" rows={[frame(), recording]} />);
   await expect.element(page.getByText("got a blob")).toBeInTheDocument();
+  expect(read.mock.calls.map((call) => call[1])).toEqual(["show.1/home.png"]);
 });

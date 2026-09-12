@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import "./FramesShown.css";
 
@@ -205,17 +205,7 @@ function Plate({ frame, onOpen }: { frame: ShownFrame; onOpen?: (kept: string) =
     );
   }
   if (frame.content.kind === "video") {
-    return (
-      <span className="armada-frames__plate">
-        <video
-          className="armada-frames__video"
-          src={frame.content.src}
-          controls
-          preload="metadata"
-          aria-label={frame.name}
-        />
-      </span>
-    );
+    return <Recording name={frame.name} src={frame.content.src} />;
   }
   // text or json — the record's own words, never rendered as markup.
   return (
@@ -224,3 +214,40 @@ function Plate({ frame, onOpen }: { frame: ShownFrame; onOpen?: (kept: string) =
     </span>
   );
 }
+
+/**
+ * A recording, with its own controls.
+ *
+ * **Streamed rather than held**, so unlike every other kind the read happens
+ * inside the element and a failure never reaches the caller — which would
+ * otherwise leave a player sitting on a black box with the reason nowhere.
+ *
+ * **The player stays when it says so.** What failed is one read of one span,
+ * and pressing play again is the thing a person does about that; a sentence
+ * that replaced the controls would take away the only response there is.
+ */
+function Recording({ name, src }: { name: string; src: string }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <span className="armada-frames__plate armada-frames__plate--video">
+      <video
+        className="armada-frames__video"
+        src={src}
+        controls
+        preload="metadata"
+        aria-label={name}
+        onError={() => setFailed(true)}
+      />
+      {failed ? <span className="armada-frames__why">{WOULD_NOT_PLAY}</span> : null}
+    </span>
+  );
+}
+
+/**
+ * What a recording that would not play says.
+ *
+ * **Not the caller's `why`.** That one is about a read that settled with
+ * nothing to draw; this is about an element that has the address and could not
+ * use it, which nothing outside this component is in a position to know.
+ */
+const WOULD_NOT_PLAY = "This video would not play.";

@@ -3,20 +3,23 @@
   <head>
     <meta charset="utf-8" />
     <!--
-      `default-src 'self'` and one addition: a frame a step's harness produced
-      — an image or a video — is drawn from a `blob:` this window made itself.
+      `default-src 'self'` and two additions, both for a frame a step's harness
+      produced. An image is drawn from a `blob:` this window made itself, out of
+      bytes that came over the preload from main.
 
-      The bytes come over the preload from main, which is the rule every read
-      here follows — the renderer never opens a socket. So this widens to the
-      one scheme that carries what this window already holds, and not to
-      `http://127.0.0.1:*`, which would let the renderer fetch from Fleet
-      directly and make the surface that draws a file the surface that opens a
-      port. `data:` would do the job too and costs a third more bytes through
-      the preload to say the same thing.
+      A recording is not: a two-minute capture cannot be held whole before it
+      plays, so it is drawn from `armada-frame:`, a scheme main handles and
+      forwards to Fleet a span at a time. What this window holds is a name, and
+      main resolves it.
+
+      Neither addition is `http://127.0.0.1:*`, which is refused here on
+      purpose: it would let the renderer fetch from Fleet directly and make the
+      surface that draws a file the surface that opens a port. `data:` would
+      carry the bytes too, and costs a third more of them to say the same thing.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; img-src 'self' blob:; media-src 'self' blob:"
+      content="default-src 'self'; img-src 'self' blob:; media-src 'self' blob: armada-frame:"
     />
     <title>Armada</title>
   </head>

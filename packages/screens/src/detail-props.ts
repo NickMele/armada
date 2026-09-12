@@ -41,7 +41,7 @@ import type {
 import type { ConfirmableAct } from "./Acts";
 import type { ShowAgainCall } from "./again";
 import type { ExplainCommand, ReadCall } from "./calls";
-import type { ReadFrame } from "./frames";
+import type { FrameSrc, ReadFrame } from "./frames";
 import type { FoldedReads } from "./mine";
 import type { OpenArtifact, OpenPullRequest } from "./opening";
 import type { FollowCheckOutput, ReadCheckOutput } from "./outputs";
@@ -157,6 +157,12 @@ export type JobDetailProps = {
    * the screen is handed the way to ask rather than the way to connect.
    */
   onReadFrame: ReadFrame;
+  /**
+   * Where a recording streams from. **Beside `onReadFrame` rather than folded
+   * into it**: that one answers with bytes and this one answers with an
+   * address, because a video cannot be held whole before it plays.
+   */
+  onFrameSrc: FrameSrc;
   /** Stable, like `onReadDiff` — an effect in the decision block depends on it. */
   onNeedMaterial: (jobId: string | null) => void;
   /**

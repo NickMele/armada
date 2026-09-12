@@ -479,6 +479,19 @@ export type BridgeApi = {
   readCheckOutput: (jobId: string, kept: string) => Promise<CheckOutputRead>;
   readFrame: (jobId: string, kept: string) => Promise<FrameRead>;
   /**
+   * Where one frame's bytes stream from, as an address.
+   *
+   * **The only entry here that answers without asking anything.** Every read
+   * above crosses a channel and comes back with bytes; a recording cannot be
+   * held whole before it plays, so what crosses is a name on a scheme main
+   * handles and forwards a span at a time.
+   *
+   * The renderer still reaches no port. `readFrame` beside it is what every
+   * other kind of frame goes through, and neither one tells this window where
+   * Fleet is.
+   */
+  frameStreamUrl: (jobId: string, kept: string) => string;
+  /**
    * Read every filed report and the counts beside them, or `false` to drop it.
    *
    * **Read-only, and the only read here that names no Job.** A report is about

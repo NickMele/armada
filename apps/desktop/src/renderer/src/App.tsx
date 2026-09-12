@@ -53,6 +53,7 @@ import {
   readCheckOutput,
   followCheckOutput,
   readFrame,
+  frameSrc,
   readDiff,
   readEvidence,
   readRemarks,
@@ -366,6 +367,7 @@ export function App() {
                 onReadCall={readCall}
                 onReadCheckOutput={readCheckOutput}
                 onReadFrame={readFrame}
+                onFrameSrc={frameSrc}
                 onNeedMaterial={readEvidence}
                 onNeedRemarks={readRemarks}
                 watched={state.watched}
