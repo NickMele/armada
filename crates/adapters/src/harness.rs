@@ -40,12 +40,12 @@ use crate::transcript;
 /// quiet rather than as an argument-list fault.
 ///
 /// **The third one is why this table matters.** A Drone on the `tests` step of
-/// Job `01M14HZ8ND001FYT6264WZJFPB` was granted `Bash(cargo fmt --all:*)` and
-/// `Bash(cargo xtask verify-foundations:*)` and nothing else, so every way of
-/// finding out whether its work held up was denied by the row above — silently,
-/// which reads to a Drone as a tool that does not work. It hand-checked, said
-/// so honestly, and failed a Check it had no way to see coming. The fix is not
-/// a wider `Bash` grant, which would run a command the workflow froze against a
+/// one Job was granted `Bash(cargo fmt --all:*)` and `Bash(cargo xtask
+/// verify-foundations:*)` and nothing else, so every way of finding out
+/// whether its work held up was denied by the row above — silently, which
+/// reads to a Drone as a tool that does not work. It hand-checked, said so
+/// honestly, and failed a Check it had no way to see coming. The fix is not a
+/// wider `Bash` grant, which would run a command the workflow froze against a
 /// Manifest that may have changed; it is a tool through which Fleet runs the
 /// Checks itself.
 const EVIDENCE_TOOL: &str = "mcp__armada__submit_evidence";

@@ -86,11 +86,11 @@ function shown(states: JobRead<{ seen: unknown }>[]): unknown {
 /**
  * **The newest read wins, whichever answer lands first.**
  *
- * Job `01M21BKVPW002DC0ATD1X9T0VF`: a step boundary publishes a Drone exiting
- * and a step advancing about twenty milliseconds apart, and both re-read the
- * open Job. Each caller is `void`-ed, so the two overlap and whichever response
- * lands last used to be what the screen kept — which is how an eighteen-minute
- * old spend survived the event that should have corrected it.
+ * One Job: a step boundary publishes a Drone exiting and a step advancing
+ * about twenty milliseconds apart, and both re-read the open Job. Each caller
+ * is `void`-ed, so the two overlap and whichever response lands last used to
+ * be what the screen kept — which is how an eighteen-minute old spend survived
+ * the event that should have corrected it.
  *
  * The first request is answered second here, with the figure it would have had
  * before the boundary.

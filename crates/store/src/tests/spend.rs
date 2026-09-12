@@ -343,12 +343,12 @@ fn forgetting_a_job_forgets_what_it_spent() {
 
 /// **A Drone nobody priced is counted and not added.**
 ///
-/// Job `01M21BKVPW002DC0ATD1X9T0VF` is the instance: six Drones, two of them
-/// signalled mid-run after 277 and 299 seconds, and the two contributed
-/// `cost_micros = 0` each — so the Job read as $5.28 against a $5 cap while
-/// having spent more than it could say. Cost arrives on the terminating line of
-/// a session and those two never emitted one, so what they have is no price
-/// rather than a price of nothing.
+/// One Job is the instance: six Drones, two of them signalled mid-run after
+/// 277 and 299 seconds, and the two contributed `cost_micros = 0` each — so
+/// the Job read as $5.28 against a $5 cap while having spent more than it
+/// could say. Cost arrives on the terminating line of a session and those two
+/// never emitted one, so what they have is no price rather than a price of
+/// nothing.
 #[test]
 fn a_drone_that_named_no_price_is_counted_and_left_out_of_the_total() {
     let dir = TempDir::new();

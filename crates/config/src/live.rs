@@ -129,9 +129,8 @@ pub enum LiveKey {
     /// compile-time constant, and there was no reachable number anywhere.
     CostCapMicrosPerJob,
     /// **The other ceiling, and live for the same reason.** It shipped as a
-    /// compile-time constant with no tier under it at all, and Job
-    /// `01M22TYSAE0023MADDP5ZQEYGW` stranded at 393 turns against 300 with its
-    /// cheap final step never run.
+    /// compile-time constant with no tier under it at all, and one Job
+    /// stranded at 393 turns against 300 with its cheap final step never run.
     TurnCapPerJob,
     /// The two below are the only live keys that are not `drone:`'s, and the
     /// only two whose value is a word rather than a number.

@@ -113,7 +113,7 @@ export class JobReader<Read> {
    * failure and a second read of the same Job overtaking the first is another,
    * and the id check alone catches only the first — which is what let an
    * eighteen-minute-old spend survive the event that should have corrected it,
-   * on Job `01M21BKVPW002DC0ATD1X9T0VF`.
+   * on one Job.
    *
    * **Every caller is `void`-ed and there are seven of them.** A step boundary
    * publishes a Drone exiting and a step advancing about twenty milliseconds

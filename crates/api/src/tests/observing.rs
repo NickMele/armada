@@ -288,11 +288,11 @@ async fn a_board_on_the_event_stream_sees_nothing_of_this() {
     );
 }
 
-/// A step ending is not the Job ending. **The claim #324 is about**: a Job that
-/// advances spawns its next step's Drone milliseconds after the last one
-/// exited — 5ms apart on Job `01M1HQZAKN001AJ5MT3PT09KKY`'s own move record —
-/// and a viewer told `drone_ended` there reads the rest of the Job as a step
-/// that has not started.
+/// A step ending is not the Job ending. **The claim #324 is about**: a Job
+/// that advances spawns its next step's Drone milliseconds after the last one
+/// exited — 5ms apart on one Job's own move record — and a viewer told
+/// `drone_ended` there reads the rest of the Job as a step that has not
+/// started.
 #[tokio::test]
 async fn a_viewer_carries_on_when_the_job_advances_to_its_next_drone() {
     let (daemon, app) = wired();

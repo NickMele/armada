@@ -75,9 +75,9 @@ impl Working {
     /// **Sent is not told.** Injection lands at a turn boundary, so a Drone
     /// inside a tool call is handed nothing until that call returns — measured
     /// at 1.59s between two fast calls and 33.14s inside a slow one, spike 4,
-    /// and at 92s on Job `01M21BKVPW002DC0ATD1X9T0VF`. That Drone obeyed 26
-    /// seconds after it was handed the turn and was stopped 2 seconds later,
-    /// having spent 92 of its 120 waiting to be spoken to.
+    /// and at 92s on one Job. That Drone obeyed 26 seconds after it was handed
+    /// the turn and was stopped 2 seconds later, having spent 92 of its 120
+    /// waiting to be spoken to.
     ///
     /// **False is not a Drone ignoring anything**, which is the whole reason
     /// `crate::converging` waits rather than escalating on it.

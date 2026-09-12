@@ -2,8 +2,8 @@
 //!
 //! **Real commands and a real directory**, for `checking`'s reason and one
 //! more of its own: every claim here is about an effect one process left in a
-//! worktree for the next one to find, and a fake runner would be asserting this
-//! crate's guess at that.
+//! worktree for the next one to find, and a fake runner would be asserting
+//! this crate's guess at that.
 //!
 //! The effect is a file. `/usr/bin/touch` writes it, `/bin/test -f` reads it,
 //! and `/bin/mkdir` is how "did this run twice?" is asked without a shell —
@@ -12,11 +12,10 @@
 //!
 //! # The incident
 //!
-//! Job `01M1M6YP7G0012GVQ2PCB6VF2E` spent all three `implement` attempts on
-//! `format` — `cargo fmt --all --check` — failing at a different unformatted
-//! line each time, while `commands.fmt: cargo fmt --all` sat in the same
-//! `armada.yml`. Nothing could make the fix run. The first test below is that
-//! Job, in miniature.
+//! One Job spent all three `implement` attempts on `format` — `cargo fmt --all
+//! --check` — failing at a different unformatted line each time, while
+//! `commands.fmt: cargo fmt --all` sat in the same `armada.yml`. Nothing could
+//! make the fix run. The first test below is that Job, in miniature.
 
 use std::collections::BTreeMap;
 use std::time::Duration;

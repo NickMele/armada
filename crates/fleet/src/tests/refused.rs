@@ -2,7 +2,7 @@
 //!
 //! # The case these are built on is a real one
 //!
-//! Job `01M20E8JS40027M421MXTPZBP0` escalated as `blocked_by_policy`. Its log
+//! One Job escalated as `blocked_by_policy`. Its log
 //! line said `found: blocked_by_policy` and named no tool and no command; the
 //! `ipc::Stuck` on its detail carried the trigger, the step and the acts, and
 //! nothing about what had been refused. The two facts were in the transcript

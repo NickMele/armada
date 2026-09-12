@@ -8,8 +8,8 @@
 //! escalates the Job in the same breath (`crate::gate::apply`'s own header),
 //! so a stopped current step beneath `awaiting_review` is this bug's
 //! signature and nothing else's. Narrowed further on the trigger, so a future
-//! defect with a different one is not silently swept in here.
-//! `01M28XMQNW0027QG51YJ54G1B9` is the real Job this was written for.
+//! defect with a different one is not silently swept in here. One Job is the
+//! real Job this was written for.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{

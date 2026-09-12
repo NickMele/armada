@@ -26,14 +26,14 @@ fn a_drone_still_inside_a_call(calls: u32) -> FakeHarness {
     FakeHarness::running("/bin/sh", &["-c", "echo BUSY; sleep 30"]).reading("BUSY", called(calls))
 }
 
-/// **The grace runs from when the Drone was handed the directive, not from when
-/// Fleet wrote it.**
+/// **The grace runs from when the Drone was handed the directive, not from
+/// when Fleet wrote it.**
 ///
-/// Job `01M21BKVPW002DC0ATD1X9T0VF`: told at 02:37:42, handed the turn at
-/// 02:39:14 — 92s, injection waiting on the call in flight — wrote its
-/// deliverable at 02:39:40, stopped at `no_report` at 02:39:42. It obeyed in 26
-/// seconds and had 28 of its 120 left by the time it could hear, and the record
-/// read as a Drone ignoring a directive it had never been given.
+/// One Job: told at 02:37:42, handed the turn at 02:39:14 — 92s, injection
+/// waiting on the call in flight — wrote its deliverable at 02:39:40, stopped
+/// at `no_report` at 02:39:42. It obeyed in 26 seconds and had 28 of its 120
+/// left by the time it could hear, and the record read as a Drone ignoring a
+/// directive it had never been given.
 ///
 /// **Two seconds of grace over forty turns**, which is twenty of them. A
 /// deadline measured from the write fires on the first.

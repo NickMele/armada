@@ -333,9 +333,9 @@ impl Ending {
 /// Whether the Drone's run ended with work still running behind it.
 ///
 /// **Not part of [`Ending`], and the separation is the point.** `Ending` says
-/// how the run finished and `aftermath` turns that into one of three answers; a
-/// fourth field there would put a question about *whether to reap at all* into
-/// the function that decides *what a reap means*. This is asked first, by
+/// how the run finished and `aftermath` turns that into one of three answers;
+/// a fourth field there would put a question about *whether to reap at all*
+/// into the function that decides *what a reap means*. This is asked first, by
 /// `crate::silence::at_rest`, and where it answers true nothing is folded.
 ///
 /// **The last count wins and there is no pairing.** `BackgroundWork` is the
@@ -344,11 +344,11 @@ impl Ending {
 /// subagents and saw all three land emitted a final zero and is not waiting.
 ///
 /// **Why a Drone gets into this state at all.** A background task's report
-/// arrives as a notification that wakes the session; a headless Drone that ends
-/// its turn has nothing left to wake. So it says "I will wait for the agent's
-/// findings", ends its turn, and the report can never come. Reaping it there
-/// loses the whole step to a wait that was never going to end, which is Job
-/// `01M21BKVPW002DC0ATD1X9T0VF` and what this reading exists for.
+/// arrives as a notification that wakes the session; a headless Drone that
+/// ends its turn has nothing left to wake. So it says "I will wait for the
+/// agent's findings", ends its turn, and the report can never come. Reaping it
+/// there loses the whole step to a wait that was never going to end, which is
+/// one Job and what this reading exists for.
 pub fn awaiting_background(events: &[DroneEvent]) -> bool {
     events
         .iter()

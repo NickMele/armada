@@ -99,13 +99,13 @@ END;
 
 /// Version 33 — a price that was never named.
 ///
-/// **`NULL`, and it is not a cost of zero.** `total_cost_usd` reaches Armada on
-/// one line — the terminating line of a session — so a Drone signalled before
-/// it emits one leaves no figure at all. Written as `0` those two are the same
-/// row, and Job `01M21BKVPW002DC0ATD1X9T0VF` is what that cost: two of its six
-/// Drones ran 277 and 299 seconds against a $5 cap and were billed nothing,
-/// because both were stopped by defects that killed them mid-run. The Job read
-/// as $5.28 spent and had spent more, and nothing on it said so.
+/// **`NULL`, and it is not a cost of zero.** `total_cost_usd` reaches Armada
+/// on one line — the terminating line of a session — so a Drone signalled
+/// before it emits one leaves no figure at all. Written as `0` those two are
+/// the same row, and one Job is what that cost: two of its six Drones ran 277
+/// and 299 seconds against a $5 cap and were billed nothing, because both were
+/// stopped by defects that killed them mid-run. The Job read as $5.28 spent
+/// and had spent more, and nothing on it said so.
 ///
 /// **Nothing is backfilled**, for [`V23`]'s reason and one of its own: a `0`
 /// already on disk may be either, and a migration that guessed would relabel a
@@ -130,10 +130,10 @@ DROP TABLE job_drone_spend_priced;
 ///
 /// **[`V32`] again, for the other ceiling.** The column, the null, the two
 /// triggers and the reasoning behind each are that migration's; what is new is
-/// only which number it holds. Job `01M22TYSAE0023MADDP5ZQEYGW` is the Job that
-/// bought this one — 393 turns against a 300 constant with no tier under it,
-/// stopped on the cheap final step of work every Check had passed, and its
-/// branch committed by hand.
+/// only which number it holds. One Job is the Job that bought this one — 393
+/// turns against a 300 constant with no tier under it, stopped on the cheap
+/// final step of work every Check had passed, and its branch committed by
+/// hand.
 ///
 /// **Turns and not a second unit of money**, so nothing here converts: a turn
 /// is a count off the harness's terminating line, which is why the column is

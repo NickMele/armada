@@ -1,7 +1,7 @@
-//! What a step's own history says before its next look sees new work. Job
-//! `01M28RVVN200232YNHWF8CFFKH`'s mid-step look answered `converging` three
-//! times across six attempts of the same step, each going on to fail the same
-//! Check — a finding the look had no way to check itself against.
+//! What a step's own history says before its next look sees new work. One
+//! Job's mid-step look answered `converging` three times across six attempts
+//! of the same step, each going on to fail the same Check — a finding the
+//! look had no way to check itself against.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{Attempt, JobId, StepCheck, StepId};

@@ -143,12 +143,12 @@ async fn a_step_that_changed_what_it_did_not_declare_reaches_the_judge() {
     );
 }
 
-/// **Asked, never a gate failure and never terminal.** Job
-/// `01M148ZF0D001BYXWN9XWHYGYF` reached `completed_failed` on drift before
-/// `#191`'s escalation existed; the asking design goes one step further —
-/// `docs/concepts/judge.md`'s own header says drift tags the step and never
-/// fails it, so a refusal on it does not even reach `Ruling::Refused` any
-/// more, and nothing about the Job moves until a person answers.
+/// **Asked, never a gate failure and never terminal.** One Job reached
+/// `completed_failed` on drift before `#191`'s escalation existed; the
+/// asking design goes one step further — `docs/concepts/judge.md`'s own
+/// header says drift tags the step and never fails it, so a refusal on it
+/// does not even reach `Ruling::Refused` any more, and nothing about the
+/// Job moves until a person answers.
 #[tokio::test]
 async fn drift_the_judge_refuses_holds_a_question_rather_than_failing() {
     let workflow = scoped(true, &[]);
@@ -408,13 +408,13 @@ async fn the_same_drift_is_reported_once_and_not_every_turn() {
 
 /// **The half that was missing for as long as the check existed.** The finding
 /// went to the Job's log, which no Drone reads, so the call that replaces a
-/// plan was one the Drone had no reason to make — Job
-/// `01M14HZ8ND001FYT6264WZJFPB` drifted, carried on for seven minutes and
-/// reached its gate holding a declaration it had outgrown.
+/// plan was one the Drone had no reason to make — one Job drifted, carried on
+/// for seven minutes and reached its gate holding a declaration it had
+/// outgrown.
 ///
-/// Once per path, and the second path's notice carries only the second path:
-/// a Drone told again about a file it has already answered for reads the
-/// notice as having been ignored.
+/// Once per path, and the second path's notice carries only the second path: a
+/// Drone told again about a file it has already answered for reads the notice
+/// as having been ignored.
 #[tokio::test]
 async fn a_drifting_drone_is_told_once_per_path_and_not_again() {
     let home = TempDir::new();

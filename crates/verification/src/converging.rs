@@ -78,9 +78,9 @@ either."
 pub enum Convergence {
     Converging,
     JustifiedDrift,
-    /// Forced into being by Job `01M28RVVN200232YNHWF8CFFKH`: three choices
-    /// and no way to abstain read a look that could not tell as `converging`,
-    /// three times, over a step that failed the same way every time.
+    /// Forced into being by one Job: three choices and no way to abstain read
+    /// a look that could not tell as `converging`, three times, over a step
+    /// that failed the same way every time.
     CannotTell,
     /// **The only variant anything follows from**, and what it carries is what
     /// the Drone is told.

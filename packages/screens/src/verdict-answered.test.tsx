@@ -1,11 +1,11 @@
 // The fifth arrangement's own data, tested as the answer it is.
 //
-// **The fixture is shaped like the real Job the drawing used**,
-// `01M27918MN0011N9KZEV9ZWHY3` — four steps, `scope` and `implement` and
-// `tests` and `handoff`, `tests` overruled and `handoff` the delivering step a
-// person approves at. **Every test here builds the whole Job and never picks
-// a step** — that is the one thing this arrangement is not allowed to depend
-// on, and a test that passed `open` would not catch its return.
+// **The fixture is shaped like the real Job the drawing used**, one Job —
+// four steps, `scope` and `implement` and `tests` and `handoff`, `tests`
+// overruled and `handoff` the delivering step a person approves at. **Every
+// test here builds the whole Job and never picks a step** — that is the one
+// thing this arrangement is not allowed to depend on, and a test that passed
+// `open` would not catch its return.
 
 import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";

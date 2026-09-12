@@ -462,21 +462,21 @@ where
             return Ok(None);
         }
         // **The grace runs from when the Drone was told, not from when Fleet
-        // spoke.** Injection lands at a turn boundary, so a Drone inside a tool
-        // call is handed nothing until that call returns — and until it is, it
-        // is not failing to report, it has not been asked. Job
-        // `01M21BKVPW002DC0ATD1X9T0VF` is the instance: told at 02:37:42,
-        // handed the turn at 02:39:14, wrote its deliverable at 02:39:40, and
-        // stopped at `no_report` at 02:39:42. It obeyed in 26 seconds and had
-        // 28 of its 120 left by the time it could hear.
+        // spoke.** Injection lands at a turn boundary, so a Drone inside a
+        // tool call is handed nothing until that call returns — and until it
+        // is, it is not failing to report, it has not been asked. One Job is
+        // the instance: told at 02:37:42, handed the turn at 02:39:14, wrote
+        // its deliverable at 02:39:40, and stopped at `no_report` at
+        // 02:39:42. It obeyed in 26 seconds and had 28 of its 120 left by the
+        // time it could hear.
         //
         // **The deadline is pushed rather than the comparison widened.** A
-        // larger `report_grace` would be a guess at a delay that has no bound —
-        // it is whatever is left of the current tool call — and it would spend
-        // the same slack on a Drone that was handed the turn at once. This is
-        // `still_reporting`'s re-arm on a second reason, and it costs a Drone
-        // nothing that is genuinely quiet: once the turn lands the clock runs
-        // in full.
+        // larger `report_grace` would be a guess at a delay that has no bound
+        // — it is whatever is left of the current tool call — and it would
+        // spend the same slack on a Drone that was handed the turn at once.
+        // This is `still_reporting`'s re-arm on a second reason, and it costs
+        // a Drone nothing that is genuinely quiet: once the turn lands the
+        // clock runs in full.
         if at_work.was_handed_the_directive() {
             if let Some(at_work) = working.as_mut() {
                 at_work.handed_the_directive_at(self.now());
@@ -660,10 +660,10 @@ where
     /// message**, so a query can find every step the chain touched.
     fn noted(&self, job: &JobId, step: &StepId, stage: &Stage) {
         let (level, said, found) = match stage {
-            // Exhaustive on purpose: a state `verification::Convergence` gains
-            // tomorrow has to pick its own word here rather than inherit
-            // `converging`'s, which is the defect Job
-            // `01M28RVVN200232YNHWF8CFFKH` measured three times over.
+            // Exhaustive on purpose: a state `verification::Convergence`
+            // gains tomorrow has to pick its own word here rather than
+            // inherit `converging`'s, which is the defect one Job measured
+            // three times over.
             Stage::StillConverging {
                 found: Convergence::Converging,
                 ..

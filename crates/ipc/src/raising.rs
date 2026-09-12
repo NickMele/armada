@@ -44,10 +44,10 @@ pub struct CapRaise {
 ///
 /// **It exists because the argument against it was falsified.** The turn cap
 /// shipped with no act at all, on the reading that a Job over it is going in
-/// circles and wants a rewritten brief rather than a bigger number. Job
-/// `01M22TYSAE0023MADDP5ZQEYGW` was neither: it had finished, passed every
-/// Check, and stopped at 393 turns against 300 with a cheap final step unrun.
-/// A redispatch would have thrown the work away.
+/// circles and wants a rewritten brief rather than a bigger number. One Job
+/// was neither: it had finished, passed every Check, and stopped at 393 turns
+/// against 300 with a cheap final step unrun. A redispatch would have thrown
+/// the work away.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TurnRaise {
     /// How many turns this Job may take from now on, counted the way

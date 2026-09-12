@@ -204,18 +204,18 @@ impl Declaring {
     ///
     /// **`wants_a_declaration` decides it and nothing else does.** That is the
     /// cold switch `core_model::EvidenceScope` describes: a step with no
-    /// evidence scope, or one whose context comes from somewhere other than the
-    /// Drone, is told exactly what it was told before any of this existed.
+    /// evidence scope, or one whose context comes from somewhere other than
+    /// the Drone, is told exactly what it was told before any of this existed.
     /// Inferring the ask from `declare_plan_at` or from `scope_diff_check`
     /// would put a tool call in front of a Drone that has no tool to make it
     /// with.
     ///
     /// **Every step that wants one is asked, including the fourth step of a
-    /// Job whose Drone declared correctly on the first.** Job
-    /// `01M14F8VFA00189ZBMF0HXE607` declared its scope on the step that asked
-    /// for it, advanced, worked the next step for twenty-two minutes, and
-    /// failed `evidence_scope` on a call nobody had requested: the declaration
-    /// is cleared at the boundary and the ask was not repeated there.
+    /// Job whose Drone declared correctly on the first.** One Job declared its
+    /// scope on the step that asked for it, advanced, worked the next step for
+    /// twenty-two minutes, and failed `evidence_scope` on a call nobody had
+    /// requested: the declaration is cleared at the boundary and the ask was
+    /// not repeated there.
     pub fn at(step: &ResolvedStep) -> Option<Declaring> {
         let scope = step.evidence_scope()?;
         if !scope.wants_a_declaration() {
@@ -269,17 +269,17 @@ impl Declaring {
 /// `crate::scope` has compared edits against the plan since the scope tool
 /// existed, and everything it found went to the Job's log. The Drone was never
 /// told, so the one call that fixes a plan that turned out wrong was a call it
-/// had no reason to make: Job `01M14HZ8ND001FYT6264WZJFPB` drifted onto
-/// `crates/ipc/src/lib.rs`, carried on for seven minutes and reached its gate
-/// still holding a declaration it had outgrown.
+/// had no reason to make: One Job drifted onto `crates/ipc/src/lib.rs`,
+/// carried on for seven minutes and reached its gate still holding a
+/// declaration it had outgrown.
 ///
 /// **It offers rather than demands, and the wording is the whole mechanism.**
 /// `docs/concepts/judge.md` keeps drift a signal because legitimate
 /// investigation moves the work, so a Drone that reads this as an accusation
 /// and apologises, or as a stop-work order and downs tools over a file it was
-/// right to touch, has been made worse off by being told. Three sentences carry
-/// that: nothing has failed, you are not being asked to stop, and here is the
-/// call that makes the plan true. The stop-and-report directive is
+/// right to touch, has been made worse off by being told. Three sentences
+/// carry that: nothing has failed, you are not being asked to stop, and here
+/// is the call that makes the plan true. The stop-and-report directive is
 /// `crate::converging::ReportNow` and is a different act.
 ///
 /// **Drafted wording**, like the gaming half of [`Stopped`].

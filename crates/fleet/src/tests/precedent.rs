@@ -1,6 +1,6 @@
-//! What a step's own history says before its next mid-step look sees new
-//! work — Job `01M28RVVN200232YNHWF8CFFKH`'s tests step failed the same Check
-//! three times and the look never saw the first two.
+//! What a step's own history says before its next mid-step look sees new work
+//! — one Job's tests step failed the same Check three times and the look
+//! never saw the first two.
 
 use core_model::StepId;
 use testkit::{FakeWorkProduct, Gate, Sketch};
