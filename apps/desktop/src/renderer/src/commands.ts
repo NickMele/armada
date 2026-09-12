@@ -39,6 +39,7 @@ import type {
 import type {
   CommandAnswer,
   JudgeAnswer,
+  StartCheckoutRun,
   StartRun,
   WhenBlocked,
   WhenRefused,
@@ -88,6 +89,19 @@ export const stopRun = (jobId: string, runId: string) => window.armada.stopRun(j
 export const undoRun = (jobId: string, runId: string) => window.armada.undoRun(jobId, runId);
 export const listRuns = (jobId: string) => window.armada.listRuns(jobId);
 export const getRunOutput = (jobId: string, runId: string) => window.armada.getRunOutput(jobId, runId);
+// The same rehearsal in the main checkout — the Manifest surface. Held open
+// by the app rather than by the screen, because the palette lists off the same
+// reading and a read the screen owned would leave those rows missing
+// everywhere but on that surface.
+export const watchCheckoutRunSheet = (want: boolean): void =>
+  void window.armada.watchCheckoutRunSheet(want);
+export const observeCheckoutRun = (runId: string | null): void =>
+  void window.armada.observeCheckoutRun(runId);
+export const startCheckoutRun = (body: StartCheckoutRun) => window.armada.startCheckoutRun(body);
+export const stopCheckoutRun = (runId: string) => window.armada.stopCheckoutRun(runId);
+export const undoCheckoutRun = (runId: string) => window.armada.undoCheckoutRun(runId);
+export const listCheckoutRuns = () => window.armada.listCheckoutRuns();
+export const getCheckoutRunOutput = (runId: string) => window.armada.getCheckoutRunOutput(runId);
 export const startServer = (name: string, jobId?: string) => window.armada.startServer(name, jobId);
 export const stopServer = (serverId: string) => window.armada.stopServer(serverId);
 export const openServerLink = (serverId: string, url: string) =>

@@ -18,6 +18,8 @@ import type {
 import type { FileReport } from "@armada/protocol";
 import type { Artifact, Followed, Opened } from "@armada/protocol";
 import type { ProtocolVersion, RunListRead, RunOutputRead, StartRun } from "@armada/protocol";
+import type { StartCheckoutRun } from "@armada/protocol";
+import type { CheckoutRunListRead } from "../shared/bridge";
 import type { CommandAnswer, JudgeAnswer, WhenBlocked, WhenRefused } from "@armada/protocol";
 import { PROTOCOL_VERSION } from "@armada/protocol";
 
@@ -246,9 +248,36 @@ const api: BridgeApi = {
   getRunOutput: (jobId: string, runId: string): Promise<RunOutputRead> =>
     ipcRenderer.invoke(CHANNELS.getRunOutput, jobId, runId),
 
+  // The same rehearsal in the main checkout — the Manifest surface. **Seven
+  // entries rather than a `jobId` that may be `null` on the seven above**: a
+  // route under `/manifest` and a route under `/jobs/:id` are two operations,
+  // and one capability taking which would read as one act and perform two.
+  watchCheckoutRunSheet: (want: boolean): Promise<void> =>
+    ipcRenderer.invoke(CHANNELS.watchCheckoutRunSheet, want),
+
+  observeCheckoutRun: (runId: string | null): Promise<void> =>
+    ipcRenderer.invoke(CHANNELS.observeCheckoutRun, runId),
+
+  // A name and nothing else. There is no frozen Manifest to choose against
+  // and no diff to narrow to in the main checkout.
+  startCheckoutRun: (body: StartCheckoutRun): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.startCheckoutRun, body),
+
+  stopCheckoutRun: (runId: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.stopCheckoutRun, runId),
+
+  undoCheckoutRun: (runId: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.undoCheckoutRun, runId),
+
+  listCheckoutRuns: (): Promise<CheckoutRunListRead> =>
+    ipcRenderer.invoke(CHANNELS.listCheckoutRuns),
+
+  getCheckoutRunOutput: (runId: string): Promise<RunOutputRead> =>
+    ipcRenderer.invoke(CHANNELS.getCheckoutRunOutput, runId),
+
   // Start a declared server, for this Job's worktree or, with no Job, the
-  // main checkout — the one capability on this seam Manifest's own surface
-  // will share once it exists, which is why `jobId` is optional here already.
+  // main checkout — the capability the Manifest surface shares, which is why
+  // `jobId` was optional here before that surface existed.
   startServer: (name: string, jobId?: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.startServer, name, jobId),
 

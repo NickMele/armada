@@ -30,7 +30,62 @@ import type {
 import type { FleetCapacity, JobSummary, ProposalInFlight, UnreadableJob } from "@armada/protocol";
 import type { ManifestReading } from "@armada/protocol";
 import type { RunFollowed, RunSheetRead, ServerList } from "@armada/protocol";
+import type { CheckoutRunList, CheckoutRunSheet, Outcome } from "@armada/protocol";
 import { spoken } from "@armada/protocol";
+
+// ---------------------------------------------------------------------------
+// The Manifest surface's two readings — Journey 9, *Running one*
+// ---------------------------------------------------------------------------
+//
+// **Declared here and again in `@armada/screens`' `checkout-runs.ts`, and the
+// duplication is deliberate.** Every other Bridge-only read state — `Reports`,
+// `HeldWorktrees`, `RunSheetRead`, `RunFollowed` — lives in `@armada/protocol`,
+// which is the one package main, the preload and a screen can all reach. These
+// two could not be added there: the checkout's half of the wire landed on its
+// own and the protocol package was another child's ground at the time.
+//
+// **Nothing drifts silently.** `App.tsx` hands `checkoutRunSheet` and
+// `checkoutRunFollowed` straight to `<Manifest>`, so the two declarations meet
+// at one assignment and a field added to one and not the other is a typecheck
+// failure rather than a field that is quietly always absent.
+
+/**
+ * `GET /manifest/run_sheet`, where the Manifest surface asked for it.
+ *
+ * **`Reports`' shape rather than a `JobRead`**, for that type's own stated
+ * reason: there is no id to check an answer against, which is the whole of
+ * what `JobRead` exists to do.
+ */
+export type CheckoutRunSheetRead =
+  | { state: "none" }
+  | { state: "reading" }
+  | { state: "read"; sheet: CheckoutRunSheet }
+  | { state: "failed"; outcome: Outcome };
+
+/** The checkout run a window is reading, as it prints. `RunFollowed`'s four
+ * states with the Job taken out of each. */
+export type CheckoutRunFollowed =
+  | { state: "none" }
+  | { state: "opening"; runId: string }
+  | {
+      state: "following";
+      runId: string;
+      name: string;
+      path: string;
+      /** The file's own line number of `lines[0]`, counted from one. */
+      fromLine: number;
+      /** The newest lines, oldest first, bounded. */
+      lines: string[];
+      /** Why the stream ended, or absent while it is still arriving. */
+      ended?: string;
+    }
+  | { state: "failed"; runId: string; detail: string };
+
+/** What `list_checkout_runs` came back as, answered to the caller rather than
+ * held as state — `RunListRead`'s reason, one owner over. */
+export type CheckoutRunListRead =
+  | { ok: true; runs: CheckoutRunList }
+  | { ok: false; outcome: Outcome };
 
 
 
@@ -271,6 +326,22 @@ export type BridgeState = {
    * closes.
    */
   servers: ServerList;
+  /**
+   * What this repository's Manifest declares, for the Manifest surface.
+   *
+   * **The second read here no Job scopes, and not for the reports' reason.**
+   * It is the file Fleet is already holding, read before any Job exists —
+   * which is the whole of why that surface can answer with the Board empty.
+   *
+   * Held open while the surface is showing **or the palette is up**: the
+   * palette lists one row per Check and Command off this reading, and a read
+   * scoped to the surface alone would leave those rows missing everywhere a
+   * person would think to look for them.
+   */
+  checkoutRunSheet: CheckoutRunSheetRead;
+  /** The checkout run a window is reading, as it prints. Its own socket,
+   * `runFollowed`'s shape one owner over. One at a time. */
+  checkoutRunFollowed: CheckoutRunFollowed;
 };
 
 /**
@@ -310,6 +381,8 @@ export const NOTHING_YET: BridgeState = {
   runSheet: { state: "none" },
   runFollowed: { state: "none" },
   servers: { servers: [] },
+  checkoutRunSheet: { state: "none" },
+  checkoutRunFollowed: { state: "none" },
 };
 
 /** The channels the preload is allowed to name. There is no general `invoke`. */
@@ -360,6 +433,18 @@ export const CHANNELS = {
   undoRun: "bridge:undo-run",
   listRuns: "bridge:list-runs",
   getRunOutput: "bridge:get-run-output",
+  // The same rehearsal in the main checkout — Journey 9's *Running one*.
+  // Seven channels beside the Job's seven rather than a Job id that may be
+  // `null` on each: a route under `/manifest` and a route under `/jobs/:id`
+  // are two operations, and one capability taking which would read as one act
+  // and perform two.
+  watchCheckoutRunSheet: "bridge:watch-checkout-run-sheet",
+  observeCheckoutRun: "bridge:observe-checkout-run",
+  startCheckoutRun: "bridge:start-checkout-run",
+  stopCheckoutRun: "bridge:stop-checkout-run",
+  undoCheckoutRun: "bridge:undo-checkout-run",
+  listCheckoutRuns: "bridge:list-checkout-runs",
+  getCheckoutRunOutput: "bridge:get-checkout-run-output",
   startServer: "bridge:start-server",
   stopServer: "bridge:stop-server",
   openServerLink: "bridge:open-server-link",

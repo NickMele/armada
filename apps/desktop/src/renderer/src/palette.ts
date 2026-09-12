@@ -111,6 +111,15 @@ export type PaletteHands = {
    * — silently, and only for whoever chose the second one.
    */
   surface: (surfaceId: string) => void;
+  /**
+   * Go to the Manifest surface with one Check or Command picked.
+   *
+   * **It selects; it does not run.** Journey 9 has the palette opening the
+   * surface with that entry chosen, and a row that started a destructive
+   * Command straight off a list of forty would be an act nobody confirmed —
+   * which is the one confirmation that surface exists to carry.
+   */
+  run: (entryId: string) => void;
   filter: (tabId: string) => void;
   search: () => void;
   copyDebugInfo: () => void;
@@ -136,6 +145,9 @@ export function carryOut(choice: PaletteChoice, job: string | null, hands: Palet
       return;
     case "surface":
       hands.surface(choice.id);
+      return;
+    case "run":
+      hands.run(choice.id);
       return;
     case "filter":
       hands.filter(choice.id);

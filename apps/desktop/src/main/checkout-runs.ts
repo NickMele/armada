@@ -1,0 +1,289 @@
+// The Manifest surface's half of Journey 9 — run one Check or Command in the
+// main checkout, and read its output as it prints.
+//
+// **Beside `rehearsal.ts` rather than inside it, and it is the same subject
+// one owner over.** Every read and every act here answers a route under
+// `/manifest`, which resolves no Job: there is no id to hold, no id to check
+// an answer against, and no worktree that can be gone. `JobReader` exists
+// entirely to do the first two, so nothing here uses it.
+//
+// **A rehearsal, never a verdict.** Nothing here writes Evidence or moves a
+// Job. A run ends with `checkout_run.finished`, which carries the record — and
+// all that moves in this window is the sheet's own reading of it.
+
+import WebSocket from "ws";
+
+import type {
+  CheckoutRunList,
+  CheckoutRunMessage,
+  CheckoutRunSheet,
+  CheckoutRunUnderway,
+  NamedRun,
+  Outcome,
+  RunOutput,
+  RunOutputRead,
+  StartCheckoutRun,
+} from "@armada/protocol";
+import type { CheckoutRunFollowed, CheckoutRunListRead, CheckoutRunSheetRead } from "../shared/bridge";
+import { ask } from "./request";
+import { HOST } from "./runtime-file";
+
+/** Where the checkout's own routes live. One repository, one Manifest. */
+const MANIFEST = "/manifest";
+
+/**
+ * `GET /manifest/run_sheet`, read and re-read while a surface wants it.
+ *
+ * **`JobReader`'s second rule without its first.** There is no id for an
+ * answer to be checked against, so what remains is the rule that a newer read
+ * begun after an older one is the only one whose answer may be published —
+ * which is not a refinement: `start_run` and `checkout_run.finished` re-read
+ * this within milliseconds of each other by construction, and without the
+ * counter the surface would keep whichever the network returned slowest.
+ */
+export class CheckoutSheetReader {
+  private readonly publish: (read: CheckoutRunSheetRead) => void;
+  /** Whether a surface still wants it. `false` is no read. */
+  private wanted = false;
+  /** How many reads this reader has begun; the newest is the only one that publishes. */
+  private asked = 0;
+
+  constructor(publish: (read: CheckoutRunSheetRead) => void) {
+    this.publish = publish;
+  }
+
+  /** Whether anything is holding this read open. */
+  get open(): boolean {
+    return this.wanted;
+  }
+
+  /** Hold the read open, or let it go. Nothing connected is a failure to draw. */
+  async want(port: number | null, want: boolean): Promise<void> {
+    this.wanted = want;
+    if (!want) {
+      this.publish({ state: "none" });
+      return;
+    }
+    this.publish({ state: "reading" });
+    if (port === null) {
+      this.publish({ state: "failed", outcome: { ok: false, why: "not_connected" } });
+      return;
+    }
+    await this.again(port);
+  }
+
+  /** Read again, where a surface still wants it. */
+  async again(port: number): Promise<void> {
+    if (!this.wanted) return;
+    this.asked += 1;
+    const asked = this.asked;
+    const answer = await ask(port, "GET", `${MANIFEST}/run_sheet`);
+    // Nobody wants it any more, or a newer read was begun while this one was
+    // in flight. Either way this answer is not the one to publish — including
+    // its failure: a stale timeout must not blank a panel the newer read is
+    // about to fill.
+    if (!this.wanted || this.asked !== asked) return;
+    if (answer.ok !== true) {
+      this.publish({ state: "failed", outcome: answer.outcome });
+      return;
+    }
+    this.publish({ state: "read", sheet: answer.body as CheckoutRunSheet });
+  }
+
+  /** The read ends with the window. Nothing is published: the surface is gone. */
+  close(): void {
+    this.wanted = false;
+  }
+}
+
+/** What starting and stopping a checkout run needs of the connection. */
+export type CheckoutBoard = {
+  port: () => number | null;
+  /** Follow this run's output from the instant it answers as underway. */
+  follow: (port: number, runId: string) => void;
+  /** Read the sheet again — its own `running` field is what moved. */
+  refreshSheet: (port: number) => Promise<void>;
+};
+
+/** `start`, `stop`, `undo`, and the two reads the page's history draws from. */
+export class CheckoutRunCommands {
+  private readonly board: CheckoutBoard;
+
+  constructor(board: CheckoutBoard) {
+    this.board = board;
+  }
+
+  /**
+   * Run one Check or Command in the main checkout, as it is on disk.
+   *
+   * **Answers at once, with the run underway.** Fleet takes a snapshot first
+   * and the output streams on `observe_checkout_run`, which this opens the
+   * moment the run exists.
+   */
+  async startRun(body: StartCheckoutRun): Promise<Outcome> {
+    const port = this.board.port();
+    if (port === null) return { ok: false, why: "not_connected" };
+    const answer = await ask(port, "POST", `${MANIFEST}/start_run`, body);
+    if (answer.ok !== true) return answer.outcome;
+    const running = answer.body as CheckoutRunUnderway;
+    this.board.follow(port, running.id);
+    await this.board.refreshSheet(port);
+    return { ok: true };
+  }
+
+  /** End a run's process group. The log keeps what printed. */
+  async stopRun(id: string): Promise<Outcome> {
+    const port = this.board.port();
+    if (port === null) return { ok: false, why: "not_connected" };
+    const body: NamedRun = { id };
+    const answer = await ask(port, "POST", `${MANIFEST}/stop_run`, body);
+    if (answer.ok !== true) return answer.outcome;
+    await this.board.refreshSheet(port);
+    return { ok: true };
+  }
+
+  /**
+   * Put back the files one run changed, from the snapshot taken just before
+   * it. **This tree holds a person's own uncommitted work**, so the surface
+   * names every path before it asks — and the page's own reading of whether
+   * the run has been undone comes from `list_checkout_runs` read again, not
+   * from this answer.
+   */
+  async undoRun(id: string): Promise<Outcome> {
+    const port = this.board.port();
+    if (port === null) return { ok: false, why: "not_connected" };
+    const body: NamedRun = { id };
+    const answer = await ask(port, "POST", `${MANIFEST}/undo_run`, body);
+    return answer.ok === true ? { ok: true } : answer.outcome;
+  }
+
+  /** Every earlier run in this checkout, newest first, and what would not read. */
+  async listRuns(): Promise<CheckoutRunListRead> {
+    const port = this.board.port();
+    if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
+    const answer = await ask(port, "GET", `${MANIFEST}/runs`);
+    if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
+    return { ok: true, runs: answer.body as CheckoutRunList };
+  }
+
+  /** One run's log, read back as a window that says it is one. */
+  async getRunOutput(runId: string): Promise<RunOutputRead> {
+    const port = this.board.port();
+    if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
+    const answer = await ask(port, "GET", `${MANIFEST}/runs/${encodeURIComponent(runId)}/output`);
+    if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
+    return { ok: true, output: answer.body as RunOutput };
+  }
+}
+
+/**
+ * One checkout run's output, as a window is watching it. **`RunSocket`'s
+ * shape, one owner over** — a run id and no Job — and one at a time for the
+ * same reason: the page shows one run's output, and opening another replaces
+ * it.
+ */
+export class CheckoutRunSocket {
+  private readonly publish: (followed: CheckoutRunFollowed) => void;
+  private socket: WebSocket | null = null;
+  private held: CheckoutRunFollowed = { state: "none" };
+
+  constructor(publish: (followed: CheckoutRunFollowed) => void) {
+    this.publish = publish;
+  }
+
+  /** Which run is being read, or `null` to stop. */
+  open(port: number | null, runId: string | null): void {
+    const held = this.held;
+    if (
+      runId !== null &&
+      held.state !== "none" &&
+      held.state !== "failed" &&
+      held.runId === runId
+    ) {
+      return;
+    }
+    this.close();
+    if (runId === null) {
+      this.set({ state: "none" });
+      return;
+    }
+    if (port === null) {
+      this.set({ state: "failed", runId, detail: "Fleet is not connected." });
+      return;
+    }
+    this.set({ state: "opening", runId });
+
+    const path = `${MANIFEST}/runs/${encodeURIComponent(runId)}/observe`;
+    const socket = new WebSocket(`ws://${HOST}:${port}${path}`);
+    this.socket = socket;
+    socket.on("message", (data: WebSocket.RawData) => this.arrived(runId, String(data)));
+    socket.on("error", (cause: Error) => this.broke(runId, cause.message));
+    socket.on("close", () => this.broke(runId, "the connection closed"));
+  }
+
+  close(): void {
+    const socket = this.socket;
+    this.socket = null;
+    if (socket === null) return;
+    socket.removeAllListeners();
+    // One listener stays, `RunSocket`'s reason: a socket still shaking hands
+    // reports its abort as an `error` on the next tick, and one with nothing
+    // listening is thrown by Node.
+    socket.on("error", () => {});
+    socket.close();
+  }
+
+  private set(followed: CheckoutRunFollowed): void {
+    this.held = followed;
+    this.publish(followed);
+  }
+
+  private arrived(runId: string, text: string): void {
+    let message: CheckoutRunMessage;
+    try {
+      message = JSON.parse(text) as CheckoutRunMessage;
+    } catch {
+      this.broke(runId, "Fleet sent a message this Bridge could not read.");
+      return;
+    }
+
+    if (message.message === "opened") {
+      this.set({
+        state: "following",
+        runId,
+        name: message.name,
+        path: message.path,
+        fromLine: message.skipped + 1,
+        lines: [],
+      });
+      return;
+    }
+
+    const held = this.held;
+    if (held.state !== "following") return;
+
+    if (message.message === "lines") {
+      this.set({ ...held, lines: [...held.lines, ...message.lines] });
+      return;
+    }
+    if (message.message === "missed") return;
+
+    // `closed` carries why, and the socket is let go first so its own `close`
+    // cannot overwrite the reason.
+    this.close();
+    this.set({ ...held, ended: message.because });
+  }
+
+  /** The socket went without a sentence. What had arrived stays arrived. */
+  private broke(runId: string, detail: string): void {
+    if (this.socket === null) return;
+    this.socket.removeAllListeners();
+    this.socket = null;
+    const held = this.held;
+    if (held.state === "following") {
+      this.set({ ...held, ended: held.ended ?? "broke" });
+      return;
+    }
+    this.set({ state: "failed", runId, detail });
+  }
+}

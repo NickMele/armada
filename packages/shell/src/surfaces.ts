@@ -16,7 +16,7 @@
 // the order rather than the numbers. So the order is written here once, from
 // `docs/concepts/bridge.md`, and every digit falls out of it.
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { ClipboardList, FileCog, HardDrive } from "lucide-react";
 
 import type { PaletteSurface } from "./Palette";
@@ -100,15 +100,22 @@ export const SURFACES: readonly PaletteSurface[] = [
  * whole point of the modifier is that it still works from inside one.
  */
 export function useSurfaceKeys(onSurface: (surfaceId: string) => void): void {
+  // **Bound once, and the handler is read through a ref.** The app rebuilds
+  // its `goTo` every render, and a listener re-registered on every render is
+  // one that has to be right about removal every time — `useCommandPalette`
+  // avoids the question by depending on nothing, and this does the same.
+  const latest = useRef(onSurface);
+  latest.current = onSurface;
+
   useEffect(() => {
     function pressed(event: KeyboardEvent): void {
       if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
       const surface = SURFACES.find((one) => one.shortcut === `⌘${event.key}`);
       if (surface === undefined) return;
       event.preventDefault();
-      onSurface(surface.id);
+      latest.current(surface.id);
     }
     window.addEventListener("keydown", pressed);
     return () => window.removeEventListener("keydown", pressed);
-  }, [onSurface]);
+  }, []);
 }

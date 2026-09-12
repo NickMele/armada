@@ -505,6 +505,16 @@ export class FleetConnection {
       this.rehearsal.onRunFinished(event.job_id, fleet.port);
       return;
     }
+    if (event.kind === "checkout_run.finished") {
+      // **Above the tail below, because there is no Job to find**, which is
+      // `manifest.reread`'s reason on this same switch: the tail reads
+      // `event.job_id` and treats a Job it does not hold as a missed message,
+      // so falling through would make every run in the checkout trigger a full
+      // re-read of the board.
+      this.publish({ connection });
+      this.rehearsal.onCheckoutRunFinished(fleet.port);
+      return;
+    }
     if (
       event.kind === "server.starting" ||
       event.kind === "server.serving" ||
