@@ -73,7 +73,17 @@ export type { Render } from "./render";
 export type { JobDetailProps } from "./detail-props";
 import type { JobDetailProps } from "./detail-props";
 
-export function JobDetail({
+/**
+ * The screen, **remounted for every Job it is handed.** Everything below holds
+ * the open state of one reading, and none of it is the next Job's — so the
+ * reset is the key, rather than an effect per piece that lands a frame late and
+ * a piece nobody wrote one for.
+ */
+export function JobDetail(props: JobDetailProps) {
+  return <OneJob key={props.job.id} {...props} />;
+}
+
+function OneJob({
   onReadDiff,
   onOpenArtifact,
   onOpenPullRequest,
@@ -134,12 +144,10 @@ export function JobDetail({
   // `null` means the one Fleet says is current, so a Job that moves on carries
   // the reader with it until they choose a step themselves.
   const [selected, setSelected] = useState<string | null>(null);
-  useEffect(() => setSelected(null), [job.id]);
 
   // Which sheet is open, or none. **One value rather than two booleans**: the
   // two cannot both be open, and a pair of flags is a state that says they can.
   const [sheet, setSheet] = useState<OpenSheet>(null);
-  useEffect(() => setSheet(null), [job.id]);
 
   // Which run of the step the log sheet is reading, or `null` for the step
   // whole. **An earlier attempt's `Open the log` means that attempt's log** —
@@ -156,17 +164,14 @@ export function JobDetail({
   // Whether the report dialog is up. Two controls open it — the Job header's
   // menu entry and `b` — and the keyboard is bound at the screen's level.
   const [reporting, setReporting] = useState(false);
-  useEffect(() => setReporting(false), [job.id]);
 
   // Whether the raise dialog is up, on `reporting`'s terms: the header's
   // button and `B` both open it.
   const [raising, setRaising] = useState(false);
-  useEffect(() => setRaising(false), [job.id]);
 
   // Whether the turn-cap dialog is up. Its own state beside the cost cap's:
   // `budget_hold` offers one control or the other, never both.
   const [raisingTurns, setRaisingTurns] = useState(false);
-  useEffect(() => setRaisingTurns(false), [job.id]);
   const runHook = useRunSheet({ ...rehearsal, jobId: job.id, jobTitle: job.title, sheet, now, setSheet, onSaid });
 
   // The diff, for every Job that is open rather than only for one at review.
