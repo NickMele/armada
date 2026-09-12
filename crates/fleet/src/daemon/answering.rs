@@ -1,20 +1,17 @@
 //! What Fleet answers when it is asked: the boot read, the two acts a person
 //! takes on a Job, and the reads every surface makes between them.
 //!
-//! **Two acts, and both of them a person's.** A Job is proposed and a Job is
-//! approved. Everything else that moves a Job moves it from inside — from a
-//! turn, a Check, or a Drone's own submission — through the modules around this
-//! one, so the actor recorded here is `human` and Fleet is not allowed to be
-//! recorded as having approved anything.
+//! **Two acts, both a person's** — a Job is proposed and a Job is approved. Everything else
+//! moves a Job from inside (a turn, a Check, a Drone's own submission), so the actor recorded
+//! here is `human` and Fleet is never recorded as having approved anything.
 //!
-//! **A read never quietly shortens.** [`Fleet::every_job`] answers with the rows
-//! that would not load beside the ones that did: a caller handed a short list
-//! with nothing in the signature saying so cannot tell it from a complete one.
+//! **A read never quietly shortens** — [`Fleet::every_job`] answers with the rows that would
+//! not load beside the ones that did, since a short list with nothing in the signature saying
+//! so cannot be told from a complete one.
 //!
-//! **Who is calling is a read too, and it asks the transport.** The Drone index
-//! is kept here beside [`Fleet::caller_of`], which is its only reason to exist —
-//! `crate::peer` places a call by the port pair it arrived on, and this is what
-//! it places it against.
+//! **Who is calling is a read too, and it asks the transport** — the Drone index sits beside
+//! [`Fleet::caller_of`], its only reason to exist: `crate::peer` places a call by the port pair
+//! it arrived on, and this is what it places it against.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
@@ -43,22 +40,18 @@ where
 {
     /// **The boot read, and the reconciliation.** Nothing runs until this has.
     ///
-    /// A Job the store says was `running` **is asked about** rather than
-    /// assumed dead. `libc::setsid()` at every spawn is what lets a Drone
-    /// outlive the Fleet that started it, so a step whose pointer is still set
-    /// may name a process that is still working — and this used to state
-    /// `Ending::Vanished` about all of them, because a pid lived only in memory
-    /// and there was nothing to ask with. `crate::readopting` is the asking and
-    /// `#61` is the subject.
+    /// A Job the store says was `running` **is asked about** rather than assumed dead —
+    /// spawning with a fresh session is what lets a Drone outlive the Fleet that started it,
+    /// so a step whose pointer is still set may name a process still working. This used to
+    /// state `Ending::Vanished` about all of them, since a pid lived only in memory with
+    /// nothing to ask; `crate::readopting` is the asking and `#61` is the subject.
     ///
-    /// Where the process is gone, the answer is what it always was: `escalated`,
-    /// reason `interrupted`, through `crate::aftermath` rather than restated
-    /// here.
+    /// Where the process is gone, the answer is what it always was: `escalated`, reason
+    /// `interrupted`, through `crate::aftermath` rather than restated here.
     ///
-    /// **Never resumed silently, which is a stronger claim than it looks.** A
-    /// Drone that is adopted is put back in a slot and the Job carries on, and
-    /// the record says so twice over: a line in the Job's log naming the pid,
-    /// and a row in the Drone's own transcript saying how long nothing was read
+    /// **Never resumed silently, a stronger claim than it looks.** An adopted Drone is put back
+    /// in a slot and the Job carries on, and the record says so twice: a line in the Job's log
+    /// naming the pid, and a row in the Drone's own transcript saying how long nothing was read
     /// and that nothing will be read from here.
     pub async fn reconcile(&self) -> Result<Reconciled, Adrift> {
         // First of all: the servers a crashed Fleet left running are ended, so

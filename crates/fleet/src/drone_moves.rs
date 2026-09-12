@@ -1,28 +1,18 @@
-//! A Drone arriving on a step and leaving it: the column, the log row, and the
-//! two events Bridge folds.
+//! A Drone arriving on a step and leaving it: the column, the log row, and the two events
+//! Bridge folds. Kept out of [`dispatch`](mod@crate::dispatch), a different subject — this is
+//! the one field whose content is whether a process exists.
 //!
-//! Kept out of [`dispatch`](mod@crate::dispatch) because it is a different
-//! subject — that file is what happens to a Job in the slot, and this is the
-//! one field whose content is whether a process exists.
+//! **Arriving answers, and leaving answers about the fault, not the fact.** A spawn that cannot
+//! be recorded fails the dispatch: `assigned_drone` is what the liveness clock reads to know a
+//! process exists.
 //!
-//! # Arriving answers, and leaving answers about the fault and not the fact
+//! A departure used to be swallowed whole. Two of the three things it swallowed were faults: a
+//! store that would not take the write, and a caller naming a step the Job does not have —
+//! both now return. **A step that holds no Drone is still not one** — `kill_drone` reaches it
+//! on a Job whose Drone has already gone, and answers `Ok`.
 //!
-//! A spawn that cannot be recorded fails the dispatch: `assigned_drone` is what
-//! the liveness clock and every surface read to know a process exists, and a
-//! Drone running against a record that does not say so is the lie this event
-//! was added to remove.
-//!
-//! A departure used to be swallowed whole, on the grounds that every caller is
-//! already ending the Drone for a reason of its own. Two of the three things it
-//! swallowed were not that: a store that would not take the write, and — now
-//! that the pointer is per step — a caller naming a step the Job does not have.
-//! Both are faults and both now return. **A step that holds no Drone is still
-//! not one**: `kill_drone` reaches it on a Job whose Drone has already gone,
-//! and it answers `Ok`.
-//!
-//! #140 is what needs that distinction. It records an exit and then spawns onto
-//! the next step, and a spawn refuses over a live pointer — so an exit that
-//! silently failed would become a boundary that could not put a Drone on it.
+//! `#140` needs that distinction: it records an exit and spawns onto the next step, and a spawn
+//! refuses over a live pointer — so a silently failed exit would block the next boundary.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
@@ -67,22 +57,18 @@ where
 
     /// Record the operating-system process the Drone is running as.
     ///
-    /// **The third place a spawn is written down, and the only one a restart
-    /// can read.** The step's `assigned_drone` says a Drone exists and
-    /// `crate::peer`'s index says which pid it is; both are needed while Fleet
-    /// is up, and only this survives Fleet going away. `crate::adopting` is the
-    /// reader.
+    /// **The third place a spawn is written down, and the only one a restart can read.** The
+    /// step's `assigned_drone` says a Drone exists and `crate::peer`'s index says which pid it
+    /// is; only this survives Fleet going away. `crate::adopting` is the reader.
     ///
-    /// **A pid and when it started, because a pid alone is not an identity.**
-    /// The reading is taken here, once, immediately after the process exists —
-    /// not at the adoption, where the answer would be whatever holds the number
-    /// by then.
+    /// **A pid and when it started, because a pid alone is not an identity.** The reading is
+    /// taken here, once, immediately after the process exists — not at the adoption, where the
+    /// answer would be whatever holds the number by then.
     ///
-    /// **A probe that will not run does not fail the spawn.** What is lost is
-    /// the ability to adopt this Drone if Fleet restarts, which is a recovery
-    /// Fleet did not have at all until now; failing a live dispatch over it
-    /// would trade a working Job for a hypothetical one. The Job's log says so,
-    /// because a Drone that silently cannot be adopted is exactly the kind of
+    /// **A probe that will not run does not fail the spawn.** What is lost is the ability to
+    /// adopt this Drone if Fleet restarts, a recovery Fleet did not have at all until now;
+    /// failing a live dispatch over it would trade a working Job for a hypothetical one. The
+    /// Job's log says so, since a Drone that silently cannot be adopted is exactly the kind of
     /// absence nobody finds later.
     pub(crate) async fn drone_process_recorded(
         &self,

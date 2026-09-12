@@ -132,21 +132,17 @@ impl Adopted {
 
     /// Whether the process has gone, **and it is still the same process**.
     ///
-    /// The reading `crate::dispatch::reap` takes every turn for an adopted
-    /// Drone, and it is [`crate::holder_of`] rather than the `waitid` a spawned
-    /// Drone gets: `waitid` answers about a child, and this one is not Fleet's
-    /// child — there is nothing to collect and nothing to be a zombie. The
-    /// argument that made `holder_of` the wrong probe for a spawned Drone
-    /// therefore does not reach here.
+    /// `crate::dispatch::reap` takes this every turn via [`crate::holder_of`]
+    /// rather than `waitid`, since this pid is not Fleet's child — nothing to
+    /// collect, nothing to be a zombie.
     ///
-    /// **It re-checks the identity on every reading, and that is what it costs
-    /// a fork for.** A pid that came round as somebody else's process reads as
-    /// gone, which is the answer that ends the adoption rather than one that
-    /// signals a stranger. A `ps` per turn per adopted Drone is the price, paid
-    /// only on a road that exists because Fleet crashed.
+    /// **It re-checks identity on every reading, at the cost of a fork.** A
+    /// pid recycled by another process reads as gone rather than signalling
+    /// a stranger — the price of a `ps` per turn, paid only because Fleet
+    /// crashed.
     ///
-    /// **A probe that would not run is not a Drone that stopped.** It comes
-    /// back as the `io::Error` the caller escalates on, never as `true`.
+    /// **A probe that would not run is not a Drone that stopped.** It
+    /// surfaces as the `io::Error` the caller escalates on, never as `true`.
     pub(crate) fn exited(&self) -> Result<bool, io::Error> {
         match self.still_ours()? {
             Some(_) => Ok(false),
@@ -164,21 +160,17 @@ impl Adopted {
 
     /// End it, and everything it started.
     ///
-    /// **The fallback, and the only act on an adopted Drone that changes
-    /// anything.** `kill_drone` and `kill_job` reach it through [`Session`]
-    /// exactly as they reach a spawned Drone's `terminate`.
+    /// **The only act on an adopted Drone that changes anything.**
+    /// `kill_drone` and `kill_job` reach it through [`Session`], exactly as
+    /// they reach a spawned Drone's `terminate`.
     ///
-    /// **The identity is proved immediately before the signal, never once at
-    /// adoption.** A spawned Drone's group is safe to signal because Fleet
-    /// holds an uncollected child on the pid; there is no child here, so the
-    /// proof is the reading — and a pid that is no longer this Drone's is left
-    /// alone and said so.
+    /// **Identity is proved immediately before the signal, never once at
+    /// adoption** — there is no uncollected child to make the pid safe to
+    /// signal, so a pid no longer this Drone's is left alone and said so.
     ///
     /// **`Ok` means the group was signalled, not that the process is gone.**
-    /// Fleet cannot wait on something it did not spawn, so there is no wait to
-    /// do and nothing to collect; the confirmation is the next turn's
-    /// [`exited`](Adopted::exited). Saying more than that would be the one lie
-    /// this whole module exists to avoid.
+    /// Fleet cannot wait on something it did not spawn; the confirmation is
+    /// the next turn's [`exited`](Adopted::exited).
     async fn terminate(&self) -> Result<(), io::Error> {
         match self.still_ours()? {
             Some(_) => {
@@ -234,26 +226,17 @@ impl Session {
 
     /// Whether Fleet holds no way of reading what this Drone says.
     ///
-    /// **The condition, and deliberately not the cause.** What it answers is
-    /// whether there is a read end on the other side of this Drone's output —
-    /// not whether the Drone was adopted, which is merely the only road into
-    /// that state today. `crate::silence` escalates on this rather than on
-    /// [`adopted`](Session::adopted) for exactly that reason: a second way to
-    /// lose the pipe should reach the same trigger without minting a second
-    /// one, and a method called `is_adopted` at that call site would have
-    /// written the cause into the badge.
+    /// **The condition, deliberately not the cause.** It answers whether
+    /// there is a read end on this Drone's output, not whether it was
+    /// adopted — the only road into that state today, but not the only one a
+    /// future one could take. `crate::silence` escalates on this rather than
+    /// on [`adopted`](Session::adopted) so a second way to lose the pipe
+    /// reaches the same trigger without minting one.
     ///
-    /// **Two callers now, and they are the two halves of one sentence.**
-    /// `crate::silence` says what the badge reads; `crate::stuck` says which
-    /// acts sit under it, withholding the redirect and the gate re-run because
-    /// both need the pipe, and `crate::resume` ends the Drone rather than
-    /// refusing a restart over it. A badge that says nothing is reading this
-    /// Drone, beside a button that speaks to it, is worse than either alone.
-    ///
-    /// **It is the same fact the six refusals below are**, read as a question
-    /// instead of taken as an error. A caller deciding *what to say about* a
-    /// Drone cannot get the answer by trying to speak to it, because trying
-    /// costs a turn and spends a poke.
+    /// `crate::silence` reads it for the badge; `crate::stuck` withholds the
+    /// redirect and gate re-run because both need the pipe; `crate::resume`
+    /// ends the Drone rather than refusing a restart. **The same fact the six
+    /// refusals below are, asked rather than tried** — trying costs a poke.
     pub(crate) fn unheard(&self) -> bool {
         match self {
             Session::Spawned(_) => false,

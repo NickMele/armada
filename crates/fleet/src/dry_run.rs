@@ -1,28 +1,18 @@
-//! A Drone asking whether its work passes, and Fleet running the step's Checks
-//! to answer.
+//! A Drone asking whether its work passes, and Fleet running the step's Checks to answer.
 //!
-//! **The allowlist is why this exists and is not the fix.** `--allowedTools` is
-//! a permission list rather than a toolset, so a Drone granted `cargo fmt` and
-//! nothing else has every other invocation denied *silently*, which reads as a
-//! tool that does not work. Widening it would run a command the workflow did
-//! not freeze. Fleet runs the Checks; a Drone can now ask it to.
+//! **The allowlist is why this exists.** `--allowedTools` is a permission list, not a toolset,
+//! so a Drone granted `cargo fmt` has every other invocation denied *silently*; Fleet runs the
+//! Checks instead of widening it.
 //!
-//! **A signal, and no path from here to a pass.** Nothing below writes a Check
-//! row, records evidence or moves a step, and the gate runs every Check again
-//! for itself. Output goes to `<step>.dry.<n>.log` and never to the gate's
-//! `<step>.<n>.log`, so no record ends up naming a file no gate wrote.
-//!
-//! **The clocks suspend while it runs, which is what needs two bounds.** A
-//! Drone waiting on Fleet is not silent and is not thrashing — `#58` settled
-//! that for evidence at the gate — but they were also the only thing bounding
-//! the cost, and `cargo build --workspace` is minutes.
+//! **A signal, no path to a pass** — nothing below writes a Check row, records evidence or
+//! moves a step; output goes to `<step>.dry.<n>.log`, never the gate's `<step>.<n>.log`. **The
+//! clocks suspend while it runs, needing two bounds** — not thrashing (`#58`), but the only
+//! thing bounding the cost, and `cargo build --workspace` is minutes:
 //!
 //! | Bound | What it stops |
 //! |---|---|
 //! | A refusal while one runs | Two builds in one worktree, neither answer about the work |
 //! | [`DryRuns`], per step | Ask, change a line, ask again, for as long as the step lasts |
-//!
-//! **The call chooses neither the Checks nor the bar** — [`Fleet::run_checks`].
 
 use std::fmt;
 use std::path::Path;
@@ -187,20 +177,18 @@ where
 {
     /// Run the step's Checks and say what each one did. **Nothing moves.**
     ///
-    /// The Drone names no Job, no step and no Check; all three are read out of
-    /// **its own** slot and the Job's own frozen workflow, which is
-    /// `Fleet::declare_scope`'s binding and for the same reason. Which slot is
-    /// `crate::peer`'s answer.
+    /// The Drone names no Job, no step and no Check; all three are read out of **its own** slot
+    /// and the Job's own frozen workflow, which is `Fleet::declare_scope`'s binding. Which slot
+    /// is `crate::peer`'s answer.
     ///
-    /// `only_what_changed` is the one thing the Drone does say, and it names
-    /// nothing either: the step's Checks run under both answers, and what moves
-    /// is how much of the tree each opens — against this worktree's own diff,
-    /// read here, only where the Manifest declared a narrower way to run it.
-    /// `#504`, and `docs/contracts/configuration.md` holds the syntax.
+    /// `only_what_changed` is the one thing the Drone does say, and it names nothing either:
+    /// the step's Checks run under both answers, and what moves is how much of the tree each
+    /// opens, against this worktree's own diff, read here, only where the Manifest declared a
+    /// narrower way to run it. `#504`, and `docs/contracts/configuration.md` holds the syntax.
     ///
-    /// **A narrowed answer is the smaller claim and the report says which it
-    /// is** — its own closing sentence, and the narrowed command on every row
-    /// that ran one. The gate goes on reading the whole of every Check.
+    /// **A narrowed answer is the smaller claim and the report says which it is** — its own
+    /// closing sentence, and the narrowed command on every row that ran one. The gate goes on
+    /// reading the whole of every Check.
     pub async fn run_checks(
         &self,
         caller: &JobId,

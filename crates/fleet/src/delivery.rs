@@ -1,28 +1,18 @@
 //! Getting a Job's work back to the branch it merges into.
 //!
-//! # Rebasing is Fleet's, on every path, and it is one call
+//! **Rebasing is Fleet's, on every path, one call.** `docs/concepts/fleet.md`, *Catching a
+//! branch up*, is the rule; [`caught_up_onto`](Fleet::caught_up_onto) is the only place a
+//! boundary rebases, and every path that starts, resumes or advances a step reaches it.
 //!
-//! `docs/concepts/fleet.md`, *Catching a branch up*, is the rule.
-//! [`caught_up_onto`](Fleet::caught_up_onto) is the only place a boundary
-//! rebases, and every path that starts, resumes or advances a step reaches it.
+//! **Two moments, used to be three.** At a **spawn** it runs before the process exists and what
+//! moved rides the opening brief (`crate::spawning`); on the step that delivers, entering it
+//! commits, pushes and opens for review (`crate::landing`). The third was a live Drone hearing
+//! what moved mid-turn; a Drone belongs to a step now, so every boundary is a spawn.
 //!
-//! # Two moments, and they used to be three
-//!
-//! At a **spawn** the rebase runs before the process exists and what moved
-//! rides the opening brief — `crate::spawning`. On the step the workflow says
-//! delivers, and as it is entered, the branch is committed, pushed and opened
-//! for review — `crate::landing`, which owns why that is an entry and not an
-//! advance. The third was a boundary where the Drone was alive and heard what
-//! moved in the turn it got for the next step; a Drone belongs to a step now,
-//! so every boundary is a spawn.
-//!
-//! # A boundary is asked, never the Drone
-//!
-//! Asking the Drone whether its branch is behind would be asking it to manage
-//! its own state, which `docs/concepts/drone.md` says it cannot be trusted to
-//! do — and it has just submitted, so git can answer on its own. What the
-//! worktree is *holding* is not checked either: the rebase carries uncommitted
-//! work across and puts it back. See `adapters`' delivery module.
+//! **A boundary is asked, never the Drone** — asking it would be asking it to manage its own
+//! state, which `docs/concepts/drone.md` says it cannot be trusted to do, and it has just
+//! submitted, so git can answer on its own. The worktree's *holdings* are not checked either:
+//! the rebase carries uncommitted work across and puts it back (`adapters`' delivery module).
 
 use adapter_traits::{
     AgentHarness, Base, BroughtUpToDate, Changed, Delivery, Opened, Pushed, Standing, Vcs,
@@ -95,24 +85,19 @@ where
 {
     /// Bring this branch up to its base, in the worktree it is checked out in.
     ///
-    /// **The one call.** `#150` found two paths that advanced a step without
-    /// it and `#180` found a third, which is the shape of a missing seam rather
-    /// than three oversights — so this is where the decision lives and every
+    /// **The one call** — `#150` found two paths that advanced a step without it and `#180`
+    /// found a third, the shape of a missing seam rather than three oversights, so every
     /// caller reaches it rather than repeating it.
     ///
-    /// **Nothing is created and nothing is discarded.** The worktree named here
-    /// is the one that already exists, holding whatever a previous Drone left
-    /// in it; a clean rebase updates it in place and a conflicted one writes
-    /// markers into it. That is what makes this compatible with `#62`, where a
-    /// restart exists precisely so the earlier attempt's work survives.
+    /// **Nothing is created and nothing is discarded** — the worktree named here already
+    /// exists, holding whatever a previous Drone left; a clean rebase updates it in place and
+    /// a conflicted one writes markers into it, compatible with `#62`, where a restart exists
+    /// precisely so the earlier attempt's work survives. `None` is a repository naming no
+    /// base, or a branch not behind one — both are silence rather than an event.
     ///
-    /// `None` is a repository that names no base, or a branch that is not
-    /// behind one. Both are silence rather than an event.
-    ///
-    /// **One Job at a time from the rebase onward.** Dispatch and the work run
-    /// N-wide; this does not, because every worktree is cut from one `.git` and
-    /// `Fleet::merge_end` — taken here and in `crate::landing` — lets one Job
-    /// touch it at a time. That field carries the argument and the cost.
+    /// **One Job at a time from the rebase onward** — dispatch and the work run N-wide, this
+    /// does not, because every worktree is cut from one `.git` and `Fleet::merge_end` — taken
+    /// here and in `crate::landing` — lets one Job touch it at a time.
     pub(crate) async fn caught_up_onto(
         &self,
         job_id: &core_model::JobId,

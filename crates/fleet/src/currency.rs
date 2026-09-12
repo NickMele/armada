@@ -1,22 +1,18 @@
 //! Keeping a Job's pull request current as main moves, without closing and
 //! reopening it. `#663`, in place of `#427`'s close-and-reopen — which moved
 //! what the forge compares against and not a single commit, so it never fixed
-//! a branch actually behind its base with conflicts. #660 sat in that twice.
+//! a branch actually behind its base with conflicts. `#660` sat in that twice.
 //!
-//! **Once per base, remembered durably.** `crate::noticing::Sweep::nudged` —
-//! the map this replaces — lived in memory and lost the count on a restart,
-//! which is why #660 was nudged twice for the same base.
-//! [`Store::kept_current_for`] is read before every attempt and compared
-//! against the base's tip *now* ([`Delivery::base_tip`]): where they agree,
-//! nothing runs, clean or conflicted alike, and a restart mid-conflict reads
-//! the same answer back rather than retrying.
+//! **Once per base, remembered durably.** `crate::noticing::Sweep::nudged` — the map this
+//! replaces — lived in memory and lost the count on a restart, why `#660` was nudged twice.
+//! [`Store::kept_current_for`] is read before every attempt and compared against the base's
+//! tip *now* ([`Delivery::base_tip`]): where they agree, nothing runs, and a restart
+//! mid-conflict reads the same answer back rather than retrying.
 //!
-//! **A conflict is told to a person, not resolved here.**
-//! [`KeptCurrent::Conflicted`] leaves the branch exactly as
-//! `adapters::keeping_current` found it and writes a `Warn` line into the
-//! Job's log; nothing here moves the Job. `ipc::PullRequestDetail::currency`
-//! is what a person reads, and `crate::conflict_resolution` is where they may
-//! act on it.
+//! **A conflict is told to a person, not resolved here.** [`KeptCurrent::Conflicted`] leaves
+//! the branch as `adapters::keeping_current` found it and writes a `Warn` line into the Job's
+//! log; nothing here moves the Job. `ipc::PullRequestDetail::currency` is what a person reads,
+//! and `crate::conflict_resolution` is where they may act on it.
 
 use std::sync::Arc;
 

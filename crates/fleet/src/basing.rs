@@ -1,27 +1,18 @@
 //! Getting a prepared checkout of the base, giving back the ones the base has
 //! moved past, and reading one side's frames against the other's.
 //!
-//! # Why there is no lock in this file
+//! **No lock in this file.** `crate::turning` is one task walking the roster
+//! in order and awaiting each Job, so no two Jobs' settling overlaps and the
+//! sweep below runs on that same turn — a mutex here would be a second answer
+//! to a question already answered. Across processes the guard is git's own:
+//! two Fleets on one repository is already refused, and `armada clean` refuses
+//! while a Fleet runs; [`Vcs::base_checkout`] is idempotent besides.
 //!
-//! Several Jobs want the same base checkout, and two turns must not set it up
-//! twice or take it away under each other. **The turn loop is what stops
-//! that**, not a mutex added here: `crate::turning` is one task walking the
-//! roster in order and awaiting each Job, so no two Jobs' settling overlaps,
-//! and the sweep below runs on that same turn. A lock would be a second answer
-//! to a question already answered, and the kind that reads as protecting
-//! something.
-//!
-//! Across processes the guard is git's own: two Fleets on one repository is
-//! already refused, and `armada clean` refuses while a Fleet runs.
-//! [`Vcs::base_checkout`] is idempotent besides.
-//!
-//! # Preparation is paid once and marked on the disk
-//!
-//! It is paid by the first Job to need the base, and every later Job finds the
-//! mark. The mark is a file **inside** the checkout, so a record and a
-//! directory cannot disagree about it — and a Fleet killed halfway leaves no
-//! mark, so the next one prepares again rather than serving a tree with no
-//! dependencies in it.
+//! **Preparation is paid once, marked on the disk.** The first Job to need the
+//! base pays it; every later Job finds the mark, a file **inside** the
+//! checkout so a record and a directory cannot disagree. A Fleet killed
+//! halfway leaves no mark, so the next one prepares again rather than serving
+//! a tree with no dependencies in it.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -342,20 +333,18 @@ where
 
     /// Give back every base checkout the base has moved past.
     ///
-    /// **On the same sweep that reclaims a Job's worktree**, which is
-    /// `crate::holding`'s, rather than a second sweeper on a second timer: two
-    /// things walking `.armada/` on two clocks is how a directory comes to be
-    /// deleted by whichever one a person was not thinking about.
+    /// **On the same sweep that reclaims a Job's worktree** (`crate::holding`'s)
+    /// rather than a second sweeper on a second timer — two things walking
+    /// `.armada/` on two clocks is how a directory gets deleted by whichever
+    /// one a person was not thinking about.
     ///
-    /// **Everything that is not the current base commit**, and nothing else
-    /// decides. A checkout is only reachable through the commit its directory
-    /// is named for, so one at any other commit can never be asked for again —
-    /// there is no in-use set to consult, and a base run in flight is
-    /// impossible here for the reason this module's header gives: one turn
-    /// loop, one Job at a time, and this sweep is on that same loop.
+    /// **Everything that is not the current base commit, nothing else decides.**
+    /// A checkout is reachable only through the commit its directory is named
+    /// for, so no in-use set is needed, and a base run in flight is impossible
+    /// here — one turn loop, one Job at a time, this sweep on that same loop.
     ///
-    /// A repository that names no base sweeps nothing. Its checkouts, if any
-    /// were ever made, are held rather than guessed about.
+    /// A repository that names no base sweeps nothing; checkouts, if any were
+    /// made, are held rather than guessed about.
     pub(crate) fn bases_gone_by(&self) -> Vec<String> {
         let root = &self.host().repo_root;
         let Ok(Some(current)) = self.vcs().base_commit(root, self.manifest().base()) else {

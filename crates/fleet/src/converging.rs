@@ -1,7 +1,5 @@
 //! Catching a Drone that is working and not getting anywhere.
 //!
-//! # Four stages, and the trigger is the fourth
-//!
 //! | Stage | What | Costs |
 //! |---|---|---|
 //! | Tripwire | tool calls, wall-clock, the plan against the live diff | nothing |
@@ -9,20 +7,12 @@
 //! | The directive | "stop and report your current state now" | a turn |
 //! | `no_report` | **when that also fails** | the escalation |
 //!
-//! A Drone that is not converging and then reports when told to is not stopped
-//! at all. Escalating at stage one would make the trigger mean "took a while";
-//! at stage two it would spend a call and ignore what it said.
+//! A Drone that reports when told is not stopped at all, so escalating at stage one or two would
+//! be premature. **Stage four asks about silence, not the finding** — the escalation is not
+//! `thrashing` (stage two's verdict); [`NoReport`] stops the step, and a Drone still writing
+//! inside its plan re-arms the grace.
 //!
-//! **Stage four asks about silence, not about the finding**, which is why the
-//! escalation is not `thrashing` — that is stage two's verdict, and it named
-//! stage four too while one detection produced both. [`NoReport`] stops the
-//! step, and a Drone still writing inside its plan re-arms the grace.
-//!
-//! [`Chain`] holds where a step stands and is cleared when the step changes, so
-//! a tripwire that stays tripped — drift does — buys no second call.
-//! **Nothing here kills a Drone.** `docs/concepts/helm.md` holds a thrashing
-//! Drone with its worktree intact, leaving a redirect available; one waiting on
-//! an answer is not thrashing at all — `crate::questioning`.
+//! [`Chain`] clears on step change. **Nothing here kills a Drone** — `docs/concepts/helm.md` holds a thrashing one with its worktree intact; one waiting on an answer is not thrashing.
 use std::path::Path;
 use std::time::Duration;
 
@@ -461,22 +451,16 @@ where
             }
             return Ok(None);
         }
-        // **The grace runs from when the Drone was told, not from when Fleet
-        // spoke.** Injection lands at a turn boundary, so a Drone inside a tool
-        // call is handed nothing until that call returns — and until it is, it
-        // is not failing to report, it has not been asked. Job
-        // `01M21BKVPW002DC0ATD1X9T0VF` is the instance: told at 02:37:42,
-        // handed the turn at 02:39:14, wrote its deliverable at 02:39:40, and
-        // stopped at `no_report` at 02:39:42. It obeyed in 26 seconds and had
-        // 28 of its 120 left by the time it could hear.
+        // **The grace runs from when the Drone was told, not from when Fleet spoke.** Injection
+        // lands at a turn boundary, so a Drone inside a tool call is handed nothing until that
+        // call returns. Job `01M21BKVPW002DC0ATD1X9T0VF`: told at 02:37:42, handed the turn at
+        // 02:39:14, wrote its deliverable at 02:39:40, stopped at `no_report` at 02:39:42 — it
+        // obeyed in 26 seconds and had 28 of its 120 left by the time it could hear.
         //
-        // **The deadline is pushed rather than the comparison widened.** A
-        // larger `report_grace` would be a guess at a delay that has no bound —
-        // it is whatever is left of the current tool call — and it would spend
-        // the same slack on a Drone that was handed the turn at once. This is
-        // `still_reporting`'s re-arm on a second reason, and it costs a Drone
-        // nothing that is genuinely quiet: once the turn lands the clock runs
-        // in full.
+        // **The deadline is pushed rather than the comparison widened** — a larger `report_grace`
+        // would guess at a delay with no bound (whatever is left of the current tool call), and
+        // would spend the same slack on a Drone handed the turn at once. This is
+        // `still_reporting`'s re-arm on a second reason; it costs a genuinely quiet Drone nothing.
         if at_work.was_handed_the_directive() {
             if let Some(at_work) = working.as_mut() {
                 at_work.handed_the_directive_at(self.now());

@@ -1,28 +1,18 @@
 //! Resolving a pull request's conflicts with main from the review gate,
 //! without asking the Drone that cannot. `#663`.
 //!
-//! **Fleet rebases, never a Drone** — the same engine [`crate::currency`]'s
-//! sweep runs. Clean, it pushes and the pull request updates; nobody is
-//! spawned. Conflicted, a Drone that can edit files is needed, and the step at
-//! the gate is very often exactly the one that cannot: #660 spent a turn on
-//! `handoff`, which only summarises, because a picked "resolve the conflicts"
-//! comment reached it through `crate::remarks`.
+//! **Fleet rebases, never a Drone** — [`crate::currency`]'s sweep engine. Clean, it pushes and the pull
+//! request updates, nobody spawned; conflicted, a Drone that can edit files is needed, and the gate step
+//! is often exactly the one that cannot (`#660` spent a turn on `handoff`, which only summarises).
 //!
-//! **So a conflict routes the Job back to the step before the one that
-//! delivers**, the same [`StepTarget::Returned`] edge `verdict_routing`
-//! already uses to redo a step on purpose (`crate::reviewing::route_back` is
-//! that caller; this is a second one, choosing its own target). A Drone there
-//! reads the markers `crate::spawning`'s catch-up left — the same brief a
-//! restart already hands one — and once its Checks pass, the ordinary forward
-//! walk carries the Job through the delivering step again, which commits,
-//! pushes and updates the pull request. The gate itself never moves.
+//! **So a conflict routes the Job back to the step before delivery** — the same [`StepTarget::Returned`]
+//! edge `verdict_routing` uses (`crate::reviewing::route_back` is that caller; this chooses its own
+//! target). A Drone there reads `crate::spawning`'s catch-up markers, and once Checks pass, the ordinary
+//! forward walk carries the Job through delivery again — commit, push, pull request updated.
 //!
-//! **Not the step at the gate**: `crate::landing::sent_out_on_entry` commits
-//! whatever the worktree holds the moment the delivering step is *entered*, so
-//! entering it onto a conflicted rebase would commit the markers. The step
-//! before it never delivers, so its entry only rebases and briefs. A
-//! single-step workflow has none to redo, and
-//! [`Fleet::resolve_pull_request_conflict`] refuses rather than risk that.
+//! **Not the gate step itself**: `crate::landing::sent_out_on_entry` commits whatever the worktree holds
+//! the moment delivery is *entered*, so a conflicted rebase there would commit the markers; a single-step
+//! workflow has none to redo, and [`Fleet::resolve_pull_request_conflict`] refuses rather than risk it.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{Actor, Component, Envelope, FieldValue, Job, JobId, Level, StepTarget, Target};

@@ -1,28 +1,18 @@
 //! What crosses a step boundary when the process does not.
 //!
-//! # Why this is a value and not three arguments
+//! **A value, not three arguments** — a Drone belongs to a step, so part two never saw part one
+//! worked, and everything the gone process held has to arrive in the next Drone's opening brief.
+//! That list is not closed: [`Crossed`] carries three, and the third — [`Redirected`] — arrived
+//! as `#139` said it would: a field, a method, no caller of the first two touched.
 //!
-//! A Drone belongs to a step, so the one starting part two never saw part one
-//! worked. Everything the process that is gone would have held has to be handed
-//! over in the next Drone's opening brief, and that list is not closed:
-//! [`Crossed`] carries three, and the third — [`Redirected`], a person's note
-//! written where no Drone was there — arrived as `#139` said it would: a field,
-//! a method, no caller of the first two touched. A fourth costs the same.
+//! **An injected turn does not survive being moved into an opening brief.** Every sentence of
+//! `verification::OutcomeTurn` addresses the Drone that did the work — a string cannot be
+//! re-tensed — so what crosses is the **facts**, and [`Cleared`] is the fresh Drone's rendering
+//! of them, exactly as [`Reconciling`] is of `verification::TheBaseMoved`. [`Reconciling`] moved
+//! here from [`briefing`](mod@crate::briefing) for that reason.
 //!
-//! # An injected turn does not survive being moved into an opening brief
-//!
-//! Every sentence of `verification::OutcomeTurn` is addressed to the Drone that
-//! did the work: "Go on to Implement" is a continuation, and `Verified` says
-//! "the checks that cover what you changed" to a Drone that changed nothing. So
-//! what crosses is the **facts** of the outcome and not the rendered turn — a
-//! string cannot be re-tensed. [`Cleared`] is the fresh Drone's rendering of
-//! them, exactly as [`Reconciling`] is of `verification::TheBaseMoved`: same
-//! fact, different tense, two types. [`Reconciling`] moved here from
-//! [`briefing`](mod@crate::briefing) for that reason.
-//!
-//! **Drafted wording**, which `docs/contracts/agent-prompt.md` section 4a says.
-//! The product block is not — the contract draws it, and [`Produced::text`]
-//! follows it.
+//! **Drafted wording** (`docs/contracts/agent-prompt.md` section 4a); the product block is not
+//! — the contract draws it, and [`Produced::text`] follows it.
 use core_model::{FrozenWorkflow, RedirectWaiting, ResolvedStep, StepEvidence, StepId};
 use verification::TheBaseMoved;
 
@@ -132,23 +122,16 @@ impl Crossed {
 /// That a Job read off the same request landed work while this one was between
 /// steps.
 ///
-/// # Why a Drone is told rather than the Job stopped
+/// **Why a Drone is told rather than the Job stopped.** Two Jobs from one reading are unordered
+/// by construction, so either may land the other's work. Before dispatch `crate::superseding`
+/// closes a Job with nothing left to do — it can, because no Drone has started and no branch
+/// holds anything. **Once a Drone has worked, that answer costs too much**: closing would throw
+/// away work nobody has read, and killing mid-step is a different decision again, so the
+/// boundary says what happened and lets the Drone decide.
 ///
-/// Two Jobs from one reading are unordered by construction, so either may land
-/// the other's work. Before dispatch `crate::superseding` asks whether anything
-/// is left to do and closes the Job where nothing is — it can, because no Drone
-/// has started and no branch holds anything.
-///
-/// **Once a Drone has worked, that answer costs too much to act on.** The Job's
-/// earlier steps wrote commits, and those commits are not only the part a
-/// sibling has now duplicated. Closing it would throw away work nobody has
-/// read; killing it mid-step is a different decision again. So the boundary
-/// says what happened and lets the Drone decide, which is the one thing that is
-/// cheap and cannot be wrong.
-///
-/// **It gates nothing.** No Check reads it, no Judge sees it, and a Drone that
-/// ignores it is refused by exactly what would have refused it anyway. That is
-/// what makes telling safe where `crate::gate`'s rule makes believing unsafe.
+/// **It gates nothing** — no Check reads it, no Judge sees it, and a Drone that ignores it is
+/// refused by exactly what would have refused it anyway, which is what makes telling safe where
+/// `crate::gate`'s rule makes believing unsafe.
 ///
 /// **Drafted wording**, like [`Cleared`] and [`Reconciling`].
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -229,25 +212,18 @@ impl Dispatched {
 
 /// What a person said while nobody was there to hear it.
 ///
-/// # Why this is a type and not the string on the record
+/// **Why a type and not the string on the record.** The string is a person's own words and
+/// passes through untouched — the Agent Prompt Contract's table says `redirect_drone`'s content
+/// comes from a person, not a verdict. What this adds is the frame the words need in an
+/// *opening* turn and did not need injected: injected, the words arrive mid-conversation; here
+/// they arrive at the top of a brief, addressed to a process that never worked this part.
 ///
-/// The string is a person's own words and passes through untouched — the Agent
-/// Prompt Contract's table says outright that `redirect_drone`'s content comes
-/// from a person rather than from a verdict. What this adds is the frame the
-/// words need in an *opening* turn and did not need in an injected one, which
-/// is the same re-tensing [`Cleared`] and [`Reconciling`] exist for: injected,
-/// the words arrive in the middle of a conversation the Drone remembers; here
-/// they arrive at the top of a brief, addressed to a process that has never
-/// worked this part and would otherwise read them as part of the task.
+/// **It says who wrote them** — "a person read the work and asked for this" is the difference
+/// between an instruction and the step's own definition, and a fresh Drone has nothing else to
+/// tell the two apart.
 ///
-/// **It says who wrote them.** "A person read the work and asked for this" is
-/// the difference between an instruction and the step's own definition, and a
-/// fresh Drone has nothing else to tell the two apart.
-///
-/// **Drafted wording**, like [`Cleared`] and [`Reconciling`].
-/// `docs/contracts/agent-prompt.md` sanctions no copy for it — section 4a's
-/// table gives `redirect_drone` no Fleet wording at all, which is a statement
-/// about the note and not about the frame around it.
+/// **Drafted wording**, like [`Cleared`] and [`Reconciling`] — `docs/contracts/agent-prompt.md`
+/// sanctions no copy for it, section 4a's table giving `redirect_drone` no Fleet wording at all.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Redirected(String);
 
@@ -259,22 +235,18 @@ impl Redirected {
 
     /// The block, as it reaches a Drone.
     ///
-    /// **The words are quoted and never paraphrased**, for the reason
-    /// `fleet::resume::redirect` gives about the Judge's citation: the person
-    /// read the work and left this from it, and Fleet summarising it would be
-    /// Fleet deciding what they meant.
+    /// **Quoted and never paraphrased**, for the reason `fleet::resume::redirect` gives about
+    /// the Judge's citation: the person read the work and left this, and Fleet summarising it
+    /// would be Fleet deciding what they meant.
     ///
-    /// **It is framed as work and not as context**, which is the whole of the
-    /// difference between it and [`Produced`]'s `not_claimed` block. That one
-    /// says outright that it is not work this part owes; this one is the
-    /// reason this part is being worked at all.
+    /// **Framed as work, not context** — the whole difference from [`Produced`]'s `not_claimed`
+    /// block, which says outright it is not work this part owes; this is the reason the part is
+    /// being worked at all.
     ///
-    /// **"left this" and not "wrote this", since `#526`.** A person typing a
-    /// note wrote the words; a person picking comments off a pull request
-    /// picked somebody else's, and `fleet::remarks` is the second act that
-    /// writes this column. The frame has to be true of both, and the note
-    /// itself is what says which kind it is — the assembled one opens by saying
-    /// whose words follow.
+    /// **"left this" and not "wrote this", since `#526`** — a person typing a note wrote the
+    /// words, but one picking comments off a pull request picked somebody else's
+    /// (`fleet::remarks` is the second act writing this column), and the assembled note itself
+    /// says which kind it is.
     pub(crate) fn text(&self) -> String {
         let said = &self.0;
         format!(
@@ -289,27 +261,18 @@ impl Redirected {
 
 /// What the part immediately before this one produced, as the record holds it.
 ///
-/// **The part immediately before, and no further back.** The contract draws one
-/// block and it names one part. Reaching an arbitrary earlier step's evidence
-/// is what `baseline_ref` and `reference_docs` are for, and `reference_docs` is
-/// the Judge's yardstick — `docs/concepts/drone.md` keeps it away from a Drone
-/// and `config::scope` refuses it.
+/// **The part immediately before, no further back.** The contract draws one block naming one
+/// part; reaching an arbitrary earlier step is what `baseline_ref` and `reference_docs` are for
+/// (the Judge's yardstick, kept from a Drone by `docs/concepts/drone.md`, refused by `config::scope`).
 ///
-/// **Both the quotation and the path, and neither alone.** Quoting the claim
-/// alone reproduces what `#138` closed: the next Drone is handed a sentence a
-/// Drone typed about a file, rather than the file. Naming the path alone spends
-/// a tool call to read two lines, and says nothing on a step whose product is
-/// the diff.
+/// **Both the quotation and the path, neither alone.** Quoting the claim alone reproduces what
+/// `#138` closed: a sentence about a file rather than the file. Naming the path alone spends a
+/// tool call to read two lines and says nothing on a step whose product is the diff.
 ///
-/// **Two of the three evidence strings cross, and which two follows from
-/// that.** `shown_by` does not: `#138` is explicit that the brief points at a
-/// path Fleet resolved rather than at whatever the previous Drone typed.
-/// `not_claimed` does, on the owner's ruling of 31 Aug 2026 — `claimed`
-/// summarises a file in this same worktree and the path is right there, so a
-/// Drone wanting the whole of it opens the file, and `not_claimed` is nowhere
-/// else. It also bears most directly on what this part must not spend its turn
-/// on: "the writer has the same bound and is untouched" is exactly what a fix
-/// step should not go and re-do.
+/// **Two of the three evidence strings cross.** `shown_by` does not: `#138` is explicit the
+/// brief points at a path Fleet resolved, not whatever the previous Drone typed. `not_claimed`
+/// does, on the owner's ruling of 31 Aug 2026 — the path is right there in this worktree, so a
+/// Drone wanting the whole opens the file, bearing on what this part must not redo.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Produced {
     /// One-based, and it is the part number the rail counts with — "part 1",
@@ -489,20 +452,16 @@ impl Cleared {
 
 /// What Fleet did to this branch before the Drone reading it existed.
 ///
-/// **A different block from the one a live Drone gets**, and the difference is
-/// the tense. `verification::TheBaseMoved` renders "while you worked", which is
-/// true at a step boundary and false in an opening turn: this Drone did not
-/// work, and a first turn that opens by describing work it has no memory of is
-/// a first turn it has to reconcile before it can start.
+/// **A different block from the one a live Drone gets, in tense.** `verification::TheBaseMoved`
+/// renders "while you worked", true at a step boundary and false in an opening turn: this Drone
+/// did not work, and a first turn describing work it has no memory of has to reconcile before
+/// it can start.
 ///
-/// **The conflicted variant is the reader `#180` had to find.** A rebase runs
-/// where there is no session to inject a turn into, so the conflict rides the
-/// brief and is the Drone's opening piece of work — which is the whole of what
-/// "the Drone is asked to resolve them before continuing" means on a path with
-/// no Drone yet.
+/// **The conflicted variant is the reader `#180` had to find** — a rebase runs where there is no
+/// session to inject a turn into, so the conflict rides the brief as the Drone's opening work.
 ///
-/// **Drafted wording**, like [`Cleared`] and like `terms::Redeclaring`.
-/// `docs/contracts/agent-prompt.md` has no sanctioned copy for it.
+/// **Drafted wording**, like [`Cleared`] and `terms::Redeclaring` — `docs/contracts/agent-prompt.md`
+/// has no sanctioned copy for it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Reconciling(String);
 

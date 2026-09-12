@@ -1,9 +1,7 @@
 //! The acts that take something away, and what each one leaves.
 //!
-//! Cut out of [`daemon`](mod@crate::daemon) on that module's own three-part
-//! sentence — what Fleet is made of, the slots it works in, and the things it
-//! can be asked. `resume` and `reviewing` hold the rest; these are a ladder
-//! rather than leftovers, each rung defined against the one below it.
+//! Cut out of [`daemon`](mod@crate::daemon) — `resume` and `reviewing` hold the rest; these
+//! are a ladder, each rung defined against the one below it.
 //!
 //! | Act | Asked by | Goes | Survives |
 //! |---|---|---|---|
@@ -12,17 +10,9 @@
 //! | [`kill_job`](Fleet::kill_job) | a person | the Job, at `killed` | the record, and the worktree until `armada clean` |
 //! | [`forget_job`](Fleet::forget_job) | a person | the record | nothing this owns; the worktree is `armada clean`'s |
 //!
-//! **Reading them apart is why they are together.** Each doc below says what
-//! it is *not*: a kill that is not terminal, a terminal that is not a verdict,
-//! a deletion that is not a way to stop something still running, and a reap
-//! nobody asked for.
-//!
-//! **That last one needs defending, and `Ended` is the defence.** Fleet takes
-//! no process away on a judgement of its own; it takes away one whose own
-//! terminating event says its run is over.
-//!
-//! [`stopped_by_hand`](Fleet::stopped_by_hand) is here because `kill_drone` is
-//! its only caller and the two are one act as an operator means it.
+//! **Reading them apart is why they are together** — each says what it is *not*: a kill that
+//! is not terminal, a terminal not a verdict, a deletion not a way to stop something running, a
+//! reap nobody asked for. `Ended` defends that last: Fleet takes no process on its own judgement.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
@@ -180,29 +170,19 @@ where
 
     /// Take away a Drone whose own run has ended, and stop the step it was on.
     ///
-    /// **The only act on this ladder Fleet asks for**, and `DroneEvent::Ended`
-    /// is what makes it defensible rather than a judgement: the Drone said its
-    /// own run was over, and anything it does after saying so is outside what
-    /// it told Fleet. The reading is `crate::silence`'s and so is its argument.
+    /// **The only act on this ladder Fleet asks for**, and `DroneEvent::Ended` is what makes it
+    /// defensible: the Drone said its own run was over, and anything after is outside what it
+    /// told Fleet (`crate::silence`'s reading). **The cost is written down rather than
+    /// discovered** — a Drone that reports its run ended and keeps working loses that work,
+    /// accepted since the alternative is a step saying `running` under a Drone already finished.
     ///
-    /// **The cost is written down rather than discovered.** A Drone that
-    /// reports its run has ended and then keeps working loses that work. It is
-    /// accepted because the alternative is the row this reaps: a step saying
-    /// `running` beneath a Drone that has said it is finished.
+    /// **The order is `kill_drone`'s, load-bearing for the same reason:** process, then step,
+    /// then Job — the inner machine freezes the moment the Job leaves `running`, so a step
+    /// stopped after would be refused and `last_verdict` stays unwritten.
     ///
-    /// **The order is `kill_drone`'s, and load-bearing for the same reason.**
-    /// The process, then the step, then the Job — the inner machine freezes the
-    /// moment the Job leaves `running`, so a step stopped after the move is
-    /// refused and `last_verdict` stays unwritten. The step stops while the Job
-    /// is still `running`, so this needs no `step_machine` exception of its own.
-    ///
-    /// **It will not hang on a process that will not go**, which is `#371`.
-    /// `DroneSession::terminate` sends `SIGKILL`, uncatchable, and waits on
-    /// Fleet's own direct child. The pipe is the other wait — a tool the Drone
-    /// spawned can hold it open — and [`drained`](crate::Watching::drained)
-    /// bounds it and says whether it got to the end. Both answers ride out on
-    /// [`StoodDown`]: a slot handed back over a transcript cut short must not
-    /// be handed back silently.
+    /// **It will not hang on a process that will not go** (`#371`) — `SIGKILL` is uncatchable;
+    /// the pipe is the other wait, bounded by [`drained`](crate::Watching::drained), both riding
+    /// out on [`StoodDown`].
     pub(crate) async fn drone_at_rest(
         &self,
         target: Target,

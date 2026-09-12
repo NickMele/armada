@@ -1,18 +1,16 @@
 //! A Judge criterion that refuses, and asks rather than stops the step.
 //!
-//! `docs/concepts/judge.md`'s asking design: every criterion asks by default,
-//! a criterion marked `refuse` — or a Job set to [`WhenRefused::AlwaysRefuse`]
-//! — still stops the step exactly as it did before this existed, and
-//! `declared_plan_drift` can never reach [`Ruling::Refused`] at all. This
-//! module is the other half of that design: what happens once
+//! `docs/concepts/judge.md`'s asking design: every criterion asks by default;
+//! `refuse` or [`WhenRefused::AlwaysRefuse`] still stops the step as before,
+//! and `declared_plan_drift` can never reach [`Ruling::Refused`]. This module
+//! is the other half: what happens once
 //! [`crate::judging::looks::JudgeFold`] decides a refusal is one to ask about.
 //!
-//! **The step holds at the same states a `human_always` review gate already
-//! reaches** — `awaiting_human` beneath `awaiting_review` — and the Drone is
-//! not stood down, unlike that gate: `crate::dispatch`'s own arm says why.
-//! Answering is one of three moves, and none of them times out into a
-//! refusal — an unanswered question just holds, exactly as an unanswered
-//! review does.
+//! **The step holds at the same states a `human_always` review gate reaches**
+//! — `awaiting_human` beneath `awaiting_review` — but the Drone is not stood
+//! down, unlike that gate (`crate::dispatch`'s own arm says why). None of the
+//! three answering moves times out into a refusal; an unanswered question
+//! just holds, exactly as an unanswered review does.
 //!
 //! [`WhenRefused`]: core_model::WhenRefused
 

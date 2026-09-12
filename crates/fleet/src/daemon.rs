@@ -1,28 +1,18 @@
-//! The daemon core: the [`Fleet`] a process is. It is assembled from
-//! [`mod@fittings`], answers through [`mod@answering`], and hands what it holds
-//! to the crate around it through [`mod@seams`]. A slot's contents are
-//! [`working`](mod@crate::working), an invariant kept away from the logic that
-//! moves it, and [`dispatch`](mod@crate::dispatch) is what moves it.
+//! The daemon core: the [`Fleet`] a process is — assembled from [`mod@fittings`], answering
+//! through [`mod@answering`], handing what it holds to the crate around it through [`mod@seams`].
 //!
-//! **The queue is not a list.** [`Fleet`] holds a [`Slots`] roster, one slot per
-//! Job being worked and bounded by [`Concurrency`](crate::slots::Concurrency),
-//! and a Job approved while the bound is spent stays at `queued` — a status the
-//! registry already has and the store already persists. So there is no queue
-//! object here, and no ordering in memory a restart could lose or disagree with
-//! the log: `#50` added the second slot rather than a scheduler over it. **The
-//! bound is on Drones, never on approvals.**
+//! **The queue is not a list.** [`Fleet`] holds a [`Slots`] roster bounded by
+//! [`Concurrency`](crate::slots::Concurrency); a Job approved past the bound stays `queued` — a
+//! status the registry and store already have, so no ordering in memory a restart could lose or
+//! disagree with the log. `#50` added the second slot rather than a scheduler over it.
 //!
-//! **A refused transition is not survivable.** Every move goes through
-//! `Job::transition` or `Job::transition_step`, and no arm below logs an
-//! `Adrift::IllegalMove` or `Adrift::IllegalStepMove` and continues: a refusal
-//! means Fleet asked for what the edge table says cannot happen, a bug in Fleet.
+//! **A refused transition is not survivable** — every move goes through `Job::transition` or
+//! `Job::transition_step`, and no arm logs an `IllegalMove`/`IllegalStepMove` and continues: a
+//! refusal means Fleet asked for what the edge table says cannot happen.
 //!
-//! **Three locks — the roster, one Job's slot, the store — taken in that order
-//! and in no other**, with [`crate::slots`] holding the argument. The gate
-//! holds none of them across a Check or a Judge call, so a quarter-hour run
-//! holds up nothing — including the reads a surface makes of that same Job.
-//! [`Fleet::merge_end`] is a fourth and sits outside the order, for the reason
-//! its field gives.
+//! **Three locks — roster, one Job's slot, the store — in that order, no other**
+//! ([`crate::slots`] holds the argument). The gate holds none across a Check or Judge call, so a
+//! long run holds up nothing. [`Fleet::merge_end`] is a fourth, outside the order.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;

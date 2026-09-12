@@ -1,28 +1,17 @@
 //! Starting a Drone, and what its ending means for the Job.
 //!
-//! **Fleet builds the environment; nobody inherits one.** [`environment`] is
-//! the whole of what a Drone gets and every variable in it was named there.
-//! Nothing here reads `std::env`: the two values a Drone needs are parameters
-//! resolved by the composition root, for the same reason a timestamp is — a
-//! function reading its own inputs from the process cannot be tested or replayed.
+//! **Fleet builds the environment; nobody inherits one.** [`environment`] is the whole of what
+//! a Drone gets; nothing here reads `std::env` — the two values needed are parameters resolved
+//! by the composition root, for the same reason a timestamp is.
 //!
-//! **No credential of any kind is on that list**, which is the second half of
-//! "a Drone cannot push" — the first being that no [`Grant`] can express one. A
-//! shell that reached a push anyway would have no `SSH_AUTH_SOCK`, no
-//! `GIT_ASKPASS`, no forge token and nobody to ask, and the attempt is a
-//! `DroneEvent::Refused` in the transcript either way.
+//! **No credential of any kind is on that list** — the second half of "a Drone cannot push"
+//! (the first being no [`Grant`] can express one): no `SSH_AUTH_SOCK`, `GIT_ASKPASS` or forge
+//! token, and the attempt is a `DroneEvent::Refused` in the transcript either way.
 //!
-//! **The prompt goes in on stdin, not argv.** `ps` prints a same-uid child's
-//! argument list on darwin 27, so argv is public to every process on the
-//! machine. The first turn goes to the child's stdin instead, the same channel
-//! a later turn is injected through — [`start`] holds why the write is checked.
-//!
-//! **The environment is not a hiding place either, and this module used to say
-//! it was.** `ps -Eww` prints a same-uid process's environment on darwin 27,
-//! measured against a live Drone in
-//! `docs/spikes/011-what-can-one-drone-reach.md`. Nothing here depended on the
-//! old claim, so nothing moves; it is corrected because a false statement about
-//! what is visible is the kind a later design rests on.
+//! **The prompt goes in on stdin, not argv, and the environment is not a hiding place either.**
+//! `ps` prints a same-uid child's argument list and, with `-Eww`, its environment, on darwin 27
+//! — measured in `docs/spikes/011-what-can-one-drone-reach.md`. The first turn goes to the
+//! child's stdin instead, the channel a later turn is injected through too.
 
 use std::error::Error;
 use std::fmt;
@@ -128,24 +117,20 @@ pub struct Started {
     pub complaints: ChildStderr,
 }
 
-/// Start a Drone against a prepared worktree, detached, and give it its first
-/// turn.
+/// Start a Drone against a prepared worktree, detached, and give it its first turn.
 ///
-/// The order matters and is the order v1 got wrong: the process exists before
-/// anything is written to it, and the write is checked before this returns, so
-/// a caller that gets an `Ok` has a Drone that has been told what to do. A
-/// caller that gets an `Err` has one that is gone — every failure below ends
-/// with nothing running.
+/// The order matters and is the order v1 got wrong: the process exists before anything is
+/// written to it, and the write is checked before this returns, so an `Ok` caller has a Drone
+/// that has been told what to do, and an `Err` caller has one that is gone.
 ///
-/// **The write is the one place this module can be killed by a child.** v1
-/// wrote its own handoff with `let _ = pipe.write_all(…)` while SIGPIPE was at
-/// `SIG_DFL` process-wide, so a child that exec'd and exited before reading
-/// would take the parent down with exit 141, mid-spawn, after the record was
-/// already written — and `let _ =` cannot catch it, because the signal arrives
-/// before `write` returns. Here the result is matched, a broken pipe is its own
-/// variant, and **nothing in this workspace restores SIGPIPE**, so the write
-/// returns `EPIPE` rather than a signal. `a_drone_that_dies_before_it_is_told`
-/// is the test that would fail if any of that changed.
+/// **The write is the one place this module can be killed by a child.** v1 wrote its handoff
+/// with `let _ = pipe.write_all(...)` while SIGPIPE was at `SIG_DFL` process-wide, so a child
+/// that exec'd and exited before reading would take the parent down with exit 141, mid-spawn,
+/// after the record was already written — and `let _ =` cannot catch it, since the signal
+/// arrives before `write` returns. Here the result is matched, a broken pipe is its own
+/// variant, and **nothing in this workspace restores SIGPIPE**, so the write returns `EPIPE`
+/// rather than a signal. `a_drone_that_dies_before_it_is_told` is the test that would fail if
+/// any of that changed.
 pub async fn start<H>(
     harness: &H,
     config: &DroneSpawnConfig,
@@ -332,23 +317,19 @@ impl Ending {
 
 /// Whether the Drone's run ended with work still running behind it.
 ///
-/// **Not part of [`Ending`], and the separation is the point.** `Ending` says
-/// how the run finished and `aftermath` turns that into one of three answers; a
-/// fourth field there would put a question about *whether to reap at all* into
-/// the function that decides *what a reap means*. This is asked first, by
-/// `crate::silence::at_rest`, and where it answers true nothing is folded.
+/// **Not part of [`Ending`], and the separation is the point.** `Ending` says how the run
+/// finished and `aftermath` turns that into one of three answers; a fourth field there would
+/// put *whether to reap at all* into the function deciding *what a reap means*. This is asked
+/// first, by `crate::silence::at_rest`, and where it answers true nothing folds.
 ///
-/// **The last count wins and there is no pairing.** `BackgroundWork` is the
-/// harness re-stating its whole outstanding set, so the last one in the stream
-/// is the set as it stood when the run ended — a Drone that started three
-/// subagents and saw all three land emitted a final zero and is not waiting.
+/// **The last count wins, no pairing.** `BackgroundWork` is the harness re-stating its whole
+/// outstanding set, so the last one in the stream is the set as it stood when the run ended —
+/// a Drone that started three subagents and saw all three land emitted a final zero.
 ///
-/// **Why a Drone gets into this state at all.** A background task's report
-/// arrives as a notification that wakes the session; a headless Drone that ends
-/// its turn has nothing left to wake. So it says "I will wait for the agent's
-/// findings", ends its turn, and the report can never come. Reaping it there
-/// loses the whole step to a wait that was never going to end, which is Job
-/// `01M21BKVPW002DC0ATD1X9T0VF` and what this reading exists for.
+/// **Why a Drone gets into this state at all.** A background task's report wakes the session;
+/// a headless Drone that ends its turn has nothing left to wake, so it says "I will wait for
+/// the agent's findings" and the report can never come. Reaping it there loses the whole step
+/// to a wait that was never going to end — Job `01M21BKVPW002DC0ATD1X9T0VF` is why this exists.
 pub fn awaiting_background(events: &[DroneEvent]) -> bool {
     events
         .iter()
@@ -403,20 +384,10 @@ pub enum Aftermath {
 /// | working | vanished | nothing | `interrupted` — the process died; a person decides |
 /// | stopped | anything | anything | nothing moves; the Job is now restartable |
 ///
-/// **A refusal count is a run total, so it classifies nothing on its own.** A
-/// Drone refused early and still calling tools at the end carried on past the
-/// allowlist a person would be sent to widen; what decides is whether it
-/// reached again after the last refusal.
-///
-/// **Every answer but the first two leaves the Job escalated, which is not
-/// terminal** — the registry wins over the milestone step's word: `escalated`
-/// holds the worktree and the port span until a person answers, and answering
-/// is what takes it terminal. What the step asks is that the Job never stays
-/// `running`, and no path here leaves it there.
-///
-/// **`status` is the first question, not a guard bolted on.** An escalated Job
-/// keeps its Drone alive and idle, so a dying Drone is no longer proof the Job
-/// was working, and stopping one twice is `escalated -> escalated`, refused.
+/// **A refusal count is a run total**: what decides is whether it reached again after the last
+/// refusal. **Every answer but the first two leaves the Job escalated, not terminal** — the
+/// registry wins over the milestone step's word. **`status` is the first question, not a guard
+/// bolted on** — an escalated Job keeps its Drone alive and idle, so stopping one twice is refused.
 pub fn aftermath(status: JobStatus, ending: &Ending, left: Left) -> Aftermath {
     if status != JobStatus::Running {
         return Aftermath::AlreadyStopped;

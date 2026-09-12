@@ -1,26 +1,18 @@
 //! Trying a stopped Job again, which is minting a new one.
 //!
-//! # It does not reopen the Job, and the registry is why
+//! **It does not reopen the Job, and the registry is why.** `job-fields.toml`'s
+//! `redispatched_from` row says a redispatch is always a new Job carrying a reference back,
+//! never a terminal or escalated one reopened — that edge is a redirect's, not this. The disk
+//! agrees: `create_worktree` refuses an existing branch, so running the original under its own
+//! id could only work by deleting the branch its failure is recorded on, so the id has to
+//! change: **a stopped Job's worktree and branch are evidence**. An escalated original is
+//! killed; a `completed_failed` or `killed` one is left standing, no terminal having an
+//! outbound edge.
 //!
-//! `job-fields.toml`'s `redispatched_from` row says a redispatch is always a
-//! new Job carrying a reference back, never a terminal or escalated one
-//! reopened. The `escalated -> running` edge is a redirect's — context
-//! injected mid-step — not this.
-//!
-//! The disk agrees. `create_worktree` refuses an existing branch, so a Job
-//! moved back to `running` under its own id could only run by deleting the
-//! branch `armada/<job_id>` its failure is recorded on. **A stopped Job's
-//! worktree and branch are evidence**, so the id has to change.
-//!
-//! An escalated original is killed; a `completed_failed` or `killed` one is
-//! left where it stands, no terminal having an outbound edge.
-//!
-//! # The replacement is minted before the original is killed
-//!
-//! The two writes are not one transaction. Killed first and minting failing
-//! leaves a terminal Job with no replacement and no way to ask again, which is
-//! the complaint this exists to answer. This order leaves, at worst, a Job at
-//! the approval gate beside a still-escalated one: visible and recoverable.
+//! **The replacement is minted before the original is killed.** The two writes are not one
+//! transaction: killing first and minting failing leaves a terminal Job with no replacement and
+//! no way to ask again, leaving at worst a Job at the approval gate beside a still-escalated
+//! one — visible and recoverable.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{Facts, Job, JobId, JobStatus, NewJob, StepSeed};
@@ -51,21 +43,19 @@ where
 {
     /// Replace a Job that ran and stopped.
     ///
-    /// **`escalated`, `awaiting_repair`, `completed_failed` and `killed`.** A
-    /// Check said no, or you stopped it deliberately; either way you change
-    /// something and go again, and that loop is what this is. A running Job is
-    /// redirected instead, and one at a gate has not stopped.
+    /// **`escalated`, `awaiting_repair`, `completed_failed` and `killed`.** A Check said no, or
+    /// you stopped it deliberately; either way you change something and go again. A running Job
+    /// is redirected instead, and one at a gate has not stopped.
     ///
-    /// `awaiting_repair` is the newest and the one to reach for last: a
-    /// restart puts a fresh Drone on the step that failed and keeps every step
-    /// before it, where this throws all of them away. `#208`.
+    /// `awaiting_repair` is the newest and the one to reach for last: a restart puts a fresh
+    /// Drone on the step that failed and keeps every step before it, where this throws all of
+    /// them away. `#208`.
     ///
-    /// **`rejected` is refused because it never ran.** There is no Facts and no
-    /// Evidence to carry into a replacement, so what is being asked for is a
-    /// new Job — which is `propose_job`.
+    /// **`rejected` is refused because it never ran** — there is no Facts and no Evidence to
+    /// carry into a replacement, so what is being asked for is a new Job, `propose_job`.
     ///
-    /// The actor is **human**. Fleet never redispatches of its own accord: a
-    /// Job stops precisely where Fleet stopped deciding.
+    /// The actor is **human**. Fleet never redispatches of its own accord: a Job stops
+    /// precisely where Fleet stopped deciding.
     pub async fn redispatch(&self, job_id: &JobId) -> Result<Replacement, Adrift> {
         let failed = self.load(job_id).await?;
         match failed.status() {

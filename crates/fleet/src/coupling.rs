@@ -1,25 +1,18 @@
 //! What an upstream's terminal status does to the Job waiting behind it.
 //!
-//! # Three outcomes, not two
+//! **Three outcomes, not two.** `docs/concepts/fleet.md` on DAG scheduling is the rule and
+//! [`coupling`] is the whole of it: `completed_success` releases, `superseded` releases and is
+//! carried as unsatisfied, any other terminal escalates, anything not terminal waits.
+//! **`superseded` releasing is not leniency** — the work landed outside the Job, only the
+//! record has nothing to say (`job-statuses.toml`'s argument for it being a status rather than
+//! a queued reason). There is no edge type and no hard/soft flag: the variation is entirely in
+//! that status.
 //!
-//! `docs/concepts/fleet.md` on DAG scheduling is the rule and [`coupling`] is
-//! the whole of it: `completed_success` releases, `superseded` releases and is
-//! carried as unsatisfied, any other terminal escalates, anything not terminal
-//! waits. **`superseded` releasing is not leniency** — the work landed outside
-//! the Job, so the base is there and only the record has nothing to say, which
-//! is `job-statuses.toml`'s argument for it being a status rather than a queued
-//! reason. Until it released here it blocked a dependent for ever. There is no
-//! edge type and no hard/soft flag: the variation is entirely in that status.
-//!
-//! # One predicate, and `blocks` is not read
-//!
-//! [`coupling`] is the only place an edge is weighed. `dispatch::clear_to_run`
-//! is `Clear` and nothing else, and `serving`'s Board label is that same call —
-//! so a Board saying `blocked_by_dependency` and a Fleet admitting the Job
-//! cannot both be answering. `ipc::DependencyEdge` says `blocks` is expressible
-//! and never written, because a plan is created in dependency order; reading it
-//! would also break the acyclicity [`Fleet::peers_held`] establishes, since "B
-//! blocks A" points forward in time at a Job already on the board.
+//! **One predicate, and `blocks` is not read.** [`coupling`] is the only place an edge is
+//! weighed; `dispatch::clear_to_run` is `Clear` and nothing else, and `serving`'s Board label is
+//! that same call, so a Board and Fleet cannot disagree. `ipc::DependencyEdge` says `blocks` is
+//! expressible and never written: a plan is created in dependency order, and reading it would
+//! break the acyclicity [`Fleet::peers_held`] establishes.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -88,24 +81,19 @@ where
 {
     /// Escalate every `queued` Job whose upstream ended badly.
     ///
-    /// **The walk is the other direction from admission.** `clear_to_run` asks
-    /// one Job about its peers on the way to starting it; this asks the same
-    /// question of every waiting Job, because nothing else in the loop visits a
-    /// *dependent* of the Job that just ended. Without it the dependent sits at
-    /// `queued` behind `blocked_by_dependency` for ever — a label with no action
-    /// attached, which is the outcome `escalation-triggers.toml` rejected.
+    /// **The walk is the other direction from admission** — `clear_to_run` asks one Job about
+    /// its peers on the way to starting it; this asks the same question of every waiting Job,
+    /// since nothing else visits a *dependent*. Without it a dependent sits at `queued` behind
+    /// `blocked_by_dependency` forever, the outcome `escalation-triggers.toml` rejected.
     ///
-    /// **Per turn and not per transition.** A Job reaches a terminal from the
-    /// gate, from a kill, from a reap and from reconciliation; hooking each
-    /// would be five places agreeing, and the next one added would be the sixth
-    /// that forgot. One read of the board a turn is the same cost `admit_next`
-    /// already pays and it cannot be got out of step with.
+    /// **Per turn, not per transition** — a Job reaches terminal from the gate, a kill, a reap
+    /// or reconciliation; hooking each would be five places agreeing and the next one added the
+    /// sixth that forgot. One board read a turn is the same cost `admit_next` already pays.
     ///
-    /// **Nothing downstream is cancelled.** Escalating stops at the first
-    /// dependent and asks a person, which is `fleet.md`'s *"so a person decides
-    /// rather than one failure terminating a chain unattended"*. A dependent of
-    /// *this* Job stays `queued`, because `escalated` is not terminal and the
-    /// chain has not failed — it is waiting on a person.
+    /// **Nothing downstream is cancelled.** Escalating stops at the first dependent and asks a
+    /// person (`fleet.md`'s *"so a person decides rather than one failure terminating a chain
+    /// unattended"*); a dependent of *this* Job stays `queued`, since `escalated` is not
+    /// terminal and the chain has not failed.
     pub(crate) async fn strand_dependents(&self) -> Result<Vec<JobId>, Adrift> {
         let (loaded, _) = self.every_job().await?;
         let standing: BTreeMap<JobId, JobStatus> = loaded
@@ -134,23 +122,18 @@ where
 
     /// Refuse a proposal that names a peer this Fleet does not hold.
     ///
-    /// **This is the cycle check, and it is a refusal rather than a search.**
-    /// `ProposeJob.dependencies` already says a peer *"must already exist: an
-    /// edge is a pointer, and Fleet mints the ids"* — and nothing enforced it,
-    /// so two Jobs each naming the other were representable and both were
-    /// permanently unadmittable behind a label that reads as ordinary waiting.
+    /// **This is the cycle check, a refusal rather than a search.** `ProposeJob.dependencies`
+    /// already says a peer *"must already exist: an edge is a pointer, and Fleet mints the
+    /// ids"*, and nothing enforced it, so two Jobs naming each other were representable and
+    /// both permanently unadmittable behind a label reading as ordinary waiting.
     ///
-    /// Enforced, the rule makes a cycle **unrepresentable** rather than
-    /// detected: `dependencies` is written once, at insert, by the one statement
-    /// in `store::write` that creates a row. So every edge points at a strictly
-    /// older Job, "older" is a strict order, and a topological sort would have
-    /// nothing to find. That is the cheaper answer and the durable one — there
-    /// is no acyclicity assertion to keep in step with a graph that can change,
-    /// because the graph cannot.
+    /// Enforced, a cycle becomes **unrepresentable** rather than detected: `dependencies` is
+    /// written once, at insert, by the one statement in `store::write` that creates a row, so
+    /// every edge points at a strictly older Job and a topological sort has nothing to find —
+    /// no acyclicity assertion to keep in step with a graph that cannot change.
     ///
-    /// The proposer's own path is unaffected and already safe:
-    /// `proposing::read` refuses a plan whose edges do not point backwards, and
-    /// `propose_from_request` mints in that order.
+    /// The proposer's own path is unaffected and already safe: `proposing::read` refuses a plan
+    /// whose edges do not point backwards, and `propose_from_request` mints in that order.
     pub(crate) async fn peers_held(&self, edges: &[ipc::DependencyEdge]) -> Result<(), Adrift> {
         if edges.is_empty() {
             return Ok(());

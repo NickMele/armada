@@ -1,25 +1,16 @@
 //! Which approved Job runs next, and how many may run at once.
 //!
-//! Split from [`dispatch`](mod@crate::dispatch), which is what happens to a Job
-//! once the answer is yes. They were one file while the answer was "the slot is
-//! free"; the bound, the queue's ordering and the dependency release together
-//! are a subject, and it is the one `#44`, `#48` and `#51` each arrive at.
+//! Split from [`dispatch`](mod@crate::dispatch) — the bound, queue ordering
+//! and dependency release are the subject `#44`, `#48` and `#51` converge on.
 //!
-//! # The queue is a status, not a structure
+//! `queued` is the queue: no ordering is held in memory to lose on restart or
+//! disagree with the log — [`Fleet::next_queued`] reads the board and sorts
+//! by the approving event's sequence.
 //!
-//! `queued` is the queue. There is no ordering held in memory that a restart
-//! could lose or that could disagree with the log, so [`Fleet::next_queued`]
-//! reads the board and sorts by the sequence of the approving event.
-//!
-//! # One predicate per question, and every reason to refuse belongs inside one
-//!
-//! [`Room`] answers "may another Drone start **at all**" — the machine and the
-//! roster, about no Job in particular; a new machine-wide reason is a variant
-//! there. **A reason belonging to one Job is a predicate of its own**:
-//! [`clear_to_run`] for dependencies, `Fleet::overspent` for what it has spent,
-//! asked where a Job is chosen rather than once per admission. All three are
-//! shared with `serving`'s `queued_reason`, so a Board cannot say a Job is
-//! blocked while Fleet is starting it.
+//! [`Room`] answers whether Fleet may start a Drone **at all**. A reason
+//! belonging to one Job is its own predicate instead — [`clear_to_run`] for
+//! dependencies, `Fleet::overspent` for spend — all three feeding `serving`'s
+//! `queued_reason`, so a Board cannot call a Job blocked while Fleet starts it.
 //!
 //! [`Fleet::next_queued`]: crate::Fleet
 
@@ -44,24 +35,15 @@ use crate::superseding::{siblings_of, still_needed, Landed, StillNeeded};
 /// Whether Fleet may start another Drone, and what stops it where it may not.
 ///
 /// **Every variant but the first folds to `waiting_on_resources`** on the
-/// Board, which is the only label `job-statuses.toml` gives a `queued` Job
-/// short of anything. The distinction between them is the operator's.
+/// Board — the only label `job-statuses.toml` gives a `queued` Job short of
+/// anything. The distinction between them is the operator's, surfaced
+/// unreduced by `get_capacity` beside `Slots::cap` and `Slots::count` through
+/// [`Room::hold`]; `queued_reason` still folds it to [`Room::granted`].
 ///
-/// # Which one is short now reaches a person, through [`Room::hold`]
-///
-/// `queued_reason` still reduces this to [`Room::granted`]. What changed is
-/// that `get_capacity` serves this value unreduced, beside `Slots::cap` and
-/// `Slots::count` — the three things this doc asked for, and no new read.
-///
-/// **The order is still the catch, and it is deliberately not relaxed.** The
-/// bound is asked first so a Fleet at its cap pays nothing for a reading, which
-/// makes `Bound` and `Machine` exclusive: "the cap is spent *and* the disk is
-/// full" is not a state this can report. What is served is what stops admission
-/// now, and the next thing is served once that clears. Relaxing the order would
-/// put three processes behind every read of a Fleet that is already full.
-///
-/// Doctor's System stats panel, which `settings.toml`'s headroom row names as
-/// the other reader of these numbers, does not exist either.
+/// **The bound is asked first, deliberately.** A Fleet at its cap pays
+/// nothing for a machine reading, and `Bound`/`Machine` become exclusive: this
+/// cannot report "the cap is spent *and* the disk is full". Relaxing the
+/// order would put three processes behind every read of a Fleet already full.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Room {
     /// There is room.
@@ -176,29 +158,19 @@ where
 
     /// Start every approved Job there is room for.
     ///
-    /// **[`Fleet::room_for_another`] is the whole of what "room" means here**,
-    /// and it is the same predicate `queued_reason` answers
-    /// `waiting_on_resources` from — one answer, because a Board saying a Job is
-    /// blocked while Fleet is starting it is worse than a Board saying nothing.
+    /// [`Fleet::room_for_another`] is the whole of "room" here — the same predicate
+    /// `queued_reason` answers `waiting_on_resources` from.
     ///
-    /// **The roster lock is held across the loop, and nothing else is.** Two
-    /// admissions running at once would each read the same `queued` Job as next
-    /// and dispatch it twice; holding the roster is what makes admission one act.
-    /// It is released the moment the last Drone is spawned — a slot is held for
-    /// as long as a Job is worked, and this for as long as one is *started*.
+    /// **The roster lock is held across the loop, and nothing else is** — two admissions
+    /// at once would read the same `queued` Job as next and dispatch it twice. It
+    /// releases once the last Drone spawns, well before the Job itself finishes.
     ///
-    /// Admission stops at the first Job that will not start. The failure is
-    /// returned, its Job is left `escalated` by `dispatch`, and the next turn
-    /// asks again — Fleet does not walk on down the queue to find one that works,
-    /// because the reason the first failed is ordinarily the disk.
+    /// Admission stops at the first Job that will not start, left `escalated` by
+    /// `dispatch`, since the failure is ordinarily the disk.
     ///
-    /// **Never from a `Commands` method, and none does** — `#428`, then `#456`
-    /// for the six that freed a place and filled it in one breath. This runs a
-    /// whole [`crate::dispatch`], so on a handler's future a client that stops
-    /// waiting takes the command and its timeout away together; where the command
-    /// freed a place, the Job that then never starts is the *next* one in the
-    /// queue and nobody is watching it. [`Fleet::turn`] and [`Fleet::reconcile`]
-    /// are the only callers.
+    /// **Never called from a `Commands` method** — `#428`, `#456` — a handler's future
+    /// dropped on client timeout would leave a freed place's next Job unwatched.
+    /// [`Fleet::turn`] and [`Fleet::reconcile`] are the only callers.
     pub(crate) async fn admit_next(&self) -> Result<Vec<JobId>, Adrift> {
         let mut slots = self.slots().lock().await;
         let mut admitted = Vec::new();

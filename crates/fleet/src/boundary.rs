@@ -2,27 +2,17 @@
 //! put on the same worktree for the next step.
 //!
 //! A Drone belongs to a workflow step — `docs/concepts/drone.md`. The worktree
-//! and the branch survive, because nothing in this workspace can remove one;
-//! what crosses is a directory holding every step's work so far, uncommitted,
-//! as `crate::landing` requires.
+//! and branch survive; what crosses is a directory holding every step's work
+//! so far, uncommitted, as `crate::landing` requires.
 //!
-//! # The order is fixed, and each part of it answers a failure
+//! **The order is fixed, and each part answers a failure:** terminate explicitly (dropping a
+//! [`Working`] drops its `DroneSession` without signalling — the `setsid`-detached child survives
+//! and keeps spending); drain before dropping, bounded, since a tool the Drone spawned can hold
+//! the pipe open (`#211`); record the exit before the spawn, since `Job::drone_spawned` refuses
+//! over a live pointer (`#137`'s `AlreadyAssigned`).
 //!
-//! 1. **Terminate explicitly.** [`put_a_drone_on`](Fleet::put_a_drone_on)
-//!    assigns straight over the slot, and dropping a [`Working`] drops its
-//!    `DroneSession` without signalling. The child is `setsid`-detached, so it
-//!    survives its parent's handle going away and keeps spending.
-//! 2. **Drain before dropping, bounded.** `Drop` aborts the reader over the
-//!    Drone's last lines, and a tool it spawned holds the pipe open — `#211`.
-//! 3. **Record the exit before the spawn.** `Job::drone_spawned` refuses over a
-//!    live pointer — `#137`'s `AlreadyAssigned` — so a spawn ordered first is
-//!    refused by the record it had just failed to update.
-//!
-//! The first two are [`Working::stood_down`], which consumes the slot; the
-//! third and the spawn are here, because both reach a store.
-//!
-//! What crosses is `crate::crossing`'s value and not the injected turn, for the
-//! reason that module's own doc gives: a rendered turn cannot be re-tensed.
+//! The first two are [`Working::stood_down`]'s; the third and the spawn are here, since both reach a store.
+//! What crosses is `crate::crossing`'s value, not the injected turn — it cannot be re-tensed.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{Component, Envelope, FieldValue, Job, JobId, Level, StepId};
@@ -49,25 +39,18 @@ where
     /// The whole boundary: end the Drone that finished its step, and put a
     /// fresh one on the same worktree for `next`.
     ///
-    /// **Every advance a Drone in a slot makes comes here**, which is the
-    /// mechanical one in `crate::dispatch` and, since #50's follow-on, only
-    /// that one. A person's advance at a human gate and a person's override
-    /// both cross a step boundary too, and both take the Job back to `queued`
-    /// instead — because the boundary they cross also has to consult
-    /// `concurrency-cap`, and only admission does. `crate::readmitting` is
-    /// where they arrive; what they hand a fresh Drone is still a `Crossed`,
-    /// which is the point of that type.
+    /// **Every mechanical advance comes here** — `crate::dispatch`'s, and since `#50`'s follow-on,
+    /// only that one. A person's advance or override also crosses a boundary but takes the Job
+    /// back to `queued` instead, since it must also consult `concurrency-cap`, which only
+    /// admission does; `crate::readmitting` is where they arrive, still handing a fresh Drone a `Crossed`.
     ///
-    /// **A slot that is already empty is not an error.** The Fleet holding the
-    /// process restarted, or the Drone ended on its own, and the answer is the
-    /// same either way: the worktree is still on disk and a fresh Drone is put
-    /// on it. That is the arm `crate::overruling` used to spell for itself.
+    /// **A slot already empty is not an error** — a restarted Fleet or a Drone that ended on
+    /// its own both answer the same way: the worktree is still on disk and a fresh Drone goes
+    /// on it, the arm `crate::overruling` used to spell for itself.
     ///
-    /// **The catch-up, the brief and the baseline are all
-    /// [`put_a_drone_on`](Fleet::put_a_drone_on)'s**, which is what makes the
-    /// rebase run once per boundary and its outcome ride the opening turn.
-    /// There is no session to inject it into any more, which is `#180`'s
-    /// ordering arriving everywhere at once.
+    /// **The catch-up, brief and baseline are all [`put_a_drone_on`](Fleet::put_a_drone_on)'s**,
+    /// making the rebase run once per boundary with its outcome riding the opening turn — no
+    /// session to inject it into any more, `#180`'s ordering arriving everywhere at once.
     pub(crate) async fn crossed_onto(
         &self,
         job: &Job,
@@ -95,20 +78,16 @@ where
 
     /// End the Drone in the slot, drain what it said, and record that it left.
     ///
-    /// **`Ok(None)` is a slot that was already empty**, which is a legitimate
-    /// state and not a failure — see [`crossed_onto`](Fleet::crossed_onto).
+    /// **`Ok(None)` is legitimate, not a failure** — see [`crossed_onto`](Fleet::crossed_onto).
     ///
-    /// **The exit is returned rather than noted.** `end_the_drone` swallows the
-    /// same refusal into the Job's log, and it is right to: its callers are
-    /// ending a Drone as part of a move the Job has already made, so there is
-    /// nothing left to abandon. Here there is. A spawn follows, and
-    /// `drone_spawned` refuses over a pointer that is still set — so an exit
-    /// that silently failed would become a boundary that could not put a Drone
-    /// on the next step, with nothing saying why.
+    /// **The exit is returned rather than noted**, unlike `end_the_drone`, whose callers are
+    /// ending a Drone as part of a move the Job already made — here there is still something
+    /// to abandon: a spawn follows, and `drone_spawned` refuses over a pointer still set, so a
+    /// silent failure would become a boundary that could not put a Drone on the next step.
     ///
-    /// It sweeps the record as well as the slot. A step the record still names
-    /// a Drone on and the slot does not is the ordinary shape after a Fleet
-    /// restart, and it refuses the spawn exactly as a live pointer would.
+    /// It sweeps the record as well as the slot — a step the record still names a Drone on
+    /// while the slot does not is the ordinary shape after a Fleet restart, and refuses the
+    /// spawn exactly as a live pointer would.
     pub(crate) async fn stood_down(
         &self,
         job_id: &JobId,
@@ -205,22 +184,18 @@ where
 
 /// How the run finished, in one word, for the log.
 ///
-/// **Not a verdict and it cannot become one.** `Ending` has no `Succeeded` for
-/// the reason its own doc gives, and a boundary is reached because the *gate*
-/// passed the step — what the process did on its way out is a separate fact and
-/// this is all of it that is legible.
+/// **Not a verdict and it cannot become one.** `Ending` has no `Succeeded` —
+/// a boundary is reached because the *gate* passed the step, and what the
+/// process did on its way out is a separate fact, all of it that is legible.
 ///
-/// **`Vanished` alone cannot say why nothing arrived, so `signalled` is a
-/// second parameter rather than a fourth `Ending` variant.** A step also ends
-/// because a person advanced or killed it, so this cannot and does not claim
-/// the Drone handed anything in — only that Fleet's own signal, not the
-/// process dying on its own, is why no terminating event is on record. Read
-/// `signalled` false and the process was already gone before Fleet came to
-/// stop it, which is the one case `Ending::of`'s own doc describes and the
-/// original sentence still fits. Read it true and Fleet ended a process that
-/// was, until that signal, still running: a Job whose step ended while its
-/// Drone was mid-turn read the old, single sentence as one that had died,
-/// when Fleet simply had not waited for it to close its own.
+/// **`signalled` is a second parameter, not a fourth `Ending` variant** —
+/// `Vanished` alone cannot say why nothing arrived, and this cannot claim the
+/// Drone handed anything in, only that Fleet's own signal (not the process
+/// dying on its own) is why no terminating event is on record. `false` means
+/// the process was already gone before Fleet reached it (`Ending::of`'s one
+/// case); `true` means Fleet ended a process still running — without it, a
+/// Job whose step ended mid-turn read as though the Drone had died, when
+/// Fleet simply had not waited for it to close.
 fn said(ending: &Ending, signalled: bool) -> String {
     match ending {
         Ending::Reported {

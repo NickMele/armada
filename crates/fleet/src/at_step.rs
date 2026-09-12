@@ -11,25 +11,18 @@ use core_model::{Attempt, EvidenceRef, FrozenWorkflow, ResolvedStep, Spent, Step
 /// Where a Job is: which step of its frozen workflow, and the worktree the work
 /// is in.
 ///
-/// **There is no constructor taking a step index.** A position comes from a
-/// step id the workflow actually declares, so a gate cannot be pointed at a
-/// step that is not in the definition the Job froze.
+/// **No constructor takes a step index** — a position comes from a step id the workflow
+/// actually declares, so a gate cannot point at a step outside the definition the Job froze.
 ///
-/// # Which run of the step is part of where the Job is, and there are two of them
+/// **"Which step" alone does not locate a Job** — a step can be worked more than once.
+/// [`Attempt`] is the coordinate `store::attempt` files each run under; [`Spent`] is what the
+/// retry budget is asked against, resetting where an attempt climbs across a return. Both are
+/// carried so the gate cannot reach for whichever is nearer — the types make taking the wrong
+/// one a compile error.
 ///
-/// A step can be worked more than once, so "which step" does not locate a Job
-/// on its own. [`Attempt`] is the coordinate `store::attempt` files every
-/// per-run record under, and [`Spent`] is what the retry budget is asked
-/// against — a different number the moment anything loops, because an attempt
-/// climbs across a return and the budget resets. Both are carried so the gate
-/// cannot reach for whichever is nearer; the types make taking the wrong one a
-/// compile error.
-///
-/// Neither has a constructor that invents a number, so a caller cannot tell
-/// this type it is on the fourth run when the log says the second. All three
-/// constructors answer the first of each, which is the only value a position
-/// with no history could have — [`on_attempt`](AtStep::on_attempt) is how the
-/// callers that have read the log say otherwise.
+/// **No constructor invents a number** — all three answer the first of each, the only value a
+/// position with no history could have; [`on_attempt`](AtStep::on_attempt) says otherwise for a
+/// caller who read the log.
 #[derive(Clone, Copy, Debug)]
 pub struct AtStep<'a> {
     workflow: &'a FrozenWorkflow,

@@ -1,25 +1,18 @@
 //! Running one step's Checks, several at a time, bounded — and, before them,
 //! what their `requires` names. [`beforehand`] owns that half.
 //!
-//! # One observation per declared Check, in the step's order
+//! **One observation per declared Check, in the step's order.** `Ran::of` refuses a list
+//! shorter than the step's declaration, so a vacuous pass is unconstructible: the vector is
+//! sized from the declaration before anything spawns and each Check gets its own slot, skips
+//! included — order is a property of the type, not the scheduler.
 //!
-//! `Ran::of` refuses a list shorter than the step's declaration, which is how a
-//! vacuous pass is made unconstructible. So nothing here appends: the vector is
-//! sized from the declaration before anything is spawned and each Check is
-//! written into its own slot, skips included, which makes the order of the
-//! report a property of the type rather than of the scheduler.
+//! **Each Check keeps its own budget, and nothing stops early.** `checks_runner::run` holds the
+//! timeout whole per call rather than shared over the batch, so a false failure does not move
+//! when the machine is busy. A failing Check cancels none of the others.
 //!
-//! # Each Check keeps its own budget, and nothing stops early
-//!
-//! `checks_runner::run` holds the timeout, given whole per call rather than
-//! shared over the batch — a false failure moves when the machine is busy. A
-//! failing Check cancels none of the others; the second failure often explains
-//! the first.
-//!
-//! **Over 500 lines.** `ports` and `env` thread through both halves already
-//! here, for `docs/concepts/manifest.md`'s Ports section: it reaches every
-//! Command, and splitting by function would separate a Check from the
-//! prerequisite it waits behind.
+//! Over 500 lines: `ports` and `env` thread through both halves already, for
+//! `docs/concepts/manifest.md`'s Ports section — splitting by function would separate a Check
+//! from the prerequisite it waits behind.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -36,29 +29,19 @@ use crate::underway::Announcing;
 
 /// How many of a step's Checks may run at once.
 ///
-/// **Four, and the number is about the machine rather than about the step.**
-/// It was measured when Fleet worked one Job at a time, so it was the whole of
-/// Armada's concurrency; `#50` made it a share of it, bounded by
-/// `Concurrency` — with the cap at two, two gates running at once is eight
-/// Checks and two Drones on one machine.
+/// **Four, about the machine, not the step.** Measured when Fleet worked one Job at a time, the
+/// whole of Armada's concurrency then; `#50` made it a share, bounded by `Concurrency` (at cap
+/// two, two gates is eight Checks and two Drones on one machine). Nothing has re-measured it
+/// under two, and `#44` landed without answering it: the headroom read is pre-spawn, past the
+/// point two running gates ask anything.
 ///
-/// **Nothing has re-measured it under two**, and the number is left where the
-/// measurement put it rather than halved on an argument. **`#44` landed and
-/// did not answer it**: the headroom read is pre-spawn, and two gates already
-/// running are past the point anything is asked.
-///
-/// Measured on this repository's own six Checks, ten cores, warm target
-/// directory: 28.5s one at a time against 16.5s at four. Bounds of two, three,
-/// four and six were within noise of each other, because the floor is set by
-/// the slowest single Check and by `build` and `test` contending for one Cargo
-/// target lock however many slots exist. Four rather than two because that
-/// floor is this repository's and not every step's, and four rather than six
+/// Measured on this repository's own six Checks, ten cores, warm target directory: 28.5s one at
+/// a time against 16.5s at four. Two, three, four and six were within noise of each other — the
+/// floor is the slowest single Check and `build`/`test` contending for one Cargo target lock.
+/// Four over two because that floor is this repository's, not every step's; four over six
 /// because six leaves nothing for the Drone the step belongs to.
 ///
-/// **A constant rather than a dial.** `CheckBudget` and `DryRuns` have no
-/// default because what they bound is policy a person owns; this bounds how
-/// many processes one machine should host, which nobody has asked to set. It
-/// becomes a `Fittings` field the first time a machine disagrees with it.
+/// **A constant rather than a dial** — this bounds how many processes one machine should host, which nobody has asked to set; it becomes a `Fittings` field the first time one disagrees.
 pub(crate) const AT_ONCE: usize = 4;
 
 /// Whether the gate declines to run this Check, and what it writes down when it
@@ -210,28 +193,19 @@ impl NotMet {
 
 /// Run every prerequisite the batch's runnable Checks name, in order, once each.
 ///
-/// **A context is one call to [`ran`]** — one gate evaluation of one step, or
-/// one dry run — and that is what "skipped if already run in the same context"
-/// means here. It follows from where a prerequisite's effect lives: in the
-/// worktree, over the span nothing else is editing it. A Drone edits between
-/// attempts, so the next attempt is a new context and `fmt` runs again, which
-/// it must or the second attempt gates on the first one's formatting. A Check
-/// in its own container is a third context and finds no hit, which is
-/// `docs/concepts/manifest.md`'s own reading.
+/// **A context is one call to [`ran`]** — one gate evaluation or one dry run — which is what
+/// "skipped if already run in the same context" means: a prerequisite's effect lives in the
+/// worktree, over the span nothing else edits it. A Drone edits between attempts, so `fmt` runs
+/// again next attempt; a Check in its own container is a third context and finds no hit
+/// (`docs/concepts/manifest.md`'s own reading).
 ///
-/// **Serial, and before anything spawns.** These mutate the worktree by design;
-/// one running beside a Check would rewrite files under a command already
-/// reading them. The batch pays the wall clock for the guarantee.
+/// **Serial, before anything spawns** — these mutate the worktree by design, so one running
+/// beside a Check would rewrite files it is reading, and the batch pays the wall clock for that.
 ///
-/// **First occurrence wins, by name.** Two Checks naming `migrate` run it once.
-/// So `requires` guarantees *has run*, not *has just run* — a Check needing
-/// genuinely fresh state resets what it needs in its own command.
+/// **First occurrence wins, by name** — two Checks naming `migrate` run it once, so `requires`
+/// guarantees *has run*, not *has just run*; a Check needing fresh state resets it itself.
 ///
-/// **`ports` and `env` are the same pair every Check-running caller hands
-/// in.** A prerequisite is a Command, and `docs/concepts/manifest.md`'s Ports
-/// section reaches every Command string, not only a `setup.requires` one —
-/// see `crate::ports::resolve_ports` for the substitution and
-/// `crate::ports::env_vars` for what `env` holds.
+/// **`ports` and `env` are the same pair every caller hands in**, since a prerequisite is a Command and `docs/concepts/manifest.md`'s Ports section reaches every Command string.
 async fn beforehand(
     needed: &[&Prerequisite],
     worktree: &Path,
@@ -267,20 +241,16 @@ async fn beforehand(
 
 /// What is at the path a step's `artifact_exists` names.
 ///
-/// **`join` on a relative path and nothing cleverer.** `config` refused a
-/// target that globs, that is absolute, that ends in `/` or that holds `..`
-/// where the workflow was parsed, so what arrives here cannot leave the
-/// worktree and cannot match two files. A second guard here would be a second
-/// rule to keep in step with the first.
+/// **`join` on a relative path, nothing cleverer** — `config` already refused a target that
+/// globs, is absolute, ends in `/` or holds `..` when the workflow was parsed, so a second
+/// guard here would be a second rule to keep in step with the first.
 ///
-/// **Settled before anything is spawned**, beside the skip decision and for the
-/// same reason: it is one `metadata` call with no command, no budget and no
-/// ordering. Settling it first also means no Check's own output can be what
-/// satisfies it.
+/// **Settled before anything is spawned**, beside the skip decision and for the same reason: one
+/// `metadata` call with no command, no budget, no ordering — so no Check's own output can be
+/// what satisfies it.
 ///
-/// Every way the filesystem says no reads as [`Artifact::Missing`]: the
-/// overwhelmingly common reason is that the Drone did not write it, which is
-/// the answer the gate wants and the one the Drone can act on.
+/// Every way the filesystem says no reads as [`Artifact::Missing`]: the Drone did not write it,
+/// overwhelmingly, which is the answer the gate wants and the Drone can act on.
 fn looked_for(worktree: &Path, target: &str) -> Artifact {
     match std::fs::metadata(worktree.join(target)) {
         Err(_) => Artifact::Missing,
@@ -292,24 +262,19 @@ fn looked_for(worktree: &Path, target: &str) -> Artifact {
 
 /// Run the step's Checks in `worktree` and say what each one did.
 ///
-/// `moved` is `diff_nonempty`'s answer, decided by the caller: it is a read of
-/// the work product, which is fallible and belongs where the caller's error
-/// path already is. Reading it before rather than during also means no Check's
-/// output can be part of what the diff sees.
+/// `moved` is `diff_nonempty`'s answer, decided by the caller — a fallible read of the work
+/// product that belongs where the caller's error path already is, and reading it before rather
+/// than during means no Check's output can be part of what the diff sees.
 ///
-/// `announcing` is told when the batch begins and as each Check is spawned and
-/// joined, so a person sees it waiting, running and finished rather than
-/// nothing until the ruling. **Told and never asked**: nothing here reads it
-/// back, and what this returns is built exactly as it was before —
-/// `crate::underway`.
+/// `announcing` is told when the batch begins and as each Check spawns and joins, so a person
+/// sees waiting, running and finished rather than nothing until the ruling. **Told and never
+/// asked** — nothing here reads it back.
 ///
-/// `ports` and `env` are the claimed span's name-to-port map and the
-/// environment it sets, **handed in and never read here** — for
-/// `gate::rule_on`'s own reason beside `policies`: a caller with a Job in hand
-/// can resolve a claim and nothing else here can, and every call site is a
-/// Fleet method with a store to ask. Both are empty where the Job declared no
-/// `ports:`, or where there is no Job at all — `crate::proving`'s own call,
-/// proving a merged commit nothing dispatched.
+/// `ports` and `env` are the claimed span's name-to-port map and environment, **handed in and
+/// never read here** — a caller with a Job in hand can resolve a claim and nothing else here
+/// can (`gate::rule_on`'s reason beside `policies`), and every call site is a Fleet method with
+/// a store to ask. Both are empty where the Job declared no `ports:` or there is no Job at all
+/// (`crate::proving`'s call, proving a merged commit nothing dispatched).
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn ran(
     checks: &[ResolvedCheck],

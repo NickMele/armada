@@ -1,28 +1,17 @@
 //! Why the loop could not carry a Job forward.
 //!
-//! # An illegal transition is in here, and that is the point
+//! [`Adrift::IllegalMove`] and [`Adrift::IllegalStepMove`] exist so a move the
+//! machine refuses **surfaces as a bug in Fleet**, not a warning stepped over —
+//! no arm here turns `Job::transition`'s `Err` into one.
 //!
-//! [`Adrift::IllegalMove`] and [`Adrift::IllegalStepMove`] exist so that a move
-//! the machine refuses **surfaces as a bug in Fleet** rather than being logged
-//! and stepped over. There is no arm anywhere in this crate that turns one into
-//! a warning and continues: `Job::transition` returning `Err` means Fleet asked
-//! for something the registry says cannot happen, and a fallback for it would
-//! be Fleet quietly disagreeing with the edge table.
-//!
-//! # The adapter failures are boxed and the domain failures are not
-//!
-//! `docs/contracts/error-contract.md` puts a typed leaf enum beside the code
-//! that raised it and a real cause chain in the wrapper. The typed halves below
-//! are the ones this crate can name: the store's, the machine's, the spawn
-//! configuration's. The adapter halves arrive through a generic seam whose
-//! error type is the implementation's — a `V::Error` cannot be a variant here
-//! without making this enum generic over three parameters, which would put the
-//! adapter's vocabulary into every signature in the crate. They are boxed, and
-//! reachable through [`Error::source`].
-//!
-//! This is not `Box<dyn Error>` collapsing everything: every variant still says
-//! *what Fleet was doing*, which is the thing a caller matches on, and the box
-//! carries only the leaf underneath it.
+//! Per `docs/contracts/error-contract.md`, a typed leaf sits beside the code
+//! that raised it, with a real cause chain in the wrapper. This crate can name
+//! the store's, the machine's and the spawn configuration's failures; the
+//! adapter halves arrive through a generic seam whose error type is the
+//! implementation's, and boxing them (reachable via [`Error::source`]) avoids
+//! making this enum generic over three parameters and leaking the adapter's
+//! vocabulary into every signature. Every variant still says *what Fleet was
+//! doing* — the box carries only the leaf underneath it.
 
 use std::error::Error;
 use std::io;

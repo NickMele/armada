@@ -1,28 +1,18 @@
 //! The first turn a Drone is given, assembled from the Job it is being put on.
 //!
-//! **The baseline is quoted, not written here.** `docs/contracts/agent-prompt.md`
-//! section 5 carries the M1 rendering as sanctioned copy, and each clause in it
-//! passed a membership test this module is in no position to re-run. [`BASELINE`]
-//! is that text transcribed, and the rest of this module assembles the per-Job
-//! blocks around it. A wording change belongs in the contract; a copy here that
-//! drifted from it would be the second-vocabulary defect in prose.
-//! [`notekeeping`] and the gaming half of [`Stopped`] are **drafted** for the
-//! same reason: sanctioned copy is the contract's and it has none for them yet.
+//! **The baseline is quoted, not written here.** `docs/contracts/agent-prompt.md` section 5 is
+//! the sanctioned M1 copy; [`BASELINE`] transcribes it, and a wording change belongs in the
+//! contract. [`notekeeping`] and the gaming half of [`Stopped`] are **drafted** — the contract
+//! has no sanctioned copy for them yet.
 //!
-//! **What is not assembled is missing rather than empty.** The contract names
-//! six layers and M1 has no Kit and no Manifest, which its own M1 rendering
-//! says, so what is assembled is baseline, job brief, where-you-are and step.
-//! The exemplar corpus and a review step's injected reference material each
-//! need a record M1 has no type for, and a block rendered empty reads to a
-//! Drone as a block that was answered. What the previous step produced was on
-//! that list and is not — [`crossing`](mod@crate::crossing) is what does.
+//! **What is not assembled is missing, not empty.** M1 has no Kit and no Manifest, so only
+//! baseline, job brief, where-you-are and step are assembled; a block rendered empty would read
+//! to a Drone as one that was answered. "What the previous step produced" is handled by
+//! [`crossing`](mod@crate::crossing) instead of a block here.
 //!
-//! **No block here is written from a `ResolvedCheck`'s `run` string.** The step
-//! block comes from [`ResolvedStep::label`] and the Job's own fields, and the
-//! blocks that outlive the turn are not here at all — the sentence this module
-//! was split on. [`crate::terms`] holds the five a step puts to whoever works
-//! it; [`Stopped`] stayed, because it is why a resuming brief differs from a
-//! first one and the one turn it was built for consumes it.
+//! **No block here comes from a `ResolvedCheck`'s `run` string**, but [`ResolvedStep::label`]
+//! and the Job's own fields; the rest live in [`crate::terms`], except [`Stopped`], kept for why
+//! a resuming brief differs.
 
 use adapter_traits::{Prompt, SpawnConfigRefused};
 use core_model::{
@@ -34,31 +24,21 @@ use verification::TheBaseMoved;
 use crate::crossing::{Crossed, Overtaken, Produced, Reconciling, Redirected};
 use crate::terms::{Checking, Declaring, Delivering, Splitting};
 
-/// Layer 1, verbatim from the Agent Prompt Contract's M1 rendering: **mechanics,
-/// never task content**, identical on every step of every Job, which is what
-/// makes it a constant rather than something assembled.
+/// Layer 1, verbatim from the Agent Prompt Contract's M1 rendering: **mechanics, never task
+/// content**, identical on every step of every Job, so a constant rather than something assembled.
 ///
-/// **Its third paragraph names which outcome comes back and which does not.** It
-/// used to promise a later turn carrying the reason whenever work did not pass,
-/// and exactly one outcome keeps that promise:
-/// [`HandedBack`](crate::Ruling::HandedBack) carries a `tell` built from what
-/// each Check expected and produced. [`Refused`](crate::Ruling::Refused),
-/// [`Suspect`](crate::Ruling::Suspect) and [`CouldNotDecide`](crate::Ruling::CouldNotDecide)
-/// have no message field at all — the step stops, the Job escalates, `dispatch`
-/// terminates without a turn, and a Drone told to wait waited holding a live
-/// session until a person noticed. Twice on one Job: nineteen hours, nearly all
-/// of it that wait.
+/// **Its third paragraph names which outcome comes back and which does not.**
+/// Only [`HandedBack`](crate::Ruling::HandedBack) carries a `tell`, built from what each Check
+/// expected and produced. [`Refused`](crate::Ruling::Refused), [`Suspect`](crate::Ruling::Suspect)
+/// and [`CouldNotDecide`](crate::Ruling::CouldNotDecide) carry no message — the step stops, the
+/// Job escalates, and a Drone told to wait held a live session until a person noticed. Twice on
+/// one Job: nineteen hours, nearly all of it that wait.
 ///
-/// **The promise narrowed rather than the system gaining a message.** Telling a
-/// refused Drone changes nothing it can act on — a refusal says the work runs
-/// and is not what was asked for, which resubmitting under the same instructions
-/// cannot answer — and `#140` ends a Drone once its step's work clears the
-/// machine gates, so the process is ending either way.
+/// **The promise narrowed rather than gained a message** — a refusal says the work is not what
+/// was asked for, which resubmitting cannot answer, and `#140` ends the Drone once the step's
+/// work clears the machine gates anyway.
 ///
-/// **Stated positively, over both halves.** "You may not hear back" tells a Drone
-/// nothing, and a rule about refusals alone would leave a Drone whose work
-/// *passed* reading its own silence as one: a step that advances ends its Drone
-/// too, and sends nothing.
+/// **Stated positively, over both halves** — "you may not hear back" alone would leave a Drone whose work *passed* reading its own silence as refusal.
 pub const BASELINE: &str = "\
 You are working in a git worktree on a branch of your own. You cannot push, \
 open a pull request, or run commands this repository has not declared.
@@ -77,23 +57,17 @@ asked about it again.";
 
 /// What a Drone being put on a worktree is opening with.
 ///
-/// **The two first turns as a value rather than as two calls**, so that the one
-/// funnel every spawn goes through — [`put_a_drone_on`] — can decide the brief
-/// *after* the rebase it runs has answered. A caller that assembled the prompt
-/// itself would have had to be handed the catch-up back, which is the fourth
-/// call site `#180` exists to avoid.
+/// **The two first turns as a value, not two calls** — the one funnel every
+/// spawn goes through, [`put_a_drone_on`], can decide the brief *after* the
+/// rebase it runs answers; a caller assembling the prompt itself would need
+/// the catch-up handed back, the fourth call site `#180` exists to avoid.
 ///
-/// **A struct rather than the enum it was**, because what a boundary carries is
-/// orthogonal to whether the step has been attempted. A restarted Drone on part
-/// three needs to know what part two produced exactly as a fresh one does, and
-/// an enum would have had to carry [`Crossed`] in both arms. It is also what
-/// keeps [`put_a_drone_on`]'s signature closed: the carried items ride the
-/// `Opening` a caller already passes, which is how `#207`'s waiting redirect
-/// arrived without the spawn funnel changing shape.
-///
-/// **An opening turn is asked for rather than assembled by the caller.** Every
-/// spawn rebases first, so what a Drone is told about its branch is not known
-/// at the moment the caller would have built the prompt.
+/// **A struct rather than the enum it was** — what a boundary carries is
+/// orthogonal to whether the step was attempted, and an enum would have
+/// carried [`Crossed`] in both arms. It also keeps [`put_a_drone_on`]'s
+/// signature closed via `#207`'s waiting redirect, and the opening turn is
+/// asked for rather than assembled by the caller: every spawn rebases first,
+/// so what a Drone is told about its branch is unknown at prompt-build time.
 ///
 /// [`put_a_drone_on`]: crate::daemon::Fleet::put_a_drone_on
 #[derive(Clone, Debug)]
@@ -417,25 +391,18 @@ impl Stopped {
     /// What stopped the earlier attempt, in one sentence, from the verdict the
     /// record holds.
     ///
-    /// **Read rather than assumed.** [`Stopped::verdict`] was carried here and
-    /// never rendered, and the block said "checked and did not pass" whatever
-    /// it held — which is false after `gate_undecided`, where nothing was
-    /// checked and the gate said so. A Drone told its work did not pass goes
-    /// looking for what was wrong with work that was right, and the second
-    /// attempt is then worse than the first for a reason nothing records.
+    /// **Read rather than assumed** — [`Stopped::verdict`] used to say "checked and did not pass"
+    /// whatever it held, false after `gate_undecided` where nothing was checked; a Drone told
+    /// its work failed hunts for what was wrong with work that was right.
     ///
-    /// **One sentence per trigger, matched exhaustively**, and no two triggers
-    /// share one. A Drone acts on what it is told, so a trigger added to the
-    /// registry is a compile error here rather than a Drone quietly handed the
-    /// nearest sentence — and the nearest sentence is the trap, not the
-    /// missing one. `drone_killed` sat under `thrashing`'s line for a while
-    /// because both are true of a step stopped mid-run; one of them sends a
-    /// Drone hunting for what was wrong with work nothing had measured.
+    /// **One sentence per trigger, matched exhaustively, no two sharing one** — a trigger added
+    /// to the registry is a compile error here rather than a Drone quietly handed the nearest
+    /// sentence, which is the trap. `drone_killed` sat under `thrashing`'s line for a while
+    /// because both are true of a step stopped mid-run.
     ///
-    /// Every sentence says what Fleet knows and stops. What the gate could not
-    /// read, and what a Judge would make of it, are not Fleet's to speculate
-    /// about — `docs/concepts/drone.md`'s rule about self-report, pointed the
-    /// other way.
+    /// Every sentence says what Fleet knows and stops; what the gate could not read is not
+    /// Fleet's to speculate about (`docs/concepts/drone.md`'s self-report rule, pointed the
+    /// other way).
     fn why(&self) -> &'static str {
         let Some(StepVerdict::Failed(stopped_by)) = self.verdict else {
             // No verdict against the work at all. `passed` and `not_reached`
@@ -600,31 +567,21 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed
     blocks
 }
 
-/// Where a file a Drone writes for itself goes, which is not the repository
-/// root. A private function rather than one of the types above: it is rendered
-/// where the turn is assembled, and does not outlive it.
+/// Where a file a Drone writes for itself goes, which is not the repository root. Private and
+/// rendered where the turn is assembled, so it does not outlive the turn.
 ///
-/// **Every other per-Job artifact is already keyed by Job id** — the log, a
-/// Check's output, the worktree, the brief's attachments. A plan was the one
-/// piece that was not, and one shared slot at the root cannot say whether what
-/// is in it is still live: the `PLAN.md` this repository carried belonged to a
-/// Job that finished and merged, and every worktree cut after it inherited a
-/// confident plan for work nobody had asked for. **No Drone is known to have
-/// been misled by it** — nothing pointed at that file, so one reached it only
-/// by going looking. The Job-keyed path is the correct home; harm was not
-/// observed.
+/// **Every other per-Job artifact is already keyed by Job id** — the log, a Check's output, the
+/// worktree, the brief's attachments. A plan was not: this repository's own root `PLAN.md`
+/// belonged to a finished, merged Job, and every worktree cut after inherited a confident plan
+/// for work nobody had asked for. No Drone is known to have been misled — the Job-keyed path is
+/// the correct home regardless.
 ///
-/// **It offers a place; it does not ask for a plan.** A block a Drone reads as
-/// an instruction puts every Job through a planning step nobody requested, so
-/// the whole of it is conditional and the last sentence says so outright. A
-/// plan is no longer one of its examples either: on a `plan` step that made it
-/// read as an instruction to put the step's deliverable in the one directory
-/// the Judge cannot see, and [`Delivering`] names that file instead.
-///
-/// **"Plan" already means something else here.** [`Declaring`] calls the
-/// declared scope "the plan you declared", and a second meaning in one turn is
-/// the second-vocabulary defect in prose — so this block leads with what a
-/// Drone is actually holding, a file it wrote for itself.
+/// **It offers a place; it does not ask for a plan.** A block read as an instruction puts every
+/// Job through an unrequested planning step. A plan is no longer one of its examples either: on
+/// a `plan` step it read as an instruction to put the deliverable where the Judge cannot see it,
+/// and [`Delivering`] names that file instead. **"Plan" already means something else here** —
+/// [`Declaring`] calls the declared scope "the plan you declared", so this block leads with what
+/// a Drone is holding: a file it wrote for itself.
 fn notekeeping(job: &JobId) -> String {
     format!(
         "FILES YOU WRITE FOR YOURSELF\n\nA checklist, notes you want to keep \

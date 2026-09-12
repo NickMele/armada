@@ -1,27 +1,18 @@
 //! What a Check produced, written down and read back: the output to a file,
 //! the row to the store, and the file to whoever opens that row.
 //!
-//! # A file, with the path on the row
+//! The same call the Drone transcript got: a large artifact with its own
+//! retention profile lives on disk and the record holds a reference.
+//! `Ruling::Failed` used to carry the bytes in memory, dying with the process,
+//! so a failed Check showed its exit code and never its output.
 //!
-//! The same call the Drone transcript got, for the same reason: a large
-//! artifact with its own retention profile lives on disk and the record holds a
-//! reference. `Ruling::Failed` carried the bytes in memory and they died with
-//! the process, so a failed Check showed its exit code and never its output.
+//! **The path is a function of the row's key, and nothing else**:
+//! `.armada/checks/<job-id>/<step-id>.<attempt>.<ordinal>.log`, exactly
+//! `job_step_checks`'s key. The attempt is in the path because a retried step now
+//! reruns a Check, and without it a second run's file would overwrite the first's
+//! while `store` kept both rows, leaving the first attempt's row pointing wrong.
 //!
-//! # The path is a function of the row's key, and nothing else
-//!
-//! `.armada/checks/<job-id>/<step-id>.<attempt>.<ordinal>.log`, which is the
-//! row's key exactly: `job_step_checks` is keyed by Job, step, attempt and
-//! ordinal, and every one of the four is here.
-//!
-//! The attempt was missing while nothing could run a step twice. Now a failed
-//! Check hands the step back, so a second run wrote over the first run's files
-//! while `store` kept both runs' rows — leaving the first attempt's row
-//! pointing at the second attempt's output, which is worse than pointing at
-//! nothing. A path that is the whole key cannot do that.
-//!
-//! # Over 500 lines: `#737`'s [`excerpt`] shares [`windowed`] with
-//! [`kept_output`] rather than copying its bound into a file of its own.
+//! Over 500 lines: `#737`'s [`excerpt`] shares [`windowed`] with [`kept_output`] rather than copying its bound into a file of its own.
 
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Write};
@@ -397,26 +388,19 @@ const MOST: usize = 256 * 1024;
 
 /// One Check's output, read back out of the file its row points at.
 ///
-/// **Beside the writing, because both halves depend on the one shape above.**
-/// A name the writer stops producing is a name this stops resolving, and the
-/// two would drift the first time they were a crate apart.
+/// **Beside the writing** — both halves depend on the one shape above, so a
+/// name the writer stops producing is a name this stops resolving.
 ///
-/// **The id is the file's own name and never a path the caller composed.**
-/// `kept` is the last component of a row's `output_path`, and it is resolved
-/// against the rows this Job actually holds before anything is opened — so an
-/// id naming no row of this Job reaches no file, whatever it spells. That is
-/// what makes reading a file at a caller's word safe here: the caller does not
-/// name a file, it names a row, and Fleet says where that row's file is.
+/// **The id is the file's own name, never a path the caller composed** —
+/// `kept` is the last component of a row's `output_path`, resolved against
+/// the rows this Job holds before anything opens: the caller names a row,
+/// not a file, and Fleet says where that row's file is.
 ///
-/// `None` where no row of this Job kept an output under that name: a Job whose
-/// `.armada` directory was reclaimed, an id that was never one, or a file that
-/// will not open. Not an error — the caller decides what to say about it,
-/// exactly as `transcript::arguments` leaves that decision to `serving`.
+/// `None` where no row kept an output under that name — reclaimed, an id
+/// that was never one, or a file that will not open. Not an error; the
+/// caller decides what to say, as `transcript::arguments` leaves to `serving`.
 ///
-/// **The file is counted as it is read.** `total_lines` is exact even where the
-/// window is not the whole, which is what lets `from_line` be the file's own
-/// numbering rather than the window's: a reader citing line 1,940 means the
-/// file's 1,940th line.
+/// **The file is counted as it is read** — `total_lines` is exact even where the window is not, so `from_line` is the file's own numbering, not the window's.
 pub fn kept_output(
     records_root: &str,
     kept: &str,

@@ -1,19 +1,15 @@
 //! What the Judge was asked, written down beside what it answered.
 //!
-//! # A file off the checkout, with the path on the row
+//! A brief carries the request, criteria, references, deliverable and the
+//! whole branch diff — too large for a column, which would put the diff on
+//! every row of every panel. It lives at `<records_root>/briefs/`, beside
+//! `transcript::transcript_of` and `check_output::checks_dir`
+//! (`crate::records::root` resolves `records_root`, never the repository).
 //!
-//! `crate::check_output`'s shape and its reason: a brief carries the request,
-//! the criteria, the references, the deliverable and the whole branch diff, so
-//! it is a large artifact with its own retention profile. A column holding the
-//! bytes would put the diff on every row of every panel.
-//!
-//! `<records_root>/briefs/`, beside `transcript::transcript_of` and
-//! `check_output::checks_dir` — `crate::records::root` is what resolves
-//! `records_root`, and it is never the repository. `armada clean` removes
-//! `.armada/worktrees/` and forgets the Job's rows and does not touch either
-//! the repository root or the data directory, so the brief outlives the record
-//! pointing at it — which is the right way round, because a verdict argued
-//! about weeks later is argued about after somebody cleaned.
+//! `armada clean` removes `.armada/worktrees/` and forgets the Job's rows but
+//! touches neither the repository root nor the data directory, so the brief
+//! outlives the record pointing at it — the right way round, since a verdict
+//! argued weeks later is argued about after somebody cleaned.
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -24,25 +20,18 @@ use crate::check_output::one_component;
 /// Where one Job's briefs live, under this repository's own share of Fleet's
 /// data directory.
 ///
-/// # What expires, and where that will be enforced
-///
 /// **Nothing expires yet, and nothing here prunes.** `#69` owns retention for
 /// every artifact under [`crate::records::root`] — transcripts, logs, Check
-/// output and now briefs — and one sweep that knows all four is the only kind
-/// that can be reasoned about. A rule invented here would be a fifth answer
-/// nobody could find. What this owes `#69` is the bound: one file per
-/// criterion **and one per judged gaming pattern** per attempt per step, a
-/// panel sharing one, each roughly the branch diff plus the deliverable
-/// (`verification::A_DELIVERABLE`, 16 KiB) plus the Check tails. So a Job's
-/// briefs grow with its criteria and its declared patterns times its re-runs,
-/// with the diff in every one.
+/// output and briefs — one sweep that knows all four, not a fifth answer
+/// invented here. The bound it owes `#69`: one file per criterion **and one
+/// per judged gaming pattern** per attempt per step, a panel sharing one, each
+/// roughly the branch diff plus the deliverable (`verification::A_DELIVERABLE`,
+/// 16 KiB) plus the Check tails, so briefs grow with criteria and patterns
+/// times re-runs, diff in every one.
 ///
-/// The gaming half is the cheaper one and only by a little: its brief carries
-/// the diff and the baseline and none of the Check output. It is also the rarer
-/// one — the second look runs only where a step would otherwise advance.
-///
-/// Until `#69` lands, `armada clean --all` and deleting this directory by hand
-/// are the only prunes, and both are a person's act.
+/// The gaming half is cheaper (no Check output) and rarer (only where a step
+/// would otherwise advance). Until `#69` lands, `armada clean --all` or
+/// deleting this directory by hand are the only prunes, a person's act.
 pub fn briefs_dir(records_root: &str, handle: &str) -> PathBuf {
     Path::new(records_root)
         .join(".armada")
@@ -91,24 +80,18 @@ impl Asked {
     /// Write one brief down, and answer with the path to put on every judgment
     /// it produces.
     ///
-    /// **Called before the call goes out.** A timeout, a vendor refusal or an
-    /// answer in prose produces no `Judgment` at all, and those are exactly the
-    /// calls `#154`'s calibration record has to look at — so a failed call
-    /// leaves a brief with no row rather than a row with no brief.
+    /// **Called before the call goes out** — a timeout, a vendor refusal or an answer in prose
+    /// produces no `Judgment`, exactly the calls `#154`'s calibration record looks at, so a
+    /// failed call leaves a brief with no row rather than a row with no brief.
     ///
-    /// **A panel shares one file and two criteria do not.** The sharing is
-    /// exact: `judging::judged` builds the `Brief` outside the panel loop, so
-    /// the file is not a summary of three calls, it is the three. Folding two
-    /// criteria into a shared prefix and two tails would store a recipe rather
-    /// than a record, and being unable to prove a reassembly matched what went
-    /// out is the whole cost `#224` was filed over.
+    /// **A panel shares one file, and two criteria do not.** `judging::judged` builds the
+    /// `Brief` outside the panel loop, so the file is the three calls, not a summary of them —
+    /// folding two into a shared prefix would store a recipe, unable to prove a reassembly
+    /// matched what went out (`#224`).
     ///
-    /// **`None` is ordinary and never an error.** Nowhere to write, an id that
-    /// is not a single path component, a directory that would not open, a disk
-    /// that refused — none is a reason to fail a call that is otherwise about
-    /// to be made, exactly as `check_output::kept` leaves a row's path absent
-    /// rather than failing a ruling. What is lost is the re-read, and the
-    /// absent path is how a reader is told so.
+    /// **`None` is ordinary and never an error** — nowhere to write, a bad id, a disk that
+    /// refused: none fails a call otherwise ready, as `check_output::kept` leaves a path absent
+    /// rather than failing a ruling.
     pub(crate) fn kept(
         &self,
         step: &StepId,

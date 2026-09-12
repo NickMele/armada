@@ -1,27 +1,18 @@
 //! The inside of the loop: taking an approved Job, running it, and ending it.
 //!
-//! Split from [`daemon`](mod@crate::daemon), which is what Fleet *is* — the
-//! seams it is assembled from and the things it can be asked. This is what
-//! happens to one Job in a slot, and the only file in the workspace that calls
+//! Split from [`daemon`](mod@crate::daemon) — the seams Fleet is assembled from and what it can
+//! be asked. This is what happens to one Job in a slot, and the only file that calls
 //! `Job::transition` and `Job::transition_step`. **Which** Job gets a slot is
-//! [`admitting`](mod@crate::admitting)'s; a Job that has run before is
-//! [`readmitting`](mod@crate::readmitting)'s.
+//! [`admitting`](mod@crate::admitting)'s; a Job that has run before is [`readmitting`](mod@crate::readmitting)'s.
 //!
-//! # The order in `dispatch` is the specification
+//! **The order in `dispatch` is the specification.** `queued -> running` happens first, before
+//! the worktree and the Drone — the registry forces it: a step cannot start from `queued`
+//! because the inner machine advances only beneath `running`, and `queued`'s outbound edges
+//! give a disk that will not give up a worktree no expressible destination.
 //!
-//! `queued -> running` happens **first**, before the worktree and the Drone,
-//! and that is not the order it reads as. The registry forces it. A step
-//! cannot be started from `queued`, because the inner machine advances only
-//! beneath `running`; and `queued`'s outbound edges give a disk that will not
-//! give up a worktree **no expressible destination**, where `running` has every
-//! one.
-//!
-//! # Nothing here removes a worktree, on any path
-//!
-//! Not on a failed Check, a kill or an interruption. No method in this
-//! workspace could: `Vcs` has no removal and the reason is written on the
-//! trait. A failed Job's branch is exactly as its Drone left it, which is what
-//! "a person reads the branch" depends on.
+//! **Nothing here removes a worktree, on any path** — not on a failed Check, a kill or an
+//! interruption. No method in this workspace could: `Vcs` has no removal, and a failed Job's
+//! branch is exactly as its Drone left it, which is what "a person reads the branch" depends on.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
 use core_model::{
@@ -52,21 +43,17 @@ where
 {
     /// Take one approved Job all the way to a running Drone.
     ///
-    /// **Two Jobs are queued and only one of them is new.** A Job whose branch
-    /// is already written has run before: a person answered it at a human gate
-    /// or acted on it while it was escalated, and it went back in the queue
-    /// rather than straight to a Drone. Its worktree, its branch and every
-    /// earlier step's work are on disk, and starting it from the first step
-    /// would re-run work that was already accepted.
+    /// **Two Jobs are queued and only one of them is new.** A Job whose branch is already
+    /// written has run before: a person answered it at a human gate or acted on it while it
+    /// was escalated. Its worktree, its branch and every earlier step's work are on disk, and
+    /// starting it from the first step would re-run work that was already accepted.
     ///
-    /// The branch is the discriminator and it is exact, not a heuristic: it is
-    /// written once, here, and of the three statuses `queued` is reachable from
-    /// only `awaiting_approval` has no branch — `awaiting_review` and
-    /// `escalated` are both downstream of this line.
+    /// The branch is the discriminator and it is exact, not a heuristic: written once, here,
+    /// and of the three statuses `queued` is reachable from, only `awaiting_approval` has no
+    /// branch — `awaiting_review` and `escalated` are both downstream of this line.
     ///
-    /// Every failure below leaves the Job `escalated` rather than `running`,
-    /// and returns the cause. A person decides; Fleet does not retry, and does
-    /// not put the Job back in the queue for itself to fail on again.
+    /// Every failure below leaves the Job `escalated` rather than `running`, and returns the
+    /// cause. A person decides; Fleet does not retry, and does not requeue itself to fail again.
     pub(crate) async fn dispatch(
         &self,
         job: Job,
@@ -165,26 +152,19 @@ where
 
     /// Read what the worktree holds now, and hold it as this step's baseline.
     ///
-    /// **The reading `diff_nonempty` is decided against**, taken at the moment
-    /// a step starts so that what the gate compares is the step's own work
-    /// rather than the branch's. `WorkProduct` measures from the commit the
-    /// branch was cut from, which credits every step with everything its
-    /// predecessors wrote.
+    /// **The reading `diff_nonempty` is decided against**, taken at the moment a step starts
+    /// so the gate compares the step's own work rather than the branch's — `WorkProduct`
+    /// measures from the commit the branch was cut from, crediting predecessors' work too.
     ///
-    /// **After the rebase, on every path — because every path has one now.**
-    /// What a rebase moves is inherited rather than done: a conflicting one
-    /// leaves markers and a clean one replays the branch onto a base that
-    /// itself moved. Both are content, so a baseline read before it makes git's
-    /// output the next step's work, and a Drone that resolved nothing passes
-    /// `diff_nonempty` on the markers it was handed. This used to except a
-    /// Job's first step and an approved one; `#150` and `#180` closed both.
+    /// **After the rebase, on every path, since every path has one now.** A rebase's move is
+    /// inherited rather than done: a conflicting one leaves markers, a clean one replays onto a
+    /// base that itself moved, and reading before it would make git's output the next step's
+    /// work. This used to except a Job's first step and an approved one; `#150` and `#180`
+    /// closed both.
     ///
-    /// **A failure leaves the step with no baseline, and that is deliberate.**
-    /// A reading that did not happen is not a worktree that did not move, so
-    /// there is no arm here that stores an empty footprint — the gate reads
-    /// `None` as nothing known to have moved and fails the check. An unread
-    /// baseline must not be able to advance a step, which is
-    /// `Changed::nothing`'s rule applied one level up.
+    /// **A failure leaves the step with no baseline, deliberately** — a reading that did not
+    /// happen is not a worktree that did not move, so nothing here stores an empty footprint;
+    /// the gate reads `None` as nothing known to have moved and fails the check.
     pub(crate) fn marked(&self, working: &mut Option<Working>) {
         let Some(at_work) = working.as_ref() else {
             return;
@@ -215,24 +195,19 @@ where
         // did. See [`paid_so_far`](Fleet::paid_so_far).
         self.paid_so_far(working).await?;
         match ruling {
-            // **The Drone ends here, and a fresh one starts the next step on
-            // the same worktree.** It used to be told and carried on: same
-            // process, same session, same accumulated transcript, with the last
-            // step of a Job — the one whose work lands — paying for every step
-            // before it. `crate::boundary` owns the order the ending happens
-            // in, and each part of that order answers a failure.
+            // **The Drone ends here, and a fresh one starts the next step on the same
+            // worktree.** It used to be told and carried on with the same process/session; now
+            // the last step of a Job pays for every step before it — `crate::boundary` owns
+            // the ending order.
             //
-            // **`tell` is not read on this arm any more.** There is no session
-            // to inject a verdict into; what the verdict *said* crosses as
-            // `Cleared`, re-tensed for a Drone that was not there — see
-            // `crate::crossing`, which argues why a rendered turn cannot simply
-            // be moved into an opening brief.
+            // **`tell` is not read on this arm any more.** There is no session to inject a
+            // verdict into; what it *said* crosses as `Cleared`, re-tensed for a Drone that was
+            // not there — see `crate::crossing`.
             //
-            // **Nothing here rebases and nothing reads a baseline.** Both are
-            // inside `put_a_drone_on`, which is the one funnel every spawn goes
-            // through, and both were already there for the restart path. What
-            // the catch-up came to rides the opening brief because there is
-            // nowhere else for it to go.
+            // **Nothing here rebases and nothing reads a baseline** — both are inside
+            // `put_a_drone_on`, the one funnel every spawn goes through, already there for the
+            // restart path. The catch-up rides the opening brief because there is nowhere else
+            // for it to go.
             Ruling::Advanced { .. } => {
                 let job = self.load(job_id).await?;
                 // Read before the step moves: the block the next Drone gets
@@ -276,25 +251,20 @@ where
             // The whole of what finishing a Job is, including the commit that
             // makes its branch mergeable, is `landing`'s.
             Ruling::Finished { tell, .. } => self.finish(ruling, tell, job_id, step, working).await,
-            // The Job moves to the gate and its Drone ends there. **The step
-            // moves first and holds at `awaiting_human`** — `#522`, and the
-            // order is not the freeze's doing, since the inner machine advances
-            // beneath both statuses. It is what a client watching would
-            // otherwise see: a Job at `awaiting_review` whose current step still
-            // said a Drone was working it.
+            // The Job moves to the gate and its Drone ends there. **The step moves first and
+            // holds at `awaiting_human`** — `#522` — since the inner machine advances beneath
+            // both statuses; otherwise a client would see a Job at `awaiting_review` whose
+            // current step still said a Drone was working it.
             //
-            // **A person's review costs no fleet time**, and that is what the
-            // ending is for. The work passed the machine gates, which is what
-            // ends a Drone; keeping the session so that a `request_changes`
-            // could cost a turn rather than a respawn also kept the working
-            // slot, and one Job held the only slot for four hours and fifty-six
-            // minutes doing nothing while a person read it. The slot is freed
-            // in this turn and `admit_next` may give it to the next Job.
+            // **A person's review costs no fleet time**, and that is what the ending is for.
+            // The work passed the machine gates, which is what ends a Drone; keeping the
+            // session so `request_changes` could cost a turn rather than a respawn also kept
+            // the working slot — one Job held the only slot for four hours and fifty-six
+            // minutes doing nothing while a person read it. The slot frees this turn.
             //
-            // **The cost is that `request_changes` cannot inject anything.**
-            // There is no Drone to give the note to, so `#207` gives it
-            // somewhere to wait: the note goes onto the Job and the Drone
-            // re-admission puts back on the step opens with it.
+            // **The cost is that `request_changes` cannot inject anything.** There is no Drone
+            // to give the note to, so `#207` gives it somewhere to wait: the note goes onto the
+            // Job, and the Drone re-admission puts back on the step opens with it.
             Ruling::HeldForReview { held, .. } => {
                 let job = self.load(job_id).await?;
                 let job = self
@@ -325,26 +295,20 @@ where
                 self.asked_the_judge_question(&job, step, ruling).await?;
                 Ok(())
             }
-            // The gate failed and there is budget left. **Nothing about the
-            // Job moves** — it is still `running`, the Drone still holds its
-            // session and its context, and the only thing that happens is the
-            // step going round again.
+            // The gate failed and there is budget left. **Nothing about the Job moves** — it
+            // is still `running`, the Drone still holds its session and context, and only the
+            // step goes round again.
             //
-            // Two step moves, because `retrying` is a pair of edges and not a
-            // resting place. The first writes `retrying` with the trigger, so
-            // the log says this entry into `running` was the machine handing
-            // work back rather than a person restarting a stopped step. The
-            // second is the entry itself, and it is what `store::attempt`
-            // counts — without it the next run's checks and judgments would
-            // overwrite this one's and the record would read as one attempt.
-            // `step_machine` argues the shape at length.
+            // Two step moves, because `retrying` is a pair of edges and not a resting place: the
+            // first writes `retrying` with the trigger (a machine handoff, not a person
+            // restarting a stopped step), and the second is the entry `store::attempt` counts —
+            // without it the next run's checks would overwrite this one's.
             //
-            // **Nothing re-reads the baseline and nothing re-asks for a plan.**
-            // The step was entered once and this is still that entry: a
-            // baseline taken here would make `diff_nonempty` ask whether *this
-            // attempt* wrote something rather than whether the step did, and a
-            // second `declare_plan_at` would spend a turn asking a Drone to
-            // restate a plan it never left.
+            // **Nothing re-reads the baseline and nothing re-asks for a plan.** The step was
+            // entered once and this is still that entry: a baseline taken here would make
+            // `diff_nonempty` ask whether *this attempt* wrote something rather than the step,
+            // and a second `declare_plan_at` would spend a turn asking a Drone to restate a
+            // plan it never left.
             Ruling::HandedBack { tell, retrying, .. } => {
                 let job = self.load(job_id).await?;
                 let job = self
@@ -353,30 +317,20 @@ where
                 self.move_step(&job, step, StepTarget::Running).await?;
                 self.tell(job_id, tell, None, working).await
             }
-            // Four stops, one shape: the work stops here, the Drone is not
-            // told, and `apply` decides which status and which trigger.
-            // `Suspect` joins them because a person is being asked either way —
-            // what differs is the claim being made, which is the trigger's to
-            // say. **A refusal does not reach the retry budget**, though the
-            // budget now exists: it answers a mechanical failure, and what
-            // sends a step back to its Drone is a check that ran and said no.
-            // A refusal says the work runs and is not what was asked for,
-            // which is a person's to answer — resubmitting under the same
-            // instructions would produce the same work. **The refusal
-            // reprompt the contract specifies is not injected here and no
-            // longer waits to be** — the step stopping is what ends the
-            // Drone, so `expected` and `produced` reach the opening brief of
-            // the Drone a person restarts the step with instead. `#204`.
+            // Four stops, one shape: the work stops here, the Drone is not told, and `apply`
+            // decides which status and which trigger. `Suspect` joins them because a person is
+            // asked either way; what differs is the claim, which is the trigger's to say.
+            // **A refusal does not reach the retry budget** — resubmitting under the same
+            // instructions would produce the same work. **Its reprompt is not injected here any
+            // more** — the step stopping ends the Drone, so `expected` and `produced` reach the
+            // opening brief of the Drone a person restarts the step with instead. `#204`.
             //
-            // **`CouldNotDecide` is the fourth, and it is not a verdict.** The
-            // shape is shared and the claim is not: the other three weighed the
-            // work, and this one is Fleet saying it could not read what it
-            // needed to weigh it with. It joins them because the alternative is
-            // what it used to do — leave the Job `running` for the liveness
-            // clock to find, with nothing anywhere saying why — and because
-            // only a stopped step is one `crate::resume` can put a person back
-            // on. What could not be read is written into the Job's log by
-            // `crate::settling`, before this runs.
+            // **`CouldNotDecide` is the fourth, and it is not a verdict.** The shape is shared
+            // and the claim is not: the other three weighed the work, and this one is Fleet
+            // saying it could not read what it needed to weigh it with. The alternative is what
+            // it used to do — leave the Job `running` for the liveness clock to find — and
+            // only a stopped step is one `crate::resume` can put a person back on. What could
+            // not be read is written by `crate::settling` before this runs.
             Ruling::Failed { .. }
             | Ruling::Refused { .. }
             | Ruling::Suspect { .. }
@@ -555,24 +509,19 @@ where
 
     /// End the Drone and free the slot. **The worktree is untouched.**
     ///
-    /// A terminate that fails is a process already gone or one the operating
-    /// system will not signal, and there is nothing further to do about either:
-    /// the slot is already free, and the Job has already moved.
+    /// A terminate that fails is a process already gone or one the OS will not signal: the
+    /// slot is already free, and the Job has already moved.
     ///
-    /// **What it spent goes onto the Job, and for a fortnight it did not.**
-    /// This is the ending [`Ruling::Finished`] takes and, since #397, the one a
-    /// Job whose gate-failure attempts are spent takes to `awaiting_repair` —
-    /// which is the road a failing Check travels every time. Its Drone was
-    /// signalled and dropped without a fold, so the Job's record showed every
-    /// Drone's cost but its last and `#51`'s cap was reading a number that was
-    /// short. `Fleet::stood_down_paying` is the pairing, shared with the two
-    /// endings that always had it, and the drain inside it is why the figure
-    /// is the whole run rather than a prefix of it.
+    /// **What it spent goes onto the Job, and for a fortnight it did not.** This is the ending
+    /// [`Ruling::Finished`] takes and, since `#397`, the one a Job whose gate-failure attempts
+    /// are spent takes to `awaiting_repair`. Its Drone was signalled and dropped without a
+    /// fold, so the Job's record showed every Drone's cost but its last, and `#51`'s cap was
+    /// reading a number that was short. `Fleet::stood_down_paying` is the pairing, shared with
+    /// the two endings that always had it.
     ///
-    /// The ids are read before the slot is consumed, so a spend that will not
-    /// write still leaves a departure that can be. Neither refusal can return —
-    /// six callers end a Drone as part of moving a Job that has already
-    /// moved — so both go into that Job's own log rather than into a discard.
+    /// The ids are read before the slot is consumed, so a spend that will not write still
+    /// leaves a departure that can be. Neither refusal can return — six callers end a Drone as
+    /// part of moving a Job that has already moved — so both go into that Job's own log.
     pub(crate) async fn end_the_drone(&self, working: &mut Option<Working>) {
         let ended = match working.take() {
             Some(at_work) => {
@@ -596,30 +545,21 @@ where
         }
     }
 
-    /// Pause the Job for a person, holding its worktree as-is, before any
-    /// process existed.
+    /// Pause the Job for a person, holding its worktree as-is, before any process existed.
     ///
-    /// **The trigger is a parameter because the answer differs and the fact
-    /// does not.** Every caller is upstream of the spawn, so on all of them
-    /// nothing is running and nothing is missing; what changes is who fixes it
-    /// — `no_worktree` the disk or the repository, `not_configurable` the
-    /// Manifest or the model roster, `would_not_start` the environment the
-    /// daemon runs in. That is what a person reads off the badge, and it is all
-    /// they get before they open the Job. All three are Job-level, so
-    /// [`core_model::StepLevelTrigger::of`] keeps them out of `last_verdict`.
+    /// **The trigger is a parameter because the answer differs and the fact does not.** Every caller is
+    /// upstream of the spawn, so nothing is running and nothing is missing on any of them; what changes is
+    /// who fixes it — `no_worktree` the disk or repository, `not_configurable` the Manifest or model
+    /// roster, `would_not_start` the daemon's own environment. All three are Job-level, kept out of
+    /// `last_verdict` by [`core_model::StepLevelTrigger::of`].
     ///
-    /// **It was one trigger, `interrupted`, until 2026-08-31**, and this
-    /// method's doc used to say outright that no trigger named an
-    /// infrastructure failure at dispatch. Three do now. `interrupted` means a
-    /// Job marked running has no matching OS process, so borrowing it here sent
-    /// whoever read it after a dead Drone on a Job that had never spawned one —
-    /// the third time this defect was found in a week, after `gate_failure`'s
-    /// verb and `not_prepared`'s split.
+    /// **It was one trigger, `interrupted`, until 2026-08-31.** `interrupted` means a Job marked running
+    /// has no matching OS process, so borrowing it here sent whoever read it after a dead Drone on a Job
+    /// that had never spawned one — the third such defect found in a week, after `gate_failure`'s verb
+    /// and `not_prepared`'s split.
     ///
-    /// It is not a home for `interrupted` itself. The two sites that raise it
-    /// legitimately — a Drone that vanished, and a submission for a Job outside
-    /// the slot — have a process to be missing, which is the one thing no
-    /// caller here does.
+    /// It is not a home for `interrupted` itself: the two sites that legitimately raise it have a
+    /// process to be missing, which is the one thing no caller here does.
     pub(crate) async fn stopped_before_a_drone(
         &self,
         job: &Job,
@@ -698,26 +638,18 @@ where
         Ok(moved.job)
     }
 
-    /// A Job as an event publish carries it, with the reason its last
-    /// transition stored.
+    /// A Job as an event publish carries it, with the reason its last transition stored.
     ///
-    /// **`From<&core_model::Job>` cannot make this redaction.** That
-    /// conversion is right the instant a Job is created, advances a step or
-    /// gains or loses a Drone while still `running` — none of those have a
-    /// reason to carry, and the doc on that `impl` says so. It stops being
-    /// right the moment the Job it is handed is `escalated`: the reason is
-    /// what `escalation` in `packages/screens/src/render.ts` reads to draw
-    /// the dead-end render at all, a client replaces its whole row on every
-    /// one of these events rather than patching it, and there is no event
-    /// after the one that drops it to put the reason back — the Job sits
-    /// `escalated` until a person acts, and so does the hole in what Bridge
-    /// can draw.
+    /// **`From<&core_model::Job>` cannot make this redaction.** That conversion is right the
+    /// instant a Job is created, advances a step or gains or loses a Drone while still
+    /// `running` — none of those carry a reason. It stops being right once `escalated`: the
+    /// reason is what `escalation` in `packages/screens/src/render.ts` reads to draw the
+    /// dead-end render, a client replaces its whole row on every one of these events rather
+    /// than patching it, and no later event puts the reason back while the Job sits `escalated`.
     ///
-    /// **`queued_reason`, `budget_hold`, `asking` and `resumption` stay
-    /// `None`, for `From`'s own reason.** Nothing publishes an event about a
-    /// Job in `queued` — creation, a step advancing and a Drone arriving or
-    /// leaving are none of them a `queued` Job — so there is no board to read
-    /// those from here either.
+    /// **`queued_reason`, `budget_hold`, `asking` and `resumption` stay `None`, for `From`'s
+    /// own reason** — nothing publishes an event about a `queued` Job, so there is no board to
+    /// read those from here either.
     pub(crate) async fn published(&self, job: &Job) -> Result<ipc::JobSummary, Adrift> {
         let reason = self.last_reason(job.id()).await?;
         Ok(ipc::JobSummary::of(
@@ -748,26 +680,19 @@ where
 
     /// The target that enters a step, given where that step already stands.
     ///
-    /// **One place asks it, because a forward walk cannot tell by looking.**
-    /// Every step of every linear workflow is entered as
-    /// [`StepTarget::Running`]; a step a loop has come round to has not been
-    /// dispatched into, because a return leaves the emitting step where it
-    /// stood, and entering it again is [`StepTarget::Revisited`]. The two walk
-    /// different edges and the machine refuses each in the other's place, so a
-    /// call site choosing by hand is a call site that can be wrong — and the
-    /// three that walk forward would each have had to choose.
+    /// **One place asks it, because a forward walk cannot tell by looking.** Every step of every
+    /// linear workflow enters as [`StepTarget::Running`]; a step a loop has come round to has not
+    /// been dispatched into, since a return leaves the emitting step where it stood, and entering
+    /// it again is [`StepTarget::Revisited`]. The two walk different edges the machine refuses
+    /// each in the other's place, so a call site choosing by hand can be wrong.
     ///
-    /// **Two states answer `Revisited` and they are the same fact.** A verdict
-    /// is routed back from a step's advance gate, so the emitter is `running`
-    /// where the routing was mechanical and `awaiting_human` where a person at
-    /// the gate asked for it. Reading only the first is what left the loop's
-    /// second pass one move short of the gate that asked for it, one state
-    /// along.
+    /// **Two states answer `Revisited` and they are the same fact** — routing leaves the
+    /// emitter `running` where it was mechanical and `awaiting_human` where a person at the gate
+    /// asked for it; reading only the first left the loop's second pass one move short.
     ///
-    /// **It never invents a return.** A step that has `advanced` answers
-    /// [`StepTarget::Running`] here and the machine refuses it, which is
-    /// `StepAlreadyAdvanced` and is the redispatch refusal doing its job: a
-    /// return needs the step that routed it, and this cannot see one.
+    /// **It never invents a return.** A step that has `advanced` answers [`StepTarget::Running`]
+    /// here and the machine refuses it (`StepAlreadyAdvanced`): a return needs the step that
+    /// routed it, and this cannot see one.
     pub(crate) fn entering(&self, job: &Job, step: &StepId) -> StepTarget {
         match job.step(step).map(|row| row.state()) {
             Some(StepState::Running | StepState::AwaitingHuman) => StepTarget::Revisited,
@@ -777,20 +702,16 @@ where
 
     /// The same move, said by somebody other than Fleet.
     ///
-    /// **Only what a person did needs it.** Every step move Fleet derives — a
-    /// gate ruling, a dispatch, a reap — is Fleet's, and
-    /// [`move_step`](Fleet::move_step) is the spelling. An override is a person
-    /// advancing a step the gate refused, and the actor is the whole content of
-    /// that row: the log cannot reconstruct afterwards who disagreed with the
-    /// Judge, and a `stopped -> advanced` recorded against Fleet would say
-    /// Fleet overruled itself.
+    /// **Only what a person did needs it.** Every step move Fleet derives — a gate ruling, a
+    /// dispatch, a reap — is Fleet's, and [`move_step`](Fleet::move_step) is the spelling. An
+    /// override is a person advancing a step the gate refused, and the actor is the whole
+    /// content of that row: a `stopped -> advanced` recorded against Fleet would say Fleet
+    /// overruled itself.
     ///
-    /// **`crate::reviewing` is the other caller, and the actor is what tells
-    /// its row from the loop's.** Both reach [`StepTarget::Revisited`] and
-    /// neither carries a payload; Fleet on that row is a loop coming round to
-    /// the step that emitted the verdict, and a person on it is a person
-    /// sending the work back to the step they were standing at. Nothing else on
-    /// the row distinguishes them, so nothing else had to be added to make it.
+    /// **`crate::reviewing` is the other caller, and the actor tells its row from the loop's.**
+    /// Both reach [`StepTarget::Revisited`] and neither carries a payload; Fleet on that row is
+    /// a loop coming round, and a person on it is a person sending the work back — nothing
+    /// else distinguishes them.
     pub(crate) async fn move_step_by(
         &self,
         job: &Job,
@@ -851,23 +772,19 @@ where
 
 /// Why the step stops, on each of the four rulings that end the work on it.
 ///
-/// **[`Ruling::stops_the_step`] answers three, and the fourth is spelled here
-/// rather than folded into it.** `gate::apply` reads that method as the trigger
-/// to escalate on — "the rulings that escalate are exactly the rulings that
-/// stop the step" is the sentence it is written under — and a gate failure
-/// escalates nothing, because the Job is over. Folding the two together would
-/// have the one ruling that ends a Job derive an escalation for it.
+/// **[`Ruling::stops_the_step`] answers three, and the fourth is spelled here rather than
+/// folded into it.** `gate::apply` reads that method as the trigger to escalate on — "the
+/// rulings that escalate are exactly the rulings that stop the step" — and a gate failure
+/// escalates nothing, because the Job is over.
 ///
-/// A failure spells `gate_failure`, the trigger a hand-back already writes: the
-/// same tier failed, and what differs is whether there was budget left to
-/// answer it. Without this, #179 — the Job reached `completed_failed` while its
-/// `tests` step stayed `running` with a null verdict, so the only record that
-/// the step had failed was the Check run itself, and `resume::resumable` finds
-/// a step to act on by looking for the stopped one.
-/// `pub` for one caller outside the loop: `acceptance`'s bench restates this
-/// ordering because a hermetic test cannot reach `act_on`, which speaks to a
-/// live session. It restates the order and **not** the decision — a second
-/// spelling of `gate_failure` over there is how the two would come to disagree.
+/// A failure spells `gate_failure`, the trigger a hand-back already writes: the same tier
+/// failed, and what differs is whether there was budget left. Without this, `#179` — the Job
+/// reached `completed_failed` while its `tests` step stayed `running` with a null verdict, so
+/// the only record that the step had failed was the Check run itself.
+///
+/// `pub` for one caller outside the loop: `acceptance`'s bench restates this ordering because
+/// a hermetic test cannot reach `act_on`. It restates the order and **not** the decision — a
+/// second spelling of `gate_failure` over there is how the two would come to disagree.
 pub fn stopping(ruling: &Ruling) -> Option<StepLevelTrigger> {
     match ruling {
         Ruling::Failed { .. } => StepLevelTrigger::of(EscalationTrigger::GateFailure),

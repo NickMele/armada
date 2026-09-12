@@ -272,22 +272,18 @@ where
     }
 }
 
-/// Entry zero of the scope history: what this Job starts out intending to
-/// write, and who said so.
+/// Entry zero of the scope history: what this Job starts out intending to write, and who said so.
 ///
-/// **Written on both paths, not only the proposer's.** A revert reads entry
-/// zero of the Job it undoes rather than proposing afresh, so a hand-entered
-/// Job with no entry zero would be one nothing could be reverted against.
-/// `approved_by` is what tells the two apart.
+/// **Written on both paths, not only the proposer's.** A revert reads entry zero of the Job it
+/// undoes rather than proposing afresh, so a hand-entered Job with no entry zero would be one
+/// nothing could be reverted against. `approved_by` is what tells the two apart.
 ///
-/// `atomic_before` is `false` because there was no before — the Job did not
-/// exist. `outcome` is `took` because entry zero is the scope the Job actually
-/// carries; the registry names the field and no value set, so the word was
-/// chosen here and it is reported as such. It is spelled through
-/// [`ScopeRevisionOutcome::took`] rather than as a literal, because a second
-/// writer of this history now exists — `crate::widening` — and two spellings
-/// of one outcome would make "did this take" a comparison each reader wrote
-/// for itself.
+/// `atomic_before` is `false` because there was no before — the Job did not exist. `outcome`
+/// is `took` because entry zero is the scope the Job actually carries; the registry names the
+/// field and no value set, so the word was chosen here. It is spelled through
+/// [`ScopeRevisionOutcome::took`] rather than as a literal, because a second writer of this
+/// history exists — `crate::widening` — and two spellings of one outcome would make "did this
+/// take" a comparison each reader wrote for itself.
 fn entry_zero(
     write_targets: Option<&WriteTargets>,
     atomic: bool,
