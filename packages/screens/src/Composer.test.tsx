@@ -118,3 +118,64 @@ test("an at-mention in the brief opens the popup and inserts the pick", async ()
 
   await expect.element(brief()).toHaveValue("See @README.md ");
 });
+
+/**
+ * A minimal stand-in for a paste's `clipboardData` — just enough of the shape
+ * `onBriefPaste`/`onRequestPaste` actually read, `items` iterated for a
+ * `type` and a `getAsFile()`. A real `DataTransfer` is for a real clipboard;
+ * this is what a test builds one from without needing a browser to have
+ * actually put something there.
+ */
+function pasteEventCarrying(file: File): Event {
+  const event = new Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "clipboardData", {
+    value: { items: [{ type: file.type, getAsFile: () => file }] },
+  });
+  return event;
+}
+
+/**
+ * A screenshot pasted straight into the Brief, without a trip to the file
+ * picker — `onBriefPaste` calling the same `stage()` the "Attach" button
+ * calls, on a `clipboardData` a paste carries and a change event never does.
+ */
+test("a screenshot pasted into the brief stages the same way a picked file does", async () => {
+  const { drafts } = opened();
+  const pasted = new File(["a screenshot"], "screenshot.png", { type: "image/png" });
+
+  // The mount above is not synchronous in this React — see `mounted.tsx`'s own
+  // note. `.element()` throws on a DOM this has not rendered into yet, so this
+  // waits for the field the way every other test here does before reaching in
+  // for the raw node a paste event needs.
+  await expect.element(brief()).toBeVisible();
+  brief().element().dispatchEvent(pasteEventCarrying(pasted));
+  await expect.element(page.getByRole("button", { name: "Remove screenshot.png" })).toBeVisible();
+
+  await userEvent.fill(page.getByRole("textbox", { name: "Title" }), "Fix the flicker");
+  await userEvent.fill(brief(), "The board flickers on every event.");
+  await userEvent.click(page.getByRole("button", { name: "Propose" }));
+
+  expect(drafts).toHaveLength(1);
+  expect(drafts[0]!.attachments).toEqual([
+    { path: "/tmp/staged/screenshot.png-image/png", filename: "screenshot.png", mimeType: "image/png" },
+  ]);
+});
+
+/**
+ * Plain text pasted into the Brief is not read for images at all — it falls
+ * through to the field as text the way it always did, and nothing stages.
+ */
+test("pasting text into the brief stages nothing", async () => {
+  opened();
+  const event = new Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "clipboardData", {
+    value: { items: [{ type: "text/plain", getAsFile: () => null }] },
+  });
+
+  await expect.element(brief()).toBeVisible();
+  brief().element().dispatchEvent(event);
+
+  await expect
+    .element(page.getByRole("button", { name: /^Remove / }))
+    .not.toBeInTheDocument();
+});

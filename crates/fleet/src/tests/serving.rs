@@ -103,6 +103,30 @@ async fn the_operations_answer_from_a_real_fleet() {
     );
 }
 
+/// `search_files` served from a real Fleet. `crate::files::search` is proven
+/// as a pure walk in its own module, and `api`'s suite proves the route
+/// against a fake daemon — neither proves the one line between them, that
+/// `Fleet::search_files` walks `Host::repo_root`, the checkout this Fleet
+/// actually serves, and not some other path.
+#[tokio::test]
+async fn search_files_reads_the_repository_fleet_serves() {
+    let home = TempDir::new();
+    std::fs::write(home.path().join("README.md"), b"").expect("a file");
+    let fleet = Arc::new(a_fleet(&home, FakeWorkProduct::changed(&["src/log.rs"])));
+    let events = fleet.events();
+    let app = api::router(api::Served::sharing(
+        Arc::clone(&fleet),
+        RunId::carried("01RUN"),
+        events,
+    ));
+
+    let (status, body) = call(&app, "GET", "/manifest/files?q=read", "").await;
+
+    assert_eq!(status, StatusCode::OK);
+    let found: ipc::FilesFound = ipc::decode("files found", &body).expect("a list of paths");
+    assert_eq!(found.paths, vec!["README.md".to_string()]);
+}
+
 /// The one Job on the Board, read back the way Bridge reads it.
 async fn only_job(app: &Router) -> JobSummary {
     let (status, body) = call(app, "GET", "/jobs", "").await;
