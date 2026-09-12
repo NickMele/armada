@@ -24,7 +24,7 @@ import type { StepActivity, StepChapter, StepTimelineAttempt } from "@armada/com
 
 import { namesChapter } from "./detail-keys";
 import { span } from "./duration";
-import { askedOf, didNotPass } from "./gates";
+import { askedOf, didNotPass, judgeAsking } from "./gates";
 import { entriesOf } from "./story";
 
 /** Which phase a row is. What an attempt wrote rides on `working`. */
@@ -295,7 +295,7 @@ function judgeRow(
       ? asked === 0
         ? "no judge declared"
         : asking
-          ? `asking · ${asked} ${asked === 1 ? "criterion" : "criteria"}`
+          ? judgeAsking(step)
           : `${asked} ${asked === 1 ? "criterion" : "criteria"}, not asked`
       : refused > 0
         ? `${refused} of ${criteria.size} refused`

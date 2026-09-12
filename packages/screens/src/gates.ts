@@ -361,6 +361,18 @@ export function askedOf(step: StepDetail): number {
 }
 
 /**
+ * What a Judge still out says — `asking · 2 criteria`.
+ *
+ * **One sentence, because two surfaces say it.** The timeline's Judge row and
+ * the run tree's Judge fact both draw a step whose panel is being asked, and a
+ * call in flight reading two ways in one panel is the drift this file holds.
+ */
+export function judgeAsking(step: StepDetail): string {
+  const asked = askedOf(step);
+  return `asking · ${asked} ${asked === 1 ? "criterion" : "criteria"}`;
+}
+
+/**
  * Whether this attempt's panel was asked and never answered, rather than
  * never asked at all. Both draw `judged` empty for the current attempt, and
  * they are not the same sentence: one is a call still ahead of the step, the
