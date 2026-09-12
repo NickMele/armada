@@ -627,7 +627,8 @@ pub struct JobAsking {
 /// command: the one going out carries [`waiting`](JobCommandWaiting::waiting)
 /// and the one coming back carries nothing, and a surface ages the wait from
 /// `asked_at`. Only a Job at [`WhenBlocked::AskMe`](crate::WhenBlocked) produces
-/// it — under the default the call is refused on arrival and nothing waits.
+/// it — under [`WhenBlocked::RefuseAndHold`](crate::WhenBlocked) the call is
+/// refused on arrival and nothing waits.
 ///
 /// It names no [`JobSummary`](crate::JobSummary), for [`JobAsking`]'s reason.
 ///

@@ -20,7 +20,7 @@ use ipc::{CommandAnswer, CommandInFlight};
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Sketch};
 
 use crate::daemon::Fleet;
-use crate::permitting::NotPermitted;
+use crate::permitting::{NotPermitted, Refusing};
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
 use crate::tests::tmp::TempDir;
@@ -146,13 +146,17 @@ async fn refuse_and_hold_refuses_and_the_fold_sees_it() {
     let home = TempDir::new();
     let fleet = a_fleet_with(&home, a_drone_that_reached_for("c1"));
     let job = started(&fleet, &home).await;
+    fleet
+        .set_when_blocked(&job, WhenBlocked::RefuseAndHold)
+        .await
+        .unwrap();
 
     let answer = fleet
         .permission(&job, &asked("Bash", "npm publish", "c1"))
         .await;
 
     let PermissionAnswer::Deny(words) = answer else {
-        panic!("a new Job refuses and holds: {answer:?}");
+        panic!("a Job set to refuse and hold does exactly that: {answer:?}");
     };
     assert!(words.contains("not granted `npm publish`"), "{words}");
     assert!(
@@ -162,6 +166,31 @@ async fn refuse_and_hold_refuses_and_the_fold_sees_it() {
     assert!(
         fleet.command_awaited(&job).await.is_none(),
         "and nobody is asked"
+    );
+}
+
+/// **The default, as a case.** A Job nobody has touched the setting on holds
+/// the call for a person rather than refusing it outright — issue #686.
+#[tokio::test]
+async fn a_new_job_asks_first_by_default() {
+    let home = TempDir::new();
+    let fleet = a_fleet_with(&home, a_drone_that_reached_for("c1"));
+    let job = started(&fleet, &home).await;
+
+    let (answer, answered) = tokio::join!(
+        fleet.permission(&job, &asked("Bash", "npm publish", "c1")),
+        async {
+            until_waiting(&fleet, &job).await;
+            fleet
+                .answer_command(&job, "c1", CommandAnswer::Reject)
+                .await
+        }
+    );
+
+    answered.expect("a person was asked, unprompted by any setting");
+    assert_eq!(
+        answer,
+        PermissionAnswer::Deny(Refusing::Rejected.to_the_drone("npm publish"))
     );
 }
 

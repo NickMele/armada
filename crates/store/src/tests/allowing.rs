@@ -52,14 +52,14 @@ fn version_forty_three(dir: &TempDir, id: &str) {
 }
 
 #[test]
-fn a_job_on_a_fresh_store_refuses_and_holds_and_has_nothing_allowed() {
+fn a_job_on_a_fresh_store_asks_first_and_has_nothing_allowed() {
     let dir = TempDir::new();
     let mut store = open(&dir);
     a_job(&mut store, "01FRESH");
 
     assert_eq!(
         store.when_blocked(&job_id("01FRESH")).expect("reads"),
-        WhenBlocked::RefuseAndHold
+        WhenBlocked::AskMe
     );
     assert!(store
         .allowed_commands(&job_id("01FRESH"))

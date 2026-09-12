@@ -25,7 +25,7 @@
 use core_model::{
     Attachment, DroneAssigned, DronePresence, GateManifest, Job, JobId, JobStep, Judgment,
     StepCheck, StepEvidence, StepId, StepLevelTrigger, StepTransitioned, Timestamp,
-    TransitionReason, Transitioned, WriteTargets,
+    TransitionReason, Transitioned, WhenBlocked, WriteTargets,
 };
 use rusqlite::Transaction;
 
@@ -57,10 +57,10 @@ impl Store {
                      dependencies, dispatched_by_job_id, dispatched_by_step_id,
                      redispatched_from, subject_kind, subject_ref, facts, scope_revisions,
                      write_targets_known, created_at, branch, workflow, redirect_waiting,
-                     cost_cap_micros, turn_cap, proposal_id, number
+                     cost_cap_micros, turn_cap, proposal_id, number, when_blocked
                  ) VALUES (
                      ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
-                     ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28
+                     ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29
                  )",
                 rusqlite::params![
                     job.id().as_str(),
@@ -115,6 +115,11 @@ impl Store {
                     // frozen: it is a directory, a branch and a pull request
                     // the moment the Job is dispatched.
                     job.number().get(),
+                    // Bound on every write, for `title`'s reason: the column's
+                    // `DEFAULT` in `V44` backfills a Job written before the
+                    // setting existed, and is never the value a new Job gets.
+                    // A person changes it after, through `set_when_blocked`.
+                    WhenBlocked::AskMe.as_wire(),
                 ],
             )
             .map_err(fault("writing the job row"))

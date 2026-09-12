@@ -264,8 +264,11 @@ export const RAISE_TURN_CAP_LABEL = "Raise the turn cap";
 
 /**
  * How a job meets a command its drone was not given, in the Job settings
- * panel's words, and the order it offers them. **The three are the whole set**
- * — a new job starts at the first, which asks nobody to be watching.
+ * panel's words, and the order it offers them. **The three are the whole
+ * set** — a new job starts at *Ask me first*, which holds the call and
+ * publishes the question rather than deciding without a person. *Stop and
+ * wait for me* stays offered, for somebody who wants the call refused rather
+ * than held.
  *
  * The labels say what happens to the person, not to the call: *refuse and
  * hold* named Fleet's side of it, and what somebody choosing needs to know is

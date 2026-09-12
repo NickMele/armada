@@ -456,7 +456,7 @@ nullable = "No"
 frozen_at = "Never"
 purpose = "How this Job meets a command its Drone was not granted."
 in_code = "Yes"
-notes = "Read by the next permission question, so changing it needs no respawn. `refuse_and_hold` is the default and what every Job written before the column reads as. No event: a setting moves no status and no step, so the column is the authority for its field the way `branch` is."
+notes = "Read by the next permission question, so changing it needs no respawn. A new Job is bound to `ask_me` at creation; `refuse_and_hold` is what every Job written before the column reads as, and the type's own fallback for a store that will not say. No event: a setting moves no status and no step, so the column is the authority for its field the way `branch` is."
 why = "Frozen at spawn, a change would reach only the next Drone, and the Drone already held on a refused command is the one the person is looking at."
 
 [fields.workflow]
