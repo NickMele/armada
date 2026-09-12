@@ -154,6 +154,12 @@ pub enum HeldBecause {
     /// criterion, so there is no judgment for the policy to advance on. See
     /// [`Policies::at_a_review_gate`].
     TheStepAsksNoJudge,
+    /// This step delivers, its own catch-up conflicted, and the commit it
+    /// made never reached a remote. **Not a policy answer** — no
+    /// `advance_gate` on earth asks for this — but the safe direction to be
+    /// wrong in is the same one: a person sees the branch before anything
+    /// claims it went out. `#691`.
+    TheBranchDidNotGoOut,
 }
 
 impl HeldBecause {
@@ -176,6 +182,11 @@ impl HeldBecause {
                 "this repository's review_gate is auto_if_judge_passes and this step asks the \
                  Judge nothing, so it is held for a person rather than advanced on the \
                  mechanical tier alone",
+            ),
+            HeldBecause::TheBranchDidNotGoOut => Some(
+                "this step delivers and its own catch-up conflicted with its base, so the \
+                 commit it made never reached a remote — held for a person rather than \
+                 advanced or finished over a pull request that does not carry it",
             ),
         }
     }

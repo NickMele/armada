@@ -124,6 +124,11 @@ const NOTHING_TO_RESOLVE: &str = "fleet.nothing_to_resolve";
 /// A conflict resolution asked for on a workflow with no step before the one
 /// that delivers. `#663`.
 const NO_STEP_TO_REDO: &str = "fleet.no_step_to_redo";
+/// An approval asked for at a gate whose delivering step made a commit that
+/// never reached its remote. A 409 beside the two above: the machine was
+/// never asked, and what a person does next is resolve the conflict rather
+/// than retry the approval. `#691`.
+const UNPUSHED_DELIVERY: &str = "fleet.unpushed_delivery";
 /// The base branch is protected. **Its own code, and the whole reason the
 /// refusal kinds are not one**: what answers this is an administrator or a
 /// rule, and nothing a person does to the Job changes it.
@@ -370,6 +375,10 @@ where
             ),
             Adrift::NoStepToRedo { job } => Refusal::IllegalMove(
                 WireError::raised(NO_STEP_TO_REDO, said, self.run_id())
+                    .about_job(ipc::JobId::from(job)),
+            ),
+            Adrift::UnpushedDelivery { job, .. } => Refusal::IllegalMove(
+                WireError::raised(UNPUSHED_DELIVERY, said, self.run_id())
                     .about_job(ipc::JobId::from(job)),
             ),
             // **One code per kind, decided from the typed kind and never from

@@ -106,8 +106,17 @@ where
             return;
         }
         match self.land_and_deliver(job, worktree).await {
-            Ok(Committed::Made { .. }) => {}
-            Ok(Committed::NothingToCommit) => self.noted_not_sent(
+            // **The one case that used to fall through here silently — `#691`.**
+            // A commit was made and `deliver` returned `Ok`, which is not the
+            // same claim as "the branch went out": a conflicting catch-up
+            // returns before the push, and this arm is where that stopped
+            // being told apart from an ordinary success.
+            Ok((Committed::Made { .. }, delivered)) => {
+                if let Some(why) = delivered.unpushed_reason() {
+                    self.noted_push_skipped(job, step, &why);
+                }
+            }
+            Ok((Committed::NothingToCommit, _)) => self.noted_not_sent(
                 job,
                 step,
                 "this step sends the work out and the worktree held nothing new, \
@@ -133,6 +142,31 @@ where
                 Some(&adrift),
             ),
         }
+    }
+
+    /// Write into the Job's own log that a commit stands in the worktree and
+    /// never reached the branch's remote, and why. `#691`.
+    ///
+    /// **The case `#691` found with no line at all.** The commit succeeded, so
+    /// [`sent_out_on_entry`](Fleet::sent_out_on_entry)'s match used to treat
+    /// this the same as an ordinary push: a person approving a step that
+    /// "sent the work out" was reading a pull request the branch conflicted
+    /// its way past, silently. `noted_not_sent` says nothing here — the
+    /// commit did land — so this is its own line rather than a fourth cause
+    /// folded into that one.
+    fn noted_push_skipped(&self, job: &Job, step: &StepId, why: &str) {
+        let envelope = Envelope::new(
+            self.now(),
+            Level::Warn,
+            Component::Fleet,
+            self.run().clone(),
+            "this step delivers and the branch stands committed but unpushed: a pull request \
+             already open for it still shows what it carried before this step ran",
+        )
+        .in_job(job.id().as_ulid().clone())
+        .at_step(step.as_str())
+        .with_field("cause", FieldValue::Str(why.to_string()));
+        self.noted_in_the_log(job.id(), &envelope);
     }
 
     /// Write into the Job's own log that the branch did not go out, and why.
@@ -178,7 +212,7 @@ where
         &self,
         job: &Job,
         worktree: &Worktree,
-    ) -> Result<Committed, Adrift> {
+    ) -> Result<(Committed, Delivered), Adrift> {
         // **One Job at a time from here.** The commit, the rebase and the push
         // all write into the one `.git` every worktree is cut from, and whether
         // two of them can do that concurrently is not established. See
@@ -223,9 +257,9 @@ where
             self.left_delivered(job.id(), delivered.clone()).await;
         }
         let committed = landed?;
-        delivered?;
+        let delivered = delivered?;
         noted?;
-        Ok(committed)
+        Ok((committed, delivered))
     }
 
     /// Write what the branch came to onto the Job's record.
@@ -238,33 +272,60 @@ where
     ///
     /// `NothingToCommit` writes no commit: the record says what happened, and
     /// "the worktree held nothing new" is not an id.
+    ///
+    /// **A skip carries `pushed` and `pull_request` forward rather than
+    /// clearing them, and that is the fix for `#691`.** Every other field
+    /// here is written including its `None`, for a redispatch's reason —
+    /// but a skip is not a redispatch: nothing about the remote or the pull
+    /// request changed this turn, the catch-up conflicted before either was
+    /// touched. Clearing them anyway is what silently orphaned the recovery
+    /// path in the measured incident — the store forgot the very pull
+    /// request `resolve_pull_request_conflict` reads to send the Drone back.
     async fn note_delivery(
         &self,
         job: &Job,
         committed: Option<&Committed>,
         delivered: Option<&Delivered>,
     ) -> Result<(), Adrift> {
+        let unpushed = delivered.and_then(Delivered::unpushed_reason);
+        let (pushed, pull_request) = if unpushed.is_some() {
+            let before = self
+                .store()
+                .lock()
+                .await
+                .delivery_for(job.id())
+                .map_err(Adrift::Reading)?;
+            (before.pushed, before.pull_request)
+        } else {
+            (
+                match delivered.and_then(|it| it.pushed.as_ref()) {
+                    Some(Pushed::ToTheRemote { remote, branch }) => {
+                        Some(format!("{remote}/{branch}"))
+                    }
+                    Some(Pushed::NoRemote) => Some("no remote".to_string()),
+                    None => None,
+                },
+                match delivered.and_then(|it| it.opened.as_ref()) {
+                    Some(Opened::PullRequest { url } | Opened::AlreadyOpen { url }) => {
+                        Some(url.clone())
+                    }
+                    _ => None,
+                },
+            )
+        };
         let delivery = store::Delivery {
             commit: match committed {
                 Some(Committed::Made { commit }) => Some(commit.clone()),
                 _ => None,
             },
-            pushed: match delivered.and_then(|it| it.pushed.as_ref()) {
-                Some(Pushed::ToTheRemote { remote, branch }) => Some(format!("{remote}/{branch}")),
-                Some(Pushed::NoRemote) => Some("no remote".to_string()),
-                None => None,
-            },
-            pull_request: match delivered.and_then(|it| it.opened.as_ref()) {
-                Some(Opened::PullRequest { url } | Opened::AlreadyOpen { url }) => {
-                    Some(url.clone())
-                }
-                _ => None,
-            },
+            pushed,
+            pull_request,
             // **Cleared, never carried.** Nothing has become of a pull request
             // opened a line ago, and a redispatched Job delivering again must
             // not inherit the last run's merge — which is the reason every
             // other field here is written including its `None`.
             landed: None,
+            unpushed,
         };
         if delivery.is_empty() {
             return Ok(());

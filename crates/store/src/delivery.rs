@@ -57,6 +57,20 @@ pub(crate) const V26: &str = r#"
 ALTER TABLE jobs ADD COLUMN delivery_landed TEXT;
 "#;
 
+/// Version 51 — whether the branch a delivery describes ever reached its
+/// remote. `#691`.
+///
+/// **One nullable column, and null is the ordinary answer.** A clean push, a
+/// repository with no base to catch up to, and a worktree with nothing new to
+/// commit are the same fact here: nothing is owed to a remote that does not
+/// already have it. Non-null is the one case this exists for — catching the
+/// branch up to its base conflicted, or its own commits would not replay, so
+/// `fleet::delivery::deliver` left the commit standing in the worktree and
+/// this names why, in the same words the Job's log carries.
+pub(crate) const V51: &str = r#"
+ALTER TABLE jobs ADD COLUMN delivery_unpushed_reason TEXT;
+"#;
+
 /// Version 48 — the base a pull request's branch was last brought up to,
 /// where main moved under it. `#663`, in place of the close-and-reopen it
 /// replaced.
@@ -102,6 +116,15 @@ pub struct Delivery {
     /// URL it carries is [`pull_request`](Delivery::pull_request) — the column
     /// holds the state alone, so a row cannot say two addresses.
     pub landed: Option<Landing>,
+    /// Why the commit named above never reached the branch's remote, where it
+    /// did not. `#691`.
+    ///
+    /// **Absent is not "unknown"** — it is a push that went out, a repository
+    /// with no remote to fail against, or a Job that has not reached a
+    /// delivering step at all. Present is the one fact this column exists
+    /// for: the commit stands in the worktree and the pull request, if one is
+    /// already open, still shows what it did before this attempt.
+    pub unpushed: Option<String>,
 }
 
 impl Delivery {
@@ -114,6 +137,7 @@ impl Delivery {
             && self.pushed.is_none()
             && self.pull_request.is_none()
             && self.landed.is_none()
+            && self.unpushed.is_none()
     }
 }
 
@@ -209,13 +233,15 @@ impl Store {
             .conn
             .execute(
                 "UPDATE jobs SET delivery_commit = ?2, delivery_pushed = ?3, \
-                 delivery_pull_request = ?4, delivery_landed = ?5 WHERE job_id = ?1",
+                 delivery_pull_request = ?4, delivery_landed = ?5, \
+                 delivery_unpushed_reason = ?6 WHERE job_id = ?1",
                 (
                     job_id.as_str(),
                     delivery.commit.as_deref(),
                     delivery.pushed.as_deref(),
                     delivery.pull_request.as_deref(),
                     delivery.landed.as_ref().and_then(as_stored),
+                    delivery.unpushed.as_deref(),
                 ),
             )
             .map_err(fault("recording what the branch came to"))
@@ -389,7 +415,7 @@ impl Store {
         self.conn
             .query_row(
                 "SELECT delivery_commit, delivery_pushed, delivery_pull_request, \
-                 delivery_landed FROM jobs WHERE job_id = ?1",
+                 delivery_landed, delivery_unpushed_reason FROM jobs WHERE job_id = ?1",
                 (job_id.as_str(),),
                 |row| {
                     let pull_request: Option<String> = row.get(2)?;
@@ -398,6 +424,7 @@ impl Store {
                         pushed: row.get(1)?,
                         landed: from_stored(row.get(3)?, pull_request.as_ref()),
                         pull_request,
+                        unpushed: row.get(4)?,
                     })
                 },
             )

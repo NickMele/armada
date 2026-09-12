@@ -306,11 +306,23 @@ export function pullRequestBlockOf(
   onOpen?: () => void,
   onResolveConflict?: () => void,
   disabled?: boolean,
+  /**
+   * Present where the branch's last commit never reached this pull request —
+   * `whole.delivery.unpushed`. Since protocol 11.2, `#691`.
+   *
+   * **The presence is drawn, never the sentence.** Fleet's own words name a
+   * commit and a base, which is exactly the mechanism this screen otherwise
+   * refuses to show; what a person needs is that the pull request is behind
+   * what this Job actually did, and the same control `currencyLineOf`'s
+   * conflict already offers answers it.
+   */
+  unpushed?: string,
 ): ReactNode | undefined {
   if (address === undefined) return undefined;
   const number =
     detail?.number === undefined ? (pullRequestNumber(address) ?? "Pull request") : `#${detail.number}`;
   const currency = currencyLineOf(detail?.currency, now);
+  const blocked = unpushed !== undefined || currency?.conflicted === true;
   return (
     <div className="armada-verdict__pr">
       <p className="text-xs text-fg-muted">
@@ -335,6 +347,11 @@ export function pullRequestBlockOf(
           {currency.said}
         </p>
       )}
+      {unpushed === undefined ? null : (
+        <p className="text-xs text-fg-default">
+          The work here is committed but has not reached this pull request yet.
+        </p>
+      )}
       {/* Sits directly under the sentence it answers, never after the
           decision card below — a person reading "changes that clash" should
           find the fix in the same glance. `#663`. Drawn only where there is a
@@ -343,7 +360,7 @@ export function pullRequestBlockOf(
           **Primary**, because `Decide`'s own merge control is disabled in
           exactly this state — one accent fill, and it is on the control that
           works. */}
-      {currency?.conflicted !== true || onResolveConflict === undefined ? null : (
+      {!blocked || onResolveConflict === undefined ? null : (
         <Tooltip label="Sends the clash back to the step that wrote the code. Its Drone fixes the files, the Checks run again, and the pull request updates.">
           <Button variant="primary" disabled={disabled} onClick={onResolveConflict}>
             Resolve conflicts
@@ -427,6 +444,8 @@ export type VerdictArgs = {
     onResolveConflict?: () => void;
     /** Off while nothing here can be sent — the same reading `Decide` gets. */
     resolveConflictDisabled?: boolean;
+    /** Present where the last commit never reached this pull request. Since protocol 11.2, `#691`. */
+    unpushed?: string;
   };
   /** Fleet's own reason the gate could not decide, scoped to this step. */
   undecided?: string;
@@ -473,6 +492,7 @@ export function verdictOf({
             pullRequest.onOpen,
             pullRequest.onResolveConflict,
             pullRequest.resolveConflictDisabled,
+            pullRequest.unpushed,
           ),
         }),
     provesIt: <CheckRuns rows={provesItOf(step, whole?.acceptance_criteria ?? [], now, undecided, reason)} />,
@@ -546,7 +566,8 @@ export function verdictSlotAtGate({
 }: VerdictSlotAtGateArgs): ReactNode {
   const address = whole?.delivery?.pull_request;
   const detail = whole?.delivery?.pull_request_detail;
-  const conflicted = currencyLineOf(detail?.currency, now)?.conflicted === true;
+  const unpushed = whole?.delivery?.unpushed;
+  const conflicted = currencyLineOf(detail?.currency, now)?.conflicted === true || unpushed !== undefined;
   const never = neverDelivers(whole?.steps ?? []);
   // Never `auto_merge`: approving here never merges regardless of that
   // policy, which holds a later, separate gate (`fleet::gate`, `reviewing`).
@@ -584,6 +605,7 @@ export function verdictSlotAtGate({
             }),
           onResolveConflict: () => onResolvePullRequestConflict(job.id),
           resolveConflictDisabled: stale || deciding,
+          unpushed,
         },
         undecided,
       })}

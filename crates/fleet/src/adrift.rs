@@ -202,6 +202,16 @@ pub enum Adrift {
     /// sends it out, which this cannot redo without redelivering onto its own
     /// conflict. `#663`.
     NoStepToRedo { job: JobId },
+    /// An approval was asked for at a gate whose delivering step made a
+    /// commit that never reached its branch's remote. `#691`.
+    ///
+    /// **The Job stays exactly at its gate.** Nothing moves, so a person who
+    /// reads this can act on it immediately — `resolve_pull_request_conflict`
+    /// is the same act this refusal is asking for, from the same screen.
+    /// Approving anyway is not a road this leaves open: the pull request does
+    /// not carry what a person would be approving, and there is no call that
+    /// takes it there regardless.
+    UnpushedDelivery { job: JobId, why: String },
     /// The forge would not merge the pull request, and which kind of would-not
     /// it was.
     ///
