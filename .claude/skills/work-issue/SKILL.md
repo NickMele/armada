@@ -100,6 +100,16 @@ The commit lands on the branch. **Whether it merges is not the agent's call** â€
 which is exactly `human_always` on `handoff`, and the reason six of the seven
 shipped workflows now stop before landing.
 
+**A rebase re-opens the gate, and step 4's run does not survive one.** The gate
+reads the merged tree, and a branch and `main` can each sit under a limit that
+the two together cross. Confirmed 2026-09-12: #730 passed `verify-foundations`
+at 898 lines in `packages/screens/src/JobDetail.tsx`; `main` grew the same file
+by seven while the branch was open, and the rebase landed it at 905 â€” over the
+900-line rule. It merged on its own green measurement and left `main` red, with
+nothing to raise it until somebody ran the gate by hand. **Run the gate again
+after `git rebase`, before the force-push**, and where a file is near a
+threshold leave headroom rather than sitting on it.
+
 Open a PR or hand back the branch, and say what you would want looked at
 closely. Then `milestone-step` steps 5, 6 and 7: close the issue with what
 contradicted the plan, give every open item an owner, report.
