@@ -10,15 +10,19 @@
 //! there on 4 Sep 2026 and the four `spend` figures all read zero — and a
 //! fixture that spawned `/bin/cat` would prove the easy half and not that one.
 
-use core_model::JobStatus;
+use core_model::{JobStatus, RepoPath, StepId, Timestamp};
 use ipc::{Asked, Finding, Held};
-use testkit::FakeWorkProduct;
+use testkit::{FakeWorkProduct, Gate, Sketch};
 
 use crate::daemon::Fleet;
 use crate::examining::folded;
 use crate::resources::{descended, measured};
-use crate::tests::daemon::{a_proposal, fittings, worktree_directory};
+use crate::tests::admitted::dispatched;
+use crate::tests::daemon::{
+    a_fleet_holding, a_proposal, diff_evidence, fittings, worktree_directory,
+};
 use crate::tests::tmp::TempDir;
+use crate::tests::tools::submitted_by_the_one;
 
 type Fixture = Fleet<testkit::FakeHarness, testkit::FakeVcs, FakeWorkProduct>;
 
@@ -280,11 +284,11 @@ async fn what_the_examination_found_is_written_into_the_jobs_own_log() {
     }
 }
 
-/// The claim: five looks, every time, whatever the Job is doing. A look that
+/// The claim: seven looks, every time, whatever the Job is doing. A look that
 /// went missing on some statuses would be a check nobody could tell from one
 /// that passed.
 #[tokio::test]
-async fn every_examination_asks_all_five() {
+async fn every_examination_asks_all_seven() {
     let home = TempDir::new();
     let fleet = a_fleet(&home);
     let job = fleet
@@ -301,7 +305,109 @@ async fn every_examination_asks_all_five() {
         Asked::Writing,
         Asked::Span,
         Asked::Silence,
+        Asked::Repeating,
+        Asked::ScopeDrift,
     ] {
         assert!(asked.contains(&one), "{one:?} was not asked: {asked:?}");
     }
+}
+
+/// A gated Check failing the same way on a step's last two attempts is the
+/// state four greens and a shrug could not name.
+#[tokio::test]
+async fn a_step_failing_the_same_check_twice_is_read_as_repeating() {
+    let home = TempDir::new();
+    let unhappy = "/bin/sh -c 'echo it broke 1>&2; exit 1'";
+    let workflow = testkit::retried(
+        &[Sketch {
+            id: "implement",
+            label: "Implement",
+            evidence_type: Some("diff"),
+            gates: &[Gate::Check {
+                name: "suite",
+                run: unhappy,
+                expect_exit_code: 0,
+                when: &[],
+            }],
+            judged_on: &[],
+            scope: None,
+            gaming: None,
+        }],
+        2,
+    );
+    let fleet = a_fleet_holding(
+        &home,
+        FakeWorkProduct::changed(&["src/routes.rs"]),
+        workflow,
+        1,
+    );
+    let job = fleet
+        .propose(a_proposal("fix the route"))
+        .await
+        .expect("a Job");
+    worktree_directory(&home, &job);
+    dispatched(&fleet, job.id()).await.expect("dispatched");
+
+    submitted_by_the_one(&fleet, diff_evidence())
+        .await
+        .expect("the first attempt submits");
+    fleet.turn().await.expect("the first ruling");
+    submitted_by_the_one(&fleet, diff_evidence())
+        .await
+        .expect("the second attempt submits");
+    fleet.turn().await.expect("the second ruling");
+
+    let job = fleet.load(job.id()).await.expect("reloaded");
+    let examined = fleet.examined(&job).await.expect("an examination");
+    let repeating = examined
+        .looks
+        .iter()
+        .find(|look| look.asked == Asked::Repeating)
+        .expect("the repeating look");
+    assert_eq!(repeating.found, Finding::NotWorking, "{repeating:?}");
+    assert_eq!(
+        examined.found,
+        Finding::NotWorking,
+        "one look finding a fault carries the whole answer: {:?}",
+        examined.looks
+    );
+}
+
+/// A live scope-drift record reaches the examination rather than staying a
+/// log line nobody but its own reader ever acts on.
+#[tokio::test]
+async fn a_recorded_drift_is_visible_to_an_examination() {
+    let home = TempDir::new();
+    let fleet = a_fleet(&home);
+    let job = fleet
+        .propose(a_proposal("something drifted"))
+        .await
+        .expect("a Job");
+    fleet
+        .store()
+        .lock()
+        .await
+        .record_scope_drift(
+            job.id(),
+            &StepId::new("implement"),
+            &[RepoPath::new("src/log.rs")],
+            &Timestamp::from_rfc3339("2026-09-04T18:08:45.000Z"),
+        )
+        .expect("the drift is kept");
+
+    let examined = fleet.examined(&job).await.expect("an examination");
+
+    let drift = examined
+        .looks
+        .iter()
+        .find(|look| look.asked == Asked::ScopeDrift)
+        .expect("the scope drift look");
+    assert_eq!(drift.found, Finding::CannotTell, "{drift:?}");
+    assert!(
+        drift
+            .fields
+            .iter()
+            .any(|field| field.value.contains("src/log.rs")),
+        "{drift:?}"
+    );
 }

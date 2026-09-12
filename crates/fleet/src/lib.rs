@@ -106,6 +106,7 @@ pub mod peer;
 pub mod permitting;
 pub mod policy;
 pub mod ports;
+mod precedent;
 pub mod preparing;
 pub mod process;
 pub mod proposal;

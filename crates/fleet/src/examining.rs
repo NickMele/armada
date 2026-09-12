@@ -5,15 +5,15 @@
 //! find out first whether ending it was warranted. That is why the Board
 //! milestone's Job was killed.
 //!
-//! **It costs no model call and cannot hang.** Five looks over
-//! [`crate::resources`]'s one reading, each bounded, and the reading itself is
-//! bounded. An act pressed by somebody already worried must not be the next
-//! thing that stops answering.
+//! **It costs no model call and cannot hang.** Five looks read
+//! [`crate::resources`]'s one bounded reading; [`repeating`] and
+//! [`scope_drift`] read the store instead. An act pressed by somebody already
+//! worried must not be the next thing that stops answering.
 //!
-//! **"Everything looks fine" is refused as an answer.** Each look says whether
-//! it could tell working from not, a single `cannot_tell` keeps the whole
-//! examination off `working`, and two of the five can never say `not_working`
-//! at all — [`writing`] and [`silence`] say so where they are drawn.
+//! **"Everything looks fine" is refused as an answer.** Each look says
+//! whether it could tell working from not, a single `cannot_tell` keeps the
+//! whole examination off `working`, and some can never say `not_working` at
+//! all — [`writing`], [`silence`] and [`scope_drift`] say so where drawn.
 //!
 //! **The answer lands on the Job's own log**, so it is on the record beside
 //! everything else Fleet did rather than in a terminal, and a second person
@@ -57,6 +57,8 @@ where
             span(job),
         ];
         looks.push(self.silence(job).await);
+        looks.push(self.repeating(job).await);
+        looks.push(self.scope_drift(job).await);
         let found = folded(&looks);
         let examined = JobExamined {
             job_id: job.id().into(),
@@ -130,6 +132,112 @@ where
             "the liveness watch has not fired on this Drone",
             fields,
         )
+    }
+
+    /// Whether the current step's last two attempts failed the same Check —
+    /// alive and repeating, which every other look here reads as `working` or,
+    /// at worst, a shrug. Job `01M28RVVN200232YNHWF8CFFKH`'s tests step failed
+    /// this way six times over seven hours.
+    async fn repeating(&self, job: &Job) -> Look {
+        let Some(step) = job.current_step_id() else {
+            return told(
+                Asked::Repeating,
+                Finding::CannotTell,
+                "this Job points at no step",
+                vec![],
+            );
+        };
+        let Ok(every) = self
+            .store()
+            .lock()
+            .await
+            .step_checks_every_attempt(job.id())
+        else {
+            return told(
+                Asked::Repeating,
+                Finding::CannotTell,
+                "this step's history would not read",
+                vec![],
+            );
+        };
+        let runs: Vec<_> = every
+            .iter()
+            .filter(|run| &run.step_id == step)
+            .map(|run| &run.record)
+            .collect();
+        let Some(latest) = runs.len().checked_sub(1).map(|i| runs[i]) else {
+            return told(
+                Asked::Repeating,
+                Finding::CannotTell,
+                "this step has not run yet",
+                vec![],
+            );
+        };
+        let Some(before) = runs.len().checked_sub(2).map(|i| runs[i]) else {
+            return told(
+                Asked::Repeating,
+                Finding::CannotTell,
+                "this step has run only once",
+                vec![],
+            );
+        };
+        let repeated: Vec<&str> = latest
+            .iter()
+            .filter(|check| !check.outcome.advances())
+            .filter(|check| {
+                before
+                    .iter()
+                    .any(|prior| prior.name == check.name && !prior.outcome.advances())
+            })
+            .map(|check| check.name.as_str())
+            .collect();
+        if repeated.is_empty() {
+            return told(
+                Asked::Repeating,
+                Finding::Working,
+                "the last two attempts of this step did not fail the same Check",
+                vec![],
+            );
+        }
+        told(
+            Asked::Repeating,
+            Finding::NotWorking,
+            "this step's last two attempts failed the same Check",
+            vec![said("checks", repeated.join(", "))],
+        )
+    }
+
+    /// Whether a step has edited outside its declared plan, unresolved. Never
+    /// `not_working`: legitimate investigation moves the work, and the
+    /// mid-step look or the gate's Judge question is what decides that — this
+    /// only says a move was seen.
+    async fn scope_drift(&self, job: &Job) -> Look {
+        match self.store().lock().await.scope_drift(job.id()) {
+            Ok(seen) if seen.is_empty() => told(
+                Asked::ScopeDrift,
+                Finding::Working,
+                "no step has edited outside its declared scope",
+                vec![],
+            ),
+            Ok(seen) => told(
+                Asked::ScopeDrift,
+                Finding::CannotTell,
+                "a step edited outside its declared scope and nothing has cleared it",
+                vec![said(
+                    "paths",
+                    seen.iter()
+                        .map(|one| one.path.as_str())
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                )],
+            ),
+            Err(_) => told(
+                Asked::ScopeDrift,
+                Finding::CannotTell,
+                "the scope drift record would not read",
+                vec![],
+            ),
+        }
     }
 
     /// Write the examination into the Job's own log.
@@ -395,6 +503,8 @@ fn asked(asked: Asked) -> &'static str {
         Asked::Writing => "writing",
         Asked::Span => "span",
         Asked::Silence => "silence",
+        Asked::Repeating => "repeating",
+        Asked::ScopeDrift => "scope_drift",
     }
 }
 

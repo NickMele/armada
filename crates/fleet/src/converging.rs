@@ -354,12 +354,17 @@ where
                 job: job.clone(),
                 cause,
             })?;
+        // What this same step failed on last time, so the look answers
+        // against the step's own history rather than the diff's shape alone —
+        // `crate::precedent`'s header names the Job this closes.
+        let precedent = self.precedent_failures(job, step).await;
         let found = judging::converging(
             declared_step,
             &patch,
             at_work.declared(),
             at_work.off_plan(),
             held.as_deref(),
+            &precedent,
             &judging,
         )
         .await;
@@ -626,14 +631,38 @@ where
     /// message**, so a query can find every step the chain touched.
     fn noted(&self, job: &JobId, step: &StepId, stage: &Stage) {
         let (level, said, found) = match stage {
-            Stage::StillConverging { found, .. } => (
+            // Exhaustive on purpose: a state `verification::Convergence` gains
+            // tomorrow has to pick its own word here rather than inherit
+            // `converging`'s, which is the defect Job
+            // `01M28RVVN200232YNHWF8CFFKH` measured three times over.
+            Stage::StillConverging {
+                found: Convergence::Converging,
+                ..
+            } => (
                 Level::Info,
                 "the mid-step look found the step converging",
-                match found {
-                    Convergence::JustifiedDrift => "justified_drift",
-                    _ => "converging",
-                },
+                "converging",
             ),
+            Stage::StillConverging {
+                found: Convergence::JustifiedDrift,
+                ..
+            } => (
+                Level::Info,
+                "the mid-step look found the drift justified",
+                "justified_drift",
+            ),
+            Stage::StillConverging {
+                found: Convergence::CannotTell,
+                ..
+            } => (
+                Level::Warn,
+                "the mid-step look could not tell whether the step is converging",
+                "cannot_tell",
+            ),
+            Stage::StillConverging {
+                found: Convergence::Thrashing(_),
+                ..
+            } => unreachable!("a thrashing finding takes the AskedToReport stage"),
             Stage::AskedToReport { .. } => (
                 Level::Warn,
                 "the step is not converging and the Drone was told to report",

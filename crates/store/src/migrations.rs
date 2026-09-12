@@ -81,6 +81,7 @@ pub const MIGRATIONS: &[&str] = &[
     crate::ports::V50,
     crate::delivery::V51,
     crate::asking::V52,
+    crate::drift::V53,
 ];
 
 /// Every table whose rows belong to one Job, asked of the file rather than
