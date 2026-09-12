@@ -627,6 +627,7 @@ export function JobDetail({
           // navigated to a different step, and `stuck.undecided` is not that
           // step's reason for anything.
           undecided: whole?.stuck?.step_id === open.step_id ? whole?.stuck?.undecided : undefined,
+          asking,
           onRunHere: (checkId) => runHook.open(checkEntryId(checkId)), // Journey 9
         });
 

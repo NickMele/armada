@@ -109,6 +109,7 @@ export function chaptersOf({
   now,
   following,
   undecided,
+  asking,
   onRunHere,
 }: {
   /** Now, injected, so a running Check's elapsed time moves with the clock. */
@@ -225,6 +226,8 @@ export function chaptersOf({
    * — a step open for any other reason gets none.
    */
   undecided?: string;
+  /** The criterion a live judge question holds open on this step, where one is. */
+  asking?: string;
   /** **Run it here** on a refused Check's row, from the run sheet — Journey 9. */
   onRunHere?: (checkId: string) => void;
 }): StepChapter[] {
@@ -438,7 +441,7 @@ export function chaptersOf({
     // The last chapters, where the step has them. `evidence.tsx` decides
     // whether either is drawn — a step that gates on nothing has neither, and
     // one that gates on a Judge alone has one.
-    ...evidenceChaptersOf({ step, criteria, opens, outputs, now, following, undecided, onRunHere }),
+    ...evidenceChaptersOf({ step, criteria, opens, outputs, now, following, undecided, asking, onRunHere }),
   ];
   return story.map((chapter, at) => ({ ...chapter, ordinal: at + 1 }));
 }

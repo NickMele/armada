@@ -273,8 +273,22 @@ export function panelsOf(
    */
   asking?: string,
 ): Panel[] {
+  return panelsFrom(onlyCurrentAttempt(step.judged), criteria, asking);
+}
+
+/**
+ * `panelsOf`'s own grouping, over whichever `Judged` rows a caller already
+ * narrowed. **One reading for both shapes of narrowing** — the live gate's
+ * current attempt, and the run tree's single historical one — so a step's
+ * Judge count cannot read one way in the strip and another in the rail. #689.
+ */
+export function panelsFrom(
+  judged: readonly Judged[],
+  criteria: readonly Criterion[],
+  asking?: string,
+): Panel[] {
   const held = new Map<string, Judged[]>();
-  for (const one of onlyCurrentAttempt(step.judged)) {
+  for (const one of judged) {
     const already = held.get(one.criterion_id);
     if (already === undefined) held.set(one.criterion_id, [one]);
     else already.push(one);

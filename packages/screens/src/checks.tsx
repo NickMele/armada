@@ -433,13 +433,22 @@ export function judgeRow(
     };
   }
   const refused = panels.filter((panel) => panel.verdict === "not_met").length;
+  const stillAsking = panels.filter((panel) => panel.verdict === "asking").length;
   return {
     id: JUDGE_ROW,
-    says: countedIn(refused, panels.length),
+    says: countedIn(refused, panels.length, stillAsking),
     identifier,
     identifierIsAName: true,
-    named: refused === 0 ? "passed" : "refused",
-    icon: CRITERION_VERDICT_JUDGE[refused === 0 ? "met" : "not_met"]?.icon ?? undefined,
+    // No `named` for an open question — `CheckRunNamed` has no word for it,
+    // and a row that is neither passed nor refused takes no hue rather than
+    // borrowing one that claims more than is known.
+    named: refused > 0 ? "refused" : stillAsking > 0 ? undefined : "passed",
+    icon:
+      refused > 0
+        ? (CRITERION_VERDICT_JUDGE.not_met?.icon ?? undefined)
+        : stillAsking > 0
+          ? undefined
+          : (CRITERION_VERDICT_JUDGE.met?.icon ?? undefined),
   };
 }
 
