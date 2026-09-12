@@ -17,9 +17,8 @@ import { Textarea } from "../../primitives/Textarea/Textarea";
  * alone is a button whose effect has to be guessed, and a guess here spends.
  *
  * **Still not the orchestrator `docs/scope.md` records as abandoned**: the
- * answers stay a closed set and no reply comes back here — see [`DroneAnswer`].
- *
- * No glyph — `icons.toml` has none for a drone asking, and the gap is reported.
+ * answers stay a closed set and no reply comes back — see [`DroneAnswer`]. No
+ * glyph either: `icons.toml` has none for this, and the gap is reported.
  */
 export type DroneQuestionProps = {
   /**
