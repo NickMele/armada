@@ -9,6 +9,7 @@ import {
   checkoutGroupsOf,
   checkoutOutputOf,
   checkoutRunnablesOf,
+  runningEntryOf,
 } from "./checkout-runs";
 import type { CheckoutRunFollowed } from "./checkout-runs";
 
@@ -125,5 +126,15 @@ describe("the output pane, keyed to the selection", () => {
 
   it("draws a run already under way when nothing is selected yet", () => {
     expect(checkoutOutputOf(FMT)?.following).toBe(true);
+  });
+});
+
+describe("the entry a run in flight is for", () => {
+  it("is the row the run's name names, so reopening onto it lights that row", () => {
+    expect(runningEntryOf(checkoutGroupsOf(SHEET), "test")).toBe("check:test");
+  });
+
+  it("is nothing where nothing is running", () => {
+    expect(runningEntryOf(checkoutGroupsOf(SHEET), undefined)).toBeUndefined();
   });
 });

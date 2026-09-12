@@ -256,7 +256,13 @@ export function RunPage({
             Nothing has run here yet. Output stays on this page until you dismiss it.
           </p>
         ) : (
-          <div className="armada-run-page__panel">
+          <div
+            className={
+              output === undefined
+                ? "armada-run-page__panel"
+                : "armada-run-page__panel armada-run-page__panel--reading"
+            }
+          >
             <div className="armada-run-page__panel-head">
               <span className="armada-run-page__panel-title">Output</span>
               {onDismiss === undefined ? null : (

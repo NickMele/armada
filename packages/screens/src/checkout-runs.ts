@@ -357,10 +357,17 @@ export function useManifestRuns(
     if (runningId === undefined) refreshRuns();
   }, [runningId]);
 
+  const groups = data === undefined ? [] : checkoutGroupsOf(data);
+  // **Nothing picked and a run in flight reads as the running entry picked.**
+  // Opening the surface onto a run already underway drew its output under
+  // "Pick a Check or a Command" with no row lit — the page describing the run
+  // and the list denying one was going.
+  const shown = selected ?? runningEntryOf(groups, data?.running?.name) ?? null;
+
   const runningNow = checkoutRunningOf(data, now);
   const changedRun = checkoutChangedRunOf(runs);
-  const server = checkoutServerStatusOf(data, selected, now);
-  const live = checkoutOutputOf(followed, selected === null ? undefined : nameOf(selected));
+  const server = checkoutServerStatusOf(data, shown, now);
+  const live = checkoutOutputOf(followed, shown === null ? undefined : nameOf(shown));
   const output = dismissed ? undefined : (viewing?.output ?? live);
   // Which run the result line is about: the one opened from *Earlier runs*, or
   // the newest finished one while the live pane is what is showing. **Never
@@ -378,8 +385,8 @@ export function useManifestRuns(
     ...(data?.manifest_edited_at === undefined
       ? {}
       : { manifestEditedAt: `armada.yml last edited ${absoluteOf(data.manifest_edited_at) ?? "—"}` }),
-    groups: data === undefined ? [] : checkoutGroupsOf(data),
-    selectedId: selected,
+    groups,
+    selectedId: shown,
     onSelect: (id) => {
       setSelected(id);
       setViewing(null);
@@ -429,7 +436,7 @@ export function useManifestRuns(
       if (instanceId !== undefined) void onStopServer(instanceId);
     },
     onOpenLink: (url) => {
-      const instanceId = checkoutServerInstanceIdOf(data, selected ?? undefined);
+      const instanceId = checkoutServerInstanceIdOf(data, shown ?? undefined);
       if (instanceId === undefined) return;
       void openServerLink(onOpenServerLink, instanceId, url).then((because) => {
         if (because !== null) onSaid(because);
@@ -453,6 +460,18 @@ export function useManifestRuns(
       });
     });
   }
+}
+
+/** The entry id a run in flight is for, off its bare Manifest name. Servers
+ * start with `start_server` rather than as a run, so they never match. */
+export function runningEntryOf(
+  groups: readonly RunPageGroup[],
+  runningName: string | undefined,
+): string | undefined {
+  if (runningName === undefined) return undefined;
+  return groups
+    .flatMap((group) => group.entries)
+    .find((entry) => !isServerEntry(entry.id) && nameOf(entry.id) === runningName)?.id;
 }
 
 /** The result line for a finished run. Unhued: a rehearsal is not a verdict. */

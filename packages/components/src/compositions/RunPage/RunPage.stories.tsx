@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { fn } from "storybook/test";
+import { expect, fn } from "storybook/test";
 
 import { RunPage, type RunPageGroup } from "./RunPage";
 import type { ConsoleRow } from "../ConsoleOutput/ConsoleOutput";
@@ -203,5 +203,64 @@ export const AServerServing: Story = {
       uptime: "up 4m",
       links: [{ url: "http://localhost:41207", name: "Storybook" }],
     },
+  },
+};
+
+/**
+ * **A destructive Command confirms once, naming the command, before it runs.**
+ * The press puts the dialog up and sends nothing; only the dialog's own
+ * confirm reaches `onRun`, and Cancel holds focus so `Enter` cannot run it by
+ * reflex. This is the one confirmation the surface exists to carry — Fleet
+ * does not gate it.
+ */
+export const ADestructiveCommandConfirms: Story = {
+  args: { ...EDITED, groups: GROUPS, selectedId: "command:fmt", onSelect: fn(), onRun: fn() },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Run" }));
+    await expect(args.onRun).not.toHaveBeenCalled();
+
+    const dialog = canvas.getByRole("dialog", { name: "Run a Command that writes?" });
+    await expect(dialog).toHaveTextContent("cargo fmt --all");
+    await expect(canvas.getByRole("button", { name: "Cancel" })).toHaveFocus();
+
+    await userEvent.click(canvas.getByRole("button", { name: "Run it" }));
+    await expect(args.onRun).toHaveBeenCalledWith("command:fmt");
+  },
+};
+
+/** A Check that writes nothing runs on the press — no dialog for a flag it does not carry. */
+export const ACheckRunsOnThePress: Story = {
+  args: { ...EDITED, groups: GROUPS, selectedId: "check:typecheck", onSelect: fn(), onRun: fn() },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Run" }));
+    await expect(args.onRun).toHaveBeenCalledWith("check:typecheck");
+    await expect(canvas.queryByRole("dialog")).toBeNull();
+  },
+};
+
+/**
+ * **Undo confirms, naming every path it would discard.** This tree holds the
+ * owner's own uncommitted work, so the press alone restores nothing.
+ */
+export const UndoNamesWhatItDiscards: Story = {
+  args: {
+    ...EDITED,
+    groups: GROUPS,
+    selectedId: "command:fmt",
+    onSelect: fn(),
+    onRun: fn(),
+    onDismiss: fn(),
+    result: { name: "fmt", exitCode: 0, expected: 0, ended: "exited", duration: "2.7s" },
+    changed: { files: REFORMATTED, onUndo: fn() },
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Undo this run" }));
+    await expect(args.changed?.onUndo).not.toHaveBeenCalled();
+
+    const dialog = canvas.getByRole("dialog", { name: "Put these files back as they were?" });
+    for (const file of REFORMATTED) await expect(dialog).toHaveTextContent(file.path);
+
+    await userEvent.click(canvas.getByRole("button", { name: "Undo the run" }));
+    await expect(args.changed?.onUndo).toHaveBeenCalled();
   },
 };
