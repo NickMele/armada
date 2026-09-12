@@ -95,8 +95,11 @@ where
                     cause,
                 }
             })?;
+        // **With the Manifest's base on it**, which `Vcs` cannot put there —
+        // `adapters` may not read a Manifest. Without it this step's readings
+        // measure from the checkout's HEAD and later steps' from the base.
         let worktree = match self.vcs().create_worktree(&spec) {
-            Ok(worktree) => worktree,
+            Ok(worktree) => self.based(worktree),
             Err(cause) => {
                 self.stopped_before_a_drone(&job, EscalationTrigger::NoWorktree)
                     .await?;

@@ -18,6 +18,8 @@
 //
 // `files.ts` is the live half and says the same thing from the other side.
 
+import { useEffect } from "react";
+
 import type { ChangedFile } from "@armada/components";
 
 import type { JobFilesChanged, Turn } from "@armada/protocol";
@@ -119,4 +121,44 @@ export function wroteSoFar(turns: readonly Turn[]): string {
   let files: readonly WireFile[] = [];
   for (const turn of turns) if (turn.saw.event === "produced") files = turn.saw.files;
   return files.map((file) => `${file.change} ${file.path}`).join("\n");
+}
+
+/**
+ * Whose work the list is, said under it.
+ *
+ * **The chapter is the Job's and it is drawn inside one step's row.** Both
+ * readings behind it are whole-worktree — the live event and the record Fleet
+ * keeps at the stopping instant — and since the story became the step
+ * timeline, they are drawn under the phase one Drone worked. A reader takes
+ * that for the step's own output, which is the reading the row's own count
+ * contradicts. The sheet says the same sentence over the same files.
+ */
+export const THE_JOBS_WORK =
+  "Fleet commits once at the end, so this is the job's work and not this step's.";
+
+/** The note under the list: whose work it is, and where it went outside a plan. */
+export function noteUnder(produced: Produced): string {
+  return produced.note === undefined ? THE_JOBS_WORK : `${THE_JOBS_WORK} ${produced.note}`;
+}
+
+/**
+ * Take the patch again for the sheet somebody is looking at: on the press that
+ * opens it, and whenever the file list moves under it.
+ *
+ * **Only while it is open.** The patch is the megabyte the split in
+ * `crates/ipc/src/work.rs` exists to save, and Fleet republishes a footprint
+ * only where the list changed — so a Drone editing the same files all night
+ * costs one read. `apps/desktop/src/main/review.ts` holds why taking it again
+ * does not blank the layer being read.
+ */
+export function useDiffAgain(
+  read: (jobId: string | null) => void,
+  jobId: string,
+  sheet: string | null,
+  turns: readonly Turn[],
+): void {
+  const wrote = wroteSoFar(turns);
+  useEffect(() => {
+    if (sheet === "diff") read(jobId);
+  }, [sheet, wrote, jobId]);
 }

@@ -7,10 +7,11 @@
 // drifting past it.
 import { describe, expect, it } from "vitest";
 
+import type { StepChapter } from "@armada/components";
 import type { CheckRun, StepDetail, Turn } from "@armada/protocol";
 
 import { freshStep, instructed, producedTurn, said } from "./fixtures/build/base";
-import { timelineOf } from "./timeline";
+import { stepTimelineOf, timelineOf } from "./timeline";
 
 const NOW = Date.parse("2026-09-10T14:30:00Z");
 
@@ -111,11 +112,43 @@ describe("what an attempt wrote", () => {
     expect(second?.rows.find((row) => row.phase === "working")?.produced).toBeUndefined();
   });
 
-  it("is counted in what the row says folded", () => {
+  it("is counted on the row, off what the row says", () => {
     const [first] = timelineOf(handedBack(), [wrote], NOW);
-    expect(first?.rows.find((row) => row.phase === "working")?.meta).toContain("1 file");
+    const working = first?.rows.find((row) => row.phase === "working");
+    expect(working?.wrote).toBe(1);
+    expect(working?.meta).toBe("1 turn · 2m 22s");
+  });
+
+  // **The count and the list are one question.** What an attempt wrote is its
+  // own boundary reading; the Produced chapter the row unfolds is the Job's
+  // whole work, and a row saying `1 file` over a list of nine is the pair of
+  // answers this repository keeps filing bugs about.
+  it("reaches the row's own line only where the row draws no list", () => {
+    // The attempt being read draws the chapter, so the count comes off its
+    // line; the one before it has no list and keeps the count it earned.
+    const wroteAgain = producedTurn("regression_verify", "2026-09-10T14:25:30Z", [
+      { path: "crates/settings/src/reducer.rs", change: "modified" },
+    ]);
+    const turns = [wrote, wroteAgain];
+
+    const [earlier, current] = stepTimelineOf(handedBack(), turns, NOW, [aProducedChapter()]);
+    expect(earlier?.rows.find((row) => row.name === "Working")?.meta).toBe(
+      "1 turn · 2m 22s · 1 file",
+    );
+    expect(current?.rows.find((row) => row.name === "Working")?.meta).toBe("1 turn · 5m 20s");
+
+    // With no chapter to draw, every attempt says what it wrote.
+    const [, alone] = stepTimelineOf(handedBack(), turns, NOW, []);
+    expect(alone?.rows.find((row) => row.name === "Working")?.meta).toBe(
+      "1 turn · 5m 20s · 1 file",
+    );
   });
 });
+
+/** The chapter that draws the Job's whole file list under the Working row. */
+function aProducedChapter(): StepChapter {
+  return { id: "produced", ordinal: 3, title: "Produced", preview: null };
+}
 
 describe("the gate's rows", () => {
   it("marks the Checks of the attempt that failed them", () => {

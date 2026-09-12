@@ -26,7 +26,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use adapter_traits::{AgentHarness, BaseCheckout, BaseSpec, Delivery, Vcs, WorkProduct};
+use adapter_traits::{AgentHarness, BaseCheckout, BaseSpec, Delivery, Vcs, WorkProduct, Worktree};
 use core_model::{Component, Envelope, FieldValue, Job, Level, Side, StepFrame};
 
 use crate::daemon::Fleet;
@@ -225,6 +225,26 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
+    /// The Manifest's base, attached to a worktree Fleet is about to read.
+    ///
+    /// **Every reading of a Job's work is measured from the same commit, or
+    /// two surfaces answer one question differently.** Without a base,
+    /// `adapters` falls back to the main checkout's HEAD — a floating
+    /// reference that says where a person is standing rather than what the Job
+    /// branched from — and then to the branch tip, where the reading is only
+    /// what is uncommitted. `crate::reviewing`'s diff and `kept_footprint` had
+    /// this and the live footprint did not, so a Job's Produced chapter and
+    /// its patch could be measured from two different commits on one worktree.
+    ///
+    /// `adapters` cannot read a Manifest — the layers forbid it — so this is
+    /// where the two are held together.
+    pub(crate) fn based(&self, worktree: Worktree) -> Worktree {
+        match self.manifest().base() {
+            Some(base) => worktree.from_base(base),
+            None => worktree,
+        }
+    }
+
     /// The base checkout to serve *before* from, prepared, or why there is
     /// none.
     ///
