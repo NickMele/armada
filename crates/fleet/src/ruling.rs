@@ -106,10 +106,8 @@ pub enum Ruling {
     ///
     /// **Nothing has failed yet in the sense the Job cares about.** The Job
     /// stays `running`, the step passes through `retrying` and re-enters
-    /// `running`, and the Drone keeps its session and its context — which is
-    /// the whole economy of this: the process that wrote the code is still
-    /// holding everything it knew while writing it, and a respawn would pay for
-    /// that twice.
+    /// `running`, and the Drone keeps its session and context — the whole
+    /// economy of this: a respawn would pay twice for what it already knows.
     ///
     /// **The Judge never ran**, exactly as on [`Failed`](Ruling::Failed), so a
     /// hand-back costs no model call. The mechanical tier is the only tier that
@@ -185,10 +183,9 @@ pub enum Ruling {
     /// wrong with.
     ///
     /// `question` is the first ask-eligible refusal this pass produced —
-    /// [`crate::judging::looks::JudgeFold`] asks about one at a time. Every
-    /// refusal this pass produced, asked or not, is still in `judged` and
-    /// still reaches `job_step_judgments`: this ruling changes what happens
-    /// next, not what was recorded.
+    /// [`crate::judging::looks::JudgeFold`] asks one at a time. Every refusal,
+    /// asked or not, still reaches `judged` and `job_step_judgments`: this
+    /// ruling changes what happens next, not what was recorded.
     Questioned {
         question: Judgment,
         /// The plain question the criterion asked. Neither `question` nor its
