@@ -13,15 +13,17 @@
 //! built per spawn from the store and is consumed by the single turn it was
 //! built for — it is the reason a resuming brief differs from a first one,
 //! rather than a term this step puts to whoever works it. `Delivering` was
-//! missing from the list and is the plainest member of it.
+//! missing from the list and is the plainest member of it. [`Capturing`] is
+//! the sixth, added by `#790`.
 //!
 //! **Every one is written from the definition and from nothing else**, which is
 //! `briefing`'s narrowing carried across: [`Checking`] names its Checks and
-//! not what they run, and [`Delivering`] names a path in the Drone's own
-//! worktree. [`Splitting`] reads one step further, because what a step's
+//! not what they run, [`Delivering`] names a path in the Drone's own
+//! worktree, and [`Capturing`] names `evidence.run` and never what it runs.
+//! [`Splitting`] reads one step further, because what a step's
 //! product *becomes* is a fact about the step after it — and names no workflow.
 //!
-//! Four of the five carry **drafted wording**. Sanctioned copy is
+//! Five of the six carry **drafted wording**. Sanctioned copy is
 //! `docs/contracts/agent-prompt.md`'s to write and it has none for them yet.
 
 use core_model::{FrozenWorkflow, RepoPath, ResolvedCheck, ResolvedStep, StepId};
@@ -71,6 +73,54 @@ impl Delivering {
              empty file or no file stops this part, and a file somewhere else \
              is not this part's work however good it is. What you submit \
              summarises it and does not replace it."
+        )))
+    }
+
+    /// The block, exactly as it reaches a Drone.
+    pub fn text(&self) -> &str {
+        &self.0
+    }
+}
+
+/// What a step tells its Drone when it is captured: that `shown_by` names a
+/// file `evidence.run` runs, not one it only reads.
+///
+/// **`#790`.** Capture worked on the issue that introduced it only because a
+/// person wrote the spec by hand and pointed the step at it — nothing told
+/// the Drone that `shown_by` would be run at all, so a Drone that had not
+/// happened to write one produced a diff, a passing suite or a note, and
+/// capture recorded nothing.
+///
+/// **It names `evidence.run` and stops there.** What that command is, and
+/// what `evidence.frames` expects to find, is the repository's own decision
+/// — `docs/concepts/manifest.md`'s Evidence section, never a medium or a
+/// framework this block could name instead.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Capturing(String);
+
+impl Capturing {
+    /// The block this step puts to its Drone, or `None` where the step is
+    /// not captured.
+    ///
+    /// **`ResolvedStep::captured` is the only switch.** A step that is not
+    /// captured must not gain a paragraph about specs — the ordinary
+    /// `shown_by` obligation in the baseline already covers it.
+    pub fn at(step: &ResolvedStep) -> Option<Capturing> {
+        if !step.captured() {
+            return None;
+        }
+        Some(Capturing(String::from(
+            "THIS PART IS CAPTURED\n\nWhatever you name in `shown_by` is not \
+             only read. This repository's own `evidence.run` runs it once \
+             you submit — so it has to be a spec: one file of runnable code \
+             that reaches the state your claim is about, landing in the \
+             diff like anything else this part changes, not a description \
+             of what you saw. What that run leaves behind is what a \
+             reviewer sees, in place of reading the diff for themselves. \
+             What the spec has to look like beyond that is this \
+             repository's own decision, not something this instruction can \
+             tell you.\n\nNaming none does not fail this part. It means \
+             nothing is captured, and a reviewer reads the diff instead.",
         )))
     }
 
