@@ -23,6 +23,7 @@
    reads as one lid. */
 .armada-chapter__line {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   padding-right: var(--armada-chapter-pad);
@@ -30,9 +31,15 @@
   min-width: 0;
 }
 
-/* The act sits at the trailing edge of the line and never grows. */
+/* The act sits at the trailing edge of the line and never grows. Its natural
+   width is fixed, but it is not the thing that yields at a narrow width: the
+   header beside it (`flex-basis: auto`, below) claims its own content size
+   first, so when the two no longer fit on one line the act wraps to a line of
+   its own — flush to the trailing edge there too — rather than the header's
+   name and meta colliding with it. */
 .armada-chapter__act {
   flex: none;
+  margin-inline-start: auto;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -45,7 +52,12 @@
   align-items: center;
   /* The drawn 10px: --space-2 plus a half --space-1. */
   gap: calc(var(--space-2) + var(--space-1) / 2);
-  flex: 1;
+  /* `auto` basis, not `0`: the line's wrap decision (above) reads this as the
+     header's own content size, so the act is what moves to a line of its own
+     once the number, the name and the meta no longer fit beside it. A `0`
+     basis reports no size to wrap against and the header just shrinks the
+     name to nothing instead. */
+  flex: 1 1 auto;
   /* The drawn 9px: --space-2 plus a quarter --space-1. */
   padding: calc(var(--space-2) + var(--space-1) / 4) var(--armada-chapter-pad);
   border: 0;
@@ -96,7 +108,12 @@ button.armada-chapter__head:focus-visible {
   color: var(--border-strong);
 }
 
+/* Never the thing that shrinks. It is what tells a person which step they are
+   reading, so at a narrow width `.armada-chapter__meta` gives way first — the
+   ellipsis below is the pathological fallback for a name too long for the
+   head at any width, not the ordinary narrow-window case. */
 .armada-chapter__name {
+  flex: none;
   min-width: 0;
   font-size: var(--text-xs);
   line-height: var(--leading-xs);
@@ -108,16 +125,26 @@ button.armada-chapter__head:focus-visible {
 }
 
 /* The fact that makes a collapsed chapter worth leaving collapsed. Pushed to
-   the trailing edge, so three chapters' meta line up down one column. */
+   the trailing edge, so three chapters' meta line up down one column.
+   Shrinkable, unlike the name beside it: at a narrow width this is the fact
+   that gives up characters first, ellipsised by `__meta-text` inside it,
+   rather than forcing the name to. */
 .armada-chapter__meta {
   display: flex;
   align-items: center;
   gap: calc(var(--space-2) - var(--space-1) / 4);
   margin-inline-start: auto;
-  flex: none;
+  min-width: 0;
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
   color: var(--fg-subtle);
+}
+
+.armada-chapter__meta-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Streaming. The running dot, at the size the error treatment's dot already
