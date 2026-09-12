@@ -162,11 +162,10 @@ where
     /// the third reader, and takes the whole answer — `Room::hold` is a
     /// `match` over the value admission itself returned.
     ///
-    /// **`occupied` is `Slots::count`.** The roster is what the bound is
-    /// measured against, and a count taken from Job statuses would disagree
-    /// with it: an escalated Job keeps its Drone alive and idle so a redirect
-    /// costs no respawn, and it keeps its place. `count` sweeps the slots whose
-    /// `Working` has gone, so what it answers is what admission will act on.
+    /// **`occupied` is `Slots::count`.** A count taken from Job statuses would
+    /// disagree with the roster: an escalated Job keeps its Drone alive and
+    /// idle, keeping its place. `count` sweeps the slots whose `Working` has
+    /// gone, so it answers what admission will act on.
     ///
     /// The roster lock is taken once, so the bound, count and reason cannot be
     /// three readings of three different instants — admission's own lock
