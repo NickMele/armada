@@ -61,9 +61,10 @@ export type TimelineRow = {
    *
    * **Off `meta` rather than in it**, because whether it may be said at all
    * depends on what the row draws. This is the step's own reading, taken at
-   * its boundary; the Produced chapter a row unfolds is the **Job's** whole
-   * work, and a row asserting `3 files` over a list of nine is two answers to
-   * one question. `stepTimelineOf` is where both are known.
+   * its boundary; the Produced chapter a row unfolds lists files too — the
+   * **Job's** whole work on the live run, that run's own on an earlier one —
+   * and a row asserting `3 files` over a list of nine is two answers to one
+   * question. `stepTimelineOf` is where both are known.
    */
   wrote?: number;
 };
@@ -447,7 +448,7 @@ export function stepTimelineOf(
         const drawn = bodyOf(row.phase, mine);
         // **The count is said only where the row does not draw the list.** What
         // this attempt wrote is its own boundary reading; the Produced chapter
-        // under it is the Job's whole work, so a row that draws the chapter and
+        // under it lists files of its own, so a row that draws the chapter and
         // states its own number puts two answers to one question on one line.
         // A folded row has no list, and there the count is the whole of it.
         const meta = row.wrote === undefined || drawn.showsWhatItWrote === true
