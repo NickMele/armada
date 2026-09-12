@@ -110,11 +110,9 @@ def main() -> None:
                        "the process; everywhere else a value arrives typed.")
 
     # ---- rule: a comment block runs to five lines and no further ---------
-    #
-    # Same cap as the gate, refused here instead of merely warned about
-    # there — the gate's own rule went from fail to warn on this one because
-    # the backlog is real; a new write adding to it is not. Judges the
-    # fragment being written, not the file it lands in.
+    # Same cap as the gate, refused rather than warned: new writes should not
+    # add to a backlog the gate merely reports. Judges the fragment being
+    # written, not the file it lands in.
     source_scope = rel.endswith((".rs", ".ts", ".tsx")) and rel.split("/", 1)[0] in (
         "crates", "apps", "packages", "xtask",
     )
