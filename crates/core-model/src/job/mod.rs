@@ -30,6 +30,7 @@ mod attempt;
 mod check;
 mod collision;
 mod covers;
+mod declared;
 mod drone;
 mod escalation;
 mod event;
@@ -95,7 +96,8 @@ pub use transition::{
     CriteriaOwed, Edge, IllegalTransition, PilotReason, Target, TransitionReason, EDGES,
 };
 pub use verdict::GateVerdict;
+pub use declared::{AdvanceGate, EvidenceType};
 pub use workflow::{
-    AdvanceGate, EvidenceType, FrozenWorkflow, ResolvedCheck, ResolvedStep, ARTIFACT_EXISTS,
-    DIFF_NONEMPTY, EVERY_MANIFEST_CHECK, MANIFEST_CHECK,
+    FrozenWorkflow, ResolvedCheck, ResolvedStep, ARTIFACT_EXISTS, DIFF_NONEMPTY,
+    EVERY_MANIFEST_CHECK, MANIFEST_CHECK,
 };

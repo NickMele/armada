@@ -263,6 +263,28 @@ fn built(steps: &[Sketch<'_>], retry_limit: u32, models: &[(&str, &str)]) -> Res
         &[],
         Sends::TheLastStep,
         Held::NoStep,
+        &[],
+    )
+}
+
+/// The same fixture with the named steps asking to be captured — the half of
+/// `evidence` that is an instruction to Fleet rather than a claim.
+///
+/// **A whole-fixture argument rather than a field on [`Sketch`]**, for
+/// [`retried`]'s reason: one step of one fixture asks, and a field would make
+/// ninety-odd literals state a `false` about a key they do not use.
+pub fn capturing(steps: &[Sketch<'_>], captured: &[&str]) -> ResolvedWorkflow {
+    assembled(
+        steps,
+        0,
+        &[],
+        &[],
+        &[],
+        &[],
+        &[],
+        Sends::TheLastStep,
+        Held::NoStep,
+        captured,
     )
 }
 
@@ -365,11 +387,12 @@ fn assembled(
     narrows: &[Narrows<'_>],
     delivers: Sends<'_>,
     held: Held<'_>,
+    captured: &[&str],
 ) -> ResolvedWorkflow {
     let roster = Roster::of(models.iter().map(|(_, model)| *model));
     let def = WorkflowDef::parse(
         Path::new("fixture-workflow.yml"),
-        &workflow_text(steps, retry_limit, models, patience, delivers, held),
+        &workflow_text(steps, retry_limit, models, patience, delivers, held, captured),
         &roster,
     )
     .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
@@ -397,6 +420,7 @@ fn workflow_text(
     patience: &[Patience<'_>],
     delivers: Sends<'_>,
     held: Held<'_>,
+    captured: &[&str],
 ) -> String {
     let mut text = String::from(
         "version: 1\nworkflow_id: fixture-workflow\nname: fixture\nstructure: linear\nsteps:\n",
@@ -417,8 +441,18 @@ fn workflow_text(
              delivers: {delivers}\n    retry_limit: {retry_limit}\n",
             step.id, step.label
         ));
-        if let Some(evidence) = step.evidence_type {
-            text.push_str(&format!("    evidence_type: {evidence}\n"));
+        // The block, where the step says either half. No key at all where it
+        // says neither, which is what a step producing nothing a Judge reads
+        // looks like in a real file.
+        let captures = captured.contains(&step.id);
+        if step.evidence_type.is_some() || captures {
+            text.push_str("    evidence:\n");
+            if let Some(evidence) = step.evidence_type {
+                text.push_str(&format!("      submitted:\n        type: {evidence}\n"));
+            }
+            if captures {
+                text.push_str("      captured: true\n");
+            }
         }
         if let Some((_, model)) = models.iter().find(|(id, _)| *id == step.id) {
             text.push_str(&format!("    model: {model}\n"));

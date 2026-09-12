@@ -89,11 +89,11 @@ const ENUMS: &[EnumSource] = &[
     },
     EnumSource {
         name: "AdvanceGate",
-        path: "crates/core-model/src/job/workflow.rs",
+        path: "crates/core-model/src/job/declared.rs",
     },
     EnumSource {
         name: "EvidenceType",
-        path: "crates/core-model/src/job/workflow.rs",
+        path: "crates/core-model/src/job/declared.rs",
     },
     EnumSource {
         name: "DronePresence",

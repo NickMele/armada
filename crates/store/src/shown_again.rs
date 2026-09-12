@@ -12,8 +12,8 @@
 //! gate asks about, and beside the change it makes rather than in `schema.rs`
 //! for [`V29`](crate::proving::V29)'s reason.
 
-use core_model::{Attempt, EvidenceType, JobId, Side, StepFrame, StepId, Timestamp};
-use rusqlite::{OptionalExtension, Row};
+use core_model::{Attempt, JobId, Side, StepFrame, StepId, Timestamp};
+use rusqlite::Row;
 
 use crate::error::{fault, LoadJobError, RowError, WriteError};
 use crate::open::Store;
@@ -56,38 +56,55 @@ fn unreadable(cause: rusqlite::Error) -> LoadJobError {
 }
 
 impl Store {
-    /// The spec a Drone last named on a step whose evidence is what it looks
-    /// like, and the run that named it — or `None` where no Drone ever did.
+    /// The spec a Drone last named on a step Fleet captures, and the run that
+    /// named it — or `None` where no Drone ever did.
     ///
-    /// **`shown` rows only.** `shown_by` is required on every submission, but
-    /// only a `shown` step's names a spec: on any other step it points at
-    /// whatever shows the claim, a test or a file, and a press that handed that
-    /// to `evidence.run` would put a Drone's sentence into a command line the
-    /// repository wrote for a spec. A `shown` step's value is already
-    /// substituted there by the step's own run, so rerunning it opens nothing
-    /// the step had not.
+    /// **Captured steps only, and the caller says which.** `shown_by` is
+    /// required on every submission, but only a captured step's names a spec:
+    /// on any other it points at whatever shows the claim, a test or a file.
     ///
-    /// **The latest by when it was recorded**, across every step: the owner's
-    /// words are *the last spec the Drone named*. A resubmission inside one run
-    /// replaces its row, so the latest is what the step last stood on.
-    pub fn spec_last_named(&self, job_id: &JobId) -> Result<Option<SpecNamed>, LoadJobError> {
-        let found = self
+    /// **The ids come in rather than off the row**, because since `#777` being
+    /// captured is a fact about the step and a submission carries only its own
+    /// type. This filtered on `evidence_type = 'shown'`, which is the reading
+    /// that could not see a step handing in a diff *and* being captured.
+    ///
+    /// **The latest by when it was recorded**, across every step: a
+    /// resubmission inside one run replaces its row.
+    pub fn spec_last_named(
+        &self,
+        job_id: &JobId,
+        captured: &[StepId],
+    ) -> Result<Option<SpecNamed>, LoadJobError> {
+        if captured.is_empty() {
+            return Ok(None);
+        }
+        let mut asking = self
             .conn
-            .query_row(
+            .prepare(
                 "SELECT step_id, attempt, shown_by FROM job_step_evidence
-                 WHERE job_id = ?1 AND evidence_type = ?2
-                 ORDER BY recorded_at DESC, attempt DESC, step_id DESC
-                 LIMIT 1",
-                (job_id.as_str(), EvidenceType::Shown.as_wire()),
-                |row| {
-                    let step: String = row.get("step_id")?;
-                    let attempt: i64 = row.get("attempt")?;
-                    let spec: String = row.get("shown_by")?;
-                    Ok((step, attempt, spec))
-                },
+                 WHERE job_id = ?1
+                 ORDER BY recorded_at DESC, attempt DESC, step_id DESC",
             )
-            .optional()
             .map_err(unreadable)?;
+        let rows = asking
+            .query_map((job_id.as_str(),), |row| {
+                let step: String = row.get("step_id")?;
+                let attempt: i64 = row.get("attempt")?;
+                let spec: String = row.get("shown_by")?;
+                Ok((step, attempt, spec))
+            })
+            .map_err(unreadable)?;
+        // Filtered here rather than in an `IN` clause assembled from the slice:
+        // one Job's rows are few, and building a parameter list is the one
+        // place this dialect would have to interpolate SQL.
+        let mut found = None;
+        for row in rows {
+            let (step, attempt, spec) = row.map_err(unreadable)?;
+            if captured.iter().any(|id| id.as_str() == step) {
+                found = Some((step, attempt, spec));
+                break;
+            }
+        }
         let Some((step, attempt, spec)) = found else {
             return Ok(None);
         };

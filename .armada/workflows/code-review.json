@@ -37,7 +37,9 @@
     {
       "id": "read",
       "label": "Read the diff",
-      "evidence_type": "facts_note",
+      "evidence": {
+        "submitted": { "type": "facts_note" }
+      },
       "mechanical_checks": [
         {
           "type": "artifact_exists",
@@ -50,7 +52,9 @@
     {
       "id": "assess",
       "label": "Assess",
-      "evidence_type": "facts_note",
+      "evidence": {
+        "submitted": { "type": "facts_note" }
+      },
       "mechanical_checks": [
         {
           "type": "artifact_exists",
@@ -66,7 +70,9 @@
     {
       "id": "deliver",
       "label": "Deliver the review",
-      "evidence_type": "bundle",
+      "evidence": {
+        "submitted": { "type": "bundle" }
+      },
       "model": "haiku",
       "delivers": false,
       "advance_gate": "auto"

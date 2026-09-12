@@ -172,7 +172,7 @@ Drone's *input* rather than its output — "the work product" needs
 restating for that workflow, and it is one of the reasons the gate row is
 the component that bends there.
 
-## What the Judge receives, per `evidence_type`
+## What the Judge receives, per `evidence.submitted.type`
 
 The veto-only contract says the Judge receives the task text, the **work
 product** and the deterministic facts. On a coding step the work product
@@ -188,7 +188,7 @@ Judge asks *is this a sound root-cause analysis*, never *did the Drone
 work hard*. In one line: **the Judge sees what the step produced. It never
 sees how the step went.**
 
-| `evidence_type` | Work product handed to the Judge | What `context_paths` is for on that step |
+| `evidence.submitted.type` | Work product handed to the Judge | What `context_paths` is for on that step |
 | --- | --- | --- |
 | `diff` | The actual patch, pre-loaded | **What else** may be opened — the unchanged remainder of a touched file, a sibling module, an interface being conformed to |
 | `failing_test` | The patch adding the test, plus the run's exit code and status as deterministic facts | As for `diff`. Bug's `repro` asks whether the test represents the reported bug, which needs the code under test |

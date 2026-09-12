@@ -396,8 +396,13 @@ fn naming_checks_by_hand_does_not_read_as_gating_on_every_one() {
     assert!(!resolved.steps()[1].gates_on_every_check());
 }
 
-/// A workflow with a `shown` step, met with a Manifest that declares no
+/// A workflow with a captured step, met with a Manifest that declares no
 /// harness.
+///
+/// **The captured step hands in a diff as well**, which is the shape `#777`
+/// made possible and the one the old single value could not spell: capture is
+/// an instruction to Fleet, so it sits beside the claim rather than instead
+/// of it.
 const SHOWS: &str = r#"
 version: 1
 workflow_id: shows
@@ -406,12 +411,17 @@ structure: linear
 steps:
   - id: implement
     label: Implement
-    evidence_type: diff
+    evidence:
+      submitted:
+        type: diff
     delivers: false
     advance_gate: auto
   - id: show
     label: Show what it looks like
-    evidence_type: shown
+    evidence:
+      submitted:
+        type: diff
+      captured: true
     delivers: true
     advance_gate: auto
 "#;
@@ -425,10 +435,10 @@ evidence:
   frames: .playwright/frames
 "#;
 
-/// **A step asking to be shown, held to a repository that can show it.**
+/// **A step asking to be captured, held to a repository that can capture it.**
 ///
-/// Neither file can answer this alone: `evidence_type: shown` parses against
-/// no Manifest, and an `evidence:` section is declared with no workflow in
+/// Neither file can answer this alone: `evidence.captured` parses against no
+/// Manifest, and an `evidence:` section is declared with no workflow in
 /// sight. So it is checked here, at resolve, and refused before anything is
 /// dispatched.
 ///
@@ -439,7 +449,7 @@ evidence:
 #[test]
 fn a_step_that_shows_its_work_is_refused_where_nothing_can_show_it() {
     let def = WorkflowDef::parse(&named("workflows/shows.yml"), SHOWS, &roster())
-        .expect("a workflow with a shown step");
+        .expect("a workflow with a captured step");
 
     let refused = ResolvedWorkflow::resolve(&def, &manifest())
         .expect_err("no harness is declared, so the step cannot run");
@@ -455,12 +465,12 @@ fn a_step_that_shows_its_work_is_refused_where_nothing_can_show_it() {
 }
 
 /// And the same workflow resolves once the repository says how it shows its
-/// work. **Absence is the refusal and not the type**, which is what keeps
-/// `shown` a step a repository can opt into rather than one nobody can write.
+/// work. **Absence is the refusal and not the key**, which is what keeps
+/// capture a thing a repository can opt into rather than one nobody can write.
 #[test]
 fn a_repository_that_declares_a_harness_may_have_steps_that_show_their_work() {
     let def = WorkflowDef::parse(&named("workflows/shows.yml"), SHOWS, &roster())
-        .expect("a workflow with a shown step");
+        .expect("a workflow with a captured step");
     let manifest = Manifest::parse(&named("armada.yml"), &format!("{MANIFEST}{AND_A_HARNESS}"))
         .expect("a manifest with a harness");
 

@@ -33,7 +33,7 @@ use crate::yaml::{self, Table};
 const STEP_KEYS: &[&str] = &[
     "id",
     "label",
-    "evidence_type",
+    "evidence",
     "mechanical_checks",
     "judge_checks",
     "advance_gate",
@@ -68,12 +68,10 @@ const GATE_LEGAL: &[&str] = &[
     "manifest_rule:review_gate",
 ];
 
-/// **`shown` is carried here and still cannot be dispatched on its own.**
-/// Every other value is satisfied by whatever the step's work product is, and
-/// this one needs an `evidence:` section in the `armada.yml` the workflow is
-/// resolved against — a file this parser has never seen. So it parses here and
-/// is refused in `crate::resolve`, which is the one place both files are in
-/// hand.
+/// **Every value is a claim a Drone hands in and the gate measures**, which is
+/// what `shown` never was: it meant *run the repository's harness*, and an
+/// instruction in a list of claims is why one key could not say both. `captured`
+/// says it now, beside this rather than among it — `#777`.
 const EVIDENCE_CARRIED: &[(&str, EvidenceType)] = &[
     ("diff", EvidenceType::Diff),
     ("failing_test", EvidenceType::FailingTest),
@@ -81,7 +79,6 @@ const EVIDENCE_CARRIED: &[(&str, EvidenceType)] = &[
     ("test_suite_run", EvidenceType::TestSuiteRun),
     ("bundle", EvidenceType::Bundle),
     ("document", EvidenceType::Document),
-    ("shown", EvidenceType::Shown),
 ];
 const EVIDENCE_LEGAL: &[&str] = &[
     "diff",
@@ -90,8 +87,11 @@ const EVIDENCE_LEGAL: &[&str] = &[
     "test_suite_run",
     "bundle",
     "document",
-    "shown",
 ];
+
+/// The whole of the `evidence` block, and of the `submitted` object inside it.
+const EVIDENCE_KEYS: &[&str] = &["submitted", "captured"];
+const SUBMITTED_KEYS: &[&str] = &["type"];
 
 /// One step of a workflow.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,6 +99,7 @@ pub struct Step {
     id: StepId,
     label: String,
     evidence_type: Option<EvidenceType>,
+    captured: bool,
     mechanical_checks: Vec<MechanicalCheck>,
     judge_checks: Vec<JudgeCheck>,
     advance_gate: AdvanceGate,
@@ -129,6 +130,13 @@ impl Step {
 
     pub fn evidence_type(&self) -> Option<EvidenceType> {
         self.evidence_type
+    }
+
+    /// Whether Fleet runs the repository's `evidence:` harness for this step.
+    /// **False where the block says nothing**, which is every step that asks to
+    /// be read rather than looked at.
+    pub fn captured(&self) -> bool {
+        self.captured
     }
 
     /// All entries must pass. **Routinely empty** — a gateless step is the
@@ -264,16 +272,7 @@ pub(super) fn read(
     let label = table
         .required("label", out)
         .and_then(|value| yaml::text(&table.at("label"), value, out));
-    let evidence_type = table.optional("evidence_type").and_then(|value| {
-        yaml::word(
-            &table.at("evidence_type"),
-            value,
-            EVIDENCE_CARRIED,
-            EVIDENCE_LEGAL,
-            EVIDENCE_LEGAL,
-            out,
-        )
-    });
+    let (evidence_type, captured) = evidence(&mut table, out);
     let mechanical_checks = mechanical::checks(&mut table, out);
     let judge_checks = judge::checks(&mut table, roster, out);
     let evidence_scope = scope::evidence_scope(&mut table, out);
@@ -417,6 +416,7 @@ pub(super) fn read(
         id: StepId::new(id?),
         label: label?,
         evidence_type,
+        captured: captured?,
         mechanical_checks,
         judge_checks,
         advance_gate: advance_gate?,
@@ -430,6 +430,54 @@ pub(super) fn read(
         quiet_after_seconds,
         poke_limit,
     })
+}
+
+/// The `evidence` block: what the Drone hands in, and whether Fleet captures.
+///
+/// **Two keys because they are two questions**, and holding them in one value
+/// is exactly what stopped a step handing in a patch *and* being captured. The
+/// submitted half is a claim the gate measures; `captured` is an instruction to
+/// Fleet that gates nothing. `#777`.
+///
+/// **Absent is neither**, which is every step that produces nothing a Judge
+/// reads. A block present but empty is the same answer said out loud.
+fn evidence(table: &mut Table<'_>, out: &mut Vec<Refusal>) -> (Option<EvidenceType>, Option<bool>) {
+    let at = table.at("evidence");
+    let Some(value) = table.optional("evidence") else {
+        return (None, Some(false));
+    };
+    let Some(mut block) = Table::open(&at, value, out) else {
+        return (None, None);
+    };
+    let submitted_at = block.at("submitted");
+    let submitted = block.optional("submitted").and_then(|value| {
+        let mut inner = Table::open(&submitted_at, value, out)?;
+        let type_at = inner.at("type");
+        // **Required inside the block, because writing `submitted:` is asking
+        // for something.** A step handing nothing in leaves the key out.
+        let kind = inner.required("type", out).and_then(|value| {
+            yaml::word(
+                &type_at,
+                value,
+                EVIDENCE_CARRIED,
+                EVIDENCE_LEGAL,
+                EVIDENCE_LEGAL,
+                out,
+            )
+        });
+        inner.close(SUBMITTED_KEYS, out);
+        kind
+    });
+    // **Absent is false, and anything that is not a boolean is a refusal** —
+    // `may_dispatch_jobs`'s rule, for its reason: a value read as absent would
+    // be a step written to be captured that silently is not.
+    let captured_at = block.at("captured");
+    let captured = match block.optional("captured") {
+        None => Some(false),
+        Some(value) => yaml::flag(&captured_at, value, out),
+    };
+    block.close(EVIDENCE_KEYS, out);
+    (submitted, captured)
 }
 
 /// `advance_gate` has its own reader because one of the schema's four forms is

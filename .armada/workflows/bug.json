@@ -57,7 +57,9 @@
     {
       "id": "plan",
       "label": "Plan the change",
-      "evidence_type": "facts_note",
+      "evidence": {
+        "submitted": { "type": "facts_note" }
+      },
       "mechanical_checks": [
         {
           "type": "artifact_exists",
@@ -89,7 +91,9 @@
     {
       "id": "implement",
       "label": "Implement",
-      "evidence_type": "diff",
+      "evidence": {
+        "submitted": { "type": "diff" }
+      },
       "retry_limit": 2,
       "mechanical_checks": [
         {
@@ -141,7 +145,9 @@
     {
       "id": "handoff",
       "label": "Summarise",
-      "evidence_type": "facts_note",
+      "evidence": {
+        "submitted": { "type": "facts_note" }
+      },
       "model": "haiku",
       "delivers": true,
       "advance_gate": "human_always"

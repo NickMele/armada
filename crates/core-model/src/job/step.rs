@@ -28,7 +28,7 @@ use crate::job::escalation::StepLevelTrigger;
 use crate::job::ids::{DroneId, JobId, StepId};
 use crate::job::status::StepState;
 use crate::job::step_machine::StepTarget;
-use crate::job::workflow::EvidenceType;
+use crate::job::declared::EvidenceType;
 
 /// The last verdict against a step.
 ///

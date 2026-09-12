@@ -33,7 +33,9 @@
     {
       "id": "draft",
       "label": "Draft",
-      "evidence_type": "document",
+      "evidence": {
+        "submitted": { "type": "document" }
+      },
       "mechanical_checks": [
         {
           "type": "artifact_exists",
@@ -46,7 +48,9 @@
     {
       "id": "present",
       "label": "Present",
-      "evidence_type": "document",
+      "evidence": {
+        "submitted": { "type": "document" }
+      },
       "delivers": false,
       "advance_gate": "human_always",
       "verdict_routing": {
