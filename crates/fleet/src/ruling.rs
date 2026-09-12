@@ -106,10 +106,8 @@ pub enum Ruling {
     ///
     /// **Nothing has failed yet in the sense the Job cares about.** The Job
     /// stays `running`, the step passes through `retrying` and re-enters
-    /// `running`, and the Drone keeps its session and its context — which is
-    /// the whole economy of this: the process that wrote the code is still
-    /// holding everything it knew while writing it, and a respawn would pay for
-    /// that twice.
+    /// `running`, and the Drone keeps its session and context — the whole
+    /// economy of this: a respawn would pay twice for what it already knows.
     ///
     /// **The Judge never ran**, exactly as on [`Failed`](Ruling::Failed), so a
     /// hand-back costs no model call. The mechanical tier is the only tier that
@@ -142,16 +140,11 @@ pub enum Ruling {
     /// asked only after the mechanical one holds, so a failing Check costs
     /// nothing.
     ///
-    /// **The Drone is terminated without a turn, and the Job is not.** Keeping
-    /// the session was tried for the fortnight this status has existed, so that
-    /// a redirect into the process that wrote the code would cost no respawn.
-    /// What it also cost was the working slot, held from the last Check to
-    /// whenever somebody read the failure — which is `awaiting_review`'s
-    /// measured hour count wearing a different name, and the owner's ruling is
-    /// that a repair is a wait like a review. The context is worth less than
-    /// the slot, and a fresh Drone opens with what stopped this one:
-    /// `crate::resume::what_stopped` reads the verdict, the Judge's answers and
-    /// the gaming flags off the record.
+    /// **The Drone is terminated without a turn, and the Job is not** — see
+    /// [`ends_the_drone`](Ruling::ends_the_drone) for the measured reason the
+    /// slot outweighs the session. A fresh Drone opens with what stopped this
+    /// one: `crate::resume::what_stopped` reads the verdict, the Judge's
+    /// answers and the gaming flags off the record.
     ///
     /// The worktree is kept and the output below is readable, unchanged.
     Failed {
@@ -186,14 +179,13 @@ pub enum Ruling {
     /// answers, not the machine" — and, unlike that ruling, **the Drone is not
     /// stood down**: a person's answer either fails the step exactly as
     /// [`Ruling::Refused`] would have, or advances it, and either way the same
-    /// Drone that is already holding the worktree carries on rather than a
-    /// fresh one being spawned to redo work nothing found wrong with.
+    /// Drone carries on rather than a fresh one redoing work nothing found
+    /// wrong with.
     ///
     /// `question` is the first ask-eligible refusal this pass produced —
-    /// [`crate::judging::looks::JudgeFold`] asks about one at a time. Every
-    /// refusal this pass produced, asked or not, is still in `judged` and
-    /// still reaches `job_step_judgments`: this ruling changes what happens
-    /// next, not what was recorded.
+    /// [`crate::judging::looks::JudgeFold`] asks one at a time. Every refusal,
+    /// asked or not, still reaches `judged` and `job_step_judgments`: this
+    /// ruling changes what happens next, not what was recorded.
     Questioned {
         question: Judgment,
         /// The plain question the criterion asked. Neither `question` nor its
