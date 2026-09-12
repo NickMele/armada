@@ -3,7 +3,7 @@ import { expect, fn } from "storybook/test";
 import { ActivityLog } from "../ActivityLog/ActivityLog";
 import { ChangedFiles } from "../ChangedFiles/ChangedFiles";
 import { FramesShown } from "../FramesShown/FramesShown";
-import { StepStory, StepStorySkeleton, type StepChapter } from "./StepStory";
+import { StepStory, type StepChapter } from "./StepStory";
 
 /**
  * The story as the drawing tells it, and what happens when a chapter is
@@ -304,9 +304,4 @@ export const ShowingTheOutcome: Story = {
     // with the evidence.
     expect(canvasElement.querySelectorAll(".armada-frames__image")).toHaveLength(2);
   },
-};
-
-/** The story while its step is read: the chapters every step has, closed. */
-export const Reading: Story = {
-  render: () => <StepStorySkeleton chapters={["Drone instructions", "Activity log", "Produced"]} />,
 };
