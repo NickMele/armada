@@ -18,9 +18,34 @@ use ipc::{
 use super::FakeDaemon;
 use crate::tests::shapes;
 use crate::tests::shapes::run_id;
-use crate::{Observed, Queries, Refusal, Resolved};
+use crate::{FramePart, FrameSpan, Observed, Queries, Refusal, Resolved};
 
 impl FakeDaemon {
+    /// The row a frame id resolves to, and the bytes behind it.
+    ///
+    /// **The record is the allowlist here too.** Both frame routes go through
+    /// this, so a name no row of this Job holds reaches nothing on either —
+    /// which is the rule a ranged read must not be able to route around.
+    fn frame_held(
+        &self,
+        job_id: &JobId,
+        kept: String,
+    ) -> Result<(KeptFrame, &'static [u8]), Refusal> {
+        let jobs = self.jobs.lock().expect("not poisoned");
+        if !jobs.iter().any(|job| &job.id == job_id) {
+            return Err(self.no_such_job(job_id));
+        }
+        if kept != shapes::THE_FRAME && kept != shapes::THE_RECORDING {
+            return Err(Refusal::Unacceptable(ipc::WireError::raised(
+                "fleet.no_such_frame",
+                format!("no step of this Job kept a frame named `{kept}`"),
+                run_id(),
+            )));
+        }
+        let bytes = shapes::bytes_of(&kept);
+        Ok((shapes::frame(kept), bytes))
+    }
+
     /// The run sheet's six operations, which the fake does not run: a 404 for
     /// a Job it does not hold, and a 422 naming that for one it does. What the
     /// routes prove is that each is wired, and `fleet` proves what they do.
@@ -365,18 +390,38 @@ impl Queries for FakeDaemon {
         job_id: JobId,
         kept: String,
     ) -> Result<(KeptFrame, Vec<u8>), Refusal> {
-        let jobs = self.jobs.lock().expect("not poisoned");
-        if !jobs.iter().any(|job| job.id == job_id) {
-            return Err(self.no_such_job(&job_id));
+        let (held, bytes) = self.frame_held(&job_id, kept)?;
+        Ok((held, bytes.to_vec()))
+    }
+
+    /// **The span is arithmetic here rather than a seek**, because the fake
+    /// holds bytes and not files. What the route has to prove is the three
+    /// answers — a span, a span past the end, and a name no row holds — and
+    /// every one of those is a property of the response.
+    async fn get_frame_part(
+        &self,
+        job_id: JobId,
+        kept: String,
+        span: FrameSpan,
+    ) -> Result<(KeptFrame, FramePart), Refusal> {
+        let (held, bytes) = self.frame_held(&job_id, kept)?;
+        let total = bytes.len() as u64;
+        let (first, last) = match span {
+            FrameSpan::From { first, last } => (first, last),
+            FrameSpan::Last(back) => (total.saturating_sub(back), None),
+        };
+        if first >= total {
+            return Ok((held, FramePart::Beyond { total }));
         }
-        if kept != shapes::THE_FRAME {
-            return Err(Refusal::Unacceptable(ipc::WireError::raised(
-                "fleet.no_such_frame",
-                format!("no step of this Job kept a frame named `{kept}`"),
-                run_id(),
-            )));
-        }
-        Ok((shapes::frame(kept), shapes::THE_FRAME_BYTES.to_vec()))
+        let upto = last.map_or(total - 1, |last| last.min(total - 1));
+        Ok((
+            held,
+            FramePart::Span {
+                first,
+                bytes: bytes[first as usize..=upto as usize].to_vec(),
+                total,
+            },
+        ))
     }
 
     async fn list_workflows(&self) -> Result<Vec<WorkflowSummary>, Refusal> {

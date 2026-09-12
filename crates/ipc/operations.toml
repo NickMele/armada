@@ -111,7 +111,11 @@ The split is `get_check_output`'s and made against the same measurement. `KeptFr
 
 **Since 10.1 a person's press has run directories of its own**, `implement.again2.1.branch/home.png` beside the step's `implement.1.branch/home.png` — see `show_again`. The rows those name are the second list this resolves against, and the same allowlist rule holds for both.
 
-`agent_access` is `Yes` since `#697`, which is `#695`'s decision arriving: an agent that cannot see what its change drew has verified nothing. The door answers a frame as an MCP image block, and one over 64 KiB as this route rather than as fewer bytes — a truncated PNG is not a shorter PNG, which is the same argument this row makes about a window.
+**Since 11.6 a video is answered a span at a time, and only a video.** `#615`: a recording cannot be held whole before it plays, so Bridge skipped one over twenty mebibytes and downloaded the rest before a frame of it drew. This route honours `Range` on a frame whose media type is a video — 206 with `Content-Range`, 416 naming the length where the span starts past the end — and ignores it on everything else, which is what a caller reads as *answer it whole*. The window above is unchanged for every other kind, and the reason is the same one: half a log is a log, half an image is not an image, and half a recording is the part you are watching.
+
+**A long span is windowed rather than honoured.** A player opens a recording by asking for everything from byte zero, so a read that obeyed would load the file this exists to stop loading. Fewer bytes than were asked for is a legal answer and the player asks again — which is what keeps the allocation bounded by the window and not by the capture's length.
+
+`agent_access` is `Yes` since `#697`, which is `#695`'s decision arriving: an agent that cannot see what its change drew has verified nothing. The door answers a frame as an MCP image block, and one over 64 KiB as this route rather than as fewer bytes — a truncated PNG is not a shorter PNG, which is the same argument this row makes about a window. **The door asks for no span**: an agent reads a frame whole or not at all, and a recording is not something a session watches.
 """
 
 [operations.get_diff]

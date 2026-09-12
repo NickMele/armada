@@ -16,6 +16,7 @@ use crate::tests::fake::{at, running, FakeDaemon};
 use crate::tests::shapes;
 use crate::tests::shapes::{
     run_id, A_PROPOSAL, THE_ARGUMENT, THE_CALL, THE_DRONE, THE_FRAME, THE_MANIFEST, THE_OUTPUT,
+    THE_RECORDING,
 };
 use crate::{router, Broadcaster, Next, Served, Subscription, SERVED};
 
@@ -541,6 +542,138 @@ async fn a_frame_comes_back_as_the_file_and_says_what_it_is() {
         shapes::THE_FRAME_BYTES,
         "the file itself, and not a base64 of it inside an envelope"
     );
+}
+
+/// **A recording is answered one span at a time**, which is the whole of what
+/// makes a long one watchable: the surface refused a video over twenty
+/// mebibytes outright because nothing here could answer part of one. What is
+/// asserted is where the bytes start, what came back, and the length a player
+/// needs in order to seek by it.
+#[tokio::test]
+async fn a_video_is_answered_one_span_at_a_time() {
+    let events = Broadcaster::new();
+    let daemon = FakeDaemon::new(events.clone());
+    running(&daemon, "01RUNNING");
+    let app = wired(daemon, events);
+
+    let request = Request::builder()
+        .method("GET")
+        .uri(format!("/jobs/01RUNNING/frames/{THE_RECORDING}"))
+        .header("range", "bytes=4-8")
+        .body(Body::empty())
+        .expect("a well-formed request");
+    let response = app.oneshot(request).await.expect("the router answers");
+
+    assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+    let said = |name: &str| {
+        response
+            .headers()
+            .get(name)
+            .and_then(|said| said.to_str().ok())
+            .map(str::to_string)
+    };
+    assert_eq!(said("content-range").as_deref(), Some("bytes 4-8/26"));
+    assert_eq!(said("accept-ranges").as_deref(), Some("bytes"));
+    assert_eq!(said("content-type").as_deref(), Some("video/webm"));
+    assert_eq!(
+        said("x-content-type-options").as_deref(),
+        Some("nosniff"),
+        "a span of a file is still a file nothing may sniff"
+    );
+
+    let body = response
+        .into_body()
+        .collect()
+        .await
+        .expect("a body that reads")
+        .to_bytes()
+        .to_vec();
+    assert_eq!(body, b"efghi", "the span asked for, and not the file");
+}
+
+/// **A span past the end says how long the file is**, which is the one fact a
+/// player can act on — it asks again with a span that exists. A name the record
+/// does not hold is refused exactly as it is without a range: a seek is not a
+/// way around the allowlist.
+#[tokio::test]
+async fn a_span_past_the_end_names_the_length_and_never_the_file() {
+    let events = Broadcaster::new();
+    let daemon = FakeDaemon::new(events.clone());
+    running(&daemon, "01RUNNING");
+    let app = wired(daemon, events);
+
+    let ask = |uri: String, range: &'static str| {
+        let app = app.clone();
+        async move {
+            let request = Request::builder()
+                .method("GET")
+                .uri(uri)
+                .header("range", range)
+                .body(Body::empty())
+                .expect("a well-formed request");
+            app.oneshot(request).await.expect("the router answers")
+        }
+    };
+
+    let response = ask(
+        format!("/jobs/01RUNNING/frames/{THE_RECORDING}"),
+        "bytes=99-",
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::RANGE_NOT_SATISFIABLE);
+    assert_eq!(
+        response
+            .headers()
+            .get("content-range")
+            .and_then(|said| said.to_str().ok()),
+        Some("bytes */26"),
+        "the length, which is what a player asks again with"
+    );
+
+    let response = ask(
+        "/jobs/01RUNNING/frames/never.1/gone.webm".to_string(),
+        "bytes=0-",
+    )
+    .await;
+    assert_eq!(
+        response.status(),
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "a name no row holds reaches no file, range or no range"
+    );
+}
+
+/// **Streaming is for video, and everything else is answered whole.** An SVG
+/// and an HTML file are served as bytes because a browser executes either, and
+/// a range that carved one up would be a second path to the thing that decision
+/// closed. A `Range` on an image is ignored, which is always legal.
+#[tokio::test]
+async fn a_range_on_anything_but_a_video_is_ignored() {
+    let events = Broadcaster::new();
+    let daemon = FakeDaemon::new(events.clone());
+    running(&daemon, "01RUNNING");
+    let app = wired(daemon, events);
+
+    let request = Request::builder()
+        .method("GET")
+        .uri(format!("/jobs/01RUNNING/frames/{THE_FRAME}"))
+        .header("range", "bytes=0-1")
+        .body(Body::empty())
+        .expect("a well-formed request");
+    let response = app.oneshot(request).await.expect("the router answers");
+
+    assert_eq!(response.status(), StatusCode::OK, "not a 206");
+    assert!(
+        response.headers().get("accept-ranges").is_none(),
+        "and it does not invite one either"
+    );
+    let body = response
+        .into_body()
+        .collect()
+        .await
+        .expect("a body that reads")
+        .to_bytes()
+        .to_vec();
+    assert_eq!(body, shapes::THE_FRAME_BYTES, "the whole file");
 }
 
 /// A frame the record does not hold is **not** the Job being absent — the same

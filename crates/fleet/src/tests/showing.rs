@@ -15,7 +15,11 @@ use std::time::Duration;
 use config::Manifest;
 use core_model::{Attempt, Side, StepFrame, StepId};
 
-use crate::showing::{frame_bytes, kept, named, show, tail, Aimed, ComingUp, NotShown, Shown};
+use api::{FramePart, FrameSpan};
+
+use crate::showing::{
+    frame_bytes, frame_part, kept, named, show, tail, Aimed, ComingUp, NotShown, Shown,
+};
 use crate::tests::tmp::TempDir;
 
 const JOB: &str = "01J0000000000000000000JOB0";
@@ -136,6 +140,84 @@ fn a_row_whose_file_is_gone_is_the_same_answer_as_a_name_that_was_never_one() {
     assert!(
         frame_bytes(&root, "implement.1/reclaimed.png", &frames).is_none(),
         "the row is there and the file is not, which is nothing to answer with"
+    );
+}
+
+/// **A span, and the length beside it.** What makes a recording playable is
+/// that a reader can ask for the middle of one without the rest being read, so
+/// what is asserted is the bytes, where they start, and the total a player
+/// seeks by — and that the record is still the only thing resolving a name.
+#[test]
+fn a_ranged_read_answers_one_span_and_still_resolves_against_the_record() {
+    let dir = TempDir::new();
+    let root = dir.path();
+    let at = format!(".armada/frames/{HANDLE}/implement.1");
+    std::fs::create_dir_all(root.join(&at)).expect("the frames directory");
+    std::fs::write(
+        root.join(&at).join("walk.webm"),
+        b"abcdefghijklmnopqrstuvwxyz",
+    )
+    .expect("a recording");
+
+    let frames = vec![store::KeptFrame {
+        step: StepId::new("implement"),
+        attempt: 1,
+        frame: StepFrame {
+            name: "walk.webm".to_string(),
+            path: format!("{at}/walk.webm"),
+            bytes: 26,
+            side: Side::Branch,
+            digest: String::from("a1b2c3d4e5f60718"),
+        },
+    }];
+    let root = root.to_string_lossy().into_owned();
+    let asked = |span| frame_part(&root, "implement.1/walk.webm", &frames, span);
+
+    let (held, part) = asked(FrameSpan::From {
+        first: 4,
+        last: Some(8),
+    })
+    .expect("the row and its file");
+    assert_eq!(held.frame.name, "walk.webm");
+    match part {
+        FramePart::Span {
+            first,
+            bytes,
+            total,
+        } => {
+            assert_eq!(first, 4);
+            assert_eq!(bytes.as_slice(), b"efghi");
+            assert_eq!(total, 26, "the length a player seeks by");
+        }
+        FramePart::Beyond { .. } => panic!("a span inside the file is not beyond it"),
+    }
+
+    // The last few bytes, which is how a container's index is read.
+    let (_, part) = asked(FrameSpan::Last(3)).expect("the row and its file");
+    assert!(matches!(part, FramePart::Span { first: 23, .. }));
+
+    // Past the end is not a refusal: the file is there and the span is not.
+    let (_, part) = asked(FrameSpan::From {
+        first: 99,
+        last: None,
+    })
+    .expect("the row and its file");
+    assert!(matches!(part, FramePart::Beyond { total: 26 }));
+
+    // **The record is still the allowlist.** A seek must not become the way
+    // around the rule a whole read follows.
+    assert!(
+        frame_part(
+            &root,
+            "implement.1/../../etc/passwd",
+            &frames,
+            FrameSpan::From {
+                first: 0,
+                last: None,
+            },
+        )
+        .is_none(),
+        "a name no row holds reaches no file, whatever it spells"
     );
 }
 
