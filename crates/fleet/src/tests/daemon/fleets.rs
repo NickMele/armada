@@ -34,6 +34,7 @@ use crate::headroom::{Bytes, Headroom, Polling, Spare};
 use crate::holding::Reclaiming;
 use crate::judging::JudgeBudget;
 use crate::noticing::Noticing;
+use crate::permitting::PermissionHold;
 use crate::ports::PortRange;
 use crate::slots::Concurrency;
 use crate::tests::tmp::TempDir;
@@ -148,6 +149,12 @@ pub fn fitted_with(
         // commands answer in milliseconds, so this only slows a genuine hang's
         // failure rather than a passing suite.
         command_budget: CommandBudget::of(Duration::from_secs(5)),
+        // **Out of reach, and not the five seconds beside it.** No fixture here
+        // should ever reach the end of a hold, and `until_waiting` polls for two
+        // seconds before it gives up — so five would be close enough for a
+        // loaded machine to end the hold under a case that was never about it.
+        // The hold cases plant their own, short enough to outlive.
+        permission_hold: PermissionHold::of(Duration::from_secs(30)),
         judge_model: Model::named("the-cheap-model").expect("a model name"),
         proposer_model: Model::named("the-cheap-model").expect("a model name"),
         // Resolves nothing, so every fixture but `proposing`'s own behaves

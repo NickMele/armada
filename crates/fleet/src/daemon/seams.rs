@@ -112,6 +112,11 @@ where
     pub(crate) fn command_budget(&self) -> crate::commanding::CommandBudget {
         self.command_budget
     }
+    /// How long a permission question is held inside the Drone's call. See
+    /// [`crate::permitting::PermissionHold`].
+    pub(crate) fn permission_hold(&self) -> crate::permitting::PermissionHold {
+        self.permission_hold
+    }
     /// What this Job may spend: the composition root's constant, then
     /// `armada.yml`'s `drone.cost_cap_micros_per_job`, then the Job's own
     /// column. `Allowance::at` is where the order is written.

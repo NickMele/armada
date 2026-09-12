@@ -4,9 +4,16 @@
 //! refuses and the fold that classifies the ending sees the refusal; Ask me
 //! holds the call until a person answers and the answer is what the call
 //! returns; an allow is remembered; and the Board row says the Job waits on a
-//! person. Not proved here: the hold running out, which is four real minutes.
-//! `Fleet::permission` is called with the Job id the peer lookup would have
-//! produced, as `crate::tests::questioning` calls `ask_question`.
+//! person. `Fleet::permission` is called with the Job id the peer lookup would
+//! have produced, as `crate::tests::questioning` calls `ask_question`.
+//!
+//! **The hold running out is proved on a planted hold.** [`PermissionHold`] is
+//! a fitting, so the last three cases hold a question for milliseconds and
+//! outlive it — what ships is four real minutes, and no case waits it.
+//!
+//! **Past 500 lines and staying one file.** The hold cases are the answer cases
+//! read at a later moment: splitting them off would put the fixture, the fake
+//! Drone and the `after` event in two places.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -19,8 +26,8 @@ use ipc::mcp::{Incoming, PermissionAsked};
 use ipc::{CommandAnswer, CommandInFlight};
 use testkit::{FakeHarness, FakeJudge, FakeVcs, FakeWorkProduct, Sketch};
 
-use crate::daemon::Fleet;
-use crate::permitting::{Answered, NotPermitted, Refusing};
+use crate::daemon::{Fittings, Fleet};
+use crate::permitting::{Answered, NotPermitted, PermissionHold, Refusing};
 use crate::tests::admitted::dispatched;
 use crate::tests::daemon::{a_proposal, fitted_with, one, worktree_directory};
 use crate::tests::tmp::TempDir;
@@ -82,11 +89,7 @@ pub(super) fn a_drone_that_reached_for(call: &str) -> FakeHarness {
 }
 
 pub(super) fn a_fleet_with(home: &TempDir, harness: FakeHarness) -> Fixture {
-    a_fleet_judged_by(
-        home,
-        harness,
-        Arc::new(FakeJudge::that_fails("no model is asked about a command")),
-    )
+    Fleet::assembled(the_fittings(home, harness))
 }
 
 /// The same Fleet, with the model call scripted. **The judge is handed in and
@@ -97,10 +100,27 @@ pub(super) fn a_fleet_judged_by(
     harness: FakeHarness,
     judge: Arc<FakeJudge>,
 ) -> Fixture {
-    let mut fittings = fitted_with(home, FakeWorkProduct::changed(&["src/parse.rs"]), harness);
-    fittings.workflows = one(one_step());
+    let mut fittings = the_fittings(home, harness);
     fittings.judge = judge;
     Fleet::assembled(fittings)
+}
+
+/// [`a_fleet_with`], holding a question for the time named rather than the
+/// fixture's thirty seconds — what lets a case outlive a hold.
+fn a_fleet_holding_for(home: &TempDir, harness: FakeHarness, hold: Duration) -> Fixture {
+    let mut fittings = the_fittings(home, harness);
+    fittings.permission_hold = PermissionHold::of(hold);
+    Fleet::assembled(fittings)
+}
+
+fn the_fittings(
+    home: &TempDir,
+    harness: FakeHarness,
+) -> Fittings<FakeHarness, FakeVcs, FakeWorkProduct> {
+    let mut fittings = fitted_with(home, FakeWorkProduct::changed(&["src/parse.rs"]), harness);
+    fittings.workflows = one(one_step());
+    fittings.judge = Arc::new(FakeJudge::that_fails("no model is asked about a command"));
+    fittings
 }
 
 pub(super) async fn started(fleet: &Fixture, home: &TempDir) -> JobId {
@@ -141,6 +161,38 @@ fn refused(heard: &[DroneEvent], call: &str) -> bool {
         .iter()
         .any(|event| matches!(event, DroneEvent::Refused { call: refused, .. } if refused == call))
 }
+
+/// How many lines the Drone has read from Fleet: the fake answers every one
+/// with `ANSWERED`, scripted to this call. **Nothing writes to a Drone's input
+/// on the in-the-call path**, so a count that rises is a permission turn and
+/// not an answer that went back down the held call. Counted rather than looked
+/// for, because dispatch wrote the opening brief the same way.
+async fn lines_read(fleet: &Fixture) -> usize {
+    heard(fleet)
+        .await
+        .iter()
+        .filter(|event| matches!(event, DroneEvent::Called { call, .. } if call == "after"))
+        .count()
+}
+
+/// Wait until the Drone has read another line, or say it never did.
+async fn until_told(fleet: &Fixture, before: usize) -> bool {
+    for _ in 0..400 {
+        if lines_read(fleet).await > before {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    false
+}
+
+/// Long enough for a turn that was sent to have been read, which `until_told`
+/// takes a poll or two to see. What "and not also as a turn" is asserted after.
+const GRACE: Duration = Duration::from_millis(150);
+
+/// Short enough that a case can outlive it, and long enough that the question
+/// is on the slot and published before it runs out.
+const BRIEFLY: Duration = Duration::from_millis(50);
 
 /// Wait until a person is being asked, and hand back what they would see.
 pub(super) async fn until_waiting(fleet: &Fixture, job: &JobId) -> CommandInFlight {
@@ -506,4 +558,189 @@ async fn a_second_command_waits_behind_the_first() {
         !refused(&heard(&fleet).await, "c2"),
         "nothing about it is final"
     );
+}
+
+/// **The hold runs out, and the Drone is told to wait rather than refused.**
+/// The question stays on the slot, so the person whose answer was late still
+/// has one to answer.
+#[tokio::test]
+async fn a_hold_that_runs_out_tells_the_drone_to_wait() {
+    let home = TempDir::new();
+    let fleet = a_fleet_holding_for(&home, a_drone_that_reached_for("c1"), BRIEFLY);
+    let job = started(&fleet, &home).await;
+    fleet
+        .set_when_blocked(&job, WhenBlocked::AskMe)
+        .await
+        .unwrap();
+    let before = lines_read(&fleet).await;
+
+    let answer = fleet
+        .permission(&job, &asked("Bash", "npm publish", "c1"))
+        .await;
+
+    assert_eq!(
+        answer,
+        PermissionAnswer::Deny(Refusing::Asked.to_the_drone("npm publish")),
+        "asked, and nobody answered in time"
+    );
+    let PermissionAnswer::Deny(words) = &answer else {
+        unreachable!("the assertion above")
+    };
+    assert!(
+        words.contains("has been asked whether you may run"),
+        "{words}"
+    );
+    assert!(words.contains("Stop and wait"), "{words}");
+    let still = fleet
+        .command_awaited(&job)
+        .await
+        .expect("the question stands for a person who is late");
+    assert_eq!(still.call, "c1");
+    assert_eq!(still.detail, "npm publish");
+    assert_eq!(
+        lines_read(&fleet).await,
+        before,
+        "nothing was said to the Drone"
+    );
+    assert!(fleet
+        .store()
+        .lock()
+        .await
+        .allowed_commands(&job)
+        .unwrap()
+        .is_empty());
+}
+
+/// **The late answer reaches the Drone as a turn**, which is what the deny
+/// above told it to wait for: the Drone reads it, the allow is written down,
+/// the question is settled and nothing left the session.
+#[tokio::test]
+async fn a_later_answer_reaches_the_drone_as_a_turn() {
+    let home = TempDir::new();
+    let fleet = a_fleet_holding_for(&home, a_drone_that_reached_for("c1"), BRIEFLY);
+    let job = started(&fleet, &home).await;
+    fleet
+        .set_when_blocked(&job, WhenBlocked::AskMe)
+        .await
+        .unwrap();
+    let before = lines_read(&fleet).await;
+
+    let answer = fleet
+        .permission(&job, &asked("Bash", "npm publish", "c1"))
+        .await;
+    assert_eq!(
+        answer,
+        PermissionAnswer::Deny(Refusing::Asked.to_the_drone("npm publish"))
+    );
+
+    fleet
+        .answer_command(&job, "c1", Answered::of(CommandAnswer::AllowForJob, None))
+        .await
+        .expect("the question is still on the slot, late as the answer is");
+
+    assert!(
+        until_told(&fleet, before).await,
+        "the Drone reads the answer as a turn"
+    );
+    assert!(
+        fleet.command_awaited(&job).await.is_none(),
+        "and the question is settled"
+    );
+    let allowed = fleet.store().lock().await.allowed_commands(&job).unwrap();
+    assert_eq!(allowed.len(), 1);
+    assert_eq!(allowed[0].run, "npm publish");
+    assert_eq!(
+        fleet.load(&job).await.unwrap().status(),
+        JobStatus::Running,
+        "the Drone never left its session"
+    );
+}
+
+/// **Answered inside the hold, and not again as a turn.** The call carries the
+/// answer, and past the end of a hold the Drone has still been told nothing —
+/// the other half of "never both" is [`a_later_answer_reaches_the_drone_as_a_turn`],
+/// where the call has already given up.
+#[tokio::test]
+async fn an_answer_inside_the_hold_goes_down_the_call_only() {
+    let home = TempDir::new();
+    let hold = Duration::from_millis(500);
+    let fleet = a_fleet_holding_for(&home, a_drone_that_reached_for("c1"), hold);
+    let job = started(&fleet, &home).await;
+    fleet
+        .set_when_blocked(&job, WhenBlocked::AskMe)
+        .await
+        .unwrap();
+    let asking = asked("Bash", "npm publish", "c1");
+    let before = lines_read(&fleet).await;
+
+    let (answer, answered) = tokio::join!(fleet.permission(&job, &asking), async {
+        until_waiting(&fleet, &job).await;
+        fleet
+            .answer_command(&job, "c1", Answered::of(CommandAnswer::AllowForJob, None))
+            .await
+    });
+
+    answered.expect("the call is still held");
+    assert_eq!(answer, PermissionAnswer::Allow);
+    tokio::time::sleep(hold + GRACE).await;
+    assert_eq!(
+        lines_read(&fleet).await,
+        before,
+        "answered in the call, so no turn follows it"
+    );
+}
+
+/// **An answer racing the end of the hold arrives once**: down the call or as a
+/// turn, never both and never neither. Which side wins is the machine's to
+/// decide — the assertion is that one of them did, and that the question is
+/// settled either way.
+#[tokio::test]
+async fn an_answer_at_the_end_of_the_hold_is_delivered_once() {
+    for round in 0..5 {
+        let home = TempDir::new();
+        let fleet = a_fleet_holding_for(&home, a_drone_that_reached_for("c1"), BRIEFLY);
+        let job = started(&fleet, &home).await;
+        fleet
+            .set_when_blocked(&job, WhenBlocked::AskMe)
+            .await
+            .unwrap();
+        let asking = asked("Bash", "npm publish", "c1");
+        let before = lines_read(&fleet).await;
+
+        // Across the end of the hold rather than at one point either side of
+        // it: the rounds run from well inside it to well past it, so both
+        // deliveries are taken without either being predicted.
+        let fired_at = Duration::from_millis(30 + 10 * round);
+        let (answer, answered) = tokio::join!(fleet.permission(&job, &asking), async {
+            until_waiting(&fleet, &job).await;
+            tokio::time::sleep(fired_at).await;
+            fleet
+                .answer_command(&job, "c1", Answered::of(CommandAnswer::AllowForJob, None))
+                .await
+        });
+
+        answered.unwrap_or_else(|why| panic!("round {round}: the answer was not taken: {why}"));
+        if answer == PermissionAnswer::Allow {
+            tokio::time::sleep(GRACE).await;
+            assert_eq!(
+                lines_read(&fleet).await,
+                before,
+                "round {round}: the call carried it, and a turn carried it again"
+            );
+        } else {
+            assert_eq!(
+                answer,
+                PermissionAnswer::Deny(Refusing::Asked.to_the_drone("npm publish")),
+                "round {round}: the hold ended, so the call says to wait"
+            );
+            assert!(
+                until_told(&fleet, before).await,
+                "round {round}: the call gave up and no turn reached the Drone"
+            );
+        }
+        assert!(
+            fleet.command_awaited(&job).await.is_none(),
+            "round {round}: settled, whichever side carried it"
+        );
+    }
 }

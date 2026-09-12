@@ -31,6 +31,7 @@ use std::time::Duration;
 
 use adapters::{GitVcs, HeadlessAgent, IssueLookup};
 use config::Roster;
+use fleet::permitting::{self, PermissionHold};
 use fleet::runtime::{self, Presence, RuntimeFile, Staleness};
 use fleet::{
     detect_ceiling, Allowance, BindConnectProbe, Bytes, CheckBudget, Clock, CommandBudget,
@@ -816,6 +817,10 @@ fn assemble(
         judge_budget: JudgeBudget::of(PROVISIONAL_JUDGE_BUDGET),
         proposer_budget: JudgeBudget::of(PROVISIONAL_PROPOSER_BUDGET),
         command_budget: CommandBudget::of(PROVISIONAL_COMMAND_BUDGET),
+        // Not a `PROVISIONAL_` beside the others: the four minutes is derived
+        // from what the agent CLI itself waits, so it stays spelled beside that
+        // derivation and this line only names it.
+        permission_hold: PermissionHold::of(permitting::HOLD),
         judge_model,
         proposer_model,
         // The one link shape resolved before dispatch. See

@@ -11,11 +11,8 @@
 //! there is told, or the step restarts where none is.
 
 use std::path::Path;
-use std::time::Duration;
 
-use adapter_traits::{
-    AgentHarness, CallDetail, CommitTime, Delivery, Vcs, WorkProduct, Worktree, PERMISSION_WAIT,
-};
+use adapter_traits::{AgentHarness, CallDetail, CommitTime, Delivery, Vcs, WorkProduct, Worktree};
 use api::PermissionAnswer;
 use config::Manifest;
 use core_model::{
@@ -31,10 +28,6 @@ use crate::daemon::Fleet;
 use crate::permitting::{first, Answered, First, Permitted, Refusing, Waiting};
 use crate::resume::Steer;
 use crate::session::{LiveSession, Occasion};
-
-/// How long a question is held open for a person: a minute under what the
-/// harness waits, so the answer the Drone gets is Fleet's and says why.
-const HOLD: Duration = Duration::from_secs(PERMISSION_WAIT.as_secs() - 60);
 
 /// What a person may answer about a command a Drone is waiting on. **All
 /// three, always**: a command that could not be allowed is refused before
@@ -253,7 +246,8 @@ where
         what: &str,
         answer: &mut oneshot::Receiver<Answered>,
     ) -> PermissionAnswer {
-        let answered = match tokio::time::timeout(HOLD, &mut *answer).await {
+        let held_for = self.permission_hold().duration();
+        let answered = match tokio::time::timeout(held_for, &mut *answer).await {
             Ok(answered) => answered.ok(),
             Err(_) => {
                 // **From here the answer is a turn.** The sender is taken under
