@@ -55,7 +55,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import type { PhaseStage, RunTreeStep, StepChapter } from "@armada/components";
+import type { PhaseStage, RunTreeStep } from "@armada/components";
 
 import { holdsText } from "./keys";
 import { LOG_REGION, rowOfPayload } from "./Log";
@@ -229,7 +229,7 @@ export type DetailShape = {
    * this file holds — so the chapters are assembled after it and this is how
    * they get back in. Nothing calls it during a render.
    */
-  chapters: () => readonly StepChapter[];
+  landings: () => readonly { id: string; opens: boolean }[];
   /** The strip, in order, or nothing on a step that has none. */
   stages: readonly PhaseStage[] | undefined;
   /**
@@ -619,7 +619,7 @@ function withStep(
  * reader back to the top of a thing they are reading down.
  */
 function chapter(by: 1 | -1, shape: DetailShape, on: Moves): boolean {
-  const opens = openable(shape.chapters());
+  const opens = openable(shape.landings());
   if (opens.length === 0) return false;
   on.chapter((was) => {
     const at = was === null ? -1 : opens.indexOf(was);
@@ -656,10 +656,8 @@ function diff(shape: DetailShape): boolean {
  * `content` would have left the brackets stopping at chapter one and nothing
  * would have said so.
  */
-function openable(chapters: readonly StepChapter[]): string[] {
-  return chapters
-    .filter((held) => held.content !== undefined || held.act !== undefined)
-    .map((held) => held.id);
+function openable(landings: readonly { id: string; opens: boolean }[]): string[] {
+  return landings.filter((held) => held.opens).map((held) => held.id);
 }
 
 /** A chapter's own control, by the name this app writes on it. */

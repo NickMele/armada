@@ -87,7 +87,7 @@ import { DIFF_CHAPTER, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-ke
 import { useAtFloor } from "@armada/shell";
 import { DetailSheet, holdOf, type HeldAt, type OpenSheet } from "./Sheets";
 import { chaptersOf } from "./chapters";
-import { stepTimelineOf } from "./timeline";
+import { landingsOf, stepTimelineOf } from "./timeline";
 import { againOf, useShowAgain, type ShowAgainCall } from "./again";
 import { span } from "./duration";
 import { ordered } from "./facts";
@@ -478,7 +478,7 @@ export function JobDetail({
   // from what this holds; see `DetailShape.chapters`.
   const keys = useDetailKeys({
     run,
-    chapters: () => chapters,
+    landings: () => landingsOf(timeline ?? []),
     stages: phases?.stages,
     // `f`, from `actions.toml` — `open_diff`, scope `detail`. It opens the
     // layer now rather than a chapter: the patch stopped being something the

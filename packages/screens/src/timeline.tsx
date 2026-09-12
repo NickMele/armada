@@ -16,11 +16,12 @@
 // their order is the phase order — instructed, working, checks, judge — which
 // is the order the strip already draws and the order Fleet runs them in. A
 // timeline that claimed measured times for them would be inventing them.
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 
 import type { ChangedFile, CheckRun, Judged, StepAttempt, StepDetail, Turn } from "@armada/protocol";
 import type { StepActivity, StepChapter, StepTimelineAttempt } from "@armada/components";
 
+import { namesChapter } from "./detail-keys";
 import { span } from "./duration";
 import { askedOf, didNotPass } from "./gates";
 import { entriesOf } from "./story";
@@ -300,6 +301,9 @@ export function stepTimelineOf(
     current: attempt.current,
     rows: attempt.rows.map((row) => ({
       id: `${attempt.id}-${row.id}`,
+      // Named the way a chapter was, because `[` `]` land on whatever carries
+      // this — and what they land on is a phase of an attempt now.
+      marker: namesChapter(`${attempt.id}-${row.id}`),
       name: row.name,
       activity: row.mark,
       ...(row.meta === undefined ? {} : { meta: row.meta }),
@@ -330,9 +334,13 @@ function bodyOf(
     return chapter === undefined ? [] : [chapter];
   });
   if (mine.length === 0) return {};
-  // One act to a row: the first chapter that carries one. A phase owning three
-  // chapters has at most one thing worth leaving the panel for.
-  const act = mine.find((chapter) => chapter.act !== undefined)?.act;
+  // **Every act the phase's chapters carry, not the first.** Working owns the
+  // log, what was shown and what was produced, and each has somewhere of its
+  // own to go — keeping only the first took `Open the diff` off the panel
+  // entirely, which the story asserting it caught.
+  const acts = mine.flatMap((chapter) =>
+    chapter.act === undefined ? [] : [{ id: chapter.id, act: chapter.act }],
+  );
   return {
     body: mine.map((chapter) => (
       <section key={chapter.id}>
@@ -341,7 +349,11 @@ function bodyOf(
         {chapter.content}
       </section>
     )),
-    ...(act === undefined ? {} : { act }),
+    ...(acts.length === 0
+      ? {}
+      : {
+          act: acts.map((one) => <Fragment key={one.id}>{one.act}</Fragment>),
+        }),
   };
 }
 
@@ -361,4 +373,20 @@ function saidOf(attempt: TimelineAttempt): string | undefined {
           ? "stopped"
           : attempt.outcome;
   return attempt.took === undefined ? said : `${said} · ${attempt.took}`;
+}
+
+/** One thing `[` `]` can land on: a row, and whether it opens to anything. */
+export type Landing = { id: string; opens: boolean };
+
+/**
+ * The rows a keyboard can walk, in the order they are drawn.
+ *
+ * **Every attempt's rows, not just the one being read.** A folded attempt is
+ * still on the screen and its rows are still in the document, so a key that
+ * skipped them would walk past a section a reader can see.
+ */
+export function landingsOf(attempts: readonly StepTimelineAttempt[]): Landing[] {
+  return attempts.flatMap((attempt) =>
+    attempt.rows.map((row) => ({ id: row.id, opens: row.body !== undefined })),
+  );
 }

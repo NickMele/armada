@@ -38,6 +38,15 @@ export type StepTimelineRow = {
    */
   body?: ReactNode;
   /**
+   * Attributes naming this row for whatever finds it — the marker a keyboard
+   * map queries rather than reaching for the class this component ships.
+   *
+   * **Written by the caller, because the name is the caller's.** A row is one
+   * phase of one attempt and only the surface assembling it knows what to call
+   * that; a name minted here would be a second vocabulary for the same row.
+   */
+  marker?: Record<string, string>;
+  /**
    * The control on the row's line — `Open the log`, `Open the diff`.
    *
    * **A sibling of the opening control, never inside it**, which is the rule
@@ -175,6 +184,7 @@ function Row({
           className="armada-steps__line armada-steps__line--opens"
           aria-expanded={open}
           onClick={onToggle}
+          {...row.marker}
         >
           {line}
         </button>
