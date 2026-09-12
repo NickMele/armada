@@ -276,9 +276,9 @@ const api: BridgeApi = {
     ipcRenderer.invoke(CHANNELS.readEvidence, jobId),
 
   // The worktree against the branch it was cut from — **the one entry here
-  // that spends the patch bytes**. Deliberately not reached by opening a Job:
-  // the renderer calls it from the surface that shows a diff, which is the act
-  // the bytes were separated for.
+  // that spends the patch bytes**, and asked for more than once: on opening a
+  // Job, on the press that opens the diff, and while that sheet is open and
+  // the file list moves under it. `shared/api.ts` holds why.
   readDiff: (jobId: string | null): Promise<void> =>
     ipcRenderer.invoke(CHANNELS.readDiff, jobId),
 

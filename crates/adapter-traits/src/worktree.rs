@@ -206,10 +206,12 @@ impl Worktree {
 
     /// The branch this one is measured against — the Manifest's `base`.
     ///
-    /// **A builder rather than a third argument**, because the reading that
-    /// needs it is one of several and every other caller of [`Worktree::at`] is
-    /// a fake or a test that has no Manifest to name. A worktree with no base
-    /// is a legal value and says so.
+    /// **A builder rather than a third argument**, because [`Worktree::at`] is
+    /// called where there is no Manifest to read — this crate's own callers,
+    /// and every fake. Fleet puts the base on before it hands one to a reading
+    /// — `fleet::basing`'s `based` is the one place that does it — and a
+    /// worktree arriving without one is a legal value that measures from the
+    /// checkout's HEAD instead.
     pub fn from_base(mut self, base: impl Into<String>) -> Worktree {
         self.base = Some(base.into());
         self

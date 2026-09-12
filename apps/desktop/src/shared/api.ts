@@ -387,8 +387,8 @@ export type BridgeApi = {
    * naming the Job, and this walks a process table and a directory.
    */
   readResources: (jobId: string | null) => Promise<void>;
-  /** Read the run sheet — Journey 9 — or `null` to stop. Opened by the sheet,
-   * not the Job: `readDiff`'s rule, one read on demand. */
+  /** Read the run sheet — Journey 9 — or `null` to stop. Opened by the sheet
+   * and not by the Job, which is what `readDiff` no longer is. */
   watchRunSheet: (jobId: string | null) => Promise<void>;
   /** One run's output, or `null` to stop — opened for a run `startRun` just
    * began, or one the sheet is reopening onto in flight. */
@@ -437,9 +437,15 @@ export type BridgeApi = {
   readEvidence: (jobId: string | null) => Promise<void>;
   /**
    * Read one Job's worktree against its branch, or `null` to stop. Read-only.
-   * **The one capability here that spends the patch bytes**, and deliberately
-   * not reachable by opening a Job — the renderer calls it from the surface
-   * that draws a diff, which is the act the bytes were separated for.
+   * **The one capability here that spends the patch bytes.**
+   *
+   * **Asked for more than once, and that is the point.** It said it was not
+   * reachable by opening a Job, which stopped being true when the Produced
+   * chapter started opening a file to what it actually wrote. The reading is
+   * now taken when a Job opens, again on the press that opens the diff, and
+   * again while that sheet is open and the file list moves under it — because
+   * a patch read once on a running Job is the worktree as it was before its
+   * Drone wrote. `packages/screens/src/produced.ts` holds what asks.
    */
   readDiff: (jobId: string | null) => Promise<void>;
   /**

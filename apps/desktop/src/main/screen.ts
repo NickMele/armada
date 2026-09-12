@@ -62,7 +62,7 @@ type Reviewed = {
  * | What it holds, `resources` | Every event naming it | Every occasion |
  * | Its transition history | Every event naming it, where unfolded | Every occasion |
  * | Its turns, and its own log | Their own sockets | Reopened where down |
- * | What its Drones claimed, and the patch | A press, and nothing else | On a reconnection where it is showing a failure; on Refresh always |
+ * | What its Drones claimed, and the patch | The surface that draws it, asking | On a reconnection where it is showing a failure; on Refresh always |
  *
  * **Three per-Job things are deliberately absent, and each is absent for its
  * own reason.** The footprint is pushed by `job.files_changed` and has no route
