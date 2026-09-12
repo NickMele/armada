@@ -20,8 +20,8 @@
 
 import type { ChangedFile } from "@armada/components";
 
-import type { JobFilesChanged } from "@armada/protocol";
-import type { JobFootprint, TouchedFile } from "@armada/protocol";
+import type { JobFilesChanged, Turn } from "@armada/protocol";
+import type { ChangedFile as WireFile, JobFootprint, TouchedFile } from "@armada/protocol";
 import { filesOf, footprintNote } from "./files";
 
 /** One reading, shaped for the chapter that draws it. */
@@ -100,4 +100,23 @@ export function keptNote(kept: JobFootprint): string | undefined {
   return outside === 0
     ? undefined
     : `${outside} of ${kept.files.length} paths are outside the plans the steps declared.`;
+}
+
+/**
+ * What the live footprint last said this Job has written, as one value an
+ * effect can depend on.
+ *
+ * **The signal the diff sheet re-reads on.** The chapter and the sheet read one
+ * worktree at two different times, and the sheet's reading was taken when the
+ * Job was opened — so a Drone that wrote afterwards left `0 files` beside a
+ * list naming seven. This is what says the list moved.
+ *
+ * The last reading wins, `timeline.tsx`'s rule for the same event: Fleet
+ * republishes the footprint only where it changed, so a Drone editing the same
+ * files for an hour produces one value and no re-read.
+ */
+export function wroteSoFar(turns: readonly Turn[]): string {
+  let files: readonly WireFile[] = [];
+  for (const turn of turns) if (turn.saw.event === "produced") files = turn.saw.files;
+  return files.map((file) => `${file.change} ${file.path}`).join("\n");
 }
