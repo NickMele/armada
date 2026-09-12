@@ -30,8 +30,8 @@ use core_model::JobReference;
 use ipc::{
     AlertList, CallArguments, DroneDetail, DroneId, DroneList, FleetCapacity, FleetHealth,
     FleetUsage, JobDetail, JobDiff, JobEvidence, JobHistory, JobId, JobList, JobRemarks,
-    JobResources, ManifestConfig, ManifestDrift, ManifestId, ManifestReading, ManifestSummary,
-    ModelChoices, Work, WorkflowSummary, WorktreesHeld,
+    JobResources, ManifestConfig, ManifestDrift, ManifestFile, ManifestId, ManifestReading,
+    ManifestSummary, ModelChoices, Work, WorkflowSummary, WorktreesHeld,
 };
 use store::{LoadJobError, ResolveJobError};
 
@@ -188,6 +188,16 @@ where
     /// booted on.
     async fn get_manifest_reading(&self) -> Result<Option<ManifestReading>, Refusal> {
         Ok(self.last_reading())
+    }
+
+    /// `armada.yml` as it is on disk, for the view that edits it —
+    /// [`editing`](mod@crate::editing).
+    ///
+    /// **Unparsed, and whole.** A file that does not parse is the case a
+    /// person opening this is most likely to be in, and what the parse came to
+    /// is `get_manifest_reading` beside it.
+    async fn get_manifest_file(&self) -> Result<ManifestFile, Refusal> {
+        self.read_manifest_file()
     }
 
     /// Whether the repository still has what `armada.yml` names —

@@ -20,8 +20,8 @@ use ipc::{
     AlertList, CallArguments, CheckOutput, CheckoutRunList, CheckoutRunSheet, CommandExplained,
     DroneDetail, DroneId, DroneList, FilesFound, FleetCapacity, FleetHealth, FleetUsage, JobDetail,
     JobDiff, JobEvidence, JobHistory, JobId, JobList, JobRemarks, JobResources, KeptFrame,
-    ManifestConfig, ManifestDrift, ManifestId, ManifestReading, ManifestSummary, ModelChoices,
-    ReportList, RunList, RunOutput, RunSheet, WorkflowSummary, WorktreesHeld,
+    ManifestConfig, ManifestDrift, ManifestFile, ManifestId, ManifestReading, ManifestSummary,
+    ModelChoices, ReportList, RunList, RunOutput, RunSheet, WorkflowSummary, WorktreesHeld,
 };
 
 /// What a caller asked for of a frame's bytes.
@@ -200,6 +200,22 @@ pub trait Queries: Send + Sync + 'static {
     fn get_manifest_reading(
         &self,
     ) -> impl Future<Output = Result<Option<ManifestReading>, Refusal>> + Send;
+
+    /// `get_manifest_file` — `armada.yml` as it is on disk, for the view that
+    /// edits it.
+    ///
+    /// **The half a person acts with**, where
+    /// [`Queries::get_manifest_reading`] is the half that reports.
+    ///
+    /// **The bytes, not a document.** Nothing is parsed, so a file that does
+    /// not parse reads back as well as one that does — the case a person
+    /// opening this is most likely to be in.
+    ///
+    /// **No path in, and no `manifest_id`**, matching the two reads beside it:
+    /// a Fleet serves one repository and resolves its own file.
+    ///
+    /// [`Refusal::Fault`] where the file will not open.
+    fn get_manifest_file(&self) -> impl Future<Output = Result<ManifestFile, Refusal>> + Send;
 
     /// `get_manifest_drift` — whether the repository still has what
     /// `armada.yml` names, line by line.

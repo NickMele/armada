@@ -32,6 +32,9 @@ mod daemon;
 /// The agent's door: the HTTP surface, spoken as MCP. **Who may open it is
 /// `#698`; what it is scoped to is here.**
 mod door;
+/// The Manifest file's two routes: read its text, and write a corrected one
+/// back. Journey 9, *Editing*.
+mod editing;
 /// The reads that belong to no Job: the roster, the machine, the spend and
 /// what crossed the stream.
 mod fleetwide;

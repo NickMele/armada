@@ -21,9 +21,9 @@ use crate::daemon::Refusal;
 use ipc::{
     AnswerCommand, CapRaise, ChangesRequested, CheckoutRunRecord, CheckoutRunUnderway,
     ChosenAnswer, FileReport, JobExamined, JobForgotten, JobId, JobSummary, JudgeAnswered,
-    NamedRun, ProposeJob, Redirection, Redispatched, RemarksTakenUp, Report, RestartRequested,
-    RunRecord, RunUnderway, SetWhenBlocked, SetWhenRefused, StartCheckoutRun, StartRun, TurnRaise,
-    WorktreeReclaimed,
+    ManifestSaved, NamedRun, ProposeJob, Redirection, Redispatched, RemarksTakenUp, Report,
+    RestartRequested, RunRecord, RunUnderway, SaveManifestFile, SetWhenBlocked, SetWhenRefused,
+    StartCheckoutRun, StartRun, TurnRaise, WorktreeReclaimed,
 };
 
 /// Everything a client asks Fleet to do.
@@ -714,6 +714,26 @@ pub trait Commands: Send + Sync + 'static {
         &self,
         run: NamedRun,
     ) -> impl Future<Output = Result<CheckoutRunRecord, Refusal>> + Send;
+
+    /// `save_manifest_file` — write a corrected `armada.yml` to disk, and stop
+    /// there.
+    ///
+    /// **No staging, no commit, no formatting and no reserialisation.** The
+    /// bytes the caller sends are the bytes on disk — Journey 9, *Editing*.
+    ///
+    /// **A write that does not parse is still a write.** Refusing invalid YAML
+    /// would mean work in progress cannot be saved. What Fleet could not adopt
+    /// arrives as `manifest.reread`, previous values still in force.
+    ///
+    /// **What comes back is not a reading.** The watch settles before it
+    /// re-reads, so what the save moved is not known when this answers.
+    ///
+    /// [`Refusal::Fault`] where the file will not be written. Nothing about
+    /// the text can refuse it.
+    fn save_manifest_file(
+        &self,
+        save: SaveManifestFile,
+    ) -> impl Future<Output = Result<ManifestSaved, Refusal>> + Send;
 
     /// `start_server` — start a server the Manifest declares, in a Job's
     /// worktree on its span or in the main checkout on its own, **or answer

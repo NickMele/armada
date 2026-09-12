@@ -153,6 +153,19 @@ impl Commands for FakeDaemon {
     ) -> Result<ipc::CheckoutRunRecord, Refusal> {
         self.runs_nothing_here()
     }
+    /// The bytes echoed back as a path so a route test can tell the body
+    /// arrived. Nothing is written: what a save does to a file is
+    /// `fleet::editing`'s and is tested there against a real one.
+    async fn save_manifest_file(
+        &self,
+        save: ipc::SaveManifestFile,
+    ) -> Result<ipc::ManifestSaved, Refusal> {
+        Ok(ipc::ManifestSaved {
+            path: format!("armada.yml ({} bytes)", save.text.len()),
+            at: ipc::Instant::carried("2026-09-12T09:00:00.000Z"),
+        })
+    }
+
     /// Refused, naming what was asked for, so a route test can tell the body
     /// arrived. Holding a server is `fleet::servers`' and tested there.
     async fn start_server(

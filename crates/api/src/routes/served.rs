@@ -65,6 +65,23 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/manifest/drift",
     },
+    // The file itself, where the two rows above are readings of it. Singular
+    // and beside them for their reason, and never `/manifests/:id/file`: a
+    // Fleet resolves its own `armada.yml`, so there is no id to carry and no
+    // path a caller could compose.
+    Route {
+        operation: "get_manifest_file",
+        method: "GET",
+        path: "/manifest/file",
+    },
+    // The write, and the one route on this table that changes a tracked file in
+    // the main checkout. It spells the act in its last segment the way
+    // `start_checkout_run` does, so the read above stays the bare noun.
+    Route {
+        operation: "save_manifest_file",
+        method: "POST",
+        path: "/manifest/save_file",
+    },
     // The `@` mention popup's read. `?q=` rather than a path segment: the
     // query is a person's typed text, empty the instant they type `@` and
     // before anything follows it, and a path segment cannot carry that. A

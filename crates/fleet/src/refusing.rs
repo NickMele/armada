@@ -103,6 +103,10 @@ const REVIEW_UNREADABLE: &str = "fleet.review_unreadable";
 /// request is wrong, and the worktree existed a moment ago — `surviving_worktree`
 /// already refused otherwise.
 const REMARKS_FILE_UNWRITABLE: &str = "fleet.remarks_file_unwritable";
+/// The three Manifest-file codes. Why each is its own is `save_manifest_file`'s row.
+const MANIFEST_UNREADABLE: &str = "fleet.manifest_unreadable";
+const MANIFEST_UNWRITABLE: &str = "fleet.manifest_unwritable";
+const MANIFEST_MOVED: &str = "fleet.manifest_moved_under_the_edit";
 /// A press that named no comment at all. **A 422**, like a blank note: the
 /// request decoded and names something that cannot work.
 const NO_REMARKS_CHOSEN: &str = "fleet.no_remarks_chosen";
@@ -359,6 +363,21 @@ where
                 WireError::raised(NO_REMARKS_CHOSEN, said, self.run_id())
                     .about_job(ipc::JobId::from(job)),
             ),
+            // Fleet's own ground failing; a refused parse is `ManifestReading`.
+            Adrift::ManifestUnreadable { .. } => {
+                Refusal::Fault(WireError::raised(MANIFEST_UNREADABLE, said, self.run_id()))
+            }
+            Adrift::ManifestUnwritable { .. } => {
+                Refusal::Fault(WireError::raised(MANIFEST_UNWRITABLE, said, self.run_id()))
+            }
+            // A conflict, not a fault; the disk rides it, absent where it is gone.
+            Adrift::ManifestMovedUnderTheEdit { on_disk, .. } => {
+                let refused = WireError::raised(MANIFEST_MOVED, said, self.run_id());
+                Refusal::IllegalMove(match on_disk {
+                    Some(text) => refused.with_field("on_disk", WireValue::Str(text.clone())),
+                    None => refused,
+                })
+            }
             // The comments a person picked would not write to disk. A 500,
             // for `ReviewUnreadable`'s reason: nothing about the request is
             // wrong.

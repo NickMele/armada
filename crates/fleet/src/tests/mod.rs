@@ -47,6 +47,7 @@ mod detail;
 mod drifting;
 mod drone;
 mod dry_run;
+mod editing;
 mod epic;
 mod evidence;
 mod explaining;
