@@ -13,6 +13,7 @@ export * from "./primitives/Dialog/Dialog";
 export * from "./primitives/DropdownMenu/DropdownMenu";
 export * from "./primitives/Input/Input";
 export * from "./primitives/Kbd/Kbd";
+export * from "./primitives/MentionPopover/MentionPopover";
 export * from "./primitives/Popover/Popover";
 export * from "./primitives/Prose/Prose";
 export * from "./primitives/Radio/Radio";

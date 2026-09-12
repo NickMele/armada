@@ -249,3 +249,45 @@ it("names the allow it takes back by the whole command", async () => {
   expect(asked[0]?.path).toBe(`/jobs/${A_JOB.id}/remove_allowed_command`);
   expect(JSON.parse(asked[0]?.body ?? "null")).toEqual({ run: "pnpm add -D reselect@5.1.1" });
 });
+
+/** A listener that answers `search_files` with a fixed list, and records the path asked. */
+async function fleetListing(paths: string[], into: Asked[]): Promise<number> {
+  const server = createServer((request: IncomingMessage, response) => {
+    into.push({ path: request.url ?? "", body: "" });
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ paths }));
+  });
+  listening = server;
+  await new Promise<void>((up) => server.listen(0, "127.0.0.1", up));
+  return (server.address() as AddressInfo).port;
+}
+
+/**
+ * The `@` mention popup's own read. What a person typed rides the querystring,
+ * encoded — a bare `@` narrows with an empty `q` and a path or a space in the
+ * typed text must survive the trip.
+ */
+it("asks search_files with the typed query, encoded, and answers its paths", async () => {
+  const asked: Asked[] = [];
+  const commands = new JobCommands(
+    boardOn(await fleetListing(["src/log.rs", "README.md"], asked)),
+  );
+
+  const found = await commands.searchFiles("a query/with slashes");
+
+  expect(found).toEqual(["src/log.rs", "README.md"]);
+  expect(asked[0]?.path).toBe(`/manifest/files?q=${encodeURIComponent("a query/with slashes")}`);
+});
+
+/**
+ * Fires on every keystroke against a form that may not be connected to
+ * anything yet — see `JobCommands.searchFiles`'s own note. Nowhere to ask is
+ * answered empty, not as a refusal a popup would have to render.
+ */
+it("answers no paths at all where there is nowhere to ask", async () => {
+  const commands = new JobCommands({ ...boardOn(0), port: () => null });
+
+  const found = await commands.searchFiles("anything");
+
+  expect(found).toEqual([]);
+});

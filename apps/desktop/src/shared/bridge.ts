@@ -320,6 +320,7 @@ export const CHANNELS = {
   proposeFromRequest: "bridge:propose-from-request",
   stopProposal: "bridge:stop-proposal",
   stageAttachment: "bridge:stage-attachment",
+  searchFiles: "bridge:search-files",
   approveDispatch: "bridge:approve-dispatch",
   redispatchJob: "bridge:redispatch-job",
   killDrone: "bridge:kill-drone",

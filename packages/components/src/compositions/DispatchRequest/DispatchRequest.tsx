@@ -1,14 +1,18 @@
 import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ChangeEvent, ClipboardEvent, ReactNode } from "react";
+import { useRef } from "react";
 
+import { AttachmentChip } from "../../primitives/AttachmentChip/AttachmentChip";
 import { Badge } from "../../primitives/Badge/Badge";
 import { Button } from "../../primitives/Button/Button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../../primitives/Card/Card";
+import { MentionPopover, useMention } from "../../primitives/MentionPopover/MentionPopover";
 import { Textarea } from "../../primitives/Textarea/Textarea";
 import { ErrorNotice } from "../../errors/ErrorNotice/ErrorNotice";
 import type { DebugPayload } from "../../errors/ErrorNotice/ErrorNotice";
 import { ACTION } from "../../actions";
 import { JOB_STATUS } from "../../generated/vocabulary";
+import type { StagedAttachment } from "@armada/protocol";
 
 /**
  * Dispatch a job by describing the work. One field, one press, and the Job
@@ -95,6 +99,29 @@ export type DispatchRequestProps = {
    */
   request: string;
   onRequest: (request: string) => void;
+  /**
+   * Narrow the checkout against typed text, for the `@` mention popup —
+   * `crate::files::search` on the other side of the wire. Never rejects: a
+   * call that could not be made answers empty, the way `JobCommands.searchFiles`
+   * does, so a popup nobody may even have open never raises a toast.
+   */
+  onSearchFiles: (query: string) => Promise<readonly string[]>;
+  /**
+   * Files pasted or picked against the request, before the Job it will
+   * attach to exists. Controlled, the way `request` is — this draws the chips
+   * and the picker, and the caller carries what comes back on `onDispatch`.
+   */
+  attachments: readonly StagedAttachment[];
+  /**
+   * Put a picked or pasted file somewhere the Job can name, and answer with
+   * the path. Staged before any Job exists, so there is no id to key it on —
+   * the same call `Composer` makes through `onStage`.
+   */
+  onStage: (bytes: ArrayBuffer, filename: string, mimeType: string) => Promise<{ path: string }>;
+  /** One file staged, appended to `attachments`. */
+  onAttach: (attachment: StagedAttachment) => void;
+  /** Take a staged file back, by the path `onStage` answered with. */
+  onRemoveAttachment: (path: string) => void;
   /** Send it. Never called with a blank request — the control is off until one. */
   onDispatch: () => void;
   /** Fill the form in by hand instead. The override, and one press away. */
@@ -259,6 +286,11 @@ const NOTHING_CREATED = "Nothing was created and the request is unchanged.";
 export function DispatchRequest({
   request,
   onRequest,
+  onSearchFiles,
+  attachments,
+  onStage,
+  onAttach,
+  onRemoveAttachment,
   onDispatch,
   onEnterByHand,
   onReset,
@@ -275,6 +307,42 @@ export function DispatchRequest({
   const reading = proposal.at === "reading";
   const answered = proposal.at === "proposed";
   const empty = request.trim() === "";
+  // The hidden file input the "Attach" button clicks through. A ref rather
+  // than state because nothing here reads its value; `onChange` does.
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mention = useMention(request, onRequest, onSearchFiles);
+
+  /**
+   * One file staged and handed to `onAttach`. Shared by the picker and a
+   * pasted screenshot — both hand this the same three facts and differ only
+   * in where the bytes came from. Mirrors `Composer`'s own `stage()`.
+   */
+  async function stage(file: File): Promise<void> {
+    const bytes = await file.arrayBuffer();
+    const { path } = await onStage(bytes, file.name, file.type);
+    onAttach({ path, filename: file.name, mimeType: file.type });
+  }
+
+  function onFilesPicked(event: ChangeEvent<HTMLInputElement>): void {
+    const files = event.target.files;
+    if (files !== null) for (const file of Array.from(files)) void stage(file);
+    // Cleared so picking the same file again still fires `onChange`.
+    event.target.value = "";
+  }
+
+  /**
+   * A screenshot pasted straight into the Request field, without a trip to
+   * the file picker. `clipboardData.items` carries every kind a paste can
+   * hold; only image entries are staged here, and plain text still falls
+   * through to the field as text.
+   */
+  function onRequestPaste(event: ClipboardEvent<HTMLTextAreaElement>): void {
+    for (const item of Array.from(event.clipboardData.items)) {
+      if (!item.type.startsWith("image/")) continue;
+      const file = item.getAsFile();
+      if (file !== null) void stage(file);
+    }
+  }
 
   return (
     <Card className="armada-dispatch">
@@ -297,14 +365,64 @@ export function DispatchRequest({
               approving={approving}
             />
           ) : (
-            <Textarea
-              label="Request"
-              rows={4}
-              value={request}
-              placeholder={PLACEHOLDER}
-              disabled={reading || disabled}
-              onChange={(event) => onRequest(event.target.value)}
-            />
+            <>
+              <div className="armada-mention-anchor">
+                <Textarea
+                  label="Request"
+                  rows={4}
+                  value={request}
+                  placeholder={PLACEHOLDER}
+                  disabled={reading || disabled}
+                  onChange={mention.onFieldChange}
+                  onKeyDown={mention.onFieldKeyDown}
+                  onSelect={mention.onFieldSelect}
+                  onPaste={onRequestPaste}
+                />
+                {/* The `@` mention popup, directly under the field it opened
+                    on — see `MentionPopover`'s own note on why it is anchored
+                    there and not at the caret. */}
+                {mention.open ? (
+                  <MentionPopover
+                    query={mention.query}
+                    results={mention.results}
+                    active={mention.active}
+                    onHover={mention.onHover}
+                    onChoose={mention.onChoose}
+                  />
+                ) : null}
+              </div>
+              {/* Hidden behind the "Attach" button — no file input is ever
+                  drawn directly, the platform's own picker chrome is not this
+                  app's to style. */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={onFilesPicked}
+              />
+              <div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={reading || disabled}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Attach
+                </Button>
+                {attachments.length > 0 && (
+                  <div>
+                    {attachments.map((attachment) => (
+                      <AttachmentChip
+                        key={attachment.path}
+                        filename={attachment.filename}
+                        onRemove={() => onRemoveAttachment(attachment.path)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
           )}
 
           {/* The wait. The proposal still arrives whole; what moves here is

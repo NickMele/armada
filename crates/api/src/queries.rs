@@ -10,7 +10,7 @@
 //! `get_diff` spends the patch, `get_call` spends one argument, and both are
 //! separate routes so that the reads made on every refresh do not pay for them.
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::Response;
 use serde::Deserialize;
@@ -74,6 +74,29 @@ pub(crate) async fn get_capacity<D: Queries>(State(served): State<Served<D>>) ->
 pub(crate) async fn get_manifest_reading<D: Queries>(State(served): State<Served<D>>) -> Response {
     match served.daemon().get_manifest_reading().await {
         Ok(reading) => answer(StatusCode::OK, &reading, served.run_id()),
+        Err(refusal) => refused(refusal),
+    }
+}
+
+/// The `?q=` a person has typed after `@`. A query string rather than a path
+/// segment — `q` is empty the instant somebody types `@` and before anything
+/// follows it, which a path segment cannot carry. Absent decodes the same as
+/// empty: a caller that sends no parameter at all gets everything, up to the
+/// cap.
+#[derive(Deserialize)]
+pub(crate) struct Search {
+    #[serde(default)]
+    q: String,
+}
+
+/// Paths under the checkout narrowed against typed text, for Bridge's `@`
+/// mention popup. It never refuses — see `Queries::search_files`.
+pub(crate) async fn search_files<D: Queries>(
+    State(served): State<Served<D>>,
+    Query(Search { q }): Query<Search>,
+) -> Response {
+    match served.daemon().search_files(q).await {
+        Ok(found) => answer(StatusCode::OK, &found, served.run_id()),
         Err(refusal) => refused(refusal),
     }
 }

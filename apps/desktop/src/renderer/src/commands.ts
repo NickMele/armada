@@ -28,7 +28,14 @@
 import { useEffect, useState } from "react";
 
 import type { BridgeState } from "../../shared/bridge";
-import type { Artifact, Draft, FileReport, Outcome, WorktreeReclaimed } from "@armada/protocol";
+import type {
+  Artifact,
+  Draft,
+  FileReport,
+  Outcome,
+  StagedAttachment,
+  WorktreeReclaimed,
+} from "@armada/protocol";
 import type { CommandAnswer, StartRun, WhenBlocked } from "@armada/protocol";
 import type { Answered, ConfirmableAct } from "@armada/screens";
 import { proposeRequest } from "./dispatch";
@@ -79,6 +86,8 @@ export const openServerLink = (serverId: string, url: string) =>
   window.armada.openServerLink(serverId, url);
 export const stageAttachment = (bytes: ArrayBuffer, filename: string, mimeType: string) =>
   window.armada.stageAttachment(bytes, filename, mimeType);
+/** Paths under the checkout narrowed against typed text, for the `@` mention popup. */
+export const searchFiles = (query: string) => window.armada.searchFiles(query);
 
 /** What a command needs from the render, and where two of them land. */
 export type Sending = {
@@ -147,8 +156,12 @@ export function useCommands(sending: Sending) {
    * Bridge's identity are published state, so they arrive as an argument rather
    * than being reached for here.
    */
-  async function proposeFrom(request: string, proposing: Proposing): Promise<Answered> {
-    const read = await proposeRequest(request, proposing);
+  async function proposeFrom(
+    request: string,
+    attachments: readonly StagedAttachment[],
+    proposing: Proposing,
+  ): Promise<Answered> {
+    const read = await proposeRequest(request, attachments, proposing);
     if (read.outcome !== null) setOutcome(read.outcome);
     return read;
   }

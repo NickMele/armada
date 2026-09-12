@@ -12,6 +12,7 @@ import type {
   Outcome,
   Proposed,
   ReclaimOutcome,
+  StagedAttachment,
 } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
 import type { Artifact, Followed, Opened } from "@armada/protocol";
@@ -52,8 +53,11 @@ const api: BridgeApi = {
   // `proposeJob` rather than a mode on it: one carries a workflow the person
   // chose and the other carries the sentence they wrote, and a single
   // capability taking which would read as one act and perform two.
-  proposeFromRequest: (request: string): Promise<Proposed> =>
-    ipcRenderer.invoke(CHANNELS.proposeFromRequest, request),
+  proposeFromRequest: (
+    request: string,
+    attachments: readonly StagedAttachment[],
+  ): Promise<Proposed> =>
+    ipcRenderer.invoke(CHANNELS.proposeFromRequest, request, attachments),
   stopProposal: (): Promise<Outcome> => ipcRenderer.invoke(CHANNELS.stopProposal),
 
   // Bytes never round-trip through `proposeJob`'s JSON channel as base64 —
@@ -61,6 +65,9 @@ const api: BridgeApi = {
   // `proposeJob` call carries as a `staged_path`.
   stageAttachment: (bytes: ArrayBuffer, filename: string, mimeType: string): Promise<{ path: string }> =>
     ipcRenderer.invoke(CHANNELS.stageAttachment, bytes, filename, mimeType),
+
+  searchFiles: (query: string): Promise<string[]> =>
+    ipcRenderer.invoke(CHANNELS.searchFiles, query),
 
   approveDispatch: (jobId: string): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.approveDispatch, jobId),

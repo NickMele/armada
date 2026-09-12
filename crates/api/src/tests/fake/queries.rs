@@ -9,9 +9,9 @@
 //! `ipc` alone.
 
 use ipc::{
-    CallArguments, CheckOutput, FleetCapacity, JobDetail, JobDiff, JobEvidence, JobHistory, JobId,
-    JobList, JobRemarks, JobResources, KeptFrame, ManifestReading, ManifestSummary, ModelChoices,
-    WorkflowSummary, WorktreesHeld,
+    CallArguments, CheckOutput, FilesFound, FleetCapacity, JobDetail, JobDiff, JobEvidence,
+    JobHistory, JobId, JobList, JobRemarks, JobResources, KeptFrame, ManifestReading,
+    ManifestSummary, ModelChoices, WorkflowSummary, WorktreesHeld,
 };
 
 use super::FakeDaemon;
@@ -327,6 +327,12 @@ impl Queries for FakeDaemon {
             live,
             history: self.history.lock().expect("not poisoned").clone(),
             skipped: *self.skipped.lock().expect("not poisoned"),
+        })
+    }
+
+    async fn search_files(&self, query: String) -> Result<FilesFound, Refusal> {
+        Ok(FilesFound {
+            paths: shapes::files_found(&query),
         })
     }
 }

@@ -1,5 +1,7 @@
+import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fireEvent, fn } from "storybook/test";
+import { expect, fireEvent, fn, waitFor } from "storybook/test";
+import type { StagedAttachment } from "@armada/protocol";
 
 import { DispatchRequest } from "./DispatchRequest";
 import type { Proposal } from "./DispatchRequest";
@@ -24,6 +26,11 @@ const meta: Meta<typeof DispatchRequest> = {
   args: {
     request: "",
     onRequest: fn(),
+    onSearchFiles: fn(async () => []),
+    attachments: [],
+    onStage: fn(async () => ({ path: "/tmp/staged" })),
+    onAttach: fn(),
+    onRemoveAttachment: fn(),
     onDispatch: fn(),
     onEnterByHand: fn(),
     onReset: fn(),
@@ -84,6 +91,190 @@ export const Typed: Story = {
     // event still arrives here to prove the handler is not bound either.
     fireEvent.click(dispatch);
     await expect(args.onDispatch).toHaveBeenCalledOnce();
+  },
+};
+
+/**
+ * Typing `@` opens the mention popup, and picking a result inserts it into
+ * the field — the way Claude Code's own `@` file reference works.
+ *
+ * **A stateful wrapper, not static args.** Every other story here proves a
+ * callback fired; this one proves what the field holds afterward, which needs
+ * `onRequest` actually feeding back into `request` rather than a `fn()` that
+ * drops it.
+ */
+export const MentionInserted: Story = {
+  render: (args) => {
+    function Stateful() {
+      const [request, setRequest] = useState("");
+      return (
+        <DispatchRequest
+          {...args}
+          request={request}
+          onRequest={setRequest}
+          onSearchFiles={() => Promise.resolve(["README.md", "packages/components/README.md"])}
+        />
+      );
+    }
+    return <Stateful />;
+  },
+  play: async ({ canvas, userEvent }) => {
+    const field = canvas.getByRole("textbox", { name: "Request" });
+    await userEvent.type(field, "@READ");
+    await userEvent.click(await canvas.findByRole("option", { name: "README.md" }));
+    await expect(field).toHaveValue("@README.md ");
+  },
+};
+
+/**
+ * Arrow keys move the active row without touching the field's text, and
+ * `Enter` inserts whichever row that lands on — the keyboard path beside the
+ * mouse `MentionInserted` above already proves.
+ */
+export const MentionChosenByKeyboard: Story = {
+  render: (args) => {
+    function Stateful() {
+      const [request, setRequest] = useState("");
+      return (
+        <DispatchRequest
+          {...args}
+          request={request}
+          onRequest={setRequest}
+          onSearchFiles={() => Promise.resolve(["README.md", "packages/components/README.md"])}
+        />
+      );
+    }
+    return <Stateful />;
+  },
+  play: async ({ canvas, userEvent }) => {
+    const field = canvas.getByRole("textbox", { name: "Request" });
+    await userEvent.type(field, "@");
+    await canvas.findByRole("option", { name: "README.md" });
+
+    await userEvent.keyboard("{ArrowDown}");
+    await expect(
+      canvas.getByRole("option", { name: "packages/components/README.md" }),
+    ).toHaveAttribute("aria-selected", "true");
+
+    await userEvent.keyboard("{Enter}");
+    await expect(field).toHaveValue("@packages/components/README.md ");
+  },
+};
+
+/**
+ * `Escape` closes the popup without touching what was typed — the one way out
+ * that leaves the `@` as plain text rather than turning it into a mention.
+ */
+export const MentionDismissedByEscape: Story = {
+  render: (args) => {
+    function Stateful() {
+      const [request, setRequest] = useState("");
+      return (
+        <DispatchRequest
+          {...args}
+          request={request}
+          onRequest={setRequest}
+          onSearchFiles={() => Promise.resolve(["README.md"])}
+        />
+      );
+    }
+    return <Stateful />;
+  },
+  play: async ({ canvas, userEvent }) => {
+    const field = canvas.getByRole("textbox", { name: "Request" });
+    await userEvent.type(field, "@READ");
+    await canvas.findByRole("option", { name: "README.md" });
+
+    await userEvent.keyboard("{Escape}");
+
+    await expect(canvas.queryByRole("listbox")).toBeNull();
+    await expect(field).toHaveValue("@READ");
+  },
+};
+
+/**
+ * An `@` that does not start a word — an email typed into the same field —
+ * never opens the popup. `useMention`'s own note says why: an `@` preceded by
+ * anything but whitespace stays plain text rather than a mention.
+ */
+export const MentionNotOpenedInsideAWord: Story = {
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.type(canvas.getByRole("textbox", { name: "Request" }), "ping me at a@b");
+    await expect(canvas.queryByRole("listbox")).toBeNull();
+  },
+};
+
+/**
+ * A screenshot pasted straight into the Request field, without a trip to the
+ * file picker — `onRequestPaste`'s own path, proven the way `WithAttachments`
+ * below proves the picker's: `onStage` and `onAttach` both fire with what the
+ * paste carried.
+ *
+ * **A real `DataTransfer`, dispatched directly.** A real browser's
+ * `ClipboardEvent` constructor requires `clipboardData` to be an actual
+ * `DataTransfer` and throws otherwise, before the component ever sees the
+ * paste. `fireEvent.paste` cannot carry it: `@testing-library/dom`'s
+ * `createEvent` rebuilds `clipboardData` from `Object.getOwnPropertyNames`
+ * of whatever is passed — a jsdom-era shim — and a real `DataTransfer`'s
+ * `items`/`files` live on its prototype, not as own properties, so that
+ * rebuild silently produces an empty one. Dispatching the `ClipboardEvent`
+ * ourselves is the seam that keeps the real data.
+ */
+export const PastedScreenshot: Story = {
+  play: async ({ args, canvas }) => {
+    const field = canvas.getByRole("textbox", { name: "Request" });
+    const pasted = new File(["a screenshot"], "screenshot.png", { type: "image/png" });
+
+    const dt = new DataTransfer();
+    dt.items.add(pasted);
+    field.dispatchEvent(new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: dt }));
+
+    // `stage()` reads the file's bytes before calling `onStage`, so the calls
+    // land after this event handler returns — `waitFor` rather than a bare
+    // assertion.
+    await waitFor(() =>
+      expect(args.onStage).toHaveBeenCalledWith(expect.anything(), "screenshot.png", "image/png"),
+    );
+    await expect(args.onAttach).toHaveBeenCalledWith({
+      path: "/tmp/staged",
+      filename: "screenshot.png",
+      mimeType: "image/png",
+    });
+  },
+};
+
+/**
+ * Plain text pasted into the Request is not read for images at all — it falls
+ * through to the field as text, and nothing stages.
+ */
+export const PastedTextStagesNothing: Story = {
+  play: async ({ args, canvas }) => {
+    const field = canvas.getByRole("textbox", { name: "Request" });
+
+    const dt = new DataTransfer();
+    dt.setData("text/plain", "some text");
+    field.dispatchEvent(new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: dt }));
+
+    await expect(args.onStage).not.toHaveBeenCalled();
+    await expect(args.onAttach).not.toHaveBeenCalled();
+  },
+};
+
+/**
+ * Files staged against the request, drawn as removable chips — the same
+ * `AttachmentChip` the hand-entry form already uses, on this field instead.
+ */
+export const WithAttachments: Story = {
+  args: {
+    request: REQUEST,
+    attachments: [
+      { path: "/tmp/a", filename: "before.png", mimeType: "image/png" },
+      { path: "/tmp/b", filename: "after.png", mimeType: "image/png" },
+    ] satisfies StagedAttachment[],
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Remove before.png" }));
+    await expect(args.onRemoveAttachment).toHaveBeenCalledWith("/tmp/a");
   },
 };
 

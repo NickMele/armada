@@ -32,6 +32,7 @@ import type { ReactNode } from "react";
 
 import { Button, DispatchRequest } from "@armada/components";
 import type { Proposal, ProposalWatch } from "@armada/components";
+import type { StagedAttachment } from "@armada/protocol";
 
 import type { Answered } from "./proposal";
 import { PROPOSAL_IS_SLOW } from "./proposal";
@@ -50,7 +51,15 @@ export type DispatchJobProps = {
    *
    * Called at most once per answer, and never with a blank request.
    */
-  onPropose: (request: string) => Promise<Answered>;
+  onPropose: (request: string, attachments: readonly StagedAttachment[]) => Promise<Answered>;
+  /**
+   * Put a picked or pasted file somewhere the Job can name, and answer with
+   * the path. The same call `Composer`'s `onStage` makes; this screen owns
+   * the staged list until `onPropose` carries it on.
+   */
+  onStage: (bytes: ArrayBuffer, filename: string, mimeType: string) => Promise<{ path: string }>;
+  /** Narrow the checkout against typed text, for the `@` mention popup. */
+  onSearchFiles: (query: string) => Promise<readonly string[]>;
   /** Open one of the jobs that came back, where its own gate is drawn. */
   onOpen: (jobId: string) => void;
   /**
@@ -98,6 +107,8 @@ export type DispatchJobProps = {
 
 export function DispatchJob({
   onPropose,
+  onStage,
+  onSearchFiles,
   onOpen,
   onApprove,
   approving,
@@ -110,6 +121,7 @@ export function DispatchJob({
   onCopied,
 }: DispatchJobProps) {
   const [request, setRequest] = useState("");
+  const [attachments, setAttachments] = useState<StagedAttachment[]>([]);
   const [proposal, setProposal] = useState<Proposal>({ at: "unasked" });
   // Which of the two ways through this surface is open. Describing is the
   // path, so it is what the surface opens on.
@@ -125,7 +137,7 @@ export function DispatchJob({
     outstanding.current = true;
     setProposal({ at: "reading" });
     try {
-      const read = await onPropose(asked);
+      const read = await onPropose(asked, attachments);
       setProposal(read.proposal);
       // Fleet's echo, put back in the field. A refused request comes back
       // unchanged, and this is what makes that true rather than only stated.
@@ -143,6 +155,7 @@ export function DispatchJob({
 
   function reset(): void {
     setRequest("");
+    setAttachments([]);
     setProposal({ at: "unasked" });
   }
 
@@ -179,6 +192,13 @@ export function DispatchJob({
     <DispatchRequest
       request={request}
       onRequest={setRequest}
+      attachments={attachments}
+      onStage={onStage}
+      onSearchFiles={onSearchFiles}
+      onAttach={(attachment) => setAttachments((current) => [...current, attachment])}
+      onRemoveAttachment={(path) =>
+        setAttachments((current) => current.filter((attachment) => attachment.path !== path))
+      }
       onDispatch={() => void dispatch()}
       onEnterByHand={() => setHand(true)}
       onReset={reset}

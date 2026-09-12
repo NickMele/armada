@@ -6,7 +6,7 @@ import { join } from "node:path";
 import tokens from "@armada/tokens/tokens.json";
 import { CHANNELS, NOTHING_YET } from "../shared/bridge";
 import type { BridgeState, Summons } from "../shared/bridge";
-import type { Draft } from "@armada/protocol";
+import type { Draft, StagedAttachment } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
 import type { Artifact, CommandAnswer, WhenBlocked } from "@armada/protocol";
 import type { StartRun } from "@armada/protocol";
@@ -282,8 +282,10 @@ void app.whenReady().then(() => {
   // on the one above: that one carries a workflow the person chose and this
   // one carries the sentence they wrote, and one channel taking which would
   // make the model call a flag.
-  ipcMain.handle(CHANNELS.proposeFromRequest, (_event, request: string) =>
-    connection?.commands.proposeFromRequest(request),
+  ipcMain.handle(
+    CHANNELS.proposeFromRequest,
+    (_event, request: string, attachments: StagedAttachment[]) =>
+      connection?.commands.proposeFromRequest(request, attachments),
   );
   // No argument: what may be stopped is what this window started. See
   // `JobCommands.stopProposal`.
@@ -295,6 +297,9 @@ void app.whenReady().then(() => {
     CHANNELS.stageAttachment,
     (_event, bytes: ArrayBuffer, filename: string, mimeType: string) =>
       stageAttachment(bytes, filename, mimeType),
+  );
+  ipcMain.handle(CHANNELS.searchFiles, (_event, query: string) =>
+    connection?.commands.searchFiles(query),
   );
   ipcMain.handle(CHANNELS.approveDispatch, (_event, jobId: string) =>
     connection?.commands.approveDispatch(jobId),

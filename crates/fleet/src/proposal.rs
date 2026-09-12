@@ -191,6 +191,22 @@ where
         request: &str,
         client_ref: Option<String>,
     ) -> Result<Vec<Job>, Adrift> {
+        self.propose_from_with_attachments(request, client_ref, Vec::new())
+            .await
+    }
+
+    /// [`propose_from`](Self::propose_from), carrying attachments staged
+    /// against the request onto the head of the plan it becomes.
+    ///
+    /// **A second method rather than a third parameter on the first.** Most
+    /// callers — every test that predates attachments among them — have none
+    /// to carry, and `propose_from` stays their call unchanged.
+    pub async fn propose_from_with_attachments(
+        &self,
+        request: &str,
+        client_ref: Option<String>,
+        attachments: Vec<ipc::AttachmentRef>,
+    ) -> Result<Vec<Job>, Adrift> {
         let request = request.trim();
         if request.is_empty() {
             return Err(Adrift::NothingToPropose);
@@ -247,9 +263,16 @@ where
                     job.workflow_id.as_str()
                 )
             }));
+            // The head of the plan, and only the head: `made` is still empty
+            // on the first iteration and never again after it.
+            let carried = if made.is_empty() {
+                attachments.clone()
+            } else {
+                Vec::new()
+            };
             let minted = self
                 .proposed_job(
-                    self.as_proposal(job, waits_on),
+                    self.as_proposal(job, waits_on, carried),
                     stated,
                     Some(minted_by.clone()),
                 )
@@ -298,6 +321,7 @@ where
         &self,
         job: &ProposedJob,
         dependencies: Vec<ipc::DependencyEdge>,
+        attachments: Vec<ipc::AttachmentRef>,
     ) -> ipc::ProposeJob {
         ipc::ProposeJob {
             title: job.title.clone(),
@@ -319,7 +343,7 @@ where
             acceptance_criteria: Vec::new(),
             subject: None,
             facts: job.brief.clone(),
-            attachments: Vec::new(),
+            attachments,
         }
     }
 }

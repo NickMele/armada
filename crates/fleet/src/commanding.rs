@@ -58,7 +58,11 @@ where
         request: ipc::JobRequest,
     ) -> Result<ipc::ProposedPlan, Refusal> {
         let made = self
-            .propose_from(&request.request, request.client_ref)
+            .propose_from_with_attachments(
+                &request.request,
+                request.client_ref,
+                request.attachments,
+            )
             .await
             .map_err(|why| self.refusal(why))?;
         let mut jobs = Vec::with_capacity(made.len());

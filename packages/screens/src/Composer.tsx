@@ -48,8 +48,10 @@ import {
   CardTitle,
   Checkbox,
   Input,
+  MentionPopover,
   Select,
   Textarea,
+  useMention,
   WorkflowRail,
 } from "@armada/components";
 
@@ -84,6 +86,8 @@ export type ComposerProps = {
    * path. Staged before the Job exists, so there is no id to key it on.
    */
   onStage: (bytes: ArrayBuffer, filename: string, mimeType: string) => Promise<{ path: string }>;
+  /** Narrow the checkout against typed text, for the `@` mention popup. */
+  onSearchFiles: (query: string) => Promise<readonly string[]>;
   /** The workflows Fleet holds. **The only ones it will accept.** */
   workflows: readonly WorkflowSummary[];
   /** The Manifest the rail names. A fact here, not a choice. */
@@ -101,6 +105,7 @@ export function Composer({
   models,
   disabled,
   onStage,
+  onSearchFiles,
   onPropose,
 }: ComposerProps) {
   const [title, setTitle] = useState("");
@@ -114,6 +119,7 @@ export function Composer({
   // The hidden file input the "Attach" button clicks through. A ref rather
   // than state because nothing here reads its value; `onChange` does.
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mention = useMention(brief, setBrief, onSearchFiles);
 
   // Selected as soon as the connection answers, and only while nothing has been
   // chosen — a person who picked something keeps it when the roster is re-read.
@@ -210,14 +216,30 @@ export function Composer({
             invalid={tried && emptyTitle}
             message="A job needs a title. It is what names the row in the list."
           />
-          <Textarea
-            label="Brief"
-            value={brief}
-            onChange={(event) => setBrief(event.target.value)}
-            onPaste={onBriefPaste}
-            invalid={tried && emptyBrief}
-            message="A job needs a brief. Write what the work is."
-          />
+          <div className="armada-mention-anchor">
+            <Textarea
+              label="Brief"
+              value={brief}
+              onChange={mention.onFieldChange}
+              onKeyDown={mention.onFieldKeyDown}
+              onSelect={mention.onFieldSelect}
+              onPaste={onBriefPaste}
+              invalid={tried && emptyBrief}
+              message="A job needs a brief. Write what the work is."
+            />
+            {/* The `@` mention popup, directly under the field it opened on —
+                see `MentionPopover`'s own note on why it is anchored there and
+                not at the caret. */}
+            {mention.open ? (
+              <MentionPopover
+                query={mention.query}
+                results={mention.results}
+                active={mention.active}
+                onHover={mention.onHover}
+                onChoose={mention.onChoose}
+              />
+            ) : null}
+          </div>
           {/* Hidden behind the "Attach" button — no file input is ever drawn
               directly, the platform's own picker chrome is not this app's to
               style. */}
@@ -227,6 +249,10 @@ export function Composer({
             multiple
             className="hidden"
             onChange={onFilesPicked}
+            // A bare file input has no accessible role or label to query by —
+            // the only handle a test has onto the seam a real pick reaches
+            // through the platform's own chrome.
+            data-testid="composer-attach-input"
           />
           <div>
             <Button

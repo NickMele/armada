@@ -76,6 +76,8 @@ function opened(answering: () => Promise<Answered>): { sent: string[] } {
         sent.push(request);
         return answering();
       }}
+      onStage={() => Promise.resolve({ path: "/tmp/staged" })}
+      onSearchFiles={() => Promise.resolve([])}
       onOpen={() => {}}
       onApprove={() => {}}
       approving={[]}
@@ -198,6 +200,8 @@ test("the proposal is approved from here", async () => {
   mount(
     <DispatchJob
       onPropose={() => Promise.resolve(PROPOSED)}
+      onStage={() => Promise.resolve({ path: "/tmp/staged" })}
+      onSearchFiles={() => Promise.resolve([])}
       onOpen={() => {}}
       onApprove={(jobId) => approved.push(jobId)}
       approving={[]}
@@ -227,6 +231,8 @@ test("the row follows the board, not the answer", async () => {
   mount(
     <DispatchJob
       onPropose={() => Promise.resolve(PROPOSED)}
+      onStage={() => Promise.resolve({ path: "/tmp/staged" })}
+      onSearchFiles={() => Promise.resolve([])}
       onOpen={() => {}}
       onApprove={() => {}}
       approving={[]}

@@ -11,7 +11,7 @@
 // needs — where to send, and what to do with the Jobs that come back — so
 // nothing here can drift from what the socket believes.
 
-import type { Outcome, Proposed } from "@armada/protocol";
+import type { Outcome, Proposed, StagedAttachment } from "@armada/protocol";
 import type { JobRequest, ProposedPlan } from "@armada/protocol";
 // Read, never minted: Fleet's own spellings, and the only thing on the wire
 // that tells a declined request from a call that could not be made.
@@ -41,7 +41,11 @@ import type { Board } from "./command";
  * Job, so there is no id to key one on — a second dispatch is a second request,
  * and the form is what stops a double press.
  */
-export async function proposeFromRequest(board: Board, request: string): Promise<Proposed> {
+export async function proposeFromRequest(
+  board: Board,
+  request: string,
+  attachments: StagedAttachment[] = [],
+): Promise<Proposed> {
   const said = request.trim();
   if (said === "") return { ok: false, why: "refused", outcome: { ok: false, why: "empty_brief" } };
   const port = board.port();
@@ -54,7 +58,18 @@ export async function proposeFromRequest(board: Board, request: string): Promise
   // it — `ipc::JobRequest::client_ref` says why matching on the request's own
   // text would match the wrong call.
   const clientRef = randomUUID();
-  const body: JobRequest = { request: said, client_ref: clientRef };
+  const body: JobRequest = {
+    request: said,
+    client_ref: clientRef,
+    // Sent unconditionally, even empty — matching `proposeJob`'s own
+    // `ProposeJob.attachments`, which has no meaningful absent-vs-empty
+    // reading for Fleet to fill in.
+    attachments: attachments.map((attachment) => ({
+      staged_path: attachment.path,
+      filename: attachment.filename,
+      mime_type: attachment.mimeType,
+    })),
+  };
   board.watchProposal(clientRef);
   try {
     // **No wait at all, which is the change.** A model call inside a request

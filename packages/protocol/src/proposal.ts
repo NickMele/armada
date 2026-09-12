@@ -13,7 +13,7 @@
 // field added on one side of this file is a field missing on the other with
 // every check green.
 
-import type { JobSummary } from "./protocol";
+import type { AttachmentRef, JobSummary } from "./protocol";
 
 /**
  * What a person described, before anything has decided what it is. The request
@@ -40,6 +40,15 @@ export type JobRequest = {
    * Absent is ordinary — a caller with no surface has nothing to correlate.
    */
   client_ref?: string;
+  /**
+   * Files staged against the request before it was sent, the way
+   * `ProposeJob.attachments` carries them for hand entry.
+   *
+   * A request can become several Jobs; these land on the head of the plan
+   * alone, never on every member — `crates/fleet/src/proposal.rs` is where
+   * that is decided.
+   */
+  attachments?: AttachmentRef[];
 };
 
 /**

@@ -21,7 +21,7 @@ import type { AddressInfo } from "node:net";
 
 import { afterEach, expect, it } from "vitest";
 
-import type { JobSummary } from "@armada/protocol";
+import type { JobSummary, StagedAttachment } from "@armada/protocol";
 import type { Board } from "./command";
 import { proposeFromRequest } from "./proposing";
 
@@ -151,4 +151,58 @@ it("carries the status when the answer is not a refusal", async () => {
     path: "/jobs/from_request",
     status: 502,
   });
+});
+
+/** A listener that answers every proposal and records the body it carried. */
+async function fleetRecording(bodies: string[]): Promise<number> {
+  const server = createServer((request: IncomingMessage, response) => {
+    let body = "";
+    request.on("data", (chunk) => (body += String(chunk)));
+    request.on("end", () => {
+      bodies.push(body);
+      response.writeHead(201, { "content-type": "application/json" });
+      response.end(JSON.stringify({ jobs: [A_JOB] }));
+    });
+  });
+  listening = server;
+  await new Promise<void>((up) => server.listen(0, "127.0.0.1", up));
+  return (server.address() as AddressInfo).port;
+}
+
+/**
+ * A staged screenshot rides the request, renamed onto Fleet's own field names
+ * — `ipc::JobRequest::attachments` takes `staged_path`, `filename` and
+ * `mime_type`, not the camelCase `StagedAttachment` a picker or a paste built.
+ */
+it("carries a staged attachment on the request, renamed onto Fleet's fields", async () => {
+  const bodies: string[] = [];
+  const port = await fleetRecording(bodies);
+  const attachment: StagedAttachment = {
+    path: "/tmp/staged/before.png",
+    filename: "before.png",
+    mimeType: "image/png",
+  };
+
+  const answered = await proposeFromRequest(boardOn(port), "Fix the flicker", [attachment]);
+
+  expect(answered.ok).toBe(true);
+  const sent = JSON.parse(bodies[0] ?? "null") as { attachments: unknown };
+  expect(sent.attachments).toEqual([
+    { staged_path: "/tmp/staged/before.png", filename: "before.png", mime_type: "image/png" },
+  ]);
+});
+
+/**
+ * Nothing staged is sent as an empty list rather than left off — `proposing.ts`'s
+ * own note says `ProposeJob.attachments` has no meaningful absent-vs-empty
+ * reading for Fleet to fill in.
+ */
+it("sends an empty attachments list where nothing was staged", async () => {
+  const bodies: string[] = [];
+  const port = await fleetRecording(bodies);
+
+  await proposeFromRequest(boardOn(port), "Make the parser take it");
+
+  const sent = JSON.parse(bodies[0] ?? "null") as { attachments: unknown };
+  expect(sent.attachments).toEqual([]);
 });
