@@ -189,7 +189,7 @@ Two questions this journey once carried open are now decided, and both are recor
 - **The origin tag reads as a status** — resolved 2026-08-21, see Settled here above.
 - **The copy-on-click rule claims more than it means.** `docs/contracts/design-system.md` says anything in mono copies on click and names a path and a command among its examples. A path that opens a file cannot also copy it, so the rule wants narrowing to identifiers — a job id, a branch, a drone id.
 - **A workflow definition carries no version and no timestamp.** The panel can say a Job runs the workflow as it stood when the Job was dispatched, which needs nothing new, but not whether the definition has moved on since. `[workflowdef-schema-gaps]` on `crates/core-model/domain/README.md` already names `version` as a key the samples use and the catalogue does not.
-- **`evidence_type` had no capture value, so a Job asked to change a screen proved it with a diff — the least useful thing on that screen — addressed.** `shown` now runs the repository's own harness against a spec and captures frames Fleet keeps; see [Manifest](../concepts/manifest.md#evidence--how-this-repository-shows-its-work).
+- **`evidence_type` had no capture value, so a Job asked to change a screen proved it with a diff — the least useful thing on that screen — addressed.** A step declaring `evidence.captured` runs the repository's own harness against a spec and keeps what it produced; see [Manifest](../concepts/manifest.md#evidence--how-this-repository-shows-its-work). It is a key of its own rather than a value of `evidence.submitted.type`, so a step is captured *and* still hands in its patch — `#777`.
 
 ## Open questions
 

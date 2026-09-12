@@ -1,6 +1,6 @@
 //! A person asking a Job to show its work, off the turn loop.
 //!
-//! The other half of `#603`'s *both*: a step whose evidence is `shown` runs the
+//! The other half of `#603`'s *both*: a captured step runs the
 //! harness while it settles, and this reruns the last spec a Drone named when a
 //! person presses. [`show`] and [`kept`] are the mechanism, unchanged.
 //!
@@ -49,7 +49,7 @@ pub enum Unshowable {
     NoHarness,
     /// The worktree is not on disk. `armada clean` and reclaim take it.
     NoWorktree,
-    /// No Drone named a spec on a step whose evidence is `shown`.
+    /// No Drone named a spec on a step Fleet captures.
     NoSpec,
     /// The spec the Drone named is not in the worktree any more.
     SpecGone { spec: String },
@@ -75,8 +75,8 @@ impl Unshowable {
                  harness. A clean or a reclaim took it",
             ),
             Unshowable::NoSpec => String::from(
-                "no step of this Job named a spec to run. Only a step whose evidence is `shown` \
-                 names one",
+                "no step of this Job named a spec to run. Only a step the workflow asks to be \
+                 captured names one",
             ),
             Unshowable::SpecGone { spec } => format!(
                 "the spec `{spec}` is no longer in this Job's worktree. A later run renamed or \
@@ -150,6 +150,20 @@ impl Drop for Held {
     }
 }
 
+/// The steps this Job's frozen workflow asks Fleet to capture.
+///
+/// **Off the frozen workflow rather than off the evidence row.** Being captured
+/// is a fact about the step; a submission carries only its own type, and before
+/// `#777` the two were the same value and this was read off the row.
+fn captured_steps(job: &Job) -> Vec<StepId> {
+    job.workflow()
+        .steps()
+        .iter()
+        .filter(|step| step.captured())
+        .map(|step| step.id().clone())
+        .collect()
+}
+
 /// The step id `kept` is handed for a press, so its copies land in a run
 /// directory of their own: `<step>.again<press>.<attempt>.branch`.
 ///
@@ -210,7 +224,7 @@ where
             .store()
             .lock()
             .await
-            .spec_last_named(job_id)
+            .spec_last_named(job_id, &captured_steps(&job))
             .map_err(Adrift::Reading)?;
         let Some(named) = named else {
             return Err(refused(Unshowable::NoSpec));
@@ -328,7 +342,9 @@ where
         let worktree = self.worktree_on_disk(job);
         let (named, sets) = {
             let store = self.store().lock().await;
-            let named = store.spec_last_named(job.id()).map_err(Adrift::Reading)?;
+            let named = store
+                .spec_last_named(job.id(), &captured_steps(job))
+                .map_err(Adrift::Reading)?;
             let sets = store
                 .shown_again_every_press(job.id())
                 .map_err(Adrift::Reading)?;

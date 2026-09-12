@@ -30,21 +30,27 @@
     {
       "id": "frame",
       "label": "Frame",
-      "evidence_type": "facts_note",
+      "evidence": {
+        "submitted": { "type": "facts_note" }
+      },
       "delivers": false,
       "advance_gate": "auto"
     },
     {
       "id": "build",
       "label": "Build",
-      "evidence_type": "diff",
+      "evidence": {
+        "submitted": { "type": "diff" }
+      },
       "delivers": false,
       "advance_gate": "human_always"
     },
     {
       "id": "write_up",
       "label": "Write up",
-      "evidence_type": "facts_note",
+      "evidence": {
+        "submitted": { "type": "facts_note" }
+      },
       "model": "haiku",
       "delivers": false,
       "advance_gate": "auto"

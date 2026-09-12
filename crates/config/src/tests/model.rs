@@ -24,8 +24,8 @@ use crate::workflow::WorkflowDef;
 fn two_steps(model: &str) -> String {
     format!(
         "version: 1\nworkflow_id: modelled\nname: modelled\nstructure: linear\nsteps:\n  \
-         - id: decide\n    label: Decide\n    evidence_type: diff\n    delivers: false\n    advance_gate: auto\n  \
-         - id: report\n    label: Report\n    evidence_type: facts_note\n    model: \
+         - id: decide\n    label: Decide\n    evidence: {{submitted: {{type: diff}}}}\n    delivers: false\n    advance_gate: auto\n  \
+         - id: report\n    label: Report\n    evidence: {{submitted: {{type: facts_note}}}}\n    model: \
          {model}\n    delivers: false\n    advance_gate: auto\n"
     )
 }
@@ -121,7 +121,7 @@ fn judged(model: &str) -> String {
         "steps:",
         "  - id: review",
         "    label: Review",
-        "    evidence_type: diff",
+        "    evidence: {submitted: {type: diff}}",
         "    delivers: false",
         "    advance_gate: auto_if_judge_passes",
         "    judge_checks:",
@@ -201,7 +201,7 @@ fn the_two_model_keys_are_separate_and_neither_fills_in_for_the_other() {
         "steps:",
         "  - id: review",
         "    label: Review",
-        "    evidence_type: diff",
+        "    evidence: {submitted: {type: diff}}",
         "    model: the-deciding-model",
         "    delivers: false",
         "    advance_gate: auto_if_judge_passes",
@@ -239,7 +239,7 @@ fn a_judge_check_that_names_no_model_carries_none() {
         "steps:",
         "  - id: review",
         "    label: Review",
-        "    evidence_type: diff",
+        "    evidence: {submitted: {type: diff}}",
         "    model: the-deciding-model",
         "    delivers: false",
         "    advance_gate: auto_if_judge_passes",

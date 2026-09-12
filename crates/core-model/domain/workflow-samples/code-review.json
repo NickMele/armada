@@ -23,7 +23,9 @@
       "id": "read",
       "order": 1,
       "required": true,
-      "evidence_type": "facts_note",
+      "evidence": {
+        "submitted": { "type": "facts_note" }
+      },
       "mechanical_checks": [
         {
           "type": "artifact_exists",
@@ -45,7 +47,9 @@
       "id": "assess",
       "order": 2,
       "required": true,
-      "evidence_type": "review_findings",
+      "evidence": {
+        "submitted": { "type": "review_findings" }
+      },
       "mechanical_checks": [
         {
           "type": "artifact_exists",
@@ -85,7 +89,9 @@
       "id": "deliver",
       "order": 3,
       "required": true,
-      "evidence_type": "bundle",
+      "evidence": {
+        "submitted": { "type": "bundle" }
+      },
       "judge_checks": [],
       "evidence_scope": {
         "context_source": "hybrid",

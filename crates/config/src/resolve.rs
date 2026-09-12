@@ -27,8 +27,7 @@
 use std::path::PathBuf;
 
 use core_model::{
-    EvidenceScope, EvidenceType, FrozenWorkflow, RepoPath, ResolvedCheck, ResolvedStep, StepId,
-    WorkflowId,
+    EvidenceScope, FrozenWorkflow, RepoPath, ResolvedCheck, ResolvedStep, StepId, WorkflowId,
 };
 
 use crate::error::{Disagreement, ResolveError, UnknownCheck};
@@ -82,15 +81,15 @@ impl ResolvedWorkflow {
             });
         }
         // **Between the two, and this is the one place both files are in
-        // hand.** `evidence_type: shown` parses against no Manifest, and an
+        // hand.** `evidence.captured` parses against no Manifest, and an
         // `evidence:` section is declared with no workflow in sight; only here
-        // can a step asking to be shown be held to a repository that can show
-        // it. Refusing at dispatch is the whole argument — the alternative is a
-        // Job that reaches the step with a worktree cut and a Drone spawned and
-        // then captures nothing, which reads as a broken harness rather than a
-        // file that never had one.
+        // can a step asking to be captured be held to a repository that can
+        // capture it. Refusing at dispatch is the whole argument — the
+        // alternative is a Job that reaches the step with a worktree cut and a
+        // Drone spawned and then captures nothing, which reads as a broken
+        // harness rather than a file that never had one.
         if manifest.harness().is_none() {
-            let shows = shown_by_a_harness(def);
+            let shows = asking_to_be_captured(def);
             if !shows.is_empty() {
                 return Err(ResolveError::ShowsWithNoHarness {
                     workflow: def.path().to_path_buf(),
@@ -155,16 +154,21 @@ impl ResolvedWorkflow {
     }
 }
 
-/// Every step whose evidence is what it looks like, in the order the workflow
-/// declares them.
+/// Every step Fleet is asked to capture, in the order the workflow declares
+/// them.
 ///
 /// **All of them and not the first**, which is [`UnknownCheck`]'s rule: a
 /// workflow with three such steps is one edit to the Manifest, and a refusal
 /// naming one would make it three attempts to find that out.
-fn shown_by_a_harness(def: &WorkflowDef) -> Vec<StepId> {
+///
+/// **Found through `captured` rather than through an evidence type.** A step
+/// asking to be captured now says so in its own key, so a step that hands in a
+/// diff *and* is captured is found here too — which the old reading could not
+/// see, because one value could not say both. `#777`.
+fn asking_to_be_captured(def: &WorkflowDef) -> Vec<StepId> {
     def.steps()
         .iter()
-        .filter(|step| step.evidence_type() == Some(EvidenceType::Shown))
+        .filter(|step| step.captured())
         .map(|step| step.id().clone())
         .collect()
 }
@@ -283,6 +287,7 @@ fn resolve_step(
         step.retry_limit(),
         step.model().cloned(),
     )
+    .capturing(step.captured())
     .dispatching(step.may_dispatch_jobs())
     // Its own builder for `dispatching`'s reason, and read straight off the
     // step: the file was required to say, and `config` already refused a

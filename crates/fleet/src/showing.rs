@@ -1,10 +1,14 @@
 //! Running the repository's own harness, and keeping what it produced.
 //!
-//! A step whose `evidence_type` is `shown` is reviewed by looking at it, and
-//! this is what there is to look at. The repository declared how — `evidence:`
-//! in `armada.yml` — and the Drone wrote the spec, which scopes the run:
-//! `shown_by` names it and is refused when empty, so a capture of nothing is
-//! unreachable.
+//! A step whose `evidence.captured` is true is reviewed by looking at what it
+//! produced, and this is what there is to look at. The repository declared how
+//! — `evidence:` in `armada.yml` — and the Drone wrote the spec, which scopes
+//! the run: `shown_by` names it and is refused when empty, so a capture of
+//! nothing is unreachable.
+//!
+//! **The step may hand in a patch as well.** Capture is an instruction to Fleet
+//! and not a claim, so it sits beside whatever the step submits rather than
+//! instead of it — `#777`.
 //!
 //! # Armada grows no capture stack
 //!
@@ -31,7 +35,7 @@ use std::time::Duration;
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{FramePart, FrameSpan, Refusal};
 use checks_runner::Served;
-use config::{EvidenceType, Harness};
+use config::Harness;
 use core_model::{
     Attempt, Component, Envelope, FieldValue, Job, JobId, Level, ResolvedStep, Side, StepFrame,
     StepId,
@@ -684,7 +688,7 @@ where
     ///
     /// **Nothing happens on any other step.** The three conditions are read
     /// here rather than at the caller so there is one place that says when a
-    /// harness runs: the step declares `shown`, the repository declares a
+    /// harness runs: the step asks to be captured, the repository declares a
     /// harness, and the submission named a spec. The third cannot fail —
     /// `shown_by` is refused when empty — and is checked anyway, because the
     /// consequence of a blank one is a command with a hole in it.
@@ -712,11 +716,11 @@ where
         job: &Job,
         worktree: &Path,
     ) -> Result<Option<NotShown>, Adrift> {
-        if declared.evidence_type() != Some(EvidenceType::Shown) {
+        if !declared.captured() {
             return Ok(None);
         }
         // Unreachable on a Job that was resolved — `ResolvedWorkflow::resolve`
-        // refuses a `shown` step against a Manifest with no harness — and
+        // refuses a captured step against a Manifest with no harness — and
         // checked because the Job froze its workflow and the Manifest is read
         // live. A repository that deleted the section under a running Job
         // reaches here, and saying so beats capturing nothing quietly.

@@ -321,7 +321,7 @@ Fleet runs `run` once, against the Job's own worktree, and reads `frames` after 
 
 **`never` is honest about being a comment.** Nothing here drives a browser, so there is no navigation to intercept. What reads it is the block a Drone writing the spec is given, and the reviewer reading the spec against it. That is weaker than an interception, and the alternative is a key that reads as a guarantee.
 
-**A section this repository does not declare is not a default.** A workflow with a `shown` step resolved against a Manifest with no harness is refused before anything is dispatched — so it reaches a person as a sentence rather than as a Job that cut a worktree, spawned a Drone and captured nothing.
+**A section this repository does not declare is not a default.** A workflow with a captured step resolved against a Manifest with no harness is refused before anything is dispatched — so it reaches a person as a sentence rather than as a Job that cut a worktree, spawned a Drone and captured nothing.
 
 ### A Drone attesting to its own work
 

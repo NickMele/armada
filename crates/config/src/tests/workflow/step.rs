@@ -13,7 +13,7 @@
 //! file's own second paragraph says not to make — the pair is read together
 //! because neither refusal can be stated without both.
 
-use core_model::{AdvanceGate, EvidenceRef, GamingPattern};
+use core_model::{AdvanceGate, EvidenceRef, EvidenceType, GamingPattern};
 
 use super::{bug_with, parse, BUG};
 use crate::error::Fault;
@@ -27,7 +27,9 @@ fn judged(gate: &str, panel_size: u32, enabled: bool) -> String {
         "    label: Review".to_string(),
         // A judged step declares what it produces, because the Judge is shown
         // the work product and a step declaring none produces nothing.
-        "    evidence_type: diff".to_string(),
+        "    evidence:".to_string(),
+        "      submitted:".to_string(),
+        "        type: diff".to_string(),
         "    delivers: false".to_string(),
         format!("    advance_gate: {gate}"),
         "    judge_checks:".to_string(),
@@ -493,10 +495,10 @@ fn an_evidence_type_outside_the_schema_is_refused() {
     // legal values. The registry records that as an open question; until it is
     // answered, the parser refuses it by name rather than guessing.
     let refused = refusals(bug_with(
-        "  - id: assess\n    label: Assess\n    evidence_type: review_findings\n    delivers: false\n    advance_gate: auto\n",
+        "  - id: assess\n    label: Assess\n    evidence:\n      submitted:\n        type: review_findings\n    delivers: false\n    advance_gate: auto\n",
     ));
     assert!(matches!(
-        fault_at(&refused, "steps[3].evidence_type"),
+        fault_at(&refused, "steps[3].evidence.submitted.type"),
         Fault::NotInTheSchema { .. }
     ));
 }
@@ -507,4 +509,43 @@ fn a_step_may_declare_no_evidence_type() {
         bug_with("  - id: merge\n    label: Merge\n    delivers: false\n    advance_gate: auto\n")
             .expect("a step that produces nothing a Judge reads");
     assert_eq!(def.steps()[3].evidence_type(), None);
+    assert!(!def.steps()[3].captured());
+}
+
+/// **The whole of `#777` in one step**: a patch handed in, and a capture asked
+/// for, which one `evidence_type` could not say at once.
+#[test]
+fn a_step_may_hand_in_a_patch_and_be_captured() {
+    let def = bug_with(
+        "  - id: demonstrate\n    label: Demonstrate\n    evidence:\n      submitted:\n        type: diff\n      captured: true\n    delivers: false\n    advance_gate: auto\n",
+    )
+    .expect("a step that hands in a diff and is captured");
+    assert_eq!(def.steps()[3].evidence_type(), Some(EvidenceType::Diff));
+    assert!(def.steps()[3].captured());
+}
+
+/// Capture is an instruction to Fleet, so a step may ask for one while handing
+/// in nothing the gate measures — which is what `shown` used to spell.
+#[test]
+fn a_step_may_be_captured_and_hand_in_nothing() {
+    let def = bug_with(
+        "  - id: show\n    label: Show\n    evidence:\n      captured: true\n    delivers: false\n    advance_gate: auto\n",
+    )
+    .expect("a step that is captured and claims nothing");
+    assert_eq!(def.steps()[3].evidence_type(), None);
+    assert!(def.steps()[3].captured());
+}
+
+/// `shown` was an evidence type and is not one now. It is refused by name
+/// rather than read as a capture, because a file still spelling it is a file
+/// somebody has to correct.
+#[test]
+fn shown_is_no_longer_an_evidence_type() {
+    let refused = refusals(bug_with(
+        "  - id: show\n    label: Show\n    evidence:\n      submitted:\n        type: shown\n    delivers: false\n    advance_gate: auto\n",
+    ));
+    assert!(matches!(
+        fault_at(&refused, "steps[3].evidence.submitted.type"),
+        Fault::NotInTheSchema { .. }
+    ));
 }

@@ -20,7 +20,9 @@
       "id": "draft",
       "order": 1,
       "required": true,
-      "evidence_type": "document",
+      "evidence": {
+        "submitted": { "type": "document" }
+      },
       "mechanical_checks": [
         {
           "type": "artifact_exists",
@@ -41,7 +43,9 @@
       "id": "present",
       "order": 2,
       "required": true,
-      "evidence_type": "document",
+      "evidence": {
+        "submitted": { "type": "document" }
+      },
       "judge_checks": [],
       "evidence_scope": {
         "context_source": "hybrid",

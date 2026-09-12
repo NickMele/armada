@@ -30,6 +30,7 @@ mod attempt;
 mod check;
 mod collision;
 mod covers;
+mod declared;
 mod drone;
 mod escalation;
 mod event;
@@ -62,6 +63,7 @@ pub use attempt::{Attempt, Iteration, Spent};
 pub use check::{CheckOutcome, StepCheck};
 pub use collision::{collisions, Collision, ScopeClaim};
 pub use covers::{BadPattern, Covers, PathPattern};
+pub use declared::{AdvanceGate, EvidenceType};
 pub use drone::{DroneAssigned, DroneMoved, DronePresence, IllegalDroneMove};
 pub use escalation::{EscalationTrigger, StepLevelTrigger, TriggerKind, TriggerLevel};
 pub use event::{JobEvent, StepEvent};
@@ -96,6 +98,6 @@ pub use transition::{
 };
 pub use verdict::GateVerdict;
 pub use workflow::{
-    AdvanceGate, EvidenceType, FrozenWorkflow, ResolvedCheck, ResolvedStep, ARTIFACT_EXISTS,
-    DIFF_NONEMPTY, EVERY_MANIFEST_CHECK, MANIFEST_CHECK,
+    FrozenWorkflow, ResolvedCheck, ResolvedStep, ARTIFACT_EXISTS, DIFF_NONEMPTY,
+    EVERY_MANIFEST_CHECK, MANIFEST_CHECK,
 };

@@ -24,11 +24,11 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::envelope::Timestamp;
+use crate::job::declared::EvidenceType;
 use crate::job::escalation::StepLevelTrigger;
 use crate::job::ids::{DroneId, JobId, StepId};
 use crate::job::status::StepState;
 use crate::job::step_machine::StepTarget;
-use crate::job::workflow::EvidenceType;
 
 /// The last verdict against a step.
 ///

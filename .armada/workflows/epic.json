@@ -40,7 +40,9 @@
     {
       "id": "plan",
       "label": "Plan the wave",
-      "evidence_type": "document",
+      "evidence": {
+        "submitted": { "type": "document" }
+      },
       "mechanical_checks": [
         {
           "type": "artifact_exists",
@@ -69,7 +71,9 @@
     {
       "id": "dispatch",
       "label": "Dispatch the wave",
-      "evidence_type": "facts_note",
+      "evidence": {
+        "submitted": { "type": "facts_note" }
+      },
       "may_dispatch_jobs": true,
       "mechanical_checks": [
         {
@@ -83,7 +87,9 @@
     {
       "id": "roll_up",
       "label": "Roll up the wave",
-      "evidence_type": "document",
+      "evidence": {
+        "submitted": { "type": "document" }
+      },
       "mechanical_checks": [
         {
           "type": "artifact_exists",

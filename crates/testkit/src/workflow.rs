@@ -417,8 +417,14 @@ fn workflow_text(
              delivers: {delivers}\n    retry_limit: {retry_limit}\n",
             step.id, step.label
         ));
+        // No key at all where the step declares no type, which is what a step
+        // producing nothing a Judge reads looks like in a real file. A fixture
+        // that wants the other half writes the file itself — `fleet`'s
+        // `shown_step` is the one that does.
         if let Some(evidence) = step.evidence_type {
-            text.push_str(&format!("    evidence_type: {evidence}\n"));
+            text.push_str(&format!(
+                "    evidence:\n      submitted:\n        type: {evidence}\n"
+            ));
         }
         if let Some((_, model)) = models.iter().find(|(id, _)| *id == step.id) {
             text.push_str(&format!("    model: {model}\n"));

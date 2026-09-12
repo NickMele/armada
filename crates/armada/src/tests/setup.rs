@@ -184,7 +184,7 @@ fn each_named_check_resolved_to_the_command_the_manifest_holds() {
 fn gating_on_every_check_runs_them_in_the_order_armada_yml_writes_them() {
     let setup = Setup::at(&repository(), &roster()).expect("a setup that loads");
     let text = "version: 1\nworkflow_id: sweeping\nname: sweeping\nstructure: linear\nsteps:\n  \
-                - id: implement\n    label: Implement\n    evidence_type: diff\n    \
+                - id: implement\n    label: Implement\n    evidence: {submitted: {type: diff}}\n    \
                 delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      \
                 - { type: every_manifest_check }\n      - { type: diff_nonempty }\n";
     let def = WorkflowDef::parse(std::path::Path::new("sweeping.yml"), text, &roster())
@@ -344,7 +344,7 @@ fn a_repository_whose_workflow_names_no_check_starts_and_keeps_its_order() {
     dir.write(
         ".armada/workflows/sweeping.yml",
         "version: 1\nworkflow_id: sweeping\nname: sweeping\nstructure: linear\nsteps:\n  \
-         - id: only\n    label: \"Only step\"\n    evidence_type: diff\n    delivers: true\n    \
+         - id: only\n    label: \"Only step\"\n    evidence: {submitted: {type: diff}}\n    delivers: true\n    \
          advance_gate: auto\n    mechanical_checks:\n      - { type: every_manifest_check }\n",
     );
 

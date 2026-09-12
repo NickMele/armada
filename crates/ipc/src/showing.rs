@@ -132,7 +132,7 @@ pub struct ShowAgain {
     /// Whether the Job's worktree is on disk. `armada clean` and reclaim take
     /// it, and a press has nowhere to run without it.
     pub worktree_on_disk: bool,
-    /// The spec a press reruns — the last one a Drone named on a `shown` step.
+    /// The spec a press reruns — the last one a Drone named on a captured step.
     /// **Absent where no Drone ever named one**, which is every Job whose
     /// workflow never asked a step to show its work.
     #[serde(default, skip_serializing_if = "Option::is_none")]

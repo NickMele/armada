@@ -20,7 +20,9 @@
       "id": "revert",
       "order": 1,
       "required": true,
-      "evidence_type": "diff",
+      "evidence": {
+        "submitted": { "type": "diff" }
+      },
       "mechanical_checks": [
         {
           "type": "diff_nonempty"
@@ -65,7 +67,9 @@
       "id": "regression_verify",
       "order": 2,
       "required": true,
-      "evidence_type": "test_suite_run",
+      "evidence": {
+        "submitted": { "type": "test_suite_run" }
+      },
       "mechanical_checks": [
         {
           "type": "manifest_check",
@@ -85,7 +89,9 @@
       "id": "review",
       "order": 3,
       "required": true,
-      "evidence_type": "bundle",
+      "evidence": {
+        "submitted": { "type": "bundle" }
+      },
       "judge_checks": [
         {
           "enabled": true,

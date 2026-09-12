@@ -27,12 +27,12 @@ structure: linear
 steps:
   - id: plan
     label: Plan the change
-    evidence_type: facts_note
+    evidence: {submitted: {type: facts_note}}
     delivers: false
     advance_gate: auto
   - id: implement
     label: Implement
-    evidence_type: diff
+    evidence: {submitted: {type: diff}}
     mechanical_checks:
       - { type: manifest_check, check: build, expect_exit_code: 0 }
       - { type: manifest_check, check: test, expect_exit_code: 0 }
@@ -41,7 +41,7 @@ steps:
     advance_gate: auto
   - id: handoff
     label: Summarise
-    evidence_type: facts_note
+    evidence: {submitted: {type: facts_note}}
     delivers: true
     advance_gate: auto
 "#;

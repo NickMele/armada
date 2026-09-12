@@ -119,7 +119,7 @@ fn every_unresolved_name_is_reported_not_only_the_first() {
 #[test]
 fn a_step_with_no_checks_needs_nothing_from_the_manifest() {
     let def = parse(
-        "version: 1\nworkflow_id: fixture\nname: prototype\nstructure: linear\nsteps:\n  - id: frame\n    label: Frame\n    evidence_type: facts_note\n    delivers: false\n    advance_gate: auto\n",
+        "version: 1\nworkflow_id: fixture\nname: prototype\nstructure: linear\nsteps:\n  - id: frame\n    label: Frame\n    evidence: {submitted: {type: facts_note}}\n    delivers: false\n    advance_gate: auto\n",
     )
     .expect("well formed");
     let bare = Manifest::parse(&named("armada.yml"), "version: 1\nid: tooling\n").expect("bare");
@@ -202,7 +202,7 @@ commands:
 #[test]
 fn a_step_that_says_nothing_about_an_exit_code_takes_the_checks_own() {
     let def = parse(
-        "version: 1\nworkflow_id: bug\nname: bug\nstructure: linear\nsteps:\n  - id: repro\n    label: Reproduce\n    evidence_type: diff\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: manifest_check, check: test }\n      - { type: manifest_check, check: build }\n",
+        "version: 1\nworkflow_id: bug\nname: bug\nstructure: linear\nsteps:\n  - id: repro\n    label: Reproduce\n    evidence: {submitted: {type: diff}}\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: manifest_check, check: test }\n      - { type: manifest_check, check: build }\n",
     )
     .expect("a step may leave the key out");
     let manifest = Manifest::parse(&named("armada.yml"), FAILING_MANIFEST).expect("a manifest");
@@ -238,7 +238,7 @@ fn a_step_restating_the_manifests_code_is_carried_unchanged() {
 #[test]
 fn a_step_contradicting_the_manifests_exit_code_is_refused() {
     let def = parse(
-        "version: 1\nworkflow_id: bug\nname: bug\nstructure: linear\nsteps:\n  - id: repro\n    label: Reproduce\n    evidence_type: diff\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: manifest_check, check: test, expect_exit_code: 0 }\n",
+        "version: 1\nworkflow_id: bug\nname: bug\nstructure: linear\nsteps:\n  - id: repro\n    label: Reproduce\n    evidence: {submitted: {type: diff}}\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: manifest_check, check: test, expect_exit_code: 0 }\n",
     )
     .expect("the definition itself is well formed");
     let manifest = Manifest::parse(&named("armada.yml"), FAILING_MANIFEST).expect("a manifest");
@@ -263,7 +263,7 @@ fn a_step_contradicting_the_manifests_exit_code_is_refused() {
 #[test]
 fn a_step_may_gate_on_every_check_the_manifest_declares() {
     let def = parse(
-        "version: 1\nworkflow_id: feature\nname: feature\nstructure: linear\nsteps:\n  - id: implement\n    label: Implement\n    evidence_type: diff\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: every_manifest_check }\n      - { type: diff_nonempty }\n",
+        "version: 1\nworkflow_id: feature\nname: feature\nstructure: linear\nsteps:\n  - id: implement\n    label: Implement\n    evidence: {submitted: {type: diff}}\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: every_manifest_check }\n      - { type: diff_nonempty }\n",
     )
     .expect("a step may gate on all of them");
     let manifest = Manifest::parse(&named("armada.yml"), FAILING_MANIFEST).expect("a manifest");
@@ -293,7 +293,7 @@ fn a_step_may_gate_on_every_check_the_manifest_declares() {
 #[test]
 fn declaring_no_checks_is_not_declaring_every_check() {
     let def = parse(
-        "version: 1\nworkflow_id: design\nname: design\nstructure: linear\nsteps:\n  - id: draft\n    label: Draft\n    evidence_type: document\n    delivers: false\n    advance_gate: auto\n",
+        "version: 1\nworkflow_id: design\nname: design\nstructure: linear\nsteps:\n  - id: draft\n    label: Draft\n    evidence: {submitted: {type: document}}\n    delivers: false\n    advance_gate: auto\n",
     )
     .expect("well formed");
     let manifest = Manifest::parse(&named("armada.yml"), FAILING_MANIFEST).expect("a manifest");
@@ -317,7 +317,7 @@ fn declaring_no_checks_is_not_declaring_every_check() {
 #[test]
 fn gating_on_every_check_where_the_manifest_declares_none_expands_to_nothing_and_says_so() {
     let def = parse(
-        "version: 1\nworkflow_id: feature\nname: feature\nstructure: linear\nsteps:\n  - id: implement\n    label: Implement\n    evidence_type: diff\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: every_manifest_check }\n",
+        "version: 1\nworkflow_id: feature\nname: feature\nstructure: linear\nsteps:\n  - id: implement\n    label: Implement\n    evidence: {submitted: {type: diff}}\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: every_manifest_check }\n",
     )
     .expect("well formed");
     let bare = Manifest::parse(&named("armada.yml"), "version: 1\nid: tooling\n").expect("bare");
@@ -358,7 +358,7 @@ checks:
 #[test]
 fn every_manifest_check_expands_in_the_order_the_manifest_writes_not_the_alphabet() {
     let def = parse(
-        "version: 1\nworkflow_id: feature\nname: feature\nstructure: linear\nsteps:\n  - id: implement\n    label: Implement\n    evidence_type: diff\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: every_manifest_check }\n",
+        "version: 1\nworkflow_id: feature\nname: feature\nstructure: linear\nsteps:\n  - id: implement\n    label: Implement\n    evidence: {submitted: {type: diff}}\n    delivers: false\n    advance_gate: auto\n    mechanical_checks:\n      - { type: every_manifest_check }\n",
     )
     .expect("well formed");
     let manifest =
@@ -396,8 +396,13 @@ fn naming_checks_by_hand_does_not_read_as_gating_on_every_one() {
     assert!(!resolved.steps()[1].gates_on_every_check());
 }
 
-/// A workflow with a `shown` step, met with a Manifest that declares no
+/// A workflow with a captured step, met with a Manifest that declares no
 /// harness.
+///
+/// **The captured step hands in a diff as well**, which is the shape `#777`
+/// made possible and the one the old single value could not spell: capture is
+/// an instruction to Fleet, so it sits beside the claim rather than instead
+/// of it.
 const SHOWS: &str = r#"
 version: 1
 workflow_id: shows
@@ -406,12 +411,17 @@ structure: linear
 steps:
   - id: implement
     label: Implement
-    evidence_type: diff
+    evidence:
+      submitted:
+        type: diff
     delivers: false
     advance_gate: auto
   - id: show
     label: Show what it looks like
-    evidence_type: shown
+    evidence:
+      submitted:
+        type: diff
+      captured: true
     delivers: true
     advance_gate: auto
 "#;
@@ -425,10 +435,10 @@ evidence:
   frames: .playwright/frames
 "#;
 
-/// **A step asking to be shown, held to a repository that can show it.**
+/// **A step asking to be captured, held to a repository that can capture it.**
 ///
-/// Neither file can answer this alone: `evidence_type: shown` parses against
-/// no Manifest, and an `evidence:` section is declared with no workflow in
+/// Neither file can answer this alone: `evidence.captured` parses against no
+/// Manifest, and an `evidence:` section is declared with no workflow in
 /// sight. So it is checked here, at resolve, and refused before anything is
 /// dispatched.
 ///
@@ -439,7 +449,7 @@ evidence:
 #[test]
 fn a_step_that_shows_its_work_is_refused_where_nothing_can_show_it() {
     let def = WorkflowDef::parse(&named("workflows/shows.yml"), SHOWS, &roster())
-        .expect("a workflow with a shown step");
+        .expect("a workflow with a captured step");
 
     let refused = ResolvedWorkflow::resolve(&def, &manifest())
         .expect_err("no harness is declared, so the step cannot run");
@@ -455,12 +465,12 @@ fn a_step_that_shows_its_work_is_refused_where_nothing_can_show_it() {
 }
 
 /// And the same workflow resolves once the repository says how it shows its
-/// work. **Absence is the refusal and not the type**, which is what keeps
-/// `shown` a step a repository can opt into rather than one nobody can write.
+/// work. **Absence is the refusal and not the key**, which is what keeps
+/// capture a thing a repository can opt into rather than one nobody can write.
 #[test]
 fn a_repository_that_declares_a_harness_may_have_steps_that_show_their_work() {
     let def = WorkflowDef::parse(&named("workflows/shows.yml"), SHOWS, &roster())
-        .expect("a workflow with a shown step");
+        .expect("a workflow with a captured step");
     let manifest = Manifest::parse(&named("armada.yml"), &format!("{MANIFEST}{AND_A_HARNESS}"))
         .expect("a manifest with a harness");
 

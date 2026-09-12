@@ -215,7 +215,7 @@ fn the_step_before_the_epic_s_dispatch_is_the_one_a_person_answers() {
 fn a_definition_may_grant_the_dispatch_tool() {
     let text = "version: 1\nworkflow_id: grants\nname: grants\nstructure: linear\n\
                 steps:\n  - id: split\n    label: \"Split\"\n    \
-                evidence_type: facts_note\n    may_dispatch_jobs: true\n    \
+                evidence: {submitted: {type: facts_note}}\n    may_dispatch_jobs: true\n    \
                 delivers: false\n    advance_gate: auto\n";
     let def = config::WorkflowDef::parse(Path::new("grants.yml"), text, &roster())
         .expect("a definition may say a step creates Jobs");
@@ -229,7 +229,7 @@ fn a_definition_may_grant_the_dispatch_tool() {
 fn a_dispatch_grant_that_is_not_a_boolean_is_refused() {
     let text = "version: 1\nworkflow_id: grants\nname: grants\nstructure: linear\n\
                 steps:\n  - id: split\n    label: \"Split\"\n    \
-                evidence_type: facts_note\n    may_dispatch_jobs: dispatches\n    \
+                evidence: {submitted: {type: facts_note}}\n    may_dispatch_jobs: dispatches\n    \
                 delivers: false\n    advance_gate: auto\n";
     assert!(config::WorkflowDef::parse(Path::new("grants.yml"), text, &roster()).is_err());
 }

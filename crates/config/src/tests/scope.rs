@@ -23,7 +23,7 @@ fn parsed(steps: &str) -> Result<WorkflowDef, crate::error::LoadError> {
 const WATCHED: &str = "
   - id: implement
     label: Implement
-    evidence_type: diff
+    evidence: {submitted: {type: diff}}
     delivers: false
     advance_gate: auto
     declare_plan_at: step_start
@@ -110,12 +110,12 @@ fn a_step_can_name_the_earlier_evidence_its_work_is_measured_against() {
         "
   - id: scope
     label: Scope
-    evidence_type: facts_note
+    evidence: {submitted: {type: facts_note}}
     delivers: false
     advance_gate: auto
   - id: implement
     label: Implement
-    evidence_type: diff
+    evidence: {submitted: {type: diff}}
     delivers: false
     advance_gate: auto
     evidence_scope:
@@ -247,7 +247,7 @@ fn a_step_with_no_scope_block_carries_none() {
         "
   - id: implement
     label: Implement
-    evidence_type: diff
+    evidence: {submitted: {type: diff}}
     delivers: false
     advance_gate: auto
 ",

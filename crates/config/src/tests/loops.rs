@@ -20,12 +20,12 @@ use crate::workflow::{Structure, WorkflowDef};
 const DESIGN_PLAN: &str = "
   - id: draft
     label: Draft
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: auto
   - id: present
     label: Present
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: human_always
     verdict_routing:
@@ -95,12 +95,12 @@ fn a_loop_may_declare_an_edge_and_no_cap() {
         "
   - id: draft
     label: Draft
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: auto
   - id: present
     label: Present
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: human_always
     verdict_routing:
@@ -120,12 +120,12 @@ fn a_cap_of_zero_is_a_sentence_an_author_may_write() {
         "
   - id: draft
     label: Draft
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: auto
   - id: present
     label: Present
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: human_always
     verdict_routing:
@@ -147,12 +147,12 @@ fn a_cap_that_is_not_a_number_is_refused() {
         "
   - id: draft
     label: Draft
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: auto
   - id: present
     label: Present
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: human_always
     verdict_routing:
@@ -177,13 +177,13 @@ fn a_cap_on_a_step_with_no_edge_is_refused() {
         "
   - id: draft
     label: Draft
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: auto
     iteration_cap: 5
   - id: present
     label: Present
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: human_always
     verdict_routing:
@@ -207,12 +207,12 @@ fn a_verdict_that_is_not_a_loop_return_is_refused() {
         "
   - id: draft
     label: Draft
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: auto
   - id: present
     label: Present
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: human_always
     verdict_routing:
@@ -236,12 +236,12 @@ fn an_empty_routing_map_is_refused() {
         "
   - id: draft
     label: Draft
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: auto
   - id: present
     label: Present
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: human_always
     verdict_routing: {}
@@ -282,12 +282,12 @@ fn a_loop_that_declares_no_edge_is_refused() {
         "
   - id: draft
     label: Draft
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: auto
   - id: present
     label: Present
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: human_always
 ",
@@ -309,11 +309,11 @@ fn a_loop_whose_routing_step_failed_to_parse_is_not_also_called_edgeless() {
         "
   - id: draft
     label: Draft
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: auto
   - id: present
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: human_always
     verdict_routing:
@@ -338,12 +338,12 @@ fn an_edge_that_names_no_step_is_refused() {
         "
   - id: draft
     label: Draft
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: auto
   - id: present
     label: Present
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: human_always
     verdict_routing:
@@ -371,12 +371,12 @@ fn a_step_that_routes_at_itself_is_refused_as_a_retry() {
         "
   - id: draft
     label: Draft
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: auto
   - id: present
     label: Present
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: human_always
     verdict_routing:
@@ -404,14 +404,14 @@ fn a_step_that_routes_forward_is_refused_and_not_deferred() {
         "
   - id: draft
     label: Draft
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: human_always
     verdict_routing:
       request_changes: present
   - id: present
     label: Present
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: auto
 ",
@@ -479,12 +479,12 @@ fn a_route_with_no_cap_freezes_as_a_loop_that_may_not_go_round() {
         "
   - id: draft
     label: Draft
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: auto
   - id: present
     label: Present
-    evidence_type: document
+    evidence: {submitted: {type: document}}
     delivers: false
     advance_gate: human_always
     verdict_routing:

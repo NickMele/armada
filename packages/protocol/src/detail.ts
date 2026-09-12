@@ -720,7 +720,7 @@ export type StepDetail = {
    * 9.2 sends no such field at all. Both are *this step has no frames*, and a
    * reader that required the key would break on the second.
    *
-   * That is the ordinary case — every step that declared no `shown` evidence,
+   * That is the ordinary case — every step the workflow did not ask to capture,
    * which is most of them, and one whose harness ran and captured nothing.
    * **Absent never means the harness failed**: a repository with a broken
    * harness and a spec that photographed nothing look the same here, and what

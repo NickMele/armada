@@ -9,7 +9,7 @@
 //! Every run here is reached by transitioning, as in `attempt`: the attempt a
 //! row names is a fact about the log, not a number this file chose.
 
-use core_model::{EvidenceType, Side, StepEvidence, StepFrame};
+use core_model::{EvidenceType, Side, StepEvidence, StepFrame, StepId};
 
 use crate::tests::attempt::{on_its_first_run, run_it_again, step_id};
 use crate::tests::{at, open, TempDir};
@@ -25,6 +25,16 @@ fn frame(dir: &str, name: &str, digest: &str) -> StepFrame {
         side: Side::Branch,
         digest: digest.to_string(),
     }
+}
+
+/// The steps the caller says Fleet captures.
+///
+/// Every submission in this file is on `step_id()`, so a test wanting a spec
+/// back names it and one wanting none names nothing — which is what reading the
+/// frozen workflow would have answered. **The row no longer says**: since
+/// `#777` being captured is a fact about the step, not about its submission.
+fn captured() -> Vec<StepId> {
+    vec![step_id()]
 }
 
 fn submitted(store: &mut Store, evidence_type: EvidenceType, spec: &str, when: &str) {
@@ -51,7 +61,7 @@ fn a_press_never_overwrites_the_frames_the_step_itself_produced() {
     let id = crate::tests::job_id(JOB);
     submitted(
         &mut store,
-        EvidenceType::Shown,
+        EvidenceType::Diff,
         "e2e/panel.spec.ts",
         "2026-08-26T10:03:00.000Z",
     );
@@ -65,7 +75,7 @@ fn a_press_never_overwrites_the_frames_the_step_itself_produced() {
         .expect("the step's own frame");
 
     let named = store
-        .spec_last_named(&id)
+        .spec_last_named(&id, &captured())
         .expect("reads")
         .expect("the Drone named a spec");
     for (when, digest) in [
@@ -124,11 +134,14 @@ fn a_press_that_captured_nothing_writes_no_set_and_takes_no_number() {
     let id = crate::tests::job_id(JOB);
     submitted(
         &mut store,
-        EvidenceType::Shown,
+        EvidenceType::Diff,
         "e2e/panel.spec.ts",
         "2026-08-26T10:03:00.000Z",
     );
-    let named = store.spec_last_named(&id).expect("reads").expect("named");
+    let named = store
+        .spec_last_named(&id, &captured())
+        .expect("reads")
+        .expect("named");
 
     store
         .record_shown_again(&id, 1, &named, &[], &at("2026-08-26T11:00:00.000Z"))
@@ -142,14 +155,14 @@ fn a_press_that_captured_nothing_writes_no_set_and_takes_no_number() {
 }
 
 #[test]
-fn the_spec_a_press_reruns_is_the_last_one_a_shown_step_named() {
+fn the_spec_a_press_reruns_is_the_last_one_a_captured_step_named() {
     let dir = TempDir::new();
     let mut store = open(&dir);
     let job = on_its_first_run(&mut store, JOB);
     let id = crate::tests::job_id(JOB);
     submitted(
         &mut store,
-        EvidenceType::Shown,
+        EvidenceType::Diff,
         "e2e/first.spec.ts",
         "2026-08-26T10:03:00.000Z",
     );
@@ -161,19 +174,25 @@ fn the_spec_a_press_reruns_is_the_last_one_a_shown_step_named() {
     );
     submitted(
         &mut store,
-        EvidenceType::Shown,
+        EvidenceType::Diff,
         "e2e/renamed.spec.ts",
         "2026-08-26T10:07:00.000Z",
     );
 
-    let named = store.spec_last_named(&id).expect("reads").expect("named");
+    let named = store
+        .spec_last_named(&id, &captured())
+        .expect("reads")
+        .expect("named");
     assert_eq!(named.spec, "e2e/renamed.spec.ts");
     assert_eq!(named.attempt.number(), 2, "named by the second run");
 }
 
-/// **Only a `shown` step names a spec.** Every other step's `shown_by` points at
-/// whatever shows its claim, and handing that to `evidence.run` would put a
+/// **Only a captured step names a spec.** Every other step's `shown_by` points
+/// at whatever shows its claim, and handing that to `evidence.run` would put a
 /// Drone's sentence into a command line written for a spec.
+///
+/// The caller naming no captured step is how that is said now — the submission
+/// itself looks identical either way.
 #[test]
 fn a_job_whose_steps_never_asked_to_be_shown_names_no_spec() {
     let dir = TempDir::new();
@@ -187,5 +206,5 @@ fn a_job_whose_steps_never_asked_to_be_shown_names_no_spec() {
         "2026-08-26T10:03:00.000Z",
     );
 
-    assert_eq!(store.spec_last_named(&id).expect("reads"), None);
+    assert_eq!(store.spec_last_named(&id, &[]).expect("reads"), None);
 }

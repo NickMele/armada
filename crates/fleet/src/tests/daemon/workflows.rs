@@ -192,10 +192,10 @@ fn two_steps_gated(
         std::path::Path::new("fixture.yml"),
         &format!(
             "version: 1\nworkflow_id: fixture-workflow\nname: fixture\nstructure: linear\n\
-             steps:\n  - id: implement\n    label: \"Implement\"\n    evidence_type: diff\n    \
+             steps:\n  - id: implement\n    label: \"Implement\"\n    evidence: {{submitted: {{type: diff}}}}\n    \
              mechanical_checks:\n      - type: diff_nonempty\n{judge}    \
              delivers: {}\n    advance_gate: {}\n  - \
-             id: summarise\n    label: \"Summarise\"\n    evidence_type: facts_note\n    \
+             id: summarise\n    label: \"Summarise\"\n    evidence: {{submitted: {{type: facts_note}}}}\n    \
              delivers: {}\n    advance_gate: {}\n",
             sends("implement"),
             gate("implement"),
@@ -246,7 +246,7 @@ fn workflow_named_and(id: &str, gated: bool) -> config::ResolvedWorkflow {
         std::path::Path::new("fixture.yml"),
         &format!(
             "version: 1\nworkflow_id: {id}\nname: {id}\nstructure: linear\nsteps:\n  - id: \
-             {step_id}\n    label: \"{step_id}\"\n    evidence_type: diff\n{mechanical}    \
+             {step_id}\n    label: \"{step_id}\"\n    evidence: {{submitted: {{type: diff}}}}\n{mechanical}    \
              delivers: true\n    advance_gate: auto\n"
         ),
         // The fixture names no model, so there is nothing for a roster to
@@ -282,7 +282,7 @@ pub fn manifest() -> Manifest {
 ///
 /// **The manifest is returned as well as the workflow**, because the two are
 /// separate parses of the same text: this one is what `ResolvedWorkflow`
-/// checks a `shown` step against, and the caller still has to plant a second
+/// checks a captured step against, and the caller still has to plant a second
 /// copy on `Fittings::manifest`, which is what Fleet actually reads at
 /// runtime.
 ///
@@ -298,9 +298,21 @@ pub fn shown_step(
 ) -> (config::ResolvedWorkflow, Manifest) {
     let def = config::WorkflowDef::parse(
         std::path::Path::new("fixture-shown.yml"),
-        "version: 1\nworkflow_id: fixture-shown\nname: fixture\nstructure: linear\nsteps:\n  \
-         - id: show\n    label: \"Show\"\n    evidence_type: shown\n    delivers: false\n    \
-         advance_gate: auto\n",
+        r#"
+version: 1
+workflow_id: fixture-shown
+name: fixture
+structure: linear
+steps:
+  - id: show
+    label: "Show"
+    evidence:
+      submitted:
+        type: diff
+      captured: true
+    delivers: false
+    advance_gate: auto
+"#,
         &config::Roster::offering_nothing(),
     )
     .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));

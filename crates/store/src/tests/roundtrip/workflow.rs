@@ -14,8 +14,8 @@
 //! no store at all.
 
 use core_model::{
-    AdvanceGate, ContextSource, Covers, DeclarePlanAt, EvidenceRef, GamingPattern, ModelName,
-    Narrowing, PathPattern, Prerequisite, RepoPath, ResolvedCheck, StepId,
+    AdvanceGate, ContextSource, Covers, DeclarePlanAt, EvidenceRef, EvidenceType, GamingPattern,
+    ModelName, Narrowing, PathPattern, Prerequisite, RepoPath, ResolvedCheck, StepId,
 };
 
 use crate::tests::{created_at, job_id, open, top_level, TempDir};
@@ -191,6 +191,61 @@ fn a_workflow_frozen_before_when_existed_reads_back_as_a_check_that_always_runs(
     assert_eq!(check.when(), None);
     assert!(!check.needs_changed_paths());
     assert!(check.covers(&[]), "a Check with no `when` runs on any step");
+}
+
+/// A frozen workflow as a store written before `#777` holds one: a step whose
+/// evidence type was the word `shown`.
+const FROZEN_SHOWN: &str = r#"{
+  "workflow_id": "01J000000000000000000WF02",
+  "name": "shows",
+  "version": 1,
+  "steps": [{
+    "id": "show",
+    "label": "Show",
+    "evidence_type": "shown",
+    "advance_gate": "auto",
+    "retry_limit": 0,
+    "evidence_scope": null,
+    "judge_checks": [],
+    "checks": []
+  }]
+}"#;
+
+#[test]
+fn a_step_frozen_as_shown_reads_back_as_captured_with_nothing_submitted() {
+    // **No migration moves the row, because the old spelling has an exact
+    // reading in the new shape.** `shown` was never a claim the gate measured
+    // — it asked Fleet to run the repository's harness — so a step that froze
+    // it submitted nothing and asked to be captured.
+    let workflow = crate::columns::read_workflow(FROZEN_SHOWN).expect("a pre-#777 row");
+    let step = workflow.step(&StepId::new("show")).expect("the step");
+    assert_eq!(step.evidence_type(), None);
+    assert!(step.captured());
+}
+
+#[test]
+fn the_two_halves_of_a_steps_evidence_survive_the_column_separately() {
+    // The pair one value could not hold: a patch handed in, and a capture
+    // asked for. A writer and a reader that folded them back together would
+    // put `#777` straight back.
+    let stored = FROZEN_SHOWN.replace(
+        r#""evidence_type": "shown""#,
+        r#""evidence_type": "diff", "captured": true"#,
+    );
+    let workflow = crate::columns::read_workflow(&stored).expect("both halves");
+    let step = workflow.step(&StepId::new("show")).expect("the step");
+    assert_eq!(step.evidence_type(), Some(EvidenceType::Diff));
+    assert!(step.captured());
+}
+
+/// **A step nobody asked to capture reads back as one**, which is every step of
+/// every workflow and every row written before the key existed.
+#[test]
+fn a_step_frozen_with_no_capture_reads_back_uncaptured() {
+    let workflow = crate::columns::read_workflow(WITHOUT_WHEN).expect("a pre-`captured` row");
+    let step = workflow.step(&StepId::new("fix")).expect("the step");
+    assert_eq!(step.evidence_type(), Some(EvidenceType::Diff));
+    assert!(!step.captured());
 }
 
 #[test]

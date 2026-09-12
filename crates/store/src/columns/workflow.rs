@@ -35,6 +35,10 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
             "id": step.id().as_str(),
             "label": step.label(),
             "evidence_type": step.evidence_type().map(|kind| kind.as_wire()),
+            // Absent rather than `false`, which is every step of every workflow
+            // that asks to be read rather than looked at, and every row written
+            // before the key existed.
+            "captured": step.captured().then_some(true),
             "advance_gate": step.advance_gate().as_wire(),
             "retry_limit": step.retry_limit(),
             // The loop, written as the pair it is read as. Absent rather than
@@ -209,16 +213,36 @@ fn declares_delivery(entry: &Value) -> bool {
         .is_some_and(|found| !found.is_null())
 }
 
+/// What the step hands in, and whether Fleet captures it.
+///
+/// **`"shown"` reads back as captured with nothing submitted**, which is
+/// exactly what that value meant: it was never a claim the gate measured, it
+/// asked Fleet to run the repository's harness. So a Job frozen before `#777`
+/// still loads, and no migration moves a stored row — the old spelling has an
+/// exact reading in the new shape.
+fn read_evidence(entry: &Map<String, Value>) -> Result<(Option<EvidenceType>, bool), Malformed> {
+    let captured = match entry.get("captured") {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(set)) => *set,
+        Some(other) => return Err(format!("`captured` is {}", kind(other))),
+    };
+    match field(entry, "evidence_type")? {
+        Value::Null => Ok((None, captured)),
+        Value::String(named) if named == "shown" => Ok((None, true)),
+        Value::String(named) => Ok((
+            Some(
+                EvidenceType::from_wire(named)
+                    .ok_or_else(|| format!("`evidence_type` holds `{named}`"))?,
+            ),
+            captured,
+        )),
+        other => Err(format!("`evidence_type` is {}", kind(other))),
+    }
+}
+
 fn read_step(entry: &Map<String, Value>) -> Result<ResolvedStep, Malformed> {
     let gate = text(entry, "advance_gate")?;
-    let evidence_type = match field(entry, "evidence_type")? {
-        Value::Null => None,
-        Value::String(named) => Some(
-            EvidenceType::from_wire(named)
-                .ok_or_else(|| format!("`evidence_type` holds `{named}`"))?,
-        ),
-        other => return Err(format!("`evidence_type` is {}", kind(other))),
-    };
+    let (evidence_type, captured) = read_evidence(entry)?;
     let mut checks = Vec::new();
     for check in array(field(entry, "checks")?)? {
         checks.push(read_check(object(check)?)?);
@@ -234,6 +258,7 @@ fn read_step(entry: &Map<String, Value>) -> Result<ResolvedStep, Malformed> {
         read_retry_limit(entry)?,
         read_step_model(entry)?,
     )
+    .capturing(captured)
     .dispatching(read_may_dispatch_jobs(entry)?)
     // **False where the key is absent, and `read_workflow` is what corrects a
     // row where every step is.** A step alone cannot tell "this step does not

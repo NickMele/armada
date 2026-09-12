@@ -123,24 +123,55 @@ parent = "steps[]"
 sub_items = ["scope_diff_check", "context_paths", "context_source", "exclude_paths", "max_context_size", "reference_docs"]
 purpose = "Exactly what the Judge, or the human at the gate, is allowed to read."
 open_questions = ["Does exceeding max_context_size hard-fail or soft-warn?", "How does a loop workflow's appended prior-iteration context stay under max_context_size?"]
-notes = "Attached to every step that triggers a Judge or a human gate, so whoever is judging is told exactly where to look rather than searching the whole codebase. It is also how a Judge inspects changed files directly, rather than being handed a parsed summary of them. The full object — the definition-versus-resolved split, the pre-loaded diff, the per-`evidence_type` table — is on Workflow under Evidence Scope Object, read as a unit rather than field by field."
+notes = "Attached to every step that triggers a Judge or a human gate, so whoever is judging is told exactly where to look rather than searching the whole codebase. It is also how a Judge inspects changed files directly, rather than being handed a parsed summary of them. The full object — the definition-versus-resolved split, the pre-loaded diff, the per-`evidence.submitted.type` table — is on Workflow under Evidence Scope Object, read as a unit rather than field by field."
 
-[fields.evidence_type]
-type = "enum"
+[fields.evidence]
+type = "object"
 concern = "Verification"
 parent = "steps[]"
+sub_items = ["submitted", "captured"]
+purpose = "What the step hands in, and whether Fleet captures it. Two questions, two keys."
+notes = """
+**One key could not answer both, and that is why this is an object.** `evidence_type` held a single value, so a step asking to be captured stopped claiming the diff its Judge reads and its `diff_nonempty` check measures — the Feature workflow's `implement` step is the case. A list was rejected: it would put an instruction and a requirement in one array. `#777`.
+
+`submitted` is the Drone's claim and what `verification::gate` checks a submission against; `captured` is an instruction to Fleet and gates nothing. A step declaring neither produces nothing a Judge reads, which is Bug's `merge`.
+"""
+
+[fields.submitted]
+type = "object"
+concern = "Verification"
+parent = "evidence"
+sub_items = ["type"]
+purpose = "What the step hands in as its work product. Absent where it hands in nothing."
+notes = "One key today, `type`, and an object rather than a bare value so the typed payloads deferred at `[evidence-mcp-submission-schema]` have somewhere to land without moving the key."
+
+[fields.type]
+type = "enum"
+concern = "Verification"
+parent = "submitted"
 purpose = "What the step produces as its work product. Determines what the Judge is handed."
 open_questions = ["Does the Judge see the Drone's transcript, or only task text, diff and deterministic facts?"]
 notes = """
-Values in use across the samples: `diff`, `failing_test`, `facts_note`, `test_suite_run`, `bundle`, `document`, `shown`. A step may also declare none — Bug's `merge` produces nothing a Judge reads. A step with no gate advances once evidence of its declared `evidence_type` arrives, so on a gateless step this field is the entire advance condition.
+The legal values: `diff`, `failing_test`, `facts_note`, `test_suite_run`, `bundle`, `document`. A step may declare none — Bug's `merge` produces nothing a Judge reads. A step with no gate advances once evidence of its declared type arrives, so on a gateless step this field is the entire advance condition.
 
-What the Judge receives for each value, and what `context_paths` is for in each case, is the per-`evidence_type` table on Workflow under Evidence Scope Object. Code Review is the exception that table cannot fold in — there the diff is the input and the review is the work product.
+What the Judge receives for each value, and what `context_paths` is for in each case, is the per-type table on Workflow under Evidence Scope Object. Code Review is the exception that table cannot fold in — there the diff is the input and the review is the work product.
 
-**`shown` is the one value with behaviour, and it is the first this field has had.** Every other value is a claim about what the step produced, compared against a type Fleet fills in and so unable to disagree; requiring or refusing a `note` was the whole of what the field did, and that field is gone. A step declaring `shown` makes Fleet run the repository's own harness — `evidence:` in `armada.yml` — against the spec `shown_by` names, on the settling turn, before the gate and gating nothing. The frames land on the step's record and a reviewer opens them instead of reading a patch to infer what a change looked like.
+**`shown` was a value here and is not one now.** Every value in this set is a claim a Drone hands in and the gate measures; `shown` was never a claim by anybody — it meant *Fleet, run the repository's harness* — which is why it could not sit beside `diff`. `captured` is where that instruction lives. `#777`.
 
-It is also the one value a Manifest can refuse. A workflow with a `shown` step resolved against a repository that declares no harness is refused at load, before anything is dispatched — so a step that cannot be shown is a sentence somebody reads rather than a Job that cut a worktree and captured nothing.
+Whether the field earns its place at all is still a person's question, open at `[evidence-mcp-submission-schema]`, which also defers the typed payloads for `bundle`, `document` and `review_findings`.
+"""
 
-Whether the field earns its place for the other six is still a person's question, open at `[evidence-mcp-submission-schema]`, which also defers the typed payloads for `bundle`, `document` and `review_findings`.
+[fields.captured]
+type = "bool"
+concern = "Verification"
+parent = "evidence"
+purpose = "Whether Fleet runs the repository's own `evidence:` harness for this step and keeps what it produced. Optional, and absent means no."
+notes = """
+**It names no medium, deliberately.** These workflows ship with the app and run against any repository, so what a capture produces is that repository's decision — a screenshot, a recording, terminal output, a table. A key called `pictures`, `frames` or `screenshots` would be wrong the first time somebody captured a log.
+
+Fleet runs the harness against the spec `shown_by` names, on the settling turn, before the gate. **It gates nothing**: a capture that fails has established nothing about the work, so what a failed run costs is the thing a reviewer was going to look at, and that goes in the Job's log rather than into a verdict.
+
+It is the one key here a Manifest can refuse. A workflow asking to be captured, resolved against a repository that declares no harness, is refused at load before anything is dispatched — so it reaches a person as a sentence rather than as a Job that cut a worktree and captured nothing.
 """
 
 [fields.exclude_paths]
@@ -476,7 +507,7 @@ No sample carries one yet.
 [fields."steps[]"]
 type = "array[step]"
 concern = "Structure"
-sub_items = ["id", "label", "model", "mechanical_checks", "judge_checks", "evidence_scope", "evidence_type", "advance_gate", "delivers", "retry_limit", "verdict_routing", "iteration_cap", "hard_prerequisite", "on_fail", "on_gaming_flag", "declare_plan_at", "quiet_after_seconds", "poke_limit"]
+sub_items = ["id", "label", "model", "mechanical_checks", "judge_checks", "evidence_scope", "evidence", "advance_gate", "delivers", "retry_limit", "verdict_routing", "iteration_cap", "hard_prerequisite", "on_fail", "on_gaming_flag", "declare_plan_at", "quiet_after_seconds", "poke_limit"]
 purpose = "The ordered set of steps. Everything nested under this row is a field of a step, not of the WorkflowDef."
 notes = """
 Ordered, and loop-capable: `structure: "loop"` means a step returns to an earlier one by `verdict_routing`, not that the array is unordered.

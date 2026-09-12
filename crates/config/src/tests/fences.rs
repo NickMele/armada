@@ -24,7 +24,7 @@ structure: linear
 steps:
   - id: implement
     label: Implement
-    evidence_type: diff
+    evidence: {submitted: {type: diff}}
     delivers: false
     advance_gate: auto
     evidence_scope:
@@ -33,7 +33,7 @@ steps:
         - docs
   - id: handoff
     label: Summarise
-    evidence_type: facts_note
+    evidence: {submitted: {type: facts_note}}
     delivers: true
     advance_gate: auto
     evidence_scope:
@@ -48,7 +48,7 @@ structure: linear
 steps:
   - id: implement
     label: Implement
-    evidence_type: diff
+    evidence: {submitted: {type: diff}}
     delivers: true
     advance_gate: auto
 "#;
