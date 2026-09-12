@@ -719,20 +719,17 @@ pub trait Commands: Send + Sync + 'static {
     /// there.
     ///
     /// **No staging, no commit, no formatting and no reserialisation.** The
-    /// bytes the caller sends are the bytes on disk. The file is tracked, so
-    /// the edit appears in the working tree and is committed along with
-    /// everything else — Journey 9, *Editing*.
+    /// bytes the caller sends are the bytes on disk — Journey 9, *Editing*.
     ///
     /// **A write that does not parse is still a write.** Refusing invalid YAML
-    /// would mean work in progress cannot be saved, which is the editor this
-    /// exists to stop sending people to. What Fleet could not adopt arrives as
-    /// `manifest.reread`, with the previous values still in force.
+    /// would mean work in progress cannot be saved. What Fleet could not adopt
+    /// arrives as `manifest.reread`, previous values still in force.
     ///
     /// **What comes back is not a reading.** The watch settles before it
     /// re-reads, so what the save moved is not known when this answers.
     ///
-    /// [`Refusal::Fault`] where the file will not be written. Nothing about the
-    /// text can refuse it.
+    /// [`Refusal::Fault`] where the file will not be written. Nothing about
+    /// the text can refuse it.
     fn save_manifest_file(
         &self,
         save: SaveManifestFile,

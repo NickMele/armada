@@ -205,19 +205,16 @@ pub trait Queries: Send + Sync + 'static {
     /// edits it.
     ///
     /// **The half a person acts with**, where
-    /// [`Queries::get_manifest_reading`] is the half that reports. That one
-    /// names the keys Fleet was refused for and nothing on this seam put one
-    /// right, so a correction meant leaving Bridge for an editor.
+    /// [`Queries::get_manifest_reading`] is the half that reports.
     ///
     /// **The bytes, not a document.** Nothing is parsed, so a file that does
-    /// not parse reads back as well as one that does — which is the case a
-    /// person opening this is most likely to be in.
+    /// not parse reads back as well as one that does — the case a person
+    /// opening this is most likely to be in.
     ///
     /// **No path in, and no `manifest_id`**, matching the two reads beside it:
     /// a Fleet serves one repository and resolves its own file.
     ///
-    /// [`Refusal::Fault`] where the file will not open. There is no "no such
-    /// Manifest" here — Fleet holds one and started against it.
+    /// [`Refusal::Fault`] where the file will not open.
     fn get_manifest_file(&self) -> impl Future<Output = Result<ManifestFile, Refusal>> + Send;
 
     /// `get_manifest_drift` — whether the repository still has what
