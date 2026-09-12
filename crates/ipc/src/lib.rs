@@ -42,6 +42,9 @@ mod commanding;
 /// One Manifest as Fleet resolved it, past the summary a picker reads.
 mod configured;
 mod detail;
+/// The agent's door: the MCP half of the HTTP surface, and the tool set
+/// `build.rs` emits from `operations.toml`'s own `agent_access` column.
+pub mod door;
 /// The processes Fleet is holding, and what one of them has been doing.
 /// **Read off the roster, never off the Jobs.**
 mod drones;

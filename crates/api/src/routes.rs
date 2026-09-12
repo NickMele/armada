@@ -695,8 +695,21 @@ pub const SERVED: &[Route] = &[
 ];
 
 
-/// The one listener. HTTP for queries and commands, an upgrade for events.
+/// The one listener: the HTTP surface, the Drone's endpoint and the agent's
+/// door, on one port.
+///
+/// **The surface is built twice on purpose.** The agent's door makes every
+/// tool call against it rather than against the daemon, and a router that held
+/// itself is not a value — so it is handed its own copy of the same table.
 pub fn router<D: Daemon>(served: Served<D>) -> Router {
+    surface(served.clone()).merge(crate::door::mounted::<D>(
+        served.clone(),
+        surface(served),
+    ))
+}
+
+/// The HTTP surface and the Drone's endpoint: every route but the door.
+fn surface<D: Daemon>(served: Served<D>) -> Router {
     Router::new()
         .route("/jobs", get(list_jobs::<D>).post(propose_job::<D>))
         .route("/jobs/from_request", post(propose_from_request::<D>))

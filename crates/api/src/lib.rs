@@ -29,6 +29,9 @@ mod answers;
 mod attention;
 mod commands;
 mod daemon;
+/// The agent's door: the HTTP surface, spoken as MCP. **Who may open it is
+/// `#698`; what it is scoped to is here.**
+mod door;
 /// One Job's own log, followed off the file Fleet already writes.
 /// **The third voice in the activity log.**
 mod following;
@@ -60,6 +63,7 @@ mod tests;
 pub use daemon::{Commands, Daemon, PermissionAnswer, Queries, Refusal, Tools};
 pub use following::{Follow, Followed, LiveOutput};
 pub use journal::{Journal, Reading, FOLLOW};
+pub use door::{offered, Scope, DOOR_PATH};
 pub use mcp::{Caller, MCP_PATH};
 pub use observing::{Feed, Observed, Seen, Turns, Watch, WATCHING};
 pub use reference::Resolved;
