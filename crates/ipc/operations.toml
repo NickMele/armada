@@ -1,9 +1,9 @@
 # Every operation the Fleet/Bridge seam carries, with who may reach it.
 #
 # Authored here. This file is the authority on the operation set: which calls
-# exist, which of them Helm may reach, and which travel the socket rather than
-# HTTP. A page in the design workspace that disagrees with this file is stale,
-# not right.
+# exist, which of them an agent may reach, and which travel the socket rather
+# than HTTP. A page in the design workspace that disagrees with this file is
+# stale, not right.
 #
 # It sits beside `ipc` because that is the crate the wire vocabulary lives in,
 # and both readers of the seam read it. Fleet's hand-written route table is the
@@ -24,8 +24,10 @@
 # Fields:
 #   kind        - query | command | event
 #   transport   - HTTP | WebSocket
-#   helm_access - Yes | No | Bridge only | Drafts only. What Helm may reach
-#                 directly, which on a command is the Intervention Ladder rung
+#   agent_access - Yes | No | Bridge only | Drafts only. What an agent may
+#                 reach directly — Helm inside Bridge, or any agent working
+#                 on the machine, on one shared set — which on a command is
+#                 the Intervention Ladder rung
 #   description - what the operation returns or does, in one line
 #   notes       - the reasoning the row carried, where it carried any
 
@@ -33,13 +35,13 @@
 [operations.get_activity_feed]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "Completed Jobs, chronological"
 
 [operations.get_capacity]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "How many Drones Fleet may run, how many it is running, and which one thing is holding the next one back"
 notes = """
 Fleet-wide, and the answer no per-Job field could give. `get_job`'s `queued_reason` says why *that row* has not started and folds the concurrency bound, CPU, memory and disk into one label — `waiting_on_resources` is the only thing `job-statuses.toml` grants a `queued` Job short of anything. So a person saw that their Job was held and never what was holding it.
@@ -52,13 +54,13 @@ Its spelling is the one open set on this seam. Bridge reads it through the gener
 
 A route of its own rather than a field on `list_jobs`, which is read on every Board refresh and is a list of Jobs. This is one small answer about Fleet, asked by the surface that draws Fleet's own state.
 
-`helm_access` is `Yes` for the reason the other queries have it: reading how full the fleet is costs three integers and tells Helm why the Job it dispatched has not started.
+`agent_access` is `Yes` for the reason the other queries have it: reading how full the fleet is costs three integers and tells Helm why the Job it dispatched has not started.
 """
 
 [operations.get_call]
 kind = "query"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "One tool call's arguments, whole"
 notes = """
 **The other end of a row that was cut.** A `called` row on `observe_job` carries one line of what a call was on and how many characters the argument had, so opening it reads *showing 200 of 14,320 characters*; this is where the rest comes from. Without it the flag on that row was a dead end — a surface could say the argument was cut and nothing more, which is how the activity log came to render an apology in the one place whose entire purpose is showing the payload.
@@ -71,13 +73,13 @@ The split is `get_diff`'s against `job.files_changed`, made against the same mea
 
 A member read, so the path is `/jobs/:job_id/calls/:call_id` and names no act — the shape `get_job` has under `/jobs`, and the one exception on that table besides it.
 
-`helm_access` is `No` for the reason `observe_job` and `get_diff` have it: an argument the size of a file pulled into a Helm session stays in that session for its remainder, and the viewer this exists for is a person who clicked a row.
+`agent_access` is `No` for the reason `observe_job` and `get_diff` have it: an argument the size of a file pulled into a Helm session stays in that session for its remainder, and the viewer this exists for is a person who clicked a row.
 """
 
 [operations.get_check_output]
 kind = "query"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "One Check's own output, read back into the app"
 notes = """
 **The other end of a path that opened nothing in Armada.** `CheckRun.output_path` has said where a Check's stdout and stderr were written since the record kept them, and Bridge hands that path to the operating system — so the one surface built to audit a suite that went green for the wrong reason could only send a person out of the app to do it. This is what a reader asks for, once, about the one Check they opened.
@@ -88,13 +90,13 @@ The split is `get_call`'s, made against the same measurement. A Check's output i
 
 **A window, and it says it is one.** The tail is served, for the reason `checks_runner` captures the tail: a test runner prints its failures last. `from_line` is the file's own numbering, `total_lines` is exact because the file is counted as it is read, and `whole` is stated rather than left to be inferred.
 
-`helm_access` is `No` for the reason `get_diff` and `observe_job` have it: a test runner's output pulled into a Helm session stays in that session for the rest of it, and the reader this exists for is a person who pressed a row.
+`agent_access` is `No` for the reason `get_diff` and `observe_job` have it: a test runner's output pulled into a Helm session stays in that session for the rest of it, and the reader this exists for is a person who pressed a row.
 """
 
 [operations.get_frame]
 kind = "query"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "One frame a step's harness produced, as the file itself"
 notes = """
 **The only operation on this seam that does not answer JSON.** A frame has no window. `get_check_output` serves a tail and describes it — `from_line`, `total_lines`, `whole` — because half a log is still a log; half an image is not an image, it is a file nothing can draw. So there is no partial reading for an envelope to carry, and base64 would inflate the bytes by a third to say nothing the row did not already say. The response is the file, with a media type read off its own name and `nosniff` beside it.
@@ -109,13 +111,13 @@ The split is `get_check_output`'s and made against the same measurement. `KeptFr
 
 **Since 10.1 a person's press has run directories of its own**, `implement.again2.1.branch/home.png` beside the step's `implement.1.branch/home.png` — see `show_again`. The rows those name are the second list this resolves against, and the same allowlist rule holds for both.
 
-`helm_access` is `No` for the reason `get_diff`, `get_call` and `get_check_output` have it: a file this size pulled into a Helm session stays in that session for its remainder, and the viewer this exists for is a person who opened a frame.
+`agent_access` is `No` for the reason `get_diff`, `get_call` and `get_check_output` have it: a file this size pulled into a Helm session stays in that session for its remainder, and the viewer this exists for is a person who opened a frame.
 """
 
 [operations.get_diff]
 kind = "query"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "One Job's whole patch, with the file list beside it"
 notes = """
 The expensive half of the work product, and the one operation that spends it. `adapter-traits`' `WorkProduct` splits `changed_files` from `patch` because the bytes are large and most steps ask no semantic question, so a call returning both would pay for the patch on every gate. A person reading a diff to decide whether to take the work is the case those bytes are for, and this is the route that fetches them — not `get_job`, which is read on every open of a Job to draw a summary.
@@ -124,19 +126,19 @@ Not `job.files_changed` either. That event is the cheap half, published while a 
 
 `work` is absent where there was no worktree to read — a Job at the approval gate, or one whose worktree was reclaimed. An empty file list is a Drone that changed nothing, which is a different answer and fails a `diff_nonempty` check; one shape for both would report a Job that never ran as one that did nothing.
 
-`helm_access` is `No` for the reason `observe_job` is: a whole patch pulled into a Helm session stays in that session for the rest of it, and the tokens are the cost `get_events_since` names.
+`agent_access` is `No` for the reason `observe_job` is: a whole patch pulled into a Helm session stays in that session for the rest of it, and the tokens are the cost `get_events_since` names.
 """
 
 [operations.get_drone]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "One Drone, turn history, declared file plan"
 
 [operations.get_events_since]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "A count plus one line per event kind since the cursor, not the events themselves"
 notes = """
 Helm's substitute for the event stream, called at the start of each turn; Bridge does not use it, having the socket. Helm fetches detail through the other queries only where it bears on what was asked — the query is cheap, the tokens are not, and every returned event stays in the session for its remainder. Fleet waking the session was rejected: it would make Helm a second notification channel alongside Alerts.
@@ -145,7 +147,7 @@ Helm's substitute for the event stream, called at the start of each turn; Bridge
 [operations.get_evidence]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "Per-step Evidence bundles"
 notes = """
 The claims, without the bytes. Its own route beside `get_diff` rather than folded into it: evidence is a handful of sentences per step and a patch is however large the work is, so a surface wanting only the claims would otherwise fetch a megabyte to read four lines.
@@ -158,7 +160,7 @@ It carries no `source`. A Drone marking its own evidence human-attested is impos
 [operations.get_health]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "All Doctor probes"
 notes = """
 The one call that must work when Fleet is down. The probe count is not stated here; it is Doctor's, in docs/concepts/doctor.md.
@@ -167,7 +169,7 @@ The one call that must work when Fleet is down. The probe count is not stated he
 [operations.get_job]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "One Job in full, including Facts, shape, and each step's declared gates with what they did"
 notes = """
 A step carries both what it declares and what ran: `checks` is the workflow's declaration and `check_runs` is what the gate found. Empty `checks` is an ungated step and an absent `checks` is Fleet unable to say — the Job named a workflow this Fleet does not hold, or holds one that no longer declares the step. Those are different sentences and a client that saw a gap either way could not tell them apart.
@@ -186,7 +188,7 @@ A judge criterion's question does not cross, and neither does a gaming pattern's
 
 `deliverables` names the copies of a step's deliverable Fleet kept, one row per run of the step, beside `check_runs[].output_path` and `judged[].brief_path`. **Three records and a person reads each because a verdict went against them** — what the Judge read, what the Checks printed, what the Judge was asked — and one without the others cannot separate a bad Judge from a bad brief. All three cross as paths relative to the repository root, and none of them carries bytes.
 
-**A path, and Bridge opens it. The assumption is that Bridge and Fleet share a machine**, which is true today and is a thing `Reach` will change. Serving the bytes instead is a larger operation with its own size bound and its own `helm_access`, and it would have to answer what a 16 KiB deliverable, an unbounded Check log and a brief carrying a whole branch diff each cost over a link. That is not settled here; it is named here so whoever revisits it finds the reasoning rather than rediscovering it. What changes when it does: these three fields become the id half of a fetch rather than a path, and every reachability question below is re-asked.
+**A path, and Bridge opens it. The assumption is that Bridge and Fleet share a machine**, which is true today and is a thing `Reach` will change. Serving the bytes instead is a larger operation with its own size bound and its own `agent_access`, and it would have to answer what a 16 KiB deliverable, an unbounded Check log and a brief carrying a whole branch diff each cost over a link. That is not settled here; it is named here so whoever revisits it finds the reasoning rather than rediscovering it. What changes when it does: these three fields become the id half of a fetch rather than a path, and every reachability question below is re-asked.
 
 **Reachability is keyed on the row, deliberately, and retention is `#69`'s.** A brief and a kept deliverable outlive `armada clean`, which forgets the Job's rows and does not touch the repository root — so after a clean the files are there and no row names them. That is the right way round and it is not a gap this fills: a cleaned Job has no screen either, so nothing is named-but-unreachable. What a person keeps is a directory they can still open by hand.
 
@@ -200,7 +202,7 @@ A judge criterion's question does not cross, and neither does a gaming pattern's
 [operations.get_job_events]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "One Job's whole transition history, oldest first — every status move, every step move, every Drone arriving and leaving"
 notes = """
 The audit trail, and the actor on every row is what makes it one: a move says whether a person, Helm or Fleet caused it, and nothing can reconstruct that afterwards.
@@ -219,7 +221,7 @@ Helm may reach it for the reason it may reach the other queries: reading what ha
 [operations.get_job_resources]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "What one Job holds on this machine — its processes, what each is burning, the disk its worktree has taken, and when its own log was last written"
 notes = """
 **The other axis from `spend`.** That answers what a Job cost in model terms — `cost_micros`, `turns`, `ran_ms`, `drones` — and on the wedged Job of 4 Sep 2026 every one of the four read zero, which was true and told nobody anything: a Job between phases and a Job hung are the same four zeros. Establishing that the Job held no process at all took a process listing against Fleet's own pid, a `du` on the worktree and a look at a log file's mtime, none of which Armada served.
@@ -234,13 +236,13 @@ notes = """
 
 A route of its own rather than a field on `get_job`, which is read on every open of a Job and again on every event naming it. This one walks a process table and a directory; paying for that continuously to answer a question asked rarely is exactly what the Board's 250ms turn interval makes unaffordable.
 
-`helm_access` is `Yes` for the reason the other queries have it: reading the machine decides nothing, and it is three short lists.
+`agent_access` is `Yes` for the reason the other queries have it: reading the machine decides nothing, and it is three short lists.
 """
 
 [operations.get_manifest]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "Resolved config for a Manifest"
 notes = """
 The resolution chain across Kit, Machine and Manifest is not yet stated.
@@ -249,7 +251,7 @@ The resolution chain across Kit, Machine and Manifest is not yet stated.
 [operations.get_manifest_reading]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "What Fleet's last read of armada.yml came to, and whether it took"
 notes = """
 Fleet-wide, and there is no Job to hang it off. Every Envelope in the workspace is written into one Job's transcript and a Manifest reload belongs to none of them, which is why `crates/armada/src/watching.rs` had nowhere to put this and printed it on the daemon's console — a terminal window a person running Bridge does not have open.
@@ -260,13 +262,13 @@ Refusal is the absent field, not a flag: `refused` present is the read that did 
 
 Every fault crosses, not the first. `config::LoadError` finds them all, and a person correcting a file from a message naming one saves, waits, and meets the next — the same silence one round longer.
 
-`helm_access` is `Yes` on `get_capacity`'s terms: it is one small answer about Fleet's own state, and a Helm whose dispatch is running against configuration the repository no longer describes should be able to find that out.
+`agent_access` is `Yes` on `get_capacity`'s terms: it is one small answer about Fleet's own state, and a Helm whose dispatch is running against configuration the repository no longer describes should be able to find that out.
 """
 
 [operations.search_files]
 kind = "query"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Paths under the checkout narrowed against typed text, for the @ mention popup"
 notes = """
 The read behind Bridge's `@` mention — a person typing a request or a brief narrows this as they type, and picking a result inserts the path rather than making them recall or paste it by hand. No manifest_id, matching get_manifest_reading: a Fleet serves one repository, and a request is written before any Job, and therefore any worktree, exists to read one from instead.
@@ -279,7 +281,7 @@ Matching is a case-insensitive substring test against the relative path, not a f
 [operations.get_remarks]
 kind = "query"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "What anybody has written on a Job's open pull request, and which of it has already reached a Drone"
 notes = """
 **The read a person chooses from.** `fleet::under_review` already asks the forge this on `noticing`'s rotation, keeps nothing and writes a line when the count changes; this is the same ask, made when somebody is looking at the pull request and about to decide. It is not that sweep and does not ride it — the sweep answers *has anything changed*, and this answers *what does it say*.
@@ -290,37 +292,37 @@ Refused where the Job is not at `awaiting_review` and where its record holds no 
 
 `taken_up` is the one field on a comment that Armada wrote. Without it a comment already handed to a Drone reads exactly like one nobody has touched, and a person picks it again believing it new — the thing this whole road has to not do.
 
-`helm_access` is `No`, for the reason `get_diff` and `observe_job` have it: whatever anybody typed into a comment box, pulled into a Helm session, stays in that session for the rest of it. The reader this exists for is a person looking at a screen.
+`agent_access` is `No`, for the reason `get_diff` and `observe_job` have it: whatever anybody typed into a comment box, pulled into a Helm session, stays in that session for the rest of it. The reader this exists for is a person looking at a screen.
 """
 
 [operations.get_usage]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "Spend or quota against the Machine gate"
 
 [operations.list_alerts]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "Alerts by level — Blocked, Waiting"
 
 [operations.list_drones]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "Live Drones with worktree and Job"
 
 [operations.list_job_board]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "The open queue — not-yet-started Jobs"
 
 [operations.list_jobs]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "Jobs with state and reason"
 notes = """
 A `queued` row carries two reasons on two axes, and they answer different questions. `queued_reason` is what the Job is waiting for — a dependency, or headroom — and is the registry's own three-value vocabulary. `resumption` is **which act a person took to put it back in the queue**, and is absent on a Job that was approved and has never run, because that Job arrived at `queued` rather than returned to it.
@@ -333,7 +335,7 @@ It is `readmitting::Owed` with the step ids taken out, so the row and the Drone 
 [operations.list_manifests]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "The Manifests Fleet holds, with the repository each was read from"
 notes = """
 Added because nothing joined a Job's `owner_manifest_id` to a Manifest. A proposal could name any ULID and it was stored, and Bridge could only render the ULID back. Fleet now refuses a proposal naming a Manifest it does not hold, and this is how a composer offers the one it does.
@@ -346,7 +348,7 @@ One Manifest at M1, and the row is still a list: Reach scopes the Board per Mani
 [operations.list_models]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "The models a Job may name, and the one it gets when it names none"
 notes = """
 Added with the model picker. `crates/config/settings.toml` carries two rows that should answer this — `kit-level-allowed-default-models-list` and `default-model-per-job-type` — and neither has a `default` value, so nothing configured names a model. The values served are the adapter's, which is the boundary allowed to know a vendor's spellings; that is a stand-in and the settings rows are the answer.
@@ -357,7 +359,7 @@ Helm may reach it for the same reason it may reach the other queries: knowing wh
 [operations.list_reports]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "Every report a person has filed, newest first, with the Job record each carries and the counts they are read beside"
 notes = """
 The other half of `file_report`, and the half that makes a report worth filing: a record nobody can list is a record nobody triages.
@@ -368,19 +370,19 @@ It is not scoped to a Job, and that is deliberate. A report outlives the Job it 
 
 `calibration` is four counts and not a rate. Dividing disputes by refusals would put every Job nobody read into the denominator, and an unread Job is not a pass; the gap stays unmeasured rather than divided away.
 
-`helm_access` is `Yes` because reading what a person has already said is not saying it for them — which is exactly why `file_report` beside it is `No`.
+`agent_access` is `Yes` because reading what a person has already said is not saying it for them — which is exactly why `file_report` beside it is `No`.
 """
 
 [operations.list_reviews]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "Jobs awaiting sign-off"
 
 [operations.list_workflows]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "The workflows Fleet holds, with each step's declared Checks and the Manifest they resolved against"
 notes = """
 Added because nothing joined a Job's `workflow_id` to a workflow. `ResolvedWorkflow` carried a name and a version and no id, a proposal named one anyway, and the id was written onto the record unverified — so a Job could sit on the board claiming a workflow that does not exist. The refusal at creation is the fix; this is what lets a composer name a workflow that will not be refused.
@@ -397,7 +399,7 @@ A step was a bare id until `mechanical_checks` was added to it. Bridge printed "
 [operations.list_worktrees]
 kind = "query"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "Every worktree Fleet is holding disk for, and the test each one did not pass"
 notes = """
 **The read half of the owner's rule.** Fleet reclaims what passes all five tests without asking anybody; everything else is an explicit choice, item by item, and this is what that choice is made from. `crates/fleet/src/holding.rs` is the one place the tests are written, and this serves its answer rather than deriving a second one — `armada clean` and the sweep already share that derivation, and a third would be the disagreement the sharing exists to prevent.
@@ -412,13 +414,13 @@ notes = """
 
 It is not scoped to a Job. What is held is read across every Job at once, which is the reading a per-Job field cannot give: the question is which of these to give back, and that is asked of the set.
 
-`helm_access` is `Yes` for `list_reports`'s reason — reading what is held decides nothing, and `reclaim_worktree` beside it is `No`.
+`agent_access` is `Yes` for `list_reports`'s reason — reading what is held decides nothing, and `reclaim_worktree` beside it is `No`.
 """
 
 [operations.observe_job]
 kind = "query"
 transport = "WebSocket"
-helm_access = "No"
+agent_access = "No"
 description = "One Job's activity, the history and then the live rows, in three voices, on a socket of its own"
 notes = """
 **Three voices, and it carried one.** A step is Armada opening it, the Drone working, and Fleet running the Checks and reading what came out — and only the middle one was written down, so a surface drawing the activity log had the Drone's turns and nothing about what it had been asked or what was made of it. `Voice` is which of the three a row is; `instructed`, `checked` and `produced` are the rows Fleet authors. They travel here rather than on a channel of their own because they belong beside the turns they caused, in one order, stamped by one clock.
@@ -431,7 +433,7 @@ The one query on the socket, and the row that makes `kind` decide `transport` a 
 
 It does not travel `/events`. That stream is one drop-oldest channel of fixed capacity carrying every Job, so transcript rows at Drone speed would evict the state changes Bridge draws the Board from — and an eviction there is not a lost row but a full resync of every Job, paid continuously for as long as anybody is watching anything.
 
-`helm_access` is `No` for the reason `get_events_since` gives about tokens: a Drone's whole transcript streamed into a Helm session stays in that session for its remainder, and Helm has `get_drone` for the snapshot. The viewer this is for is a person.
+`agent_access` is `No` for the reason `get_events_since` gives about tokens: a Drone's whole transcript streamed into a Helm session stays in that session for its remainder, and Helm has `get_drone` for the snapshot. The viewer this is for is a person.
 
 Not `get_drone`, which is a snapshot of one Drone over HTTP. This is one Job across every Drone it has had, and it continues.
 
@@ -442,7 +444,7 @@ Not `get_drone`, which is a snapshot of one Drone over HTTP. This is one Job acr
 [operations.observe_job_log]
 kind = "query"
 transport = "WebSocket"
-helm_access = "No"
+agent_access = "No"
 description = "One Job's own log — what Fleet did to it — the lines already written and then the ones that follow"
 notes = """
 **The third voice, and it reached nowhere.** `ActivityLog` opens by saying it is one stream carrying the Drone's turns, Armada's injected turns and Fleet's own events. Two of the three travel `observe_job`. The third was written to `.armada/logs/<job-id>.jsonl` and read by nothing, so a Job with no Drone on it — cutting a worktree, running a repository's preparation commands, being reclaimed — drew a blank panel for however long that took. That is precisely the span somebody opens the log to read.
@@ -455,13 +457,13 @@ Not `/events` either, for `observe_job`'s reason: one drop-oldest channel carryi
 
 `step` is absent on exactly the notes this exists for. Preparation belongs to no step, and attaching those lines to the step about to start would read as a step that has begun when it has not — the confusion that made a wedged Job look healthy. A note with no step is the Job's own, and the surface draws it in a section above the steps.
 
-`helm_access` is `No` for `observe_job`'s reason: a stream pulled into a Helm session stays in that session for the rest of it, and `get_job_events` is the snapshot of what a Job did.
+`agent_access` is `No` for `observe_job`'s reason: a stream pulled into a Helm session stays in that session for the rest of it, and `get_job_events` is the snapshot of what a Job did.
 """
 
 [operations.observe_check_output]
 kind = "query"
 transport = "WebSocket"
-helm_access = "No"
+agent_access = "No"
 description = "One running Check's log — what it has printed so far, then what it prints next"
 notes = """
 **`observe_job_log`'s shape, one file over.** A Check's stdout and stderr used to be read into memory and written down only after the Judge answered, so a Check that ran for four minutes had nothing to show for four minutes. The runner now appends each chunk to a file as it arrives, and this reads that file the way `observe_job_log` reads a Job's log: what is already there, then what is appended, a quarter-second behind.
@@ -472,13 +474,13 @@ Not `get_check_output`. That reads a recorded log, which is finished, and is fet
 
 It ends with a sentence: `finished` once the Check has exited and every line it wrote has been sent. The recorded Check log is `get_check_output`'s from the ruling on.
 
-`helm_access` is `No` for `get_check_output`'s reason.
+`agent_access` is `No` for `get_check_output`'s reason.
 """
 
 [operations.observe_run]
 kind = "query"
 transport = "WebSocket"
-helm_access = "No"
+agent_access = "No"
 description = "One person's run from the run sheet — what its log holds, then what it prints next — on a socket of its own"
 notes = """
 **`observe_job`'s shape, one subject over**; `docs/practices/protocol.md`, *The run socket*, is the design. The subscription is opened before the log is read, the log is the history, and the lines that follow are relayed. A viewer that falls behind loses the oldest and is sent `missed` with the count, and `closed` says why it stopped. Each live line carries the byte offset past it, so a line the opening read sent is not sent twice.
@@ -487,26 +489,26 @@ notes = """
 
 Not `/events`, which carries only `run.finished`: output is the fastest thing a run makes, and on the one drop-oldest channel carrying every Job it would evict the state the Board is drawn from.
 
-`helm_access` is `No` for `observe_check_output`'s reason.
+`agent_access` is `No` for `observe_check_output`'s reason.
 """
 
 [operations.observe_server]
 kind = "query"
 transport = "WebSocket"
-helm_access = "No"
+agent_access = "No"
 description = "One server's output — what its log holds, then what it prints next — on a socket of its own"
 notes = """
 **`observe_run`'s shape, one subject over**: the subscription first, then the log as history, then live lines; `missed` with a count where a viewer fell behind, and `closed` once the server has ended. A server that has ended opens too, with its whole log — which is how one that fell over is read.
 
 Not `/events`, which carries only a server's three lifecycle facts, for `observe_run`'s reason.
 
-`helm_access` is `No` for `observe_check_output`'s reason.
+`agent_access` is `No` for `observe_check_output`'s reason.
 """
 
 [operations.answer_command]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "A person allows or rejects a command a Drone was not given"
 notes = """
 **It answers two things, and the call id says which.** A command a Drone is waiting on right now — its Job is set to `ask_me`, the default a new Job starts at, so the harness is holding it inside the permission call — is answered in place, and the Drone carries on in the same session. A refused row on a Job stopped at `blocked_by_policy` — `refuse_and_hold` — is answered after the fact: an allow records the command for the Job and restarts the step, and a reject reaches the Drone as a turn.
@@ -519,13 +521,13 @@ Refused with a 409 where the call names nothing waiting or refused on that Job, 
 
 It replaces `approve_command`, a placeholder row for confirm-before-destructive that nothing served. A command declared destructive is offered nothing here.
 
-`helm_access` is `No`, on `answer_question`'s argument: an allow becomes something a Drone runs, and `always_allow` a line every later Job is given.
+`agent_access` is `No`, on `answer_question`'s argument: an allow becomes something a Drone runs, and `always_allow` a line every later Job is given.
 """
 
 [operations.answer_judge]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "A person agrees with a judge's refusal, disagrees for this step, or disagrees and stands the criterion down for the repository"
 notes = """
 `docs/concepts/judge.md`'s asking design: a Judge criterion that refuses and is not marked `refuse` holds the step open at a question rather than stopping it. The body is `answer` -- `agree`, `disagree_once` or `disagree_always` -- and an optional `note` that rides along for the record and nothing else.
@@ -534,26 +536,26 @@ notes = """
 
 Refused with a 409 where the Job is not holding a question open.
 
-`helm_access` is `No`, for `answer_command`'s reason: whether a refusal stands is the owner's to decide.
+`agent_access` is `No`, for `answer_command`'s reason: whether a refusal stands is the owner's to decide.
 """
 
 [operations.set_when_refused]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Whether one job's judge asks a person about a criterion that refuses, per criterion, always asks, or always stops the step"
 notes = """
 A live setting on one job, the same shape `set_when_blocked` uses. The next criterion that refuses reads it, and no drone is respawned for it.
 
 The body is `when_refused`: `per_criterion`, `always_ask` or `always_refuse`. A new job starts at `per_criterion`, which is what a job that chose nothing already reads as -- each criterion decides for itself, off its own declaration. `JobDetail.when_refused` reads it back, and is absent from a Fleet older than 11.3.
 
-`helm_access` is `No`, for `set_when_blocked`'s reason: whether a refusal is asked about or stopped over is the owner's to decide.
+`agent_access` is `No`, for `set_when_blocked`'s reason: whether a refusal is asked about or stopped over is the owner's to decide.
 """
 
 [operations.set_when_blocked]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Whether one Job asks a person about a command it was not given, refuses it and holds, or runs it"
 notes = """
 A live setting on one Job. The next permission question the Job's Drone raises reads it, and no Drone is respawned for it.
@@ -562,13 +564,13 @@ The body is `when_blocked`: `refuse_and_hold`, `ask_me` or `allow_all`. A new Jo
 
 **`allow_all` runs every command without asking, except two**: one `armada.yml` declares destructive and one the harness cannot grant — a push. Those still stop for a person, so no setting on this route lets a Job push or run a destructive command unseen. It arrived at 11.0 and was a major bump, because Bridge matches on this set to choose which control to draw.
 
-`helm_access` is `No`, for `answer_command`'s reason: whether a Drone is held waiting on the owner is the owner's to decide.
+`agent_access` is `No`, for `answer_command`'s reason: whether a Drone is held waiting on the owner is the owner's to decide.
 """
 
 [operations.set_model]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Choose the model one Job's later steps run on, or clear the choice"
 notes = """
 A live setting on one Job, like `set_when_blocked`, and the answer is the Job's summary. **The next step's spawn reads it; the step running now keeps its model.** Nothing is respawned for it, so a Drone mid-step is never cut off to pick up a model.
@@ -577,13 +579,13 @@ The body is `model`: a name `list_models` offers, or `null` to clear the choice 
 
 Refused with a 409 on a model `list_models` does not offer. The picker and the route answer from the same list, so a name only a stale window still shows is told rather than spawned.
 
-`helm_access` is `No`: which model spends a Job's budget is the owner's to decide, and a Helm that could move it could move it past what the owner priced the Job at.
+`agent_access` is `No`: which model spends a Job's budget is the owner's to decide, and a Helm that could move it could move it past what the owner priced the Job at.
 """
 
 [operations.remove_allowed_command]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Take back a command a person allowed for one Job"
 notes = """
 The body is `run`, the command exactly as `JobDetail.allowed_commands` lists it, and the answer is the Job's summary. **The next reach for it is answered by the Job's `when_blocked` again.**
@@ -592,13 +594,13 @@ The body is `run`, the command exactly as `JobDetail.allowed_commands` lists it,
 
 Refused with a 409 where the Job holds no such allow, so a window left open across a removal is told rather than answered 200.
 
-`helm_access` is `No`, for `answer_command`'s reason: what a Drone may run is the owner's to decide.
+`agent_access` is `No`, for `answer_command`'s reason: what a Drone may run is the owner's to decide.
 """
 
 [operations.approve_dispatch]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Releases a Job to spawn"
 notes = """
 The primary autonomy control.
@@ -607,7 +609,7 @@ The primary autonomy control.
 [operations.approve_review]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Advances past a human gate"
 notes = """
 The counterpart to `approve_dispatch`, at the other end: that one is the gate before a Job runs and this is the decision after it has. Both are human acts and neither is reachable by Helm.
@@ -620,7 +622,7 @@ Refused with a 409 on a Job that is not at `awaiting_review`. The three review a
 [operations.merge_pull_request]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "A person merges the pull request their Job opened, and Fleet runs what follows"
 notes = """
 **The fourth answer at a human gate, and the only act in Armada that writes into a repository Fleet did not make.** Every other act is confined to a worktree Fleet cut; this changes what everybody else builds on, so it is the loudest thing in the Job's log and it is written there before the write happens rather than after.
@@ -637,13 +639,13 @@ notes = """
 
 Refused with a 409 on a Job that is not at `awaiting_review`, sharing that refusal with the three acts beside it, and with a 409 where the Job's record holds no pull request — a workflow that declares no delivering step opened none, and the act a person wants on one of those is `approve_review`.
 
-`helm_access` is `No`, like every other act at this gate. Deciding that work lands is the owner's, and this one lands it in somebody else's repository.
+`agent_access` is `No`, like every other act at this gate. Deciding that work lands is the owner's, and this one lands it in somebody else's repository.
 """
 
 [operations.resolve_pull_request_conflict]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Sends the branch back for a Drone that can edit files to bring it current with main"
 notes = """
 **`#663`. A sixth thing to do at the review gate, and Fleet's own rebase — never a Drone's, because a Drone has no git.** A clean result is pushed with `--force-with-lease` and nothing else moves: the pull request updates in place, the same outcome an unattended Job already gets from the automatic sweep in `fleet::currency`.
@@ -654,13 +656,13 @@ notes = """
 
 Refused with a 409 anywhere but `awaiting_review`, sharing that with the acts beside it; with a 409 where the record holds no open pull request; and with a 409 where the frozen workflow has no step before the one that delivers — a single step doing both, which this cannot redo without redelivering onto its own conflict.
 
-`helm_access` is `No`, like every other act at this gate.
+`agent_access` is `No`, like every other act at this gate.
 """
 
 [operations.answer_question]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "A person picks one of the answers a waiting Drone offered"
 notes = """
 **The other half of a Drone's `ask_question`.** That tool is on the Fleet/Drone seam and is in no row here; this is the Fleet/Bridge half, and the two are the same act seen from its two ends.
@@ -669,7 +671,7 @@ The body carries the question's id and the label chosen, and there is no field f
 
 The id is what makes a stale answer a refusal. A window left open across an answered question would otherwise send a label that matched the *next* question's options by coincidence, and what a wrong answer produces here is dispatched Jobs that run and spend rather than a bad verdict.
 
-**`helm_access` is `No`, on `file_report`'s argument.** Answering on the owner's behalf without his sentence is the failure mode that rule names, and here it is worse than a filed report: the answer becomes work that exists. Helm reads the outstanding question through `get_job` like every other fact, and the answer is the one thing it may not supply.
+**`agent_access` is `No`, on `file_report`'s argument.** Answering on the owner's behalf without his sentence is the failure mode that rule names, and here it is worse than a filed report: the answer becomes work that exists. Helm reads the outstanding question through `get_job` like every other fact, and the answer is the one thing it may not supply.
 
 It moves no status and no step state. The Job is `running` while it waits and `running` after — see `job.asking`.
 """
@@ -677,13 +679,13 @@ It moves no status and no step state. The Job is `running` while it waits and `r
 [operations.deny_dispatch]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Rejects a dispatch, feeds pattern learning"
 
 [operations.examine_job]
 kind = "command"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "Go and look at this Job now, and answer with what was found"
 notes = """
 **The rung below intervene, and there was none.** Every other act on a Job either changes it or reads what it already recorded, so a person who suspected a Job was wedged had one move — end it — and no way to find out first whether ending it was warranted. That is why the Board milestone's Job was killed: not because killing was known to be right, but because establishing anything else meant leaving Armada.
@@ -700,13 +702,13 @@ Five looks, each saying whether it could tell working from not: whether the proc
 
 **Every status is examinable, terminal ones included.** The span it was found in is where a Job stalls before its first agent, and a Job can be wrong at every other point too — the act means *check this Job*, not *check preparation*.
 
-`helm_access` is `Yes`, which is where it differs from every other command but `redirect_drone`. Nothing it does changes the Job, and the whole value of the rung is that it is reachable before the ladder's destructive rungs are.
+`agent_access` is `Yes`, which is where it differs from every other command but `redirect_drone`. Nothing it does changes the Job, and the whole value of the rung is that it is reachable before the ladder's destructive rungs are.
 """
 
 [operations.file_report]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Files a report on a Job that failed, carrying the person's reason and the Job's own record"
 notes = """
 **`failures` is what Armada thinks went wrong; a report is what you know went wrong.** Every other operation here answers *did this fail*. None answers *did this fail correctly*, and the two sets do not contain each other: a Job that failed perfectly by its own lights and was wrong is `escalated` with a real trigger on it, and nothing anywhere records that the refusal was wrong. Twice now the owner disagreeing out loud has been the entire detection mechanism.
@@ -715,7 +717,7 @@ notes = """
 
 **`claim` is a closed set because a count may not read prose.** The first override in this repository carries the reason `probe`, sent to find out whether the route was served, and `job_events` is append-only so it says that for ever. An override with a useless reason is indistinguishable from a considered one, and a required non-blank field does not make a reason meaningful — so what the count reads is the value a person picked, and the sentence is what a person reads.
 
-**`helm_access` is `No`, and it is the strongest `No` in this file.** Filing on the owner's behalf without his sentence is the exact failure mode: the record is evidence and his reason is the finding, and an agent that could file one would be producing the bundle without the finding, at machine speed, into a tracker where a wrong claim survives as a fact.
+**`agent_access` is `No`, and it is the strongest `No` in this file.** Filing on the owner's behalf without his sentence is the exact failure mode: the record is evidence and his reason is the finding, and an agent that could file one would be producing the bundle without the finding, at machine speed, into a tracker where a wrong claim survives as a fact.
 
 Redaction happens on the way in. The record is rendered and scrubbed before it is stored, never at read time — scrubbing on the way out leaves a window the length of the file's life, and a store that has already written a credential cannot un-write it.
 
@@ -725,7 +727,7 @@ It creates no Job and dispatches nothing. Filing comes first; dispatching is the
 [operations.kill_drone]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Kills a Drone, captures learnings, holds the worktree"
 notes = """
 Intervention Ladder rung 2.
@@ -734,7 +736,7 @@ Intervention Ladder rung 2.
 [operations.kill_job]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Ends a Job at `killed`, terminal, from any non-terminal status"
 notes = """
 Not on the Intervention Ladder, and not `kill_drone`. The ladder orders what a
@@ -756,7 +758,7 @@ rung and this has none.
 [operations.forget_job]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Deletes a terminal Job's whole record"
 notes = """
 Real deletion, and the only operation on this seam that is: every other act
@@ -767,7 +769,7 @@ only a status to move, and `kill_job` is the act that ends one still in
 flight.
 
 Not on the Intervention Ladder, for `kill_job`'s reason: it is destructive
-rather than an act on a Drone, and `helm_access` on a command is the ladder
+rather than an act on a Drone, and `agent_access` on a command is the ladder
 rung.
 
 **It does not reclaim the worktree or the branch.** `armada clean` already
@@ -780,7 +782,7 @@ should not also have to think about a directory.
 [operations.reclaim_worktree]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Gives one terminal Job's worktree and branch back"
 notes = """
 **The other half of `forget_job`, and deliberately not part of it.** That row
@@ -810,14 +812,14 @@ one of them. A repository that will not open is a refusal naming the repository
 and never a silent success.
 
 Not on the Intervention Ladder, for `kill_job`'s reason: it is destructive
-rather than an act on a Drone, and `helm_access` on a command is the ladder
+rather than an act on a Drone, and `agent_access` on a command is the ladder
 rung.
 """
 
 [operations.propose_job]
 kind = "command"
 transport = "HTTP"
-helm_access = "Drafts only"
+agent_access = "Drafts only"
 description = "Drafts a Job onto the approval gate"
 notes = """
 The gate is unchanged.
@@ -826,7 +828,7 @@ The gate is unchanged.
 [operations.propose_from_request]
 kind = "command"
 transport = "HTTP"
-helm_access = "Drafts only"
+agent_access = "Drafts only"
 description = "Reads a request and drafts the Jobs it proposes onto the approval gate"
 notes = """
 The dispatch path a person describing work takes, and the only caller of the Job
@@ -882,7 +884,7 @@ somebody decided, and a surface drawing it in red would say Armada broke.
 [operations.stop_proposal]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Stops a Job proposer call that is still out"
 notes = """
 The only thing anybody may do to a proposal in flight, and it exists because the
@@ -905,7 +907,7 @@ It is not on the Intervention Ladder and it ends no Job, because there is no Job
 Nothing is created, nothing moves, and the person is returned to the form with what
 they typed.
 
-helm_access is No for approve_dispatch's reason turned around: Helm proposes without
+agent_access is No for approve_dispatch's reason turned around: Helm proposes without
 a surface and has nobody waiting, so there is no wait for it to abandon — and a
 stop it could reach would let it cancel a person's dispatch.
 """
@@ -913,7 +915,7 @@ stop it could reach would let it cancel a person's dispatch.
 [operations.pause_job]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Retired 2026-09-03. Never built, and no longer promised"
 notes = """
 **Retired, not pending.** The row said *not yet built* for months, which read as
@@ -937,7 +939,7 @@ rung, so Helm never reached it directly.
 [operations.raise_cost_cap]
 kind = "command"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "Give one Job a higher cost ceiling than the tier above it allows"
 notes = """
 **The act the `over_budget` label has always pointed at and nothing performed.** `docs/concepts/machine.md` says a Job past its cost cap waits at `queued` until somebody raises the cap, and `job-statuses.toml` says the same thing one file over — it is the one reason a `queued` Job carries that does not clear on its own. Until this there was no key, no route and no control: the tiers above the Job govern every Job in the installation or in the repository, so the Job in front of you could only be helped by moving a number for all of them.
@@ -950,7 +952,7 @@ notes = """
 
 **409 on a terminal Job.** There is nothing left to spend, so the number would be a value nothing will ever read.
 
-**`helm_access` is `Yes`, which makes it the third command Helm reaches outright** — beside `redirect_drone`, the one Intervention Ladder rung it has, and `examine_job`, which decides nothing. The owner asked for both surfaces by name, and the reason is the Job that produced this route: it hit its cap on its last step, on the cheapest model, summarising work three gates had already passed. A person is not always at the screen when that happens.
+**`agent_access` is `Yes`, which makes it the third command Helm reaches outright** — beside `redirect_drone`, the one Intervention Ladder rung it has, and `examine_job`, which decides nothing. The owner asked for both surfaces by name, and the reason is the Job that produced this route: it hit its cap on its last step, on the cheapest model, summarising work three gates had already passed. A person is not always at the screen when that happens.
 
 **And Helm is bounded where a person is not**, which is the whole of `raised_by`. `crates/fleet/src/raising.rs` carries the ceiling and defends its shape; what belongs here is why the field exists at all. Nothing on this seam authenticates anybody, so this is a statement of *which surface composed the request* rather than a credential — Bridge fills it in because a person pressed a control, and the Helm tool adapter fills it in because it is Fleet's own code wrapping a model's request. **The model has no field for it**, which is the property `spawning::dispatches` has one seam over: what a Drone may do is rendered by Fleet into its allowlist and refused by Fleet at the call, and no argument the agent writes reaches either.
 """
@@ -958,7 +960,7 @@ notes = """
 [operations.raise_turn_cap]
 kind = "command"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "Let one Job take more turns than the tier above it allows"
 notes = """
 **The other half of what `over_budget` folds, and it had nothing at all.** The dollar cap got three tiers, a route and a control in Sept 2026; the turn cap in the same constant got none of them, and stayed a compile-time number changed by a rebuild. `budget-turn-cap-per-job` read `scope = "Machine"`, `merge_strategy = "n/a — single layer"`, and there was no key in `armada.yml`, no column on a Job and no act anywhere.
@@ -969,13 +971,13 @@ notes = """
 
 **422 on a value at or under the cap in force**, and **409 on a terminal Job**, for that route's reasons.
 
-**`helm_access` is `Yes`**, for that route's reason and with more force: the Job that bought this route stopped on its cheapest final step, and a person is not always at the screen when that happens. Helm is bounded where a person is not — `raised_by` again, the same `Ceiling` and the same `HELM_MULTIPLE`, because a bound on how far an agent may move a ceiling says nothing about what the ceiling counts.
+**`agent_access` is `Yes`**, for that route's reason and with more force: the Job that bought this route stopped on its cheapest final step, and a person is not always at the screen when that happens. Helm is bounded where a person is not — `raised_by` again, the same `Ceiling` and the same `HELM_MULTIPLE`, because a bound on how far an agent may move a ceiling says nothing about what the ceiling counts.
 """
 
 [operations.redirect_drone]
 kind = "command"
 transport = "HTTP"
-helm_access = "Yes"
+agent_access = "Yes"
 description = "Structured instruction to a running Drone"
 notes = """
 Intervention Ladder rung 1. The one command Helm gets directly.
@@ -992,7 +994,7 @@ Nothing bounds how often a Job may be redirected. Whether a cap belongs here is 
 [operations.redispatch_job]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Fresh Drone with corrective context"
 notes = """
 Intervention Ladder rung 2.
@@ -1001,7 +1003,7 @@ Intervention Ladder rung 2.
 [operations.reject_job]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Hard stop"
 notes = """
 Reserved for hard stops only.
@@ -1014,7 +1016,7 @@ Refused on a Job that is not at `awaiting_review`. `awaiting_approval -> rejecte
 [operations.take_up_remarks]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "The comments a person picked off the pull request reach a Drone. Nothing is written back onto the pull request"
 notes = """
 **A second entrance onto the note road, not a second road.** What it does to the Job is `request_changes`, called rather than restated: the words go onto the record as `redirect_waiting`, the Job takes `awaiting_review -> queued`, and the Drone re-admission puts back on the same step opens with them. The block a Drone reads is `crossing::Redirected` either way. What is different is only where the words came from.
@@ -1029,13 +1031,13 @@ notes = """
 
 **Nothing is written back onto the pull request.** Armada's own record — `job_remarks_taken_up` — is what tells a comment already handed to a Drone apart from one nobody has touched; the forge never hears about a press.
 
-`helm_access` is `No`, because Helm access on a command is the Intervention Ladder rung and this has none.
+`agent_access` is `No`, because Helm access on a command is the Intervention Ladder rung and this has none.
 """
 
 [operations.request_changes]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Design Plan feedback loop"
 notes = """
 The third answer at a human gate, between taking the work and ending the Job. The Job goes back to `running` at the same step and the note reaches the work that was waiting — so the worktree and every step so far survive, which is what separates this from a redispatch.
@@ -1052,7 +1054,7 @@ The body carries the person's own words and is a type of its own rather than a r
 [operations.restart_step]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "A fresh Drone on the surviving worktree, at the step that stopped"
 notes = """
 The second of the four acts that reach an escalated Job — `docs/concepts/job.md` has the table. The Drone is **gone**; the worktree, the branch and every earlier step's work survive, and a new Drone takes the step over where it stopped.
@@ -1079,7 +1081,7 @@ Helm does not reach it directly, because Helm access on a command is the ladder 
 [operations.override_verdict]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "A person overrules the machine that stopped a step and the step advances, keeping what was ruled on the record"
 notes = """
 The fifth act that reaches an escalated Job, and the only one that lets the work
@@ -1146,7 +1148,7 @@ make somebody take deliberately, and it is not on the Intervention Ladder.
 [operations.rerun_gate]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "A person asks the gate again, on the evidence a step already submitted, where the first reading could not decide"
 notes = """
 The sixth act that reaches an escalated Job, and **the one `override_verdict` is
@@ -1199,7 +1201,7 @@ Intervention Ladder.
 [operations.show_again]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "A person asks a Job to show its work: the repository's harness runs the last spec a Drone named, in the Job's worktree, and the frames are kept as a set of their own"
 notes = """
 **The other half of #603's "both".** A step whose evidence is `shown` runs the
@@ -1243,7 +1245,7 @@ offering a press that fails.
 with `nothing` set to the sentence the Job's own log carries — `JobExamined`'s
 rule for a look that found something wrong.
 
-`helm_access` is `No` for `get_frame`'s reason: what it produces is images for a
+`agent_access` is `No` for `get_frame`'s reason: what it produces is images for a
 person to look at, and Helm reads none of them.
 """
 
@@ -1254,7 +1256,7 @@ person to look at, and Helm reads none of them.
 [operations.get_run_sheet]
 kind = "query"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "What a person can run in one Job's worktree — its Setup, Checks and Commands — and the facts the run sheet's header draws"
 notes = """
 **The Job's frozen Manifest, not the file on disk.** A Check the Job's workflow names is listed as the Job froze it at creation — `run`, `requires`, `narrow` and the bar — because the gate judges the Job against that, and rehearsing anything else answers a question the gate never asks. Nothing a Job holds freezes a Command, or a Check its workflow does not name, so those come from the Manifest Fleet holds now and say so: `frozen` is false on each.
@@ -1263,33 +1265,37 @@ notes = """
 
 `worktree_differs` compares the worktree's own `armada.yml` against these lists; `start_run` runs that version only when asked. `manifest_edited_at` is read from git: the newest commit at or before the Job's creation that changed the file.
 
-`helm_access` is `No`: the reader is a person at the run sheet.
+`agent_access` is `No`: the reader is a person at the run sheet.
 """
 
 [operations.list_runs]
 kind = "query"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "Yes"
 description = "One Job's earlier runs from the run sheet: name, exit code, when, how long, what changed, and the log"
 notes = """
 **Read off the run directories, not a table.** Each run keeps a directory under the repository's records root — its log and a small record — and this lists them, newest first. A run from the sheet is a rehearsal and writes no `job_step_checks` row and no Evidence, so there is no row to read. A record that will not read is answered in `unreadable` rather than dropped.
 
 Kept for the Machine's ad-hoc run log retention, thirty days, swept when the Job's sheet next starts a run.
+
+`agent_access` is `Yes`: a rehearsal moves nothing on the Job, so an agent reading what it or a person already ran costs the record no integrity.
 """
 
 [operations.get_run_output]
 kind = "query"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "Yes"
 description = "One run's log, read back as a window that says it is one"
 notes = """
 `get_check_output`'s shape and its reasons: the tail, because a test runner prints its failures last, bounded by lines and bytes, numbered as the file numbers it. `:run_id` names a run this Job recorded or the one in flight, resolved against the Job's own run directories before anything is opened.
+
+`agent_access` is `Yes`, `get_check_output`'s reason: an agent that started a run and cannot read what it printed has verified nothing about it.
 """
 
 [operations.start_run]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "Yes"
 description = "Run one Check or Command in a Job's worktree, narrowed or whole — a rehearsal that records nothing on the Job"
 notes = """
 **The request names an entry, never a command line.** What runs is what the Job froze, or the worktree's `armada.yml` where `worktree_version` asks for it, and a Check's `requires` run first into the same log. **No shell**: `checks_runner` spawns the program directly, in a process group of its own. **No verdict**: no Evidence, no `job_step_checks` row, and nothing on the Job moves.
@@ -1297,26 +1303,32 @@ notes = """
 It answers at once with the run underway; output arrives on `observe_run` and the end as `run.finished` on `/events`. The run is a task of its own, so a client that goes away does not stop it — `stop_run` does. A snapshot of the tree is taken first, so what the run changed can be named and put back.
 
 Refused where the worktree is gone, where a run is already out on this Job, where nothing declares the name, and where a narrowed run has nothing to narrow to. A Drone working in the tree is not a refusal: nothing locks, and the sheet says the run shares the tree.
+
+`agent_access` is `Yes`: the description's own last clause is the reason — no Evidence, no `job_step_checks` row, nothing on the Job moves — so a rehearsal an agent starts costs the record no integrity.
 """
 
 [operations.stop_run]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "Yes"
 description = "End a run's process group; its log keeps what printed"
 notes = """
 Answers with the run's record once it is written, so the caller does not wait on the event for an end it asked for. Refused on a run that is not in flight on this Job.
+
+`agent_access` is `Yes`, `start_run`'s reason: ending a rehearsal moves nothing on the Job, so the agent that started one may also end it.
 """
 
 [operations.undo_run]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "Yes"
 description = "Put back the files one run changed, from the snapshot taken just before it"
 notes = """
 **Never a plain discard.** A Drone's work is uncommitted until delivery (`crates/fleet/src/landing.rs`), so a checkout would take it with the run's. Undo writes back only the paths the run changed, as the snapshot held them.
 
 Refused while a Drone is working in the tree, while a run is in flight, on a run already undone or with no snapshot, and where a path the run changed has moved since — writing the older version over it would take somebody's later work.
+
+`agent_access` is `Yes`, `start_run`'s reason: what it reverses is a rehearsal's own footprint, never a step's recorded work, so an agent putting the tree back costs the Job's record nothing.
 """
 
 # Servers: a Command with `serve`, held by Fleet — `docs/concepts/fleet.md`,
@@ -1326,18 +1338,18 @@ Refused while a Drone is working in the tree, while a run is in flight, on a run
 [operations.list_servers]
 kind = "query"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Every server Fleet holds — each Job's and the main checkout's — and the last instance of each that ended"
 notes = """
 **In Fleet's memory and nowhere else.** A server is true only while the process holding it lives, so there is no table: a Fleet that restarts holds none, having stopped every one it held on the way out — or, after a crash, ended what it left behind when it next starts. The last instance of each that ended is kept beside the live ones, so a server that fell over is still there to read — with its exit code and its log — until it is started again or its Job ends.
 
-`helm_access` is `No`: the reader is a person at the run sheet or *Where things are*.
+`agent_access` is `No`: the reader is a person at the run sheet or *Where things are*.
 """
 
 [operations.start_server]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "Yes"
 description = "Start a server the Manifest declares, for a Job or for the main checkout — or be handed the one already running"
 notes = """
 **A name, never a command line and never a port.** What runs is the Manifest's `run` then `serve`, with `${port.NAME}` resolved from the span it runs under: the Job's, or the main checkout's where the body names no Job. `serve` starts only if `run` exits zero, and the instance is `serving` once `ready` exits zero — polled, never a duration — or at once where there is no `ready`.
@@ -1345,21 +1357,25 @@ notes = """
 **One instance per Job per server.** A second request, from a person or through a Drone's `start_server` tool, is answered with the instance already starting or serving rather than a second one on the same port.
 
 It answers at once, `starting`; `server.serving` and `server.exited` follow on `/events`, and the output is `observe_server`'s. Refused where the name declares no server, where the Job's worktree is gone or the Job has ended.
+
+`agent_access` is `Yes`: holding a server up writes no Evidence and moves nothing on the Job, and an agent that cannot hold one up cannot look at what it is building.
 """
 
 [operations.stop_server]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "Yes"
 description = "End a server's process group; its log keeps what printed"
 notes = """
 Answers with the instance once it has ended. A Job's servers are also stopped when the Job ends, before its span is released, and every server is stopped when Fleet stops. Refused on an id that names no running server.
+
+`agent_access` is `Yes`, `start_server`'s reason: ending a server moves nothing on the Job, so the agent that started one may also end it.
 """
 
 [operations.restart_fleet]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Restarts the daemon"
 notes = """
 An API command, not a recovery path. It cannot serve the case it is named for — a dead Fleet cannot restart itself, and that path is Bridge calling `launchctl kickstart -k` directly. It exists for the reachable case: Fleet is alive and answering, and something wants a clean restart.
@@ -1368,38 +1384,38 @@ An API command, not a recovery path. It cannot serve the case it is named for �
 [operations.resume_interrupted_job]
 kind = "command"
 transport = "HTTP"
-helm_access = "No"
+agent_access = "No"
 description = "Restarts a Job after a Fleet crash"
 
 
 [operations."alert.raised"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "An Alert is raised, carrying its Alert Level"
 
 [operations."drone.exited"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "A Drone exits, clean or otherwise"
 
 [operations."drone.spawned"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "A Drone starts against a worktree"
 
 [operations."evidence.submitted"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "An Evidence MCP call lands"
 
 [operations."job.created"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "A Job exists that did not before, carrying the row whole"
 notes = """
 Added because a Job proposed while a client was connected never reached it: creation published nothing, so nothing woke Bridge.
@@ -1412,7 +1428,7 @@ It carries the whole summary, so a Board inserts the row rather than fetching th
 [operations."job.files_changed"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "The files one working Drone has changed in its worktree, as of one reading"
 notes = """
 Names and change kind, never the diff. What changed inside a file is the patch, which adapter-traits keeps as a second and more expensive read for exactly one caller — a Judge that fires — and putting it on a stream would pay for it continuously so that somebody might look.
@@ -1429,7 +1445,7 @@ The footprint is the whole list rather than a delta, so a reverted file leaves t
 [operations."job.forgotten"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "A Job's whole record is gone"
 notes = """
 It carries only the id. `job.created` carries the row whole because a client
@@ -1441,7 +1457,7 @@ to drop it from whatever it is holding.
 [operations."job.landed"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "Somebody merged, or closed, the pull request a Job opened"
 notes = """
 **Not a status change, and not a step move.** The Job was already finished and recorded when this happened; what moved is a pull request on a forge, which is outside Armada entirely. `completed_success` is immutable once reached — `job-statuses.toml` says so on the row — so there is no edge this could fire and no reason to invent one. What a person wanted was the fact, not a different status.
@@ -1456,7 +1472,7 @@ It carries the row whole, for `job.step_advanced`'s reason: a client told only t
 [operations."job.remarks_changed"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "The forge's answer about one Job's pull request comments changed since the last sweep found it open"
 notes = """
 `#661`. Fleet already reads a pull request's conversation and review bodies on `noticing`'s rotation — `read_what_is_under_review` — and used to throw them away once the log line was decided. This is the second use of that same read: a comparison of remark handles, a hash of each body and every reviewer's verdict, kept beside the count `AsItStood` already compares for the log line. Neither comparison replaces the other; the count is what the log line reads, and this one is what decides whether Bridge is told at all.
@@ -1467,7 +1483,7 @@ It carries the id and nothing else. `get_remarks` already answers what changed a
 
 Only for a Job the merge sweep found still open — `notice_a_merge` calls `read_what_is_under_review` in that one arm — so a settled pull request never produces this, on `job.landed`'s own rule that a Job which left the rotation is not asked about again.
 
-`helm_access` is `Bridge only`, on `job.judging`'s reasoning: this is a wake-up about a screen a person is looking at rather than a fact worth a Helm session's tokens, and Helm already has `get_remarks` for the answer.
+`agent_access` is `Bridge only`, on `job.judging`'s reasoning: this is a wake-up about a screen a person is looking at rather than a fact worth a Helm session's tokens, and Helm already has `get_remarks` for the answer.
 
 It adds nothing measurable to the unbounded-sink risk `docs/practices/protocol.md` names. The rotation produces at most one of these per `Noticing` interval across every open pull request Fleet holds, which is `job.asking`'s own bound one order slower — a person answers faster than a sweep rotates.
 """
@@ -1475,7 +1491,7 @@ It adds nothing measurable to the unbounded-sink risk `docs/practices/protocol.m
 [operations."job.asking"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "A Drone asks a person a question, or the one that was out is answered"
 notes = """
 A Drone that does not know had two moves and neither worked. **Escalate** stops the Job — the step freezes and the worktree and port span are held until a person transitions it back — and a step whose work is deciding what other Jobs should exist is decision-dense, so it would escalate on the first ambiguity and every one after. **Guess** is unprevented, and where the output is Jobs the cost of a guess is Drones spending on work nobody asked for.
@@ -1492,7 +1508,7 @@ It produces at the rate a person answers, which is the slowest rate on this chan
 [operations."job.command_waiting"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "A Drone is held on a command waiting for a person, or the one it was held on is answered"
 notes = """
 `job.asking`'s shape and reasoning, one tool over. Not a step state and not a Job status: the step is `running` while the Drone waits and stops waiting without moving, so the command rides beside the state as `JobDetail.command_waiting`.
@@ -1507,7 +1523,7 @@ It produces at the rate a person answers and holds no queue of its own, so it ad
 [operations."proposal.moved"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "A Job proposer call goes out, gets somewhere, or comes back"
 notes = """
 The one kind on this stream that names no Job, and that is what it is for. A proposal is the interval before any Job exists, so there is no id to hang it off and no Board row that changes. job.created is what says the Jobs arrived, and it is a different message.
@@ -1523,7 +1539,7 @@ Absent proposing means the call came back, however it came back — with Jobs, w
 [operations."job.judging"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "A Judge call goes out on a step, or the one that was out comes back"
 notes = """
 The one thing Armada does that costs money and takes wall-clock while nothing else moves had no representation on this seam. A step waiting on a model call, a step whose Drone is thinking and a step that had quietly become unreachable were the same pixels, and the question "is a judge running in the background I cannot see" was asked twice in one day with a different true answer each time.
@@ -1540,7 +1556,7 @@ Unlike `job.files_changed` it does not ask whether anybody is watching. That one
 [operations."job.checking"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "One of a step's Checks starts or finishes, or the gate's ruling on them is written down"
 notes = """
 The gate said nothing between the Drone exiting and the ruling being recorded. A step whose Checks had been running for minutes read as a step nothing had reached, and every Check flipped at once when the Judge answered — even one that had finished long before. `#628` is that.
@@ -1555,19 +1571,19 @@ One message when a Check starts and one when it finishes, and never one per seco
 [operations."job.state_changed"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "Any of the Job states transitions"
 
 [operations."job.step_advanced"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "A workflow step passes its gate"
 
 [operations."manifest.reread"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "Fleet read armada.yml again, and this is what it came to"
 notes = """
 The second kind on this stream that names no Job — `proposal.moved` is the first — and unlike that one it names no Drone and no step either. A Manifest is Fleet's own, so nothing on the Board moves when this arrives and there is nothing for a client to fold into a row.
@@ -1582,7 +1598,7 @@ It publishes at the rate somebody saves a file, behind a settle window, so it co
 [operations."run.finished"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "A person's run ended: its record, with exit code, duration and what it changed"
 notes = """
 Carries the whole `RunRecord` — the row `list_runs` answers — so the sheet draws the result and the changed files without a read. Published after the record is written, so a reader that re-reads on it finds the run in the history.
@@ -1591,7 +1607,7 @@ Carries the whole `RunRecord` — the row `list_runs` answers — so the sheet d
 [operations."server.starting"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "A server was started, for a Job or for the main checkout: its `run` is going, or `serve` is up and `ready` has not passed"
 notes = """
 Carries the whole `ServerState` — the row `list_servers` answers — in each of the three `server.*` kinds, so a row is replaced rather than patched. **Lifecycle facts only**: a server's output is `observe_server`'s and never this stream's.
@@ -1600,7 +1616,7 @@ Carries the whole `ServerState` — the row `list_servers` answers — in each o
 [operations."server.serving"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "A server's `ready` passed, or it started with no `ready` to wait for: its links are live"
 notes = """
 `serving_since` is what uptime counts from; nothing ticks on the wire.
@@ -1609,7 +1625,7 @@ notes = """
 [operations."server.exited"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "A server ended: stopped by a person, its Job or Fleet — or on its own, which is a failure whatever its code"
 notes = """
 `stopped: false` is a server that fell over, with its exit code and a sentence; its log stays readable on `observe_server`. A Job's servers publish this before the Job's own terminal `job.state_changed`, because they are torn down before its span is released.
@@ -1618,11 +1634,11 @@ notes = """
 [operations."review.ready"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "A Job reaches a human gate"
 
 [operations."usage.threshold"]
 kind = "event"
 transport = "WebSocket"
-helm_access = "Bridge only"
+agent_access = "Bridge only"
 description = "Spend or quota crosses the Machine gate"

@@ -89,7 +89,7 @@ pub trait Commands: Send + Sync + 'static {
     ) -> impl Future<Output = Result<ipc::ProposalStopped, Refusal>> + Send;
 
     /// `approve_dispatch` — releases a Job to spawn. The primary autonomy
-    /// control, and a human act: `helm_access` on this row is `No`.
+    /// control, and a human act: `agent_access` on this row is `No`.
     ///
     /// **What comes back is `queued`, not `running`.** The dispatch is a
     /// turn's, because one inside this request died whenever a client stopped

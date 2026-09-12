@@ -86,8 +86,9 @@ Six layers, assembled in order — section 3. Its wording is section 5.
 
 ### Helm
 
-**Told:** a strict subset of the Fleet MCP — every operation whose access
-column in `crates/ipc/operations.toml` says Helm may reach it, and no other.
+**Told:** a strict subset of the Fleet MCP — every operation whose
+`agent_access` column in `crates/ipc/operations.toml` reads `Yes`, and no
+other.
 That file is the authority and this sentence does not restate its totals: it
 held a count once, the count was wrong in both halves, and a number here is a
 second copy that drifts. The selected Manifest. Its resolved authority, a
