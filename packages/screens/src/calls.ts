@@ -1,22 +1,18 @@
 // The rest of a cut call argument, fetched by the person who opened the row.
 //
-// **Held here rather than in `BridgeState`.** Every other read Bridge makes is
-// published by main and kept current, because the thing it draws moves as the
-// Job does. A recorded argument is finished the moment it is written, and it is
-// asked for by one reader about one row — putting it in the published state
-// would make one person opening a payload something the whole window re-renders
-// on, and would keep a megabyte alive for as long as the Job is open.
+// **Held here, not in `BridgeState`** — every other read Bridge makes is
+// published and kept current since what it draws moves with the Job. A
+// recorded argument finishes once written, asked for by one reader about
+// one row — publishing it would make opening a payload something the
+// whole window re-renders on, keeping a megabyte alive while the Job is
+// open.
 //
-// **Keyed by call id and held for the Job.** A call id is unique inside a Job,
-// and the story draws the same row in two logs — chapter one's turns and
-// chapter two's preview — so a fetch made in one is already answered in the
-// other. Dropped when the Job changes, because a call id belongs to the Job it
-// was recorded under.
-//
-// **Nothing is fetched on its own.** The control is the whole trigger: an
-// argument big enough to need this route is the payload the socket is bounded
-// to keep off the stream, and pre-fetching every cut row would spend on the
-// screen exactly what the split was made to avoid.
+// **Keyed by call id, held for the Job** — unique inside a Job, and the
+// story draws the same row in two logs (turns, preview), so a fetch in
+// one is already answered in the other; dropped when the Job changes.
+// **Nothing is fetched on its own** — an argument needing this route is
+// what the socket keeps off the stream, and pre-fetching every cut row
+// would spend on screen exactly what the split avoids.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 

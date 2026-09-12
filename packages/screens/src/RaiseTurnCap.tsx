@@ -28,18 +28,17 @@ const OFFERED = 2;
 /**
  * The button that opens the raise dialog, and the dialog itself.
  *
- * **The dialog is the confirmation**, which is the field-collecting exception
- * the design contract names. `confirmDisabled` keeps the send control off
- * unless the figure is above the cap in force, matching the 422 Fleet would
- * answer rather than round-tripping to learn it.
+ * **The dialog is the confirmation** — the field-collecting exception the
+ * design contract names. `confirmDisabled` keeps send off unless the
+ * figure is above the cap in force, matching the 422 Fleet would answer
+ * rather than round-tripping to learn it.
  *
- * **It states both figures before it asks for one**, and neither is hedged: a
- * turn is counted, and `facts.ts` reserves the tilde for the spend, which is
- * what a run would have cost at list price.
+ * **States both figures before asking for one**, neither hedged: a turn
+ * is counted, and `facts.ts` reserves the tilde for the spend.
  *
- * **It names the other remedy.** A job going in circles and a job held out of
- * its last cheap step are over the same number, and only one of them wants a
- * new brief.
+ * **Names the other remedy.** A job going in circles and one held out of
+ * its last cheap step are over the same number, and only one wants a new
+ * brief.
  */
 export function RaiseTurnCapControl({
   jobId,

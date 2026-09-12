@@ -33,19 +33,17 @@ export type Redirection = {
 };
 
 /**
- * The body of `restart_step`, and **the whole body is optional**.
- * `crates/ipc/src/job.rs`.
+ * The body of `restart_step`. `crates/ipc/src/job.rs`. **The whole body is
+ * optional** — a plain restart sends none, which is what every restart sent
+ * before this route could read one, so absence has one spelling and there is
+ * no `null` inside the type to make a second.
  *
- * A plain restart sends none, which is the request every restart sent before
- * this route could read one — so absence has one spelling, and there is no
- * `null` inside the type to make a second.
- *
- * **The words reach no session**, because a restart is the act that exists once
- * the drone is gone. They wait on the job and open the brief of the drone the
- * restart asks for, which is where a `ChangesRequested` note goes.
+ * **The words reach no session** — a restart exists once the drone is gone.
+ * They wait on the job and open the brief of the drone the restart asks for,
+ * where a `ChangesRequested` note goes.
  *
  * **The one of the three bridge does not refuse before the press.** A blank
- * field here is a restart with nothing said rather than a restart that cannot
+ * field here is a restart with nothing said rather than one that cannot
  * happen, so it is dropped and the act goes through.
  */
 export type RestartRequested = {
@@ -68,15 +66,14 @@ export type Overruled = {
 /**
  * The body of `raise_cost_cap`. `crates/ipc/src/raising.rs`.
  *
- * **The one body here that is not a person's own words.** The other three carry
- * a sentence somebody typed; this carries a figure, and the whole of what it
- * does is move one number on one job.
+ * **The one body here that is not a person's own words.** The other three
+ * carry a sentence somebody typed; this carries a figure that moves one
+ * number on one job.
  *
- * **It raises and never lowers.** Fleet refuses a value at or under the cap in
- * force with a 422 — a call answering 200 while the job is still stopped for
- * money is exactly what the route was built against — and bridge refuses it
- * before the press, matching that. Lowering a running job's ceiling is a
- * different act nobody has asked for.
+ * **It raises and never lowers.** Fleet refuses a value at or under the cap
+ * in force with a 422 — a call answering 200 while the job is still stopped
+ * for money is exactly what the route was built against — and bridge refuses
+ * it before the press, matching that.
  *
  * Micros, not dollars: `JobSpend` reads in millionths of a dollar, so the
  * figure a person is shown and the figure that is sent are the same integer.

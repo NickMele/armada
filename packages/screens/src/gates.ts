@@ -1,24 +1,17 @@
 // What a step's gates found, read once for both surfaces that draw it.
 //
-// **Two surfaces read `check_runs` and `judged` now, and one of them is new.**
-// The phase strip says where a step stands; the Checks and Verdicts chapters
-// say what the gates found and let a person argue with it. Those are the same
-// rows read for two purposes, and reading them twice is the defect `#321`
-// already found once in this file's neighbours — two surfaces stating one
-// ordering separately, agreeing until one of them changed.
-//
-// **Nothing here is JSX, and that is the seam.** What a strip row looks like
-// and what a verdict grid looks like are each surface's own answer. What they
-// must not disagree about is which attempt's rows count, which member of a
-// panel answered what, and whether a criterion was refused — so that is what
-// lives here and nothing else does.
-//
-// The three rules this file holds, each of them from somewhere else:
-//
+// **Two surfaces read `check_runs` and `judged` now** — the strip says
+// where a step stands, Checks/Verdicts say what gates found. Reading
+// twice is the defect `#321` found in this file's neighbours: two
+// surfaces stating one ordering, agreeing until one changed.
+// **Nothing here is JSX** — a strip row and a verdict grid are each
+// surface's own answer; what they must not disagree about is which
+// attempt's rows count, which member answered what, whether a criterion
+// was refused.
 // | Rule | Where it comes from |
 // |---|---|
-// | Only the current attempt's rows are the live gate | `check_runs` and `judged` hold every attempt since protocol 7.0 |
-// | A panel is one row per member and reads as one row per criterion | `Judged.member`, since protocol 7.7 |
+// | Only the current attempt's rows are the live gate | `check_runs`/`judged` hold every attempt since protocol 7.0 |
+// | A panel is one row per member, reads as one per criterion | `Judged.member`, since protocol 7.7 |
 // | Any single refusal refuses the criterion | `docs/concepts/judge.md`, unanimity |
 
 import { CHECK_ADVANCES, CRITERION_VERDICT_CHECK } from "@armada/components";

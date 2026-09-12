@@ -70,21 +70,18 @@ export type ProposedPlan = {
 };
 
 /**
- * The two codes this route raises that a surface has to tell apart, mirrored
- * from `crates/fleet/src/refusing.rs`, which declares each beside the failure
- * that raises it.
+ * The two codes this route raises that a surface must tell apart, mirrored
+ * from `crates/fleet/src/refusing.rs`, which declares each beside the
+ * failure that raises it.
  *
- * **Read, never minted.** Bridge invents no code — one it invented would be in
- * no manifest and mean nothing to the lookup Bridge does. These are Fleet's own
- * spellings, held here because this is the one place on the seam where a client
- * must branch on a code rather than render it: the request being declined and
- * the call failing are different statuses, different advice and different acts,
- * and the code is the only thing on the wire that separates them once a body is
- * a `WireError`.
+ * **Read, never minted** — one Bridge invented would be in no manifest and
+ * mean nothing to Bridge's own lookup. These are Fleet's spellings: decline
+ * and failure carry different advice and acts, and the code is the only
+ * thing on a `WireError` that separates them.
  *
- * A code that stops matching falls to `faulted`, which advises asking again —
- * wrong for a decline, and the reason `refusing.rs` says these two must never
- * be rendered as each other.
+ * A code that stops matching falls to `faulted`, which advises asking again
+ * — wrong for a decline, the reason these two must never render as each
+ * other.
  */
 
 /** The request was read and no workflow fits. 422. The request comes back. */

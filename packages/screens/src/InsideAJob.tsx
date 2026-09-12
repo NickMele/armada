@@ -155,22 +155,19 @@ export type InsideAJobProps = {
    */
   runReading?: RunTreeSkeletonProps;
   /**
-   * The Job's pulse, in a few lines: the last thing anyone did on it, the process
-   * count, the worktree, the disk. `JobHoldsSummary`, and the full reading is a
-   * press away on the sheet, from `machineAct` on the title line.
+   * The Job's pulse, in a few lines: the last thing anyone did on it, the
+   * process count, the worktree, the disk (`JobHoldsSummary`) — full reading
+   * a press away on the sheet, from `machineAct` on the title line.
    *
-   * **Below the run and above the pointers.** It used to be a whole card above
-   * the run, which is the largest thing in this column standing in front of the
-   * thing a person opens a Job to read. It is context for the run, so it reads
-   * after it.
+   * **Below the run, above the pointers** — it used to be a whole card above
+   * the run, the largest thing in the column, ahead of what a person opens a
+   * Job to read. It is context for the run, so reads after it.
    *
-   * **It carries the latest event, and no second region does.** Cutting a
-   * worktree, running a repository's preparation commands and reclaiming one
-   * belong to no step, so Fleet's notes about them reach a reader here, beside
-   * the Drone's turns and a person's moves, whichever came last.
-   *
-   * Absent draws nothing. A Job with nothing read and nothing recorded is not a
-   * hole in the screen — the same rule `record` below keeps.
+   * **Carries the latest event, and no second region does** — cutting a
+   * worktree, running prep commands, reclaiming belong to no step, so
+   * Fleet's notes reach a reader here, beside the Drone's turns and a
+   * person's moves, whichever came last. Absent draws nothing — not a hole,
+   * the same rule `record` below keeps.
    */
   machine?: ReactNode;
   machineLabel?: ReactNode;
@@ -542,20 +539,17 @@ function FieldLabel({ children }: { children: ReactNode }) {
 /**
  * Where things are — a label column, the machine value, and the row's one act.
  *
- * **The label column is the region.** It was drawn by `JobLogReference`, which
- * has none: every row was a glyph and a path, and a reader had to work out from
- * the shape of a string whether it was a worktree, a branch or a transcript.
- * `WhereRow` was built for the drawn 74px column and nothing used it. This is
- * that composition, and the rows arrive in the shape the surface already builds
- * them in — the glyph each row carried is dropped, because the label it stood
- * in for is now written out.
+ * **The label column is the region.** `JobLogReference` drew none — every
+ * row was a glyph and a path, worked out from a string's shape as
+ * worktree, branch or transcript. `WhereRow` was built for the drawn 74px
+ * column, unused until now; rows arrive in the surface's own shape,
+ * glyphs dropped since the label now stands written out.
  *
- * **An open can fail, and the row is where it says so.** That is the one thing
- * `WhereRow` cannot hold on its own: its act is synchronous, and whether a
- * worktree still exists is not known until the OS has been asked. So the region
- * holds the last refusal and draws it under the row it was pressed on — one at
- * a time, and it is the last press, because two stale rows arguing on screen is
- * worse than the one somebody just clicked.
+ * **An open can fail, and the row says so** — the one thing `WhereRow`
+ * cannot hold alone: its act is synchronous, unknown until the OS answers.
+ * The region holds the last refusal under the pressed row — one at a
+ * time, the last press, since two stale rows arguing is worse than one
+ * just clicked.
  */
 function WhereRegion({
   rows,

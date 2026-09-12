@@ -154,18 +154,17 @@ export type KeptRead = {
 /**
  * The documents this step kept, one per run, newest run first.
  *
- * **Per run, because a re-run is a different document.** A step worked three
+ * **Per run, since a re-run is a different document.** A step worked three
  * times was judged on three, and a single row would make *the one the Judge
- * read* a guess on the one screen where that question is being asked. Empty on
- * a step that declares no deliverable, and on one whose Judge was never asked —
- * the bytes are copied where the call is built and nowhere else.
+ * read* a guess on the one screen asking that question. Empty on a step
+ * declaring no deliverable, and on one whose Judge was never asked.
  *
- * **Newest run first, on both surfaces.** The wire orders them oldest first,
- * which is what a history wants; this is a person looking at why the last run
- * went the way it did, and the run they are reading about is the one at the
- * top. The Produced chapter reversed for the same reason and said so
- * separately, and two statements of one ordering is how a step retried twice
- * ends up listing its documents two ways. #321.
+ * **Newest run first, on both surfaces.** The wire orders oldest first,
+ * which a history wants; this is a person reading why the last run went
+ * the way it did, and the run they read about is the one at the top. The
+ * Produced chapter reversed for the same reason, stated separately — two
+ * statements of one ordering, or a step retried twice lists its documents
+ * two ways. #321.
  */
 export function keptOf(step: StepDetail, opens: Opens): KeptRead[] {
   return [...(step.deliverables ?? [])].reverse().map((kept) => ({

@@ -279,19 +279,16 @@ export type CheckOutputRead =
 /**
  * What one frame came back as: the bytes, and what they are.
  *
- * **Answered to the caller rather than published as state**, for
- * `CheckOutputRead`'s reasons — a kept frame never moves, and holding one in
- * `BridgeState` would keep hundreds of kilobytes alive for as long as the Job
- * is open.
+ * **Answered to the caller, not published as state**, for `CheckOutputRead`'s
+ * reasons — a kept frame never moves, and holding one in `BridgeState` would
+ * keep hundreds of kilobytes alive for as long as the Job is open.
  *
- * **Bytes and not a string.** Every other read on this seam is JSON; this one
- * is a file, and it crosses to the renderer as the array Electron's structured
- * clone already carries. A base64 in between would inflate it by a third and
- * would have to be undone on the other side to draw it.
+ * **Bytes, not a string.** Every other read here is JSON; this crosses as
+ * the array Electron's structured clone already carries — a base64 would
+ * inflate it by a third and have to be undone to draw it.
  *
- * `type` is the media type Fleet answered with, read off the file's own name.
- * It travels with the bytes because the renderer needs it to make a `Blob`, and
- * nothing on that side should be parsing an extension to guess.
+ * `type` is the media type Fleet answered with, off the file's own name. It
+ * travels with the bytes because the renderer needs it to make a `Blob`.
  */
 export type FrameRead =
   | { ok: true; bytes: Uint8Array; type: string }
@@ -334,21 +331,19 @@ export type Holdings = {
 /** What a command answered. A refusal names itself; it never renders as silence. */
 export type Outcome =
   /**
-   * `jobId` is the Job the caller should open next, where the act produced one
-   * that is not the Job it was called on. Redispatch is the only one: it mints
-   * a replacement, so the id that came back is not the id that went in.
+   * `jobId` is the Job to open next, where the act produced one that is not
+   * the Job it was called on. Redispatch is the only one — it mints a
+   * replacement, so the id back is not the id that went in.
    *
-   * `report` rides along on the same terms: filing produces a record the caller
-   * needs next, and it is not app state — nothing on the board changes and the
-   * surface that asked is the only one that shows it, so keeping it here would
-   * leave a filed report on screen after the dialog that filed it closed.
+   * `report` rides the same terms: filing produces a record the caller needs
+   * next and it is not app state — nothing on the board changes, so keeping
+   * it here would leave a filed report on screen after its dialog closed.
    *
-   * `reclaimed` rides on the same terms as `report`, and for the same reason.
-   * Giving a worktree back changes no row — the Job stays exactly where it is
-   * — so what came back is a receipt the surface that asked shows once. **It
-   * is not derivable from `ok`**: a branch holding commits the base cannot
-   * reach is kept on purpose, so a successful reclaim can honestly report that
-   * half of it did not happen.
+   * `reclaimed` rides the same terms, for the same reason: giving a worktree
+   * back changes no row, so what came back is a receipt shown once. **Not
+   * derivable from `ok`** — a branch holding commits the base cannot reach is
+   * kept on purpose, so a successful reclaim can honestly report half of it
+   * did not happen.
    */
   | {
       ok: true;
@@ -426,25 +421,19 @@ export type Outcome =
   | { ok: false; why: "transport"; detail: string; fault: TransportFault };
 
 /**
- * What went wrong between Bridge and Fleet, for the one refusal that carries no
+ * What went wrong between Bridge and Fleet, for the refusal with no
  * `WireError`.
  *
- * **Three answers and not one string.** `detail` beside this is the machine's
- * own words and says nothing a person can act on — "The operation was aborted
- * due to timeout" is the same sentence whether Bridge waited five seconds on a
- * read or two and a half minutes on a model call, and it never says which route
- * it was about. What separates the three is what to do next, which is the
- * distinction a generic transport message throws away:
+ * **Three answers, not one string** — `detail`'s machine words say nothing
+ * actionable and never name the route. Each separates what to do next:
  *
- * - `timed_out` — the request went out and no answer came back inside the wait.
- *   **It may still have been carried out**, so the board is what says whether
- *   to send it again.
- * - `unreachable` — the fetch itself failed. Whether Fleet read it is unknown.
- * - `unanswerable` — Fleet answered a status, and the body was not a refusal
- *   Bridge could read. Fleet is running and the two disagree about the route.
+ * - `timed_out` — no answer came in the wait. **May still have run**, so the
+ *   board says whether to resend.
+ * - `unreachable` — the fetch failed; whether Fleet read it is unknown.
+ * - `unanswerable` — Fleet answered, but the body was not a refusal Bridge
+ *   could read: Fleet runs, the two disagree about the route.
  *
- * The method and the route travel on every one, because a failure that does not
- * name what was asked is one somebody has to answer with a question.
+ * Method and route travel on every one, naming what was asked.
  */
 export type TransportFault = {
   /** What Bridge sent, so the failure names the act rather than the app. */
@@ -462,24 +451,19 @@ export type TransportFault = {
 );
 
 /**
- * What `proposeFromRequest` answered. **Not `Outcome`**, for two reasons that
- * are both about what a person does next.
+ * What `proposeFromRequest` answered — **not `Outcome`**.
  *
- * One request can be several Jobs, and `Outcome` carries one optional `jobId`
- * for the one act that mints a Job the caller did not name. A plan is every Job
- * the request became, and approving one of several accepts a plan whose members
- * each take their own approval in turn — a shape that carried a single id would
- * make that unrepresentable.
+ * One request can be several Jobs; `Outcome` carries one optional `jobId`
+ * for the act that mints one Job. A plan is every Job the request became —
+ * approving one of several accepts a plan whose members each take their own
+ * approval, which a single id could not represent.
  *
- * And the two refusals are not the same thing. **The request being declined and
- * the call failing are different statuses because a person does different
- * things about them** — one is said again differently or hand-entered through
- * `proposeJob`, the other is simply asked again. `crates/ipc/operations.toml`
- * is where that division is stated and `crates/fleet/src/refusing.rs` is where
- * the two codes are declared apart so a client can honour it.
+ * **Decline and failure are different statuses**: one is said again
+ * differently or hand-entered through `proposeJob`, the other just asked
+ * again — `operations.toml` states the division, `refusing.rs` declares the
+ * codes apart.
  *
- * Nothing here is a Job that is running. Every member is at
- * `awaiting_approval`, exactly as `proposeJob` answers for one.
+ * Nothing here is running: every member sits at `awaiting_approval`.
  */
 export type Proposed =
   /**

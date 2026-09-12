@@ -21,17 +21,15 @@
  * Which checkout a frame is a photograph of. Since 9.5.
  *
  * **What makes a set of frames a before and an after.** #209 asks for the
- * branch *and* the base so a reviewer sees what changed rather than what is,
- * and two frames the spec called `home.png` are only a pair if something says
- * which is which. Nothing else on `KeptFrame` could: the name is the harness's
- * own, and both runs belong to one attempt of one step.
+ * branch *and* the base so a reviewer sees what changed, and two frames named
+ * `home.png` are only a pair if something says which is which — nothing else
+ * on `KeptFrame` does, since the name is the harness's own.
  *
- * **Pair them by `name`, and read the leftovers as answers rather than as
- * gaps.** A name on both sides is a before and an after; a name only on the
- * branch is a screen the change *added*, which has no before; a name only at
- * base is one it *removed*, which has no after. None of the three is a fault,
- * and drawing a missing half as an error would draw the commonest case #209
- * exists for — a brand-new screen — as the feature being broken.
+ * **Pair them by `name`, and read the leftovers as answers, not gaps.** A name
+ * on both sides is a before and after; only on the branch is a screen the
+ * change *added*; only at base is one it *removed*. None is a fault — drawing
+ * a missing half as an error would draw the commonest case #209 exists for, a
+ * brand-new screen, as the feature being broken.
  */
 export type Side = "base" | "branch";
 
@@ -101,20 +99,17 @@ export type KeptFrame = {
   /**
    * A digest of this frame's own bytes. Since 9.6.
    *
-   * **What lets a surface fold a pair away without fetching either image.** A
-   * spec that photographs ten screens photographs ten of which the change
-   * touched one; comparing two of these is how the nine that did not are cut,
-   * and it costs no round trip.
+   * **Lets a surface fold a pair away without fetching either image** — a
+   * spec that photographs ten screens touches one, and comparing digests is
+   * how the nine that did not change are cut, at no round trip.
    *
-   * **Sound in one direction only, which is the direction that matters.**
-   * Digests that differ mean *draw it* — at worst noise, since a PNG encoder
-   * may spell one picture two ways. Digests that agree mean *fold it*, and
-   * being wrong there hides the change somebody came to see, so `bytes` is
-   * compared beside it.
+   * **Sound in one direction only: differ means *draw it*** (at worst noise,
+   * a PNG encoder may spell one picture two ways); **agree means *fold it***,
+   * checked beside `bytes` since being wrong there hides the change.
    *
-   * **Empty or absent is not a match.** A frame kept before this field existed
-   * carries none, and two of those must not read as a pair that agrees — the
-   * pair is drawn, which is what would have happened anyway.
+   * **Empty or absent is not a match.** A frame kept before this field
+   * existed carries none, and two of those must not read as a pair that
+   * agrees — it is drawn, as it would have been anyway.
    */
   digest?: string;
 };

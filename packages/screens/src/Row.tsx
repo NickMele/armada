@@ -93,22 +93,19 @@ export function isTerminal(job: JobSummary): boolean {
 }
 
 /**
- * What a settled pull request reads as. **Written here rather than generated**,
- * unlike every status verb: `Settled` is a wire set of `crates/ipc`'s and not a
- * row in `crates/core-model/domain/`, so `enum-verbs.toml` has nothing to say
- * about it. A registry row would be the better home the day a third state
- * exists, and there is no third state — a pull request merges or it does not.
+ * What a settled pull request reads as. **Written here, not generated** —
+ * unlike every status verb, `Settled` is `crates/ipc`'s wire set, not a row
+ * in `crates/core-model/domain/`, so `enum-verbs.toml` has nothing to say.
+ * A registry row would fit the day a third state exists — there is none: a
+ * pull request merges or it does not. The same two words are used on the
+ * detail, imported from here rather than written twice.
  *
- * The same two words are used on the detail, imported from here rather than
- * written twice.
- *
- * **Spelled mid-sentence, and capitalised by whoever opens a line with it.**
- * The detail continues the pull request's own fact with this — `Pull request
- * #4711, merged` — and this row opens a field with it. `leading` is what turns
- * one reading into the other, exactly as it does for the registry's verbs,
- * which are spelled lowercase for the same reason. The alternative was a second
- * roster of the same two words in mid-sentence case, which is two spellings of
- * a set that has one owner.
+ * **Spelled mid-sentence, capitalised by whoever opens a line with it.**
+ * The detail continues the pull request's own fact — `Pull request #4711,
+ * merged` — and this row opens a field with it. `leading` turns one
+ * reading into the other, as it does for the registry's verbs, spelled
+ * lowercase for the same reason — the alternative was a second roster of
+ * the same words in mid-sentence case, two spellings of a set with one owner.
  */
 export const LANDED: Record<string, string | undefined> = {
   merged: "merged",

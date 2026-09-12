@@ -1,20 +1,18 @@
 // What each member of a panel read, and what each of them was handed.
 //
-// **Two readings off the same rows, and they answer opposite questions.**
-// `Judged.cited` is where in the brief a member's own words are quoted from —
-// what it read. `Judged.given` is a digest of the text that member's call was
-// sent — what it was handed. The first says whether two refusals rest on the
-// same lines; the second says whether the panel was a panel at all.
+// **Two readings off the same rows, opposite questions.** `Judged.cited` is
+// where in the brief a member's own words are quoted from — what it read.
+// `Judged.given` is a digest of the text sent — what it was handed: the
+// first says whether two refusals share lines, the second whether the
+// panel was a panel at all.
 //
-// **Not in `gates.ts`, and the line is deliberate.** That file holds what two
-// surfaces must not disagree about — which attempt counts, how members group,
-// whether a criterion was refused. Nothing but the Verdicts chapter reads these
-// two, so a third reading parked beside the shared ones would make the shared
-// file's own claim harder to check.
+// **Not in `gates.ts`, deliberately** — that file holds what two surfaces
+// must not disagree about; nothing else reads these two, so a third
+// reading beside the shared ones would make its claim harder to check.
 //
-// **Both are served, and both are absent on old rows.** `cited` and `given`
-// arrived in protocol 8.3; a Fleet before it sends neither, and every function
-// here answers with nothing rather than with a placeholder.
+// **Both served, both absent on old rows** — `cited` and `given` arrived
+// in protocol 8.3; a Fleet before it sends neither, and every function
+// here answers with nothing rather than a placeholder.
 
 import { CRITERION_VERDICT_JUDGE } from "@armada/components";
 import type { JudgeCitation, JudgeInputRow, JudgeInputsFor } from "@armada/components";
@@ -25,19 +23,17 @@ import { judgeNamed, type Panel } from "./gates";
 /**
  * Every pointer the panel made, one row per quotation.
  *
- * **In the order the panel recorded them** — criterion by criterion, then
- * member by member, then in the order each member wrote its quotations.
- * `panelsOf` already holds the first two orderings and `Judged.cited` the
- * third, so nothing here sorts: a citation list that reordered itself would be
- * a second index over a record whose own order is evidence of how the panel
- * ran.
+ * **In the order the panel recorded them** — criterion, then member, then
+ * quotation order. `panelsOf` holds the first two orderings, `Judged.cited`
+ * the third, so nothing here sorts: a reordered list would be a second
+ * index over a record whose own order is evidence of how the panel ran.
  *
  * **Empty and `null` are different answers.** Empty is a panel that quoted
- * nothing placeable — it met everything, or it refused in its own words — and
- * is worth a sentence. `null` is a Fleet before 8.3, which recorded no
- * citations for anybody, and the honest rendering of that is no region at all:
- * a note saying the refusals described rather than quoted would be a claim
- * about prose nobody read.
+ * nothing placeable — it met everything, or refused in its own words —
+ * worth a sentence. `null` is a Fleet before 8.3, recording no citations for
+ * anybody; the honest rendering is no region at all, since a note saying
+ * the refusals described rather than quoted would be a claim about prose
+ * nobody read.
  */
 export function citationsOf(
   panels: readonly Panel[],

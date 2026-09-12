@@ -60,21 +60,19 @@ export type RedirectWaiting = {
 };
 
 /**
- * One question a drone asked a person, while it is still unanswered.
+ * One question a drone asked a person, still unanswered.
  * `crates/ipc/src/detail.rs`.
  *
- * Arrives two ways and means the same thing both times: on the open job's
- * detail, which is what a bridge opened mid-question reads, and as the
- * `job.asking` event, which is what moves it without a reload.
+ * Arrives two ways, same meaning: on the open job's detail, read by a bridge
+ * opened mid-question, and as the `job.asking` event, which moves it without
+ * a reload.
  *
- * **A question is an event on a job, not a conversation.** Asked once, answered
- * once: one outstanding per job, the answer one of the options the drone
- * offered, and no field a reply could arrive in. A person who needs to say
- * something the options do not cover uses `redirectDrone`, which is the one
- * route their own words reach a drone by.
+ * **An event on a job, not a conversation.** Asked once, answered once: one
+ * outstanding per job, the answer one of the options offered, no field a
+ * reply could arrive in. Anything else goes through `redirectDrone`.
  *
- * `asked_at` crosses once and a surface subtracts for itself. **Nothing ticks**
- * — a question that waits an hour costs the stream two messages.
+ * `asked_at` crosses once; a surface subtracts. **Nothing ticks** — an hour's
+ * wait costs the stream two messages.
  */
 export type QuestionInFlight = {
   /**

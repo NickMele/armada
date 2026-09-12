@@ -56,18 +56,17 @@ export function stepsAhead(workflow: WorkflowSummary | undefined): RunTreeSkelet
 /**
  * The run.
  *
- * **Nothing here is inferred.** `state` is `job_steps.state` as Fleet recorded
- * it, the current row is the one `current_step_id` names, and a step whose state
- * the registry does not spell draws `not_started`, which claims nothing.
+ * **Nothing here is inferred** — `state` is `job_steps.state` as Fleet
+ * recorded it, the current row is `current_step_id`'s, and an unspelled
+ * state draws `not_started`.
  *
- * **A step's activity reads against its Job's status.** `job-statuses.toml`
- * freezes the step machine at every terminal status, so a step still reading
- * `running` beneath a Job that is over is frozen and draws as frozen —
- * `frozen.ts` holds that rule.
+ * **Activity reads against the Job's status** — `job-statuses.toml`
+ * freezes the step machine at every terminal status, so a step still
+ * reading `running` beneath an over Job draws frozen (`frozen.ts`).
  *
- * **The selected step's facts start open and no others do.** A seven-step
- * workflow with every step expanded fits no screen; after that the tree holds
- * whatever the reader opened, which is `RunTree`'s own rule.
+ * **The selected step's facts start open, no others do** — a seven-step
+ * workflow expanded fits no screen; after that the tree holds whatever the
+ * reader opened (`RunTree`'s own rule).
  */
 export function runOf(
   whole: JobWhole,

@@ -1,20 +1,18 @@
-// Opening the run sheet from the panel, by pressing the control a person
-// presses.
+// Opening the run sheet from the panel, by pressing the control a person presses.
 //
-// **The defect this exists for.** `Run…` on the worktree row is wired straight
-// to its handler, and React calls a click handler with the click event. The
-// panel passed `useRunSheet`'s `open` bare, so the event arrived where an entry
-// id belongs, was selected as one, and the next render asked it for `.indexOf`
-// — `id.indexOf is not a function`, thrown from `useRunSheet` inside
-// `JobDetail`'s own render, with the whole screen replaced by the boundary.
+// **The defect this exists for.** `Run…` on the worktree row is wired
+// straight to its handler; React calls a click handler with the click
+// event. The panel passed `useRunSheet`'s `open` bare, so the event arrived
+// where an entry id belongs and the next render asked it for `.indexOf` —
+// `id.indexOf is not a function`, thrown inside `JobDetail`'s own render,
+// the whole screen replaced by the boundary.
 //
-// It typechecked the whole way: `(entryId?: string) => void` is assignable to
-// `() => void`, because a handler is allowed to ignore what it is passed. No
-// type can catch it, so a press has to.
+// It typechecked the whole way: `(entryId?: string) => void` is assignable
+// to `() => void`, since a handler may ignore what it is passed. No type
+// catches it, so a press has to.
 //
-// **Pressed rather than called.** Every existing test of this control hands it
-// `fn()`, a mock that swallows an argument it never reads — which is exactly
-// why none of them saw this. The press has to go through the real hook.
+// **Pressed rather than called.** Every existing test hands it `fn()`, a
+// mock that swallows an argument it never reads — exactly why none saw this.
 import { afterEach, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
 

@@ -1,21 +1,18 @@
-// `escalated` / `evidence_suspect` — every mechanical Check passed, and the
+// `escalated` / `evidence_suspect` — every mechanical Check passed, the
 // Judge panel refused two criteria.
 //
-// **Full depth**, the way `escalated.ts`'s `gate_failure` is, and deliberately
-// beside it rather than folded into `escalated-light.ts`: `evidence_suspect`
-// is "mechanically passed, semantically flagged as likely gamed" —
-// `escalation-triggers.toml` — which only reads as the finding it is once the
-// Checks chapter shows a green suite and the Verdicts chapter shows a panel
-// that did not believe it. A light fixture with no `checks` or `judged` rows
-// could not carry that argument.
+// **Full depth, beside `escalated.ts`'s `gate_failure`, not folded into
+// `escalated-light.ts`** — `evidence_suspect` is "mechanically passed,
+// semantically flagged as likely gamed" (`escalation-triggers.toml`),
+// reading as a finding only once Checks show green and Verdicts show a
+// panel that did not believe it; a light fixture could not carry that.
 //
-// **A panel of three, both criteria answered, one unanimous and one not.**
-// `c1` is met by every member — the ordinary row a verdict grid still owes,
-// per `Judged`'s own doc comment: "the brief is on every row, including the
-// met ones". `c2` is refused two of three: the suite is green because the
-// assertion it depends on was deleted, which is exactly what `flagged`'s one
-// row names — `Judged.expected`/`produced`/`consequence` carry the finding
-// and `given` carries the proof the two who refused read the same brief.
+// **A panel of three, one unanimous criterion and one not.** `c1` is met
+// by every member, per `Judged`'s own doc: "the brief is on every row,
+// including the met ones". `c2` is refused two of three — the suite is
+// green since the assertion it depends on was deleted, which
+// `Judged.expected`/`produced`/`consequence` name and `given` proves the
+// two who refused read the same brief.
 
 import type { JobFixture } from "../fixture";
 import type { Judged, StepDetail } from "@armada/protocol";

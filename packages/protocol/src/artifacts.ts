@@ -26,22 +26,18 @@ import type { ManifestSummary } from "./setup";
 export const ARMADA = ".armada";
 
 /**
- * Which artifact of a Job.
+ * Which artifact of a Job. **Two shapes, since only one kind of path can be
+ * derived.** The three words name Job-level paths, rebuilt from the Job id;
+ * [`Kept`] names the three per-step records — a Check's output, a Judge's
+ * brief, a step's deliverable — whose paths only Fleet knows, each keyed by
+ * step, run, and an ordinal or criterion no layout rule derives.
  *
- * **Two shapes, because there are two kinds of path and only one of them can
- * be derived.** The three words name the Job-level paths the architecture
- * fixes, and main rebuilds each from the Job id. [`Kept`] names the three
- * per-step records — a Check's output, a Judge's brief, a step's deliverable —
- * whose paths only Fleet knows, because each carries a step, a run, and an
- * ordinal or a criterion that no layout rule derives.
+ * **Neither shape hands the renderer an arbitrary-file capability** — a
+ * word is rebuilt from the Job id, a kept path is checked against the
+ * paths Fleet named and refused otherwise (`main/open.ts`).
  *
- * **Neither shape hands the renderer an arbitrary-file capability.** A word is
- * rebuilt from the Job id; a kept path is checked against the paths Fleet named
- * for that Job in the detail main is holding, and refused where it is not one
- * of them. `main/open.ts` is where that check is.
- *
- * The branch is neither. It is served rather than derived, it is not a path,
- * and it is the one row the owner said was already right as a copy.
+ * The branch is neither: served not derived, not a path, the one row the
+ * owner said was already right as a copy.
  */
 export type Artifact = "worktree" | "log" | "transcript" | Kept;
 

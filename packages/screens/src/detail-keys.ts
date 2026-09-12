@@ -235,21 +235,17 @@ export type DetailShape = {
   /**
    * Open the step's activity log on the trailing layer — `L`.
    *
-   * **It has a key of its own now.** It answered `Enter` on whichever chapter
-   * `[` `]` had landed on, which held while the log was the only chapter with
-   * a reading behind it and stopped the moment a Check's output became the
-   * second: one `Enter` cannot open both, and the story drew the same binding
-   * twice with no way to tell which would answer.
+   * **It has a key of its own now** — it answered `Enter` on whichever
+   * chapter `[` `]` had landed on, which held while the log was the only
+   * chapter with a reading behind it, and stopped once a Check's output
+   * became the second: one `Enter` cannot open both.
    *
-   * **Required, and it was optional.** `L` reads it, finds nothing and returns
-   * false, and a press that answers nothing looks exactly like a key that is
-   * not bound — which is what shipped: this file carried the binding, the
-   * registry carried the key, `act` dispatched it, and `JobDetail` never passed
-   * the handler, so four rounds of feedback were spent on a shortcut that was
-   * wired everywhere except at the one call site. Optional made that a silence
-   * instead of a compile error. It is required now, and the screen that has
-   * nothing to open passes a function that does nothing rather than omitting
-   * the field — because that is a decision somebody wrote down.
+   * **Required, and it was optional.** `L` reads it, finds nothing, returns
+   * false — indistinguishable from an unbound key, which is what shipped:
+   * bound everywhere (this file, the registry, `act`) except `JobDetail`
+   * never passed the handler, four rounds of feedback on a dead shortcut.
+   * Optional made that silent instead of a compile error; required now, a
+   * no-op replaces omission.
    */
   onOpenLog: () => void;
   /** Open a Check's output on the trailing layer — `o`. Required, for `onOpenLog`'s reason. */

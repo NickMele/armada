@@ -1,36 +1,18 @@
 // What fleet is holding disk for, and giving back the ones you choose.
-//
-// # Why this is a surface and not a region of the board
-//
-// The board is scanned for what needs you now, and every row on it is a job
-// something can still be done to. This is read the other way round: it is asked
-// once, deliberately, when disk is the question — and the answer is about a set
-// rather than about any one job. *Which of these do I give back* cannot be asked
-// of a row, which is why the read that serves it is scoped to nothing.
-//
-// # The other half of the rule is on this page too
-//
-// Fleet reclaims what passes all five tests on its own and never asks. That
-// half is invisible by design, so the worktrees it is about to take are drawn
-// here in their own group rather than filtered out — a person who came looking
-// for one and does not find it cannot tell "already given back" from "held and
-// not said".
-//
-// # Per item, never all-or-nothing
-//
-// There is one bulk act in armada, `armada clean --everything`, and it is the
-// one nobody should reach for from a screen. So the control here is a checkbox
-// per row and a confirmation that reads out what each chosen row costs; there
-// is no select-all, and adding one would be adding the act this surface exists
-// to replace.
-//
-// # The confirmation says what is lost, not how much disk comes back
-//
-// Bytes are not the decision. Which commits go, whether anything else has them,
-// and which uncommitted files exist nowhere but the checkout is — and only the
-// last of those is destroyed at all, because there is no force on this seam.
-// `held.ts` computes it and is unit-tested, because every sentence in it is read
-// immediately before something is destroyed.
+// **Why a surface, not a region of the board** — the board asks about
+// jobs; this asks once, about a set — *which of these do I give back*
+// cannot be asked of a row.
+// **The other half of the rule is on this page too** — Fleet reclaims
+// what passes all five tests, invisibly, so worktrees about to be taken
+// are drawn in their own group: a person cannot mistake "already given
+// back" for "held and not said".
+// **Per item, never all-or-nothing** — the one bulk act, `armada clean
+// --everything`, is not for a screen: a checkbox per row, a
+// confirmation naming what each costs, no select-all.
+// **The confirmation says what is lost, not how much disk comes back** —
+// bytes are not the decision: which commits go, what else has them,
+// which uncommitted files exist nowhere else — only the last is
+// destroyed. `held.ts` computes it, unit-tested, read before destruction.
 
 import { useEffect, useState } from "react";
 import {

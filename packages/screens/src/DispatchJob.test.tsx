@@ -1,20 +1,17 @@
 // One request out at a time, and one way back from the override.
 //
-// # Why the guard is tested and not just written
+// **Why the guard is tested, not just written.** There is no in-flight guard
+// on `proposeFromRequest`, matching `proposeJob` — two presses are two model
+// calls and two drafted plans, so the form has to stop it, and a guard
+// nothing exercises is a guard nobody knows broke.
 //
-// There is no in-flight guard on `proposeFromRequest`, matching `proposeJob`.
-// Two presses are two model calls and two drafted plans — two of everything at
-// the gate, and somebody deleting one by hand — so the form is what has to stop
-// it, and a guard nothing exercises is a guard nobody knows broke.
+// **The button being disabled is not the test** — that is a rendering, and a
+// press can reach the handler with the control still drawn live: a key
+// repeat, a synthetic click, a frame not yet painted. Every case here
+// presses a control that is enabled and asserts on what was sent.
 //
-// **The button being disabled is not the test.** That is a rendering, and a
-// press can reach the handler with the control still drawn live: a key repeat,
-// a synthetic click, a frame not yet painted. So every case here presses a
-// control that is enabled and asserts on what was sent.
-//
-// The story in `packages/components` proves the other half — that the control
-// goes off while a call is out — because that half is a rendering and belongs
-// where renderings are agreed.
+// The story in `packages/components` proves the other half — that the
+// control goes off while a call is out — since that half is a rendering.
 
 import { afterEach, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";

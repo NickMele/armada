@@ -1,22 +1,18 @@
 // What the Produced chapter draws, and which of two readings it draws from.
 //
-// **The record wins wherever there is one.** Fleet serves `JobDetail.footprint`
-// only on a job that has stopped, so its presence is the whole test: a running
-// job has the live event and nothing else, and a finished one has a reading
-// taken at the moment it stopped rather than whenever the last watcher happened
-// to be looking. Preferring the live reading on a finished job would draw
-// whatever the socket last carried, which on a job opened after it ended is
-// nothing at all.
+// **The record wins wherever there is one.** Fleet serves
+// `JobDetail.footprint` only on a stopped job — a running job has the
+// live event and nothing else; a finished one has a reading taken when
+// it stopped, not last watched. Preferring live on a finished job draws
+// whatever the socket last carried, nothing on a job opened after it ended.
 //
-// **This is where the line counts appear, and why they appear only here.**
-// Counting is the same walk that renders the patch — 25ms over a hundred files,
-// 90ms over four hundred, against under a microsecond for the paths — so Fleet
-// takes it once, at the transition that ends the job. A running job's chapter
-// reads `3 files · all inside the plan` and a finished one reads `3 files · +94
-// −31 · all inside the plan`, and the difference is a measurement rather than a
-// field somebody forgot to send.
-//
-// `files.ts` is the live half and says the same thing from the other side.
+// **This is where the line counts appear, and only here** — counting is
+// the same walk that renders the patch: 25ms over a hundred files, 90ms
+// over four hundred, against under a microsecond for the paths. Fleet
+// takes it once, at the transition that ends the job. A running chapter
+// reads `3 files · all inside the plan`; a finished one reads `3 files ·
+// +94 −31 · all inside the plan` — a measurement, not a forgotten field.
+// `files.ts` is the live half, saying the same thing from the other side.
 
 import { useEffect } from "react";
 

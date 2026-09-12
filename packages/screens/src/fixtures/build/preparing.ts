@@ -1,21 +1,18 @@
 // `running` — before the first Drone turn: the worktree is cut and the
 // repository's own preparation commands are still running.
 //
-// **`crates/fleet/src/dispatch.rs` fixes the order this freezes.** A Job moves
-// to `running` before `create_worktree` is even called, and `prepared()` runs
-// the repository's setup commands in that worktree before `branded()` sets the
-// Job's own `branch` field or `put_a_drone_on` assigns a Drone — so a Job
-// frozen here carries `running`, an unset branch, no assigned Drone, and every
-// step still `not_started`. `preparing.rs`'s own log lines are what
-// `journalled` carries, word for word: "the worktree is being prepared before
-// any Drone is put on it" and "a preparation command is starting".
+// **`crates/fleet/src/dispatch.rs` fixes the order this freezes** — a Job
+// moves to `running` before `create_worktree`, and `prepared()` runs setup
+// commands before `branded()` sets `branch` or a Drone is assigned. So a
+// Job frozen here carries `running`, no branch, no Drone, every step
+// `not_started`. `preparing.rs`'s log lines are what `journalled` carries,
+// word for word: "the worktree is being prepared before any Drone is put
+// on it" and "a preparation command is starting".
 //
-// **The one state where `running` and `not started` are both true and neither
-// is wrong.** The badge reads `running` because the Job's status is; the run
-// reads every step `not_started` because none has been entered — and that gap
-// is what a wedged Job also looks like, which is why the machine panel's own
-// two lines are the thing that tells the two apart, not a status this Job
-// does not carry.
+// **The one state where `running` and `not started` are both true, neither
+// wrong** — badge reads `running` from status; run reads every step
+// `not_started` since none entered — the same gap a wedged Job looks like,
+// told apart by the machine panel's two lines, not a status this Job carries.
 
 import type { JobFixture } from "../fixture";
 import {

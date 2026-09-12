@@ -1,18 +1,16 @@
 // The two readings the panel cannot hold, on the layer that can — #286, and
 // Journey 4's frames 4i-4m.
 //
-// The activity log holds 1676 entries on a real Job and the diff is the Job's
-// whole patch. Neither is a longer version of something a chapter can hold: an
-// expander pushes every chapter under it off the screen, and a patch in a 602px
-// column is a decision taken on a line that wrapped.
+// The activity log holds 1676 entries on a real Job and the diff is the
+// Job's whole patch — neither fits an expander, which pushes chapters off
+// screen, nor a 602px column, where a patch wraps into a decision.
 //
-// **One sheet at a time, and `Esc` returns to the panel** rather than to the
-// previous sheet. Which one is open is `JobDetail`'s state; what closes one is
-// `Sheet` itself, which catches `Esc` in the capture phase so the other clause
-// of the same registry row — *returns to the list from a detail route* — does
-// not answer the same press.
+// **One sheet at a time, `Esc` returns to the panel**, not the previous
+// sheet. Which is open is `JobDetail`'s state; `Sheet` itself catches `Esc`
+// in the capture phase so the registry's other clause — *returns to the
+// list from a detail route* — does not answer the same press.
 //
-// **Two exits and no third.** The labelled control and `Esc`. A click on the
+// **Two exits, no third**: the labelled control and `Esc`. A click on the
 // ground behind does not close a sheet.
 
 import {
@@ -46,18 +44,16 @@ import { NOTHING_YET_ON_THIS_STEP, whyNotWatching, type LogRow } from "./story";
 /**
  * Which sheet is open, or none. Two cannot be.
  *
- * **`holds` is the third, and it is here for a different reason than the other
- * two.** They left the panel because a reading has no end; this left the run
- * column because it was the largest thing on it and the run is what a person
- * opens a Job to read. Same layer, same two exits, same one-at-a-time rule.
+ * **`holds` is the third, for a different reason** — the other two left
+ * the panel since a reading has no end; this left the run column as the
+ * largest thing on it. Same layer, exits, one-at-a-time rule.
  *
- * **`settings` is the fourth, and holds no reading at all** — every setting a
- * person can change on a running Job. It is here because the header's one line
- * for one of them read as the screen's main button, and a layer a person
- * already knows how to leave is where changing a Job does least to the reading.
+ * **`settings` is the fourth, and holds no reading at all** — every setting
+ * a person can change on a running Job. Here because the header's one line
+ * for it read as the screen's main button.
  *
- * **`run` is the fifth, Journey 9's.** It opens from `r`, from the worktree
- * row's `Run…`, and from a refused Check's `Run it here` — never from a
+ * **`run` is the fifth, Journey 9's.** It opens from `r`, the worktree
+ * row's `Run…`, and a refused Check's `Run it here` — never from a
  * chapter, so it lands nowhere on close, `holds`'s way.
  */
 export type OpenSheet = "log" | "diff" | "holds" | "settings" | "run" | null;
@@ -290,30 +286,17 @@ export function holdOf(now: number, rows: number): HeldAt {
 /**
  * The file rail beside the patch — the paths, and what each gained and lost.
  *
- * **From the patch, which is the answer the body is drawn from.** It used to
- * come from the footprint, and a footprint is a step's read-back written when
- * the step submits: mid-step nothing has submitted, so the rail was empty and
- * the header read `0 files · +0 −0` above a fully rendered patch. That is
- * #310, and it was two sources on one line rather than a hole to plug — filling
- * the rail from the patch and leaving the counts on the footprint would have
- * kept the contradiction one field along.
+ * **From the patch, not the footprint** — footprint writes only when a
+ * step submits; mid-step the rail read empty above a rendered patch (`0
+ * files · +0 −0`). #310. `drawn` is the same split `DecidedDiff` renders,
+ * so the rail names exactly the patch's own files, in order.
  *
- * `drawn` is the same split `DecidedDiff` renders, called on the same reading,
- * so the rail names exactly the files beside it in the order the patch wrote
- * them. It is a second call of one pure function rather than a second answer.
+ * **`null` is no reading, `[]` is nothing read** — `work` absent is a Job
+ * with no worktree; present with no patch is a drone that changed nothing,
+ * truthfully `0 files · +0 −0`.
  *
- * **`null` is no reading and `[]` is a reading of nothing**, and the split
- * falls on the line the wire already draws. `work` absent is a Job with no
- * worktree; `work` present with no patch is a drone that changed nothing, which
- * is a real answer and truthfully reads `0 files · +0 −0`. Returning `[]` for
- * both would put a count of nothing over a Job nothing was read from, which is
- * this issue one state over.
- *
- * **No step against a file.** The drawing names the step that wrote each one
- * and nothing served says which step that was: the footprint carries
- * `planned_by`, which is the step that *promised* a path, and a file no step
- * declared would then read as a file no step wrote. The rail draws the counts
- * alone and says why underneath rather than guessing. Reported.
+ * **No step against a file** — nothing served names which step wrote which;
+ * `planned_by` only promises one. Counts alone, why underneath. Reported.
  */
 function railOf(diff: Diff, jobId: string): JobDiffFile[] | null {
   // A reading of some other Job is not this Job's reading. `whyNoDiff` is the

@@ -430,20 +430,17 @@ export type Refusal = {
 /**
  * What one job has spent and what it is allowed to spend.
  *
- * **Four numbers and no verdict**, deliberately. Whether the job is over is the
- * pair being compared, and a boolean could not say by how much or which of the
- * two ceilings it was — which is exactly what `queued_reason: "over_budget"`
- * leaves out.
+ * **Four numbers, no verdict, deliberately.** A boolean could not say by how
+ * much or which ceiling — exactly what `queued_reason: "over_budget"` leaves
+ * out.
  *
- * `cost_micros` and `cost_cap_micros` are millionths of a dollar, and they are
- * **notional**. The figure is what the run would have cost at list price, which
- * is not what a subscription account is billed; a surface that presents it as
- * money owed is presenting a currency nothing here spends. What it is for is
- * telling a runaway from a job that started with a cold cache.
+ * `cost_micros`/`cost_cap_micros` are millionths of a dollar and **notional**
+ * — list price, not what a subscription is billed. Presenting it as money
+ * owed is a currency nothing here spends; it tells a runaway from a cold
+ * cache.
  *
- * `ran_ms` has no cap beside it on purpose. Wall clock is bounded by a
- * different setting at a different scope, which nothing enforces yet, so the
- * figure is here to be read and there is no ceiling to draw it against.
+ * `ran_ms` has no cap beside it on purpose — wall clock is bounded by a
+ * different setting at a different scope that nothing enforces yet.
  */
 export type JobSpend = {
   /** What every drone of this job has cost, added up, in millionths of a dollar. */
@@ -704,27 +701,17 @@ export type StepDetail = {
   /**
    * The frames this step's harness produced, oldest run first. Since 9.2.
    *
-   * **What a step whose point is not the code is reviewed by.** On a change
-   * that should make something look different, the patch is the least useful
-   * thing on the screen and it used to be the only thing offered — reviewing
-   * meant reading a diff to infer an outcome you could have been shown. These
-   * are the outcome.
+   * **What a step whose point is not the code is reviewed by** — the patch
+   * is the least useful thing on screen for a change meant to look
+   * different; these are the outcome instead of an inference from a diff.
+   * **Rows, never images**: bytes are fetched from the frame route, once, by
+   * whoever opens one.
    *
-   * **Rows, never images.** Each says what it is called, what it weighs and
-   * what to ask for; the bytes are fetched from the frame route, once, by
-   * whoever opens one. A detail is re-read on every event naming the open Job,
-   * and a frame is hundreds of kilobytes.
-   *
-   * **Absent rather than empty**, which is `deliverables`' shape and its
-   * reason: Fleet drops the field where there are none, and a peer built before
-   * 9.2 sends no such field at all. Both are *this step has no frames*, and a
-   * reader that required the key would break on the second.
-   *
-   * That is the ordinary case — every step that declared no `shown` evidence,
-   * which is most of them, and one whose harness ran and captured nothing.
-   * **Absent never means the harness failed**: a repository with a broken
-   * harness and a spec that photographed nothing look the same here, and what
-   * happened is a line in the Job's own log.
+   * **Absent rather than empty** — Fleet drops the field where there are
+   * none, and a peer built before 9.2 sends none at all; both mean *no
+   * frames*, never that the harness failed. A broken harness and a spec that
+   * photographed nothing look the same here; what happened is a line in the
+   * Job's own log.
    */
   frames?: KeptFrame[];
   /**

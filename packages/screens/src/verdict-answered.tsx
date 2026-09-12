@@ -1,25 +1,18 @@
-// The verdict sheet's fifth arrangement — a Job that is done, after a person
-// answered it somewhere along the way: approved, merged, or overruled a
-// verdict that had stopped a step.
+// The verdict sheet's fifth arrangement — a Job done after a person
+// answered it: approved, merged, or overruled a verdict that stopped a step.
 //
-// **This is the one arrangement that reads the whole Job.** `verdict.tsx`'s
-// own header says why the other four read one `StepDetail`: the panel's
-// `open` step is "the step this Job is about" everywhere else on the screen.
-// It is not, here — a verdict a person set aside is the reason this
-// arrangement exists, and the step that carries it is very often not the one
-// a fresh reader lands on. A record that only showed what the open step
-// happened to be would hide the exact thing it exists to surface. So this
-// file reads `whole.steps` whole, groups the Checks the way a person reads a
-// finished Job — which steps passed, and on what — and gives every judged
-// criterion, on every step, its own row.
+// **This is the one arrangement that reads the whole Job** — the other
+// four read one `StepDetail` since its `open` step is "the step this Job
+// is about"; not here, since a verdict set aside is the reason this
+// exists. So this file reads `whole.steps` whole, grouping Checks as a
+// person reads a finished Job, giving every judged criterion its own row.
 //
-// **`verdictOf` is still not this file's.** It is the four-block, one-step
-// reading `verdictSlotAtGate` and `verdictSlotFinished` use, and duplicating
-// its plumbing here for a different shape would be the second copy that made
-// this split worth making. The four block labels are the only thing shared —
-// "What you asked for", "What the Drone says it did", "What proves it", "What
-// the Drone says it left alone" — because the sheet is one document with one
-// layout; what fills each block is this file's own read.
+// **`verdictOf` is still not this file's** — it is the four-block,
+// one-step reading `verdictSlotAtGate`/`verdictSlotFinished` use;
+// duplicating its plumbing would be the second copy that made this split
+// worth making. Only the four block labels are shared — "What you asked
+// for", "What the Drone says it did", "What proves it", "What the Drone
+// says it left alone" — since the sheet is one document, one layout.
 
 import type { ReactNode } from "react";
 import {

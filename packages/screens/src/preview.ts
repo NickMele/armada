@@ -1,23 +1,18 @@
 // The workflow a proposal names, drawn before anything runs.
 //
-// **This is the same rail `rail.ts` builds, one moment earlier.** After the
-// fact the rail says what happened; before it, this is what somebody is
-// agreeing to when they press Propose — a workflow that will stop and wait for
-// them at `handoff`, and will spend two Judge calls at `implement`, previewed
-// as neither until `judge_checks` and `advance_gate` crossed on `WorkflowStep`.
+// **The same rail `rail.ts` builds, one moment earlier** — after the fact
+// the rail says what happened; before it, this is what somebody agrees to
+// on pressing Propose: a workflow stopping at `handoff`, spending two
+// Judge calls at `implement`, previewed as neither until `judge_checks`
+// and `advance_gate` cross on `WorkflowStep`. Every word on a row comes
+// from `declared.ts`, so the two moments cannot disagree.
 //
-// Every word on a row comes from `declared.ts`, so the two moments cannot say
-// different things about one declaration.
-//
-// # Nothing here has a result, and no row pretends to
-//
-// The running rail's gate rows carry a glyph and an outcome, and its
-// declaration rows carry `not reached`. **A preview carries neither**: no step
-// exists yet, so "not reached" would be a state about a Job nobody has created,
-// and `shield-*` is the Checks' verdict family — spending one on a Check that
-// has not been asked to run would draw a result where there is only a promise.
-// Label-only, which is the treatment #164 settled for declaration rows and the
-// same reasoning one step further.
+// **Nothing here has a result, and no row pretends to** — the running
+// rail's gate rows carry a glyph and an outcome, its declaration rows
+// carry `not reached`; a preview carries neither, since no step exists
+// yet and `shield-*` is the Checks' verdict family — spending one on a
+// Check not yet run draws a result where there is only a promise. Label-
+// only, the treatment #164 settled for declaration rows, one step further.
 
 import type { WorkflowRailStep } from "@armada/components";
 

@@ -1,19 +1,18 @@
 // What the panel head says, and what it offers.
 //
-// Split out of `App.tsx` when that file grew past the gate's 500-line warning,
-// the same way `Acts.tsx` and `copy.ts` came out of `JobDetail.tsx`. It is one
-// subject — which of the views is up, what it is called, and the one control
-// that leaves it — and the window's state machine beside it is another.
+// Split out of `App.tsx` when that file grew past the gate's 500-line
+// warning, the same way `Acts.tsx` and `copy.ts` came out of `JobDetail.tsx`.
+// One subject — which view is up, what it is called, the one control that
+// leaves it — and the window's state machine beside it is another.
 //
-// **`Back to the list` and `Cancel` live here rather than in the body.** A
-// control that leaves a view belongs beside the view's name, not scrolled into
-// it.
+// **`Back to the list` and `Cancel` live here, not in the body** — a control
+// that leaves a view belongs beside the view's name.
 //
-// **There is no count sentence.** The Board drew one beside its filter until
-// 11 Sep 2026, when the owner cut it as prose the tab counts already say.
+// **No count sentence** — the Board drew one beside its filter until 11 Sep
+// 2026, cut as prose the tab counts already say.
 //
-// **The Board's head is one control.** `New job`, with everything else the
-// Board offers in its menu. `BoardActions` says why.
+// **The Board's head is one control**, `New job`; everything else is in its
+// menu. `BoardActions` says why.
 
 import type { ReactNode } from "react";
 import { Button, Kbd } from "@armada/components";

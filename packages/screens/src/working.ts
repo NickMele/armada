@@ -1,25 +1,18 @@
 // What a Drone did inside an attempt, folded to a size a panel can draw.
 //
-// **One derivation, two drawings.** `Drafts/Working grouped` and `Drafts/Working
-// waterfall` are both drawn from this, so what separates them on screen is the
-// presentation and not the arithmetic. The owner asked on 11 Sep 2026 for two
-// shapes of the Working body to pick between, and two derivations would have
-// made that a comparison of two different readings of the same step.
+// **One derivation, two drawings** — `Drafts/Working grouped` and
+// `Drafts/Working waterfall` both draw from this; presentation, not
+// arithmetic, separates them. The owner asked on 11 Sep 2026 for two
+// shapes to pick between.
 //
-// # What the wire made us decide
-//
-// **A call and its answer are one thing that happened.** The transcript carries
-// `called` and `answered` as two rows, and drawn as two they doubled the length
-// of the densest body on the screen while saying one fact — the recorded step's
-// 351 calls arrive as 702 rows. So the answer folds into its call and becomes
-// the call's duration and its outcome.
-//
-// **The gaps are the finding, and nothing here hides them.** On the recorded
-// `implement` step the calls were open for 8m 07s of a 43m 36s attempt, and
-// 6m 31s of that is two `TaskOutput` waits. The other 35m is a model thinking.
-// A body that sums call time and calls it the step's duration would report the
-// wrong thing by a factor of five, so `wall` and `inCalls` are separate figures
-// and a caller draws both.
+// **A call and its answer are one thing that happened** — the transcript
+// carries `called`/`answered` as two rows, doubling the densest body's
+// length for one fact (the recorded step's 351 calls arrive as 702 rows),
+// so the answer folds into its call as duration and outcome.
+// **The gaps are the finding, hidden by nothing here** — the recorded
+// `implement` step had calls open 8m 07s of a 43m 36s attempt, 6m 31s of
+// it two `TaskOutput` waits, 35m a model thinking; summing call time as
+// duration misreports by a factor of five, so `wall`/`inCalls` stay separate.
 import type { ChangedFile, CheckRun, Turn } from "@armada/protocol";
 
 import { instant } from "./duration";

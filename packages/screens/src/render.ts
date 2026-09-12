@@ -9,22 +9,19 @@ import { ESCALATION_REASON, JOB_LIFECYCLE, JOB_STATUS } from "@armada/components
 import type { JobSummary } from "@armada/protocol";
 
 /**
- * Which render a Job takes. Four, because a Job waiting on a person to take its
- * work is a fourth thing to draw.
+ * Which render a Job takes. Four, since a Job waiting on a person to take
+ * its work is a fourth thing to draw.
  *
  * **The choice reads the registries, not a list of statuses typed here.**
- * `job-statuses.toml` says whether a Job is over and what it is doing, and
- * `enum-verbs.toml` says which token a status carries — both arrive through
- * the generated module. A Job that stopped and asked takes the dead-end render
- * whatever its status says, because that screen is the one built to state why
- * something stopped and where the work was left.
- *
- * **`reviewing` is decided before `working`, and that is the whole of it.**
- * `awaiting_review` is non-terminal, so without this it takes the running
- * render — a live rail and a per-step elapsed on a Job that is stopped and
- * waiting on a person, answering a question nobody is asking. And the finished
- * render is reached only once the Job is over, by which point all three review
- * acts are refused: the decision has to be drawn on the status it is legal on.
+ * `job-statuses.toml` says whether a Job is over and what it is doing;
+ * `enum-verbs.toml` says which token a status carries. A Job that stopped
+ * and asked takes the dead-end render regardless of status, since that
+ * screen states why something stopped and where the work was left.
+ * **`reviewing` is decided before `working`** — `awaiting_review` is
+ * non-terminal, so without this it takes the running render (a live rail
+ * and per-step elapsed) on a Job stopped and waiting on a person. The
+ * finished render is reached only once the Job is over, when all three
+ * review acts are refused: drawn on the status it is legal on.
  */
 export type Render = "working" | "reviewing" | "finished" | "stopped" | "unrenderable";
 

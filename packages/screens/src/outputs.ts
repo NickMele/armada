@@ -1,22 +1,18 @@
 // What a Check printed, fetched by the person who opened the Check.
 //
-// **`calls.ts`'s shape one record over, and for its reasons.** Every other read
-// Bridge makes is published by main and kept current, because the thing it
-// draws moves as the Job does. A recorded output is finished the moment the
-// Check exited, and it is asked for by one reader about one Check — putting it
-// in the published state would make one person opening a log something the
-// whole window re-renders on, and would keep a test runner's whole output alive
-// for as long as the Job is open.
+// **`calls.ts`'s shape one record over, for its reasons** — every other
+// read Bridge makes is published and kept current since what it draws
+// moves with the Job. A recorded output finishes the moment the Check
+// exits, asked for by one reader per Check: publishing it would make
+// opening a log something the whole window re-renders on, keeping
+// output alive while the Job is open.
 //
-// **Keyed by the row's own file name and held for the Job.** `fleet` builds
-// that name out of the row's key — step, attempt, ordinal — so it names exactly
-// one run of one Check inside one Job. Dropped when the Job changes, because a
-// name belongs to the Job whose `.armada` directory holds it.
-//
-// **Nothing is fetched on its own.** Opening the chapter is the whole trigger:
-// output is the payload the event stream is bounded to keep off itself, and
-// pre-fetching every row that kept one would spend on the screen exactly what
-// the split was made to avoid.
+// **Keyed by the row's own file name, held for the Job** — `fleet` builds
+// that name from the row's key (step, attempt, ordinal), naming one run
+// of one Check. Dropped when the Job changes. **Nothing is fetched on
+// its own** — opening the chapter is the trigger: output is the payload
+// the event stream keeps off itself, and pre-fetching every kept row
+// would spend on screen exactly what the split avoids.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 

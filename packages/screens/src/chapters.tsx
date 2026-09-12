@@ -264,25 +264,20 @@ export function chaptersOf({
         opened === undefined ? (
           <p className="text-2xs text-fg-muted">{transcript ?? NOT_OPENED_YET}</p>
         ) : (
-          // **The payload and not its text.** Each line carries what it is,
-          // and the block headings are on the wire as line numbers Fleet wrote
-          // down as it wrote the blocks. Mapped to `line.text` the marking is
-          // dropped here and the brief draws with the gap above a heading as
-          // the only thing marking it, which is #318 — nothing downstream can
-          // recover it, because deciding by position or by capitals is the
-          // guess the marker exists to replace.
+          // **The payload, not its text** — each line carries what it is; block
+          // headings are line numbers Fleet wrote as it wrote blocks. Mapped to
+          // `line.text` the marking is dropped and the brief draws with the gap
+          // above a heading as the only marker, #318 — nothing downstream can
+          // recover it, since deciding by position or capitals is the guess the
+          // marker replaces.
           //
-          // **The outer clamp only where `DroneBrief` cannot bound itself.**
-          // A step's opening turn used to be held to twelve lines here,
-          // because the whole brief plus the standing instructions plus the
-          // branch note is a screen and a half of one passage. Since protocol
-          // 9.7 that passage is sections instead where every heading carries a
-          // kind: the standing block folds shut by default and the one
-          // section left unbounded, `about_this_job`, clamps on its own — see
-          // `DroneBrief.tsx`. A turn with no kinds on its headings — a Fleet
-          // built before 9.7, or one with no headed blocks — still draws flat,
-          // exactly as it always has, so this keeps the clamp for that case
-          // rather than assuming every turn reaching here is sectioned.
+          // **The outer clamp only where `DroneBrief` cannot bound itself** — a
+          // step's opening turn was held to twelve lines since brief+standing+branch
+          // note is a screen and a half. Since protocol 9.7 that is sections
+          // instead, every heading carrying a kind: standing folds shut, the one
+          // unbounded section (`about_this_job`) clamps itself — see
+          // `DroneBrief.tsx`. A turn with no kinds (pre-9.7, or no headed blocks)
+          // still draws flat, so this keeps the clamp for that case.
           briefSections(opened.payload) === undefined ? (
             <Clamped lines={INSTRUCTIONS_LINES} moreLabel="Read the whole instruction">
               <DroneBrief
@@ -582,21 +577,21 @@ function readable(diff: Diff, jobId: string): boolean {
 const PREVIEWED = 8;
 
 /** What chapter one says before Armada has opened the step. */
+
 /**
  * How much of a step's opening turn is drawn before it is held back, on a
  * turn `DroneBrief` cannot section.
  *
- * **Twelve, which is the brief and not the standing instructions.** A step is
- * opened with the whole of what a Drone is told — how to report, what it may
- * write, what its branch is standing on — and the Job's brief is a few lines
- * inside that. A person opening chapter one wants the brief; the rest is the
- * same on every step of every Job and is one press away.
+ * **Twelve — the brief, not the standing instructions.** A step opens
+ * with the whole of what a Drone is told — how to report, what it may
+ * write, what its branch stands on — and the Job's brief is a few lines
+ * inside that; a person opening chapter one wants the brief, the rest one
+ * press away.
  *
- * **Since protocol 9.7, this only applies where every heading's kind is
- * absent.** A turn whose headings carry `BlockKind` sections itself, and the
- * standing block already folds shut, so the twelve-line clamp would be a
- * second, redundant bound on top of one `DroneBrief` already draws — this
- * stays for the one case that still needs it, a turn with no kinds to pair.
+ * **Since protocol 9.7, only where every heading's kind is absent** — a
+ * turn whose headings carry `BlockKind` sections itself, the standing
+ * block already folded shut, so the clamp would be redundant; it stays
+ * for the one case still needing it, a turn with no kinds to pair.
  */
 const INSTRUCTIONS_LINES = 12;
 

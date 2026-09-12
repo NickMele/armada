@@ -1,21 +1,18 @@
-// The Job header, built — and the Job that has no header, so cannot be drawn.
-//
-// The badge, the headline, the Job's own facts, the acts that end or replace
-// it, and the one way out of the app. **Four things about the Job rather than
-// about any step**, which is the line between this file and `step.tsx`: what is
-// here changes when the Job does, and what is there changes when the selection
-// does.
+// The Job header, built — and the Job that has no header, so cannot be
+// drawn: the badge, the headline, the Job's own facts, the acts that end
+// or replace it, and the one way out. **Four things about the Job, not any
+// step** — the line between this file and `step.tsx`: this changes when
+// the Job does, that when the selection does.
 //
 // **This is where the next thing lands.** Pilot's slot is left of the kill
-// group — `#250` — and the pull request link arrived here in `#422`. Both were
-// written into `JobDetail.tsx` because that was where the header was assembled;
-// the header has a file now, and the screen has one line.
+// group (`#250`), the pull request link arrived here in `#422` — both
+// written into `JobDetail.tsx` when that assembled the header; the header
+// has a file now, the screen has one line.
 //
 // **A Job the registry has no glyph or verb for has no header at all**, so
-// `headingOf` answers `null` rather than a half-built one, and `Unrenderable`
-// is what the screen draws instead. The two are here together because they are
-// one decision: the badge is the header, so there is no partial render to fall
-// back to.
+// `headingOf` answers `null` rather than half-built, and `Unrenderable` is
+// what the screen draws instead — one decision: the badge is the header,
+// so there is no partial render to fall back to.
 
 import { JOB_LIFECYCLE, JOB_STATUS, type JobDetailHeading } from "@armada/components";
 import type {

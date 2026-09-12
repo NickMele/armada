@@ -1,20 +1,16 @@
 // A report will not be filed without a sentence — by the button and by the key.
 //
-// # This one guards two things, not one
-//
-// `Report.tsx` refuses a blank sentence for the reason the other two do, and it
-// also refuses a second press while a filing is in flight: `confirmDisabled` is
-// `said.trim() === "" || filing`. The second half has no visible difference
-// from the first, so a person cannot tell which refusal they are looking at —
-// and a double press that got through would file the same report twice against
+// **This one guards two things, not one.** `Report.tsx` refuses a blank
+// sentence for the reason the other two do, and also refuses a second press
+// while a filing is in flight: `confirmDisabled` is `said.trim() === "" ||
+// filing`. A person cannot tell which refusal they are looking at, and a
+// double press that got through would file the same report twice against
 // one Job.
 //
-// # `whole: null` is a real state, not a stub
-//
-// The prop is `JobDetail | null` and the file documents it as the read that
-// fills in the verdicts a criterion scope picks between. A dialog opened before
-// that read lands is the state under test here, and it is the one the rule has
-// to hold in — nothing about a blank sentence depends on the read.
+// **`whole: null` is a real state, not a stub.** The prop is `JobDetail |
+// null`, the read that fills in the verdicts a criterion scope picks
+// between. A dialog opened before that read lands is the state under test
+// here — nothing about a blank sentence depends on the read.
 
 import { afterEach, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";

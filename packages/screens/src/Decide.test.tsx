@@ -1,27 +1,18 @@
 // Merging asks first, and the other three answers still do not.
 //
-// # Why this is a browser test and not a story
+// **Why a browser test, not a story** — `xtask/src/rules_layers.rs` puts
+// `@armada/components` below `@armada/screens`, so no story can mount
+// `Decide`; a story on `Primitives/Dialog` proves the layer's focus and
+// `Enter`, this proves the screen puts a merge behind it.
 //
-// The dialog is wired here, in a screen. `xtask/src/rules_layers.rs` puts
-// `@armada/components` below `@armada/screens` and refuses the import the other
-// way, so no story can mount `Decide` — a story on `Primitives/Dialog` proves
-// what the layer does with focus and `Enter`, and this proves this screen puts
-// a merge behind it.
-//
-// # What is actually at risk
-//
-// Merging is the one act in Armada that writes into a repository Fleet did not
-// make, and nothing in Bridge takes it back. The failure to catch is not a
-// double press — `deciding` blocks that and always did — but a first press that
-// lands the work without anybody meaning it. So every assertion here is about
-// what did **not** happen: `onMerge` uncalled after the press, uncalled after
-// `Enter`, uncalled after `Esc`, and called exactly once after the deliberate
-// move to the other control.
-//
-// The three answers beside it are asserted for the same reason in reverse. A
-// change that put every answer behind a dialog would pass every test above and
-// be the gate in the wrong place, which is the thing the issue that asked for
-// this one warned against.
+// **What is at risk.** Merging is the one act that writes into a
+// repository Fleet did not make, irreversible in Bridge. The failure to
+// catch is not a double press — `deciding` blocks that — but a first press
+// landing the work unmeant. Every assertion is about what did **not**
+// happen: `onMerge` uncalled after the press, `Enter`, `Esc`, called once
+// after the deliberate move elsewhere. The three answers are asserted in
+// reverse for the same reason: a dialog on every answer would pass every
+// test above and be the gate in the wrong place.
 
 import { afterEach, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";

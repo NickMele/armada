@@ -1,26 +1,18 @@
-// The two reads a review is made of, shaped for the surface that draws them,
-// and the sentences that say what is not there.
+// The two reads a review is made of, shaped for the surface that draws
+// them, and the sentences that say what is not there.
+// **Nothing here reads a worktree and nothing here parses a transcript** —
+// the patch arrives as a served string, claims as served fields; this
+// splits the first into files and lines as git wrote it, hands the
+// second on unchanged.
 //
-// **Nothing here reads a worktree and nothing here parses a transcript.** The
-// patch arrives as a served string and the claims arrive as served fields; this
-// splits the first into files and lines the way git already wrote it, and hands
-// the second on unchanged.
+// **The patch is bounded, loudly** — `docs/practices/bridge.md` names
+// the v1 failure this escapes; no virtualization chosen
+// (`[list-virtualization]`, open) means a hard bound with a sentence
+// naming the worktree the screen's foot links to.
 //
-// # The patch is bounded, and the bound is loud
-//
-// `docs/practices/bridge.md` names the v1 failure this app exists to escape and
-// says a diff of more than a couple of hundred lines is virtualized. **No
-// virtualization library is chosen** — that is `[list-virtualization]`, still
-// open — so the honest thing is a hard bound and a sentence saying it was hit.
-// A silently truncated diff is a decision taken on part of the work, which is
-// the one failure this surface exists to prevent, so the sentence names the
-// worktree the region at the foot of the screen gives the path to.
-//
-// # No line numbers
-//
-// git states position in the `@@` header and nowhere else. Numbering each line
-// would derive a value here and set it beside machine output, where it would
-// read as something the repository said.
+// **No line numbers** — git states position in the `@@` header and
+// nowhere else; numbering each line would derive a value and set it
+// beside machine output, reading as something the repository said.
 
 import { FileCheck } from "lucide-react";
 import { EVIDENCE_TYPE } from "@armada/components";
@@ -295,22 +287,18 @@ export const DIFF_READ_FROM = "Read from this job's worktree against the branch 
 
 /**
  * What an unreadable declaration says, and it is the whole of #157.
+ * `get_diff` reads the plan declaration from the slot this job's own drone
+ * holds, which a stopped drone no longer has — so `plan_declared` is false
+ * there whatever the step declared. Fleet now keeps a roster of slots and
+ * reads keyed by job id, so a second job beside this one changes nothing.
+ * The old sentence read "This step declared no plan, so no file is
+ * marked," **a claim about what the drone did** rather than a report of
+ * what can be read — four shipped workflows declare a plan at step start,
+ * so a reader checking scope was told it was never scoped.
  *
- * `get_diff` reads the plan declaration out of the slot this job's own drone
- * holds, which a job whose drone has stopped no longer has — so `plan_declared`
- * is false there whatever the step declared. It said "the live working slot"
- * while there was one of those; Fleet keeps a roster of slots now, and the read
- * is keyed by job id, so a second job working beside this one changes nothing
- * about which declaration comes back. The old sentence read "This step declared
- * no plan, so no file is marked," which is **a claim about what the drone did**
- * rather than a report of what can be read, and four of the shipped workflows
- * declare a plan at step start. A reader deciding whether work stayed in scope
- * was being told it was never scoped.
- *
- * **The last clause is not padding.** Dropping the sentence altogether was the
- * other option and it leaves the same wrong reading available: unmarked rows
- * with nothing beside them read as rows inside a plan. So the silence is named
- * and the inference is closed off in the same breath.
+ * **The last clause is not padding** — dropping the sentence leaves the
+ * same wrong reading available: unmarked rows read as rows inside a plan.
+ * So the silence is named and the inference closed off in the same breath.
  */
 export const PLAN_NOT_READABLE =
   "The plan this step declared is not readable once its drone has stopped, so no file is " +

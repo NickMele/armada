@@ -405,19 +405,16 @@ export function pairedFrames(frames: KeptFrame[], held: Frames): Paired[] {
 /**
  * Whether a pair is the same picture twice.
  *
- * **Every unknown answers no, and that is the design.** Folding is the only act
- * on this surface that can hide something, so it is taken only where both sides
- * are present, both carry a digest, and the digest *and* the byte count agree.
- * Anything else draws — at worst a pair a reader glances past, which is what
- * the surface did before any of this existed.
+ * **Every unknown answers no** — folding is the only act that can hide
+ * something, so it happens only where both sides are present, both carry
+ * a digest, and digest *and* byte count agree. Anything else draws.
  *
- * **The size is compared beside the digest** rather than trusted to it. Sixty-
- * four bits over data nobody is choosing adversarially is not a risk anybody
- * meets, and the count is already on the row: two comparisons that must both
- * hold cost nothing and remove the one failure that would be silent.
+ * **Size is compared beside the digest** — sixty-four bits over
+ * non-adversarial data is no risk, and the count already on the row costs
+ * nothing extra to check, removing the one failure that would be silent.
  *
- * **An empty digest never matches, including another empty.** A frame kept
- * before the field existed carries none, and two absences reading as agreement
+ * **An empty digest never matches, including another empty one** — a frame
+ * kept before the field existed carries none, and two absences agreeing
  * would fold away exactly the old Jobs nobody can photograph again.
  */
 function theSamePicture(before: Half | undefined, after: Half | undefined): boolean {

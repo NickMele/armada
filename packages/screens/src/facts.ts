@@ -95,21 +95,17 @@ function branchFact(job: JobSummary): JobDetailField[] {
 /**
  * The pull request Fleet opened, by its number, clickable.
  *
- * **News from the moment it exists.** Every Job that finishes is in this state
- * — open, waiting on a reviewer — so a fact that waited for a merge would be
- * absent exactly when a person is looking for it, which is what sent the owner
- * to the forge to find a branch by hand. `#422`.
+ * **News from the moment it exists.** Every Job that finishes is open,
+ * waiting on a reviewer — a fact that waited for a merge would be absent
+ * exactly when a person is looking for it, which sent the owner to the
+ * forge to find a branch by hand. `#422`.
  *
- * **The number, never the address.** A forge address is sixty characters of
- * which a person reads four, and the run is a line of short readings. The whole
- * of it is on the link's `title`, which is where somebody who wants to copy it
- * can still get at it.
+ * **The number, never the address** — sixty characters of which a person
+ * reads four. The whole address is on the link's `title`, for copying.
  *
- * **The number is read off the address rather than served.** Nothing on the
- * wire carries it: `JobDelivery` has the address and no id beside it, so the
- * choice was to parse or to draw something longer. A forge that numbers its
- * pull requests some other way falls back to the words alone, still linked —
- * see `pullRequestNumber`.
+ * **Read off the address rather than served** — `JobDelivery` has the
+ * address and no id beside it. A forge that numbers differently falls back
+ * to the words alone, still linked — see `pullRequestNumber`.
  */
 function pullRequestFact(address: string | undefined): JobDetailField[] {
   if (address === undefined) return [];
@@ -121,21 +117,17 @@ function pullRequestFact(address: string | undefined): JobDetailField[] {
 /**
  * The number out of a pull request address, or `null` where there is not one.
  *
- * **The last all-digit segment of the path, and that is the whole rule.**
- * `…/pull/4711` and `…/-/merge_requests/12` both answer, without this file
- * holding a list of forges — a roster of URL shapes would be a second statement
- * of something Fleet already resolved, and it would be wrong for the first
- * forge nobody thought of. Last rather than first, so an organisation or a
- * repository named in digits does not win over the number at the end.
+ * **The last all-digit segment of the path — the whole rule.**
+ * `…/pull/4711` and `…/-/merge_requests/12` both answer without a list of
+ * forges to hold. Last rather than first, so an organisation or repository
+ * named in digits does not win over the number at the end.
  *
- * **The query and the fragment are cut before anything is read, and that is
- * not tidying.** A forge address that arrives with a line anchor on it ends
- * `#3000`, which is all digits and sits after the number — so reading them as
- * segments draws a line number where the pull request goes.
+ * **The query and fragment are cut first, not tidying** — an address ending
+ * `#3000` is all digits after the number, so reading segments unfiltered
+ * draws a line number where the pull request goes.
  *
- * `null` is a real answer and not a failure: a forge that addresses a pull
- * request by a slug is a forge whose pull requests have no number, and the fact
- * draws the words alone rather than inventing one.
+ * `null` is a real answer, not a failure: a forge addressing by slug has no
+ * number, and the fact draws the words alone rather than inventing one.
  */
 export function pullRequestNumber(address: string): string | null {
   const last = (address.split(/[?#]/)[0] ?? "")
@@ -168,20 +160,18 @@ export function hostLabel(address: string): string {
 }
 
 /**
- * What became of that pull request — continuing the fact that names it, where
- * there is one to continue.
+ * What became of that pull request — continuing the fact that names it,
+ * where there is one to continue.
  *
- * **Absent on nearly every Job, which is why it is beside the branch and not a
- * fact of its own line.** It appears the moment there is something to say and
- * takes no room until then: a Job with no remote, one still running, and one
- * whose pull request nobody has merged yet all draw nothing here, because
- * "nobody has merged it yet" is the state a pull request is in from the moment
- * it exists and is not news about this Job. The address above it is.
+ * **Absent on nearly every Job**, so it sits beside the branch, not on its
+ * own line. It appears the moment there is something to say: no remote, one
+ * still running, one nobody has merged yet all draw nothing here, since
+ * "nobody has merged it yet" is not news about this Job.
  *
- * **`continues` where the address is drawn, standalone where it is not.** With
- * one, this is the second half of a sentence and reads mid-line: `Pull request
- * #4711, merged`. Without one — a Job old enough that Fleet recorded the
- * verdict and not the address — it opens a fact of its own and takes a capital.
+ * **`continues` where the address is drawn, standalone where it is not.**
+ * With one, this reads mid-line: `Pull request #4711, merged`. Without one
+ * — a Job old enough that Fleet recorded the verdict, not the address — it
+ * opens a fact of its own and takes a capital.
  */
 function landedFact(whole: JobWhole | null, linked: boolean): JobDetailField[] {
   const landed = LANDED[whole?.delivery?.landed ?? ""];
@@ -265,19 +255,16 @@ export function ordered(whole: JobWhole | null): StepDetail[] {
 }
 
 /**
- * The rows of a step's own list — `check_runs` or `judged` — from the latest
- * attempt that has rows of that kind.
+ * The rows of a step's own list — `check_runs` or `judged` — from the
+ * latest attempt that has rows of that kind.
  *
- * **Read off the list itself, not off `step.attempts`.** A rerun gate or an
- * overrule records a fresh attempt without re-running the Checks, and
- * possibly before the Judge has answered again — so the step's newest
- * attempt can hold no rows of one kind, or of either. Narrowing to
- * `step.attempts.at(-1)` made that attempt's absence read as "nothing has
- * run", when what had actually not run was only this attempt; narrowing to
- * the list's own last row instead finds the latest attempt that has
- * something to show, whichever list is asked. `check_runs` and `judged` are
- * therefore narrowed separately, and can answer from different attempts on
- * the same step.
+ * **Read off the list itself, not `step.attempts`.** A rerun gate or an
+ * overrule records a fresh attempt without re-running the Checks, possibly
+ * before the Judge answers again — so the newest attempt can hold no rows
+ * of one kind, or either. Narrowing to `step.attempts.at(-1)` made that
+ * attempt's absence read as "nothing has run"; narrowing to the list's own
+ * last row instead finds the latest attempt with something to show, so
+ * `check_runs` and `judged` can answer from different attempts.
  *
  * **Since 7.0 both lists hold every attempt's rows, oldest first**, so the
  * latest attempt with rows of this kind is the one the last row names.

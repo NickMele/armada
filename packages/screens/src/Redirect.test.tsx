@@ -1,19 +1,16 @@
 // A redirect will not send a blank instruction — by the button and by the key.
 //
-// # Why this is a browser test and not a story
+// **Why a browser test, not a story.** `RedirectControl` holds the
+// instruction and hands `Dialog` *is the field blank*; `packages/components`
+// sits below this package and cannot import it, so no story can mount this
+// control — a story there proves what `Dialog` does with `confirmDisabled`,
+// this proves this screen sets it.
 //
-// `RedirectControl` holds the instruction and hands `Dialog` the answer to *is
-// the field blank*. `packages/components` sits below this package and cannot
-// import it, so no story can mount this control — a story there proves what
-// `Dialog` does with `confirmDisabled`, and this proves this screen sets it.
-//
-// # The keyboard is a second refusal, not the same one
-//
-// `Dialog` refuses twice and independently: the confirm button carries
-// `disabled`, and the `Enter` handler bound on `window` has its own
-// `if (!confirmDisabled)`. A regression in the second leaves a dialog whose
-// send control reads as refused and sends anyway from the keyboard, which is
-// the shape a person reading the screen cannot see.
+// **The keyboard is a second refusal, not the same one.** `Dialog` refuses
+// twice independently: the confirm button carries `disabled`, and the
+// `Enter` handler bound on `window` has its own `if (!confirmDisabled)`. A
+// regression in the second sends anyway from the keyboard while the screen
+// still reads as refused.
 
 import { afterEach, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";

@@ -78,18 +78,16 @@ export function coversOf(check: DeclaredCheck): string | undefined {
 /**
  * One declared `judge_checks[]` entry, in counts.
  *
- * `judge` is the verification source named in text, which the iconography
- * contract settles for exactly this reason — Check, Judge and Attestation are
- * shorter and more precise as words than any glyph, and every verdict family is
- * reserved to a source rather than to a declaration.
+ * `judge` is the verification source named in text — Check, Judge and
+ * Attestation are shorter and more precise as words than any glyph, and
+ * every verdict family is reserved to a source, not a declaration.
  *
- * **Counts, never a question.** `DeclaredJudge` carries how many criteria are
- * asked and how many judges answer, and deliberately carries no prompt: a
- * question drawn on a rail is a prompt in a screenshot.
+ * **Counts, never a question.** `DeclaredJudge` carries how many criteria
+ * are asked and how many judges answer, deliberately no prompt: a question
+ * on a rail is a prompt in a screenshot.
  *
- * **`panel_size` is absent at one**, so a value here always means a panel and
- * nothing compares against a default that is already the domain's. An entry
- * asking no criteria only looks for gaming, and says that and nothing else.
+ * **`panel_size` is absent at one**, so a value here always means a panel.
+ * An entry asking no criteria only looks for gaming.
  */
 export function judgeOf(judge: DeclaredJudge): string {
   const said = ["judge"];

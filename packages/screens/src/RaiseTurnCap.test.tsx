@@ -1,26 +1,18 @@
 // A raise raises, and a figure that does not is refused before it is sent.
 //
-// # Why the comparison is worth a gate
+// **Why the comparison is worth a gate** — `RaiseCap.test.tsx`'s reason on
+// the other ceiling: a control that let the press through turns a stopped
+// job into one plus a round trip; the disabled confirm is the whole guard.
 //
-// `RaiseCap.test.tsx`'s reason on the other ceiling: Fleet answers 422 to a cap
-// at or under the one in force, so a control that let the press through turns a
-// stopped job into a stopped job plus a round trip. The dialog is the
-// confirmation, so the disabled confirm is the whole guard.
+// **What it sends, since this act has no conversion.** The cost cap is
+// typed in dollars and sent in millionths; this is typed in turns and sent
+// in turns — a slipped factor would go the other way, a raise to 600 sent
+// as 600000000 reaching nothing.
 //
-// # And what it sends, because this is the act with no conversion
-//
-// The cost cap is typed in dollars and sent in millionths of one. This is typed
-// in turns and sent in turns, and the case below pins that: a factor slipped in
-// here would be as invisible as the one that file guards against, and it would
-// go the other way — a raise to 600 sent as 600000000 is a ceiling nothing
-// reaches.
-//
-// # And the copy, because the argument it carries was wrong once
-//
-// The turn cap had no act for as long as a job over it was read as going in
-// circles. Job `01M22TYSAE0023MADDP5ZQEYGW` passed every Check and stopped at
-// 393 turns against 300 with a cheap summarise never run, so the dialog has to
-// name both remedies rather than the one.
+// **The copy, since the argument it carried was wrong once.** The turn cap
+// had no act while a job over it read as going in circles: Job
+// `01M22TYSAE0023MADDP5ZQEYGW` stopped at 393 turns against 300 with a
+// cheap summarise never run, so the dialog names both remedies.
 
 import { afterEach, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";

@@ -1,18 +1,16 @@
-// The verdict sheet's own data: what the four blocks and the figures are built
-// from, for the one step a Job is waiting at or finished on.
+// The verdict sheet's own data: what the four blocks and the figures are
+// built from, for the one step a Job is waiting at or finished on.
 //
-// **Everything here reads one `StepDetail`** — the panel's `open` step, the
-// same one `Decide` and `phasesOf` already read. A finished Job whose record
-// spans several steps is a real reading this file does not attempt: the wire
-// fields the verdict sheet is built from name a single step's `check_runs`
-// and `judged`, and the open step is the one every other region on this panel
-// already agrees is "the step this Job is about".
+// **Everything here reads one `StepDetail`** — the panel's `open` step,
+// the same one `Decide` and `phasesOf` read. The wire fields this sheet
+// builds from name a single step's `check_runs` and `judged`, and the
+// open step is what every other region on this panel already agrees is
+// "the step this Job is about".
 //
-// **`checksOf` alone is not the whole gate.** It joins from `step.checks`, the
-// declaration, so a mechanical check with no declared counterpart —
-// `artifact_exists` on a workflow with no other tier — has a run and no row.
-// `mechanicalRunsOf` is the other half of that read, and both are folded into
-// one list here so nothing a gate actually ran goes missing from the record.
+// **`checksOf` alone is not the whole gate** — it joins from `step.checks`,
+// so a mechanical check with no declared counterpart (`artifact_exists` on
+// a workflow with no other tier) has a run and no row. `mechanicalRunsOf`
+// is the other half, folded into one list so nothing a gate ran is missing.
 //
 // **The fifth arrangement is `verdict-answered.tsx`, not here.**
 

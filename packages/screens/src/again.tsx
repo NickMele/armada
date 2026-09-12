@@ -1,22 +1,17 @@
 // Asking a Job to show its work again, read off what Fleet said about it.
 //
 // **Fleet sends facts and this file reads them.** `ShowAgain` carries five
-// things Fleet checked — a harness, a worktree, a spec, whether it is still on
-// disk, a Drone at work — and no verdict, so the order a reason is chosen in
-// and the sentence it is said in are here, once. The order is Fleet's own
-// refusal order, so the control and a press that raced a change say the same.
+// things Fleet checked — a harness, a worktree, a spec, whether it is still
+// on disk, a Drone at work — and no verdict, so the order a reason is
+// chosen in and its sentence are here, once, matching Fleet's own refusal
+// order.
 //
-// **The control lives on the step whose spec it reruns.** A press reruns the
-// last spec a Drone named, and that spec came from one step's evidence; the
-// Shown chapter of that step is where its frames already are. A Job no Drone
-// named a spec for draws no control at all — that is every Job whose workflow
-// never asked a step to show its work, and a chapter saying so on every step of
-// every such Job would be the noise `chapters.tsx` refuses to draw for a step
-// that captured nothing. Fleet still refuses the press in words, for a caller
-// that reaches it some other way.
-//
-// **A press's sets are drawn beside the step's frames, never among them.** Each
-// is the same `FramesShown` the step's own frames are, under the moment it ran.
+// **The control lives on the step whose spec it reruns** — a press reruns
+// the last spec a Drone named, from that step's evidence. A Job no Drone
+// named a spec for draws no control at all; Fleet still refuses the press
+// in words, for a caller reaching it another way. A press's sets are
+// drawn beside the step's frames, never among them — each is the same
+// `FramesShown` the step's own frames are, under the moment it ran.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 

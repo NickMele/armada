@@ -27,25 +27,17 @@ import { spoken } from "@armada/protocol";
 /**
  * The machine record of a failure, minus the instant it is taken.
  *
- * **Built here, beside the sentence, and not derived from the fold.** The two
- * lists look alike and are not the same artifact: `details` carries prose
- * labels a person reads on screen, and this carries wire spellings a person
- * greps a log for. Deriving one from the other would put `Runtime file` into
- * an issue body as a key, and lowercasing a `WireError`'s own `fields` keys
- * would corrupt the only ones that were already right.
+ * **Built here, not derived from the fold.** `details` is prose a person
+ * reads; this is wire spellings greppable in a log — deriving one from the
+ * other would corrupt `WireError`'s own `fields`.
  *
- * `at` is added at the moment of copying rather than here — the payload is
- * built on every render and the timestamp is a fact about the press.
- * `copyDebugInfoFor` in `FailureSurface.tsx` is what stamps it, and it is the
- * same function `c` runs.
+ * `at` is added at copy time — the payload rebuilds every render, and
+ * `copyDebugInfoFor` stamps the press.
  *
- * **The app's voice is not in here.** What the old hand-rolled report put on
- * the clipboard was the headline and the `next` sentence — what the screen
- * said, not what the machine had. A reader who was not there needs the second:
- * `message` is the machine's own words and the fields under it say more than a
- * sentence could. The log paths survive as fields, because a report that names
- * a failure without naming the file the rest of it is written in is one
- * somebody has to answer with a question.
+ * **The app's voice is not in here** — the old report clipboarded the
+ * headline and `next` sentence, not what the machine had. `message` is the
+ * machine's own words; log paths survive as fields so a failure is never
+ * named without its file.
  */
 export type FailureFacts = Omit<DebugPayload, "at" | "code"> & {
   /**

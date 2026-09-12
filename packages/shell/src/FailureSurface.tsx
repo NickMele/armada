@@ -24,39 +24,35 @@ import { rendererFailure } from "./failures";
 /**
  * Copy debug info, for one of Bridge's failures.
  *
- * **This is what `c` calls.** The contextual key map binds `c` to copy debug
- * info on the focused row or the open job, and the key handler is not this
- * file's — so the act is exported as one function rather than left inside the
- * control's `onClick`, where a binding could only have reimplemented it.
+ * **This is what `c` calls** — the key map binds `c` on the focused row or
+ * open job, and the handler lives outside this file, so the act is exported
+ * rather than left inside a control's `onClick`.
  *
- * It stamps the instant here rather than at render. The payload is rebuilt on
- * every draw and `taken` is a fact about the press: a banner is a standing
- * condition somebody copies long after it appeared, which is the whole reason
- * the tail labels it.
+ * Stamps the instant here, not at render: the payload rebuilds on every draw
+ * and `taken` is a fact about the press — a banner is a standing condition
+ * somebody copies long after it appeared.
  *
- * The write itself is `@armada/components`' — one implementation of the act,
- * shared with the control the error treatment draws.
+ * The write itself is `@armada/components`', shared with the control the
+ * error treatment draws.
  */
 export function copyDebugInfoFor(failure: Failure, onCopied: (what: string) => void): void {
   copyDebugInfo({ ...failure.payload, at: new Date().toISOString() }, onCopied);
 }
 
 /**
- * What a failure offers to an issue tracker, composed when somebody opens the
- * review.
+ * What a failure offers to an issue tracker, composed when somebody opens
+ * the review.
  *
- * **The envelope and nothing else, and the transcript's absence is said out
- * loud.** The four other items the drawing named are not reachable from a
- * failure surface: doctor is not built, a judge response and a diff belong to a
- * Job read whole that none of these six failures holds, and whether an
- * observed transcript may leave the machine is `[observe-transcript-sharing]`,
- * which is open. Only the transcript is named on screen, because it is the only
- * one somebody would look for and find missing.
+ * **The envelope and nothing else — the transcript's absence is said out
+ * loud.** The other four items the drawing named are unreachable here:
+ * doctor is not built, a judge response and a diff belong to a Job read
+ * whole that none of these six failures holds, and whether an observed
+ * transcript may leave the machine is `[observe-transcript-sharing]`, open.
+ * Only the transcript is named, since it is the one somebody would look for
+ * and find missing.
  *
- * It stamps the instant here for the reason `copyDebugInfoFor` does — `taken`
- * is a fact about the press, and this is the press. A banner is a standing
- * condition redrawn every second, and a payload rebuilt on each render would
- * tick under the person reading it.
+ * Stamps the instant here for `copyDebugInfoFor`'s reason: a banner redrawn
+ * every second would tick under the reader if rebuilt on each render.
  */
 export function filingFor(failure: Failure): Filing {
   return {
@@ -83,21 +79,17 @@ export type FailureBlockProps = {
 /**
  * One failure, with something to do about it.
  *
- * Ghost controls, because none of them is a decision Armada participates in:
- * reloading redraws a window, and copying puts the machine's own record of the
- * failure onto the clipboard so nobody retypes a stack.
+ * Ghost controls — none is a decision Armada participates in: reloading
+ * redraws a window, copying puts the record on the clipboard.
  *
- * **Copying and filing are two acts and the second one has a review.** Copying
- * stays on the machine; an issue is public and permanent, so `File an issue`
- * opens a dialog showing exactly what would go and never sends on one press.
- * Nothing sends at all — see `@armada/components`' `issue.ts`.
+ * **Copying and filing are two acts; only filing has a review** — an issue
+ * is public and permanent, so `File an issue` opens a dialog showing exactly
+ * what would go and never sends on one press — `issue.ts`.
  *
- * **The label is the key map's verb, not a second name for one act.** `c` is
- * bound to copy debug info, the palette displays that wording beside the
- * binding, and this control says the same. It also happens to be the better
- * label on its own: "Copy report" named an act somebody might be about to
- * perform and left the artifact unnamed, and what a person is deciding is
- * whether to paste a machine record into a public issue.
+ * **The label is the key map's verb** — `c` is bound to copy debug info, the
+ * palette shows that wording, and this control says the same: "Copy report"
+ * left the artifact unnamed, when the decision is pasting a machine record
+ * into a public issue.
  */
 export function FailureBlock({
   failure,

@@ -1,31 +1,16 @@
 // Dispatch a job: describe the work, or fill the form in by hand.
-//
-// **One surface with two ways through it, and they are not equal.** Describing
-// the work is the path — the Job proposer reads the request and answers the
-// title, the workflow and, where the work is several jobs, the order between
-// them. `docs/concepts/job-proposer.md` calls hand entry the override, and the
-// composer this swaps to is what hand entry became.
-//
-// # The proposal is this screen's state, not the app's
-//
-// Nothing outside this surface reads it, it dies when the surface closes, and
-// the app holding it made the guard below depend on the app re-rendering in
-// time. What does cross back is the half the app draws: a refusal with no
-// drawing here is an `Outcome`, and `answeredAs` is what decides which of the
-// two an answer is.
-//
-// # The double-press guard, and why it is two things
-//
-// There is no in-flight guard on the preload call, so two presses are two model
-// calls and two drafted plans — two of everything at the gate, and somebody
-// deleting one by hand. **The form is what stops it.**
-//
-// The control being off while a call is out is the first half and the one a
-// person sees. The second half is the ref: a press that arrives anyway sends
-// nothing, because one request is outstanding until its promise settles. A
-// disabled attribute is a rendering, and a rendering is not a guarantee — a key
-// repeat and a synthetic click both reach the handler with the button drawn
-// live.
+// **One surface, two unequal ways through it** — describing the work is
+// the path: the Job proposer reads the request, answers title, workflow,
+// and order between jobs. `docs/concepts/job-proposer.md` calls hand
+// entry the override; the composer this swaps to is what it became.
+// **The proposal is this screen's state, not the app's** — it dies when
+// the surface closes; what crosses back is the app's half: a refusal
+// with no drawing here is an `Outcome`, `answeredAs` deciding which.
+// **The double-press guard is two things** — no in-flight guard on the
+// preload call, so two presses are two model calls and two drafted
+// plans; the form stops it: the control off is the half a person sees,
+// the ref is the second, since a disabled attribute is a rendering, not
+// a guarantee — a key repeat or synthetic click reach the handler live.
 
 import { useRef, useState } from "react";
 import type { ReactNode } from "react";

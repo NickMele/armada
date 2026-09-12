@@ -1,21 +1,18 @@
 // Whether the machine panel offers to ask Fleet, and the failures where it
 // must not.
 //
-// **A person opened a job Fleet had not answered about and the one control on
-// the screen asked Fleet a question.** The panel read "Nobody has asked whether
-// this job is working. Looking costs no model call." over a live `Look now`,
-// because a read that failed and a read nobody had made were the same reading.
-// #462.
+// **A person opened a job Fleet had not answered about, and the control
+// asked Fleet anyway.** The panel read "Nobody has asked whether this job
+// is working. Looking costs no model call." over a live `Look now`, since
+// a failed read and a read never made were the same reading. #462.
 //
-// The fix turns on the failure and not on the fact of failure, and on which of
-// two ways an attempt could not work. A Fleet that is not there is one; a Fleet
-// that is up and answering something Bridge cannot read is the other, and it
-// withdraws the act for the opposite reason — the disagreement is in the
-// builds, so the same request meets it again however alive Fleet is.
+// The fix turns on which of two ways an attempt could not work: Fleet not
+// there, or Fleet up and answering something Bridge cannot read — the
+// second withdraws for the opposite reason, since the disagreement is in
+// the builds and the same request meets it again however alive Fleet is.
 //
-// A refusal and a wait that ran out keep the act. Getting that wrong is just as
-// bad as the original defect: a panel that withdrew its control on a timeout
-// would take the next move away from somebody whose Fleet is fine.
+// A refusal and a timed-out wait keep the act: withdrawing on a timeout
+// would take the next move from somebody whose Fleet is fine.
 
 import { describe, expect, it } from "vitest";
 

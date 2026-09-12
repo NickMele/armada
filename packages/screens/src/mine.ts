@@ -1,22 +1,18 @@
 // A reading is the open Job's, or it is not.
 //
-// Five readings reach the detail screen — the Job whole, the Drone's turns, the
-// Job's own log, what it holds on this machine, and what the last look found —
-// and every one of them carries the id it was taken for. **Every one of them
-// has to be checked against the Job on screen before a pixel is drawn from
-// it**, because all five lag a selection by a round trip: open one Job, open
-// the next before the first answers, and the answer that lands is about a Job
-// nobody is looking at.
+// Five readings reach the detail screen, each carrying the id it was taken
+// for. **Every one must be checked against the Job on screen before a
+// pixel is drawn from it** — all five lag a selection by a round trip:
+// open one Job, open the next before the first answers, and the answer
+// lands about a Job nobody is looking at.
 //
-// `apps/desktop/src/main/reader.ts` states the same rule on the other side of
-// the seam and drops a read whose id moved while it was in flight. This is the
-// renderer's half, and it is needed as well rather than instead: a socket that
-// is still open on the previous Job is publishing correctly and about the wrong
-// Job, which no request-side guard can catch.
-//
-// **Its own file so the sixth reading has somewhere to be written.** Four of
-// the five were added one at a time, each by copying the ternary above it into
-// `JobDetail.tsx`; a fifth copy is how one of them ends up without the check.
+// `apps/desktop/src/main/reader.ts` states the same rule the other side
+// and drops a read whose id moved in flight. This is the renderer's half,
+// needed as well: a socket still open on the previous Job publishes
+// correctly and about the wrong Job, which no request-side guard can catch.
+// **Its own file so the sixth reading has somewhere to be written** — four
+// of the five were added by copying the ternary above into `JobDetail.tsx`;
+// a fifth copy is how one ends up without the check.
 
 import type {
   Diff,

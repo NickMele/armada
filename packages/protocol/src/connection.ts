@@ -99,6 +99,7 @@ export function connectedTo(fleet: FleetIdentity, cursor: number): Connection {
  * loosest thing in this package: an audit path is a local file, not something
  * Fleet ever sends. It travels because a shared vocabulary is what this package
  * is for, not because a socket carries it. */
+
 /**
  * What every Bridge failure carries that is not about the failure — where the
  * machine log is, and which Fleet is on the other end of the one connection.

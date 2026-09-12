@@ -30,19 +30,17 @@ export type StoppedAt = {
 /**
  * Which step the Job stopped at, and the Check that stopped it there.
  *
- * The rail already draws all of this a row at a time. What a Job that is over
- * owes is the one line saying where it ended, which is the first thing read on
- * the dead-end screen — and every part of it is served: the step's label, the
- * run's outcome, and the file it wrote.
+ * The rail already draws all of this a row at a time. What a Job that is
+ * over owes is one line saying where it ended, first read on the dead-end
+ * screen — the step's label, the run's outcome, the file it wrote, all served.
  *
  * **The step is Fleet's, not a guess.** `current_step_id` is frozen at the
- * failed step, so a Job whose current step Fleet cannot name says nothing here
- * rather than picking a row off the states.
+ * failed step, so an unnamed current step says nothing here rather than
+ * picking a row off the states.
  *
- * **Narrowed to the step's current attempt.** `check_runs` holds every
- * attempt's rows since 7.0, and a `.find` over all of them could name a
- * stopped first attempt's Check as the reason a second, still-running
- * attempt ended the Job.
+ * **Narrowed to the step's current attempt** — `check_runs` holds every
+ * attempt's rows since 7.0; finding over all of them could name a stopped
+ * first attempt's Check as why a second, still-running attempt ended it.
  */
 export function stoppedAt(whole: JobWhole): StoppedAt | undefined {
   const step = ordered(whole).find((held) => held.step_id === whole.job.current_step_id);
@@ -78,17 +76,15 @@ function didNotPass(run: CheckRun): boolean {
 /**
  * What one Check did, or nothing where the gate has not run it.
  *
- * **Six outcomes, each drawn as itself.** A pass carries no `produced` because
- * a pass measured nothing; four of the rest say different things about why a
- * step did not advance — an answer that was not what the step declared, a
- * signal, a budget that expired, a command that never started — and folding
- * them into "failed" would hide the one difference a reader acts on.
+ * **Six outcomes, each drawn as itself.** A pass carries no `produced`,
+ * measuring nothing; four others say why a step did not advance — wrong
+ * answer, signal, expired budget, never-started command — folding them
+ * into "failed" hides the difference a reader acts on.
  *
- * **`skipped` is the sixth and it stopped nothing.** It reads "not run", with
- * `produced` naming the paths the Check covers and this step did not touch. It
- * has its own glyph on purpose: drawn as a pass it would claim a verification
- * that never happened, and drawn as `never_ran`'s `shield-minus` it would look
- * like a Check whose command is missing.
+ * **`skipped` is the sixth, and it stopped nothing** — reads "not run",
+ * `produced` naming paths the Check covers untouched. Its own glyph: as a
+ * pass it would claim a verification that never happened, as
+ * `never_ran`'s `shield-minus` it would look like a missing command.
  *
  * The verb comes from the registry, which now has a row for all six.
  */

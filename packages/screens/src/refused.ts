@@ -174,21 +174,17 @@ type Cut = { detail: string; truncated: boolean; length?: number };
 /**
  * How much of one command is on the row, where it is not all of it.
  *
- * **The same sentence the transcript's own cut arguments carry**, through the
- * same function rather than through a second one written to look like it —
- * *showing 200 of 14,320 characters*. A command cut without saying so is one a
- * person pastes into an allowlist believing it is whole, which is the failure
- * this rides one level down from.
+ * **The same sentence the transcript's own cut arguments carry**, through
+ * the same function — *showing 200 of 14,320 characters*. A command cut
+ * silently is one pasted into an allowlist believing it whole.
  *
- * **A row Fleet never sized says it was cut and claims no total.** `sizeOf`
- * refuses a one-number sentence for the reason it gives: `200 characters shown`
- * reads as the whole of it. Leading with `cut at` cannot be read that way, and
- * an unstated total is the honest answer where nothing recorded one.
- *
- * The count is code points and not UTF-16 units, because `length` on the wire
- * is Rust's `chars().count()` — the two disagree on any command carrying an
- * astral character, and a shown count larger than the total would read as
- * nonsense.
+ * **A row Fleet never sized says it was cut and claims no total** —
+ * `sizeOf` refuses a one-number sentence, since `200 characters shown`
+ * reads as the whole of it; `cut at` cannot read that way, and an
+ * unstated total is honest where nothing recorded one. The count is code
+ * points, not UTF-16 — `length` on the wire is Rust's `chars().count()`,
+ * disagreeing on any astral character, where a shown count larger than
+ * the total would read as nonsense.
  */
 export function shownOf(one: Cut): { size: string } | undefined {
   if (!one.truncated) return undefined;

@@ -1,28 +1,18 @@
-// An override will not go on the record without a reason — by the button and
-// by the key.
+// An override will not go on the record without a reason — by the button
+// and by the key.
 //
-// # Why the reason is not optional
+// **Why the reason is not optional.** A person records that a verifier was
+// wrong; the reason goes to an append-only log beside the refusal, and
+// `#154` will read those to learn whether the Judge or the criterion was
+// at fault. An unexplained override has no path back.
 //
-// `Overrule.tsx` says it: a person is recording that a verifier was wrong and
-// that they took responsibility for going past it, the reason is written to an
-// append-only log beside the refusal, and `#154` will read those reasons to
-// learn whether the Judge or the criterion was at fault. An unexplained
-// override is the one outcome there is no path back from — which is why the
-// keyboard half below matters more here than anywhere else this rule appears.
+// **Both triggers, since words are chosen off the trigger.** A Judge's
+// refusal and a gaming flag overruled are different things, so `OVERRULING`
+// keys every word — including the label — off `trigger`.
 //
-// # Both triggers, because the words are chosen off the trigger
-//
-// A Judge's refusal overruled and a gaming flag overruled are two different
-// things a person is doing, so `OVERRULING` keys every word — including the
-// field's own label — off `trigger`. A gate reading one label would prove the
-// rule for one of the two screens this file draws.
-//
-// # And the flag's own case, which a refusal does not have
-//
-// A gaming flag is the answer to a narrow question, and the two tests at the
-// end pin that question onto this surface and the brief onto the call that
-// opens it. Neither is a rendering: one is a sentence that used to be bought
-// and thrown away, the other is which of two strings the press hands back.
+// **The flag's own case, which a refusal does not have** — a gaming flag
+// answers a narrow question; the two tests at the end pin that question
+// and the brief onto the call that opens it.
 
 import { afterEach, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";

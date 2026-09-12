@@ -1,28 +1,18 @@
 // Chapter five — the panel's answer, as criteria against judges.
-//
-// **A panel's output is not a stream, so it is not drawn as one.** Every other
-// Check writes a transcript; a panel writes verdicts, and under the veto-only
-// contract a judge that meets a criterion writes nothing at all. The grid is
-// the artifact, and a refusal opens under the row it refuses.
-//
-// **The reading is `gates.ts`'s.** Which attempt counts, how the members of a
-// panel group onto one criterion and whether one veto refuses it are decided
-// there, once, for this chapter and for the phase strip. What is decided here
-// is only what the rows look like.
-//
-// **What the wire has not got is not drawn.** `JudgeVerdicts` takes a
-// `measured` band for a criterion a Check settled, and nothing joins a
-// criterion to a Check — so no measured row is built, and only criteria the
-// panel actually answered get a row. `JudgeRefusal.overlap` takes the citation
-// sets that say where two judges' readings met and where they parted; `cited`
-// carries each member's list and nothing computes the intersection.
-//
-// **Two regions under the grid, and each is scoped where its record is.**
-// `JudgeCitations` is one list for the step, because a row names both the judge
-// and the criterion. `JudgeInputs` is one block per criterion inside that
-// criterion's own disclosure, because a brief is per criterion — every member
-// of one panel answers one brief and two criteria answer two, so a digest
-// folded over the step would differ for a reason that says nothing.
+// **A panel's output is not a stream** — every other Check writes a
+// transcript; a panel writes verdicts, a judge meeting a criterion under
+// veto-only writing nothing. The grid is the artifact, a refusal opening
+// under its row.
+// **The reading is `gates.ts`'s** — which attempt counts, how panel
+// members group onto one criterion, whether one veto refuses it, are
+// decided there once; what is decided here is only what rows look like.
+// **What the wire has not got is not drawn** — `JudgeVerdicts` takes a
+// `measured` band only where a Check settled the criterion, so only
+// answered criteria get a row; `JudgeRefusal.overlap` needs citation
+// sets, and `cited` carries each member's list unmatched.
+// **Two regions under the grid, each scoped where its record is** —
+// `JudgeCitations` is one list per step (a row names judge and
+// criterion); `JudgeInputs` is one block per criterion.
 
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";

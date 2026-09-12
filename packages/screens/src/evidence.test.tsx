@@ -1,24 +1,18 @@
 // The Checks and the Verdicts, on the screen Bridge actually composes.
 //
-// # This file exists because the drawing and the app had drifted
+// **This file exists because the drawing and the app had drifted.**
+// `chapters.tsx` returned three chapters, the Storybook story returned
+// five with two invented — never built into the screen that ships. A
+// person looking at a real refused Job saw no Checks and no Verdicts,
+// while the story that would show the gap drew its own data.
 //
-// Both chapters existed as components and as story fixtures for a while, and
-// neither was ever built into the screen that ships: `chapters.tsx` returned
-// three chapters and the Storybook story returned five, three of them from the
-// real builder and two of them invented. A person looking at a real refused Job
-// saw no Checks and no Verdicts at all, and the story that would have shown the
-// gap was drawing its own data instead of the app's.
+// **So this mounts `chaptersOf`.** Every row asserted is built by the same
+// call `JobDetail.tsx` makes, from a `StepDetail` shaped like the wire's —
+// the only arrangement where "the story draws it" and "the app draws it"
+// cannot come apart again.
 //
-// **So this mounts `chaptersOf`.** Nothing here writes a `StepChapter`. Every
-// row asserted below is built by the same call `JobDetail.tsx` makes, from a
-// `StepDetail` shaped like the wire's — which is the only arrangement in which
-// "the story draws it" and "the app draws it" cannot come apart again.
-//
-// **A browser test and not a Storybook story, because of the layer rule.**
-// `xtask/src/rules_layers.rs` puts `@armada/components` below `@armada/screens`
-// and refuses an import the other way, so no story can reach `chaptersOf`. This
-// package's browser project is where a screen is mounted — `vitest.config.ts`
-// says so, and says why.
+// **A browser test, not a story, by the layer rule** —
+// `xtask/src/rules_layers.rs` puts `@armada/components` below `@armada/screens`, so no story can reach `chaptersOf`.
 
 import { afterEach, expect, test } from "vitest";
 import { page } from "vitest/browser";

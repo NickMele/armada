@@ -99,22 +99,19 @@ export type JobSummary = {
    */
   redispatched_from?: string;
   /**
-   * Whether this job's drone is waiting on an answer from a person. Since
-   * protocol 5.7.
+   * Whether this job's drone is waiting on an answer from a person. Since protocol 5.7.
    *
-   * **A flag, and deliberately not the question.** What was asked and what each
-   * answer commits to are on the detail's `asking`, which is one job somebody
-   * opened; this is a board drawn for every job at once, and a paragraph per row
-   * to say one true-or-false is what the summary redacts `facts` to avoid.
+   * **A flag, deliberately not the question** — what was asked is on the
+   * detail's `asking`; this is a board drawn for every job at once, and a
+   * paragraph per row is what `facts` redacts to avoid.
    *
-   * **Absent is false and both mean the same thing**, unlike every other
-   * optional field here — fleet omits it when it is not set rather than sending
-   * `false`, because a bool has no third reading for absence to carry.
+   * **Absent is false, both mean the same** — unlike other optional fields
+   * here, fleet omits it rather than sending `false`, since a bool has no
+   * third reading for absence.
    *
-   * One of two fields on the row not read off the record — `landed` is the
-   * other. It comes from the working slot, so it is false on every summary
-   * built where no slot was in hand, which is every event publish — correct
-   * rather than a gap, since `job.asking` says a question exists.
+   * One of two fields not read off the record — `landed` is the other. It
+   * comes from the working slot, false on every summary built with no slot
+   * in hand: correct, not a gap, since `job.asking` says one exists.
    */
   asking?: boolean;
   /**

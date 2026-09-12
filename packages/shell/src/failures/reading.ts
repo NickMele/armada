@@ -69,18 +69,17 @@ const FLEET_VERSION_SKEW: BridgeCode = "bridge.fleet.version_skew";
 /**
  * Fleet, when the one connection is not a connection.
  *
- * `null` where there is nothing wrong. A state with no `next` has nothing to
- * say and takes no notice; a state that is not a fault takes none either, which
- * is why `connected` is answered below rather than filtered out by the guard.
+ * `null` where nothing is wrong — a state with no `next` has nothing to say,
+ * and a state that is not a fault takes no notice, which is why `connected`
+ * is answered below rather than filtered out.
  *
- * **The four runtime-file answers stay four.** Which one it was is the first
- * row of the fold, because only one of the four — running and silent — is
- * worth waiting on, and the other three need somebody to start Fleet.
+ * **The four runtime-file answers stay four** — which one it was is the
+ * fold's first row, since only running-and-silent is worth waiting on; the
+ * other three need somebody to start Fleet.
  *
- * **This is the builder where both classes appear**, and the line falls exactly
- * where the pid check falls: `unreachable` and `version_skew` are the two where
- * Bridge verified the pid, so Fleet is known alive and only the reading has
- * stopped. The other two draw red because Fleet is either absent or unproven.
+ * **Both classes appear here, exactly where the pid check falls**:
+ * `unreachable`/`version_skew` verified the pid — Fleet known alive, only
+ * the reading stopped. The other two draw red: Fleet absent or unproven.
  */
 export function fleetFailure(
   connection: Connection,

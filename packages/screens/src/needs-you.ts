@@ -1,26 +1,18 @@
-// Which jobs are waiting on a person, the sentence that counts them, and the
-// order a queue of them is read in.
+// Which jobs are waiting on a person, the sentence that counts them, and
+// the order a queue of them is read in.
 //
-// **The Board arithmetic main needs too, and only that.** Everything here is
-// also drawn by `board.ts`, which re-exports it; nothing here is a second
-// reading of anything.
-//
-// **Moved out of `board.ts` whole, and not rewritten.** The rule is unchanged;
-// what changed is who can read it. Bridge's main process has to know the same
-// set the Needs-you tab draws — it is what decides when to tell somebody away
-// from the app — and main is a Node bundle with no React in it.
-//
-// **That is why `JOB_LIFECYCLE` is imported from the generated module rather
-// than from `@armada/components`.** The barrel is every primitive and every
-// composition; importing one constant through it puts `react`, `lucide-react`
-// and a stylesheet chunk into the main bundle, which was measured rather than
-// assumed — 86 kB and no React became 95 kB, a CSS chunk and three `require`s
-// the main process has no use for. The generated file is data, so reaching it
-// by name costs the map and nothing else.
-//
-// Nothing else in this module may import from `@armada/components`. A single
-// import of `plural` here would undo the paragraph above, silently, and the
-// only thing that would say so is the size of a bundle nobody reads.
+// **The Board arithmetic main needs too, only that** — also drawn by
+// `board.ts`, which re-exports it; nothing here is a second reading.
+// **Moved out of `board.ts` whole, not rewritten** — the rule is
+// unchanged, only who can read it: main needs the same set the Needs-you
+// tab draws, to decide when to tell somebody away from the app, and main
+// is a Node bundle with no React in it.
+// **`JOB_LIFECYCLE` comes from the generated module, not
+// `@armada/components`** — the barrel is every primitive and
+// composition; one constant through it put `react`, `lucide-react` and a
+// stylesheet chunk into the main bundle — measured: 86 kB with no React
+// became 95 kB. The generated file is data, so reaching it by name costs
+// the map alone, and nothing else here may import from `@armada/components`.
 
 import { JOB_LIFECYCLE } from "@armada/components/src/generated/vocabulary";
 import type { JobSummary } from "@armada/protocol";

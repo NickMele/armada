@@ -286,20 +286,19 @@ export type Overruling = {
 };
 
 /**
- * What one trigger's override is called and what it says, for the two triggers
- * an override reaches.
+ * What one trigger's override is called and what it says, for the two
+ * triggers an override reaches.
  *
- * **The scope is Fleet's now and the words are still here.** A trigger Fleet
- * admits and this record has no sentence for draws no button and is named in
- * words, rather than a screen offering a Judge's words for a check that is not
- * the Judge — which is how `evidence_suspect` would have arrived.
+ * **The scope is Fleet's now, the words are still here.** A trigger Fleet
+ * admits with no sentence here draws no button and is named in words,
+ * rather than offering a Judge's words for a check that is not the Judge.
  *
  * **Two, since Fleet admitted the second.** `gate_failure` is the Judge
- * refusing a criterion — a judgement about the work. `evidence_suspect` is the
- * gaming check reading a diff and inferring intent — a claim about the
- * evidence, and the owner's rule is that anything a machine decides a person
- * can overrule. `gate_undecided` is absent and that is not an omission: the
- * gate never weighed the work, so there is no ruling to disagree with.
+ * refusing a criterion — a judgement about the work. `evidence_suspect` is
+ * the gaming check reading a diff and inferring intent — a claim about the
+ * evidence, and anything a machine decides a person can overrule.
+ * `gate_undecided` is absent, not an omission: the gate never weighed the
+ * work, so there is no ruling to disagree with.
  */
 export const OVERRULING: Record<Overruled, Overruling> = {
   gate_failure: {
@@ -580,20 +579,17 @@ const RESTART = `The drone is gone. ${RESTART_QUEUES}`;
 /**
  * The same act on a job whose drone is still running.
  *
- * **Two sentences and not one, because both cases are real.** Restart applies
- * where the drone has died and where it is alive and unreachable, and it does
- * the right thing in each — so the button cannot pick one reading and say it
- * everywhere. It said the drone was gone on a job whose drone was plainly
- * working, which is a sentence a person can see is false.
+ * **Two sentences, not one — both cases are real.** Restart applies where
+ * the drone died and where it is alive and unreachable, doing the right
+ * thing in each; saying the drone was gone on a job plainly working is a
+ * sentence a person can see is false.
  *
- * **What the words have to carry is that restarting ends it**, because that is
- * the part a person would not guess from a job that looks like it is running.
- * `stuck.drone_unheard` is the fact and fleet is what read it; nothing here
- * infers this from the trigger, which in this exact case says `gate_failure`.
+ * **The words must carry that restarting ends it** — not guessable from a
+ * running-looking job. `stuck.drone_unheard` is the fact fleet reads;
+ * nothing here infers it from the trigger, which here says `gate_failure`.
  *
- * **Not the code's word for it.** `unheard`, `session` and `adopted` name the
- * mechanism, and the thing a person needs is what is true on their screen: the
- * process is up, nothing is reading it, and restart is what ends that.
+ * **Not the code's word for it** — `unheard`, `session` and `adopted` name
+ * the mechanism; what a person needs is what is true on screen.
  */
 const RESTART_UNHEARD =
   `The drone is still running and nothing is reading it, so restarting ends it. ${RESTART_QUEUES}`;

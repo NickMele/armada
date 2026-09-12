@@ -1,26 +1,18 @@
 // What a Drone has changed, as the Produced chapter draws it.
 //
-// **Nothing here reads a directory.** The paths arrive as a named event like
-// everything else. Nor is anything counted that Fleet did not send: there are
-// no line counts here, because the patch is the expensive read and it is not on
-// this seam.
-//
-// **The change kind is carried, not worded.** The wire's own value goes through
-// untouched and `ChangedFiles` reads the word off `CHANGE_KIND` — the eight
-// `change_kind` rows in `enum-verbs.toml`, carried across by the generated
-// vocabulary. The lookup sits in the component rather than here because three
-// callers build the same row from three sources — this live reading,
-// `produced.ts` from a finished job's record, and `run.ts` from a step's
-// `Saw::Produced` — and a word chosen at any one of them would be the second
-// vocabulary the generated module exists to prevent. #465.
-//
-// # The note says what is in front of a reader, not where it came from
-//
-// It used to open with which of two readings this was and what the other one
-// would have been — three sentences of epistemology in a region whose job is to
-// show what the step produced. A surface shows what it has. What is worth
-// saying about a list of paths is whether any of them went outside what the
-// step promised, and that is the whole of what the note says now.
+// **Nothing here reads a directory** — paths arrive as a named event like
+// everything else, and nothing is counted that Fleet did not send: no line
+// counts here, since the patch is the expensive read and not on this seam.
+// **The change kind is carried, not worded** — the wire's value passes
+// through untouched, `ChangedFiles` reading the word off `CHANGE_KIND`
+// (eight `change_kind` rows in `enum-verbs.toml`). The lookup sits in the
+// component since three callers build the same row — this reading,
+// `produced.ts`, `run.ts`'s `Saw::Produced` — and a word chosen at any
+// one would be a second vocabulary. #465.
+// **The note says what is in front of a reader, not where it came from**
+// — it used to open with which of two readings this was, epistemology in
+// a region meant to show what the step produced. Worth saying: whether
+// any path went outside what the step promised.
 
 import type { ChangedFile } from "@armada/components";
 

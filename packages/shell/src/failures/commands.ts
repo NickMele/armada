@@ -46,19 +46,17 @@ function fleetRun(runId: string): FailureMachineValue[] {
 /**
  * A command Fleet refused.
  *
- * **The only failure here that carries a run id**, because it is the only one
- * minted on the other side of the connection. It names Fleet's run, and the row
- * says so.
+ * **The only failure here with a run id** — minted on the other side of the
+ * connection; the row names Fleet's run.
  *
  * **The one failure whose code Bridge did not mint**, and nothing here
- * interprets it. It is opaque to Bridge — looked up, never parsed — and the
- * message is what renders when the lookup misses. It carries no `bridge.`
- * prefix, which is how a reader tells at a glance that Fleet raised it and a
- * manifest holds what it means.
+ * interprets it — opaque to Bridge, looked up never parsed, and the message
+ * renders when the lookup misses. No `bridge.` prefix, so a reader tells at
+ * a glance Fleet raised it.
  *
- * The whole `fields` map and the whole `chain` are folded away rather than
- * summarised, because a refusal's `message` names one problem even where
- * several exist.
+ * The whole `fields` map and `chain` are folded away rather than
+ * summarised: a refusal's `message` names one problem even where several
+ * exist.
  */
 export function refusalFailure(error: WireError, bridge: BridgeIdentity): Failure {
   const details: FailureDetail[] = [
@@ -122,23 +120,17 @@ const COMMAND_UNANSWERABLE: BridgeCode = "bridge.command.unanswerable";
 /**
  * A command Fleet did not answer.
  *
- * **The sixth failure, and the one that used to be a line of text.** A refusal
- * carries a `WireError` and reaches `refusalFailure`; everything else on the
- * same seam — a wait that ran out, a socket that failed, a status with no
- * refusal under it — was drawn as a single `Alert` reading "Fleet did not
- * answer: <the machine's words>". That sentence has no code, no fold, and
- * nothing to copy, so a person who hit it had one line and no way to hand it
- * on. It is the generic message this file exists to repair, and it survived
- * here because a transport failure is the one seam failure with no envelope.
+ * **The sixth failure, once a line of text** — "Fleet did not answer: <the
+ * machine's words>", no code, no fold, nothing to copy. A refusal reaches
+ * `refusalFailure`; this covers everything else on the seam.
  *
- * **Bridge mints the code, and the `bridge.` prefix is what keeps that honest**
- * — the fault may well be Fleet's, and what Bridge is naming is the condition
- * it observed. Three of them, because the three take three different next
- * steps, which `TransportFault` states.
+ * **Bridge mints the code, `bridge.` keeping that honest** — the fault may
+ * be Fleet's; Bridge names the condition it observed. Three codes, since
+ * the three take three different next steps (`TransportFault`).
  *
- * **No run id, on any of the three.** Two never got an answer to carry one, and
- * the third got a body Bridge could not read one out of. A labelled blank would
- * claim Bridge looked and Fleet sent none.
+ * **No run id, on any of the three.** Two never got an answer to carry one;
+ * the third got a body Bridge could not read one out of. A labelled blank
+ * would claim Bridge looked and Fleet sent none.
  */
 export function transportFailure(
   outcome: Extract<Outcome, { ok: false; why: "transport" }>,

@@ -395,20 +395,17 @@ function overBudget(job: JobSummary): boolean {
 /**
  * Whether this job is stopped for money.
  *
- * **Not every over-budget job, which is what it used to mean.** A job at its
- * turn cap carries the same `over_budget` reason and is not started by more
- * money, so this offered a control that could not clear the hold. `budget_hold`
- * is what tells the two apart.
+ * **Not every over-budget job.** A job at its turn cap carries the same
+ * `over_budget` reason but is not started by more money — `budget_hold` tells
+ * the two apart.
  *
- * **A Fleet that sends no `budget_hold` falls here**, because the cost cap is
- * the ceiling that had a route before the field existed — an older Fleet
- * refuses `raise_turn_cap`, so the other reading would offer a press it cannot
- * answer. A spelling this build has never heard of falls to neither control,
- * which is the honest answer: a third ceiling would have a third act.
+ * **A Fleet that sends no `budget_hold` falls here** — the cost cap had a
+ * route before the field existed, and an older Fleet refuses
+ * `raise_turn_cap`. A spelling this build has never heard of falls to
+ * neither control: a third ceiling would have a third act.
  *
- * Exported because the keyboard needs the same answer: `B` opens the dialog
- * from `JobDetail.tsx`, and a binding offered where the control is not would be
- * a key that answers nothing.
+ * Exported: `B` opens this dialog from `JobDetail.tsx`, and a binding offered
+ * where the control is not would answer nothing.
  */
 export function heldForMoney(job: JobSummary): boolean {
   return overBudget(job) && (job.budget_hold === COST_CAP || job.budget_hold === undefined);

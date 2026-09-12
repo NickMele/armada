@@ -1,20 +1,17 @@
-// `awaiting_review` at the delivering step — the branch has gone out, a pull
-// request is open, and `Decide`'s fourth answer is what a person is looking
-// at.
+// `awaiting_review` at the delivering step — the branch has gone out, a
+// pull request is open, and `Decide`'s fourth answer is what a person is
+// looking at.
 //
-// **`land` is `human_always` here and nowhere else in this roster.** The
-// shared `workflow()` in `base.ts` leaves it ungated, because every other
-// fixture's Job holds at `regression_verify` or earlier and never opens
-// `land`'s own facts — changing the shared declaration would be data nobody
-// reads moving for nobody's benefit. This step is written by hand instead,
-// the way `gating.ts`'s two-Check step is, so nothing else in the roster
-// changes shape.
+// **`land` is `human_always` here and nowhere else in this roster** —
+// shared `workflow()` in `base.ts` leaves it ungated, since every other
+// fixture holds at `regression_verify` or earlier and never opens `land`'s
+// own facts. This step is written by hand instead, like `gating.ts`'s
+// two-Check step, so nothing else in the roster changes shape.
 //
-// **`WithNoPullRequest` is not a fixture here.** `review()` already is that
-// state — `awaiting_review`, mid-workflow, `whole.delivery` absent — and the
-// same absence that keeps its own gate un-mergeable is what keeps `land`
-// undrawn there. A second builder for the same absence would be the same
-// state told twice.
+// **`WithNoPullRequest` is not a fixture here** — `review()` already is
+// that state (`awaiting_review`, mid-workflow, `whole.delivery` absent),
+// and the same absence keeping its gate un-mergeable keeps `land` undrawn
+// there. A second builder for the same absence would tell one state twice.
 
 import type { JobFixture } from "../fixture";
 import type { Remark, Remarks, StepDetail } from "@armada/protocol";

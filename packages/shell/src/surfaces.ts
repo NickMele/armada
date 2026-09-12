@@ -1,20 +1,17 @@
 // Where a person can go in Bridge, and the digit that reaches it.
 //
-// **One roster, read by both controls that navigate.** The rail draws it and
-// the palette lists it. A second copy is how a place ends up in one and not the
-// other, or answers a key the other spells differently — and a binding that
-// disagrees with itself is worse than one that is missing.
+// **One roster, read by both controls that navigate** — the rail draws it,
+// the palette lists it. A second copy is how a place ends up in one and not
+// the other, or answers a key the other spells differently.
 //
-// **The digit is computed from the rail order, never typed.** The contract
-// binds `⌘1–⌘5` to Bridge surfaces *in rail order*, so a digit is a place in
-// the rail and nothing else. A surface added at the end takes the next digit by
-// arithmetic rather than by somebody remembering to renumber.
+// **The digit is computed from the rail order, never typed** — the
+// contract binds `⌘1–⌘5` to Bridge surfaces *in rail order*, so a surface
+// added at the end takes the next digit by arithmetic, not renumbering.
 //
-// **The order below is transcribed by hand, and it is the only transcription.**
-// Nothing generated carries it: `actions.toml` holds the whole rail as one
-// `bridge_surfaces` row spelling the range, deliberately, because its rule is
-// the order rather than the numbers. So the order is written here once, from
-// `docs/concepts/bridge.md`, and every digit falls out of it.
+// **The order below is transcribed by hand, the only transcription** —
+// `actions.toml` holds the rail as one `bridge_surfaces` row spelling the
+// range, since its rule is the order not the numbers. Written here once,
+// from `docs/concepts/bridge.md`.
 
 import { ClipboardList, HardDrive } from "lucide-react";
 

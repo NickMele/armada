@@ -208,22 +208,18 @@ function drones(capacity: FleetCapacity | null): ReactNode {
 }
 
 /**
- * Which of the four things is holding the next drone back, **and only while
- * something is waiting on it**.
+ * Which of the four things is holding the next drone back, only while
+ * something is waiting on it.
  *
- * Fleet answers this whenever admission would refuse, which includes a fleet
- * with nothing queued at all. Drawn then it is a warning about a situation
- * nobody is in, and the contract is explicit that the bar must not become a
- * second alert surface. So it appears when there is a Job it is an answer for.
+ * Fleet answers this whenever admission would refuse, including a fleet with
+ * nothing queued — drawn then it warns about a situation nobody is in, which
+ * the contract forbids, so it appears only when there is a Job it answers
+ * for.
  *
- * **The word is the registry's.** An unknown key is a newer Fleet naming a
- * reason this build has never heard of — additive by design — and it renders as
- * its own wire spelling, which is the fallback every other surface takes rather
- * than inventing a second vocabulary.
- *
- * **Carries a tooltip where the registry has one.** The verb alone names which
- * of the four is short; `ADMISSION_HOLD[hold]?.hint` says why, and is absent
- * for a wire spelling this build has never heard of.
+ * **Both the word and its tooltip are the registry's.** An unknown key is a
+ * newer Fleet naming a reason this build has never heard of and renders as
+ * its own wire spelling; `ADMISSION_HOLD[hold]?.hint` supplies the tooltip
+ * and is absent for the same unheard-of spelling.
  */
 function held(jobs: readonly JobSummary[], capacity: FleetCapacity | null): ReactNode[] {
   const hold = capacity?.held_by;

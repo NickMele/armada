@@ -58,23 +58,19 @@ export type Frozen = {
 };
 
 /**
- * What a terminal Job does to a step that still reads live, or nothing where
- * the step's own state stands.
- *
+ * What a terminal Job does to a step that still reads live, or nothing
+ * where the step's own state stands.
  * **Terminality is read, never listed.** `JOB_LIFECYCLE` carries it from
- * `job-statuses.toml`, so a status added there is terminal here the day it is
- * generated rather than the day somebody remembers this file.
+ * `job-statuses.toml`, so a status added there is terminal here the day it
+ * is generated, not the day somebody remembers this file.
  *
- * A terminal status with no step counterpart falls to `not_started`, the mark
- * that claims nothing and draws its own ordinal. That is wrong about the step
- * and right about what is known — and it still stops the pulse, the hue and
- * the clock, which is the whole of what a terminal Job owes.
+ * A terminal status with no step counterpart falls to `not_started` —
+ * wrong about the step, right about what is known — and it still stops
+ * the pulse, the hue and the clock.
  *
- * **The word is the Job's own verb**, borrowed from the generated vocabulary.
- * `enum-verbs.toml` does carry `step_state` rows, and they are the wrong ones
- * here: the step still reads `running` and the fact that it is over is the
- * Job's status, not the step's. So the word comes from where that fact is
- * written rather than from the state it contradicts.
+ * **The word is the Job's own verb**, not `enum-verbs.toml`'s `step_state`
+ * rows: the step reads `running`, its being over is the Job's status not
+ * the step's — the word comes from where that fact is written.
  */
 export function frozenBeneath(status: string, state: string): Frozen | undefined {
   if (JOB_LIFECYCLE[status]?.terminal !== true) return undefined;

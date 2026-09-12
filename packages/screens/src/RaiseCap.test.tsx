@@ -1,20 +1,18 @@
 // A raise raises, and a figure that does not is refused before it is sent.
 //
-// # Why the comparison is worth a gate
+// **Why the comparison is worth a gate.** The act exists because work is
+// stopped for money. Fleet answers 422 to a cap at or under the one in
+// force, so a control that let the press through would turn a stopped job
+// into a stopped job plus a round trip — and the person pressing it would
+// think they had just unblocked it. The dialog confirms, so the disabled
+// confirm is the whole guard.
 //
-// The act exists because work is stopped for money. Fleet answers 422 to a cap
-// at or under the one in force, so a control that let the press through would
-// turn a stopped job into a stopped job plus a round trip — and the person who
-// pressed it would have every reason to think they had just unblocked it. The
-// dialog is the confirmation here, so the disabled confirm is the whole guard.
-//
-// # And what it sends, because the unit is where this could go quietly wrong
-//
-// A person types dollars and Fleet reads millionths of a dollar. Nothing on
+// **What it sends, since the unit is where this could go quietly wrong.** A
+// person types dollars, Fleet reads millionths of a dollar — nothing on
 // either side would notice a factor of a million: `$20` sent as 20 is a cap
-// below a hundredth of a cent, which Fleet would refuse as no raise at all, and
-// 20000000000000 is a ceiling nothing could ever reach. The case below asserts
-// the integer.
+// below a hundredth of a cent, refused as no raise at all, and
+// 20000000000000 is a ceiling nothing could ever reach. The case below
+// asserts the integer.
 
 import { afterEach, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";

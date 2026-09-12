@@ -35,42 +35,33 @@ export type Opening = {
 };
 
 /**
- * Who a row is. The three actors a step's story has.
+ * Who a row is — the three actors a step's story has: Armada opens it with
+ * an instruction, the Drone works, Fleet runs the Checks and reads the
+ * result. Only the middle used to be logged, so an activity log could not
+ * say what a Drone had been asked or what was made of its work.
  *
- * A step is a conversation: Armada opens it with an instruction, the Drone
- * works, and Fleet runs the Checks and reads what came out. Only the middle one
- * used to be written down, so the activity log could say what the Drone did and
- * nothing about what it had been asked or what was made of it.
+ * **Absent is `drone`** — every row before Fleet stamped this field decoded
+ * from a Drone's own output, so an older row still reads back correctly.
  *
- * **Absent is `drone`.** Every row written before Fleet stamped this field
- * decoded from a Drone's own output, so an older row read back without it is
- * read back correctly.
- *
- * **`armada` reaches a `said` row as well as an `instructed` one, and they are
- * not duplicates.** `instructed` is what Fleet wrote and sent, carrying the
- * occasion and the block headings; a `said` row in this voice is the drone's
- * own stream replaying those words back off its input channel. A surface asking
- * what Armada told a drone reads `instructed`; one drawing the conversation in
- * order draws both.
+ * **`armada` reaches `said` as well as `instructed` — not duplicates.**
+ * `instructed` is what Fleet wrote and sent; a `said` row in this voice is
+ * the drone's stream replaying those words off its input channel.
  */
 export type Voice = "armada" | "drone" | "fleet";
 
 /**
- * What kind of section one heading of an opening brief is. `crates/ipc/src/turn.rs`.
+ * What kind of section one heading of an opening brief is.
+ * `crates/ipc/src/turn.rs`.
  *
- * **A plain type, like `Voice`, for the same reason: no registry declares this
- * set.** `fleet::briefing` decides it from which block it is writing, and
- * stamps every heading it writes with one.
+ * **A plain type, like `Voice`** — no registry declares this set;
+ * `fleet::briefing` decides it per block and stamps every heading with one.
  *
- * - `about_this_job` — a fact about this Job, this attempt, or the branch it
- *   runs on: what was asked, what a person said, why this attempt exists, what
- *   the branch looked like when the Drone opened it.
- * - `standing` — the same wording on every Job that has this block at all: how
- *   to hand work in, where a Drone's own files go, the scope-tool rule.
- * - `steps` — the rail: where this step sits among the workflow's, and which
- *   of the others are done. A reader already holds the same fact as data.
- * - `checks` — the Checks that gate this step, offered rather than
- *   instructed. A reader already holds the same list as data.
+ * - `about_this_job` — this Job, attempt or branch: what was asked, what a
+ *   person said, why this attempt exists, the branch at open.
+ * - `standing` — same wording on every Job: how to hand work in, where a
+ *   Drone's files go, the scope-tool rule.
+ * - `steps` — the rail: where this step sits, which others are done.
+ * - `checks` — the Checks gating this step, offered not instructed.
  */
 export type BlockKind = "about_this_job" | "standing" | "steps" | "checks";
 
@@ -83,41 +74,34 @@ export type Closed = {
 /**
  * One row of a Drone's transcript, as a viewer is shown it.
  *
- * The step a row was written under travels beside this rather than inside it,
- * as `step` on the row message: it is true of every kind, and it is optional
- * because a row written before Fleet recorded one carries no step and nothing
- * can recover which it was.
+ * `step` travels beside this rather than inside it, on the row message — true
+ * of every kind, optional because a row before Fleet recorded one carries no
+ * step and nothing recovers which it was.
  *
- * The tag is `event` and not `kind`, because `unrecognised` already carries a
- * `kind`. Two of the file's kinds never arrive here — `quota_moved`, which is
- * dispatch gating rather than this Job's business, and the sink's own
- * `missed` — so no case is written for them.
+ * The tag is `event`, not `kind`: `unrecognised` already carries a `kind`.
+ * Two file kinds never arrive here — `quota_moved` (dispatch gating, not this
+ * Job's business) and the sink's own `missed`.
  *
- * **`ended` was a third, and the reason given for it was false.** It was
- * withheld because the Job's rail was said to state a run's cost and turn
- * count; no rail ever did, and nothing else on the wire carries either. It
- * arrives since protocol 4.10, and `turns.ts` is where it is drawn.
+ * **`ended` was a third, withheld on a false premise** — that the Job's rail
+ * stated a run's cost and turn count; no rail ever did. It arrives since
+ * protocol 4.10, drawn in `turns.ts`.
  */
 export type Saw =
   | { event: "started"; session: string; model: string; mcp_servers: number }
   /**
    * The Drone reached for a tool, and what it reached for it with.
    *
-   * **Both fields always arrive.** `crates/ipc/src/turn.rs` declares `detail`
-   * and `truncated` on every `Saw::Called`, and the Fleet that predates them is
-   * a Fleet behind, which Bridge refuses rather than reads. So neither is
-   * optional here, and **empty is a value rather than an absence**: it means
-   * the vocabulary had no name for that tool's arguments, which is what the
-   * pane falls back to the call id for.
+   * **Both fields always arrive** — `turn.rs` declares `detail` and
+   * `truncated` on every `Saw::Called`; a Fleet predating them is one Bridge
+   * refuses rather than reads. **Empty is a value, not an absence** — no name
+   * existed for that tool's arguments, so the pane falls back to the call id.
    *
-   * The detail is bounded and may be cut — a `Write` argument is a whole file —
-   * and `truncated` is how a row says so, because a command can legitimately
-   * end in an ellipsis.
+   * `detail` is bounded and may be cut — a `Write` argument is a whole file —
+   * `truncated` says so, since a command can legitimately end in an ellipsis.
    *
-   * **`whole` is on the Rust variant and is not here.** `Shown` drops it before
-   * the socket, so no viewer ever receives it; declaring it would be a field a
-   * surface could read and never find. The rest comes back over HTTP, once, for
-   * the one call somebody opened — `CallArguments` below.
+   * **`whole` is on the Rust variant, not here** — `Shown` drops it before
+   * the socket, so declaring it would be a field never found. The rest comes
+   * back over HTTP, once, for the opened call — `CallArguments` below.
    */
   | {
       event: "called";

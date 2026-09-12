@@ -161,19 +161,17 @@ export function decides(held: WorktreeHeld): HeldReason | null {
 /**
  * How long a checkout has been sitting, in the coarsest true unit.
  *
- * **Its own formatter and not `lasting`.** That one writes a run — `4m 09s`,
- * `2h 13m` — because a job in flight is read to the second. This is an age, and
- * `97h 12m` is a number nobody converts in their head at the moment they are
- * deciding whether four days of untouched work is worth opening the directory
- * for. Two quantities, two formatters, and neither pretends to be the other.
+ * **Its own formatter, not `lasting`.** That one writes a run — `4m 09s`,
+ * `2h 13m` — since a job in flight is read to the second. This is an age:
+ * `97h 12m` is a number nobody converts in their head when deciding whether
+ * four days of untouched work is worth opening the directory for.
  *
- * **It rounds down and never up.** `last_moved_at` is already a floor — armada
- * last moved the job then, and the files were written at or before it — so
+ * **Rounds down, never up** — `last_moved_at` is already a floor, so
  * rounding up would turn a floor into a claim.
  *
- * `null` where the stamp will not parse or is in the future, which is the same
- * convention `instant` sets: a checkout whose date is unreadable says nothing
- * rather than showing an age measured from zero.
+ * `null` where the stamp will not parse or is in the future, the same
+ * convention `instant` sets: an unreadable date says nothing rather than
+ * showing an age measured from zero.
  */
 export function sitting(at: string, now: number): string | null {
   const moved = instant(at);

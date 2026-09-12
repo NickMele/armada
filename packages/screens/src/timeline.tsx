@@ -2,21 +2,17 @@
 // the order they happen — instructed, working, checks, judge. What the attempt
 // wrote rides on working, with the turns that wrote it.
 //
-// **Derived here and drawn by the panel.** `stepTimelineOf` below arranges the
-// step's own chapters into these rows, and `InsideAJob` draws them in place of
-// the strip and the story that used to say the same thing twice. The draft this
-// was written against is deleted, which is what a draft is for.
+// **Derived here and drawn by the panel** — `stepTimelineOf` below arranges
+// the step's own chapters into these rows, and `InsideAJob` draws them in
+// place of the strip and the story that used to say the same thing twice.
 //
-// # What the wire can and cannot say
+// **An attempt is the spine** — `StepAttempt` carries the only times a
+// step's insides have: when it began and ended. Turns carry their own
+// instant, falling into an attempt's window by timestamp.
 //
-// **An attempt is the spine.** `StepAttempt` carries the only times a step's
-// insides have: when the attempt began and when it ended. Turns carry their own
-// instant, so they fall into an attempt's window by their timestamp.
-//
-// **Checks and rulings carry an attempt and no time.** So inside an attempt
-// their order is the phase order — instructed, working, checks, judge — which
-// is the order the strip already draws and the order Fleet runs them in. A
-// timeline that claimed measured times for them would be inventing them.
+// **Checks and rulings carry an attempt and no time** — inside an attempt
+// their order is the phase order, the same the strip draws and Fleet runs
+// them in. A timeline claiming measured times for them would invent them.
 import { Fragment, type ReactNode } from "react";
 
 import type { ChangedFile, CheckRun, Judged, StepAttempt, StepDetail, Turn } from "@armada/protocol";

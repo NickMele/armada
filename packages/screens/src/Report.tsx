@@ -99,21 +99,18 @@ type Disputable = {
 };
 
 /**
- * What a report can be aimed at on this job: each step that has run, and every
- * criterion the judge answered inside it.
+ * What a report can be aimed at on this job: each step that has run, and
+ * every criterion the judge answered inside it.
  *
- * **The step itself is offered and not only its criteria.** A step that
- * escalated on `gate_undecided` has no judged criterion at all — the judge's
- * answer would not read — so a picker holding only criteria offers nothing for
- * the one case a person most wants to report, and the report then goes against
- * the whole job carrying no scope at all.
+ * **The step itself is offered, not only its criteria** — a step escalated
+ * on `gate_undecided` has no judged criterion at all, so a picker holding
+ * only criteria offers nothing for the case a person most wants to report.
  *
- * **Both verdicts are offered**, not only the refusals: a person saying
- * something wrong got through is disagreeing with a `met`, and a picker holding
- * only refusals would make that claim unscopeable.
+ * **Both verdicts are offered**, not only refusals: disagreeing that
+ * something wrong got through means disagreeing with a `met`.
  *
- * A step that never started is left out. Nothing happened in it to disagree
- * with, and offering one would put most of the workflow in the list.
+ * A step that never started is left out — nothing happened in it to
+ * disagree with, and offering one would put most of the workflow in the list.
  */
 function disputable(whole: JobWhole | null): Disputable[] {
   if (whole === null) return [];
@@ -353,6 +350,7 @@ export function ReportControl({
  * a button that turns a hunch into an issue makes filing a wrong one cheap, and
  * the record beneath is what a reader checks it against.
  */
+
 /**
  * What the report is about, in one phrase.
  *

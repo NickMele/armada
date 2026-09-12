@@ -147,19 +147,17 @@ function became(job: JobSummary, workflows: readonly WorkflowSummary[]): Propose
 /**
  * How long a proposal may run before the surface asks whether to keep waiting.
  *
- * **A prompt and not a limit.** Nothing happens at this mark: the call keeps
- * running until Fleet's own budget or until somebody presses stop. What it
- * decides is when the question is put in front of a person rather than left for
- * them to wonder about.
+ * **A prompt, not a limit.** Nothing happens at this mark: the call runs
+ * until Fleet's own budget or a stop press. It decides when the question
+ * reaches a person rather than being left to wonder.
  *
- * Two minutes, chosen against the wait it replaced — Bridge used to abort the
- * request at five seconds, and before that a proposal that took this long was
- * simply lost. It is deliberately well inside Fleet's own proposer budget
- * (`PROVISIONAL_PROPOSER_BUDGET`, ten minutes): a question asked as the call
- * dies is not a question, it is an epitaph.
+ * Two minutes, chosen against the wait it replaced — Bridge used to abort
+ * at five seconds, and before that a slow proposal was simply lost. Well
+ * inside Fleet's own proposer budget (`PROVISIONAL_PROPOSER_BUDGET`, ten
+ * minutes): a question asked as the call dies is an epitaph, not a question.
  *
- * **Unmeasured, like the budget it sits inside.** What would settle it is a
- * distribution of real proposal latencies, which nothing collects yet.
+ * **Unmeasured, like the budget it sits inside** — what would settle it is
+ * a distribution of real proposal latencies, which nothing collects yet.
  */
 export const PROPOSAL_IS_SLOW = 120_000;
 

@@ -1,28 +1,18 @@
-// What `story.ts` answers: why a log has no rows, and what a turn's payload
-// lines say about themselves.
+// What `story.ts` answers: why a log has no rows, and what a turn's payload lines say about themselves.
 //
-// **Three answers where there were two, and that is the first subject.** Four
-// of the five `Observed` states carry no live rows and `story.ts` had one
-// sentence for all of them, so a socket that had failed, one that had closed
-// and a Bridge that was not connected all read as a step that had not started.
-// Each case below is written against that sentence: it survives for the step
-// nothing has happened on, and nothing else is given it. #324.
+// **Three answers where there were two.** Four of five `Observed` states
+// carry no live rows, and `story.ts` had one sentence for all: a failed
+// socket, a closed one, an unconnected Bridge all read as a step not
+// started. Each case survives only for the step nothing happened on. #324.
 //
-// **The block heading is the second.** Everything else `story.ts` names on a
-// line — the echoed command, what a Check's run came to, the trailer — comes
-// off a `CheckRun`'s own fields and is read where those are. A heading comes
-// off a list of line numbers Fleet wrote down as it wrote the blocks, and the
-// defect it closes is that the list did not exist: the renderer's only options
-// were to guess or to draw every line the same. So each of those cases is
-// written against a guess. A short line, a shouted line and a line at the top
-// of a block are all body unless the wire named them.
+// **The block heading.** Everything else comes off a `CheckRun`'s fields;
+// a heading comes off line numbers Fleet wrote per block — closing the
+// defect that the list did not exist, so the renderer could only guess.
 //
-// **What a row says about a kind nobody can draw is the third.** Five of those
-// rows arrived across four seconds carrying five different kinds and read as
-// one error repeated, so the case below asserts five distinct lines rather
-// than five rows. Nothing here asserts the row is dropped or folded: it exists
-// to make a Fleet ahead of this Bridge visible, and muting it is the fix that
-// was refused. #379.
+// **What a row says about a kind nobody can draw.** Five rows arrived
+// across four seconds carrying five kinds and read as one error repeated;
+// the case asserts five distinct lines, not five rows, to make a Fleet
+// ahead of this Bridge visible — muting it was the fix refused. #379.
 
 import { describe, expect, it } from "vitest";
 

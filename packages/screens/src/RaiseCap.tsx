@@ -46,21 +46,17 @@ export function cap(micros: number): string {
 /**
  * The button that opens the raise dialog, and the dialog itself.
  *
- * **The dialog is the confirmation**, which is the field-collecting exception
- * the design contract names: nothing is destroyed by pressing it, and closing
- * it any other way sends nothing. `confirmDisabled` keeps the send control off
- * unless the figure is above the cap in force, matching the 422 Fleet would
- * answer rather than round-tripping to learn it.
+ * **The dialog is the confirmation** — pressing destroys nothing, closing
+ * it any other way sends nothing. `confirmDisabled` keeps send off below
+ * the cap in force, matching the 422 Fleet would answer.
  *
- * **It states both figures before it asks for one.** What the job has spent and
- * what it is allowed are on the job's own header, but somebody deciding how
- * much more to give it should not have to close this to read them — and the new
- * cap is the one number on this screen that means nothing without the other
- * two.
+ * **States both figures before asking for one** — what the job has spent
+ * and is allowed are on the header; deciding how much more should not
+ * require closing this, since the new cap means nothing alone.
  *
- * **It says what it does not change.** The tiers above this job stay where they
- * are and so does the turn cap: a raise read as loosening the repository would
- * be the opposite of the reason this act is per job.
+ * **Says what it does not change** — the tiers above this job stay put,
+ * so does the turn cap — a raise loosening the repository would be the
+ * opposite of why this act is per job.
  */
 export function RaiseCapControl({
   jobId,

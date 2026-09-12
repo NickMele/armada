@@ -132,21 +132,19 @@ function statusOf(instance: ServerState | undefined, now: number): RunSheetServe
 }
 
 /**
- * The run a window is following, as `RunSheet.output`. `undefined` where it is
- * reading no run, or where what it is following is not the entry now
- * selected.
+ * The run a window is following, as `RunSheet.output`. `undefined` where
+ * it reads no run, or what it follows is not the entry now selected.
  *
  * **Keyed to the selection, so it cannot outlive it.** `RunFollowed` is one
- * subscription and it does not clear itself the instant a person picks a
- * different row — a Drone's own turn on this same socket would look no
- * different from a stale one. Selecting a server and starting it was the case
- * that surfaced it: the serving bar came up live and correct while the pane
- * beneath it still read the Command run before it, because nothing had told
- * `output` those two facts were no longer about the same entry. `selectedName`
- * absent is the one case this does not gate — a run already under way when
- * the sheet opens onto no chosen row yet, which is `useRunSheet`'s call for
- * `selected === null` and reads as "nothing to compare against" rather than
- * "compare against nothing."
+ * subscription that does not clear itself the instant a person picks a
+ * different row — a Drone's own turn on this socket would look no
+ * different from a stale one. Selecting a server and starting it surfaced
+ * it: the serving bar came up live while the pane beneath read the Command
+ * run before it, since `output` was not told the two facts changed.
+ *
+ * `selectedName` absent is the one case ungated — a run already under way
+ * when the sheet opens onto no chosen row, `useRunSheet`'s `selected ===
+ * null`: "nothing to compare against," not "compare against nothing."
  */
 export function runOutputOf(followed: RunFollowed, selectedName?: string): ConsoleOutputProps | undefined {
   if (followed.state !== "following") return undefined;
