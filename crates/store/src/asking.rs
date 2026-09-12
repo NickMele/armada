@@ -3,17 +3,15 @@
 //! down.
 //!
 //! **Two facts and a setting, none of them an event.** [`crate::allowing`]'s
-//! own header gives the reason: none of the three moves a status or a step,
-//! so each column and table is the authority for its own field.
+//! own header gives the reason: each column and table is the authority for its
+//! own field.
 //!
 //! **One open question per Job.** A second refusal reaching the gate while the
-//! first is still unanswered does not arrive here — `fleet::judging::looks`
-//! asks about one criterion at a time — so `job_id` alone is the key rather
-//! than `(job_id, criterion_id)`.
+//! first is unanswered does not arrive here — `fleet::judging::looks` asks
+//! about one criterion at a time — so `job_id` alone is the key.
 //!
 //! **A tolerance is repository-wide and outlives every Job.** This file is
-//! opened once per repository, so `criterion_id` alone is the key: there is no
-//! second repository's row to collide with.
+//! opened once per repository, so `criterion_id` alone is the key.
 
 use core_model::{Actor, CriterionId, JobId, Timestamp, WhenRefused};
 

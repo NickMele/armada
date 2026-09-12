@@ -384,13 +384,12 @@ END;
 ///
 /// `verdict` is one of the two in `criterion_verdict_judge` — `met` and
 /// `not_met`. There is no third, and no `source` column: every row here is the
-/// Judge's, and a person attesting a criterion is a different act with a
-/// different writer.
+/// Judge's.
 ///
 /// # Nothing to backfill
 ///
 /// No Judge ran before this table existed, so every step in every existing
-/// store has none — which is what zero rows says.
+/// store has none.
 pub(crate) const V8: &str = r#"
 -- One row per criterion a step's Judge answered, in the order asked. `expected`,
 -- `produced` and `consequence` are the three named fields a refusal owes and are
@@ -415,16 +414,14 @@ CREATE TABLE job_step_judgments (
 ///
 /// Written once, at Job creation, from paths a proposal staged before the Job
 /// existed. There is no column this could be folded onto and no event that
-/// describes it — an attachment is not a transition, it is a fact about what
-/// the Job was created carrying, the same shape `job_write_targets` already
-/// has for declared paths. `job_id` has no `ordinal`: order does not matter to
-/// a Drone opening a file by name, where it does for a write target's list.
+/// describes it — an attachment is a fact about what the Job was created
+/// carrying. `job_id` has no `ordinal`: order does not matter to a Drone
+/// opening a file by name.
 ///
 /// # Nothing to backfill
 ///
 /// No Job carried an attachment before this table existed, so every Job in
-/// every existing store has none — which is what zero rows says, the same
-/// refusal V6 and V8 both make.
+/// every existing store has none.
 pub(crate) const V9: &str = r#"
 CREATE TABLE job_attachments (
     job_id      TEXT NOT NULL REFERENCES jobs(job_id),
@@ -660,17 +657,13 @@ ALTER TABLE job_step_evidence_wide RENAME TO job_step_evidence;
 /// which held while `stopped` was the only destination that said anything. An
 /// override advances a stopped step without the gate having cleared it, and the
 /// trigger it overrules is what tells that row from an ordinary pass —
-/// `job_steps.last_verdict` is a cache of the fold, so an override written
-/// without its trigger rebuilds as a step that passed and the refusal a person
-/// disagreed with is gone from the record.
+/// `job_steps.last_verdict` is a cache of the fold.
 ///
 /// The four arms are `StepTarget::arriving_at` and `admits_step`'s stopped-step
 /// rule said in SQL: `advanced` from `running` is unqualified and `advanced`
-/// from `stopped` must carry an escalation, so neither of the two moves that
-/// reach `advanced` can be written wearing the other's shape. The trigger is
-/// rewritten whole because `SQLite` cannot alter one. **Nothing to backfill**:
-/// no step could advance from `stopped` before this, so every existing row
-/// satisfies one of the first three arms.
+/// from `stopped` must carry an escalation. The trigger is rewritten whole
+/// because `SQLite` cannot alter one. **Nothing to backfill**: no step could
+/// advance from `stopped` before this.
 pub(crate) const V14: &str = r#"
 DROP TRIGGER job_events_hold_one_whole_shape;
 

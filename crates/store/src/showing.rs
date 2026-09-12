@@ -96,16 +96,14 @@ END;
 /// photographs ten screens photographs ten screens of which the change touched
 /// one, and the nine that did not are the noise `#209`'s panel exists to cut.
 /// Comparing two digests on the record is how it is cut; comparing two files
-/// would be Bridge reading a filesystem it has no access to, and Fleet serving
-/// twenty images so that eighteen could be discarded.
+/// would be Bridge reading a filesystem it has no access to.
 ///
-/// **Empty rather than backfilled, which is the opposite of [`V41`]'s call and
-/// for the same rule.** That migration could say what every existing row was,
-/// because until it landed there was only one side to be on — an observation.
-/// This one cannot: nothing recorded the bytes of a frame kept before it, and a
-/// digest invented here would be a value that compares unequal to everything
-/// including itself re-read. Empty is the honest answer, and it reads as *this
-/// pair cannot be folded* — which draws both frames, the safe direction.
+/// **Empty rather than backfilled, the opposite of [`V41`]'s call and for the
+/// same rule.** That migration could say what every existing row was, because
+/// until it landed there was only one side to be on. This one cannot: nothing
+/// recorded the bytes of a frame kept before it, and a digest invented here
+/// would compare unequal to everything including itself re-read. Empty reads as
+/// *this pair cannot be folded* — the safe direction.
 pub(crate) const V42: &str = r#"
 ALTER TABLE job_step_frames ADD COLUMN digest TEXT NOT NULL DEFAULT '';
 "#;

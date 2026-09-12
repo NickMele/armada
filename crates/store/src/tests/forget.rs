@@ -3,19 +3,15 @@
 //! Three claims now. A Job that is forgotten takes its whole history with it,
 //! so nothing is left for the fold to rebuild a half-Job from. The append-only
 //! rule that made forgetting impossible before V4 still holds everywhere it
-//! mattered: a transition cannot be deleted out from under a Job that exists.
+//! mattered.
 //!
 //! And **"its whole history" means every table, including the ones added after
 //! the delete was written.** For most of this crate's life it did not:
 //! `job_step_judgments`, `job_step_gaming_flags` and `job_step_evidence` each
 //! arrived carrying a foreign key to `jobs` and none of them was ever deleted,
-//! so the `jobs` row would not go and the whole transaction rolled back with
-//! `FOREIGN KEY constraint failed`. It cost nothing while no shipped workflow
-//! declared a `judge_check` and the tables stayed empty. The day nine of them
-//! went live, `armada clean` stopped being able to forget any Job that reached
-//! a gate. The two tests at the foot of this file are the two halves of not
-//! having that again: one forgets a Job with rows in all of them, and one asks
-//! the schema whether anything is unaccounted for.
+//! so the whole transaction rolled back with `FOREIGN KEY constraint failed`.
+//! The day nine of them went live, `armada clean` stopped being able to forget
+//! any Job that reached a gate.
 
 use core_model::{Actor, Target};
 

@@ -2,16 +2,12 @@
 //! dialect.
 //!
 //! **Its own file, and it is not a split by line count.** Everything in
-//! [`super`] is a flat array or a scalar pair; this is a whole `WorkflowDef` —
-//! steps, their Checks, their Judge criteria and the scope each declares —
-//! written and read as one object. A table would be four more for a value that
-//! is written once at creation, read whole, and never queried a piece at a
-//! time.
+//! [`super`] is a flat array or a scalar pair; this is a whole `WorkflowDef`
+//! written and read as one object. A table would be four more for a value
+//! written once at creation, read whole, and never queried a piece at a time.
 //!
 //! **Both directions still sit together**, which is the rule [`super`] states:
-//! each `write_*` is immediately above its `read_*`, so a field added to one
-//! and not the other is visible without leaving the screen. What moved is the
-//! pair, never one half of it.
+//! each `write_*` is immediately above its `read_*`.
 //!
 //! The reading primitives are [`super`]'s, because every dialect in this crate
 //! reports a malformed shape the same way.

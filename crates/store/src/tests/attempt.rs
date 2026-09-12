@@ -2,20 +2,16 @@
 //!
 //! The defect this file is the test of: all four per-step tables were keyed by
 //! step alone and replaced whole on a second visit, so iteration two erased
-//! iteration one in every one of them. A step that failed the same criterion
-//! four times and a step that failed it once were the same record.
+//! iteration one in every one of them.
 //!
 //! Every run here is reached by transitioning, never by writing a state into a
 //! row: the second run exists because the step went `running -> stopped ->
-//! running` through the machine, which is what makes the attempt ordinal a fact
-//! about the log rather than a number this test chose.
+//! running` through the machine.
 //!
 //! # Two things are asserted, and only one of them is "the rows are there"
 //!
 //! That both runs survive is the first. The second is that the **latest-run**
-//! reads still answer where the step stands — a baseline that started returning
-//! two submissions, or a Board that started rendering a superseded verdict,
-//! would be this fix breaking the thing it was protecting.
+//! reads still answer where the step stands.
 
 use core_model::{
     Actor, CheckOutcome, CriterionId, EscalationTrigger, EvidenceType, GamingFlag, GamingPattern,
