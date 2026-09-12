@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
 import { expect, fn } from "storybook/test";
 
-import { RunSheet, type RunSheetGroup } from "./RunSheet";
+import { RunSheet, type RunSheetGroup, type RunSheetProps } from "./RunSheet";
 import type { ConsoleRow } from "../ConsoleOutput/ConsoleOutput";
 import type { ChangedFile } from "../ChangedFiles/ChangedFiles";
 
@@ -176,6 +176,44 @@ export const OutputWithAThousandLines: Story = {
     onRun: fn(),
     running: { elapsed: "38.4s elapsed", onStop: fn() },
     output: { rows: THOUSAND_LINES, following: true },
+  },
+};
+
+// A line long enough that no column width would hold it — the case the sheet's
+// own "reading" size and the console's own non-wrapping text both exist for.
+const LONG_LINE_ROWS: ConsoleRow[] = [
+  { row: "line", at: 1, text: "   Compiling armada-fleet v0.1.0" },
+  {
+    row: "line",
+    at: 2,
+    text:
+      "thread 'checking::retrying::dispatch_when_the_worktree_already_carries_an_untracked_file_" +
+      "the_prior_attempt_left_behind' panicked at crates/fleet/src/tests/retrying.rs:412:9: " +
+      "assertion `left == right` failed: expected the retry to inherit the prior attempt's " +
+      "worktree unchanged, found 3 files modified outside the diff the Job itself produced",
+  },
+  { row: "line", at: 3, text: "test result: FAILED. 311 passed; 1 failed; 3 ignored" },
+];
+
+/**
+ * A line long enough to prove the point rather than assume it: the row
+ * scrolls sideways under `.armada-console__rows`' own `overflow-x: auto`
+ * instead of wrapping, and the line number stays pinned at the near edge
+ * while it does — `position: sticky` on `.armada-console__at`, with a
+ * background matched to the row so the scrolling text disappears behind the
+ * number rather than showing through it.
+ */
+export const OutputWithALongLine: Story = {
+  args: {
+    open: true,
+    ...HEADER,
+    groups: GROUPS,
+    selectedId: "test",
+    onSelect: fn(),
+    onToggleNarrow: fn(),
+    onRun: fn(),
+    output: { rows: LONG_LINE_ROWS },
+    result: { name: "test", exitCode: 101, expected: 0, duration: "41s" },
   },
 };
 
@@ -465,6 +503,57 @@ export const StopReportsTheServer: Story = {
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole("button", { name: "Stop" }));
     await expect(args.onStopServer).toHaveBeenCalledWith("storybook_server");
+  },
+};
+
+/**
+ * Selecting the server row, and starting it, must not carry `fmt`'s own run
+ * under the serving bar — Nick's own report, from a live pass against a real
+ * Fleet: the bar read `serving` and `Stop`, correct and live, with `fmt`'s log
+ * and *Printed nothing.* sitting beneath it as if that were the server's own
+ * reading.
+ *
+ * **A small caller, not a fixture.** The sheet itself holds no state — see
+ * `RunTheWholeTreeInstead` above — so this story is one: `output` reads a
+ * followed run's lines only where its name is the entry now selected, the
+ * same rule `rehearsal.ts`'s `runOutputOf` applies for the real sheet. A hook
+ * has no Storybook page of its own, so this is where the rule is proven
+ * against a render rather than only against its own return value.
+ */
+export const ServerOutputDoesNotInheritAPreviousRun: Story = {
+  render: () => {
+    const [selectedId, setSelectedId] = useState("fmt");
+    // `fmt` printed a line and is still the thing a socket is following —
+    // nothing about picking a different row stops Fleet's own stream.
+    const followed = { name: "fmt", rows: [{ row: "line" as const, at: 1, text: "Fixed 3 files" }] };
+    const [server, setServer] = useState<RunSheetProps["server"]>(undefined);
+
+    return (
+      <RunSheet
+        open
+        {...HEADER}
+        groups={GROUPS}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+        onRun={({ id }) => {
+          if (id === "storybook_server") {
+            setServer({ phase: "serving", address: "localhost:41207", uptime: "up 4s", links: [] });
+          }
+        }}
+        // The gate itself: a followed run's lines are read only where its
+        // name is the entry now selected.
+        output={followed.name === selectedId ? { rows: followed.rows } : undefined}
+        server={selectedId === "storybook_server" ? server : undefined}
+      />
+    );
+  },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByText("Fixed 3 files")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: /storybook dev/ }));
+    await expect(canvas.queryByText("Fixed 3 files")).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("button", { name: "Run" }));
+    await expect(canvas.getByText("localhost:41207")).toBeVisible();
+    await expect(canvas.queryByText("Fixed 3 files")).not.toBeInTheDocument();
   },
 };
 

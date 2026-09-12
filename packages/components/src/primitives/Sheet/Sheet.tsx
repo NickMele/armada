@@ -40,10 +40,17 @@ export type SheetSide = "right" | "left";
  *
  * `default` is the sheet the component sheet already drew, at `--w-sheet`.
  *
- * MISSING TOKEN, reported: `--w-sheet` is 480px and describes neither of these.
+ * `reading` is the run sheet's own, at 88% — Journey 9, running a Manifest
+ * entry against a real Fleet. Nick's own note, watching it work: it opened far
+ * too narrow. The run sheet's list column is a fixed 240px and everything past
+ * it is the run's own output, which is most of the reading — 62% leaves the
+ * output the same narrow column `wide` gives a log with a file rail beside it,
+ * and this sheet has no rail to share that width with.
+ *
+ * MISSING TOKEN, reported: `--w-sheet` is 480px and describes none of these.
  * A fraction of the ground is not a width and has no token to be.
  */
-export type SheetSize = "default" | "wide" | "widest";
+export type SheetSize = "default" | "wide" | "widest" | "reading";
 
 export type SheetProps = {
   open: boolean;

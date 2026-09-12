@@ -243,7 +243,7 @@ export function RunSheet({
     <Sheet
       open={open}
       contained
-      size="wide"
+      size="reading"
       floor={floor}
       title="Run"
       subtitle={

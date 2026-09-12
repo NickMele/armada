@@ -8,16 +8,18 @@
  * --armada-hairline: no border-width token exists in packages/tokens.
  * --armada-sheet-width: no panel-width token exists. The sidebar's own range
  *   tokens are the sidebar's and do not describe an overlay panel.
- * --armada-sheet-wide / --armada-sheet-widest: the two trailing sheets are
- *   measured as a fraction of the ground rather than as a width — 62% for the
- *   log, 76% for the diff — because what has to fit is the reading. A fraction
- *   is not a length and --w-sheet, at 480px, describes neither. Reported.
+ * --armada-sheet-wide / --armada-sheet-widest / --armada-sheet-reading: the
+ *   trailing sheets are measured as a fraction of the ground rather than as a
+ *   width — 62% for the log, 76% for the diff, 88% for the run sheet's own
+ *   reading — because what has to fit is the reading. A fraction is not a
+ *   length and --w-sheet, at 480px, describes none of them. Reported.
  */
 .armada-sheet {
   --armada-hairline: var(--border-width);
   --armada-sheet-width: var(--w-sheet);
   --armada-sheet-wide: 62%;
   --armada-sheet-widest: 76%;
+  --armada-sheet-reading: 88%;
 }
 
 .armada-sheet-scrim {
@@ -51,6 +53,10 @@
 
 .armada-sheet[data-size="widest"] {
   max-width: var(--armada-sheet-widest);
+}
+
+.armada-sheet[data-size="reading"] {
+  max-width: var(--armada-sheet-reading);
 }
 
 /* Rounded on the inner edge only. A panel flush to the window edge that keeps

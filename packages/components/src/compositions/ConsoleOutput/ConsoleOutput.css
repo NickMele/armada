@@ -127,13 +127,21 @@
 /* Every row is one grid so the numbers share an edge and the text shares one.
    The number column is fixed at four mono digits' worth rather than sized to
    content: a fold at line 119 beside a line at 2,321 must not shift the
-   transcript sideways as folds open. */
+   transcript sideways as folds open.
+
+   `background` is explicit rather than left to `.armada-console`'s well
+   showing through, because the number column stays behind while the row
+   scrolls under it and needs an opaque ground of its own to stay behind —
+   see `.armada-console__at`. Every state below that hues a row (`against`,
+   `landed`) overrides this on the same selector, so the number column's own
+   `background-color: inherit` always picks up whichever one applies. */
 .armada-console__line,
 .armada-console__fold {
   display: grid;
   grid-template-columns: calc(var(--space-8) + var(--space-1)) minmax(0, 1fr);
   gap: var(--space-2);
   padding: 0 var(--space-2) 0 0;
+  background: var(--surface-well);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   line-height: var(--leading-2xs);
@@ -141,21 +149,38 @@
 }
 
 /* The line's own number in the file. Not selectable: a person copying a
-   transcript wants the transcript. */
+   transcript wants the transcript.
+
+   **Sticky, so the number stays while the text scrolls under it.** The row no
+   longer wraps and scrolls sideways instead — see `.armada-console__text` —
+   and a number that scrolled away with it would strand a reader partway
+   through a long line with no way to say which one they were reading.
+   `left: 0` pins it to the near edge of `.armada-console__rows`, the nearest
+   scrolling ancestor; `background-color: inherit` takes the row's own
+   background so the scrolling text disappears behind it rather than showing
+   through, and `z-index` only makes explicit the stacking a positioned
+   element already gets over its non-positioned sibling. */
 .armada-console__at {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background-color: inherit;
   text-align: right;
   color: var(--fg-subtle);
   font-variant-numeric: tabular-nums;
   user-select: none;
 }
 
-/* Verbatim. `pre-wrap` rather than `pre`: the output's own spacing is part of
-   what is being quoted, and a long line still has to be readable in a column
-   that is not the terminal's width. */
+/* Verbatim, and never wrapped: a transcript's own line is a unit, and folding
+   it into the column width would be reflowing evidence rather than quoting
+   it. `.armada-console__rows`' own `overflow-x: auto` is what a line longer
+   than the column does instead — the row scrolls sideways under the pinned
+   number, `pre` rather than `pre-wrap` preserves the output's own spacing
+   exactly as `pre-wrap` did, and `overflow-wrap` no longer applies once
+   nothing here breaks. */
 .armada-console__text {
   min-width: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  white-space: pre;
 }
 
 /* The surface's own words beside a quoted line. Sans and set back, so nothing
