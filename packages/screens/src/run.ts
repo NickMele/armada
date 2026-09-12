@@ -31,7 +31,6 @@ import type {
   Criterion,
   JobDetail as JobWhole,
   Judged,
-  StepAttempt,
   StepDetail,
 } from "@armada/protocol";
 import { isSweepMarker } from "./declared";
@@ -124,51 +123,30 @@ function factsOfStep(
   asking?: string,
 ): RunTreeFact[] {
   const facts: RunTreeFact[] = [];
-  const retried = step.attempts.length > 1;
-
-  // The runs, oldest first, one row each, each carrying its own Checks,
-  // Judge and Verdict nested beneath it. **Never on a step run once** — a
-  // single `Attempt 1 advanced` beneath every row in the tree is a column of
-  // noise saying what the mark already says, and there is no second attempt
-  // to tell its gate rows apart from.
-  // **Every attempt folds; the last one starts open.** A step held after three
-  // tries draws fifteen rows, twelve of which are the gate saying the same
-  // thing about runs nobody can act on any more — and the attempt still open,
-  // the one a person came to read, is the one pushed off the bottom. Each
-  // attempt keeps its row and its outcome, which is what a reader scans; what
-  // folds is the working beneath it, and which of them are folded is the
-  // reader's after the first paint.
-  if (retried) {
-    const last = step.attempts.length - 1;
-    facts.push(
-      ...step.attempts.map((attempt, at) => ({
-        // A live question can only ever be about the attempt still open —
-        // every earlier one is settled, so only the last carries `asking`.
-        ...attemptFact(step, attempt, criteria, at === last ? asking : undefined),
-        folded: at !== last || undefined,
-      })),
-    );
-  }
+  // **The attempts are the panel's now.** Each one used to draw here with its
+  // Checks, Judge and Verdict nested beneath it, and the step panel draws that
+  // same list a few inches to the right — one reading in two columns, which is
+  // what the timeline replaced the strip to stop. The tree is the workflow's
+  // steps; what happened inside one is the panel's.
 
   const produced = producedFact(wrote);
   if (produced !== undefined) facts.push(produced);
 
-  // **Nested under the attempt that produced them instead, on a retried
-  // step.** `check_runs`, `judged` and `verdicts` all hold every attempt's
-  // rows now, and a flat fact drawn from all of them here would be exactly
-  // the "which attempt is this" ambiguity the nesting exists to remove.
-  if (!retried) {
-    // **While the gate runs them, the fact is what is running**, in the words
-    // the Checks chapter and the phase strip use — one reading, three places.
-    const checks =
-      step.checking === undefined ? checksFact(step, step.check_runs) : checkingFact(step);
-    if (checks !== undefined) facts.push(checks);
+  // **The step's own gate, flat.** These used to nest under each attempt, and
+  // drawing them here as well would have been the "which attempt is this"
+  // ambiguity twice over. The panel's timeline holds the per-attempt reading
+  // now, so what belongs in the tree is where this step's gate stands.
+  //
+  // **While the gate runs them, the fact is what is running**, in the words the
+  // Checks chapter uses — one reading, two places.
+  const checks =
+    step.checking === undefined ? checksFact(step, step.check_runs) : checkingFact(step);
+  if (checks !== undefined) facts.push(checks);
 
-    const judge = judgeFact(step, step.judged, criteria, asking);
-    if (judge !== undefined) facts.push(judge);
+  const judge = judgeFact(step, step.judged, criteria, asking);
+  if (judge !== undefined) facts.push(judge);
 
-    if (step.last_verdict !== undefined) facts.push(verdictFact(step.last_verdict));
-  }
+  if (step.last_verdict !== undefined) facts.push(verdictFact(step.last_verdict));
 
   // Served as a field rather than left as a pair to notice: a step reading
   // `advanced` beside a failed verdict is one a person overruled, and a tree
@@ -199,63 +177,6 @@ function verdictFact(verdict: { named: string; trigger?: string }): RunTreeFact 
   return { label: "Verdict", value: said, named: verdict.named };
 }
 
-/**
- * One run of the step: which it was, what it came to, and — nested beneath
- * it — its own Checks, Judge and Verdict.
- *
- * **The outcome is the registry's word for the step state**, off `STEP_STATE`
- * — and the escalation trigger the run carried out of `running` rides beside
- * it, because `refused` and `refused · gate_failure` are different amounts of
- * help and the second costs nothing.
- *
- * **The children are this attempt's rows and nobody else's.** `check_runs`,
- * `judged` and `verdicts` are filtered to `attempt.attempt` before either
- * fact function sees them, which is what keeps a stopped first attempt's
- * gate rows off a running second one.
- */
-function attemptFact(
-  step: StepDetail,
-  attempt: StepAttempt,
-  criteria: readonly Criterion[],
-  asking?: string,
-): RunTreeFact {
-  // **An attempt that was retried is over, so it does not say `retrying`.**
-  // That is the step's word while the next attempt runs; on the attempt it
-  // read as a Drone still working on a run the step had already moved past.
-  const outcome =
-    attempt.outcome === "retrying"
-      ? HANDED_BACK
-      : (STEP_STATE[attempt.outcome]?.verb ?? attempt.outcome);
-  const advanced = attempt.outcome === "advanced";
-  const children: RunTreeFact[] = [];
-
-  const checks = checksFact(
-    step,
-    step.check_runs.filter((run) => run.attempt === attempt.attempt),
-  );
-  if (checks !== undefined) children.push(checks);
-
-  const judge = judgeFact(
-    step,
-    step.judged.filter((judged) => judged.attempt === attempt.attempt),
-    criteria,
-    asking,
-  );
-  if (judge !== undefined) children.push(judge);
-
-  const verdict = step.verdicts.find((verdict) => verdict.attempt === attempt.attempt);
-  if (verdict !== undefined) children.push(verdictFact(verdict));
-
-  return {
-    label: `Attempt ${attempt.attempt}`,
-    value: attempt.why === undefined ? outcome : `${outcome} · ${attempt.why}`,
-    named: advanced ? "advanced" : attempt.outcome === "running" ? undefined : "refused",
-    children: children.length === 0 ? undefined : children,
-  };
-}
-
-/** What an attempt the gate returned to its Drone came to. The strip's word for the same loop. */
-const HANDED_BACK = "handed back";
 
 /**
  * What this step wrote, as a count. The files themselves are the Produced
@@ -307,7 +228,7 @@ function checkingFact(step: StepDetail): RunTreeFact {
  * a step that gates on nothing. Neither is "the Checks failed".
  *
  * **`runs` is the caller's to narrow.** A step run once passes every row in
- * `check_runs`; a retried step's `attemptFact` passes one attempt's rows, so
+ * `check_runs`; the panel's timeline reads one attempt's rows, so
  * the same rule reads as that attempt's own Checks rather than the whole
  * step's.
  */

@@ -22,18 +22,16 @@
 
 import { afterEach, expect, test } from "vitest";
 import { page } from "vitest/browser";
-import { InsideAJob } from "./InsideAJob";
-import type { Artifact, JobDetail, JobSummary, StepDetail } from "@armada/protocol";
+import type { Artifact, JobSummary, StepDetail } from "@armada/protocol";
+
+import { StepStory } from "@armada/components";
 
 import { chaptersOf } from "./chapters";
 import { NO_FRAMES } from "./frames";
 import { CHECKS_CHAPTER } from "./checks";
-import { headingOf } from "./heading";
 import { mount, unmount } from "./mounted";
 import type { Outputs } from "./outputs";
-import { phasesOf, type Opens } from "./phases";
-import { renderFor } from "./render";
-import { runOf } from "./run";
+import type { Opens } from "./phases";
 
 afterEach(unmount);
 
@@ -180,12 +178,14 @@ function opens(): Opens {
 }
 
 /**
- * The screen, composed the way `JobDetail.tsx` composes it.
+ * The step's story, built the way `JobDetail.tsx` builds it.
  *
- * **Every region comes from a reading in this package** — `headingOf`, `runOf`,
- * `phasesOf`, `chaptersOf` — against one `JobDetail` payload. Nothing below
- * hands `InsideAJob` a chapter it wrote itself, which is the whole point of the
- * file.
+ * **The chapters and nothing around them.** It mounted the whole panel while
+ * the panel was a strip above a story, which meant every count here was a count
+ * across two surfaces. The panel draws a timeline now and arranges these same
+ * chapters into it, so what this file is for — that `chaptersOf` builds them
+ * from wire data, and that nothing here writes a `StepChapter` itself — is
+ * tested better without a panel in the way.
  */
 function screen(
   showing: StepDetail,
@@ -202,77 +202,32 @@ function screen(
 ): void {
   asked = [];
   const summary = job();
-  const whole: JobDetail = {
-    job: summary,
-    created_at: summary.created_at,
-    steps: [showing],
-    acceptance_criteria: criteria,
-    dependencies: [],
-  };
   const records = opens();
-  const heading = headingOf({
-    job: summary,
-    whole,
-    workflow: undefined,
-    now: NOW,
-    render: renderFor(summary),
-    stale: false,
-    acting: false,
-    approving: false,
-    reporting: false,
-    onReporting: () => {},
-    onAct: () => {},
-    onApprove: () => {},
-    onReport: async () => ({ ok: true }),
-    onOpenPullRequest: async () => ({ ok: true }),
-    onCopied: () => {},
-    onSaid: () => {},
-    // The way into the Job settings panel. Inert here, for the reason the six
-    // below are: nothing in this file asserts about it.
-    onOpenSettings: () => {},
-    // The six the budget work added to `Heading`, three per ceiling. This file
-    // draws a heading to reach the evidence beneath it and asserts nothing
-    // about raising a cap, so they are inert here.
-    onRaiseCap: () => {},
-    raising: false,
-    onRaising: () => {},
-    onRaiseTurnCap: () => {},
-    raisingTurns: false,
-    onRaisingTurns: () => {},
-  });
-  if (heading === null) throw new Error("this Job draws no heading, so there is no screen");
   mount(
-    <InsideAJob
-      heading={heading}
-      run={runOf(whole, NOW, showing.step_id, [])}
-      step={{
-        label: showing.label,
-        fields: [],
-        ...(opening === undefined ? {} : { openChapter: opening }),
-        phases: phasesOf(showing, criteria, records, summary.status),
-        chapters: chaptersOf({
-          job: summary,
-          step: showing,
-          steps: [showing],
-          criteria,
-          frames: NO_FRAMES,
-          watching: { rows: [], skipped: 0 },
-          footprint: { state: "none" },
-          kept: undefined,
-          diff: { state: "none" },
-          live: false,
-          transcript: undefined,
-          log: (region) => ({ region, openId: null, onOpen: () => {} }),
-          calls: { of: () => undefined, fetch: () => {} },
-          outputs: outputs ?? { of: () => undefined, fetch: () => {} },
-          sheet: null,
-          opens: records,
-          onOpenSheet: () => {},
-          now: NOW,
-          following: { reading: { state: "none" }, picked: null, pick: () => {}, follow: () => {} },
-          undecided,
-        }),
-      }}
+    <StepStory
+      chapters={chaptersOf({
+        job: summary,
+        step: showing,
+        steps: [showing],
+        criteria,
+        frames: NO_FRAMES,
+        watching: { rows: [], skipped: 0 },
+        footprint: { state: "none" },
+        kept: undefined,
+        diff: { state: "none" },
+        live: false,
+        transcript: undefined,
+        log: (region) => ({ region, openId: null, onOpen: () => {} }),
+        calls: { of: () => undefined, fetch: () => {} },
+        outputs: outputs ?? { of: () => undefined, fetch: () => {} },
+        sheet: null,
+        opens: records,
+        onOpenSheet: () => {},
+        now: NOW,
+        following: { reading: { state: "none" }, picked: null, pick: () => {}, follow: () => {} },
+        undecided,
+      })}
+      {...(opening === undefined ? {} : { openId: opening })}
     />,
   );
 }
@@ -292,12 +247,13 @@ test("the Checks chapter says what each declared Check came to", async () => {
   // point: one reading, two surfaces.
   await expect.element(page.getByText("check:test_suite", { exact: true })).toBeVisible();
   await expect.element(page.getByText("check:public_api", { exact: true })).toBeVisible();
-  // The tier's own sentence, its stage on the strip, and the chapter's
-  // header — one call in `gates.ts`, three surfaces, so they cannot come to
-  // different counts. The strip's own stage began saying it on 11 Sep 2026,
-  // when a stage gained a second line for where it stands.
+  // **Once, because this file mounts the chapters and nothing else.** The
+  // sentence is `checksStand`'s, and the chapter's header is the only surface
+  // here that says it. It read three while the panel was a strip above a
+  // story and the run tree carried the same fact; those are the panel's now,
+  // and counting them from here was counting other people's surfaces.
   await expect.element(page.getByText("2 of 2 passed").first()).toBeVisible();
-  expect(page.getByText("2 of 2 passed").elements().length).toBe(3);
+  expect(page.getByText("2 of 2 passed").elements().length).toBe(1);
   // And the chapter opens onto more than its preview, which is what makes the
   // reading below reachable rather than only built.
   await expect

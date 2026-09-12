@@ -6,7 +6,7 @@
 // the safety rules, and those are imported rather than restated —
 // `holdsText` is the whole of "single-key shortcuts are suppressed while a text
 // input holds focus", and typing "fig" into a redirect box must not open a
-// diff, open a gate and open a stage.
+// diff, open a gate.
 //
 // # The contextual tier, and what detail does with each key
 //
@@ -16,7 +16,6 @@
 // | `h` `l` `←` `→` | `disclose`, scope `detail` | open and close what the focused row holds — a step's facts, a log entry's payload |
 // | `[` `]` | `focus_chapter`, scope `detail` | move between the three chapters |
 // | `f` | `open_diff`, scope `detail` | open the Produced chapter to the diff |
-// | `g` | `open_stage`, scope `detail` | open a stage of the phase strip |
 // | `b` | `report_job`, scope `detail` | open the dialog that says this job failed in error |
 // | `r` | `run`, scope `detail` | open the run sheet, nothing selected — Journey 9 |
 // | `Esc` | `back`, scope `detail` | the list, and `App.tsx` owns it |
@@ -30,15 +29,11 @@
 // with nothing to catch it, because typecheck cannot see a string selector.
 // #271.
 //
-// **The state moved here instead.** `RunTree`, `StepStory` and `PhaseStrip` all
-// take controlled open state, so this file holds which steps have their facts
-// open, which chapter is open, which stage is pinned and which log row is
-// showing its payload, and `JobDetail` passes all four down. Opening a thing is
-// naming it now, and a name is a value the compiler reads.
-//
-// The one rule that comes back the other way: **`Escape` on a controlled strip
-// reports rather than unpins.** The strip calls `onPin(null)` and this holds
-// the answer — which is why `pinnedStage` is cleared here and nowhere else.
+// **The state moved here instead.** `RunTree` and the step's timeline take
+// controlled open state, so this file holds which steps have their facts open,
+// which phase row is open and which log row is showing its payload, and
+// `JobDetail` passes them down. Opening a thing is naming it now, and a name is
+// a value the compiler reads.
 //
 // # Focus is still the cursor, because nothing draws another one
 //
@@ -55,7 +50,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import type { PhaseStage, RunTreeStep, StepChapter } from "@armada/components";
+import type { RunTreeStep } from "@armada/components";
 
 import { holdsText } from "./keys";
 import { LOG_REGION, rowOfPayload } from "./Log";
@@ -131,8 +126,6 @@ export type DetailPress =
   | { act: "log" }
   /** `o` — open a Check's output, on the layer that can hold it. */
   | { act: "output" }
-  /** `g` — open a stage of the phase strip. */
-  | { act: "stage" }
   /** `b` — say this job failed in error. */
   | { act: "report" }
   /** `B` — give this job a higher cost ceiling. */
@@ -188,8 +181,6 @@ export function detailPressOf(event: KeyboardEvent): DetailPress | null {
       return { act: "log" };
     case "o":
       return { act: "output" };
-    case "g":
-      return { act: "stage" };
     case "b":
       return { act: "report" };
     // Shifted, because plain `b` is the report above: the lowercase mnemonic is
@@ -229,9 +220,7 @@ export type DetailShape = {
    * this file holds — so the chapters are assembled after it and this is how
    * they get back in. Nothing calls it during a render.
    */
-  chapters: () => readonly StepChapter[];
-  /** The strip, in order, or nothing on a step that has none. */
-  stages: readonly PhaseStage[] | undefined;
+  landings: () => readonly { id: string; opens: boolean }[];
   /**
    * Open the trailing sheet `f` names — the Job's patch.
    *
@@ -310,9 +299,6 @@ export type DetailKeys = {
   /** `StepPanel.openChapterId` — the one chapter that is open, or none. */
   openChapterId: string | null;
   onOpenChapter: (chapterId: string | null) => void;
-  /** `PhaseStrip.pinnedStage` — the stage whose card is held open. */
-  pinnedStage: string | null;
-  onPinStage: (stageId: string | null) => void;
   /**
    * Put focus on a chapter's own control, by name. **What a closing sheet
    * calls**: the chapter line is the way back, so `[` `]` carry on from the
@@ -346,7 +332,6 @@ type OpenEntry = { region: string; row: string };
 export function useDetailKeys(shape: DetailShape): DetailKeys {
   const [openSteps, setOpenSteps] = useState<readonly string[] | null>(null);
   const [openChapter, setOpenChapter] = useState<string | null>(null);
-  const [pinnedStage, setPinnedStage] = useState<string | null>(null);
   const [openEntry, setOpenEntry] = useState<OpenEntry | null>(null);
 
   // Seeded from the run the first time it has rows — which is the moment an
@@ -366,7 +351,6 @@ export function useDetailKeys(shape: DetailShape): DetailKeys {
   const moves = useRef<Moves>({
     steps: setOpenSteps,
     chapter: setOpenChapter,
-    pinned: setPinnedStage,
     entry: setOpenEntry,
   });
 
@@ -396,8 +380,6 @@ export function useDetailKeys(shape: DetailShape): DetailKeys {
     onOpenStep,
     openChapterId: openChapter,
     onOpenChapter: setOpenChapter,
-    pinnedStage,
-    onPinStage: setPinnedStage,
     onFocusChapter,
     inLog: (region) => ({
       region,
@@ -414,7 +396,6 @@ const NONE: readonly string[] = [];
 type Moves = {
   steps: Dispatch<SetStateAction<readonly string[] | null>>;
   chapter: Dispatch<SetStateAction<string | null>>;
-  pinned: Dispatch<SetStateAction<string | null>>;
   entry: Dispatch<SetStateAction<OpenEntry | null>>;
 };
 
@@ -443,8 +424,6 @@ function act(press: DetailPress, shape: DetailShape, on: Moves): boolean {
       return sheet(shape.onOpenLog);
     case "output":
       return sheet(shape.onOpenOutput);
-    case "stage":
-      return stage(shape, on);
     case "report":
       return report(shape);
     case "raise":
@@ -619,7 +598,7 @@ function withStep(
  * reader back to the top of a thing they are reading down.
  */
 function chapter(by: 1 | -1, shape: DetailShape, on: Moves): boolean {
-  const opens = openable(shape.chapters());
+  const opens = openable(shape.landings());
   if (opens.length === 0) return false;
   on.chapter((was) => {
     const at = was === null ? -1 : opens.indexOf(was);
@@ -656,10 +635,8 @@ function diff(shape: DetailShape): boolean {
  * `content` would have left the brackets stopping at chapter one and nothing
  * would have said so.
  */
-function openable(chapters: readonly StepChapter[]): string[] {
-  return chapters
-    .filter((held) => held.content !== undefined || held.act !== undefined)
-    .map((held) => held.id);
+function openable(landings: readonly { id: string; opens: boolean }[]): string[] {
+  return landings.filter((held) => held.opens).map((held) => held.id);
 }
 
 /** A chapter's own control, by the name this app writes on it. */
@@ -668,24 +645,3 @@ function chapterControl(chapterId: string): HTMLElement | null {
   return marker === null ? null : (marker.closest("button") ?? marker);
 }
 
-/**
- * Open a stage of the phase strip.
- *
- * **Pinned, not hovered.** The strip opens a card on hover and on focus and
- * holds one open on a click, and pinning is the only one of the three a caller
- * can hold — hover is the pointer's position rather than a decision. So `g`
- * pins, and repeated presses walk the strip: `g g g` reaches the Judge without
- * a second binding for "the next one". `Escape` comes back through `onPin` and
- * clears it.
- */
-function stage(shape: DetailShape, on: Moves): boolean {
-  const stages = (shape.stages ?? [])
-    .filter((held) => held.opens ?? (held.kind ?? "phase") !== "phase")
-    .map((held) => held.id);
-  if (stages.length === 0) return false;
-  on.pinned((was) => {
-    const at = was === null ? -1 : stages.indexOf(was);
-    return stages[(at + 1) % stages.length] ?? null;
-  });
-  return true;
-}

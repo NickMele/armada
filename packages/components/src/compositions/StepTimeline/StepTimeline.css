@@ -1,0 +1,96 @@
+/* A step as one timeline: the phases in order, an attempt per section.
+
+   **Almost nothing is drawn here.** Each phase is a `Chapter`, which already
+   owns the card, the header line, the meta and the body's well — what is left
+   is the rail the phases hang off and the header an earlier attempt folds to. */
+.armada-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The line over the timeline. Sentence case: it introduces a region rather
+   than captioning one, which is the voice the strip's own label used. */
+.armada-steps__label {
+  color: var(--fg-muted);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+}
+
+.armada-steps__attempt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* An earlier attempt's header: a way back into a record, not an event
+   competing with the phases under it, so it stays quiet and unboxed. */
+.armada-steps__attempt-head {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-muted);
+}
+
+.armada-steps__attempt-name {
+  color: var(--fg-default);
+}
+
+.armada-steps__said {
+  color: var(--fg-subtle);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.armada-steps__fold {
+  flex: none;
+  color: var(--fg-subtle);
+}
+
+/* The rail. On the container, so one line runs the height of the attempt's
+   phases rather than restarting at each card. */
+.armada-steps__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-left: var(--space-2);
+  padding-left: var(--space-3);
+  border-left: var(--border-width) solid var(--border-subtle);
+  min-width: 0;
+}
+
+/* The mark and the phase's name, as one thing inside the chapter's header. */
+.armada-steps__mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* A body held to a height of its own, scrolling past it.
+
+   A HEIGHT AND NOT A LINE CLAMP. `-webkit-line-clamp` counts line boxes and a
+   sectioned brief is a column of cards carrying none, so a clamp there does
+   nothing at all — `Clamped.css` carries that account. What the opening brief
+   needs is a bound that holds whatever flow it is written in.
+
+   The fraction of the window is the drawn value: a brief taller than the panel
+   is the thing being fixed, so the bound has to be of the viewport rather than
+   of the type scale. No token spells a proportion of the window. Reported. */
+.armada-steps__bounded {
+  max-height: 45vh;
+  overflow-y: auto;
+  min-width: 0;
+}

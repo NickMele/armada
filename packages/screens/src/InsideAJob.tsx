@@ -9,12 +9,11 @@ import {
   JobBrief,
   JobBriefSkeleton,
   JobDetailHeaderActions,
-  PhaseStrip,
   PhaseStripSkeleton,
+  StepTimeline,
   RunTree,
   RunTreeSkeleton,
   Skeleton,
-  StepStory,
   StepStorySkeleton,
   Tooltip,
   WhereRow,
@@ -24,10 +23,9 @@ import {
   type JobDetailHeading,
   type JobLogReferenceRow,
   type NotOpened,
-  type PhaseStripProps,
+  type StepTimelineAttempt,
   type RunTreeSkeletonProps,
   type RunTreeStep,
-  type StepChapter,
 } from "@armada/components";
 
 /**
@@ -85,29 +83,26 @@ export type StepPanel = {
    * step. Absent on a step where nothing has gone wrong, which is most of them.
    */
   notice?: StepNotice;
-  /** Where this step is — its phases and its gate tiers as one progression. */
-  phases?: PhaseStripProps;
-  /** Why there is no strip, where there is none. */
-  phasesAbsent?: string;
   /**
-   * Anything between the strip and the story — the failure every attempt hit,
-   * what the Drone tried, the box that drafts a redirect. **It comes before the
-   * story and after the strip** because you cannot write a useful sentence
-   * until you have read them.
+   * The step as one timeline: its phases in the order they happened, repeated
+   * per attempt, each row holding the chapter that phase produced.
+   *
+   * **It replaced a strip above a story.** The two said the same thing twice — a
+   * failed Check was a red node in one and a printed exit code in the other —
+   * and this is the one reading.
+   */
+  timeline?: StepTimelineAttempt[];
+  /** Why there is no timeline, where there is none. */
+  timelineAbsent?: string;
+  /** Which row is open, held by the surface, so a keyboard map can name one. */
+  openRow?: string | null;
+  onOpenRow?: (rowId: string | null) => void;
+  /**
+   * Anything above the timeline — the failure every attempt hit, what the Drone
+   * tried, the box that drafts a redirect. **It comes before the record**
+   * because you cannot write a useful sentence until you have read it.
    */
   before?: ReactNode;
-  /** Drone instructions, Activity log, Produced — in that order, always. */
-  chapters: StepChapter[];
-  /** Which chapter is open on mount. */
-  openChapter?: string;
-  /**
-   * Which chapter is open, held by the surface. Present makes the story
-   * controlled — see `StepStoryProps.openChapter`. It is here so a keyboard map
-   * can name a chapter rather than find one by the class the story ships.
-   */
-  openChapterId?: string | null;
-  /** Told when a chapter is opened or closed. */
-  onOpenChapter?: (chapterId: string | null) => void;
   /**
    * After the story — the decision, on a step waiting for one. **At the end
    * rather than in the header**, because you make it after reading; the header
@@ -443,29 +438,24 @@ export function InsideAJob({
                 </div>
               )}
 
-              {step.phases === undefined ? (
-                <p className="armada-inside__absent" role="note">
-                  {step.phasesAbsent ??
-                    "Gates unknown"}
-                </p>
-              ) : (
-                // The screen's own handler falls through to the strip unless
-                // the caller gave the strip one of its own, so a Check's row
-                // in a phase card opens the same viewer every other selector
-                // on this screen opens.
-                <PhaseStrip onOpenArtifact={onOpenArtifact} {...step.phases} />
-              )}
-
+              {/* The box a person acts in comes before the record: you cannot
+                  write a useful sentence until you have read it. */}
               {step.before === undefined ? null : (
                 <div className="armada-inside__before">{step.before}</div>
               )}
 
-              <StepStory
-                chapters={step.chapters}
-                openId={step.openChapter}
-                openChapter={step.openChapterId}
-                onOpen={step.onOpenChapter}
-              />
+              {step.timeline === undefined ? (
+                <p className="armada-inside__absent" role="note">
+                  {step.timelineAbsent ?? "Gates unknown"}
+                </p>
+              ) : (
+                <StepTimeline
+                  attempts={step.timeline}
+                  label="Where this step is"
+                  openRow={step.openRow}
+                  onOpenRow={step.onOpenRow}
+                />
+              )}
 
               {step.after === undefined ? null : (
                 <div className="armada-inside__after">{step.after}</div>

@@ -2,9 +2,10 @@
 // the order they happen — instructed, working, checks, judge. What the attempt
 // wrote rides on working, with the turns that wrote it.
 //
-// **Derived here and drawn in one draft.** `Drafts/Step timeline` is the only
-// caller. The panel it is meant to replace still draws the strip and the
-// chapters beneath it, and the owner asked to see this before either moves.
+// **Derived here and drawn by the panel.** `stepTimelineOf` below arranges the
+// step's own chapters into these rows, and `InsideAJob` draws them in place of
+// the strip and the story that used to say the same thing twice. The draft this
+// was written against is deleted, which is what a draft is for.
 //
 // # What the wire can and cannot say
 //
@@ -16,9 +17,12 @@
 // their order is the phase order — instructed, working, checks, judge — which
 // is the order the strip already draws and the order Fleet runs them in. A
 // timeline that claimed measured times for them would be inventing them.
-import type { ChangedFile, CheckRun, Judged, StepAttempt, StepDetail, Turn } from "@armada/protocol";
-import type { StepActivity } from "@armada/components";
+import { Fragment, type ReactNode } from "react";
 
+import type { ChangedFile, CheckRun, Judged, StepAttempt, StepDetail, Turn } from "@armada/protocol";
+import type { StepActivity, StepChapter, StepTimelineAttempt } from "@armada/components";
+
+import { namesChapter } from "./detail-keys";
 import { span } from "./duration";
 import { askedOf, didNotPass } from "./gates";
 import { entriesOf } from "./story";
@@ -133,9 +137,9 @@ export function timelineOf(
         ...(wrote.length === 0 ? {} : { produced: wrote }),
         ...(kept.length === 0 ? {} : { kept }),
       },
-      checksRow(step, attempt, runs, current),
-      judgeRow(step, attempt, ruled, current),
     ];
+    const gate = [checksRow(step, attempt, runs, current), judgeRow(step, attempt, ruled, current)];
+    for (const row of gate) if (row !== undefined) rows.push(row);
     return {
       id: `attempt-${attempt.attempt}`,
       attempt: attempt.attempt,
@@ -196,12 +200,18 @@ function checksRow(
   attempt: StepAttempt,
   runs: CheckRun[],
   current: boolean,
-): TimelineRow {
+): TimelineRow | undefined {
   const declared = step.checks?.length ?? 0;
   const running = current && step.checking?.attempt === attempt.attempt;
   const failed = runs.filter(didNotPass);
   const mark: StepActivity =
     runs.length === 0 ? (running ? "running" : "not_started") : failed.length > 0 ? "failed" : "advanced";
+  // **A step that gates on nothing draws no Checks row.** Saying "none
+  // declared" on most steps is a row reporting an absence. Read off the step
+  // and not off this attempt: a step whose first attempt ran Checks still has
+  // a Checks phase on its second, and dropping it there would lose the fact
+  // that the gate is ahead of it.
+  if (declared === 0 && step.check_runs.length === 0 && !running) return undefined;
   const meta =
     runs.length === 0
       ? declared === 0
@@ -236,7 +246,7 @@ function judgeRow(
   attempt: StepAttempt,
   ruled: Judged[],
   current: boolean,
-): TimelineRow {
+): TimelineRow | undefined {
   const asked = askedOf(step);
   const asking = current && step.judging !== undefined;
   const criteria = new Map<string, boolean>();
@@ -247,6 +257,10 @@ function judgeRow(
   const refused = criteria.size - met;
   const mark: StepActivity =
     criteria.size === 0 ? (asking ? "running" : "not_started") : refused > 0 ? "failed" : "advanced";
+  // The same rule as the Checks row, read off the step: a step nobody ever
+  // asked a Judge about has no Judge phase, rather than a phase reporting that
+  // it does not exist.
+  if (asked === 0 && step.judged.length === 0 && !asking) return undefined;
   const meta =
     criteria.size === 0
       ? asked === 0
@@ -266,4 +280,129 @@ function judgeRow(
     ...(asking ? { live: true } : {}),
     judged: ruled,
   };
+}
+
+/**
+ * The timeline as the panel draws it: the phases of each attempt, with the
+ * step's own chapters arranged into the rows they belong to.
+ *
+ * **Arranged, never rebuilt.** `chaptersOf` already builds the brief, the log,
+ * what was produced and what the gates found, and each carries its own preview,
+ * body and act. Building them a second time here would be two readings of one
+ * step, which is the drift this repository deletes on sight — so the chapters
+ * are placed into the phase that produced them and nothing is derived twice.
+ *
+ * **Only the attempt being read has bodies.** Every chapter narrows itself to
+ * the current attempt, so an earlier attempt draws what this file derived for
+ * it — its counts, its outcome and what its gate found — and no body it would
+ * have to invent.
+ */
+export function stepTimelineOf(
+  step: StepDetail,
+  turns: readonly Turn[],
+  now: number,
+  /** The chapters the story already built, in the order it built them. */
+  chapters: readonly StepChapter[],
+): StepTimelineAttempt[] {
+  const held = new Map(chapters.map((chapter) => [chapter.id, chapter]));
+  return timelineOf(step, turns, now).map((attempt) => ({
+    id: attempt.id,
+    name: `Attempt ${attempt.attempt}`,
+    ...(saidOf(attempt) === undefined ? {} : { said: saidOf(attempt) }),
+    current: attempt.current,
+    rows: attempt.rows.map((row) => ({
+      id: `${attempt.id}-${row.id}`,
+      // Named the way a chapter was, because `[` `]` land on whatever carries
+      // this — and what they land on is a phase of an attempt now.
+      marker: namesChapter(`${attempt.id}-${row.id}`),
+      name: row.name,
+      activity: row.mark,
+      ...(row.meta === undefined ? {} : { meta: row.meta }),
+      ...(row.live === true ? { live: true } : {}),
+      ...bodyOf(row.phase, attempt.current ? held : new Map()),
+    })),
+  }));
+}
+
+/** Which chapters belong to which phase, in the order the phase produced them. */
+const CHAPTERS: Record<TimelinePhase, readonly string[]> = {
+  instructed: ["instructions"],
+  // What the Drone did and what came out of it are one reading — the owner's
+  // call, 11 Sep 2026 — so the log, what it showed and what it wrote all sit
+  // under the phase that produced them.
+  working: ["log", "shown", "produced"],
+  checks: ["checks"],
+  judge: ["verdicts"],
+};
+
+/** A row's body and act, from the chapters the phase owns. */
+function bodyOf(
+  phase: TimelinePhase,
+  held: Map<string, StepChapter>,
+): { body?: ReactNode; act?: ReactNode; bounded?: boolean } {
+  const mine = CHAPTERS[phase].flatMap((id) => {
+    const chapter = held.get(id);
+    return chapter === undefined ? [] : [chapter];
+  });
+  if (mine.length === 0) return {};
+  // **Every act the phase's chapters carry, not the first.** Working owns the
+  // log, what was shown and what was produced, and each has somewhere of its
+  // own to go — keeping only the first took `Open the diff` off the panel
+  // entirely, which the story asserting it caught.
+  const acts = mine.flatMap((chapter) =>
+    chapter.act === undefined ? [] : [{ id: chapter.id, act: chapter.act }],
+  );
+  const drawn = mine.map((chapter) => (
+    <section key={chapter.id}>
+      {mine.length === 1 ? null : <span className="caps">{chapter.title}</span>}
+      {chapter.preview}
+      {chapter.content}
+    </section>
+  ));
+  return {
+    body: drawn,
+    // **The brief gets a height of its own.** Unfolded whole it is a screen and
+    // a half and pushes every phase below it off the panel. A line clamp was
+    // tried first and does nothing here, for the reason `Clamped.css` states.
+    ...(phase === "instructed" ? { bounded: true } : {}),
+    ...(acts.length === 0
+      ? {}
+      : {
+          act: acts.map((one) => <Fragment key={one.id}>{one.act}</Fragment>),
+        }),
+  };
+}
+
+/**
+ * What became of an attempt, in words rather than in the wire's own.
+ *
+ * **`retrying` is "handed back".** It is the step's word for what happens next,
+ * and on an attempt that has ended it reads as a Drone still working.
+ */
+function saidOf(attempt: TimelineAttempt): string | undefined {
+  const said =
+    attempt.outcome === "retrying"
+      ? "handed back"
+      : attempt.outcome === "advanced"
+        ? "advanced"
+        : attempt.outcome === "stopped"
+          ? "stopped"
+          : attempt.outcome;
+  return attempt.took === undefined ? said : `${said} · ${attempt.took}`;
+}
+
+/** One thing `[` `]` can land on: a row, and whether it opens to anything. */
+export type Landing = { id: string; opens: boolean };
+
+/**
+ * The rows a keyboard can walk, in the order they are drawn.
+ *
+ * **Every attempt's rows, not just the one being read.** A folded attempt is
+ * still on the screen and its rows are still in the document, so a key that
+ * skipped them would walk past a section a reader can see.
+ */
+export function landingsOf(attempts: readonly StepTimelineAttempt[]): Landing[] {
+  return attempts.flatMap((attempt) =>
+    attempt.rows.map((row) => ({ id: row.id, opens: row.body !== undefined })),
+  );
 }
