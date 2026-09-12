@@ -166,11 +166,10 @@ where
     /// goes onto the Job, the Job takes `awaiting_review -> queued`, and
     /// `crate::dispatch`'s re-admission puts a fresh Drone on the same step
     /// with the note in its opening brief — `crate::spawning` delivers it and
-    /// clears it. **Not `running`**, which is what this used to refuse over: a
-    /// Job put straight back to `running` with no process on it escalates as
-    /// `interrupted` a moment later. The slot the gate freed is very often
-    /// another Job's by the time a person answers, which is why this and
-    /// [`approve_review`](Fleet::approve_review) take the same edge.
+    /// clears it. **Not `running`**: a Job put straight back to `running` with
+    /// no process on it escalates as `interrupted` a moment later — the same
+    /// slot-freed reason [`approve_review`](Fleet::approve_review) takes this
+    /// edge for.
     ///
     /// **Whichever runs, the other must not** — a note both injected and
     /// written down is one a Drone reads twice. Where a Job has no worktree
@@ -215,14 +214,10 @@ where
             return self.load(job_id).await;
         }
         if working.as_ref().is_some_and(|at_work| at_work.is(job_id)) {
-            // **The step leaves the gate first, and it did not have to before.**
-            // A step at a human gate used to read `running`, so a Drone still
-            // holding its session was already on a row that said so and this
-            // path moved nothing. Now the gate holds the step at
-            // `awaiting_human`, and leaving it there would put a live Drone on a
-            // step the record says is waiting for a person — and the next
-            // `HeldForReview` would be refused, because there is no edge into
-            // the gate from inside it.
+            // **The step leaves the gate first.** Leaving it at
+            // `awaiting_human` with a live Drone still on it would refuse the
+            // next `HeldForReview` — there is no edge into the gate from
+            // inside it.
             //
             // **`Revisited`, which is the same target the path below takes.**
             // The gate ruled on the run that reached it, so the resubmission
@@ -231,9 +226,6 @@ where
             // judgments and evidence over the ones the note was about, which is
             // `#418`'s defect on the road that keeps its Drone. It spends no
             // retry, for `step_spent`'s reason.
-            //
-            // While the Job is still `awaiting_review`, which is in
-            // `ADVANCING_STATUSES` only until the move below leaves it.
             let job = self
                 .move_step_by(&job, &step, StepTarget::Revisited, Actor::Human)
                 .await?;
@@ -255,26 +247,20 @@ where
         // refusal existed to prevent, arriving one line later.
         let waiting = self.hold_the_note(&job, note, Said::AtTheGate).await?;
         // **The pass ends here, and the record has to say so** — `#418`.
-        // Nothing entered `running`, so `store::attempt` had nothing to count
-        // and the fresh Drone wrote its Checks, evidence and judgments over the
-        // ones the note was about: a step sent back twice read as one that
-        // passed first time. `StepTarget::Revisited` is the boundary `#263`
-        // gave the loop, on the road a person walks.
+        // Nothing entered `running`, so `store::attempt` had nothing to count,
+        // and an unmarked boundary would have the fresh Drone write its
+        // Checks, evidence and judgments over the ones the note was about — a
+        // step sent back twice reading as one that passed first time.
+        // `StepTarget::Revisited` is the boundary `#263` gave the loop.
         //
-        // **Only this path, and the injection above takes none.** There the run
-        // carries on — one Drone, one session, and a resubmission inside a run
-        // supersedes. Here the gate stood that Drone down and its session
-        // cannot be reopened, so the work after the note is a different
-        // process's and the first one's record is the only account of what the
-        // note was about.
+        // **Unlike the live-Drone path above, there is no session to
+        // supersede into**: the gate stood this Drone down, so this record is
+        // the only account of what the note was about.
         //
         // **It opens a pass and spends none.** `store::step_spent` resets at
-        // this edge, as `retry_count`'s registry row says a re-entry as designed
-        // must; nothing failed, and a Job that could die of being reviewed is
-        // this fix overshooting into the defect beside it.
-        //
-        // **While the Job is still `awaiting_review`**, which is in
-        // `ADVANCING_STATUSES` only until the move below leaves it.
+        // this edge, as `retry_count`'s registry row requires; nothing failed,
+        // and a Job that could die of being reviewed is this fix overshooting
+        // into the defect beside it.
         let waiting = self
             .move_step_by(&waiting, &step, StepTarget::Revisited, Actor::Human)
             .await?;
@@ -330,8 +316,6 @@ where
         if working.as_ref().is_some_and(|at_work| at_work.is(job.id())) {
             self.end_the_drone(working).await;
         }
-        // While the Job is still `awaiting_review`, which is in
-        // `ADVANCING_STATUSES` only until the move below leaves it.
         let job = self
             .move_step_by(
                 job,
@@ -359,15 +343,12 @@ where
     /// two — so a second trigger on it is a change to the registry, and not one
     /// this wave has a ruling for.
     ///
-    /// What is left is the road a person's answer already takes.
-    /// [`request_changes`](Fleet::request_changes) moves
-    /// `awaiting_review -> running` where a Drone is there to hear the note, so
-    /// that edge already means "the person answered and the Job is back on the
-    /// machine". It is true here too: they asked for another pass and the
-    /// machine refused it. Then the step stops and the Job takes the default
-    /// `running -> escalated`, which every trigger without an edge of its own
-    /// fires — the step first, because the inner machine freezes the moment the
-    /// Job leaves an advancing status.
+    /// What is left is the road [`request_changes`](Fleet::request_changes)
+    /// already takes: `awaiting_review -> running` already means "the person
+    /// answered and the Job is back on the machine", true here too. The step
+    /// then stops and the Job takes the default `running -> escalated` — every
+    /// trigger without an edge of its own fires it, step first, since the
+    /// inner machine freezes the moment the Job leaves an advancing status.
     async fn loop_is_spent(
         &self,
         job: &Job,
@@ -397,12 +378,10 @@ where
     /// that starts on it.
     ///
     /// **One road, two entrances.** `request_changes` writes at a human gate
-    /// and [`restart_step`](Fleet::restart_step) writes on a step that stopped;
-    /// both are a person saying something to a Drone that does not exist yet,
-    /// and both are answered by the same column, the same spawn and the same
-    /// clearing. A second writer assembling this for itself would be a second
-    /// road to one destination, and the note's whole lifetime rule lives on the
-    /// road.
+    /// and [`restart_step`](Fleet::restart_step) writes on a step that stopped
+    /// — both are a person saying something to a Drone that does not exist
+    /// yet, answered by the same column, spawn and clearing. A second writer
+    /// assembling this for itself would be a second road to one destination.
     ///
     /// **It refuses a second note over an undelivered first**, which is
     /// `core_model::RedirectAlreadyWaiting` and not a rule invented here: the
