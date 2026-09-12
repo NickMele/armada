@@ -109,6 +109,7 @@ export function verdictsChapter(
   }
 
   const refused = panels.filter((panel) => panel.verdict === "not_met").length;
+  const stillAsking = panels.filter((panel) => panel.verdict === "asking").length;
   const size = panelSizeOf(step, panels);
   // Every pointer the panel made, across criteria. It is one list rather than
   // one per criterion because a row names both — `j2 · 02` — and because what
@@ -121,7 +122,7 @@ export function verdictsChapter(
     title: "Verdicts",
     // Which attempt the panel answered on, where a rerun gate left the
     // step's current attempt without a fresh answer of its own.
-    summary: notedFrom(countedIn(refused, panels.length), judgeFromAttempt(step)),
+    summary: notedFrom(countedIn(refused, panels.length, stillAsking), judgeFromAttempt(step)),
     // The grid is its own disclosure, so the chapter has no second one.
     preview: (
       <>
@@ -329,11 +330,11 @@ function splitSaid(panel: Panel, group: readonly Judged[], sets: number): string
  * list says the same thing, and two counts that could disagree is the drift
  * `gates.ts` exists to stop.
  */
-export function countedIn(refused: number, criteria: number): string {
+export function countedIn(refused: number, criteria: number, asking = 0): string {
   const said = criteria === 1 ? "criterion" : "criteria";
-  return refused === 0
-    ? `${criteria} of ${criteria} ${said} met`
-    : `${refused} of ${criteria} ${said} refused`;
+  if (refused > 0) return `${refused} of ${criteria} ${said} refused`;
+  const met = criteria - asking;
+  return `${met} of ${criteria} ${said} met`;
 }
 
 /**

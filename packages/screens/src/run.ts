@@ -28,6 +28,7 @@ import { CHECK_ADVANCES, CHECK_OUTCOME, CRITERION_VERDICT_CHECK, ESCALATION_REAS
 import type {
   ChangedFile,
   CheckRun,
+  Criterion,
   JobDetail as JobWhole,
   Judged,
   StepAttempt,
@@ -37,7 +38,7 @@ import { isSweepMarker } from "./declared";
 import { DIFF_CHAPTER } from "./detail-keys";
 import { span } from "./duration";
 import { ordered } from "./facts";
-import { checksOf, checksStand } from "./gates";
+import { checksOf, checksStand, panelsFrom } from "./gates";
 import { frozenBeneath } from "./frozen";
 
 /**
@@ -76,11 +77,16 @@ export function runOf(
   rows: readonly Turn[],
 ): RunTreeStep[] {
   const wrote = producedBy(rows);
+  const criteria = whole.acceptance_criteria;
+  const question = whole.judge_question;
   return ordered(whole).map((step) => {
     const frozen = frozenBeneath(whole.job.status, step.state);
     const activity = frozen?.activity ?? activityOf(step.state);
     const current = step.step_id === (selected ?? whole.job.current_step_id);
-    const facts = factsOfStep(step, activity, wrote.get(step.step_id) ?? []);
+    // Scoped to this step, like `JobDetail.tsx`'s own read of it — a question
+    // about a different step is not this step's criterion to hold open.
+    const asking = question?.step_id === step.step_id ? question.criterion_id : undefined;
+    const facts = factsOfStep(step, activity, wrote.get(step.step_id) ?? [], criteria, asking);
     return {
       id: step.step_id,
       label: step.label,
@@ -113,6 +119,9 @@ function factsOfStep(
   step: StepDetail,
   activity: StepActivity,
   wrote: ChangedFile[],
+  criteria: readonly Criterion[],
+  /** The criterion a live judge question holds open on this step, where one is. */
+  asking?: string,
 ): RunTreeFact[] {
   const facts: RunTreeFact[] = [];
   const retried = step.attempts.length > 1;
@@ -133,7 +142,9 @@ function factsOfStep(
     const last = step.attempts.length - 1;
     facts.push(
       ...step.attempts.map((attempt, at) => ({
-        ...attemptFact(step, attempt),
+        // A live question can only ever be about the attempt still open —
+        // every earlier one is settled, so only the last carries `asking`.
+        ...attemptFact(step, attempt, criteria, at === last ? asking : undefined),
         folded: at !== last || undefined,
       })),
     );
@@ -153,7 +164,7 @@ function factsOfStep(
       step.checking === undefined ? checksFact(step, step.check_runs) : checkingFact(step);
     if (checks !== undefined) facts.push(checks);
 
-    const judge = judgeFact(step, step.judged);
+    const judge = judgeFact(step, step.judged, criteria, asking);
     if (judge !== undefined) facts.push(judge);
 
     if (step.last_verdict !== undefined) facts.push(verdictFact(step.last_verdict));
@@ -202,7 +213,12 @@ function verdictFact(verdict: { named: string; trigger?: string }): RunTreeFact 
  * fact function sees them, which is what keeps a stopped first attempt's
  * gate rows off a running second one.
  */
-function attemptFact(step: StepDetail, attempt: StepAttempt): RunTreeFact {
+function attemptFact(
+  step: StepDetail,
+  attempt: StepAttempt,
+  criteria: readonly Criterion[],
+  asking?: string,
+): RunTreeFact {
   // **An attempt that was retried is over, so it does not say `retrying`.**
   // That is the step's word while the next attempt runs; on the attempt it
   // read as a Drone still working on a run the step had already moved past.
@@ -222,6 +238,8 @@ function attemptFact(step: StepDetail, attempt: StepAttempt): RunTreeFact {
   const judge = judgeFact(
     step,
     step.judged.filter((judged) => judged.attempt === attempt.attempt),
+    criteria,
+    asking,
   );
   if (judge !== undefined) children.push(judge);
 
@@ -319,21 +337,33 @@ function checksFact(step: StepDetail, runs: CheckRun[]): RunTreeFact | undefined
  * until it has answered, and a count once it has — the criterion text and the
  * citation are the panel's, because each of them is a sentence.
  *
- * **`judged` is the caller's to narrow**, for [`checksFact`]'s reason.
+ * **`judged` is the caller's to narrow**, for [`checksFact`]'s reason. **The
+ * count is `gates.ts`'s `panelsFrom`, the strip's own reading** — criteria,
+ * never rows, and a live question held open counts as neither met nor
+ * refused. Reading `judged` straight was the strip and the rail agreeing on a
+ * clean gate and disagreeing the moment a question was open. #689.
  */
-function judgeFact(step: StepDetail, judged: Judged[]): RunTreeFact | undefined {
+function judgeFact(
+  step: StepDetail,
+  judged: Judged[],
+  criteria: readonly Criterion[],
+  asking?: string,
+): RunTreeFact | undefined {
   const declared = step.judge_checks;
   if (declared === undefined) return undefined;
-  if (judged.length === 0) {
+  if (judged.length === 0 && asking === undefined) {
     return declared.length === 0
       ? undefined
       : { label: "Judge", value: `${declared.length} declared`, named: undefined };
   }
-  const met = judged.filter((one) => one.verdict === "met").length;
+  const panels = panelsFrom(judged, criteria, asking);
+  const refused = panels.filter((one) => one.verdict === "not_met").length;
+  const stillAsking = panels.filter((one) => one.verdict === "asking").length;
+  const met = panels.length - refused - stillAsking;
   return {
     label: "Judge",
-    value: `${met} of ${judged.length} met`,
-    named: met === judged.length ? "passed" : "failed",
+    value: `${met} of ${panels.length} met`,
+    named: refused > 0 ? "failed" : stillAsking > 0 ? undefined : "passed",
   };
 }
 

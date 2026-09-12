@@ -98,6 +98,7 @@ export function evidenceChaptersOf({
   now,
   following,
   undecided,
+  asking,
   onRunHere,
 }: {
   /** Now, injected, so a running Check's elapsed time moves with the clock. */
@@ -115,6 +116,8 @@ export function evidenceChaptersOf({
    * than read here — a chapter has no route to `stuck` of its own.
    */
   undecided?: string;
+  /** The criterion a live judge question holds open on this step, where one is. */
+  asking?: string;
   /**
    * What each Check printed, as this window has it, and how to ask for one.
    *
@@ -130,7 +133,7 @@ export function evidenceChaptersOf({
 }): Unnumbered[] {
   // Read once and drawn twice: the Checks chapter's Judge row and the Verdicts
   // grid are the same panel, and the two counts have to be one count.
-  const panels = panelsOf(step, criteria);
+  const panels = panelsOf(step, criteria, asking);
   // **Unnumbered, because the story numbers over what is drawn.** These used
   // to carry `4` and `5` off a constant, which was right while Produced was
   // always chapter three. A step that shows its work has a chapter before it,

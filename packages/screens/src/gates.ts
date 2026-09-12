@@ -244,8 +244,12 @@ export type Panel = {
   members: Judged[];
   /** The members that refused. Empty is a criterion nothing objected to. */
   refused: Judged[];
-  /** Unanimity, from `docs/concepts/judge.md`: one veto refuses the criterion. */
-  verdict: "met" | "not_met";
+  /**
+   * Unanimity, from `docs/concepts/judge.md`: one veto refuses the criterion.
+   * **`asking` is a live `JudgeQuestion` holding this criterion open** —
+   * neither met nor refused yet, since protocol 11.1.
+   */
+  verdict: "met" | "not_met" | "asking";
 };
 
 /**
@@ -259,13 +263,37 @@ export type Panel = {
  * **Narrowed to the current attempt.** `judged` holds every attempt's rows
  * since protocol 7.0, and both surfaces draw the live gate.
  */
-export function panelsOf(step: StepDetail, criteria: readonly Criterion[]): Panel[] {
+export function panelsOf(
+  step: StepDetail,
+  criteria: readonly Criterion[],
+  /**
+   * The criterion a live `JudgeQuestion` is holding open on this step, where
+   * one is. Overrides `judged` for it — Fleet asks before it commits a
+   * verdict, so an absent or stale row must not read as met.
+   */
+  asking?: string,
+): Panel[] {
+  return panelsFrom(onlyCurrentAttempt(step.judged), criteria, asking);
+}
+
+/**
+ * `panelsOf`'s own grouping, over whichever `Judged` rows a caller already
+ * narrowed. **One reading for both shapes of narrowing** — the live gate's
+ * current attempt, and the run tree's single historical one — so a step's
+ * Judge count cannot read one way in the strip and another in the rail. #689.
+ */
+export function panelsFrom(
+  judged: readonly Judged[],
+  criteria: readonly Criterion[],
+  asking?: string,
+): Panel[] {
   const held = new Map<string, Judged[]>();
-  for (const one of onlyCurrentAttempt(step.judged)) {
+  for (const one of judged) {
     const already = held.get(one.criterion_id);
     if (already === undefined) held.set(one.criterion_id, [one]);
     else already.push(one);
   }
+  if (asking !== undefined && !held.has(asking)) held.set(asking, []);
   return [...held].map(([criterionId, answered]) => {
     // In panel order rather than in arrival order. `member` is a position, and
     // a grid whose columns changed order between two criteria would put one
@@ -279,7 +307,7 @@ export function panelsOf(step: StepDetail, criteria: readonly Criterion[]): Pane
       ordinal: at === -1 ? undefined : at + 1,
       members,
       refused,
-      verdict: refused.length === 0 ? "met" : "not_met",
+      verdict: criterionId === asking ? "asking" : refused.length === 0 ? "met" : "not_met",
     };
   });
 }

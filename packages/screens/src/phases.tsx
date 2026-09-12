@@ -159,6 +159,8 @@ export function phasesOf(
   opens: Opens,
   status: string,
   claim?: Submitted,
+  /** The criterion a live judge question is holding open on this step. */
+  asking?: string,
 ): PhaseStripProps {
   // **A gate running its Checks has the work, not the Drone.** The step stays
   // `running` through the gate, so read off the state alone the strip said the
@@ -216,7 +218,7 @@ export function phasesOf(
   const checks = checksStage(step, opens);
   if (checks !== undefined) stages.push(checks);
 
-  const judge = judgeStage(step, criteria, opens, claim !== undefined);
+  const judge = judgeStage(step, criteria, opens, claim !== undefined, asking);
   if (judge !== undefined) stages.push(judge);
 
   // **`You` closes the strip, always.** It is the last thing that can hold a
@@ -342,12 +344,13 @@ function judgeStage(
   criteria: Criterion[],
   opens: Opens,
   claimed: boolean,
+  asking?: string,
 ): PhaseStage | undefined {
   const declared = step.judge_checks;
   if (declared === undefined || declared.length === 0) return undefined;
 
   const asked = askedOf(step);
-  const panels = panelsOf(step, criteria);
+  const panels = panelsOf(step, criteria, asking);
   const rows: PhaseStageRow[] = panels.map((panel) => ({
     // The criterion's own text where the Job carries it, and its id where it
     // does not. A criterion is a sentence somebody wrote, so it is not mono;
@@ -387,7 +390,11 @@ function judgeStage(
   // one criterion of two was refused. The gate is criterion-shaped and so is
   // the count a person reads against it.
   const refused = rows.filter((row) => row.named === "not_met").length;
-  const met = rows.length - refused;
+  // A criterion a live question is holding open is neither met nor refused —
+  // it stays in the denominator and out of both counts, so `2 of 3 met` says
+  // one criterion is still being asked about rather than silently passing it.
+  const stillAsking = rows.filter((row) => row.named === "asking").length;
+  const met = rows.length - refused - stillAsking;
   return {
     id: "judge",
     label:
@@ -395,7 +402,7 @@ function judgeStage(
         ? `Judge · ${met} of ${rows.length} met`
         : `Judge · ${refused} of ${rows.length} refused`,
     kind: "judge",
-    state: refused === 0 ? "cleared" : "failed",
+    state: refused > 0 ? "failed" : stillAsking > 0 ? "waiting" : "cleared",
     stands: notedFrom(
       refused === 0 ? `${met} of ${rows.length} met` : `${refused} refused`,
       judgeFromAttempt(step),
@@ -429,6 +436,9 @@ function judgeStage(
  * spellings of *refused by 2 of 3* on one screen is the drift `gates.ts` names.
  */
 export function howThePanelWent(verdict: string, refused: number, members: number): string {
+  // Not the registry's — `criterion_verdict_judge` has only `met` and
+  // `not_met`. A live question is a Bridge-only reading of the same row.
+  if (verdict === "asking") return "asking you";
   const verb = CRITERION_VERDICT_JUDGE[verdict]?.verb ?? verdict;
   if (members < 2) return verb;
   // A refusal from one of three is a close call and a refusal from all three is
