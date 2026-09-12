@@ -97,7 +97,7 @@ import type { OpenArtifact, OpenPullRequest } from "./opening";
 import { DIFF_CHAPTER, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-keys";
 import { useAtFloor } from "@armada/shell";
 import { DetailSheet, holdOf, type HeldAt, type OpenSheet } from "./Sheets";
-import { chaptersOf, EVERY_STORY_TELLS } from "./chapters";
+import { chaptersOf } from "./chapters";
 import { againOf, useShowAgain, type ShowAgainCall } from "./again";
 import { span } from "./duration";
 import { ordered } from "./facts";
@@ -109,14 +109,15 @@ import { verdictSlotAfterAnswer } from "./verdict-answered";
 // Which Check's output `o` opens. **The same call the Checks chapter's own act
 // makes**, so the key and the control cannot open different files.
 import { outputOf } from "./gates";
+import { whileReading, whyUnreachable } from "./while-reading";
 import { renderFor } from "./render";
-import { runOf, stepsAhead, whyNoSteps } from "./run";
+import { runOf, whyNoSteps } from "./run";
 import { answeringOf, askingOf, commandOf, fieldsOf, noticeOf, questionOf, waitingOf } from "./step";
 import { StepActs } from "./StepActs";
 import { whyNoNotes } from "./notes";
 import { entriesOf, hideUnread, whyNotWatching } from "./story";
 import { LOOK_FAILED, NOTHING_HAPPENED_YET, latestOf, movesOf, nothingToAsk, summarised, whyNoReading } from "./resources";
-import { briefOf, stillReading, whyNoBrief, workOf } from "./work";
+import { briefOf, whyNoBrief, workOf } from "./work";
 
 export type { ConfirmableAct, JobAct } from "./Acts";
 export type { FoldedReads } from "./mine";
@@ -432,11 +433,8 @@ export function JobDetail({
   // its disk under this Job's panel. `mine.ts` is the one place the check is
   // written, and the counterpart to `main/reader.ts` on this side of the seam.
   const whole = detailOf(watched, job.id);
-  // What the Board already holds is drawn while this Job's own read is out: the
-  // workflow's step names, and the open step's among them.
-  const reading = stillReading(watched, job.id);
-  const ahead = stepsAhead(workflow);
-  const aheadOpen = ahead.find((step) => step.id === (selected ?? job.current_step_id));
+  // What the Board's own row already answers, while this Job's read is out.
+  const reading = whileReading(watched, job, workflow, selected);
   const watching = turnsOf(observed, job.id);
   const noted = logOf(journalled, job.id);
   const holding = holdingOf(resources, job.id);
@@ -731,10 +729,8 @@ export function JobDetail({
       run={run.map(named)}
       runElapsed={span(job.created_at, now) ?? undefined}
       runAbsent={whyNoSteps(watched, job.id)}
-      runReading={reading ? { steps: ahead, current: aheadOpen?.id } : undefined}
-      unreachable={
-        watched.state === "failed" && watched.jobId === job.id ? "Fleet did not answer" : undefined
-      }
+      runReading={reading?.run}
+      unreachable={whyUnreachable(watched, job.id)}
       // What it holds on this machine, below the run and above the pointers.
       // **Five lines, and the reading a press away.** It answers *is this
       // working*, which is what a person suspecting a wedged Job came with —
@@ -781,7 +777,7 @@ export function JobDetail({
       where={workOf(onOpenArtifact, job, whole, manifest, workflow)}
       brief={whole === null ? undefined : briefOf(whole)}
       briefAbsent={whyNoBrief(watched, job.id)}
-      briefLoading={reading}
+      briefLoading={reading !== undefined}
       step={
         open === undefined
           ? undefined
@@ -829,15 +825,7 @@ export function JobDetail({
             }
       }
       stepAbsent={whyNoSteps(watched, job.id)}
-      stepReading={
-        reading
-          ? {
-              label: aheadOpen?.label,
-              labelIsAnIdentifier: aheadOpen?.labelIsAnIdentifier,
-              chapters: Object.values(EVERY_STORY_TELLS),
-            }
-          : undefined
-      }
+      stepReading={reading?.step}
       sheet={
         open === undefined ? null : (
           <DetailSheet
