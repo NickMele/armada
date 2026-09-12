@@ -166,10 +166,13 @@ function Body({ row, step }: { row: TimelineRow; step: StepDetail }) {
     const shown = rows.slice(-TURNS_DRAWN);
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
-        <span className="text-2xs text-fg-subtle">{turnsSaid(rows.length, unread, shown.length)}</span>
+        <span style={SUBTLE}>{turnsSaid(rows.length, unread, shown.length)}</span>
         {shown.map((one) => (
-          <span key={one.id} className="text-2xs">
-            <span className="mono text-fg-subtle">{one.at}</span> {one.actor} · {one.message}
+          <span key={one.id} style={SMALL}>
+            <span className="mono" style={{ color: "var(--fg-subtle)" }}>
+              {one.at}
+            </span>{" "}
+            {one.actor} · {one.message}
           </span>
         ))}
         <Wrote row={row} />
@@ -180,7 +183,7 @@ function Body({ row, step }: { row: TimelineRow; step: StepDetail }) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
         {(row.runs ?? []).map((run) => (
-          <span key={`${run.name}-${run.attempt}`} className="text-2xs">
+          <span key={`${run.name}-${run.attempt}`} style={SMALL}>
             <span className="mono">{run.name}</span> · {run.outcome}
             {run.produced === undefined ? "" : ` · ${run.produced}`}
           </span>
@@ -192,7 +195,7 @@ function Body({ row, step }: { row: TimelineRow; step: StepDetail }) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
         {(row.judged ?? []).map((one) => (
-          <span key={`${one.criterion_id}-${one.member ?? 0}`} className="text-2xs">
+          <span key={`${one.criterion_id}-${one.member ?? 0}`} style={SMALL}>
             {one.verdict} · <span className="mono">{one.criterion_id}</span>
           </span>
         ))}
@@ -201,13 +204,27 @@ function Body({ row, step }: { row: TimelineRow; step: StepDetail }) {
   }
   const opened = (row.turns ?? [])[0];
   return (
-    <span className="text-2xs text-fg-muted">
+    <span style={MUTED}>
       {opened === undefined
         ? "The words Armada opened this attempt with are in the brief."
         : `Opened at ${clock(opened.ts)}. The brief itself draws here in the panel.`}
     </span>
   );
 }
+
+/**
+ * The body's own small type, and the two steps down from it.
+ *
+ * **Written as style rather than as classes, because the classes did not
+ * exist.** `text-2xs`, `text-fg-subtle` and `text-fg-muted` are declared in no
+ * stylesheet in this repository — `.mono` and `.caps` in the token layer are the
+ * only utilities there are — so every line of this body drew at the inherited
+ * size in the inherited colour. A draft nobody can read the hierarchy of is a
+ * draft that answers the wrong question.
+ */
+const SMALL = { fontSize: "var(--text-2xs)", lineHeight: "var(--leading-2xs)" } as const;
+const SUBTLE = { ...SMALL, color: "var(--fg-subtle)" } as const;
+const MUTED = { ...SMALL, color: "var(--fg-muted)" } as const;
 
 /** How many turns the draft draws, newest last. The log chapter has the rest. */
 const TURNS_DRAWN = 12;
@@ -249,18 +266,16 @@ function Wrote({ row }: { row: TimelineRow }) {
         {`Produced · ${produced.length} ${produced.length === 1 ? "file" : "files"}`}
       </span>
       {files.map((file) => (
-        <span key={file.path} className="text-2xs">
+        <span key={file.path} style={SMALL}>
           <span className="mono">{file.path}</span>{" "}
-          <span className="text-fg-subtle">{file.change}</span>
+          <span style={{ color: "var(--fg-subtle)" }}>{file.change}</span>
         </span>
       ))}
       {produced.length <= FILES_DRAWN ? null : (
-        <span className="text-2xs text-fg-subtle">
-          {`${produced.length - FILES_DRAWN} more, in the diff`}
-        </span>
+        <span style={SUBTLE}>{`${produced.length - FILES_DRAWN} more, in the diff`}</span>
       )}
       {kept.map((one) => (
-        <span key={one} className="text-2xs mono">
+        <span key={one} className="mono" style={SMALL}>
           {one}
         </span>
       ))}

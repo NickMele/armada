@@ -143,7 +143,7 @@ export type CutCall = {
  * Drone's prose has, kept, beside a second row of Fleet's own prose that had
  * two.
  */
-function isEcho(row: Turn): boolean {
+export function isEcho(row: Turn): boolean {
   return row.saw.event === "said" && row.by === "armada";
 }
 
