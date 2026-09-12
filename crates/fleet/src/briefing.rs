@@ -32,7 +32,7 @@ use core_model::{
 use verification::TheBaseMoved;
 
 use crate::crossing::{Crossed, Overtaken, Produced, Reconciling, Redirected};
-use crate::terms::{Checking, Declaring, Delivering, Splitting};
+use crate::terms::{Capturing, Checking, Declaring, Delivering, Splitting};
 
 /// Layer 1, verbatim from the Agent Prompt Contract's M1 rendering: **mechanics,
 /// never task content**, identical on every step of every Job, which is what
@@ -581,6 +581,14 @@ fn assemble(job: &Job, workflow: &FrozenWorkflow, at: &StepId, crossed: &Crossed
     }
     if let Some(step) = workflow.steps().iter().find(|step| step.id() == at) {
         blocks.headed(&step_block(step), ipc::BlockKind::AboutThisJob);
+        // **Right after the step and before what it delivers.** What a
+        // captured step does with `shown_by` is true of the step itself, the
+        // same way `step_block` is — a Drone reading only the step and this
+        // has read the whole of what makes this step different from one that
+        // is not captured.
+        if let Some(capturing) = Capturing::at(step) {
+            blocks.headed(capturing.text(), ipc::BlockKind::Standing);
+        }
         // **Before the file the part delivers**, on the one workflow where
         // both appear: what the part is for decides what goes in the file, and
         // a Drone reading the path first has already started writing.

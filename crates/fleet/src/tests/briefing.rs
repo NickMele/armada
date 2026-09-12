@@ -35,7 +35,7 @@ use crate::daemon::Fleet;
 use crate::evidence::Call;
 use crate::gate::Ruling;
 use crate::tests::admitted::dispatched;
-use crate::tests::daemon::{a_fleet_holding, a_proposal, worktree_directory};
+use crate::tests::daemon::{a_fleet_holding, a_proposal, manifest, worktree_directory};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::{declared_by_the_one, submitted_by_the_one};
 
@@ -762,4 +762,101 @@ fn a_catch_up_that_would_not_replay_tells_the_drone_to_carry_on() {
     assert!(said.contains("exactly where it was"), "{said}");
     assert!(said.contains("Nothing here is yours to fix"), "{said}");
     assert!(!said.contains("conflict markers"), "{said}");
+}
+
+// ------------------------------------------------------ captured steps
+
+/// `implement` is captured, `summarise` is not. **Parsed, not `Sketch`ed** —
+/// that fixture writes no `captured` key, and #790 is about the one it does.
+fn capture_or_not() -> config::ResolvedWorkflow {
+    let def = config::WorkflowDef::parse(
+        std::path::Path::new("fixture-captured.yml"),
+        r#"
+version: 1
+workflow_id: fixture-captured
+name: fixture
+structure: linear
+steps:
+  - id: implement
+    label: "Implement"
+    evidence:
+      submitted:
+        type: diff
+      captured: true
+    delivers: false
+    advance_gate: auto
+  - id: summarise
+    label: "Summarise"
+    evidence:
+      submitted:
+        type: facts_note
+    delivers: false
+    advance_gate: auto
+"#,
+        &config::Roster::offering_nothing(),
+    )
+    .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
+    config::ResolvedWorkflow::resolve(&def, &manifest())
+        .unwrap_or_else(|refused| panic!("the fixture did not resolve: {refused}"))
+}
+
+fn turn_at_workflow(workflow: &config::ResolvedWorkflow, step: &str) -> String {
+    first_turn(
+        &a_job(),
+        workflow.frozen(),
+        &StepId::new(step),
+        &Crossed::nothing(),
+    )
+    .expect("a prompt")
+    .as_str()
+    .to_string()
+}
+
+/// **The gap #790 closes.** Capture worked on the issue that introduced it
+/// only because a person wrote the spec and pointed the step at it — nothing
+/// told the Drone `shown_by` would be run. A step that is not captured must
+/// not gain the paragraph either: it has no `shown_by` obligation beyond the
+/// baseline's.
+#[test]
+fn a_captured_step_is_told_shown_by_is_run_and_an_uncaptured_one_is_not() {
+    let workflow = capture_or_not();
+
+    let captured = turn_at_workflow(&workflow, "implement");
+    assert!(
+        captured.contains("THIS PART IS CAPTURED"),
+        "the captured step carries the block: {captured}"
+    );
+    assert!(
+        captured.contains("evidence.run") && captured.contains("shown_by"),
+        "it names the mechanism and the field it acts on: {captured}"
+    );
+
+    let uncaptured = turn_at_workflow(&workflow, "summarise");
+    assert!(
+        !uncaptured.contains("THIS PART IS CAPTURED"),
+        "an uncaptured step gains no paragraph about specs: {uncaptured}"
+    );
+}
+
+/// **Never a medium, never a framework.** What runs under `evidence.run` is
+/// this repository's decision, and the instruction says so rather than
+/// guessing at it.
+#[test]
+fn the_captured_instruction_names_no_medium_or_framework() {
+    let said = turn_at_workflow(&capture_or_not(), "implement").to_lowercase();
+    for word in ["playwright", "screenshot", "browser"] {
+        assert!(!said.contains(word), "no medium or framework named: {said}");
+    }
+}
+
+/// **Capture gates nothing.** A Drone that names no spec still gets a
+/// warning rather than a refusal, and the instruction does not read as
+/// though the opposite were true.
+#[test]
+fn the_captured_instruction_does_not_read_as_a_gate() {
+    let said = turn_at_workflow(&capture_or_not(), "implement");
+    assert!(
+        said.contains("does not fail this part"),
+        "naming none is not told as a refusal: {said}"
+    );
 }

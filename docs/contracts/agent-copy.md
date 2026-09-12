@@ -243,6 +243,15 @@ been evidenced.
 "Tests pass" is not an artifact. `test_concurrent_dispatch` green with
 `cargo test -p vcs` at exit 0 is.
 
+### Run, on a captured step
+
+Where a step's `evidence.captured` is true, `shown_by` is not only read.
+Fleet runs the file it names through this repository's `evidence.run` once
+the Drone submits — `docs/concepts/manifest.md`'s Evidence section says what
+that command expects and what it leaves behind. The step's own instruction
+carries this to the Drone, composed in `crates/fleet/src/terms.rs`; it is not
+repeated here.
+
 ### Two kinds in one field
 
 `not_claimed` holds both a gap and a side effect — what the work leaves
