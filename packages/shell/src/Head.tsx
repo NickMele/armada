@@ -44,12 +44,14 @@ export type HeadProps = {
    */
   clearing: boolean;
   /**
-   * The Manifest surface — Journey 9's *Running one*. Leaves to the list.
+   * The Manifest surface — Journey 9's *Running one*.
    *
-   * **`clearing`'s shape, and the same reason it has one.** It is a rail
-   * destination whose name is written nowhere on the page itself: the page is
-   * three groups of rows and an output pane, none of which says what surface
-   * they belong to.
+   * **A name and no way out, and the missing control is the point.** Manifest
+   * is a rail destination: a person who pressed `⌘4` did not come from the
+   * Board, so *Back to the list* would name a place they never were — and the
+   * rail they would actually leave by is already on screen beside it. The head
+   * is here only because the page's own rows never say what surface they
+   * belong to.
    */
   manifest: boolean;
   /** A live connection. What stops a new Job being proposed into nothing. */
@@ -62,7 +64,6 @@ export type HeadProps = {
   onReadReports: () => void;
   onCloseWorktrees: () => void;
   onReadWorktrees: () => void;
-  onCloseManifest: () => void;
   onRefresh: () => void;
   /** Every Job Bridge holds, for the counts on the Board's two bulk acts. */
   jobs: readonly JobSummary[];
@@ -87,7 +88,6 @@ export function headOf({
   onReadReports,
   onCloseWorktrees,
   onReadWorktrees,
-  onCloseManifest,
   onRefresh,
   jobs,
   onClearTerminal,
@@ -102,11 +102,8 @@ export function headOf({
       // rules, said once here rather than repeated on every row.
       summary:
         "Run one Check or Command against this checkout, as it is on disk. Nothing here is a verdict.",
-      actions: (
-        <Button variant="ghost" size="sm" onClick={onCloseManifest}>
-          Back to the list
-        </Button>
-      ),
+      // No action. The rail is how a person leaves a rail destination.
+      actions: null,
     };
   }
   if (clearing) {

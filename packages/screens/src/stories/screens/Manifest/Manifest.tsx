@@ -51,7 +51,6 @@ export function ManifestFrom({
     onReadReports: noop,
     onCloseWorktrees: noop,
     onReadWorktrees: noop,
-    onCloseManifest: noop,
     onRefresh: noop,
     jobs: [],
     onClearTerminal: noop,

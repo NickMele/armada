@@ -338,7 +338,6 @@ export function App() {
     onCloseWorktrees: () => setClearing(false),
     onReadWorktrees: () => setClearing(true),
     manifest: manifesting,
-    onCloseManifest: () => goTo(SURFACE.board),
     onRefresh: () => void commands.refresh(),
     jobs: state.jobs,
     onClearTerminal: (jobIds) => void commands.clearTerminal(jobIds),
