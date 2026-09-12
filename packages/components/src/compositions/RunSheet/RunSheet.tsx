@@ -15,8 +15,7 @@ import { ChangedFiles, type ChangedFile } from "../ChangedFiles/ChangedFiles";
  *
  * **It rehearses the Manifest the Job froze, in that Job's own worktree.**
  * There is no throwaway copy and no "Where" control — a run from here goes in
- * the Job's own tree, because a throwaway copy waits on
- * `runedit-adhoc-run-location` and a copy control was deferred outright.
+ * the tree the gate will judge, which is the one the Job's work is already in.
  *
  * **A run from this sheet writes no Evidence and moves nothing on the Job.**
  * The result line and the run list both stay unhued for that reason: a run
