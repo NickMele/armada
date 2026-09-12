@@ -77,7 +77,9 @@ fn check(inventory: &str, table: &str, event_source: &str, report: &mut Report) 
     // breaks and the rule must not depend on that.
     let compact: String = table.chars().filter(|c| !c.is_whitespace()).collect();
     if served.is_empty() {
-        report.fail(format!("{SERVED_TABLE} — a SERVED table with no rows in it"));
+        report.fail(format!(
+            "{SERVED_TABLE} — a SERVED table with no rows in it"
+        ));
         return;
     }
 
