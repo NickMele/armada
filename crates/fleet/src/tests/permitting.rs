@@ -634,7 +634,7 @@ async fn a_later_answer_reaches_the_drone_as_a_turn() {
     );
 
     fleet
-        .answer_command(&job, "c1", CommandAnswer::AllowForJob)
+        .answer_command(&job, "c1", Answered::of(CommandAnswer::AllowForJob, None))
         .await
         .expect("the question is still on the slot, late as the answer is");
 
@@ -676,7 +676,7 @@ async fn an_answer_inside_the_hold_goes_down_the_call_only() {
     let (answer, answered) = tokio::join!(fleet.permission(&job, &asking), async {
         until_waiting(&fleet, &job).await;
         fleet
-            .answer_command(&job, "c1", CommandAnswer::AllowForJob)
+            .answer_command(&job, "c1", Answered::of(CommandAnswer::AllowForJob, None))
             .await
     });
 
@@ -715,7 +715,7 @@ async fn an_answer_at_the_end_of_the_hold_is_delivered_once() {
             until_waiting(&fleet, &job).await;
             tokio::time::sleep(fired_at).await;
             fleet
-                .answer_command(&job, "c1", CommandAnswer::AllowForJob)
+                .answer_command(&job, "c1", Answered::of(CommandAnswer::AllowForJob, None))
                 .await
         });
 
