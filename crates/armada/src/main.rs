@@ -1,8 +1,9 @@
-//! `armada` — one binary, four verbs.
+//! `armada` — one binary, five verbs.
 //!
 //! `serve` is the daemon; `check` and `run` execute one thing the repository's
-//! Manifest declares; `clean` gives its worktrees, branches and Jobs back. Each
-//! verb's own module holds what it does and why.
+//! Manifest declares; `clean` gives its worktrees, branches and Jobs back;
+//! `mcp` relays an agent's session to the door Fleet serves. Each verb's own
+//! module holds what it does and why.
 //!
 //! # What exits non-zero
 //!
@@ -52,6 +53,10 @@ async fn main() -> ExitCode {
         Verb::Check { name } => declared_by_the_manifest(Registry::Checks, &name, "check").await,
         Verb::Run { name } => declared_by_the_manifest(Registry::Commands, &name, "run").await,
         Verb::Clean { everything, force } => clean_this_repository(everything, force),
+        // **Blocking, on the runtime's own thread, and alone there.** This
+        // verb is a pipe with one message in flight; nothing else is running
+        // to be starved. `armada::mcp` holds the argument.
+        Verb::Mcp => armada::mcp::speak(),
     }
 }
 

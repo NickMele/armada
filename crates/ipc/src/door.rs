@@ -141,6 +141,20 @@ pub enum Answered {
         /// The Manifest every answer to this session is given inside.
         scope: String,
     },
+    /// A handshake answered by something standing in front of a Fleet it
+    /// cannot reach — `#698`'s relay, where the caller's directory resolves to
+    /// no Manifest, or to one this machine's Fleet is not serving, or where no
+    /// Fleet is running at all.
+    ///
+    /// **A handshake that succeeds and offers nothing**, rather than a
+    /// connection that fails. A client whose server would not start shows its
+    /// person a red line and shows the model nothing; this way the reason is
+    /// in the session, in the place the model reads before it asks.
+    Unreachable {
+        id: CallId,
+        revision: String,
+        why: String,
+    },
     Ping {
         id: CallId,
     },
@@ -335,6 +349,19 @@ pub fn answer(answered: Answered) -> Result<String, Unencodable> {
                 "capabilities": { "tools": {} },
                 "serverInfo": { "name": SERVER, "version": env!("CARGO_PKG_VERSION") },
                 "instructions": instructions(&scope),
+            }),
+        ),
+        Answered::Unreachable {
+            id,
+            revision,
+            why,
+        } => result(
+            id,
+            json!({
+                "protocolVersion": revision,
+                "capabilities": { "tools": {} },
+                "serverInfo": { "name": SERVER, "version": env!("CARGO_PKG_VERSION") },
+                "instructions": why,
             }),
         ),
         Answered::Ping { id } => result(id, json!({})),

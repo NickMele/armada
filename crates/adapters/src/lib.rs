@@ -21,7 +21,9 @@
 //! review), and the agent harness: [`HeadlessAgent`] renders a confined Drone into a program and
 //! an argument list, [`transcript`](mod@transcript) reads what that Drone says
 //! back, and [`mcp`](mod@mcp) writes the one-server configuration file the two
-//! flags that confine it point at.
+//! flags that confine it point at — and, in the repository rather than beside
+//! the store, the one entry that tells an agent working there how to reach
+//! Fleet at all.
 //!
 //! And the Judge: [`judge`](mod@judge) renders the same CLI as a one-shot call
 //! — one turn, no tools, no MCP server and no directory — which is how the
@@ -66,7 +68,7 @@ pub use harness::{
     scope_tool, server_tool, widen_tool, HarnessRefused, HeadlessAgent,
 };
 pub use issue_lookup::IssueLookup;
-pub use mcp::only_the_evidence_server;
+pub use mcp::{only_the_evidence_server, publish_the_agents_door, Published, REPOSITORY_CONFIG};
 pub use reclaim::{
     reclaim, standing, BranchGone, BranchStanding, Reclaimed, RepoUnreadable, Standing,
     UnmergedWork, WorktreeGone, WorktreeStanding,

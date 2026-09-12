@@ -729,6 +729,18 @@ fn assemble(
     )?;
 
     let root = setup.root().to_path_buf();
+    // The other door, published where an agent working in this repository will
+    // find it. A failure is carried out and Fleet serves anyway: what is lost
+    // is an agent's way in, not a Job's.
+    match crate::mcp::publish(&root) {
+        Ok(adapters::Published::Written) => println!(
+            "published the agent door in {}",
+            root.join(adapters::REPOSITORY_CONFIG).display()
+        ),
+        Ok(adapters::Published::AlreadyThere) => {}
+        Err(why) => eprintln!("an agent standing in this repository will not find Armada: {why}"),
+    }
+
     let (manifest, workflows, reloads) = setup.into_parts();
     // The Judge runs the program the Drone runs, so a machine that named one
     // through the override names both — a second variable would let the two
