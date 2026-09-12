@@ -18,10 +18,12 @@
 // pre-fetching every row that kept one would spend on the screen exactly what
 // the split was made to avoid.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { ConsoleRegion, ConsoleRow } from "@armada/components";
 import type { CheckOutput, CheckOutputRead, FollowedLog } from "@armada/protocol";
+
+import { useHeldReads } from "./held-reads";
 
 /**
  * What one Check's output is, as this window has it.
@@ -67,34 +69,16 @@ export type ReadCheckOutput = (jobId: string, kept: string) => Promise<CheckOutp
  * next Job, a file name would name a file that Job never wrote.
  */
 export function useCheckOutputs(read: ReadCheckOutput, jobId: string): Outputs {
-  const [held, setHeld] = useState<Record<string, OutputState>>({});
-  useEffect(() => setHeld({}), [jobId]);
-
-  // Read through a ref inside the callback so opening a chapter does not
-  // re-create the function on every answer. The story is rebuilt on every tick
-  // of the clock, and a prop that changed with it would remount nothing
-  // usefully.
-  const current = useRef(held);
-  current.current = held;
-
-  const fetch = useCallback(
-    (kept: string) => {
-      // Already asked, or already answered. A second open while one is in
-      // flight is the same request, and Fleet reads a file for each one.
-      if (current.current[kept] !== undefined) return;
-      setHeld((was) => ({ ...was, [kept]: { state: "fetching" } }));
-      void read(jobId, kept).then(
-        (read) => setHeld((was) => ({ ...was, [kept]: settled(read) })),
-        // A rejected invoke is main gone, which is the window closing. Recorded
-        // as an absence like any other so the reader is not left saying
-        // `Reading` for the rest of its life.
-        () => setHeld((was) => ({ ...was, [kept]: { state: "absent", note: NOT_ANSWERED } })),
-      );
-    },
-    [read, jobId],
-  );
-
-  const of = useCallback((kept: string) => current.current[kept], []);
+  const { of, fetch } = useHeldReads<CheckOutputRead, OutputState>({
+    read,
+    jobId,
+    settle: settled,
+    asking: { state: "fetching" },
+    // A rejected invoke is main gone, which is the window closing. Recorded as
+    // an absence like any other so the reader is not left saying `Reading` for
+    // the rest of its life.
+    failed: { state: "absent", note: NOT_ANSWERED },
+  });
   return { of, fetch };
 }
 
