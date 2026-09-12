@@ -51,8 +51,8 @@ import type { JudgeQuestion, WhenRefused } from "./asking";
  * absent is scope undetermined, present and empty is determined to write
  * nothing.
  *
- * Evidence, per-step Check results, the log file and spend are not here and are
- * not invented. Nothing serves them.
+ * Evidence and the log file are not here and are not invented: nothing
+ * produces evidence, and `#437` serves the log as a stream of its own.
  */
 export type JobDetail = {
   /** The board row, unchanged. A field added to the row reaches here for free. */
@@ -428,15 +428,6 @@ export type Refusal = {
 };
 
 /**
- * What a finished job's branch came to.
- *
- * **Three independent absences, and a surface must not fold them.** A commit
- * with no push is a repository that names no remote; a push with no pull
- * request is a machine with nothing that can open one. Neither is a failure,
- * and a row that treated them as one would say "unknown" about a branch that is
- * sitting on a remote right now.
- */
-/**
  * What one job has spent and what it is allowed to spend.
  *
  * **Four numbers and no verdict**, deliberately. Whether the job is over is the
@@ -482,6 +473,15 @@ export type JobSpend = {
   unpriced?: number;
 };
 
+/**
+ * What a finished job's branch came to.
+ *
+ * **Three independent absences, and a surface must not fold them.** A commit
+ * with no push is a repository that names no remote; a push with no pull
+ * request is a machine with nothing that can open one. Neither is a failure,
+ * and a row that treated them as one would say "unknown" about a branch that is
+ * sitting on a remote right now.
+ */
 export type JobDelivery = {
   /** The commit Fleet wrote over the job's work, by its id. */
   commit?: string;
