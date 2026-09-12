@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { CallRead, CommandExplained, Outcome } from "@armada/protocol";
+import type { CallRead, CommandExplainedRead } from "@armada/protocol";
 
 /**
  * What one call's arguments are, as this window has them.
@@ -66,16 +66,10 @@ export type Calls = {
 export type ReadCall = (jobId: string, callId: string) => Promise<CallRead>;
 
 /**
- * What `explain_command` came back as. **`CallRead`'s shape**, and its reason:
- * a reading is asked for by one person about one call and answered once.
- *
- * It is spelled here rather than in `@armada/protocol` beside `CallRead` and
- * `RunListRead`, which is where it belongs — that package was landed with the
- * wire and is not this change's to edit. Reported.
+ * What `explain_command` came back as. **Protocol's, beside `CallRead`**, and
+ * re-exported here because this is where the screen reaches for it.
  */
-export type CommandExplainedRead =
-  | { ok: true; explained: CommandExplained }
-  | { ok: false; outcome: Outcome };
+export type { CommandExplainedRead };
 
 /**
  * Reading what one command does, as the screen's caller hands it in.

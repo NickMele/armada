@@ -145,13 +145,13 @@ pub use enums::{
     Resumption, Side, StepState, TopLevelOrigin, Urgency,
 };
 pub use error::{RunId, WireError, WireValue};
-pub use explaining::CommandExplained;
 pub use event::{
     ChangeKind, ChangedFile, Cursor, Delivered, DroneExited, DroneSpawned, Event, JobAsking,
     JobChecking, JobCommandWaiting, JobCreated, JobFilesChanged, JobJudging, JobLanded,
     JobRemarksChanged, JobStateChanged, JobStepAdvanced, Missed, ProposalMoved, Reason, Resync,
     StreamMessage,
 };
+pub use explaining::CommandExplained;
 pub use files::FilesFound;
 pub use health::{FleetHealth, Probe, Unprobed};
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};

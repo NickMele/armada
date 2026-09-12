@@ -65,7 +65,6 @@
 import { JobHoldsSummary } from "@armada/components";
 import { ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { type RunTreeStep } from "@armada/components";
 import { InsideAJob } from "./InsideAJob";
 
 import type { CommandAnswer, Examination, FileReport, FollowedLog, History, Holds, JobSummary, Journalled, JudgeAnswer, ManifestSummary, ModelChoices, Observed, Outcome, Watched, WhenBlocked, WhenRefused, WorkflowSummary } from "@armada/protocol";
@@ -83,7 +82,8 @@ const NOT_FOLLOWING: FollowedLog = { state: "none" };
 import { useFrames, type ReadFrame } from "./frames";
 import { openArtifact } from "./opening";
 import type { OpenArtifact, OpenPullRequest } from "./opening";
-import { DIFF_CHAPTER, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-keys";
+import { DIFF_CHAPTER, LOG_CHAPTER, useDetailKeys } from "./detail-keys";
+import { named } from "./run-labels";
 import { useAtFloor } from "@armada/shell";
 import { DetailSheet, holdOf, type HeldAt, type OpenSheet } from "./Sheets";
 import { chaptersOf } from "./chapters";
@@ -883,29 +883,4 @@ export function JobDetail({
       onCopied={onCopied}
     />
   );
-}
-
-/**
- * A step of the run, with its name marked so the keyboard can find the control
- * the name is drawn in.
- *
- * **The marker draws nothing.** It is `display: contents`, so the row lays out
- * exactly as it did with a bare string — which matters on this row, where the
- * name is the only column that flexes and the ellipsis it truncates with is the
- * whole reason the duration column never moves.
- *
- * It is here rather than in `run.ts` because that file builds data and this one
- * builds elements, and it is here at all because `j`/`k` move focus: focus is
- * the only cursor the tree can draw, so the keyboard has to be able to reach
- * the control. Everything else it does to the run goes through `openSteps`.
- */
-function named(step: RunTreeStep): RunTreeStep {
-  return {
-    ...step,
-    label: (
-      <span className="contents" {...namesStep(step.id)}>
-        {step.label}
-      </span>
-    ),
-  };
 }

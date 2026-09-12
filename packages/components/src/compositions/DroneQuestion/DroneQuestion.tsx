@@ -16,6 +16,9 @@ import { Textarea } from "../../primitives/Textarea/Textarea";
  * **Nothing is preselected**, and each answer says what it commits to: a label
  * alone is a button whose effect has to be guessed, and a guess here spends.
  *
+ * **Still not the orchestrator `docs/scope.md` records as abandoned**: the
+ * answers stay a closed set and no reply comes back here — see [`DroneAnswer`].
+ *
  * No glyph — `icons.toml` has none for a drone asking, and the gap is reported.
  */
 export type DroneQuestionProps = {
@@ -162,6 +165,10 @@ export function DroneQuestion({
     onAnswer(chosen, said === "" ? undefined : said);
   }
 
+  // The job stays `running` and its badge is right to say so: a question rides
+  // beside the state rather than being one, so nothing in the header moves
+  // while this is open. `--step-waiting` is the tone, which the screen's own
+  // waiting notice takes and which means "needs you, not urgent".
   return (
     <section className="armada-question" aria-label="A question from the drone">
       <div className="armada-question__head">

@@ -12,7 +12,7 @@ import type {
   CheckOutputRead,
   ClearOutcome,
   CommandAnswer,
-  CommandExplained,
+  CommandExplainedRead,
   Draft,
   FileReport,
   Followed,
@@ -33,16 +33,10 @@ import type {
 import type { BridgeState, Summons } from "./bridge";
 
 /**
- * What `explain_command` came back as. **`CallRead`'s shape**, spelled here
- * because it belongs in `@armada/protocol` beside that one and this change may
- * not edit the package the wire landed in. `@armada/screens` carries the same
- * union for the screen that draws it — one type in two places until protocol
- * takes it, and `shared/` cannot import the screens package: that would pull
- * JSX into the main and preload programs, which have no DOM. Reported.
+ * What `explain_command` came back as. **Protocol's, beside `CallRead`**, and
+ * re-exported here because this is the surface the renderer reads.
  */
-export type CommandExplainedRead =
-  | { ok: true; explained: CommandExplained }
-  | { ok: false; outcome: Outcome };
+export type { CommandExplainedRead } from "@armada/protocol";
 
 /** The whole preload surface, and therefore everything the renderer can reach. */
 export type BridgeApi = {
