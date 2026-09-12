@@ -50,14 +50,14 @@ fn the_runtime_file_round_trips() {
     let dir = TempDir::new();
     let path = dir.runtime_file();
 
-    let published = RuntimeFile::publish(vacancy_at(&path), 47821, VERSION).expect("it publishes");
+    let published = RuntimeFile::publish(vacancy_at(&path), 12345, VERSION).expect("it publishes");
 
     let Presence::Running(read_back) = runtime::read(&path).expect("it reads") else {
         panic!("the process that wrote it is still alive, so it is running");
     };
     assert_eq!(read_back, *published.file());
     assert_eq!(read_back.pid, std::process::id());
-    assert_eq!(read_back.port, 47821);
+    assert_eq!(read_back.port, 12345);
     assert_eq!(read_back.protocol_version, VERSION);
 }
 
@@ -99,7 +99,7 @@ fn the_listener_address_is_loopback_at_whatever_port_it_is_given() {
 fn nothing_in_the_file_names_a_host() {
     let dir = TempDir::new();
     let path = dir.runtime_file();
-    let _published = RuntimeFile::publish(vacancy_at(&path), 47821, VERSION).expect("it publishes");
+    let _published = RuntimeFile::publish(vacancy_at(&path), 12345, VERSION).expect("it publishes");
 
     let text = std::fs::read_to_string(&path).expect("it was written");
     // The host is a constant in the crate, so there is no field an edited file
@@ -116,7 +116,7 @@ fn a_clean_exit_removes_the_file() {
     let dir = TempDir::new();
     let path = dir.runtime_file();
 
-    let published = RuntimeFile::publish(vacancy_at(&path), 47821, VERSION).expect("it publishes");
+    let published = RuntimeFile::publish(vacancy_at(&path), 12345, VERSION).expect("it publishes");
     assert!(path.exists());
 
     drop(published);
@@ -154,7 +154,7 @@ async fn a_file_naming_a_dead_pid_reads_as_stale_rather_than_live() {
     let dead = child.id().expect("a spawned child has a pid");
     child.wait().await.expect("it exits and is reaped");
 
-    plant(&path, dead, our_start(), 47821);
+    plant(&path, dead, our_start(), 12345);
 
     match runtime::read(&path).expect("it reads") {
         Presence::Stale {
@@ -177,7 +177,7 @@ fn a_live_pid_that_is_not_this_fleets_boot_is_stale_rather_than_running() {
         &path,
         std::process::id(),
         StartedAt::carried("Thu Jan  1 00:00:00 1970"),
-        47821,
+        12345,
     );
 
     match runtime::read(&path).expect("it reads") {
@@ -212,12 +212,12 @@ fn a_stale_file_is_replaced_by_the_next_start() {
         Some(Staleness::PidHeldByAnother { .. })
     ));
 
-    let _published = RuntimeFile::publish(vacancy, 47821, VERSION).expect("it publishes over it");
+    let _published = RuntimeFile::publish(vacancy, 12345, VERSION).expect("it publishes over it");
 
     let Presence::Running(now) = runtime::read(&path).expect("it reads") else {
         panic!("the replacement names this live process");
     };
-    assert_eq!(now.port, 47821);
+    assert_eq!(now.port, 12345);
     assert_eq!(now.started_at, our_start());
 }
 
@@ -227,7 +227,7 @@ fn a_stale_file_is_replaced_by_the_next_start() {
 fn a_live_runtime_file_yields_no_vacancy() {
     let dir = TempDir::new();
     let path = dir.runtime_file();
-    let _published = RuntimeFile::publish(vacancy_at(&path), 47821, VERSION).expect("it publishes");
+    let _published = RuntimeFile::publish(vacancy_at(&path), 12345, VERSION).expect("it publishes");
 
     let presence = runtime::read(&path).expect("it reads");
     assert!(
@@ -259,7 +259,7 @@ fn a_field_a_reader_has_never_heard_of_is_ignored() {
     std::fs::write(
         &path,
         format!(
-            r#"{{"protocol_version":{{"major":1,"minor":0}},"pid":{},"port":47821,"started_at":"{}","measured_at":"later"}}"#,
+            r#"{{"protocol_version":{{"major":1,"minor":0}},"pid":{},"port":12345,"started_at":"{}","measured_at":"later"}}"#,
             std::process::id(),
             our_start()
         ),
@@ -285,7 +285,7 @@ fn a_runtime_file_carrying_one_integer_reads_as_that_major_at_minor_zero() {
     std::fs::write(
         &path,
         format!(
-            r#"{{"protocol_version":4,"pid":{},"port":47821,"started_at":"{}"}}"#,
+            r#"{{"protocol_version":4,"pid":{},"port":12345,"started_at":"{}"}}"#,
             std::process::id(),
             our_start()
         ),

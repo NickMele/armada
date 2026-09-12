@@ -585,7 +585,7 @@ fn pretend_a_fleet_is_running(machine: &Path) {
     let file = fleet::runtime::RuntimeFile {
         protocol_version: ipc::PROTOCOL_VERSION,
         pid,
-        port: 47821,
+        port: 12345,
         started_at,
     };
     std::fs::write(
