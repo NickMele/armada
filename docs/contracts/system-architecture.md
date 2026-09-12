@@ -344,7 +344,11 @@ inside one Manifest, and the handshake says which.
 rather than a permission.** A repository Fleet serves carries the entry in its
 own `.mcp.json`, naming `armada mcp` — a relay that reads the runtime file for
 the port, resolves its own working directory to a Manifest, and refuses where
-that Manifest is not the one Fleet is serving. It refuses on
+that Manifest is not the one Fleet is serving. A session started in a
+subdirectory resolves upward to the repository root and discloses at its
+handshake which one it adopted; the walk stops at a repository with no Manifest
+and at the home directory, so it reaches neither a parent repository nor a
+machine-wide `armada.yml`. It refuses on
 `Stale { PidHeldByAnother }` rather than connecting to a port something else
 now holds, and every refusal is an MCP session that opened: a handshake saying
 why, with no tools.

@@ -706,8 +706,12 @@ and `DELETE` for `/mcp`'s reason, so it adds nothing to the risk above.
 **Who opens it is the repository somebody is standing in.** `armada mcp` is the
 relay a repository's own `.mcp.json` names: it reads `fleet.json` for the port,
 refuses on `Stale { PidHeldByAnother }` rather than connecting to a port another
-process now holds, and resolves its own working directory to a Manifest —
-never a request field, for the reason a Job id is not one on a Drone's tools.
+process now holds, and resolves its own working directory to a Manifest — never
+a request field, for the reason a Job id is not one on a Drone's tools. A
+session started below a repository root walks up to it, and says at its
+handshake which root it settled on. The walk ends at a repository that has no
+Manifest of its own, and at the home directory, so it can reach neither a parent
+repository nor an `armada.yml` sitting above every project on the machine.
 A session that resolves to no Manifest, or to one this Fleet is not serving, is
 answered rather than dropped: the handshake succeeds and carries the reason, and
 `tools/list` is empty. **None of it is authentication** — the bind is loopback

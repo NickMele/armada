@@ -11,7 +11,7 @@ use fleet::process::StartedAt;
 use fleet::runtime::{Presence, RuntimeFile, Staleness};
 use ipc::{ManifestId, ManifestSummary, ProtocolVersion, PROTOCOL_VERSION};
 
-use crate::mcp::{listening, publish, refused, standing_in, stands_in};
+use crate::mcp::{found_in, listening, noting, publish, refused, standing_in, stands_in};
 use crate::tests::{repository, TempDir};
 
 fn file(version: ProtocolVersion) -> RuntimeFile {
@@ -39,44 +39,107 @@ fn manifest(id: &str) -> ManifestSummary {
 }
 
 /// The definition of done's first half: a repository Armada knows resolves to
-/// the Manifest that names it.
+/// the Manifest that names it, and says nothing about a walk it did not make.
 #[test]
 fn the_repository_you_are_standing_in_is_the_manifest_you_are_asking_about() {
     let dir = TempDir::new();
     dir.write("armada.yml", "version: 1\nid: 01FIXTUREMANIFEST\n");
 
-    assert_eq!(
-        standing_in(dir.path()),
-        Ok(String::from("01FIXTUREMANIFEST"))
-    );
+    let standing = standing_in(dir.path()).expect("the Manifest here");
+
+    assert_eq!(standing.id(), "01FIXTUREMANIFEST");
+    assert_eq!(standing.root(), dir.path());
+    assert_eq!(standing.adopted(), None, "nothing was adopted");
 }
 
-/// The second half: a repository Armada does not know is told so. **Never
-/// answered from another repository's work**, which is what a search upward
-/// would quietly do.
+/// **A session started below a root resolves upward to it**, because a person
+/// working in a subdirectory is working in the repository above it.
 #[test]
-fn a_directory_with_no_manifest_is_told_so_and_names_the_nearest_one() {
+fn a_subdirectory_resolves_to_the_repository_above_it() {
     let dir = TempDir::new();
     dir.write("armada.yml", "version: 1\nid: 01FIXTUREMANIFEST\n");
-    std::fs::create_dir_all(dir.path().join("packages/inner")).expect("a subdirectory");
+    let inner = dir.path().join("packages/inner");
+    std::fs::create_dir_all(&inner).expect("a subdirectory");
 
-    let said = standing_in(&dir.path().join("packages/inner")).expect_err("no Manifest there");
+    let standing = standing_in(&inner).expect("the Manifest above");
 
-    assert!(said.contains("there is no armada.yml"), "{said}");
-    assert!(
-        said.contains(&dir.path().display().to_string()),
-        "the repository above is named rather than adopted: {said}"
-    );
+    assert_eq!(standing.id(), "01FIXTUREMANIFEST");
+    assert_eq!(standing.root(), dir.path());
 }
 
+/// **What it adopted is disclosed, not assumed.** Answering a session about a
+/// repository its person did not think they were standing in is the failure the
+/// walk introduces, and the handshake is where a model reads what it is in.
+#[test]
+fn a_session_that_resolved_upward_says_so_and_names_the_root() {
+    let dir = TempDir::new();
+    dir.write("armada.yml", "version: 1\nid: 01FIXTUREMANIFEST\n");
+    let inner = dir.path().join("packages/inner");
+    std::fs::create_dir_all(&inner).expect("a subdirectory");
+
+    let said = standing_in(&inner)
+        .expect("the Manifest above")
+        .adopted()
+        .expect("a session that walked says so");
+
+    assert!(said.contains(&inner.display().to_string()), "{said}");
+    assert!(said.contains(&dir.path().display().to_string()), "{said}");
+}
+
+/// **The walk stops at a repository root.** Carrying on would answer a session
+/// about the repository *containing* the one somebody is working in — which is
+/// a directory nobody in that session has open.
+#[test]
+fn a_repository_with_no_manifest_ends_the_walk_rather_than_escaping_it() {
+    let outer = TempDir::new();
+    outer.write("armada.yml", "version: 1\nid: 01OUTERMANIFEST\n");
+    let inner = outer.path().join("vendor/theirs");
+    std::fs::create_dir_all(inner.join(".git")).expect("a repository of their own");
+
+    let said = standing_in(&inner).expect_err("their repository is not ours");
+
+    assert!(said.contains("has not been set up for"), "{said}");
+    assert!(said.contains(&inner.display().to_string()), "{said}");
+    assert!(!said.contains("01OUTERMANIFEST"), "{said}");
+}
+
+/// The other end of the walk. **A Manifest in a home directory is not every
+/// session's Manifest**, so the search stops there rather than at `/`.
+#[test]
+fn the_walk_stops_at_the_home_directory() {
+    let home = TempDir::new();
+    home.write("armada.yml", "version: 1\nid: 01HOMEMANIFEST\n");
+    let under = home.path().join("scratch");
+    std::fs::create_dir_all(&under).expect("a directory under it");
+
+    assert_eq!(
+        found_in(&under, Some(home.path()))
+            .expect("the home directory is itself searched")
+            .id(),
+        "01HOMEMANIFEST"
+    );
+    let said = found_in(&under, Some(&under)).expect_err("nothing above may be read");
+    assert!(said.contains("or in any directory above it"), "{said}");
+}
+
+/// **A Manifest that is there and will not parse ends the walk**, rather than
+/// being stepped over on the way to a different repository's.
 #[test]
 fn a_manifest_that_will_not_parse_is_a_refusal_and_not_a_guess() {
-    let dir = TempDir::new();
-    dir.write("armada.yml", "version: 1\nid: 01FIXTURE\nnonsense: true\n");
+    let outer = TempDir::new();
+    outer.write("armada.yml", "version: 1\nid: 01OUTERMANIFEST\n");
+    let inner = outer.path().join("inner");
+    std::fs::create_dir_all(&inner).expect("a subdirectory");
+    std::fs::write(
+        inner.join("armada.yml"),
+        "version: 1\nid: 01FIXTURE\nnonsense: true\n",
+    )
+    .expect("a Manifest with a key nothing reads");
 
-    let said = standing_in(dir.path()).expect_err("a Manifest with a key nothing reads");
+    let said = standing_in(&inner).expect_err("this one is refused");
 
     assert!(said.contains("could not be read"), "{said}");
+    assert!(!said.contains("01OUTERMANIFEST"), "{said}");
 }
 
 #[test]
@@ -231,5 +294,31 @@ fn this_repository_publishes_its_own_door() {
         adapters::Published::AlreadyThere,
         "this repository's {} is not what publishing writes:\n{theirs}",
         adapters::REPOSITORY_CONFIG
+    );
+}
+
+/// The disclosure rides on Fleet's own handshake rather than replacing it: the
+/// scope sentence is still there, and every other answer is untouched.
+#[test]
+fn the_note_is_added_to_the_handshake_and_to_nothing_else() {
+    let handshake = br#"{"jsonrpc":"2.0","id":1,"result":{"instructions":"Every answer is inside Manifest armada."}}"#;
+    let listed = br#"{"jsonrpc":"2.0","id":2,"result":{"tools":[]}}"#;
+
+    let noted = String::from_utf8(noting(handshake.to_vec(), Some("It walked up."))).expect("text");
+
+    assert!(noted.contains("It walked up."), "{noted}");
+    assert!(
+        noted.contains("Every answer is inside Manifest armada."),
+        "{noted}"
+    );
+    assert_eq!(
+        noting(listed.to_vec(), Some("It walked up.")),
+        listed.to_vec(),
+        "an answer with no instructions is carried through byte for byte"
+    );
+    assert_eq!(
+        noting(handshake.to_vec(), None),
+        handshake.to_vec(),
+        "and so is a handshake where nothing was adopted"
     );
 }

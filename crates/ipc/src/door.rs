@@ -387,6 +387,24 @@ fn instructions(scope: &str) -> String {
     )
 }
 
+/// One sentence added to an answer a relay is carrying through.
+///
+/// **For `#698`'s one disclosure**: a session resolved upward from a
+/// subdirectory is answered about a repository its person may not have thought
+/// they were standing in, and the handshake is where a model reads what its
+/// session is. A relay cannot write it — the JSON on this door is this module's
+/// — and the answer it is adding to is Fleet's, not its own.
+///
+/// `None` where the bytes are not a handshake carrying instructions, so the
+/// caller writes what it was given through unchanged.
+pub fn also_saying(answer: &[u8], note: &str) -> Option<String> {
+    let mut message: Value = serde_json::from_slice(answer).ok()?;
+    let instructions = message.get_mut("result")?.get_mut("instructions")?;
+    let said = instructions.as_str()?;
+    *instructions = Value::String(format!("{note} {said}"));
+    encode(&message).ok()
+}
+
 /// Every tool, as a client is shown it.
 fn listed(shapes: &[Shape]) -> Vec<Value> {
     shapes.iter().map(tool).collect()
