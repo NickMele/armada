@@ -25,7 +25,7 @@
 //! second vocabulary that agrees with the log only until something changes.
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
-use api::{FramePart, FrameSpan, Observed, Queries, Refusal, Resolved};
+use api::{FramePart, FrameSpan, Observed, ObservedCheckoutRun, Queries, Refusal, Resolved};
 use core_model::JobReference;
 use ipc::{
     AlertList, CallArguments, DroneDetail, DroneId, DroneList, FleetCapacity, FleetHealth,
@@ -768,8 +768,7 @@ where
         self.observe_rehearsal(&job_id.to_domain(), run_id).await
     }
 
-    /// The Manifest surface's own sheet, off the file Fleet holds. **No Job
-    /// is loaded and no store is read** — `crate::rehearsing::checkout`.
+    /// The Manifest surface's four reads — `crate::rehearsing::checkout`.
     async fn get_checkout_run_sheet(&self) -> Result<ipc::CheckoutRunSheet, Refusal> {
         self.checkout_run_sheet().await
     }
@@ -782,10 +781,7 @@ where
         self.checkout_rehearsal_output(run_id).await
     }
 
-    async fn observe_checkout_run(
-        &self,
-        run_id: String,
-    ) -> Result<api::ObservedCheckoutRun, Refusal> {
+    async fn observe_checkout_run(&self, run_id: String) -> Result<ObservedCheckoutRun, Refusal> {
         self.observe_checkout_rehearsal(run_id).await
     }
 

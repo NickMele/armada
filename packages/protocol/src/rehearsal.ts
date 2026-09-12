@@ -1,5 +1,5 @@
-// A person's run of one Manifest entry in a Job's worktree — the run sheet's
-// wire. `crates/ipc/src/rehearsal.rs`. Since protocol 10.6.
+// A person's run of one Manifest entry — in a Job's worktree or in the main
+// checkout. `crates/ipc/src/rehearsal.rs`. Since protocol 10.6.
 //
 // **A rehearsal, never a verdict.** Nothing here is a Check row or Evidence,
 // and nothing here moves a Job, so no field maps onto a status colour.
@@ -188,3 +188,100 @@ export type RunFollowed =
       ended?: string;
     }
   | { state: "failed"; jobId: string; runId: string; detail: string };
+
+// ---------------------------------------------------------------------------
+// The checkout's half — Journey 9, *Running one*. Since protocol 11.6.
+// ---------------------------------------------------------------------------
+//
+// Its own shapes rather than the Job's with the id left out: every type above
+// carries a required `job_id`, and the main checkout is not a Job with a blank
+// one. What these drop is what only a Job has — a frozen Manifest, a worktree
+// that can be gone, a Drone in the tree, and a diff to narrow against.
+
+/** `GET /manifest/run_sheet` — what can be run in the main checkout. */
+export type CheckoutRunSheet = {
+  /** The Commands `setup.requires` names, in its order. */
+  setup: RunEntry[];
+  /** Every Check, in the order the Manifest declares them. */
+  checks: RunEntry[];
+  /** Every Command `setup.requires` does not name. */
+  commands: RunEntry[];
+  /** When the Manifest was last changed by a commit. */
+  manifest_edited_at?: string;
+  /** The run in flight in the checkout, if one is. */
+  running?: CheckoutRunUnderway;
+  /** The Commands declaring `serve`, each with the checkout's instance. */
+  servers?: ServerEntry[];
+};
+
+/**
+ * `POST /manifest/start_run`'s body. A name and nothing else — there is no
+ * frozen Manifest to choose against and no diff to narrow to, so neither of
+ * `StartRun`'s two flags has an answer here.
+ */
+export type StartCheckoutRun = { name: string };
+
+/** A checkout run that has started and not finished. */
+export type CheckoutRunUnderway = {
+  id: string;
+  name: string;
+  command: string;
+  /** Elapsed time is counted from here; nothing ticks on the wire. */
+  started_at: string;
+};
+
+/** One finished checkout run. `GET /manifest/runs`'s row. */
+export type CheckoutRunRecord = {
+  id: string;
+  name: string;
+  command: string;
+  required: string[];
+  started_at: string;
+  ended_at: string;
+  duration_ms: number;
+  /** Absent where there was no code: a signal, a budget, a spawn that failed. */
+  exit_code?: number;
+  expect_exit_code: number;
+  /** How it ended, in a sentence. Unhued: a rehearsal. */
+  ended: string;
+  stopped: boolean;
+  changed: ChangedFile[];
+  /** Why the change could not be read. `changed` then means nothing. */
+  changed_unreadable?: string;
+  /**
+   * Whether Undo is there to offer. This tree holds a person's own
+   * uncommitted work, so a run with no snapshot behind it offers none.
+   */
+  undoable: boolean;
+  undone_at?: string;
+  /** The log, relative to `ManifestSummary.records_root`. */
+  log: string;
+};
+
+/** `GET /manifest/runs` — newest first, and what would not read. */
+export type CheckoutRunList = {
+  runs: CheckoutRunRecord[];
+  unreadable: { id: string; why: string }[];
+};
+
+/**
+ * One message on `GET /manifest/runs/:run_id/observe`. `RunMessage`'s four,
+ * one owner over. **It is also how a checkout run's end arrives**: nothing
+ * about one rides `/events`, so the socket closing is the end.
+ */
+export type CheckoutRunMessage =
+  | ({ message: "opened" } & CheckoutRunOpened)
+  | ({ message: "lines" } & { lines: string[] })
+  | ({ message: "missed" } & { dropped: number })
+  | ({ message: "closed" } & { because: string });
+
+export type CheckoutRunOpened = {
+  protocol_version: ProtocolVersion;
+  id: string;
+  name: string;
+  path: string;
+  /** The run was still going when this opened. */
+  live: boolean;
+  /** Older lines the opening read left out, because the window is bounded. */
+  skipped: number;
+};
