@@ -88,6 +88,10 @@ pub struct Fleet<H, V, W> {
     /// its own words rather than leaving Bridge's wait as the only account of
     /// who gave up. See [`crate::commanding::CommandBudget`].
     command_budget: crate::commanding::CommandBudget,
+    /// How long a permission question is held inside the Drone's call before
+    /// the Drone is told to wait for a turn. See
+    /// [`crate::permitting::PermissionHold`].
+    permission_hold: crate::permitting::PermissionHold,
     /// The Judge call that is out right now, or none. **The one piece of Fleet
     /// state that is only ever true for as long as it takes** — it is never
     /// written down, because a record of it would outlive the fact.

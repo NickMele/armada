@@ -176,6 +176,12 @@ pub struct Fittings<H, V, W> {
     /// its own words. See [`crate::commanding::CommandBudget`], which has no
     /// default for [`JudgeBudget`]'s reason.
     pub command_budget: crate::commanding::CommandBudget,
+    /// How long one permission question is held open inside the Drone's call
+    /// before the Drone is told to wait for the answer as a turn. See
+    /// [`crate::permitting::PermissionHold`], which has no default for
+    /// [`JudgeBudget`]'s reason — and which the composition root writes as the
+    /// harness-derived [`crate::permitting::HOLD`].
+    pub permission_hold: crate::permitting::PermissionHold,
     /// What a step naming no model of its own is judged by. **Resolved by the
     /// composition root**, like every other input here — which model is cheap
     /// is a vendor's fact, and nothing below Fleet may spell one.
@@ -231,6 +237,7 @@ where
             judge_budget: fittings.judge_budget,
             proposer_budget: fittings.proposer_budget,
             command_budget: fittings.command_budget,
+            permission_hold: fittings.permission_hold,
             aloft: Aloft::default(),
             underway: Underway::default(),
             proposals: Proposals::new(),

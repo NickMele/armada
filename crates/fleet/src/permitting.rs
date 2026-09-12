@@ -22,9 +22,35 @@ mod holding;
 
 pub use holding::{domain_setting, wire_setting, NotPermitted};
 
+use std::time::Duration;
+
+use adapter_traits::PERMISSION_WAIT;
 use core_model::{AllowedCommand, Reach, StepId, Timestamp, WhenBlocked};
 use ipc::CommandAnswer;
 use tokio::sync::oneshot;
+
+/// How long a question is held open for a person: a minute under what the
+/// harness waits, so the answer the Drone gets is Fleet's and says why.
+pub const HOLD: Duration = Duration::from_secs(PERMISSION_WAIT.as_secs() - 60);
+
+/// How long [`Fleet::permission`](crate::Fleet::permission) holds a question
+/// inside the Drone's call before telling it to wait for a turn. The shipped
+/// value is [`HOLD`], which the composition root writes out.
+///
+/// **A fitting rather than the constant it wraps**, so a test can plant a hold
+/// it can outlive: four real minutes is not a wait any case can make.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PermissionHold(Duration);
+
+impl PermissionHold {
+    pub fn of(hold: Duration) -> PermissionHold {
+        PermissionHold(hold)
+    }
+
+    pub fn duration(&self) -> Duration {
+        self.0
+    }
+}
 
 /// A permission question a person has been asked, about a call this Drone
 /// made, and not answered yet.
