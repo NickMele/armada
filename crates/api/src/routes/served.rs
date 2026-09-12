@@ -1,0 +1,709 @@
+//! The inventory: every operation M1 serves, declared once as data.
+//!
+//! **Split out of `crate::routes` when that file crossed the 900-line rule.**
+//! The router and the table it is compared against are two different things,
+//! and the file named for the router now holds the router. The gate rule reads
+//! both halves as one text — `xtask/src/rules_protocol.rs`.
+
+/// One operation, and where it is served.
+///
+/// `operation` is the key in `crates/ipc/operations.toml`, spelled exactly as
+/// that file spells it, so comparing the two needs a set lookup and no mapping.
+pub struct Route {
+    pub operation: &'static str,
+    pub method: &'static str,
+    pub path: &'static str,
+}
+
+/// The operations M1 serves — a deliberate subset of the inventory, not all of it.
+///
+/// The rest of the inventory, the `/v0` lifeboat and version-skew handling are
+/// the Ship milestone's. Nothing here stubs them: a route that answers with a
+/// placeholder is worse than one that 404s, because a client cannot tell the
+/// difference between not built and not working.
+///
+/// A path is checkable against its inventory key by eye. `list_jobs` and
+/// `get_job` are the collection and the member and name no act; every other row
+/// spells its key in the last segment, except `redispatch`, which drops `_job`
+/// because no `redispatch_drone` exists to tell it apart from. The lifeboat's
+/// `POST /v0/jobs/:id/kill` is the same act as `kill_job` under a frozen prefix
+/// that shares nothing with this table, by design.
+pub const SERVED: &[Route] = &[
+    Route {
+        operation: "list_jobs",
+        method: "GET",
+        path: "/jobs",
+    },
+    Route {
+        operation: "get_job",
+        method: "GET",
+        path: "/jobs/:job_id",
+    },
+    // Fleet's own capacity, not a Job's. It is `/capacity` and not
+    // `/jobs/capacity` because nothing about it is scoped to a Job — the whole
+    // point is the answer no per-Job field could give.
+    Route {
+        operation: "get_capacity",
+        method: "GET",
+        path: "/capacity",
+    },
+    // Fleet's reading of its own Manifest, and singular where `/manifests` is
+    // plural on purpose: that route lists what Fleet holds, and this one is the
+    // single `armada.yml` Fleet is running on and watching. Not under `/jobs`
+    // for `get_capacity`'s reason — a reload belongs to no Job at all.
+    Route {
+        operation: "get_manifest_reading",
+        method: "GET",
+        path: "/manifest/reading",
+    },
+    // The other half of the reading above, and a different question: that one
+    // is what Fleet could not adopt from the file, this is whether the
+    // repository still has what the file names. Under `/manifest` beside it for
+    // its reason — a Fleet serves one repository and neither belongs to a Job.
+    Route {
+        operation: "get_manifest_drift",
+        method: "GET",
+        path: "/manifest/drift",
+    },
+    // The `@` mention popup's read. `?q=` rather than a path segment: the
+    // query is a person's typed text, empty the instant they type `@` and
+    // before anything follows it, and a path segment cannot carry that. A
+    // Fleet serves one repository, so nothing here names one.
+    Route {
+        operation: "search_files",
+        method: "GET",
+        path: "/manifest/files",
+    },
+    // The path taken, under the Job that took it. `get_job_events` drops
+    // `get_` and `job_` for the reason `redispatch` drops `_job`: the segment
+    // before it already names the Job. It is not `/events`, which is the
+    // global stream and carries no history at all.
+    Route {
+        operation: "get_job_events",
+        method: "GET",
+        path: "/jobs/:job_id/events",
+    },
+    // The two halves of the work product, on two routes and not one. Evidence
+    // is a handful of sentences per step and the patch is however large the
+    // work is, so a surface wanting only the claims does not fetch the bytes.
+    // Neither is on `get_job`, which is read on every open to draw a summary.
+    Route {
+        operation: "get_evidence",
+        method: "GET",
+        path: "/jobs/:job_id/evidence",
+    },
+    Route {
+        operation: "get_diff",
+        method: "GET",
+        path: "/jobs/:job_id/diff",
+    },
+    // What people wrote on the pull request, beside the two halves of the work
+    // product and for their reason: it is read by the surface where somebody is
+    // deciding and by nothing else. **The one query on this table that talks to
+    // a forge**, which is why it is not a field on `get_job`.
+    Route {
+        operation: "get_remarks",
+        method: "GET",
+        path: "/jobs/:job_id/remarks",
+    },
+    // The machine reading, and the act above it. Not fields on `get_job`,
+    // which is re-read on every event naming the Job: these walk a process
+    // table and a directory. The act is a POST because it does work and leaves
+    // a line in the Job's own log, which is where its answer lives.
+    Route {
+        operation: "get_job_resources",
+        method: "GET",
+        path: "/jobs/:job_id/resources",
+    },
+    Route {
+        operation: "examine_job",
+        method: "POST",
+        path: "/jobs/:job_id/examine",
+    },
+    // One call's arguments, and a member read rather than an act — the same
+    // shape as `get_job` under `/jobs`, which is why the last segment is the id
+    // and not the key. The socket sends the line and the size; this is what a
+    // person opening that row asks for, once, about one call.
+    Route {
+        operation: "get_call",
+        method: "GET",
+        path: "/jobs/:job_id/calls/:call_id",
+    },
+    // What that call would do, read by a model for the person deciding whether
+    // to allow it. Under the call and not beside it: it is a second reading of
+    // the one call above, on the same id `answer_command` takes. A query,
+    // because it decides nothing — the offers are unchanged and the Drone stays
+    // held whatever it says.
+    Route {
+        operation: "explain_command",
+        method: "GET",
+        path: "/jobs/:job_id/calls/:call_id/explain",
+    },
+    // One Check's output, read into the app rather than handed to the operating
+    // system. `:kept` is a row's own file name — the last component of
+    // `output_path` — and never a path the caller composed: Fleet resolves it
+    // against the rows it holds for the Job before it opens anything.
+    Route {
+        operation: "get_check_output",
+        method: "GET",
+        path: "/jobs/:job_id/checks/:kept/output",
+    },
+    // One frame a step's harness produced, answered as the file. `:kept` is the
+    // run directory and the file name joined — composed by Fleet, handed to the
+    // client on the row, and resolved against the rows this Job holds before
+    // anything is opened. Two components rather than one because a frame's name
+    // is the harness's own and two steps may both have written `home.png`.
+    Route {
+        operation: "get_frame",
+        method: "GET",
+        path: "/jobs/:job_id/frames/:run/:name",
+    },
+    Route {
+        operation: "list_workflows",
+        method: "GET",
+        path: "/workflows",
+    },
+    Route {
+        operation: "list_manifests",
+        method: "GET",
+        path: "/manifests",
+    },
+    Route {
+        operation: "list_models",
+        method: "GET",
+        path: "/models",
+    },
+    // What Fleet is holding disk for, read across every Job at once. Not under
+    // `/jobs/:job_id` and not a field on one: the question is which of these to
+    // give back, which is asked of the set and answered by comparing them.
+    Route {
+        operation: "list_worktrees",
+        method: "GET",
+        path: "/worktrees",
+    },
+    Route {
+        operation: "propose_job",
+        method: "POST",
+        path: "/jobs",
+    },
+    // A second POST under `/jobs`, and a segment rather than a mode flag on the
+    // first: what a caller sends is a different shape, and one route taking
+    // either would be the two paths sharing a body that means two things.
+    Route {
+        operation: "propose_from_request",
+        method: "POST",
+        path: "/jobs/from_request",
+    },
+    // Not under `/jobs`, because a proposal is not one yet — that is the whole
+    // of what it is deciding. The id is in the body rather than the path for
+    // the reason `ipc::StopProposal` states: a proposal has exactly one
+    // operation and is not a resource.
+    Route {
+        operation: "stop_proposal",
+        method: "POST",
+        path: "/proposals/stop",
+    },
+    Route {
+        operation: "approve_dispatch",
+        method: "POST",
+        path: "/jobs/:job_id/approve_dispatch",
+    },
+    // The three answers at a human gate, and three routes rather than one with
+    // a decision in the body: each does something different to the Job, and one
+    // route taking any of them would be a body that means three things. The
+    // reject path drops `_job` for the reason `redispatch` does.
+    Route {
+        operation: "approve_review",
+        method: "POST",
+        path: "/jobs/:job_id/approve_review",
+    },
+    Route {
+        operation: "request_changes",
+        method: "POST",
+        path: "/jobs/:job_id/request_changes",
+    },
+    Route {
+        operation: "reject_job",
+        method: "POST",
+        path: "/jobs/:job_id/reject",
+    },
+    // A fifth thing to do at the same gate, and its own route for the reason
+    // the three above have three: what it does to the Job is `request_changes`,
+    // and what it takes is a set of handles off a forge rather than a person's
+    // words. One route taking either would be a body that means two things.
+    Route {
+        operation: "take_up_remarks",
+        method: "POST",
+        path: "/jobs/:job_id/take_up_remarks",
+    },
+    // The fourth answer, and the only route on this table that writes into a
+    // repository Fleet did not make. Its own route for the reason the three
+    // above have three: it does something different to the world, and one route
+    // taking a decision in the body would be a body that means four things.
+    Route {
+        operation: "merge_pull_request",
+        method: "POST",
+        path: "/jobs/:job_id/merge",
+    },
+    // A sixth thing to do at the review gate, `#663`: the branch is behind
+    // main or conflicts with it, and this is Fleet's own rebase, never a
+    // Drone's — its own route for `take_up_remarks`'s reason, a body that
+    // took a flag here would mean two things.
+    Route {
+        operation: "resolve_pull_request_conflict",
+        method: "POST",
+        path: "/jobs/:job_id/resolve_pull_request_conflict",
+    },
+    // The answer at a gate that refused, which is a different place from the
+    // three above: those answer `awaiting_review` and this answers `escalated`.
+    // Its own route rather than a flag on `approve_review` — one route taking
+    // either would let a refusal be taken with the act built for work nothing
+    // objected to, which is exactly the confusion the record has to keep apart.
+    Route {
+        operation: "override_verdict",
+        method: "POST",
+        path: "/jobs/:job_id/override_verdict",
+    },
+    // The answer at a gate that could not rule, which is a different place
+    // again: `override_verdict` lifts a decision and this asks for one. Its own
+    // route rather than a flag on that one — the two triggers do not overlap,
+    // and one route taking either would let a step nothing weighed be advanced
+    // by the act built for disagreeing with a machine that did.
+    Route {
+        operation: "rerun_gate",
+        method: "POST",
+        path: "/jobs/:job_id/rerun_gate",
+    },
+    // A person asking a Job to show its work. A POST because it runs a
+    // repository's harness and keeps what it captured, and its own route
+    // because it moves nothing on the Job — what comes back is a set of frames
+    // rather than a row.
+    Route {
+        operation: "show_again",
+        method: "POST",
+        path: "/jobs/:job_id/show_again",
+    },
+    // The run sheet: what can be run in a Job's worktree, a person's run of one
+    // entry, and what the runs left. A rehearsal, so nothing here moves the Job.
+    // `runs/:run_id/output` is `checks/:kept/output`'s shape one record over.
+    Route {
+        operation: "get_run_sheet",
+        method: "GET",
+        path: "/jobs/:job_id/run_sheet",
+    },
+    Route {
+        operation: "list_runs",
+        method: "GET",
+        path: "/jobs/:job_id/runs",
+    },
+    Route {
+        operation: "get_run_output",
+        method: "GET",
+        path: "/jobs/:job_id/runs/:run_id/output",
+    },
+    Route {
+        operation: "start_run",
+        method: "POST",
+        path: "/jobs/:job_id/start_run",
+    },
+    Route {
+        operation: "stop_run",
+        method: "POST",
+        path: "/jobs/:job_id/stop_run",
+    },
+    Route {
+        operation: "undo_run",
+        method: "POST",
+        path: "/jobs/:job_id/undo_run",
+    },
+    // The same sheet for the main checkout, under `/manifest` beside
+    // `get_manifest_reading` and for its reason: no Job is involved at all.
+    Route {
+        operation: "get_checkout_run_sheet",
+        method: "GET",
+        path: "/manifest/run_sheet",
+    },
+    Route {
+        operation: "list_checkout_runs",
+        method: "GET",
+        path: "/manifest/runs",
+    },
+    Route {
+        operation: "get_checkout_run_output",
+        method: "GET",
+        path: "/manifest/runs/:run_id/output",
+    },
+    Route {
+        operation: "start_checkout_run",
+        method: "POST",
+        path: "/manifest/start_run",
+    },
+    Route {
+        operation: "stop_checkout_run",
+        method: "POST",
+        path: "/manifest/stop_run",
+    },
+    Route {
+        operation: "undo_checkout_run",
+        method: "POST",
+        path: "/manifest/undo_run",
+    },
+    // Servers: a Command that stays running. Not under `/jobs` because one
+    // started with no Job belongs to none; the start and stop are segments of
+    // the collection, `stop_proposal`'s shape, since an instance's id is all a
+    // stop needs.
+    Route {
+        operation: "list_servers",
+        method: "GET",
+        path: "/servers",
+    },
+    Route {
+        operation: "start_server",
+        method: "POST",
+        path: "/servers/start",
+    },
+    Route {
+        operation: "stop_server",
+        method: "POST",
+        path: "/servers/stop",
+    },
+    // The one act on this table that changes what a Job may spend, and its own
+    // route because nothing else on the Job is a number a person sets. It is
+    // not a field on some general update: there is no general update, and the
+    // reason there is not is that every other row here is a named act with its
+    // own refusals.
+    Route {
+        operation: "raise_cost_cap",
+        method: "POST",
+        path: "/jobs/:job_id/raise_cost_cap",
+    },
+    // The other ceiling, on a route of its own for the reason the row above
+    // is not a field on some general update: the two are refused separately
+    // and a person clears one of them at a time.
+    Route {
+        operation: "raise_turn_cap",
+        method: "POST",
+        path: "/jobs/:job_id/raise_turn_cap",
+    },
+    Route {
+        operation: "kill_drone",
+        method: "POST",
+        path: "/jobs/:job_id/kill_drone",
+    },
+    Route {
+        operation: "kill_job",
+        method: "POST",
+        path: "/jobs/:job_id/kill_job",
+    },
+    // Real deletion, and the only route on this table that is: every other
+    // command moves a Job further, and this removes the row.
+    Route {
+        operation: "forget_job",
+        method: "POST",
+        path: "/jobs/:job_id/forget_job",
+    },
+    // The other half of the row above, and its own route because that row says
+    // why: one call with two unrelated things to fail at is worse than two
+    // calls. This one takes the disk and leaves the record.
+    Route {
+        operation: "reclaim_worktree",
+        method: "POST",
+        path: "/jobs/:job_id/reclaim_worktree",
+    },
+    Route {
+        operation: "redispatch_job",
+        method: "POST",
+        path: "/jobs/:job_id/redispatch",
+    },
+    // The two acts that resume a step without redispatching. Two routes and
+    // not one with a mode: which applies is decided by whether the Job holds a
+    // Drone, and a caller that asked for the wrong one is told which is right
+    // rather than silently given it.
+    Route {
+        operation: "redirect_drone",
+        method: "POST",
+        path: "/jobs/:job_id/redirect",
+    },
+    Route {
+        operation: "restart_step",
+        method: "POST",
+        path: "/jobs/:job_id/restart_step",
+    },
+    // Its own route and not a shape `redirect` also takes: one carries a
+    // person's words and this a label the Drone offered, and one route taking
+    // either would make the closed set optional.
+    Route {
+        operation: "answer_question",
+        method: "POST",
+        path: "/jobs/:job_id/answer_question",
+    },
+    // Not a shape `answer_question` also takes: that one is a label a Drone
+    // offered, and this one of three answers Fleet offers about a command.
+    Route {
+        operation: "answer_command",
+        method: "POST",
+        path: "/jobs/:job_id/answer_command",
+    },
+    Route {
+        operation: "set_when_blocked",
+        method: "POST",
+        path: "/jobs/:job_id/set_when_blocked",
+    },
+    Route {
+        operation: "answer_judge",
+        method: "POST",
+        path: "/jobs/:job_id/answer_judge",
+    },
+    Route {
+        operation: "set_when_refused",
+        method: "POST",
+        path: "/jobs/:job_id/set_when_refused",
+    },
+    Route {
+        operation: "set_model",
+        method: "POST",
+        path: "/jobs/:job_id/set_model",
+    },
+    Route {
+        operation: "remove_allowed_command",
+        method: "POST",
+        path: "/jobs/:job_id/remove_allowed_command",
+    },
+    // What a person says went wrong, under the Job it is about, and every
+    // report filed, which is not under one — a report outlives the Job it
+    // names, so a listing reachable only through a Job would lose exactly the
+    // reports that most need reading.
+    Route {
+        operation: "file_report",
+        method: "POST",
+        path: "/jobs/:job_id/report",
+    },
+    Route {
+        operation: "list_reports",
+        method: "GET",
+        path: "/reports",
+    },
+    // A socket rather than a body: it opens with what has already happened and
+    // then continues, which no request-response shape carries. The path drops
+    // `_job` for the reason `redispatch` does — the segment before it already
+    // names the Job.
+    Route {
+        operation: "observe_job",
+        method: "GET",
+        path: "/jobs/:job_id/observe",
+    },
+    // The Job's own log, beside its Drone's transcript and not inside it. The
+    // path drops `observe_` and `_job` for the reason `redispatch` drops one:
+    // the segment before it already names the Job, and `observe` is taken by
+    // the socket next door. **A socket rather than a query** for that one's
+    // reason — what it answers is what has already been written followed by
+    // what is written next, which no request-response shape carries.
+    Route {
+        operation: "observe_job_log",
+        method: "GET",
+        path: "/jobs/:job_id/log",
+    },
+    // One running Check's log, as it is written. `get_check_output`'s `:kept`
+    // one route over, resolved against the Checks the Job's gate is running
+    // rather than against the rows; a socket for `observe_job_log`'s reason.
+    Route {
+        operation: "observe_check_output",
+        method: "GET",
+        path: "/jobs/:job_id/checks/:kept/observe",
+    },
+    // One person's run, as it prints: a socket per run, for `observe_job`'s
+    // reason — output on `/events` would evict the state the Board is drawn from.
+    Route {
+        operation: "observe_run",
+        method: "GET",
+        path: "/jobs/:job_id/runs/:run_id/observe",
+    },
+    // One checkout run's output — `observe_run`'s socket, one owner over.
+    Route {
+        operation: "observe_checkout_run",
+        method: "GET",
+        path: "/manifest/runs/:run_id/observe",
+    },
+    // One server's output, as it prints — `observe_run`'s shape per instance.
+    Route {
+        operation: "observe_server",
+        method: "GET",
+        path: "/servers/:server_id/observe",
+    },
+    // Every event kind is served on the one socket, and every one is named:
+    // `SERVED` is what a rule compares to the inventory, so a kind published
+    // and not listed here is a kind no rule can see. The rule also compares
+    // this group to `crates/ipc/src/event.rs`'s `Event` enum, which is the
+    // closed set of kinds that can actually be published — a variant there
+    // with no row here now fails the gate rather than reading as complete
+    // while two kinds went unlisted.
+    Route {
+        operation: "job.created",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "job.state_changed",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "job.step_advanced",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "drone.spawned",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "drone.exited",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "job.files_changed",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "job.judging",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "job.checking",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "job.asking",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "job.command_waiting",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "job.forgotten",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "job.landed",
+        method: "GET",
+        path: "/events",
+    },
+    // The forge's comments on a Job's pull request changed since the last
+    // sweep found it open. `#661`.
+    Route {
+        operation: "job.remarks_changed",
+        method: "GET",
+        path: "/events",
+    },
+    // The one kind on this stream that names no Job. A proposal is the interval
+    // before any exists, which is why it carries an id of its own.
+    Route {
+        operation: "proposal.moved",
+        method: "GET",
+        path: "/events",
+    },
+    // The other kind that names no Job, and it names no Drone or step either.
+    // A Manifest is Fleet's own, so nothing on the Board moves when it arrives.
+    Route {
+        operation: "manifest.reread",
+        method: "GET",
+        path: "/events",
+    },
+    // A person's run ending. It names a Job and moves nothing on it; what the
+    // run prints is `observe_run`'s, never this stream's.
+    Route {
+        operation: "run.finished",
+        method: "GET",
+        path: "/events",
+    },
+    // A server's three lifecycle facts. Its output is `observe_server`'s.
+    Route {
+        operation: "server.starting",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "server.serving",
+        method: "GET",
+        path: "/events",
+    },
+    Route {
+        operation: "server.exited",
+        method: "GET",
+        path: "/events",
+    },
+    // The four narrowings of `/jobs`, each its own route rather than a filter
+    // on the list: what counts as waiting on a person is a rule, and a rule
+    // stated by every caller is a rule nobody owns.
+    Route {
+        operation: "list_job_board",
+        method: "GET",
+        path: "/jobs/board",
+    },
+    Route {
+        operation: "list_reviews",
+        method: "GET",
+        path: "/jobs/reviews",
+    },
+    Route {
+        operation: "get_activity_feed",
+        method: "GET",
+        path: "/jobs/activity",
+    },
+    // Not under `/jobs`, because it is not a list of Jobs: two buckets, each
+    // holding a row about one.
+    Route {
+        operation: "list_alerts",
+        method: "GET",
+        path: "/alerts",
+    },
+    // The roster and one slot in it. `/drones/:drone_id` is the collection and
+    // the member, naming no act, which is `list_jobs` and `get_job`'s shape one
+    // record over — and not under `/jobs`, because a Drone outlives the step
+    // pointer that names it.
+    Route {
+        operation: "list_drones",
+        method: "GET",
+        path: "/drones",
+    },
+    Route {
+        operation: "get_drone",
+        method: "GET",
+        path: "/drones/:drone_id",
+    },
+    // Fleet's own three, beside `/capacity` and for its reason: none of them is
+    // a fact about any Job. `/manifests/:manifest_id` is the member read under
+    // the collection `list_manifests` already serves.
+    Route {
+        operation: "get_health",
+        method: "GET",
+        path: "/health",
+    },
+    Route {
+        operation: "get_usage",
+        method: "GET",
+        path: "/usage",
+    },
+    Route {
+        operation: "get_manifest",
+        method: "GET",
+        path: "/manifests/:manifest_id",
+    },
+    // What crossed the stream, counted. **Not `/events`**, which is the socket:
+    // this is the read for a caller that cannot hold one, and `?since=` carries
+    // a position rather than naming a resource.
+    Route {
+        operation: "get_events_since",
+        method: "GET",
+        path: "/events/since",
+    },
+];
