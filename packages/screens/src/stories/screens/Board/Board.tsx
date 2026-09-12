@@ -43,6 +43,7 @@ export function BoardFrom({
     composing: false,
     auditing: false,
     clearing: false,
+    manifest: false,
     live,
     refreshing: false,
     onCloseComposer: noop,

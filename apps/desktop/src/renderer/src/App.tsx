@@ -32,6 +32,7 @@ import { DispatchJob } from "@armada/screens";
 import { watchOf } from "@armada/screens";
 import { Reports } from "@armada/screens";
 import { Worktrees } from "@armada/screens";
+import { Manifest, checkoutRunnablesOf } from "@armada/screens";
 import { JobDetail, type ConfirmableAct } from "@armada/screens";
 import { ACT_LABEL, CONFIRM, RESTART_NOTE } from "@armada/screens";
 import { Jobs } from "@armada/screens";
@@ -45,9 +46,13 @@ import {
   openRemarkLink,
   openServerLink,
   observeRun,
+  observeCheckoutRun,
   getRunOutput,
+  getCheckoutRunOutput,
   listRuns,
+  listCheckoutRuns,
   undoRun,
+  undoCheckoutRun,
   explainCommand,
   readCall,
   readCheckOutput,
@@ -64,17 +69,20 @@ import {
   showAgain,
   stageAttachment,
   startRun,
+  startCheckoutRun,
   startServer,
   stopRun,
+  stopCheckoutRun,
   stopServer,
   useCommands,
   useWatching,
   watchRunSheet,
+  watchCheckoutRunSheet,
 } from "./commands";
 import { Palette, useCommandPalette } from "@armada/shell";
 import { copyDebugInfoFor } from "@armada/shell";
 import { Shell } from "@armada/shell";
-import { SURFACE, SURFACES } from "@armada/shell";
+import { SURFACE, SURFACES, useSurfaceKeys } from "@armada/shell";
 import { watchUncaught } from "@armada/shell";
 import type { Uncaught } from "@armada/shell";
 
@@ -121,6 +129,14 @@ export function App() {
   // the Board would put a control nobody can act on beside rows that exist to
   // be acted on.
   const [clearing, setClearing] = useState(false);
+  // Whether the Manifest surface is open — Journey 9's *Running one*. **Its
+  // own view, and it needs no Job to draw**: it is read off the file Fleet
+  // already holds, which is what lets a person run this project's lint with
+  // the Board empty.
+  const [manifesting, setManifesting] = useState(false);
+  // The Check or Command the palette picked, or `null`. **It selects rather
+  // than runs**, which is what Journey 9's own table says the palette does.
+  const [picked, setPicked] = useState<string | null>(null);
   // The Manifest the rail names, and what a new Job is proposed against.
   // Bridge dispatches into the workspace it is pointed at, so this is one
   // value rather than a field on the form.
@@ -169,6 +185,20 @@ export function App() {
   // What main is asked to hold open for the Job being read: the Job itself, what
   // it holds on this machine, and its turns.
   useWatching(openJob);
+
+  // `⌘1`…`⌘n`, the binding the contract publishes and nothing answered until
+  // the Manifest surface needed `⌘4`. One roster, read by the rail, the
+  // palette and now the keyboard.
+  useSurfaceKeys(goTo);
+
+  // What this repository's Manifest declares, held open while the surface that
+  // draws it is showing **or the palette is up**. The palette lists one row
+  // per Check and Command off the same reading, so a read scoped to the
+  // surface alone would leave those rows missing everywhere a person would
+  // think to look for them.
+  useEffect(() => {
+    watchCheckoutRunSheet(manifesting || palette.open);
+  }, [manifesting, palette.open]);
 
   useEffect(() => watchUncaught(setUncaught), []);
 
@@ -289,6 +319,8 @@ export function App() {
     setComposing(false);
     setAuditing(false);
     setClearing(surfaceId === SURFACE.worktrees);
+    setManifesting(surfaceId === SURFACE.manifest);
+    if (surfaceId !== SURFACE.manifest) setPicked(null);
   }
 
   const scoped = state.holds.manifests.find((held) => held.id === scope);
@@ -305,6 +337,7 @@ export function App() {
     onReadReports: () => setAuditing(true),
     onCloseWorktrees: () => setClearing(false),
     onReadWorktrees: () => setClearing(true),
+    manifest: manifesting,
     onRefresh: () => void commands.refresh(),
     jobs: state.jobs,
     onClearTerminal: (jobIds) => void commands.clearTerminal(jobIds),
@@ -327,7 +360,9 @@ export function App() {
         // Which row the rail marks. The held worktrees are the one surface
         // other than the Board that draws, so everything else — a Job, the
         // composer, the reports — is the Board with something over it.
-        showing={clearing ? SURFACE.worktrees : SURFACE.board}
+        showing={
+          clearing ? SURFACE.worktrees : manifesting ? SURFACE.manifest : SURFACE.board
+        }
         onSurface={goTo}
       >
         {/* Real CSS, not utilities: nothing Tailwind spells emits a rule in
@@ -485,6 +520,32 @@ export function App() {
                 onCopied={setCopied}
               />
             </Boundary>
+          ) : manifesting ? (
+            /* Everything this repository's Manifest declares, and one press
+               that runs one of them in the checkout as it is on disk. No Job
+               exists and none is created: the whole point of the surface is
+               that a person can run this project's lint without one. */
+            <Boundary region="the manifest" {...guarded}>
+              <Manifest
+                sheet={state.checkoutRunSheet}
+                followed={state.checkoutRunFollowed}
+                picked={picked}
+                now={now}
+                onSaid={setTelling}
+                onObserveRun={observeCheckoutRun}
+                onStartRun={startCheckoutRun}
+                onStopRun={stopCheckoutRun}
+                onUndoRun={undoCheckoutRun}
+                onListRuns={listCheckoutRuns}
+                onGetRunOutput={getCheckoutRunOutput}
+                // The one call this surface shares with a Job's own sheet:
+                // `start_server` has taken an optional Job since it landed,
+                // and no Job means the main checkout.
+                onStartServer={(name) => startServer(name)}
+                onStopServer={stopServer}
+                onOpenServerLink={openServerLink}
+              />
+            </Boundary>
           ) : composing ? (
             /* Describing the work is the path and the form is the override, so
                the composer is what `Enter by hand` swaps to rather than what
@@ -628,6 +689,10 @@ export function App() {
         on={onWhat === undefined ? null : `${onWhat.id} — ${onWhat.title}`}
         surfaces={SURFACES}
         filters={reading === null ? BOARD_TABS : []}
+        // One row per Check and Command, off the same reading the Manifest
+        // surface draws from — Journey 9's own table. Empty until that read
+        // has answered, which is what the effect above holds open.
+        runnables={checkoutRunnablesOf(state.checkoutRunSheet)}
         jobs={state.jobs.map((job) => ({ id: job.id, label: `${job.id} — ${job.title}` }))}
         // Bridge serves no settings surface, so the section is empty and draws
         // no head. A head over nothing is the labelled blank this app refuses.
@@ -643,6 +708,10 @@ export function App() {
             closeJob: close,
             compose: () => setComposing(true),
             surface: goTo,
+            run: (entryId) => {
+              goTo(SURFACE.manifest);
+              setPicked(entryId);
+            },
             filter: (tabId) => reach.current?.tab(tabId as BoardTab),
             search: () => reach.current?.search(),
             copyDebugInfo: () => {

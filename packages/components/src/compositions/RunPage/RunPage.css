@@ -1,0 +1,333 @@
+/* The Manifest surface's runner — Journey 9's *Running one*, in the main
+   checkout. Two columns, the run sheet's own arrangement: the Manifest's list
+   on the left, the selected entry's control and its output on the right.
+
+   **A page, not a sheet.** So it fills the panel it is mounted in rather than
+   the reading width a sheet opens to, and it takes its own bottom padding —
+   there is no sheet chrome under it to close the space. */
+.armada-run-page {
+  display: grid;
+  grid-template-columns: calc(var(--space-12) * 5) minmax(0, 1fr);
+  gap: var(--space-4);
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.armada-run-page__rail {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4) 0 var(--space-4) 0;
+  overflow-y: auto;
+  border-right: var(--border-width) solid var(--border-subtle);
+  min-width: 0;
+}
+
+.armada-run-page__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  /* The head's own border is directly above both columns, so each takes the
+     space a sheet's chrome would otherwise have given it — and the trailing
+     edge is the window's, so this column keeps off it. */
+  padding: var(--space-4) var(--space-4) var(--space-4) 0;
+  overflow-y: auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* When `armada.yml` was last changed by a commit. Above the first group, in
+   the rail, because it is a fact about the list under it rather than about the
+   run on the right. */
+.armada-run-page__edited {
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-4) var(--space-4);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* --- the rail: Setup, Checks, Commands ----------------------------------- */
+
+.armada-run-page__group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.armada-run-page__group + .armada-run-page__group {
+  margin-top: var(--space-6);
+}
+
+/* A heading, not a band — `RunSheet.css` records why the sunken fill was cut.
+   Never uppercase: that treatment is reserved to a 13px table header. */
+.armada-run-page__group-label {
+  display: block;
+  padding: 0 var(--space-4) var(--space-2) var(--space-4);
+  border-bottom: var(--border-width) solid var(--border-subtle);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-heading);
+  color: var(--fg-default);
+}
+
+/* A group with nothing in it says so. The three groups are always drawn — a
+   Manifest declaring no Commands is a fact about the file, and a group that
+   vanished would read as a surface that failed to list them. */
+.armada-run-page__group-empty {
+  margin: 0;
+  padding: var(--space-2) var(--space-4) 0 var(--space-4);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* Horizontal inset is --space-4 minus the entry button's own --space-2
+   padding, so a row's text lines up under the band's text. */
+.armada-run-page__entries {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-2) calc(var(--space-4) - var(--space-2)) 0
+    calc(var(--space-4) - var(--space-2));
+  margin: 0;
+  list-style: none;
+}
+
+.armada-run-page__entry {
+  padding: var(--space-1) 0;
+}
+
+.armada-run-page__entry + .armada-run-page__entry {
+  border-top: var(--border-width) solid var(--border-subtle);
+}
+
+.armada-run-page__entry-select {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space-1) / 2);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.armada-run-page__entry-select:hover {
+  background: var(--bg-hover);
+}
+
+.armada-run-page__entry-select:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.armada-run-page__entry-select[aria-current="true"] {
+  background: var(--accent-muted);
+}
+
+.armada-run-page__entry-name {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-default);
+}
+
+.armada-run-page__entry-run {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A plain sentence, never a bare tag. */
+.armada-run-page__entry-note {
+  margin: 0 var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+/* --- the main column: control, panel, run list ---------------------------- */
+
+.armada-run-page__control-empty,
+.armada-run-page__nothing {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  color: var(--fg-subtle);
+}
+
+.armada-run-page__control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.armada-run-page__resolved {
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-well);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-xs);
+  color: var(--fg-default);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* One row: the destructive sentence, then Run at the end of it. */
+.armada-run-page__control-acts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Unhued. A Command that writes is not a failure and takes no caution colour —
+   `tokens/status.css` names nothing for it, and the words carry the reading
+   exactly as the exit code below does. */
+.armada-run-page__writes {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-2xs);
+  color: var(--fg-subtle);
+}
+
+.armada-run-page__running {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.armada-run-page__elapsed {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--fg-subtle);
+}
+
+/* The panel that stays until it is dismissed. It is one region — output,
+   result and what changed — because those are one run, and dismissing part of
+   a run would leave a reading nobody could interpret. `flex: 1` claims the
+   remaining height of the column; `min-height: 0` is what lets it shrink below
+   its content at all. */
+.armada-run-page__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: none;
+}
+
+/* Only a panel holding output claims the column's height. A result and a
+   changed-files list are a few lines; stretched, they pushed *Earlier runs* to
+   the window's bottom edge across an empty well. */
+.armada-run-page__panel--reading {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.armada-run-page__panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.armada-run-page__panel-title {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-sm);
+  font-weight: var(--weight-heading);
+  color: var(--fg-default);
+}
+
+.armada-run-page__output {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.armada-run-page__output > .armada-console {
+  min-height: 100%;
+}
+
+/* Unhued: no run from this surface is a verdict. */
+.armada-run-page__result {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--fg-default);
+}
+
+.armada-run-page__changed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.armada-run-page__changed-acts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* --- a server: starting, serving, or exited on its own -------------------- */
+
+.armada-run-page__server-status {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--fg-default);
+}
+
+.armada-run-page__server {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.armada-run-page__server > .armada-run-page__server-status {
+  flex: none;
+  font-weight: var(--weight-medium);
+}
+
+.armada-run-page__server-address {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.armada-run-page__server-uptime {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+.armada-run-page__server-note {
+  flex: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  color: var(--fg-subtle);
+  white-space: nowrap;
+}
+
+.armada-run-page__server-links {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: var(--space-2);
+}

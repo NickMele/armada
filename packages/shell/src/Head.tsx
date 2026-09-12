@@ -43,6 +43,17 @@ export type HeadProps = {
    * same shape, and this is that file.
    */
   clearing: boolean;
+  /**
+   * The Manifest surface — Journey 9's *Running one*.
+   *
+   * **A name and no way out, and the missing control is the point.** Manifest
+   * is a rail destination: a person who pressed `⌘4` did not come from the
+   * Board, so *Back to the list* would name a place they never were — and the
+   * rail they would actually leave by is already on screen beside it. The head
+   * is here only because the page's own rows never say what surface they
+   * belong to.
+   */
+  manifest: boolean;
   /** A live connection. What stops a new Job being proposed into nothing. */
   live: boolean;
   /** A re-read in flight, so a second press does not send a second one. */
@@ -68,6 +79,7 @@ export function headOf({
   composing,
   auditing,
   clearing,
+  manifest,
   live,
   refreshing,
   onCloseComposer,
@@ -81,6 +93,19 @@ export function headOf({
   onClearTerminal,
   onForgetTerminal,
 }: HeadProps): Head | null {
+  if (manifest) {
+    return {
+      title: "Manifest",
+      // What the surface is *for*, and the one thing about it that surprises
+      // people: a run from here goes into the tree they are working in, and
+      // leaves no verdict behind for any Job. Both halves are Journey 9's own
+      // rules, said once here rather than repeated on every row.
+      summary:
+        "Run one Check or Command against this checkout, as it is on disk. Nothing here is a verdict.",
+      // No action. The rail is how a person leaves a rail destination.
+      actions: null,
+    };
+  }
   if (clearing) {
     return {
       title: "Held worktrees",

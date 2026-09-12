@@ -16,7 +16,8 @@
 // the order rather than the numbers. So the order is written here once, from
 // `docs/concepts/bridge.md`, and every digit falls out of it.
 
-import { ClipboardList, HardDrive } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { ClipboardList, FileCog, HardDrive } from "lucide-react";
 
 import type { PaletteSurface } from "./Palette";
 
@@ -35,6 +36,7 @@ type SurfaceId = (typeof RAIL)[number];
 /** The ids Bridge routes on. Here, so a typo cannot be a dead row. */
 export const SURFACE = {
   board: "board",
+  manifest: "manifest",
   worktrees: "worktrees",
 } as const satisfies Record<string, SurfaceId>;
 
@@ -48,8 +50,8 @@ function digitOf(id: SurfaceId): string {
  *
  * **What is not built is not in here.** A row a person presses and gets nothing
  * from is worse than one that is absent, which is the contract's own rule about
- * a registered binding nothing answers. So the digits skip: `⌘2`–`⌘4` are owed
- * to Alerts, Doctor and Manifest and reach nothing today.
+ * a registered binding nothing answers. So the digits skip: `⌘2` and `⌘3` are
+ * owed to Alerts and Doctor and reach nothing today.
  *
  * `held disk` is an alias because that is the word on the control this screen
  * has been reached by since it shipped, and a person who learned it should not
@@ -63,6 +65,15 @@ export const SURFACES: readonly PaletteSurface[] = [
     icon: ClipboardList,
   },
   {
+    id: SURFACE.manifest,
+    label: "Manifest",
+    shortcut: digitOf(SURFACE.manifest),
+    // No alias. The rule above is that one is for a place a person already
+    // knows by another word, and nothing in Bridge has ever reached this
+    // surface — there is no earlier word for it to keep.
+    icon: FileCog,
+  },
+  {
     id: SURFACE.worktrees,
     label: "Held worktrees",
     shortcut: digitOf(SURFACE.worktrees),
@@ -70,3 +81,41 @@ export const SURFACES: readonly PaletteSurface[] = [
     icon: HardDrive,
   },
 ];
+
+/**
+ * `⌘1`…`⌘n`, bound to the rail in rail order.
+ *
+ * **The binding the contract already publishes, finally answered.** Every
+ * digit above was drawn in the palette and on no key — a shortcut a person
+ * reads and presses to no effect is the thing `dormant` exists to prevent, and
+ * it had been true of `⌘1` since the rail shipped.
+ *
+ * **Only the surfaces that draw.** `SURFACES` is what is built, so `⌘2` and
+ * `⌘3` — Alerts and Doctor — reach nothing and are not bound; the digit stays
+ * theirs, because `digitOf` reads the rail and not this list.
+ *
+ * **A modified key, so a focused field does not suppress it.** `⌘K` is bound
+ * the same way and for the same reason: the contextual tier is suppressed
+ * while a text input holds focus precisely so that typing cannot act, and the
+ * whole point of the modifier is that it still works from inside one.
+ */
+export function useSurfaceKeys(onSurface: (surfaceId: string) => void): void {
+  // **Bound once, and the handler is read through a ref.** The app rebuilds
+  // its `goTo` every render, and a listener re-registered on every render is
+  // one that has to be right about removal every time — `useCommandPalette`
+  // avoids the question by depending on nothing, and this does the same.
+  const latest = useRef(onSurface);
+  latest.current = onSurface;
+
+  useEffect(() => {
+    function pressed(event: KeyboardEvent): void {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+      const surface = SURFACES.find((one) => one.shortcut === `⌘${event.key}`);
+      if (surface === undefined) return;
+      event.preventDefault();
+      latest.current(surface.id);
+    }
+    window.addEventListener("keydown", pressed);
+    return () => window.removeEventListener("keydown", pressed);
+  }, []);
+}

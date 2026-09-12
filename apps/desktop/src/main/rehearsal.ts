@@ -25,8 +25,10 @@ import type {
   StartRun,
 } from "@armada/protocol";
 import type { Outcome } from "@armada/protocol";
+import type { CheckoutRunListRead, StartCheckoutRun } from "@armada/protocol";
 import type { BridgeState } from "../shared/bridge";
 import { ask, route, serversOf } from "./request";
+import { CheckoutRunCommands, CheckoutRunSocket, CheckoutSheetReader } from "./checkout-runs";
 import { JobReader } from "./reader";
 import { HOST } from "./runtime-file";
 import { ServerCommands } from "./servers";
@@ -241,6 +243,10 @@ export class RehearsalConnection {
   private readonly follow: RunSocket;
   private readonly runs: RunCommands;
   private readonly servers: ServerCommands;
+  /** The Manifest surface's own three — see `checkout-runs.ts`. */
+  private readonly checkoutSheet: CheckoutSheetReader;
+  private readonly checkoutFollow: CheckoutRunSocket;
+  private readonly checkoutRuns: CheckoutRunCommands;
 
   constructor(wiring: { publish: (change: Partial<BridgeState>) => void; port: () => number | null }) {
     this.publish = wiring.publish;
@@ -257,11 +263,24 @@ export class RehearsalConnection {
       refreshSheet: (port) => this.sheet.again(port),
     });
     this.servers = new ServerCommands({ port: this.port });
+    this.checkoutSheet = new CheckoutSheetReader((checkoutRunSheet) =>
+      this.publish({ checkoutRunSheet }),
+    );
+    this.checkoutFollow = new CheckoutRunSocket((checkoutRunFollowed) =>
+      this.publish({ checkoutRunFollowed }),
+    );
+    this.checkoutRuns = new CheckoutRunCommands({
+      port: this.port,
+      follow: (port, runId) => this.checkoutFollow.open(port, runId),
+      refreshSheet: (port) => this.checkoutSheet.again(port),
+    });
   }
 
   close(): void {
     this.sheet.close();
     this.follow.close();
+    this.checkoutSheet.close();
+    this.checkoutFollow.close();
   }
 
   /** Every server Fleet holds. Read once per connection; `server.*` on
@@ -275,6 +294,18 @@ export class RehearsalConnection {
    * only where it is this run's Job. */
   onRunFinished(jobId: string, port: number): void {
     if (this.sheet.jobId === jobId) void this.sheet.again(port);
+  }
+
+  /**
+   * A run in the main checkout finished — `checkout_run.finished`, its own
+   * kind because the record names no Job.
+   *
+   * Only the Manifest surface's own reading moves, and only where something is
+   * holding it open: the event arrives on every window whether or not one is
+   * looking at that surface.
+   */
+  onCheckoutRunFinished(port: number): void {
+    if (this.checkoutSheet.open) void this.checkoutSheet.again(port);
   }
 
   /** One `server.*` event, folded into the list it replaces a row in or joins. */
@@ -318,6 +349,42 @@ export class RehearsalConnection {
   /** One run's log, read back as a window that says it is one. */
   getRunOutput(jobId: string, runId: string): Promise<RunOutputRead> {
     return this.runs.getRunOutput(jobId, runId);
+  }
+
+  /** Read what this repository's Manifest declares, or `false` to stop. Held
+   * open by the Manifest surface and by the palette, which lists off it. */
+  async watchCheckoutRunSheet(want: boolean): Promise<void> {
+    await this.checkoutSheet.want(this.port(), want);
+  }
+
+  /** One checkout run's output, or `null` to stop. */
+  async observeCheckoutRun(runId: string | null): Promise<void> {
+    this.checkoutFollow.open(this.port(), runId);
+  }
+
+  /** Run one Check or Command in the main checkout, and start following it. */
+  startCheckoutRun(body: StartCheckoutRun): Promise<Outcome> {
+    return this.checkoutRuns.startRun(body);
+  }
+
+  /** End a checkout run's process group. Its log keeps what printed. */
+  stopCheckoutRun(id: string): Promise<Outcome> {
+    return this.checkoutRuns.stopRun(id);
+  }
+
+  /** Put back the files one checkout run changed, from its own snapshot. */
+  undoCheckoutRun(id: string): Promise<Outcome> {
+    return this.checkoutRuns.undoRun(id);
+  }
+
+  /** Every earlier run in this checkout, newest first. */
+  listCheckoutRuns(): Promise<CheckoutRunListRead> {
+    return this.checkoutRuns.listRuns();
+  }
+
+  /** One checkout run's log, read back as a window that says it is one. */
+  getCheckoutRunOutput(runId: string): Promise<RunOutputRead> {
+    return this.checkoutRuns.getRunOutput(runId);
   }
 
   /** Start a declared server, for a Job's worktree or the main checkout. */

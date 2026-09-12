@@ -285,3 +285,44 @@ export type CheckoutRunOpened = {
   /** Older lines the opening read left out, because the window is bounded. */
   skipped: number;
 };
+
+/**
+ * `GET /manifest/run_sheet`, in `reads.ts`'s four states. Bridge-only, not on
+ * the wire — `RunSheetRead`'s kind, one owner over.
+ *
+ * **`Reports`' shape rather than a `JobRead`**, for that type's own stated
+ * reason: there is no id to check an answer against, which is the whole of
+ * what `JobRead` exists to do.
+ */
+export type CheckoutRunSheetRead =
+  | { state: "none" }
+  | { state: "reading" }
+  | { state: "read"; sheet: CheckoutRunSheet }
+  | { state: "failed"; outcome: Outcome };
+
+/**
+ * The checkout run a window is watching on `observe_checkout_run`, as main
+ * holds it. `RunFollowed`'s four states with the Job taken out of each.
+ * Bridge-only, not on the wire.
+ */
+export type CheckoutRunFollowed =
+  | { state: "none" }
+  | { state: "opening"; runId: string }
+  | {
+      state: "following";
+      runId: string;
+      name: string;
+      path: string;
+      /** The file's own line number of `lines[0]`, counted from one. */
+      fromLine: number;
+      /** The newest lines, oldest first, bounded. */
+      lines: string[];
+      /** Why the stream ended, or absent while it is still arriving. */
+      ended?: string;
+    }
+  | { state: "failed"; runId: string; detail: string };
+
+/** What `list_checkout_runs` came back as. `RunListRead`'s shape and reason. */
+export type CheckoutRunListRead =
+  | { ok: true; runs: CheckoutRunList }
+  | { ok: false; outcome: Outcome };

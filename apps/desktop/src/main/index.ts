@@ -15,7 +15,7 @@ import type {
   WhenBlocked,
   WhenRefused,
 } from "@armada/protocol";
-import type { StartRun } from "@armada/protocol";
+import type { StartCheckoutRun, StartRun } from "@armada/protocol";
 import { FleetConnection } from "./connection";
 import { openArtifact } from "./open";
 import { openPullRequest, openRemarkLink } from "./forge";
@@ -529,6 +529,30 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.listRuns, (_event, jobId: string) => connection?.rehearsal.listRuns(jobId));
   ipcMain.handle(CHANNELS.getRunOutput, (_event, jobId: string, runId: string) =>
     connection?.rehearsal.getRunOutput(jobId, runId),
+  );
+  // The same rehearsal in the main checkout — the Manifest surface. Held open
+  // while that surface is showing or the palette is up, since the palette
+  // lists one row per Check and Command off this reading.
+  ipcMain.handle(CHANNELS.watchCheckoutRunSheet, (_event, want: boolean) =>
+    connection?.rehearsal.watchCheckoutRunSheet(want),
+  );
+  ipcMain.handle(CHANNELS.observeCheckoutRun, (_event, runId: string | null) =>
+    connection?.rehearsal.observeCheckoutRun(runId),
+  );
+  // A run in the tree a person is working in. **A name and nothing else** —
+  // there is no frozen Manifest to choose against and no diff to narrow to.
+  ipcMain.handle(CHANNELS.startCheckoutRun, (_event, body: StartCheckoutRun) =>
+    connection?.rehearsal.startCheckoutRun(body),
+  );
+  ipcMain.handle(CHANNELS.stopCheckoutRun, (_event, runId: string) =>
+    connection?.rehearsal.stopCheckoutRun(runId),
+  );
+  ipcMain.handle(CHANNELS.undoCheckoutRun, (_event, runId: string) =>
+    connection?.rehearsal.undoCheckoutRun(runId),
+  );
+  ipcMain.handle(CHANNELS.listCheckoutRuns, () => connection?.rehearsal.listCheckoutRuns());
+  ipcMain.handle(CHANNELS.getCheckoutRunOutput, (_event, runId: string) =>
+    connection?.rehearsal.getCheckoutRunOutput(runId),
   );
   // A declared server, for this Job's worktree or the main checkout where no
   // Job is named. `servers` on the published state is what keeps a *Serving*

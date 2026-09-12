@@ -30,7 +30,9 @@ import type {
 import type { FleetCapacity, JobSummary, ProposalInFlight, UnreadableJob } from "@armada/protocol";
 import type { ManifestReading } from "@armada/protocol";
 import type { RunFollowed, RunSheetRead, ServerList } from "@armada/protocol";
+import type { CheckoutRunFollowed, CheckoutRunSheetRead } from "@armada/protocol";
 import { spoken } from "@armada/protocol";
+
 
 
 
@@ -271,6 +273,22 @@ export type BridgeState = {
    * closes.
    */
   servers: ServerList;
+  /**
+   * What this repository's Manifest declares, for the Manifest surface.
+   *
+   * **The second read here no Job scopes, and not for the reports' reason.**
+   * It is the file Fleet is already holding, read before any Job exists —
+   * which is the whole of why that surface can answer with the Board empty.
+   *
+   * Held open while the surface is showing **or the palette is up**: the
+   * palette lists one row per Check and Command off this reading, and a read
+   * scoped to the surface alone would leave those rows missing everywhere a
+   * person would think to look for them.
+   */
+  checkoutRunSheet: CheckoutRunSheetRead;
+  /** The checkout run a window is reading, as it prints. Its own socket,
+   * `runFollowed`'s shape one owner over. One at a time. */
+  checkoutRunFollowed: CheckoutRunFollowed;
 };
 
 /**
@@ -310,6 +328,8 @@ export const NOTHING_YET: BridgeState = {
   runSheet: { state: "none" },
   runFollowed: { state: "none" },
   servers: { servers: [] },
+  checkoutRunSheet: { state: "none" },
+  checkoutRunFollowed: { state: "none" },
 };
 
 /** The channels the preload is allowed to name. There is no general `invoke`. */
@@ -360,6 +380,18 @@ export const CHANNELS = {
   undoRun: "bridge:undo-run",
   listRuns: "bridge:list-runs",
   getRunOutput: "bridge:get-run-output",
+  // The same rehearsal in the main checkout — Journey 9's *Running one*.
+  // Seven channels beside the Job's seven rather than a Job id that may be
+  // `null` on each: a route under `/manifest` and a route under `/jobs/:id`
+  // are two operations, and one capability taking which would read as one act
+  // and perform two.
+  watchCheckoutRunSheet: "bridge:watch-checkout-run-sheet",
+  observeCheckoutRun: "bridge:observe-checkout-run",
+  startCheckoutRun: "bridge:start-checkout-run",
+  stopCheckoutRun: "bridge:stop-checkout-run",
+  undoCheckoutRun: "bridge:undo-checkout-run",
+  listCheckoutRuns: "bridge:list-checkout-runs",
+  getCheckoutRunOutput: "bridge:get-checkout-run-output",
   startServer: "bridge:start-server",
   stopServer: "bridge:stop-server",
   openServerLink: "bridge:open-server-link",

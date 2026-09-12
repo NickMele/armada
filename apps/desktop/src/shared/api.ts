@@ -25,7 +25,9 @@ import type {
   ReclaimOutcome,
   RunListRead,
   RunOutputRead,
+  CheckoutRunListRead,
   StagedAttachment,
+  StartCheckoutRun,
   StartRun,
   WhenBlocked,
   WhenRefused,
@@ -407,6 +409,40 @@ export type BridgeApi = {
   listRuns: (jobId: string) => Promise<RunListRead>;
   /** One run's log, read back as a window that says it is one. */
   getRunOutput: (jobId: string, runId: string) => Promise<RunOutputRead>;
+
+  // The same rehearsal in the main checkout — Journey 9's *Running one*, the
+  // Manifest surface. **Seven entries beside the seven above rather than a
+  // `jobId` that may be `null` on each**: `/manifest/start_run` and
+  // `/jobs/:id/start_run` are two operations, and a single capability taking
+  // which would be a surface that reads as one act and performs two — the rule
+  // the two kills are two entries for.
+
+  /** Read what this repository's Manifest declares, or `false` to stop. Held
+   * open by the Manifest surface, and by the palette, which lists off it. */
+  watchCheckoutRunSheet: (want: boolean) => Promise<void>;
+  /** One checkout run's output, or `null` to stop. */
+  observeCheckoutRun: (runId: string | null) => Promise<void>;
+  /**
+   * Run one Check or Command in the main checkout, as it is on disk.
+   *
+   * **A name and nothing else.** There is no frozen Manifest to choose against
+   * and no diff to narrow to, so neither of `StartRun`'s two flags has an
+   * answer here. Opens `observeCheckoutRun` the moment the run exists.
+   */
+  startCheckoutRun: (body: StartCheckoutRun) => Promise<Outcome>;
+  /** End a checkout run's process group. Its log keeps what printed. */
+  stopCheckoutRun: (runId: string) => Promise<Outcome>;
+  /**
+   * Put back the files one checkout run changed, from the snapshot taken just
+   * before it. **This tree holds a person's own uncommitted work**, which is
+   * why the surface confirms by naming every path first.
+   */
+  undoCheckoutRun: (runId: string) => Promise<Outcome>;
+  /** Every earlier checkout run, newest first, and what would not read. */
+  listCheckoutRuns: () => Promise<CheckoutRunListRead>;
+  /** One checkout run's log, read back as a window that says it is one. */
+  getCheckoutRunOutput: (runId: string) => Promise<RunOutputRead>;
+
   /** Start a declared server — this Job's worktree, or the main checkout with
    * no Job. `server.serving`/`server.exited` follow as events. */
   startServer: (name: string, jobId?: string) => Promise<Outcome>;

@@ -206,6 +206,9 @@
    Commands, a control, the streamed output and what a run left behind. */
 @import "./compositions/RunSheet/RunSheet.css";
 
+/* The same rehearsal in the main checkout, as a page — the Manifest surface. */
+@import "./compositions/RunPage/RunPage.css";
+
 /* Every setting a person can change on a running Job, on a trailing sheet. */
 @import "./compositions/JobSettings/JobSettings.css";
 
