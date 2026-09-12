@@ -259,6 +259,11 @@ where
         press: u32,
     ) -> Result<ipc::ShownAgain, Adrift> {
         let budget = self.budget().duration();
+        // The same claim a step's own run of this harness resolves against —
+        // `showing::showed` — so a press reaches the port a Command on this
+        // Job serves, exactly as the step's own run does.
+        let ports = self.port_map(job).await;
+        let port_env = self.port_env(job).await;
         let shown = show(
             harness,
             &named.spec,
@@ -266,6 +271,8 @@ where
             Side::Branch,
             ComingUp::of(budget),
             budget,
+            &ports,
+            &port_env,
         )
         .await;
         let (frames, nothing): (Vec<StepFrame>, Option<String>) = match shown {

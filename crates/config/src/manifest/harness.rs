@@ -65,12 +65,10 @@ impl Harness {
     /// declared one. **Long-running on purpose** — it is started, held for the
     /// run, and ended after it.
     ///
-    /// **It names its own port, and Armada does not assign one.**
-    /// `crates/config/settings.toml` carries three port rows and nothing
-    /// implements them, so a Fleet handing out a port would be inventing the
-    /// half of that design nobody has built. A repository already knows which
-    /// port its own preview server takes, and writing it here keeps the one
-    /// place it is spelled inside the repository that owns it.
+    /// **May reach a `ports:` declaration through `${port.NAME}`, resolved
+    /// against the Job's claim exactly as a Command's `run` is** (`#753`), so
+    /// `armada.yml`'s own `storybook_dev` and a harness can serve one port
+    /// under one name. Unclaimed, the placeholder is left as written.
     ///
     /// **`None` where the repository has nothing to serve.** A desktop app, a
     /// CLI, a library or a data pipeline reaches its state without a port, and
@@ -88,6 +86,8 @@ impl Harness {
     /// failure it produces is a frame of a blank page that looks exactly like a
     /// frame of a broken one. A command that answers is the only reading that
     /// distinguishes them.
+    ///
+    /// **Resolves `${port.NAME}` against the same claim `serve` does.**
     pub fn ready(&self) -> Option<&str> {
         self.ready.as_deref()
     }
@@ -98,6 +98,11 @@ impl Harness {
     /// template with nowhere to put the value runs the same command whichever
     /// spec was named, which is a capture scoped to nothing and saying so
     /// nowhere.
+    ///
+    /// **`${port.NAME}` resolves here too, independently of `{}`.** The spec
+    /// itself is not substituted, so `ARMADA_PORT_<NAME>` in its environment
+    /// is the only channel it has to a port it did not read off its own
+    /// command line.
     pub fn run(&self) -> &str {
         &self.run
     }

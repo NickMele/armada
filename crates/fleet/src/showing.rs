@@ -23,6 +23,7 @@
 //! off, because nothing tells a spec which tree it is aimed at. `before_this_job`
 //! below says why it stays rather than being deleted.
 
+use std::collections::BTreeMap;
 use std::io::{Read as _, Seek as _};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -248,6 +249,11 @@ impl<'a> Aimed<'a> {
 /// **The server is ended on every path that started one**, including the ones
 /// that return early: [`Served`] signals its group on drop, so a readiness
 /// budget that expires leaves nothing holding the port.
+///
+/// **`ports` and `env` are the claim's map and its environment.** `serve`,
+/// `ready` and the substituted `run` each resolve `${port.NAME}` and carry
+/// `env` — the spec `run` launches is not itself substituted, so
+/// `ARMADA_PORT_<NAME>` is its only channel to a port it did not hardcode.
 pub async fn show(
     harness: &Harness,
     spec: &str,
@@ -255,12 +261,17 @@ pub async fn show(
     side: Side,
     coming_up: ComingUp,
     budget: Duration,
+    ports: &BTreeMap<String, u16>,
+    env: &[(String, String)],
 ) -> Shown {
     let mut serving = match harness.serve() {
-        Some(serve) => match Served::spawn(serve, aimed.served_from) {
-            Ok(serving) => Some(serving),
-            Err(why) => return Shown::NotShown(NotShown::NotServed(why)),
-        },
+        Some(serve) => {
+            let serve = crate::ports::resolve_ports(serve, ports);
+            match Served::spawn(&serve, aimed.served_from, env) {
+                Ok(serving) => Some(serving),
+                Err(why) => return Shown::NotShown(NotShown::NotServed(why)),
+            }
+        }
         None => None,
     };
     // `harness.ready()` is `Some` exactly when `harness.serve()` is —
@@ -268,14 +279,17 @@ pub async fn show(
     // `serve` with no matching `ready` here would be a Manifest that loaded
     // wrong rather than a case to handle.
     if let (Some(active), Some(ready_cmd)) = (serving.as_mut(), harness.ready()) {
-        if let Some(why) = ready(ready_cmd, aimed.served_from, coming_up, active).await {
+        let ready_cmd = crate::ports::resolve_ports(ready_cmd, ports);
+        if let Some(why) = ready(&ready_cmd, aimed.served_from, coming_up, active, env).await {
             return Shown::NotShown(why);
         }
     }
     // **The spec is substituted by the Harness and never composed here.** The
-    // two characters that mark the hole are `config`'s, and a second place that
-    // knew them would be a second spelling of the same rule.
-    let ran = checks_runner::run(&harness.running(spec), aimed.shot_from, budget).await;
+    // two characters that mark the hole are `config`'s, and a second place
+    // that knew them would be a second spelling of the same rule.
+    // `${port.NAME}` is a second, independent substitution over the result.
+    let run = crate::ports::resolve_ports(&harness.running(spec), ports);
+    let ran = checks_runner::run_writing_with_env(&run, aimed.shot_from, budget, None, env).await;
     if let Some(active) = serving {
         active.end().await;
     }
@@ -310,6 +324,7 @@ async fn ready(
     worktree: &Path,
     coming_up: ComingUp,
     serving: &mut Served,
+    env: &[(String, String)],
 ) -> Option<NotShown> {
     let waiting = coming_up.duration();
     let deadline = tokio::time::Instant::now() + waiting;
@@ -324,7 +339,11 @@ async fn ready(
         if left.is_zero() {
             return Some(NotShown::NeverReady { after: waiting });
         }
-        if let Exit::Code(0) = checks_runner::run(ready_cmd, worktree, left).await.exit {
+        if let Exit::Code(0) =
+            checks_runner::run_writing_with_env(ready_cmd, worktree, left, None, env)
+                .await
+                .exit
+        {
             return None;
         }
         tokio::time::sleep_until((tokio::time::Instant::now() + ASKING_EVERY).min(deadline)).await;
@@ -681,9 +700,7 @@ where
     ///
     /// **One run, branch only.** `#602` retired the base run this once made
     /// first into the same `evidence.frames` directory — see the module doc.
-    /// `job` is still taken and not read: every other caller of a Fleet method
-    /// on a settling Job passes it, and `before_this_job` below is the reader
-    /// that will want it back.
+    /// `job` is now read, for its port claim — see `ports` below.
     pub(crate) async fn showed(
         &self,
         job_id: &JobId,
@@ -692,7 +709,7 @@ where
         declared: &ResolvedStep,
         attempt: Attempt,
         submission: &Submission,
-        _job: &Job,
+        job: &Job,
         worktree: &Path,
     ) -> Result<Option<NotShown>, Adrift> {
         if declared.evidence_type() != Some(EvidenceType::Shown) {
@@ -722,6 +739,10 @@ where
         // worktree, and both of these are that. `ComingUp` stays a type of its
         // own so a dial has somewhere to land without moving a call site.
         let budget = self.budget().duration();
+        // The same claim the gate's own Checks resolve against, a few lines
+        // later in `settling::rule_on`'s caller.
+        let ports = self.port_map(job).await;
+        let port_env = self.port_env(job).await;
         let shown = show(
             harness,
             spec,
@@ -729,6 +750,8 @@ where
             Side::Branch,
             ComingUp::of(budget),
             budget,
+            &ports,
+            &port_env,
         )
         .await;
         let (frames, refused) = match shown {
@@ -786,6 +809,8 @@ where
             Ok(checkout) => checkout,
             Err(why) => return Before::instead(WhyNoPair::NoBase(why)),
         };
+        let ports = self.port_map(job).await;
+        let port_env = self.port_env(job).await;
         let shown = show(
             harness,
             spec,
@@ -793,6 +818,8 @@ where
             Side::Base,
             ComingUp::of(budget),
             budget,
+            &ports,
+            &port_env,
         )
         .await;
         let frames = match shown {
