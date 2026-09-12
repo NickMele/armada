@@ -480,9 +480,9 @@ so joining a Job already running takes one connection rather than a history
 call and a subscription that have to be stitched together.
 
 **Who reads it.** A person, through Bridge, on the machine Fleet is running on.
-`helm_access` is `No`: a Drone's whole transcript streamed into a Helm session
-stays in that session for the rest of it, and Helm has `get_drone` for the
-snapshot.
+`agent_access` is `No`: a Drone's whole transcript streamed into a session
+stays in that session for the rest of it, and `get_drone` serves the snapshot
+instead.
 
 **What it needs.** A running Fleet and a Job id. Nothing else — a Job with no
 transcript is served, and so is one whose Drone is gone.
@@ -527,7 +527,7 @@ subject over: a run a person started from the run sheet, and
 holds, then the lines the run prints next, then `closed`.
 
 **Who reads it.** The run sheet showing that run, and nothing else.
-`helm_access` is `No`.
+`agent_access` is `No`.
 
 **Per run, not per Job's runs.** The sheet holds the run's id from
 `start_run`'s answer, a run has an end to close on, and a Job has one run out

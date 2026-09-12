@@ -341,9 +341,9 @@ themselves. Fleet waking the session was rejected: it would make Helm a
 second notification channel alongside Alerts. See the decision in Armada
 Decisions.
 
-On a command, Helm access is the Intervention Ladder rung. The full set
-of operations — each with its kind, its transport and what Helm may reach
-directly — is in `crates/ipc/operations.toml`.
+On a command, an agent's access is the Intervention Ladder rung. The full
+set of operations — each with its kind, its transport and what an agent
+may reach directly — is in `crates/ipc/operations.toml`.
 
 **`pause_job` is not built, and the act it would have backed was retired
 2026-09-03** — see `docs/concepts/drone.md`. It carried no Intervention Ladder
