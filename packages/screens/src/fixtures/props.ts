@@ -67,6 +67,9 @@ export function propsFor(fixture: JobFixture): JobDetailProps {
     onOpenPullRequest: async () => UNKNOWN_JOB_FOLLOWED,
     onOpenRemarkLink: noop,
     onReadCall: async (_jobId, callId) => fixture.calls[callId] ?? NOT_ANSWERED_CALL,
+    // Offered on every fixture so the control is drawn, and answered as a
+    // refusal: a story is a reading of one moment and no Fleet is behind it.
+    onExplainCommand: async () => ({ ok: false, outcome: NOT_CONNECTED }),
     onReadCheckOutput: async (_jobId, kept) => fixture.checkOutputs[kept] ?? NOT_ANSWERED_OUTPUT,
     onReadFrame: async (_jobId, kept) => fixture.frames[kept] ?? NOT_ANSWERED_FRAME,
     onNeedMaterial: noop,

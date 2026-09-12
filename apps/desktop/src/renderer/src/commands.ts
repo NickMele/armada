@@ -94,6 +94,9 @@ export const stageAttachment = (bytes: ArrayBuffer, filename: string, mimeType: 
   window.armada.stageAttachment(bytes, filename, mimeType);
 /** Paths under the checkout narrowed against typed text, for the `@` mention popup. */
 export const searchFiles = (query: string) => window.armada.searchFiles(query);
+/** What one command does, for the person deciding whether to allow it. A read: nothing moves. */
+export const explainCommand = (jobId: string, callId: string) =>
+  window.armada.explainCommand(jobId, callId);
 
 /** What a command needs from the render, and where two of them land. */
 export type Sending = {
@@ -288,10 +291,15 @@ export function useCommands(sending: Sending) {
    * for `answer`'s reason: the answers are the closed set Fleet offered for
    * that call, and none of them ends anything.
    */
-  async function answerCommand(jobId: string, call: string, chose: CommandAnswer): Promise<void> {
+  async function answerCommand(
+    jobId: string,
+    call: string,
+    chose: CommandAnswer,
+    note?: string,
+  ): Promise<void> {
     setActing(jobId);
     try {
-      setOutcome(await window.armada.answerCommand(jobId, call, chose));
+      setOutcome(await window.armada.answerCommand(jobId, call, chose, note));
     } finally {
       setActing(null);
     }

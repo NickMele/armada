@@ -14,12 +14,14 @@
 // **Bridge never talks to a Drone.** Every act below names Fleet — which is
 // what makes "kill the Drone" a request to the daemon that spawned it.
 
+import type { CommandExplainedRead } from "../shared/api";
 import type { BridgeState } from "../shared/bridge";
 import type { ClearOutcome, Draft, Outcome, ReclaimOutcome, StagedAttachment } from "@armada/protocol";
 import type { CapRaise, ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report, RestartRequested, TurnRaise } from "@armada/protocol";
 import type {
   AnswerCommand,
   CommandAnswer,
+  CommandExplained,
   JudgeAnswer,
   JudgeAnswered,
   RemoveAllowedCommand,
@@ -489,11 +491,45 @@ export class JobCommands {
    * the other. Which answers were offered is Fleet's, so one this window
    * believes in and Fleet does not is a 409 rather than a guess.
    */
-  async answerCommand(jobId: string, call: string, answer: CommandAnswer): Promise<Outcome> {
-    const body: AnswerCommand = { call, answer };
+  async answerCommand(
+    jobId: string,
+    call: string,
+    answer: CommandAnswer,
+    note?: string,
+  ): Promise<Outcome> {
+    // Nothing rather than an empty string. A bare refusal is the body every
+    // fleet before 11.5 took, and `{"note":""}` is a person's words nobody
+    // wrote — `restart_step`'s rule, on the seam that established it.
+    const said = note?.trim() ?? "";
+    const body: AnswerCommand = { call, answer, ...(said === "" ? {} : { note: said }) };
     return this.act(jobId, this.answering, "already_answering", (port) =>
       ask(port, "POST", route(jobId, "answer_command"), body),
     );
+  }
+
+  /**
+   * What one command does, read for the person deciding about it.
+   *
+   * **A read and not an act**, so it is outside `act` and outside every
+   * in-flight set here: nothing on the job moves, and a second press while one
+   * is out costs a model call rather than sending a second decision.
+   *
+   * `MODEL_CALL_MS` because a model call is inside the request, and
+   * deliberately longer than Fleet's own bound on it — what should arrive is
+   * Fleet's refusal with a code, not Bridge's abort.
+   */
+  async explainCommand(jobId: string, callId: string): Promise<CommandExplainedRead> {
+    const port = this.board.port();
+    if (port === null) return { ok: false, outcome: { ok: false, why: "not_connected" } };
+    const answer = await ask(
+      port,
+      "GET",
+      `${route(jobId, "calls")}/${encodeURIComponent(callId)}/explain`,
+      undefined,
+      MODEL_CALL_MS,
+    );
+    if (answer.ok !== true) return { ok: false, outcome: answer.outcome };
+    return { ok: true, explained: answer.body as CommandExplained };
   }
 
   /**

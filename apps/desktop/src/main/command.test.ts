@@ -137,6 +137,52 @@ it("trims what it sends", async () => {
 });
 
 /**
+ * **The reason rides with the refusal**, since protocol 11.5. One act and one
+ * body: the reason is in a person's head as they press reject, and carrying it
+ * in a second box is what spent it.
+ */
+it("sends a rejection's note with the answer", async () => {
+  const asked: Asked[] = [];
+  const commands = new JobCommands(boardOn(await fleetRecording(asked)));
+
+  await commands.answerCommand(A_JOB.id, "call_1", "reject", "we are not taking that dependency");
+
+  expect(asked[0]?.path).toBe(`/jobs/${A_JOB.id}/answer_command`);
+  expect(JSON.parse(asked[0]?.body ?? "null")).toEqual({
+    call: "call_1",
+    answer: "reject",
+    note: "we are not taking that dependency",
+  });
+});
+
+/**
+ * A field somebody opened and typed nothing into is a bare refusal.
+ * **`restart_step`'s rule**: no `note` key at all, which is the body every
+ * fleet before 11.5 took and the one a blank string would not be.
+ */
+it("drops a blank note rather than sending an empty one", async () => {
+  const asked: Asked[] = [];
+  const commands = new JobCommands(boardOn(await fleetRecording(asked)));
+
+  await commands.answerCommand(A_JOB.id, "call_1", "reject", "  \n ");
+
+  expect(JSON.parse(asked[0]?.body ?? "null")).toEqual({ call: "call_1", answer: "reject" });
+});
+
+/** An allow tells the drone everything it acts on, so it carries no prose. */
+it("sends an allow exactly as it did before a note existed", async () => {
+  const asked: Asked[] = [];
+  const commands = new JobCommands(boardOn(await fleetRecording(asked)));
+
+  await commands.answerCommand(A_JOB.id, "call_1", "allow_for_job");
+
+  expect(JSON.parse(asked[0]?.body ?? "null")).toEqual({
+    call: "call_1",
+    answer: "allow_for_job",
+  });
+});
+
+/**
  * **The unit crosses as micros.** The renderer hands over millionths of a
  * dollar because `JobSpend` reads in them, and the body carries that integer
  * unchanged — a raise sent in dollars would be a cap below a hundredth of a

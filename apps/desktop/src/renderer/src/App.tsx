@@ -48,6 +48,7 @@ import {
   getRunOutput,
   listRuns,
   undoRun,
+  explainCommand,
   readCall,
   readCheckOutput,
   followCheckOutput,
@@ -398,9 +399,12 @@ export function App() {
                 onAnswer={(jobId, questionId, chose) =>
                   void commands.answer(jobId, questionId, chose)
                 }
-                onAnswerCommand={(jobId, call, chose) =>
-                  void commands.answerCommand(jobId, call, chose)
+                onAnswerCommand={(jobId, call, chose, note) =>
+                  void commands.answerCommand(jobId, call, chose, note)
                 }
+                // A read beside the act it informs. It moves nothing, so it
+                // goes straight through rather than under `acting`.
+                onExplainCommand={explainCommand}
                 onAnswerJudge={(jobId, answer, note) =>
                   void commands.answerJudge(jobId, answer, note)
                 }

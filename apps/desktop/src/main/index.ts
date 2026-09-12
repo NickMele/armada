@@ -362,9 +362,17 @@ void app.whenReady().then(() => {
   ipcMain.handle(CHANNELS.answerQuestion, (_event, jobId: string, questionId: string, chose: string) =>
     connection?.commands.answerQuestion(jobId, questionId, chose),
   );
-  // A command the drone was not given, answered where it waits or where it was refused.
-  ipcMain.handle(CHANNELS.answerCommand, (_event, jobId: string, call: string, answer: CommandAnswer) =>
-    connection?.commands.answerCommand(jobId, call, answer),
+  // A command the drone was not given, answered where it waits or where it was
+  // refused. The note rides with a reject and nothing else reads it.
+  ipcMain.handle(
+    CHANNELS.answerCommand,
+    (_event, jobId: string, call: string, answer: CommandAnswer, note?: string) =>
+      connection?.commands.answerCommand(jobId, call, answer, note),
+  );
+  // What that command does, read for the person deciding. It moves nothing and
+  // decides nothing — the answers above stay live while it is out.
+  ipcMain.handle(CHANNELS.explainCommand, (_event, jobId: string, callId: string) =>
+    connection?.commands.explainCommand(jobId, callId),
   );
   // How the job meets the next such command. Moves nothing on the job.
   ipcMain.handle(CHANNELS.setWhenBlocked, (_event, jobId: string, whenBlocked: WhenBlocked) =>

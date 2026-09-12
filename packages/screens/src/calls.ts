@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { CallRead } from "@armada/protocol";
+import type { CallRead, CommandExplained, Outcome } from "@armada/protocol";
 
 /**
  * What one call's arguments are, as this window has them.
@@ -64,6 +64,27 @@ export type Calls = {
  * first and is handed the second.
  */
 export type ReadCall = (jobId: string, callId: string) => Promise<CallRead>;
+
+/**
+ * What `explain_command` came back as. **`CallRead`'s shape**, and its reason:
+ * a reading is asked for by one person about one call and answered once.
+ *
+ * It is spelled here rather than in `@armada/protocol` beside `CallRead` and
+ * `RunListRead`, which is where it belongs — that package was landed with the
+ * wire and is not this change's to edit. Reported.
+ */
+export type CommandExplainedRead =
+  | { ok: true; explained: CommandExplained }
+  | { ok: false; outcome: Outcome };
+
+/**
+ * Reading what one command does, as the screen's caller hands it in.
+ *
+ * **`ReadCall`'s shape one question over.** The screen decides when to ask and
+ * what the answer means; the host makes the call, because a screen that reached
+ * for the preload could not be rendered outside the app.
+ */
+export type ExplainCommand = (jobId: string, callId: string) => Promise<CommandExplainedRead>;
 
 export function useCallArguments(read: ReadCall, jobId: string): Calls {
   const [held, setHeld] = useState<Record<string, CallState>>({});

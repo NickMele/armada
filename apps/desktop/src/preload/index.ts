@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 
 import { CHANNELS } from "../shared/bridge";
 import type { BridgeState, Summons } from "../shared/bridge";
-import type { BridgeApi } from "../shared/api";
+import type { BridgeApi, CommandExplainedRead } from "../shared/api";
 import type {
   CallRead,
   CheckOutputRead,
@@ -113,10 +113,20 @@ const api: BridgeApi = {
     chose: string,
   ): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.answerQuestion, jobId, questionId, chose),
-  // A closed set on both, like the question's answer above: the answer is one
-  // of the three Fleet offered for this call, and the setting one of two.
-  answerCommand: (jobId: string, call: string, answer: CommandAnswer): Promise<Outcome> =>
-    ipcRenderer.invoke(CHANNELS.answerCommand, jobId, call, answer),
+  // The answer is one of the three Fleet offered for this call. The note is a
+  // person's own words, read only on a reject, and `undefined` crosses as
+  // `undefined` — a bare refusal sends no prose at all.
+  answerCommand: (
+    jobId: string,
+    call: string,
+    answer: CommandAnswer,
+    note?: string,
+  ): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.answerCommand, jobId, call, answer, note),
+  // What that command does. A read, and the one capability here that answers a
+  // question about a call rather than deciding it.
+  explainCommand: (jobId: string, callId: string): Promise<CommandExplainedRead> =>
+    ipcRenderer.invoke(CHANNELS.explainCommand, jobId, callId),
   setWhenBlocked: (jobId: string, whenBlocked: WhenBlocked): Promise<Outcome> =>
     ipcRenderer.invoke(CHANNELS.setWhenBlocked, jobId, whenBlocked),
   answerJudge: (jobId: string, answer: JudgeAnswer, note?: string): Promise<Outcome> =>

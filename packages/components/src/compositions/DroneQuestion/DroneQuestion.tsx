@@ -3,49 +3,20 @@ import { useId, useState } from "react";
 
 import { Button } from "../../primitives/Button/Button";
 import { Radio, RadioGroup } from "../../primitives/Radio/Radio";
+import { Textarea } from "../../primitives/Textarea/Textarea";
 
 /**
- * A drone has asked a question and is waiting. The question, the answers it
- * offered, and the one control that sends one.
+ * A drone has asked a question and is waiting, or a command it reached for and
+ * was not given. The question, the answers offered, and the control that sends
+ * one.
  *
- * **The band above it says why you are here; this is what you do about it.**
- * `InsideAJob` draws a `waiting` notice and then this, in the slot the redirect
- * draft uses — between the phase strip and the step's story — because a question
- * is the same kind of thing: a box a person acts in about the step they have
- * open. So this carries no frame and no fill of its own, only the waiting rule
- * on its left; two framed regions for one condition would read as two things
- * wrong.
+ * **No frame and no fill of its own**, only the waiting rule on its left — the
+ * band above carries the condition, and two framed regions read as two faults.
  *
- * **The whole surface is a closed set.** There is no text field here and no
- * prop that could add one: the drone offers between two and four answers, a
- * person picks one, and nothing is typed. That is the difference between this
- * and the orchestrator `docs/scope.md` records as abandoned — the distinction is
- * not whether a person is involved, it is whether a conversation is the medium.
- * A person who needs to say something the options do not cover has Redirect,
- * which already carries their own words into the same session; `redirectNote`
- * says so on this surface so that it is not a thing to remember.
+ * **Nothing is preselected**, and each answer says what it commits to: a label
+ * alone is a button whose effect has to be guessed, and a guess here spends.
  *
- * **Each answer says what it commits to, and that is not decoration.** A label
- * alone is a button whose effect has to be guessed, and here a guess produces
- * jobs that run and spend. The consequence sits under the label in the briefing
- * register the design contract asks for: the facts needed to decide, on screen,
- * without a click.
- *
- * **Nothing is preselected.** A default answer is an answer somebody did not
- * give, and the whole reason this exists is that the drone could not guess.
- *
- * # No glyph, and that is a finding rather than a choice
- *
- * `packages/icons/icons.toml` has no mark for a drone asking. `file-question-mark`
- * is reserved — "the file-* family means evidence throughout" — and nothing else
- * in the registry means it. So this draws none, per `armada-components`: a state
- * with no glyph gets the story and the report, never an invented mark.
- *
- * # The job stays `running`, and its badge is right to say so
- *
- * A question rides beside the state rather than being one, so nothing about the
- * header changes while this is open. `--step-waiting` is the tone, which is what
- * the screen's own `waiting` notice takes and means "needs you, not urgent".
+ * No glyph — `icons.toml` has none for a drone asking, and the gap is reported.
  */
 export type DroneQuestionProps = {
   /**
@@ -59,8 +30,14 @@ export type DroneQuestionProps = {
   options: readonly DroneAnswer[];
   /** How long it has been waiting, already rendered. `12m`, `2h`. */
   waiting?: string;
-  /** Send the label. The caller holds the request. */
-  onAnswer: (label: string) => void;
+  /**
+   * Send the label, and the words typed under it where that answer takes any.
+   *
+   * **An answer carrying no words calls this with one argument**, as it did
+   * before a note existed — not with an explicit `undefined`. A caller that
+   * offers no note cannot tell the two versions apart.
+   */
+  onAnswer: (label: string, note?: string) => void;
   /**
    * An answer already in flight, or nothing live to send it over. The caller's
    * sentence says which — a disabled control with no reason looks broken.
@@ -83,15 +60,69 @@ export type DroneQuestionProps = {
    * heading crediting the drone would say it chose them.
    */
   answersLabel?: string;
+  /**
+   * A reading of what was asked, as the caller holds it. **Absent draws no
+   * control**, which is a drone's own question: there is no command to read,
+   * and offering to explain a sentence written in English answers nothing.
+   */
+  explain?: Explaining;
+  /** Ask for the reading. The caller makes the request and reports it back on `explain`. */
+  onExplain?: () => void;
+  /** The words on the control. Short enough to press without reading twice. */
+  explainLabel?: string;
 };
 
-/** One answer, as this surface draws it. */
+/**
+ * One answer, as this surface draws it.
+ *
+ * **`noteLabel` is what makes an answer the one that carries words**, and the
+ * caller says which. For a drone's own question nothing is typed and the closed
+ * set holds — Redirect is where those words go. A command is the other case:
+ * its three answers are Armada's rather than the drone's, and only one wants a
+ * reason, since an allow tells the drone everything it acts on and a refusal
+ * tells it nothing. That reason is in a person's head as they press reject, and
+ * a second box spends it. Since protocol 11.5.
+ */
 export type DroneAnswer = {
   /** What the person picks, and what the answer names. */
   label: string;
   /** What the drone will do if it is picked. Never blank. */
   consequence: string;
+  /**
+   * That this answer carries a person's words, and what the field is called.
+   * **Drawn only while this answer is the chosen one** — a field under an
+   * answer nobody picked is a question nobody asked.
+   */
+  noteLabel?: string;
+  /** What becomes of those words, under the field. Absent draws nothing. */
+  noteSays?: ReactNode;
 };
+
+/**
+ * A reading of the command, as the caller holds it.
+ *
+ * **It decides nothing.** A person cannot answer about a command they cannot
+ * read, and the alternative is leaving the window — which is how a command gets
+ * allowed unread. The answers stay live while it is out and after it lands.
+ *
+ * **The model is named because a reading is a claim**, which is what
+ * hedge-by-source asks of anything judged rather than measured.
+ */
+export type Explaining =
+  /** Nothing asked yet, which is every command until somebody presses. */
+  | { state: "ready" }
+  /** Asked, nothing back. The control says so and does not send twice. */
+  | { state: "asking" }
+  /** What came back, and what read it. */
+  | { state: "read"; explanation: string; model: string }
+  /** Nothing came back, in the caller's words. The answers are untouched. */
+  | { state: "failed"; why: ReactNode };
+
+/** What the reading is called where a screen reader meets it. */
+const READING_LABEL = "What this command does";
+
+/** Said while the reading is out: a wait somebody asked for, named rather than spun. */
+const READING = "Reading this command.";
 
 export function DroneQuestion({
   question,
@@ -104,12 +135,32 @@ export function DroneQuestion({
   redirectNote = "If none of these is right, redirect the drone instead — that is where your own words go.",
   answerLabel = "Send this answer",
   answersLabel = "Answers the drone offered",
+  explain,
+  onExplain,
+  explainLabel = "Help me understand this command",
 }: DroneQuestionProps) {
   const [chosen, setChosen] = useState<string | null>(null);
+  // Kept when the choice moves off the answer that reads it: a person who typed
+  // a reason and then pressed the wrong radio has not withdrawn the reason.
+  const [note, setNote] = useState("");
   // One radio group per box. A drone's question and a command it is waiting
   // on can be open at once, and two boxes sharing a name are one group to the
   // browser: picking in one would clear the other.
   const group = useId();
+
+  const picked = options.find((option) => option.label === chosen);
+
+  function send() {
+    if (chosen === null) return;
+    // An answer that reads no words is sent as it was before one could be
+    // typed — one argument, and no empty string standing in for silence.
+    if (picked?.noteLabel === undefined) {
+      onAnswer(chosen);
+      return;
+    }
+    const said = note.trim();
+    onAnswer(chosen, said === "" ? undefined : said);
+  }
 
   return (
     <section className="armada-question" aria-label="A question from the drone">
@@ -127,6 +178,44 @@ export function DroneQuestion({
           wording to it and neither does this. */}
       <p className="armada-question__asked">{question}</p>
 
+      {/* Above the answers and never among them: reading is what a person does
+          before deciding, and a control in the list would read as a fourth
+          answer. */}
+      {explain === undefined ? null : (
+        <div className="armada-question__explaining">
+          <Button
+            variant="secondary"
+            onClick={onExplain}
+            // Off only while its own reading is out. **Never `disabled`** — a
+            // command whose answer is on its way is still one somebody may want
+            // to understand, and this sends nothing.
+            disabled={explain.state === "asking"}
+            aria-busy={explain.state === "asking" || undefined}
+          >
+            {explainLabel}
+          </Button>
+          {explain.state === "asking" ? (
+            <p className="armada-question__said" role="status">
+              {READING}
+            </p>
+          ) : null}
+          {explain.state === "read" ? (
+            <div className="armada-question__reading" role="status" aria-label={READING_LABEL}>
+              <p className="armada-question__explanation">{explain.explanation}</p>
+              {/* Mono on the model, as every machine-derived value here is. */}
+              <p className="armada-question__said">
+                Read by <span className="mono">{explain.model}</span>
+              </p>
+            </div>
+          ) : null}
+          {explain.state === "failed" ? (
+            <p className="armada-question__said" role="status">
+              {explain.why}
+            </p>
+          ) : null}
+        </div>
+      )}
+
       <RadioGroup label={answersLabel}>
         {options.map((option) => (
           <div className="armada-question__option" key={option.label}>
@@ -143,6 +232,22 @@ export function DroneQuestion({
                 commits to, and a person reads it after the name and before the
                 press. */}
             <p className="armada-question__means">{option.consequence}</p>
+            {/* The field the answer reads, under the answer that reads it, so
+                nothing asks for words about a decision nobody has taken. */}
+            {option.noteLabel !== undefined && chosen === option.label ? (
+              <div className="armada-question__note">
+                <Textarea
+                  label={option.noteLabel}
+                  rows={2}
+                  value={note}
+                  disabled={disabled}
+                  onChange={(event) => setNote(event.target.value)}
+                />
+                {option.noteSays === undefined ? null : (
+                  <p className="armada-question__means">{option.noteSays}</p>
+                )}
+              </div>
+            ) : null}
           </div>
         ))}
       </RadioGroup>
@@ -150,11 +255,7 @@ export function DroneQuestion({
       {/* Off until something is picked, which is what fleet would answer — a
           round trip to learn nothing was chosen is a refusal that reads as a
           failure. */}
-      <Button
-        variant="primary"
-        disabled={disabled || chosen === null}
-        onClick={() => chosen !== null && onAnswer(chosen)}
-      >
+      <Button variant="primary" disabled={disabled || chosen === null} onClick={send}>
         {answerLabel}
       </Button>
 

@@ -70,7 +70,7 @@ import { InsideAJob } from "./InsideAJob";
 
 import type { CommandAnswer, Examination, FileReport, FollowedLog, History, Holds, JobSummary, Journalled, JudgeAnswer, ManifestSummary, ModelChoices, Observed, Outcome, Watched, WhenBlocked, WhenRefused, WorkflowSummary } from "@armada/protocol";
 import { heldForMoney, heldForTurns, type ConfirmableAct } from "./Acts";
-import { useCallArguments, type ReadCall } from "./calls";
+import { useCallArguments, type ExplainCommand, type ReadCall } from "./calls";
 import {
   useCheckOutputs,
   useFollowing,
@@ -148,7 +148,9 @@ export type JobDetailProps = {
    * same call answers a command a drone is waiting on and a refused row on a
    * stopped job. Straight through, for `onAnswer`'s reason.
    */
-  onAnswerCommand: (jobId: string, call: string, answer: CommandAnswer) => void;
+  onAnswerCommand: (jobId: string, call: string, answer: CommandAnswer, note?: string) => void;
+  /** Ask what one command does. It decides nothing; absent draws no control. */
+  onExplainCommand?: ExplainCommand;
   /** Answer the question a judge refusal opened. One press is the whole answer. */
   onAnswerJudge: (jobId: string, answer: JudgeAnswer, note?: string) => void;
   /** How this job meets the next such command. Live; nothing restarts. */
@@ -343,6 +345,7 @@ export function JobDetail({
   onRedirect,
   onAnswer,
   onAnswerCommand,
+  onExplainCommand,
   onAnswerJudge,
   onSetWhenBlocked,
   onSetWhenRefused,
@@ -682,7 +685,10 @@ export function JobDetail({
   // One way to answer a command the Drone was not given, for both places a
   // person meets one: the command it is waiting on, and a refused row.
   const answering = answeringOf(job.id, stale, acting, onAnswerCommand);
-  const waiting = waitingOf(question, commandOf(whole, now, answering));
+  // Bound to the Job being read, so nothing downstream carries an id back.
+  const explain =
+    onExplainCommand === undefined ? undefined : (call: string) => onExplainCommand(job.id, call);
+  const waiting = waitingOf(question, commandOf(whole, now, answering, explain));
 
   // The Job header, and everything that goes in it. `heading.tsx` holds what
   // it is made of — the badge, the facts, the acts that end or replace the Job,
