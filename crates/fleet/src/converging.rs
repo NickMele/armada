@@ -37,6 +37,7 @@ use crate::adrift::Adrift;
 use crate::daemon::Fleet;
 use crate::judging;
 use crate::session::{LiveSession, Occasion};
+use crate::slots::Slot;
 use crate::working::Working;
 
 /// What a step is expected to cost before any of this looks at it.
@@ -273,53 +274,82 @@ where
     ///
     /// **Cold on an ordinary turn.** Every tripwire is read off the slot, so a
     /// step inside its norms reaches no store, no worktree and no model.
-    pub(crate) async fn watch_convergence(
-        &self,
-        working: &mut Option<Working>,
-    ) -> Result<Option<Wandering>, Adrift> {
-        let Some(at_work) = working.as_ref() else {
-            return Ok(None);
+    pub(crate) async fn watch_convergence(&self, slot: &Slot) -> Result<Option<Wandering>, Adrift> {
+        let (job, step, chain) = {
+            let working = slot.lock().await;
+            let Some(at_work) = working.as_ref() else {
+                return Ok(None);
+            };
+            let (job, step, _) = at_work.standing();
+            (job, step, at_work.chain().clone())
         };
-        let (job, step, _) = at_work.standing();
-        match at_work.chain() {
+        match chain {
             // Already answered for. A step that stopped is a person's, and a
             // step whose look was spent does not get a second one — that is
             // what keeps the tier cold when a tripwire stays tripped.
             Chain::Stopped | Chain::Looked => Ok(None),
+            // Stage four asks the Drone's own record and no model, so it is
+            // the one arm that runs under the slot from end to end.
             Chain::Reporting {
                 asked_at,
                 why,
                 in_plan,
             } => {
-                let (asked_at, why, in_plan) = (asked_at.clone(), why.clone(), in_plan.clone());
-                self.after_the_directive(working, &job, &step, &asked_at, why, &in_plan)
-                    .await
+                self.after_the_directive(
+                    &mut *slot.lock().await,
+                    &job,
+                    &step,
+                    &asked_at,
+                    why,
+                    &in_plan,
+                )
+                .await
             }
-            Chain::Working => self.first_look(working, &job, &step).await,
+            Chain::Working => self.first_look(slot, &job, &step).await,
         }
     }
 
     /// Stage one, then stage two, then stage three — in the one turn, because
     /// each follows from the last with nothing to wait for in between.
+    ///
+    /// **The slot is let go across the look**, for `crate::settling`'s reason
+    /// one tier up: a Judge call is a minute or two, `get_job` and `list_jobs`
+    /// read this slot, and a look that held it stopped every surface for its
+    /// own length. What the call is shown is read first and carried by value.
     async fn first_look(
         &self,
-        working: &mut Option<Working>,
+        slot: &Slot,
         job: &JobId,
         step: &StepId,
     ) -> Result<Option<Wandering>, Adrift> {
         // At the gate, or waiting on a person — neither is thrashing, and both
         // are cheaper than the tripwires. `crate::questioning` says why.
-        if self.evidence_waiting_for(&job) > 0 {
+        if self.evidence_waiting_for(job) > 0 {
             return Ok(None);
         }
-        let at_work = working.as_ref().expect("the slot was read as full");
-        if crate::questioning::waiting_on_an_answer(at_work) {
-            return Ok(None);
-        }
-        let Some(tripped) = self.tripped(at_work) else {
-            return Ok(None);
+        let (tripped, worktree, in_plan, declared, off_plan) = {
+            let working = slot.lock().await;
+            let at_work = working.as_ref().expect("the slot was read as full");
+            if crate::questioning::waiting_on_an_answer(at_work) {
+                return Ok(None);
+            }
+            let Some(tripped) = self.tripped(at_work) else {
+                return Ok(None);
+            };
+            let (_, _, worktree) = at_work.standing();
+            // The declared plan as the finding is about to be made against it. A
+            // file inside the plan that is not in this reading appeared *after* the
+            // look, which is what makes the citation stale rather than merely old.
+            // One reading, on the one turn of a step that reaches this far.
+            let in_plan = self.in_plan(at_work);
+            (
+                tripped,
+                worktree,
+                in_plan,
+                at_work.declared().cloned(),
+                at_work.off_plan().to_vec(),
+            )
         };
-        let (_, _, worktree) = at_work.standing();
         let record = self.load(job).await?;
         if record.status() != JobStatus::Running {
             return Ok(None);
@@ -332,11 +362,6 @@ where
         let Ok(patch) = self.work().patch(&worktree) else {
             return Ok(None);
         };
-        // The declared plan as the finding is about to be made against it. A
-        // file inside the plan that is not in this reading appeared *after* the
-        // look, which is what makes the citation stale rather than merely old.
-        // One reading, on the one turn of a step that reaches this far.
-        let in_plan = self.in_plan(at_work);
         // The step's deliverable, read at the same instant as the patch and by
         // the gate's own reader. **An unreadable file is not a look that could
         // not be made**: part-way through a step the ordinary case is a file
@@ -361,13 +386,17 @@ where
         let found = judging::converging(
             declared_step,
             &patch,
-            at_work.declared(),
-            at_work.off_plan(),
+            declared.as_ref(),
+            &off_plan,
             held.as_deref(),
             &precedent,
             &judging,
         )
         .await;
+        // **The slot is taken back here and not before.** Everything below
+        // writes what the look came to, and the two readings under it are
+        // deliberately taken after the call rather than before.
+        let working = &mut *slot.lock().await;
         // Read before the directive is written, never after: the reply can
         // arrive between the two, and a baseline taken afterwards would count
         // it as having been there all along — which reads as a Drone that

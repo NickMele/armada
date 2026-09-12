@@ -21,6 +21,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
+use std::time::Duration;
 
 use adapter_traits::{Ask, Heard, JudgeCall, ModelClient};
 
@@ -31,6 +32,9 @@ pub struct FakeJudge {
     by_criterion: BTreeMap<String, String>,
     failing: Option<&'static str>,
     asked: Mutex<Vec<String>>,
+    /// How long the rendered program takes before it answers. Zero on every
+    /// judge but one a test asked for [`FakeJudge::taking`].
+    taking: Duration,
 }
 
 impl FakeJudge {
@@ -41,6 +45,7 @@ impl FakeJudge {
             by_criterion: BTreeMap::new(),
             failing: None,
             asked: Mutex::new(Vec::new()),
+            taking: Duration::ZERO,
         }
     }
 
@@ -69,6 +74,7 @@ impl FakeJudge {
                 .collect(),
             failing: None,
             asked: Mutex::new(Vec::new()),
+            taking: Duration::ZERO,
         }
     }
 
@@ -80,6 +86,24 @@ impl FakeJudge {
             by_criterion: BTreeMap::new(),
             failing: Some(standing_in_for),
             asked: Mutex::new(Vec::new()),
+            taking: Duration::ZERO,
+        }
+    }
+
+    /// The same judge, answering only after `taking`. **For a test whose
+    /// claim is about what else can happen while a call is out** — nothing
+    /// here is about the answer, so every other constructor stays instant.
+    pub fn taking(mut self, taking: Duration) -> FakeJudge {
+        self.taking = taking;
+        self
+    }
+
+    /// The shell prefix that makes a call take [`FakeJudge::taking`]. Empty
+    /// where it is zero, so an ordinary fake renders exactly what it did.
+    fn beat(&self) -> String {
+        match self.taking.is_zero() {
+            true => String::new(),
+            false => format!("sleep {}; ", self.taking.as_secs_f32()),
         }
     }
 
@@ -113,7 +137,7 @@ impl ModelClient for FakeJudge {
             (None, Some(_)) => String::from("cat >/dev/null; printf %s \"$0\""),
             (None, None) => String::from("cat >/dev/null"),
         };
-        let mut args = vec![String::from("-c"), script];
+        let mut args = vec![String::from("-c"), format!("{}{script}", self.beat())];
         if let Some(answer) = self.answer(ask.question()) {
             args.push(answer);
         }
@@ -158,7 +182,7 @@ impl ModelClient for FakeJudge {
         // One `printf` per line with a beat between, then the exit the fake is
         // scripted for. `$0`-style splicing is deliberately not used: every
         // line is already a literal by the time it reaches the shell.
-        let mut script = String::from("cat >/dev/null; ");
+        let mut script = format!("cat >/dev/null; {}", self.beat());
         for line in &lines {
             script.push_str(&format!("printf '%s\n' {}; sleep 0.05; ", quoted(line)));
         }

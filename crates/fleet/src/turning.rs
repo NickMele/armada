@@ -298,14 +298,14 @@ where
     /// single slot had**, and each argument for it is about the Drone rather
     /// than about Fleet, which is why none of them needed rewriting.
     ///
-    /// **The slot is taken for the watchers and let go before the gate.** The
-    /// five above `settle` are a worktree read, a store read and at most one
-    /// Judge call; the gate below is every Check the step declares and every
-    /// criterion its Judge holds, and holding the slot across that is what made
-    /// a Job unreadable for as long as its own gate ran.
+    /// **Nothing that calls a model or runs a command holds the slot.** The
+    /// four in the block below are worktree and store reads; the look and the
+    /// gate take it for themselves, around their calls. Holding it across
+    /// either is what made a Job — and through `list_jobs`, the whole Board —
+    /// unreadable for as long as Fleet was working it.
     async fn turning_one(&self, job: JobId, slot: &Slot) -> Result<Worked, Adrift> {
         let mut worked = Worked::on(job.clone());
-        let (drifting, roused, quiet, wandering) = {
+        let (drifting, roused, quiet) = {
             let working = &mut *slot.lock().await;
             // First, because the reading it takes is the one the drift check needs
             // and a turn must not open the same repository twice. It answers `None`
@@ -329,12 +329,15 @@ where
             // question first is what stops Fleet paying a model to look at the work
             // of a Drone that is no longer doing any.
             let quiet = self.watch_silence(working).await?;
-            // After the drift reading it consumes and before the gate, which is the
-            // one place both are true: a step whose evidence lands this turn is at
-            // the gate rather than thrashing, and `settle` may clear the slot.
-            let wandering = self.watch_convergence(working).await?;
-            (drifting, roused, quiet, wandering)
+            (drifting, roused, quiet)
         };
+        // After the drift reading it consumes and before the gate, which is the
+        // one place both are true: a step whose evidence lands this turn is at
+        // the gate rather than thrashing, and `settle` may clear the slot.
+        //
+        // **Outside the block, because its one look is a Judge call.** It takes
+        // the slot for what the look is shown and lets it go across the call.
+        let wandering = self.watch_convergence(slot).await?;
         let settled = self.settle(slot).await?;
         worked.delivered = self.take_delivered(&job).await;
         worked.after = self.reap(&mut *slot.lock().await).await?;
