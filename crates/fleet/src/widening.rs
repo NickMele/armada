@@ -212,11 +212,10 @@ where
 {
     /// Take a request for more scope from the working Drone, and answer it.
     ///
-    /// **The Job does not move while the call is out.** It is `running` when
-    /// the request arrives and `running` when this returns, which is the whole
-    /// of what the reversal bought: the Drone keeps its session, its worktree
-    /// and its place under the concurrency bound, and carries on the moment
-    /// this answers.
+    /// **The Job does not move while the call is out** — the module doc's
+    /// reversal, `running` in and `running` out: the Drone keeps its session,
+    /// worktree and place under the concurrency bound, and carries on the
+    /// moment this answers.
     ///
     /// The Drone names no Job and no step; both are read out of **its own**
     /// slot, exactly as `declare_scope` and `ask_question` read them, so a

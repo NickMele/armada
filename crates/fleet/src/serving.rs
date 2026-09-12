@@ -159,20 +159,17 @@ where
     ///
     /// **The same predicate again, unreduced.** `admit_next` opens with
     /// `room_for_another` and `queued_reason` folds it to one label; this is
-    /// the third reader of that one answer and it takes it whole. Nothing here
-    /// computes a second opinion about why a Job is waiting — `Room::hold` is a
+    /// the third reader, and takes the whole answer — `Room::hold` is a
     /// `match` over the value admission itself returned.
     ///
-    /// **`occupied` is `Slots::count`.** The roster is what the bound is
-    /// measured against, and a count taken from Job statuses would disagree
-    /// with it: an escalated Job keeps its Drone alive and idle so a redirect
-    /// costs no respawn, and it keeps its place. `count` sweeps the slots whose
-    /// `Working` has gone, so what it answers is what admission will act on.
+    /// **`occupied` is `Slots::count`.** A count taken from Job statuses would
+    /// disagree with the roster: an escalated Job keeps its Drone alive and
+    /// idle, keeping its place. `count` sweeps the slots whose `Working` has
+    /// gone, so it answers what admission will act on.
     ///
-    /// The roster lock is taken once and both facts are read under it, so the
-    /// bound, the count and the reason cannot be three readings of three
-    /// different instants. It is admission's own lock order — roster first,
-    /// then the poll lock inside `room_for_another` — so this adds no cycle.
+    /// The roster lock is taken once, so the bound, count and reason cannot be
+    /// three readings of three different instants — admission's own lock
+    /// order, roster first, so this adds no cycle.
     async fn get_capacity(&self) -> Result<FleetCapacity, Refusal> {
         let mut slots = self.slots().lock().await;
         let room = self.room_for_another(&mut slots).await;
@@ -438,12 +435,12 @@ where
     /// # The Job is loaded first, and that is not a wasted read
     ///
     /// It is what makes an id that names nothing a 404 rather than an empty
-    /// history, which would be a lie about a Job that exists and has not moved.
-    /// It also keeps this read behind the same fold every other read is behind:
-    /// a log the machine would not admit refuses to load, so a history that
-    /// reaches the wire is one `Job::transition` accepted. **This read cannot
-    /// show a state the fold rejected**, and it does not replay anything to
-    /// avoid it — `crates/store/src/fold.rs` is still the only caller.
+    /// history — a lie about a Job that exists and has not moved — and it
+    /// keeps this read behind the same fold every other read is behind: a log
+    /// the machine would not admit refuses to load, so a history that reaches
+    /// the wire is one `Job::transition` accepted. **This read cannot show a
+    /// state the fold rejected**, and does not replay to avoid it —
+    /// `crates/store/src/fold.rs` is still the only caller.
     ///
     /// # The rows come back whole
     ///
