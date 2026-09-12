@@ -62,3 +62,47 @@ test("the press that opens the diff takes the reading again, and so does the fil
   );
   await vi.waitFor(() => expect(onReadDiff).toHaveBeenCalledWith(fixture.job.id));
 });
+
+test("an open sheet keeps reading while a drone is still writing", async () => {
+  vi.useFakeTimers();
+  try {
+    const fixture = running();
+    const onReadDiff = vi.fn<(jobId: string | null) => void>();
+    mount(<JobDetail {...propsFor(fixture)} onReadDiff={onReadDiff} />);
+    // The press, then the clock. **Fleet republishes a footprint only where the
+    // file list changed**, so a Drone editing the same seven files leaves the
+    // event silent and the hunks on screen are what this takes again.
+    await userEvent.click(page.getByRole("button", { name: "Open the diff" }).first());
+    onReadDiff.mockClear();
+
+    await vi.advanceTimersByTimeAsync(11_000);
+    expect(onReadDiff.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(onReadDiff).toHaveBeenCalledWith(fixture.job.id);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+// **A worktree nobody is writing to cannot go stale.** The clock is the one
+// thing here that spends without being asked, so it is bounded by the two
+// facts that make a reading able to move: somebody is looking, and a Drone
+// holds the pen.
+test("and pays nothing on a job with no drone on it", async () => {
+  vi.useFakeTimers();
+  try {
+    const fixture = running();
+    const stopped: JobFixture = {
+      ...fixture,
+      job: { ...fixture.job, assigned_drone: undefined },
+    };
+    const onReadDiff = vi.fn<(jobId: string | null) => void>();
+    mount(<JobDetail {...propsFor(stopped)} onReadDiff={onReadDiff} />);
+    await userEvent.click(page.getByRole("button", { name: "Open the diff" }).first());
+    onReadDiff.mockClear();
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(onReadDiff).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
+});
