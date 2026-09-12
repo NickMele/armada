@@ -21,6 +21,10 @@
 //! print its environment, measured for this step, so argv is the one channel
 //! public by construction. The prompt goes in on stdin as the session's first
 //! turn, the same channel a later turn is injected through.
+//!
+//! **Just over 500 lines.** The global-flag catch-all in [`command_rule`]
+//! guards the same render this file already renders, and splitting it out
+//! would separate the refusal from the argument list it is refusing.
 
 use std::error::Error;
 use std::fmt;
@@ -111,8 +115,10 @@ const TOOL_WAIT: &str = "MCP_TOOL_TIMEOUT";
 const ON_PATH: &str = "claude";
 
 /// The verbs [`Grant::ReadTheRepository`] renders, none of which can change a
-/// repository. `branch --list` carries its flag because `branch` alone can
-/// also create one.
+/// repository. `branch` is not among them: no rule tells its `--list` form
+/// apart from a bare `git branch <name>`, which creates one, so `branch` is
+/// denied wholesale by `git_guard` instead — a Drone reads its branch with
+/// `rev-parse --abbrev-ref HEAD` or `status`, both already here.
 const READ_ONLY_GIT_VERBS: &[&str] = &[
     "status",
     "diff",
@@ -120,7 +126,6 @@ const READ_ONLY_GIT_VERBS: &[&str] = &[
     "show",
     "rev-parse",
     "blame",
-    "branch --list",
     "describe",
 ];
 
@@ -359,6 +364,16 @@ fn command_rule(run: &str) -> Result<String, HarnessRefused> {
             verb,
         });
     }
+    // Checked last, as the catch-all: a global flag denies every subcommand
+    // behind it, whatever it is, so a command that reached here without a
+    // more specific reason is still denied at runtime unless it is refused
+    // here first.
+    if let Some(flag) = git_guard::git_global_flag(run) {
+        return Err(HarnessRefused::CommandCarriesAGitGlobalFlag {
+            run: String::from(run),
+            flag,
+        });
+    }
     Ok(format!("Bash({run}:*)"))
 }
 
@@ -380,6 +395,10 @@ pub enum HarnessRefused {
     /// history some other way. **Refused, never granted quietly**, same as a
     /// push — `verb` is what [`git_guard::denied_mutating_git`] found.
     CommandWouldMutateGit { run: String, verb: String },
+    /// A declared command that carries a git global flag before its
+    /// subcommand. Denied wholesale at runtime whatever that subcommand is —
+    /// `flag` is what [`git_guard::git_global_flag`] found.
+    CommandCarriesAGitGlobalFlag { run: String, flag: String },
     /// The config's environment already names the variable the permission
     /// wait goes in. Fleet cannot spell it, so this is a Fleet bug.
     PermissionWaitNotSet(adapter_traits::SpawnConfigRefused),
@@ -419,6 +438,14 @@ impl fmt::Display for HarnessRefused {
                  a commit, a ref, the index or history — a Drone is denied git and \
                  stays denied, so this command cannot run as declared. Remove it \
                  from the Manifest, or move the git call Fleet needs into `commit.rs`"
+            ),
+            HarnessRefused::CommandCarriesAGitGlobalFlag { run, flag } => write!(
+                out,
+                "the declared command `{run}` carries git's `{flag}`, a global flag \
+                 ahead of its subcommand — a Drone is denied every git invocation \
+                 shaped that way, whatever the subcommand, so this command cannot \
+                 run as declared. Remove the flag, or move the git call Fleet needs \
+                 into `commit.rs`"
             ),
         }
     }

@@ -11,6 +11,8 @@
 //! **Over 500 lines, and left as one file.** The rendering and the deny rules
 //! it carries are one claim — a Drone confined — and splitting the git-deny
 //! cases out would separate that proof from the rest of the same argument.
+//! [`git_guard_gaps`](super::git_guard_gaps) holds two later cases only,
+//! kept out so this file does not grow past what that argument covers.
 
 use adapter_traits::{
     AgentHarness, DroneSpawnConfig, Environment, Grant, McpConfig, Model, Prompt, Toolbelt,
@@ -24,11 +26,11 @@ use crate::harness::{
 
 const SECRET_LOOKING_TASK: &str = "fix the parser, the token is hunter2";
 
-fn worktree() -> Worktree {
+pub(super) fn worktree() -> Worktree {
     Worktree::at("/repos/armada/.armada/worktrees/01AAA", "armada/01AAA")
 }
 
-fn environment() -> Environment {
+pub(super) fn environment() -> Environment {
     Environment::nothing()
         .and("PATH", "/usr/bin:/bin")
         .expect("a legal name")
@@ -36,7 +38,7 @@ fn environment() -> Environment {
         .expect("a legal name")
 }
 
-fn config(toolbelt: Toolbelt) -> DroneSpawnConfig {
+pub(super) fn config(toolbelt: Toolbelt) -> DroneSpawnConfig {
     DroneSpawnConfig::spawn_in(
         &worktree(),
         Model::named("a-model").expect("a named model"),
@@ -47,7 +49,7 @@ fn config(toolbelt: Toolbelt) -> DroneSpawnConfig {
     )
 }
 
-fn rendered(toolbelt: Toolbelt) -> Vec<String> {
+pub(super) fn rendered(toolbelt: Toolbelt) -> Vec<String> {
     HeadlessAgent::at("/usr/local/bin/agent")
         .render(&config(toolbelt))
         .expect("a legal configuration renders")
@@ -55,7 +57,7 @@ fn rendered(toolbelt: Toolbelt) -> Vec<String> {
         .to_vec()
 }
 
-fn value_after(args: &[String], flag: &str) -> Option<String> {
+pub(super) fn value_after(args: &[String], flag: &str) -> Option<String> {
     args.iter()
         .position(|arg| arg == flag)
         .and_then(|at| args.get(at + 1))
@@ -449,7 +451,6 @@ fn the_read_only_git_grant_renders_every_non_destructive_verb() {
         "Bash(git show:*)",
         "Bash(git rev-parse:*)",
         "Bash(git blame:*)",
-        "Bash(git branch --list:*)",
         "Bash(git describe:*)",
     ] {
         assert!(entries.contains(&rule), "missing `{rule}`: {allowed}");
@@ -562,51 +563,37 @@ fn every_rendering_denies_the_verbs_that_write_a_commit_a_ref_or_history() {
 
 /// `git -C <path> commit` starts with `git -C`, not `git commit` — measured
 /// against the real CLI, a deny keyed on the verb let it through and the
-/// commit landed. Denying the redirect flags themselves, for every
-/// subcommand, is what closes it.
+/// commit landed. `git_guard_gaps` has the fuller case: one rule denies every
+/// global flag, not only the three named here originally.
 #[test]
 fn the_denial_covers_a_redirected_repository_not_only_the_bare_verb() {
     let args = rendered(Toolbelt::evidence_only());
     let denied = value_after(&args, "--disallowedTools").expect("a deny list is rendered");
-    let entries: Vec<&str> = denied.split(',').collect();
-    for rule in [
-        "Bash(git -C:*)",
-        "Bash(git --git-dir:*)",
-        "Bash(git --work-tree:*)",
-    ] {
-        assert!(entries.contains(&rule), "missing `{rule}`: {denied}");
-    }
+    assert!(
+        denied.split(',').any(|entry| entry == "Bash(git -*)"),
+        "missing the global-flag deny: {denied}"
+    );
 }
 
-/// `Grant::ReadTheRepository` renders `Bash(git branch --list:*)`, and a deny
-/// on the bare verb — measured against the real CLI — also denies that
-/// narrower allow: `git branch --list` was refused with nothing else naming
-/// `branch` at all. So `branch` is denied by its mutating flags, never as a
-/// bare verb, and the read-only listing survives.
+/// `branch` is not among [`READ_ONLY_GIT_VERBS`](crate::harness) at all: no
+/// rule tells its `--list` form apart from a bare `git branch <name>`, which
+/// creates one — so the verb is denied wholesale, the same as every other
+/// mutating verb, rather than by its flags. `git_guard_gaps` measures the
+/// bare-create case this closed.
 #[test]
-fn the_denial_never_shadows_the_granted_branch_listing() {
+fn the_denial_covers_branch_wholesale_now_that_nothing_grants_it() {
     let args = rendered(Toolbelt::evidence_only().and(Grant::ReadTheRepository));
     let denied = value_after(&args, "--disallowedTools").expect("a deny list is rendered");
-    let entries: Vec<&str> = denied.split(',').collect();
     assert!(
-        !entries.contains(&"Bash(git branch:*)"),
-        "a bare `branch` deny would also deny the granted `branch --list`: {denied}"
+        denied.split(',').any(|entry| entry == "Bash(git branch:*)"),
+        "missing the wholesale branch deny: {denied}"
     );
-    for rule in [
-        "Bash(git branch -d:*)",
-        "Bash(git branch -D:*)",
-        "Bash(git branch -m:*)",
-        "Bash(git branch -M:*)",
-        "Bash(git branch --delete:*)",
-    ] {
-        assert!(entries.contains(&rule), "missing `{rule}`: {denied}");
-    }
     let allowed = value_after(&args, "--allowedTools").expect("an allowlist is rendered");
     assert!(
-        allowed
+        !allowed
             .split(',')
-            .any(|entry| entry == "Bash(git branch --list:*)"),
-        "the read-only grant lost its own rule: {allowed}"
+            .any(|entry| entry.starts_with("Bash(git branch")),
+        "the read-only grant should carry no branch rule at all: {allowed}"
     );
 }
 
@@ -640,7 +627,6 @@ fn a_command_that_only_names_a_mutating_verb_is_not_refused() {
     for run in [
         "npm run checkout-flow",
         "cargo build --features restore",
-        "git branch --list",
         "git status",
     ] {
         let rendered = HeadlessAgent::at("/usr/local/bin/agent").render(&config(
