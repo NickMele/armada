@@ -2,7 +2,8 @@
 //!
 //! # The Drone did not do this, and could not have
 //!
-//! A Drone is denied `git`. So a Job that ran every step and passed every Check
+//! A Drone is denied `git` — at spawn, on `--disallowedTools`, see
+//! `crate::git_guard`. So a Job that ran every step and passed every Check
 //! left its work as an uncommitted modification in the worktree, on a branch
 //! still pointing at the commit it started from — correct, verified, and
 //! unmergeable. This is where that ends.

@@ -7,6 +7,10 @@
 //! nothing readable on it, an environment nobody inherited — is a value, so a
 //! suite can hold the whole confinement posture without a credential, a network
 //! or a dollar.
+//!
+//! **Over 500 lines, and left as one file.** The rendering and the deny rules
+//! it carries are one claim — a Drone confined — and splitting the git-deny
+//! cases out would separate that proof from the rest of the same argument.
 
 use adapter_traits::{
     AgentHarness, DroneSpawnConfig, Environment, Grant, McpConfig, Model, Prompt, Toolbelt,
@@ -465,14 +469,20 @@ fn the_read_only_git_grant_never_renders_a_bare_git_prefix() {
 }
 
 /// `git stash push` names `stash`, not `push` — the failure mode measured on
-/// one Job, where the old word-match refused it.
+/// one Job, where the old word-match refused it as a push. `stash` is itself
+/// a denied verb now, so the command is still refused — just not as a push,
+/// which is the property this test is about.
 #[test]
 fn a_stash_push_is_not_a_push() {
     for run in ["git stash push -u -m \"wip\"", "git stash push"] {
-        let rendered = HeadlessAgent::at("/usr/local/bin/agent").render(&config(
+        let refused = HeadlessAgent::at("/usr/local/bin/agent").render(&config(
             Toolbelt::evidence_only().and(Grant::RunADeclaredCommand(String::from(run))),
         ));
-        assert!(rendered.is_ok(), "`{run}` was refused and should not be");
+        assert!(
+            matches!(refused, Err(HarnessRefused::CommandWouldMutateGit { .. })),
+            "`{run}` should be refused as a git mutation, not silently rendered \
+             or misnamed as a push: {refused:?}"
+        );
     }
 }
 
@@ -511,4 +521,147 @@ fn two_drones_render_the_same_way_from_the_same_configuration() {
     let first = rendered(Toolbelt::evidence_only().and(Grant::ReadTheWorktree));
     let second = rendered(Toolbelt::evidence_only().and(Grant::ReadTheWorktree));
     assert_eq!(first, second);
+}
+
+/// The measured defect: a Job with no person-allowed commands still ran `git
+/// add` and `git commit` about fifteen times, because the operator's own
+/// ambient settings granted them and nothing on the argument list said no.
+/// `--disallowedTools` is that no, carried on every rendering.
+#[test]
+fn every_rendering_denies_the_verbs_that_write_a_commit_a_ref_or_history() {
+    for toolbelt in every_kind_of_toolbelt() {
+        let args = rendered(toolbelt);
+        let denied = value_after(&args, "--disallowedTools")
+            .expect("a Drone is denied git regardless of what it was granted");
+        let entries: Vec<&str> = denied.split(',').collect();
+        for rule in [
+            "Bash(git commit:*)",
+            "Bash(git add:*)",
+            "Bash(git rm:*)",
+            "Bash(git mv:*)",
+            "Bash(git reset:*)",
+            "Bash(git rebase:*)",
+            "Bash(git merge:*)",
+            "Bash(git cherry-pick:*)",
+            "Bash(git revert:*)",
+            "Bash(git am:*)",
+            "Bash(git apply:*)",
+            "Bash(git tag:*)",
+            "Bash(git checkout:*)",
+            "Bash(git switch:*)",
+            "Bash(git restore:*)",
+            "Bash(git stash:*)",
+            "Bash(git push:*)",
+            "Bash(git pull:*)",
+            "Bash(git worktree:*)",
+        ] {
+            assert!(entries.contains(&rule), "missing `{rule}`: {denied}");
+        }
+    }
+}
+
+/// `git -C <path> commit` starts with `git -C`, not `git commit` — measured
+/// against the real CLI, a deny keyed on the verb let it through and the
+/// commit landed. Denying the redirect flags themselves, for every
+/// subcommand, is what closes it.
+#[test]
+fn the_denial_covers_a_redirected_repository_not_only_the_bare_verb() {
+    let args = rendered(Toolbelt::evidence_only());
+    let denied = value_after(&args, "--disallowedTools").expect("a deny list is rendered");
+    let entries: Vec<&str> = denied.split(',').collect();
+    for rule in [
+        "Bash(git -C:*)",
+        "Bash(git --git-dir:*)",
+        "Bash(git --work-tree:*)",
+    ] {
+        assert!(entries.contains(&rule), "missing `{rule}`: {denied}");
+    }
+}
+
+/// `Grant::ReadTheRepository` renders `Bash(git branch --list:*)`, and a deny
+/// on the bare verb — measured against the real CLI — also denies that
+/// narrower allow: `git branch --list` was refused with nothing else naming
+/// `branch` at all. So `branch` is denied by its mutating flags, never as a
+/// bare verb, and the read-only listing survives.
+#[test]
+fn the_denial_never_shadows_the_granted_branch_listing() {
+    let args = rendered(Toolbelt::evidence_only().and(Grant::ReadTheRepository));
+    let denied = value_after(&args, "--disallowedTools").expect("a deny list is rendered");
+    let entries: Vec<&str> = denied.split(',').collect();
+    assert!(
+        !entries.contains(&"Bash(git branch:*)"),
+        "a bare `branch` deny would also deny the granted `branch --list`: {denied}"
+    );
+    for rule in [
+        "Bash(git branch -d:*)",
+        "Bash(git branch -D:*)",
+        "Bash(git branch -m:*)",
+        "Bash(git branch -M:*)",
+        "Bash(git branch --delete:*)",
+    ] {
+        assert!(entries.contains(&rule), "missing `{rule}`: {denied}");
+    }
+    let allowed = value_after(&args, "--allowedTools").expect("an allowlist is rendered");
+    assert!(
+        allowed
+            .split(',')
+            .any(|entry| entry == "Bash(git branch --list:*)"),
+        "the read-only grant lost its own rule: {allowed}"
+    );
+}
+
+/// The other half of denying a verb outright: a declared command naming one
+/// is refused at render rather than silently granted, the way a declared push
+/// already was.
+#[test]
+fn a_declared_command_that_would_mutate_git_beyond_a_push_is_refused() {
+    for run in [
+        "git commit -am wip",
+        "git add .",
+        "git reset --hard HEAD~1",
+        "git checkout main",
+        "git branch -D old-branch",
+        "git -C /repos/armada/.armada/worktrees/01AAA commit -m sneaky",
+    ] {
+        let refused = HeadlessAgent::at("/usr/local/bin/agent").render(&config(
+            Toolbelt::evidence_only().and(Grant::RunADeclaredCommand(String::from(run))),
+        ));
+        assert!(
+            matches!(refused, Err(HarnessRefused::CommandWouldMutateGit { .. })),
+            "`{run}` was not refused: {refused:?}"
+        );
+    }
+}
+
+/// The control. A refusal keyed on the wrong signal would deny a command that
+/// only mentions a denied verb's name in passing.
+#[test]
+fn a_command_that_only_names_a_mutating_verb_is_not_refused() {
+    for run in [
+        "npm run checkout-flow",
+        "cargo build --features restore",
+        "git branch --list",
+        "git status",
+    ] {
+        let rendered = HeadlessAgent::at("/usr/local/bin/agent").render(&config(
+            Toolbelt::evidence_only().and(Grant::RunADeclaredCommand(String::from(run))),
+        ));
+        assert!(rendered.is_ok(), "`{run}` was refused and should not be");
+    }
+}
+
+/// `-C` shifts a push's own subcommand out of the position the old check
+/// looked at, the same way it shifts `commit`'s — fixed alongside the new
+/// check rather than left as a second gap next to the one being closed.
+#[test]
+fn a_push_behind_a_redirect_flag_is_still_refused_as_a_push() {
+    let refused = HeadlessAgent::at("/usr/local/bin/agent").render(&config(
+        Toolbelt::evidence_only().and(Grant::RunADeclaredCommand(String::from(
+            "git -C /repos/armada/.armada/worktrees/01AAA push",
+        ))),
+    ));
+    assert!(
+        matches!(refused, Err(HarnessRefused::CommandWouldPush { .. })),
+        "{refused:?}"
+    );
 }

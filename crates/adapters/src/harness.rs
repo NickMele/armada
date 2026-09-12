@@ -7,13 +7,14 @@
 //! **The argument list is the permission model**, and not as a metaphor. What a
 //! Drone may run unattended, whether it is asked before it is refused, and
 //! whether the operator's servers come along are all granted and withheld here,
-//! at spawn. Three flags do work no runtime check is behind:
+//! at spawn. Four flags do work no runtime check is behind:
 //!
 //! | Flag | What its absence does |
 //! | --- | --- |
 //! | `--strict-mcp-config` | The session comes up holding every MCP server the operator has connected. Measured: seven servers, ninety-five tools, personal accounts. **This is the v1 defect this step exists for** |
 //! | `--permission-mode` | The mode falls back to the operator's own configured default, which was measured as `auto` — a Drone that approves itself. **`default`, with `--permission-prompt-tool`, makes a denial Armada's answer rather than the mode's**: every call the allowlist does not cover is put to Armada's permission tool, which refuses at once or holds the question for a person, as the Job says. `dontAsk` would refuse without consulting the tool at all. A tool that errors or cannot be reached leaves the call unrun, measured, so the failure is closed rather than a hang |
 //! | `--allowedTools` | Every built-in tool is callable. It is a permission allowlist and **not** a toolset: it removed none of the thirty built-ins in any of the three spike runs. That is why confinement here is a floor rather than a fence, and it is written down as an open question on Drone rather than papered over — the built-in tools are bounded by what the Drone can reach, a worktree and an empty environment, not by this list |
+//! | `--disallowedTools` | An operator's own ambient settings can grant `git commit` and `git add` — measured, on a real Job — and without this the allowlist above is not the whole of what a Drone may run. [`git_guard`] carries the deny rules; deny beats an identical allow, measured against the CLI |
 //!
 //! **Nothing readable goes in argv**: no prompt text, no task, nothing brokered.
 //! `ps` prints a same-uid child's argument list on darwin 27 and does **not**
@@ -28,6 +29,7 @@ use adapter_traits::{
     AgentHarness, AmbientServers, DroneEvent, DroneSpawnConfig, Grant, Launch, Prompting,
 };
 
+use crate::git_guard;
 use crate::mcp::EVIDENCE_SERVER;
 use crate::transcript;
 
@@ -249,6 +251,13 @@ impl AgentHarness for HeadlessAgent {
         args.push("--allowedTools".into());
         args.push(allowlist(config)?);
 
+        // Carried whatever the toolbelt holds, not only when
+        // `Grant::ReadTheRepository` is present — the floor holds for a
+        // Drone with no git access too. `git_guard`'s module doc has the
+        // three surprises that shape this list.
+        args.push("--disallowedTools".into());
+        args.push(git_guard::disallowed_git_rules().join(","));
+
         Launch::rendered(config, &self.program, args)
             .waiting_on_permission(TOOL_WAIT)
             .map_err(HarnessRefused::PermissionWaitNotSet)
@@ -333,54 +342,24 @@ fn command_rule(run: &str) -> Result<String, HarnessRefused> {
             found,
         });
     }
-    if would_push(run) {
+    // Push first, so its refusal keeps naming push specifically. No `Grant`
+    // names one and no type a Drone is handed carries one, so a declared
+    // command is the only remaining spelling — a repository that declares one
+    // is a repository whose Drone would try, and this is belt to the
+    // environment's braces: nothing a Drone holds could authenticate a push
+    // that reached the network anyway.
+    if git_guard::would_push(run) {
         return Err(HarnessRefused::CommandWouldPush {
             run: String::from(run),
         });
     }
-    Ok(format!("Bash({run}:*)"))
-}
-
-/// Whether a declared command would put a branch somewhere a person can see it.
-///
-/// **The last place a push can be expressed, and it is refused here.** No
-/// `Grant` names one and no type a Drone is handed carries one, so a declared
-/// command is the only remaining spelling — and a repository that declares one
-/// is a repository whose Drone would try. The refusal is a rendering failure
-/// rather than a silent omission because a rule that is quietly dropped denies
-/// without telling anyone, and a denied Drone goes quiet.
-///
-/// This is belt to the environment's braces: a Drone's environment carries no
-/// credential and no agent socket, so a push that reached the network would
-/// have nothing to authenticate with. Two mechanisms, because the second one
-/// fails at the point of use where this one fails at the point of declaration.
-///
-/// **Matched on the git subcommand, never on the word.** `git stash push -u -m
-/// "…"` names `stash`, not `push`, and a refusal that fired on the word alone
-/// would deny it the same way it would deny `cargo test --features push`. A
-/// command is split on the operators a shell chains commands with first, so a
-/// push after `&&` on a segment whose own program is not `git` is still found.
-fn would_push(run: &str) -> bool {
-    run.split(|c| matches!(c, '&' | '|' | ';'))
-        .any(is_a_git_push)
-}
-
-/// One shell segment: whether its git invocation, if it has one, is `push`.
-fn is_a_git_push(segment: &str) -> bool {
-    let mut words = segment.split_whitespace();
-    let Some(program) = words.next() else {
-        return false;
-    };
-    let program = program.rsplit('/').next().unwrap_or(program);
-    if program != "git" {
-        return false;
+    if let Some(verb) = git_guard::denied_mutating_git(run) {
+        return Err(HarnessRefused::CommandWouldMutateGit {
+            run: String::from(run),
+            verb,
+        });
     }
-    // The subcommand is the first word that is not a flag of git's own —
-    // `--force`, `-u` and the like sit before or after it, never in place of
-    // it, so the first non-flag word after the program is always the verb.
-    words
-        .find(|word| !word.starts_with('-'))
-        .is_some_and(|subcommand| subcommand == "push")
+    Ok(format!("Bash({run}:*)"))
 }
 
 /// Why a Drone could not be rendered.
@@ -397,6 +376,10 @@ pub enum HarnessRefused {
     CommandNotExpressibleAsARule { run: String, found: char },
     /// A declared command that would push. **Refused, never granted quietly.**
     CommandWouldPush { run: String },
+    /// A declared command that would write a commit, a ref, the index or
+    /// history some other way. **Refused, never granted quietly**, same as a
+    /// push — `verb` is what [`git_guard::denied_mutating_git`] found.
+    CommandWouldMutateGit { run: String, verb: String },
     /// The config's environment already names the variable the permission
     /// wait goes in. Fleet cannot spell it, so this is a Fleet bug.
     PermissionWaitNotSet(adapter_traits::SpawnConfigRefused),
@@ -429,6 +412,13 @@ impl fmt::Display for HarnessRefused {
                  and merge are Fleet's, with credentials a Drone is never given. \
                  Remove it from the Manifest — a Drone granted it would be denied \
                  at the point of use with nothing to say why"
+            ),
+            HarnessRefused::CommandWouldMutateGit { run, verb } => write!(
+                out,
+                "the declared command `{run}` would run git's {verb}, which writes \
+                 a commit, a ref, the index or history — a Drone is denied git and \
+                 stays denied, so this command cannot run as declared. Remove it \
+                 from the Manifest, or move the git call Fleet needs into `commit.rs`"
             ),
         }
     }
