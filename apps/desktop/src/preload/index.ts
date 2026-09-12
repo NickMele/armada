@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 import { CHANNELS } from "../shared/bridge";
+import { frameStreamUrl } from "../shared/streaming";
 import type { BridgeState, Summons } from "../shared/bridge";
 import type { BridgeApi, CommandExplainedRead } from "../shared/api";
 import type {
@@ -301,6 +302,12 @@ const api: BridgeApi = {
     ipcRenderer.invoke(CHANNELS.readCheckOutput, jobId, kept),
   readFrame: (jobId: string, kept: string): Promise<FrameRead> =>
     ipcRenderer.invoke(CHANNELS.readFrame, jobId, kept),
+
+  // A recording's address, composed rather than fetched — it is the one entry
+  // here that opens no channel. What makes it safe to hand over is what makes
+  // the rest safe: it names a Job and a frame id the record already gave out,
+  // and main is what turns that into a request.
+  frameStreamUrl: (jobId: string, kept: string): string => frameStreamUrl(jobId, kept),
 
   // Every report filed, with the counts. Read-only, and **the one read here
   // that carries no Job id**: a report survives the Job being forgotten, so

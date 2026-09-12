@@ -72,6 +72,11 @@ export function propsFor(fixture: JobFixture): JobDetailProps {
     onExplainCommand: async () => ({ ok: false, outcome: NOT_CONNECTED }),
     onReadCheckOutput: async (_jobId, kept) => fixture.checkOutputs[kept] ?? NOT_ANSWERED_OUTPUT,
     onReadFrame: async (_jobId, kept) => fixture.frames[kept] ?? NOT_ANSWERED_FRAME,
+    // A recording's address, spelled as the app spells it. **It resolves to
+    // nothing here**, for the reason every read above answers a refusal: a
+    // story is a reading of one moment and no Fleet is behind it, so a video
+    // in a fixture draws the sentence a video that will not play draws.
+    onFrameSrc: (jobId, kept) => `armada-frame://frame/${jobId}/${kept}`,
     onNeedMaterial: noop,
     onNeedRemarks: noop,
     onReport: async () => NOT_CONNECTED,

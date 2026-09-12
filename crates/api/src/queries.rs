@@ -11,12 +11,12 @@
 //! separate routes so that the reads made on every refresh do not pay for them.
 
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::Response;
 use serde::Deserialize;
 
-use crate::answers::{answer, file, refused};
-use crate::daemon::Queries;
+use crate::answers::{answer, asked_for, file, file_beyond, file_span, refused, streams};
+use crate::daemon::{FramePart, Queries};
 use crate::reference::Resolved;
 use crate::served::Served;
 
@@ -292,17 +292,43 @@ pub(crate) async fn get_check_output<D: Queries>(
 /// They are rejoined here into the `kept` the record composes, which keeps the
 /// one spelling of that identity in `showing::tail` rather than a second one
 /// here.
+/// **A recording is answered a span at a time, and nothing else is.** A player
+/// cannot hold a two-minute capture whole before it draws a frame, and the
+/// surface answered that by refusing to draw one at all. Video is the only kind
+/// asked this way: a `Range` on anything else is ignored, which is what a
+/// caller reads as *answer it whole* and is always legal.
 pub(crate) async fn get_frame<D: Queries>(
     State(served): State<Served<D>>,
     job: Resolved,
+    headers: HeaderMap,
     Path(Framed { run, name }): Path<Framed>,
 ) -> Response {
-    match served
-        .daemon()
-        .get_frame(job.id(), format!("{run}/{name}"))
-        .await
-    {
-        Ok((held, bytes)) => file(&held.name, bytes),
+    let kept = format!("{run}/{name}");
+    let span = streams(&name)
+        .then(|| {
+            asked_for(
+                headers
+                    .get(header::RANGE)
+                    .and_then(|said| said.to_str().ok()),
+            )
+        })
+        .flatten();
+    let Some(span) = span else {
+        return match served.daemon().get_frame(job.id(), kept).await {
+            Ok((held, bytes)) => file(&held.name, bytes),
+            Err(refusal) => refused(refusal),
+        };
+    };
+    match served.daemon().get_frame_part(job.id(), kept, span).await {
+        Ok((
+            held,
+            FramePart::Span {
+                first,
+                bytes,
+                total,
+            },
+        )) => file_span(&held.name, first, bytes, total),
+        Ok((_, FramePart::Beyond { total })) => file_beyond(total),
         Err(refusal) => refused(refusal),
     }
 }

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeImage, Notification } from "electron";
+import { app, BrowserWindow, ipcMain, nativeImage, net, Notification, protocol } from "electron";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -21,6 +21,7 @@ import { openArtifact } from "./open";
 import { openPullRequest, openRemarkLink } from "./forge";
 import { RemarksPoll } from "./remarks-poll";
 import { openServerLink } from "./servers";
+import { frameStream, FRAME_SCHEME } from "./streaming";
 import { Attention } from "./telling";
 
 // Bridge's window, and the one connection under it.
@@ -44,6 +45,31 @@ import { Attention } from "./telling";
  * `AppIcon.icns` for a fortnight and the tile stayed Electron's the whole time.
  */
 const APP_ICON = join(__dirname, "AppIcon.png");
+
+// **Before the app is ready, because that is the only moment it can be.** A
+// scheme a window may load has to be privileged before any window exists;
+// `protocol.handle` below fills in what answers it, once there is a connection
+// to forward to. `streaming.ts` says why a recording is not read whole.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: FRAME_SCHEME,
+    privileges: {
+      // `standard` gives the scheme an origin, which is what lets the policy in
+      // `index.html` name it. `secure` keeps a page loaded from `file:` from
+      // treating it as mixed content and refusing it on those grounds instead.
+      standard: true,
+      secure: true,
+      // What a `<video>` needs: a partial answer, streamed. Without `stream`
+      // the body is buffered whole, which is the thing this exists to stop.
+      stream: true,
+      supportFetchAPI: true,
+      // **Never `bypassCSP`.** The policy admits this scheme by name; one that
+      // ignored the policy would be the same hole in a different shape.
+      bypassCSP: false,
+      corsEnabled: false,
+    },
+  },
+]);
 
 /**
  * Wear the mark. **Runtime, not packaging** — `BrowserWindow`'s `icon` option
@@ -257,6 +283,19 @@ const attention = new Attention({
 
 void app.whenReady().then(() => {
   wearTheMark();
+
+  // A recording plays from here, forwarded to the port main already holds.
+  // **The port is read at request time and never captured**, for the reason
+  // the comments timer reads it that way: this is built once, and a connection
+  // comes and goes under it. `net.fetch` is Chromium's own stack, which is what
+  // streams a span rather than buffering one.
+  protocol.handle(
+    FRAME_SCHEME,
+    frameStream(
+      () => (published.connection.state === "connected" ? published.connection.fleet.port : null),
+      (url, init) => net.fetch(url, init),
+    ),
+  );
 
   connection = new FleetConnection({
     home: process.env["HOME"],

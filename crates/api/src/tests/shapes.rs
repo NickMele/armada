@@ -72,6 +72,24 @@ pub const THE_FRAME: &str = "implement.1/job-detail-refused.png";
 /// name, which is a property of the response and not of the pixels.
 pub const THE_FRAME_BYTES: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 
+/// The second frame the fake holds, and the only one answered a span at a
+/// time. **A recording, because the span is the subject** — every other kind
+/// is answered whole however it is asked for.
+pub const THE_RECORDING: &str = "implement.1/walkthrough.webm";
+
+/// Twenty-six bytes, so a span of them is arithmetic a reader can check
+/// against the assertion without running anything.
+pub const THE_RECORDING_BYTES: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
+
+/// What the fake answers for one of the two frames its record holds.
+pub fn bytes_of(kept: &str) -> &'static [u8] {
+    if kept == THE_RECORDING {
+        THE_RECORDING_BYTES
+    } else {
+        THE_FRAME_BYTES
+    }
+}
+
 /// A proposal body, as Bridge would send it.
 pub const A_PROPOSAL: &str = r#"{
     "title": "fix the off-by-one in the log reader",
@@ -498,11 +516,14 @@ pub fn check_output(kept: String) -> CheckOutput {
 /// directory and the name joined — the same value the caller sent — because
 /// that identity has one spelling and the record composes it.
 pub fn frame(kept: String) -> KeptFrame {
+    // The harness's own file name, which is the last component of the id — so
+    // the two frames the fake holds do not need two builders to differ by it.
+    let name = kept.rsplit('/').next().unwrap_or(&kept).to_string();
     KeptFrame {
         attempt: 1,
-        name: "job-detail-refused.png".to_string(),
+        bytes: bytes_of(&kept).len() as u64,
+        name,
         path: format!(".armada/frames/01RUNNING/{kept}"),
-        bytes: THE_FRAME_BYTES.len() as u64,
         kept,
         side: ipc::Side::from_wire("branch").expect("a side"),
         // **A literal, and deliberately not computed from `THE_FRAME_BYTES`.**

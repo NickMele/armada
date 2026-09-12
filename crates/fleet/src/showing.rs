@@ -23,10 +23,12 @@
 //! off, because nothing tells a spec which tree it is aimed at. `before_this_job`
 //! below says why it stays rather than being deleted.
 
+use std::io::{Read as _, Seek as _};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
+use api::{FramePart, FrameSpan, Refusal};
 use checks_runner::Served;
 use config::{EvidenceType, Harness};
 use core_model::{
@@ -551,6 +553,69 @@ pub fn frame_bytes(
     Some((held, bytes))
 }
 
+/// How much of a frame one ranged read answers with.
+///
+/// **A window, because a span is a caller's arithmetic and a file is not.** A
+/// player opening a recording asks for everything from byte zero and means
+/// *start sending*; a read that took that literally would hold the whole file
+/// in memory, which is the thing a ranged read exists to stop. Four mebibytes
+/// is several seconds of a screen recording and one allocation nobody notices.
+const SPAN_BYTES: u64 = 4 * 1024 * 1024;
+
+/// The row this name resolves to, and one span of the file it points at.
+///
+/// **[`frame_bytes`]'s allowlist, and never more than [`SPAN_BYTES`] at once.**
+/// The record resolves the name before anything is opened, exactly as the whole
+/// read does. What differs is that the file is seeked rather than read, so a
+/// two-minute recording costs the window instead of its length.
+pub fn frame_part(
+    records_root: &str,
+    kept: &str,
+    frames: &[store::KeptFrame],
+    span: FrameSpan,
+) -> Option<(store::KeptFrame, FramePart)> {
+    let held = named(kept, frames)?;
+    let mut file = std::fs::File::open(Path::new(records_root).join(&held.frame.path)).ok()?;
+    let total = file.metadata().ok()?.len();
+    let (first, last) = match span {
+        FrameSpan::From { first, last } => (first, last),
+        // The last `n` bytes of a file shorter than `n` is the whole file.
+        FrameSpan::Last(back) => (total.saturating_sub(back), None),
+    };
+    if first >= total {
+        return Some((held, FramePart::Beyond { total }));
+    }
+    let upto = last.map_or(total - 1, |last| last.min(total - 1));
+    let want = (upto - first + 1).min(SPAN_BYTES);
+    file.seek(std::io::SeekFrom::Start(first)).ok()?;
+    let mut bytes = Vec::new();
+    (&mut file).take(want).read_to_end(&mut bytes).ok()?;
+    Some((
+        held,
+        FramePart::Span {
+            first,
+            bytes,
+            total,
+        },
+    ))
+}
+
+/// One kept frame as the row a client reads.
+///
+/// **Composed in one place**, so the row on a step's detail and the row either
+/// frame read answers beside its bytes cannot come to differ in a field.
+pub fn as_wire(held: &store::KeptFrame) -> ipc::KeptFrame {
+    ipc::KeptFrame {
+        attempt: held.attempt,
+        name: held.frame.name.clone(),
+        path: held.frame.path.clone(),
+        bytes: held.frame.bytes,
+        kept: tail(&held.frame.path),
+        side: held.frame.side.into(),
+        digest: held.frame.digest.clone(),
+    }
+}
+
 /// The run directory and the file name, joined — what a caller names a frame
 /// by.
 ///
@@ -576,6 +641,25 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
+    /// Every frame this Job's record holds: the step's own, and every one a
+    /// person's press kept.
+    ///
+    /// **The allowlist, composed once.** Both frame reads resolve a
+    /// caller-supplied name against this, so a ranged read cannot come to
+    /// resolve against a different list from the whole one.
+    pub(crate) async fn frames_held(&self, id: &JobId) -> Result<Vec<store::KeptFrame>, Refusal> {
+        let store = self.store().lock().await;
+        let mut frames = store
+            .step_frames_every_attempt(id)
+            .map_err(|why| self.refusal(Adrift::Reading(why)))?;
+        frames.extend(crate::showing_again::pressed_rows(
+            store
+                .shown_again_every_press(id)
+                .map_err(|why| self.refusal(Adrift::Reading(why)))?,
+        ));
+        Ok(frames)
+    }
+
     /// Run the harness for a step whose evidence is what it looks like, keep
     /// the frames, and write down what was kept.
     ///
