@@ -567,6 +567,18 @@ These have no trigger, so flip and alignment do not apply to them.
 
 The palette's offset, and why it is not centred, are under Command palette.
 
+**A sheet's width is a fraction of the ground it takes, not a column width.**
+`default` is `--w-sheet`, 480px. `wide`, `widest` and `reading` are read
+against the window instead, because what has to fit each is a reading rather
+than a value: `wide` (62%) is the activity log's file rail beside a line that
+does not wrap, `widest` (76%) is the diff's file rail beside a patch line that
+does not wrap, and `reading` (88%) is the run sheet's own — a fixed 240px list
+of the Manifest's Setup, Checks and Commands, with everything past it the run's
+own output. `--armada-sheet-wide`, `--armada-sheet-widest` and
+`--armada-sheet-reading` have no token behind them: `packages/tokens` carries
+no width scale for an overlay panel, only the sidebar's own range, which does
+not describe this. Reported, not minted here.
+
 ### Stacking
 
 **A floating layer takes a stacking token and never a written number.** The
