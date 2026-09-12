@@ -222,6 +222,31 @@ Not the turn stream either. `observe_job` renders what a Drone said; this render
 Helm may reach it for the reason it may reach the other queries: reading what happened is not doing anything about it. What that costs is the tokens `get_events_since` names — a long history stays in the session for the rest of it — so it is asked about one Job rather than swept.
 """
 
+[operations.get_job_log]
+kind = "query"
+transport = "HTTP"
+agent_access = "Yes"
+description = "One Job's own log — what Fleet did to it — read back once as a window that says it is one"
+notes = """
+**The backfill, without the tail.** `observe_job_log` is the lines already written followed by the ones that come next, and it carries `agent_access = "No"` for the reason every `observe_*` carries it: an agent cannot be interrupted mid-turn, so a stream is Bridge's. That reasoning is about the tail and the refusal landed on the backfill too — so an agent sent to investigate a Job could read its state, its transitions, its Drone, its evidence, its whole diff, its Checks' output and the frames it drew, and then reached the one place a person would have looked first and found no operation at all. `examine_job` said *when* the log was last written and never what it said.
+
+**A second row rather than a widened one.** Bridge keeps the socket it draws the log panel from, untouched. A row that read `Yes` for its backfill and `No` for its tail would mean two things at once, and nothing reading the `agent_access` column could tell which of the two it was looking at.
+
+**It is not a second notification channel.** It answers once, wakes no session and publishes nothing; `system-architecture.md`'s rule stands — Fleet does not push to an agent, and an agent polls `get_events_since`. What this adds is a settled read of a record, which is what every other `get_*` on this table is.
+
+`get_run_output` is the shape and the precedent, one file over: the tail, because what a person opens a Job's log to find out is what Fleet did to it last; `from_note` numbered as the log numbers it; `total_notes` exact, because the file is counted as it is read; and `whole` stated rather than left to be inferred. `undecodable` is the one field that shape has no equivalent of — a line the reader could not parse was still an event, and the stream's reader already counts those rather than dropping them in silence.
+
+**The window is the stream's own bound and not a second one.** `fleet::journal::NOTES` is what the socket's first pass hands a viewer, and this hands the same. Two numbers would be two answers to one question. It is bounded by notes and not also by bytes, which is where it parts from `get_run_output`: a run's log is a test runner's output and one line of it can be arbitrarily long, where every line here is Fleet's own writing about one Job.
+
+**A log that will not read answers rather than refusing.** `unreadable` is `Quiet::Unreadable` as a settled fact, and what was read comes back with it — a refusal would throw away the notes that did read, on the one call somebody makes when something is already wrong. A Job that has written no line is an empty window and is ordinary: a Job at the approval gate has written nothing, and neither has one proposed before any of this existed.
+
+**The route is the one row whose last segment is not its key.** A log has two routes elsewhere on this table — `<noun>/output` for the reading and `<noun>/observe` for the stream — and here the stream took the bare noun first. `/jobs/:job_id/log` stays where Bridge already calls it.
+
+`agent_access` is `Yes`, `get_check_output`'s reason: the context cost is answered at the door, where a tool answer over 64 KiB is cut, says it was cut and names the route serving it whole. What the refusal cost is the larger number — an agent asked whether a Job is wedged, with every other fact about it and none of Fleet's own narration.
+
+**The other four `observe_*` rows are the same question and are not the same answer.** A running Check's output and a server's output have a live reader on a screen in a way a Job's log does not, and `observe_job`'s backfill is a Drone's whole transcript rather than Fleet's narration of one Job. They stay open.
+"""
+
 [operations.get_job_resources]
 kind = "query"
 transport = "HTTP"
@@ -481,6 +506,8 @@ Not `/events` either, for `observe_job`'s reason: one drop-oldest channel carryi
 `step` is absent on exactly the notes this exists for. Preparation belongs to no step, and attaching those lines to the step about to start would read as a step that has begun when it has not — the confusion that made a wedged Job look healthy. A note with no step is the Job's own, and the surface draws it in a section above the steps.
 
 `agent_access` is `No` for `observe_job`'s reason: a stream pulled into a Helm session stays in that session for the rest of it, and `get_job_events` is the snapshot of what a Job did.
+
+**The refusal is the tail's, and `get_job_log` is the backfill on its own.** This row is unchanged and stays `No`: what an agent cannot follow is a connection that keeps answering, and what it needed was the half that was already settled. Widening this one instead would have made a single column mean two things.
 """
 
 [operations.observe_check_output]

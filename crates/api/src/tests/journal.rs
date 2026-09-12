@@ -24,7 +24,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
 use tower::{Service, ServiceExt};
 
-use crate::journal::{Journal, Reading};
+use crate::journal::{Journal, Reading, Window};
 use crate::tests::connected;
 use crate::tests::fake::FakeDaemon;
 use crate::tests::shapes::{run_id, A_PROPOSAL};
@@ -60,6 +60,22 @@ impl Journal for FakeLog {
             from: written.len() as u64,
             skipped: 0,
             unreadable: *self.unreadable.lock().expect("not poisoned"),
+        }
+    }
+
+    /// The settled read, on the same terms: everything written, counted, with
+    /// nothing in front of it. What a real window leaves out is proved in
+    /// `fleet`, beside the file; what is proved here is the route's own answer.
+    fn window(&self, _handle: &str) -> Window {
+        let written = self.written.lock().expect("not poisoned");
+        Window {
+            notes: written.clone(),
+            from_note: 1,
+            total_notes: written.len() as u32,
+            undecodable: 0,
+            bytes: written.len() as u64,
+            unreadable: *self.unreadable.lock().expect("not poisoned"),
+            path: String::from(".armada/logs/a-proposal.jsonl"),
         }
     }
 }

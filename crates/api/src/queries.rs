@@ -15,7 +15,9 @@ use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::Response;
 use serde::Deserialize;
 
-use crate::answers::{answer, asked_for, file, file_beyond, file_span, refused, streams};
+use ipc::{JobLog, WireError};
+
+use crate::answers::{answer, asked_for, file, file_beyond, file_span, problem, refused, streams};
 use crate::daemon::{FramePart, Queries};
 use crate::reference::Resolved;
 use crate::served::Served;
@@ -284,6 +286,65 @@ pub(crate) async fn get_check_output<D: Queries>(
         Ok(output) => answer(StatusCode::OK, &output, served.run_id()),
         Err(refusal) => refused(refusal),
     }
+}
+
+/// One Job's own log, settled: what Fleet did to it, read back once.
+///
+/// **`observe_job_log`'s backfill without its tail**, and a second route rather
+/// than a widened one — [`crate::journal`] argues both, and Bridge keeps the
+/// socket it draws the log panel from. It notifies nobody, so it is not a
+/// second channel beside `get_events_since`.
+///
+/// **It goes through the reader and not the daemon**, which is where it parts
+/// from every other read on this page: a Job's log is a file rather than a
+/// record, and the extractor already resolved the handle that file is named
+/// by, so a daemon call would read the Job's row a second time for a fact this
+/// handler was handed.
+///
+/// 404 where the Job is unknown, from the extractor. A Job that wrote no line
+/// is an empty window; a log that will not read answers with what it had.
+pub(crate) async fn get_job_log<D: Queries>(
+    State(served): State<Served<D>>,
+    job: Resolved,
+) -> Response {
+    let Some(journal) = served.journal() else {
+        return problem(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &WireError::raised(
+                crate::sockets::NO_JOURNAL,
+                "this Fleet was built with no reader for a Job's own log",
+                served.run_id().clone(),
+            )
+            .about_job(job.id()),
+        );
+    };
+    // Blocking, and said so — [`crate::journal::pass`]'s reason: the read is a
+    // file read, and running it inline would hold a worker for the length of it.
+    let handle = job.handle().to_string();
+    let Ok(window) = tokio::task::spawn_blocking(move || journal.window(&handle)).await else {
+        return problem(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &WireError::raised(
+                crate::sockets::NO_JOURNAL,
+                "the reader for this Job's own log failed",
+                served.run_id().clone(),
+            )
+            .about_job(job.id()),
+        );
+    };
+    let whole = window.whole();
+    let log = JobLog {
+        job_id: job.id(),
+        path: window.path,
+        notes: window.notes,
+        from_note: window.from_note,
+        total_notes: window.total_notes,
+        undecodable: window.undecodable,
+        bytes: window.bytes,
+        whole,
+        unreadable: window.unreadable,
+    };
+    answer(StatusCode::OK, &log, served.run_id())
 }
 
 /// One frame a step's harness produced, answered as the file itself.
