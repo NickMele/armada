@@ -15,6 +15,7 @@ import sys
 # `xtask/src/rules.rs` carries the same numbers; the two must not drift.
 FAIL_LINES = 900
 CLAUDE_MD_FAIL = 50
+COMMENT_BLOCK_CAP = 5
 
 # Where bytes enter the process, plus the gate that names the pattern it bans.
 JSON_ALLOWED = ("crates/store/", "crates/ipc/", "xtask/")
@@ -108,6 +109,22 @@ def main() -> None:
                        "belongs to `store` and `ipc`, the two places bytes enter "
                        "the process; everywhere else a value arrives typed.")
 
+    # ---- rule: a comment block runs to five lines and no further ---------
+    #
+    # Same cap as the gate, refused here instead of merely warned about
+    # there — the gate's own rule went from fail to warn on this one because
+    # the backlog is real; a new write adding to it is not. Judges the
+    # fragment being written, not the file it lands in.
+    source_scope = rel.endswith((".rs", ".ts", ".tsx")) and rel.split("/", 1)[0] in (
+        "crates", "apps", "packages", "xtask",
+    )
+    if source_scope and written:
+        worst = worst_comment_run(written)
+        if worst > COMMENT_BLOCK_CAP:
+            answer("deny", f"{rel} would add a comment block of {worst} lines, over "
+                           f"{COMMENT_BLOCK_CAP}. A comment is a line or two; reduce "
+                           "it or file it. `.claude/skills/comments/SKILL.md`")
+
     # ---- rule: a CLAUDE.md routes, it does not explain -------------------
     lines = projected_lines(root, rel, tool_input)
     if rel.endswith("CLAUDE.md") and lines is not None:
@@ -167,6 +184,21 @@ def on_main(root: str) -> bool:
             return f.read().strip() == "ref: refs/heads/main"
     except OSError:
         return False
+
+
+def worst_comment_run(text: str) -> int:
+    """Longest run of consecutive comment lines in `text`. Same detection as
+    `rules.rs`'s `no_comment_block_too_long`: a line starting `//`, `*` or
+    `/*`. A blank or code line ends the run."""
+    run = worst = 0
+    for line in text.splitlines():
+        t = line.strip()
+        if t.startswith("//") or t.startswith("*") or t.startswith("/*"):
+            run += 1
+            worst = max(worst, run)
+        else:
+            run = 0
+    return worst
 
 
 def projected_lines(root: str, rel: str, tool_input: dict) -> "int | None":
