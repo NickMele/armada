@@ -179,6 +179,44 @@ export const OutputWithAThousandLines: Story = {
   },
 };
 
+// A line long enough that no column width would hold it — the case the sheet's
+// own "reading" size and the console's own non-wrapping text both exist for.
+const LONG_LINE_ROWS: ConsoleRow[] = [
+  { row: "line", at: 1, text: "   Compiling armada-fleet v0.1.0" },
+  {
+    row: "line",
+    at: 2,
+    text:
+      "thread 'checking::retrying::dispatch_when_the_worktree_already_carries_an_untracked_file_" +
+      "the_prior_attempt_left_behind' panicked at crates/fleet/src/tests/retrying.rs:412:9: " +
+      "assertion `left == right` failed: expected the retry to inherit the prior attempt's " +
+      "worktree unchanged, found 3 files modified outside the diff the Job itself produced",
+  },
+  { row: "line", at: 3, text: "test result: FAILED. 311 passed; 1 failed; 3 ignored" },
+];
+
+/**
+ * A line long enough to prove the point rather than assume it: the row
+ * scrolls sideways under `.armada-console__rows`' own `overflow-x: auto`
+ * instead of wrapping, and the line number stays pinned at the near edge
+ * while it does — `position: sticky` on `.armada-console__at`, with a
+ * background matched to the row so the scrolling text disappears behind the
+ * number rather than showing through it.
+ */
+export const OutputWithALongLine: Story = {
+  args: {
+    open: true,
+    ...HEADER,
+    groups: GROUPS,
+    selectedId: "test",
+    onSelect: fn(),
+    onToggleNarrow: fn(),
+    onRun: fn(),
+    output: { rows: LONG_LINE_ROWS },
+    result: { name: "test", exitCode: 101, expected: 0, duration: "41s" },
+  },
+};
+
 /** Finished, with an exit code other than the one expected — unhued either way. */
 export const UnexpectedExit: Story = {
   args: {
