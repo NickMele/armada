@@ -17,12 +17,13 @@
 //! # A Check that outlasts a tick
 //!
 //! This loop awaits each turn, so a long Check stacks nothing: the tick it ran
-//! through is dropped. **What it holds is one Job's slot and not Fleet's**, so a
-//! quarter of an hour of `cargo nextest` holds up that Job's own kills and its
-//! own Drone's tool calls and nothing else's. What it still delays is every
-//! Job's next *turn* — this is one task walking the roster in order — which is
-//! `#50`'s remaining cost and is not measured. A failed turn is reported and
-//! ticking continues either way: one turn's fault is not every later Job's.
+//! through is dropped. **The gate holds no slot at all** — `crate::settling`
+//! takes it three times and lets it go around the Checks and the Judge — so a
+//! quarter of an hour of `cargo nextest` holds up nothing: not the Job's own
+//! kills, not a surface reading it. What it still delays is every Job's next
+//! *turn* — this is one task walking the roster in order — which is `#50`'s
+//! remaining cost and is not measured. A failed turn is reported and ticking
+//! continues either way: one turn's fault is not every later Job's.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -45,7 +46,7 @@ use crate::noticing::Noticed;
 use crate::resume::Roused;
 use crate::scope::Drifting;
 use crate::silence::Quiet;
-use crate::working::Working;
+use crate::slots::Slot;
 
 /// What one turn of the loop did for one working Drone. Every field is
 /// ordinarily empty.
@@ -247,11 +248,14 @@ where
         let each = self.slots().lock().await.each();
         let mut turned = Turned::default();
         for (job, slot) in each {
-            // A Job whose slot is held by its own Drone's tool call right now.
-            // Waiting is right — it is that Job's own turn — and it blocks no
-            // other Job, which is the whole of what the per-slot lock buys.
-            let mut working = slot.lock().await;
-            turned.each.push(self.turning_one(job, &mut working).await?);
+            // **The slot is taken inside, once per watcher, and not held
+            // across the whole turn.** Waiting behind this Job's own Drone is
+            // right and blocks no other Job — but `get_job` and `list_jobs`
+            // read the same slot for what a person is being asked, and a turn
+            // that held it across its gate served neither for as long as the
+            // Checks and the Judge took. `crate::settling` says which parts of
+            // a ruling need it and which do not.
+            turned.each.push(self.turning_one(job, &slot).await?);
         }
         // Below every slot, and outside all of them: a submission whose Job is
         // in no slot has no slot to be settled under. See `crate::settling`.
@@ -293,41 +297,47 @@ where
     /// The eight watchers, over one Drone's slot. **The order is the one the
     /// single slot had**, and each argument for it is about the Drone rather
     /// than about Fleet, which is why none of them needed rewriting.
-    async fn turning_one(
-        &self,
-        job: JobId,
-        working: &mut Option<Working>,
-    ) -> Result<Worked, Adrift> {
+    ///
+    /// **The slot is taken for the watchers and let go before the gate.** The
+    /// five above `settle` are a worktree read, a store read and at most one
+    /// Judge call; the gate below is every Check the step declares and every
+    /// criterion its Judge holds, and holding the slot across that is what made
+    /// a Job unreadable for as long as its own gate ran.
+    async fn turning_one(&self, job: JobId, slot: &Slot) -> Result<Worked, Adrift> {
         let mut worked = Worked::on(job.clone());
-        // First, because the reading it takes is the one the drift check needs
-        // and a turn must not open the same repository twice. It answers `None`
-        // on the turns it declines to read, and the drift check then reads for
-        // itself exactly as it did before this existed.
-        let footprint = self.watch_footprint(working).await;
-        // Before the gate, so a step whose evidence lands this turn has its
-        // last live reading taken while its Drone is still the one being
-        // watched — and after nothing, because the check reads a worktree and
-        // must not run against a slot the gate has just cleared.
-        let drifting = self.watch_scope(working, footprint.as_ref()).await;
-        // **Before the vigil, because they are one question in the two
-        // directions** and the answers must not be read out of order: a Drone
-        // that has answered a redirect is a Drone that is speaking, and a Job
-        // still `escalated` is one the vigil declines to measure at all. This
-        // is what puts it back under the clock.
-        let roused = self.watch_redirect(working).await?;
-        // **Before the thrashing chain, because it is cheaper and more
-        // specific.** A Drone that has stopped speaking is not thrashing, and
-        // the chain's first stage costs a Judge call — so asking the free
-        // question first is what stops Fleet paying a model to look at the work
-        // of a Drone that is no longer doing any.
-        let quiet = self.watch_silence(working).await?;
-        // After the drift reading it consumes and before the gate, which is the
-        // one place both are true: a step whose evidence lands this turn is at
-        // the gate rather than thrashing, and `settle` may clear the slot.
-        let wandering = self.watch_convergence(working).await?;
-        let settled = self.settle(working).await?;
+        let (drifting, roused, quiet, wandering) = {
+            let working = &mut *slot.lock().await;
+            // First, because the reading it takes is the one the drift check needs
+            // and a turn must not open the same repository twice. It answers `None`
+            // on the turns it declines to read, and the drift check then reads for
+            // itself exactly as it did before this existed.
+            let footprint = self.watch_footprint(working).await;
+            // Before the gate, so a step whose evidence lands this turn has its
+            // last live reading taken while its Drone is still the one being
+            // watched — and after nothing, because the check reads a worktree and
+            // must not run against a slot the gate has just cleared.
+            let drifting = self.watch_scope(working, footprint.as_ref()).await;
+            // **Before the vigil, because they are one question in the two
+            // directions** and the answers must not be read out of order: a Drone
+            // that has answered a redirect is a Drone that is speaking, and a Job
+            // still `escalated` is one the vigil declines to measure at all. This
+            // is what puts it back under the clock.
+            let roused = self.watch_redirect(working).await?;
+            // **Before the thrashing chain, because it is cheaper and more
+            // specific.** A Drone that has stopped speaking is not thrashing, and
+            // the chain's first stage costs a Judge call — so asking the free
+            // question first is what stops Fleet paying a model to look at the work
+            // of a Drone that is no longer doing any.
+            let quiet = self.watch_silence(working).await?;
+            // After the drift reading it consumes and before the gate, which is the
+            // one place both are true: a step whose evidence lands this turn is at
+            // the gate rather than thrashing, and `settle` may clear the slot.
+            let wandering = self.watch_convergence(working).await?;
+            (drifting, roused, quiet, wandering)
+        };
+        let settled = self.settle(slot).await?;
         worked.delivered = self.take_delivered(&job).await;
-        worked.after = self.reap(working).await?;
+        worked.after = self.reap(&mut *slot.lock().await).await?;
         worked.ruled = settled.ruled;
         worked.declined = settled.declined;
         worked.drifting = drifting;
