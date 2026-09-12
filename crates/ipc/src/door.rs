@@ -141,6 +141,20 @@ pub enum Answered {
         /// The Manifest every answer to this session is given inside.
         scope: String,
     },
+    /// A handshake answered by something standing in front of a Fleet it
+    /// cannot reach — `#698`'s relay, where the caller's directory resolves to
+    /// no Manifest, or to one this machine's Fleet is not serving, or where no
+    /// Fleet is running at all.
+    ///
+    /// **A handshake that succeeds and offers nothing**, rather than a
+    /// connection that fails. A client whose server would not start shows its
+    /// person a red line and shows the model nothing; this way the reason is
+    /// in the session, in the place the model reads before it asks.
+    Unreachable {
+        id: CallId,
+        revision: String,
+        why: String,
+    },
     Ping {
         id: CallId,
     },
@@ -337,6 +351,15 @@ pub fn answer(answered: Answered) -> Result<String, Unencodable> {
                 "instructions": instructions(&scope),
             }),
         ),
+        Answered::Unreachable { id, revision, why } => result(
+            id,
+            json!({
+                "protocolVersion": revision,
+                "capabilities": { "tools": {} },
+                "serverInfo": { "name": SERVER, "version": env!("CARGO_PKG_VERSION") },
+                "instructions": why,
+            }),
+        ),
         Answered::Ping { id } => result(id, json!({})),
         Answered::Tools { id, shapes } => result(id, json!({ "tools": listed(&shapes) })),
         Answered::Served { id, answer } => result(id, served(&answer)),
@@ -362,6 +385,24 @@ fn instructions(scope: &str) -> String {
          only where it bears on what was asked. An answer larger than {MOST_A_TOOL_MAY_ANSWER} \
          bytes is cut and says so, naming the route that serves it whole."
     )
+}
+
+/// One sentence added to an answer a relay is carrying through.
+///
+/// **For `#698`'s one disclosure**: a session resolved upward from a
+/// subdirectory is answered about a repository its person may not have thought
+/// they were standing in, and the handshake is where a model reads what its
+/// session is. A relay cannot write it — the JSON on this door is this module's
+/// — and the answer it is adding to is Fleet's, not its own.
+///
+/// `None` where the bytes are not a handshake carrying instructions, so the
+/// caller writes what it was given through unchanged.
+pub fn also_saying(answer: &[u8], note: &str) -> Option<String> {
+    let mut message: Value = serde_json::from_slice(answer).ok()?;
+    let instructions = message.get_mut("result")?.get_mut("instructions")?;
+    let said = instructions.as_str()?;
+    *instructions = Value::String(format!("{note} {said}"));
+    encode(&message).ok()
 }
 
 /// Every tool, as a client is shown it.

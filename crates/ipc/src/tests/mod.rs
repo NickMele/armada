@@ -22,6 +22,8 @@ mod commanding;
 /// One Job, whole: the step rows, the gates' answers and the fields a Board
 /// row leaves behind.
 mod details;
+/// One entry added to a document this crate did not write.
+mod document;
 /// The agent's door: a tool call becomes a request on the HTTP surface, and an
 /// answer too large to carry says so.
 mod door;

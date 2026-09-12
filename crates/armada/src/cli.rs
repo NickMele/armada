@@ -27,6 +27,9 @@ pub enum Verb {
     Run { name: String },
     /// Worktrees, branches and Jobs, given back.
     Clean { everything: bool, force: bool },
+    /// The agent's door, spoken on stdin and stdout for an agent standing in
+    /// this repository. Started by an agent's MCP client, never by a person.
+    Mcp,
     /// What the four verbs are.
     Help,
 }
@@ -46,7 +49,18 @@ const VERBS: &[(&str, &str)] = &[
         "clean",
         "give this repository's worktrees, branches and Jobs back",
     ),
+    (
+        MCP,
+        "relay this repository's agent door on stdin and stdout — an agent's client runs it",
+    ),
 ];
+
+/// The verb an agent's MCP configuration names.
+///
+/// **One value, read by the parser and written into the file.** The entry
+/// `crate::mcp::publish` puts in a repository's `.mcp.json` names this verb, so
+/// a rename that missed one of the two would publish a door nothing answers.
+pub const MCP: &str = "mcp";
 
 /// Read the arguments after the program name.
 pub fn read<I: IntoIterator<Item = String>>(args: I) -> Result<Verb, Misread> {
@@ -82,11 +96,23 @@ pub fn read<I: IntoIterator<Item = String>>(args: I) -> Result<Verb, Misread> {
                 }
             }
         }
+        MCP => {
+            let positional = positionals(rest, &[], &mut faults);
+            at_most_one(MCP, &positional, &mut faults);
+            if let Some(given) = positional.first() {
+                faults.push(Fault::StandingTakesNoPath {
+                    verb: verb.clone(),
+                    given: given.clone(),
+                });
+            }
+            Some(Verb::Mcp)
+        }
         "clean" => {
             let positional = positionals(rest, &["--all", "--force"], &mut faults);
             at_most_one("clean", &positional, &mut faults);
             if let Some(given) = positional.first() {
-                faults.push(Fault::CleanTakesNoPath {
+                faults.push(Fault::StandingTakesNoPath {
+                    verb: verb.clone(),
                     given: given.clone(),
                 });
             }
@@ -159,9 +185,12 @@ pub enum Fault {
         verb: String,
         extra: Vec<String>,
     },
-    /// `clean` acts on the repository the caller is standing in. A path would
-    /// let somebody clean a repository they are not looking at.
-    CleanTakesNoPath {
+    /// The verb acts on the repository the caller is standing in. A path would
+    /// let somebody clean a repository they are not looking at — and would let
+    /// an agent ask about one it is not working in, which is the same fault one
+    /// level over.
+    StandingTakesNoPath {
+        verb: String,
         given: String,
     },
 }
@@ -209,9 +238,9 @@ impl fmt::Display for Fault {
                 "`armada {verb}` takes one argument, and {} came after it",
                 listed(&extra.iter().map(String::as_str).collect::<Vec<_>>())
             ),
-            Fault::CleanTakesNoPath { given } => write!(
+            Fault::StandingTakesNoPath { verb, given } => write!(
                 out,
-                "`armada clean` cleans the repository you are standing in, so `{given}` \
+                "`armada {verb}` acts on the repository you are standing in, so `{given}` \
                  is an argument it has nowhere to put"
             ),
         }
@@ -229,6 +258,7 @@ impl fmt::Display for Usage {
             let shape = match *verb {
                 "serve" => "serve [<path>]".to_string(),
                 "clean" => "clean [--all]".to_string(),
+                MCP => MCP.to_string(),
                 named => format!("{named} <name>"),
             };
             writeln!(out, "  armada {shape:<16}  {what}")?;

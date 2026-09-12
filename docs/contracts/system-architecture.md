@@ -340,6 +340,26 @@ strict subset of what Bridge gets — not a mirror. An agent cannot be
 interrupted mid-turn, so events are Bridge-exclusive. Every call is answered
 inside one Manifest, and the handshake says which.
 
+**Standing in a repository is what opens the door, and it is a selection
+rather than a permission.** A repository Fleet serves carries the entry in its
+own `.mcp.json`, naming `armada mcp` — a relay that reads the runtime file for
+the port, resolves its own working directory to a Manifest, and refuses where
+that Manifest is not the one Fleet is serving. A session started in a
+subdirectory resolves upward to the repository root and discloses at its
+handshake which one it adopted; the walk stops at a repository with no Manifest
+and at the home directory, so it reaches neither a parent repository nor a
+machine-wide `armada.yml`. It refuses on
+`Stale { PidHeldByAnother }` rather than connecting to a port something else
+now holds, and every refusal is an MCP session that opened: a handshake saying
+why, with no tools.
+
+**It confers nothing.** The listener is loopback with no authentication in
+front of it, so every process on this machine was already inside that boundary
+and the relay adds no authority to one. What names a terminal agent is still
+open. Publishing the door in the repository is safe for a different reason: a
+Drone is spawned under `--strict-mcp-config` against a document of Armada's
+own, so it never reads the repository's.
+
 **The context cost is answered at the door rather than by the column.** Six
 operations were refused an agent because a whole patch, a test runner's
 output or an image pulled into a session stays in that session for the rest

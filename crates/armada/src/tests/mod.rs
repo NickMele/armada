@@ -6,12 +6,16 @@
 //! branches inside `serve`.
 //!
 //! `setup` and `agent` read this repository's own files and this machine's own
-//! `PATH`. `cli`, `declared` and `clean` build the world they act on.
+//! `PATH`. `cli`, `declared` and `clean` build the world they act on. `mcp` and
+//! `loopback` are the agent's door from the outside: three decisions and a
+//! framing, none of which needs a Fleet to be running.
 
 mod agent;
 mod clean;
 mod cli;
 mod declared;
+mod loopback;
+mod mcp;
 mod setup;
 mod watching;
 

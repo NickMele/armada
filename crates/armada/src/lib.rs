@@ -20,7 +20,10 @@
 //! can be wrong on disk. [`agent`](mod@agent) is the same shape for the
 //! machine: which binary a Drone is started as, and which model.
 //! [`declared`](mod@declared) and [`clean`](mod@clean) are the three verbs that
-//! need no daemon at all. [`watching`](mod@watching) is what makes the
+//! need no daemon at all. [`mcp`](mod@mcp) is the fifth verb and the one an
+//! agent runs rather than a person: it publishes the agent door into a
+//! repository and, started by a client, relays a session to it over
+//! [`loopback`](mod@loopback). [`watching`](mod@watching) is what makes the
 //! Manifest's live keys live — `#430` — and it is here because the composition
 //! root owns the runtime and nothing below it may spawn a task.
 
@@ -28,6 +31,8 @@ pub mod agent;
 pub mod clean;
 pub mod cli;
 pub mod declared;
+pub mod loopback;
+pub mod mcp;
 pub mod say;
 pub mod serve;
 pub mod setup;
