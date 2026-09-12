@@ -80,11 +80,17 @@ export function checksChapter(
   following: Following,
   /** Fleet's own reason the gate could not decide. `verdictsChapter`'s own. */
   undecided?: string,
+  /**
+   * **Run it here** on a refused Check's row — Journey 9. Opens the run sheet
+   * with that Check selected and narrowed. Absent where the caller has no run
+   * sheet to send the row to.
+   */
+  onRunHere?: (checkId: string) => void,
 ): Omit<StepChapter, "ordinal"> | undefined {
   const reads = checksOf(step);
   if (reads.length === 0) return undefined;
 
-  const rows = reads.map((read) => checkRow(read, now));
+  const rows = reads.map((read) => checkRow(read, now, onRunHere));
   const judge = judgeRow(step, panels, undecided);
   if (judge !== undefined) rows.push(judge);
 
@@ -289,7 +295,12 @@ function LiveChecksOutput({ kept, following }: { kept: string; following: Follow
  * elapsed time is counted here from when it started, against `now`: the wire
  * sends one message when it starts and one when it finishes, never a tick.
  */
-export function checkRow(read: CheckRead, now: number): CheckRunRow {
+export function checkRow(
+  read: CheckRead,
+  now: number,
+  /** **Run it here**, drawn only on a Check that did not pass — Journey 9. */
+  onRunHere?: (checkId: string) => void,
+): CheckRunRow {
   const { name, run, live } = read;
   if (isWaiting(read)) {
     return {
@@ -313,16 +324,18 @@ export function checkRow(read: CheckRead, now: number): CheckRunRow {
       ...(live?.output_path === undefined ? {} : { output: basename(live.output_path) }),
     };
   }
+  const failed = run !== undefined && didNotPass(run);
   return {
     id: name,
     says: saidOf(run),
     // The Check's declared name, which is what a citation resolves against. The
     // command it ran is on the phase strip's row and is not repeated here.
     identifier: name,
-    named: run === undefined ? "queued" : didNotPass(run) ? "failed" : "passed",
+    named: run === undefined ? "queued" : failed ? "failed" : "passed",
     icon: iconOf(run),
     ...(run?.produced === undefined ? {} : { result: run.produced }),
     ...(run?.output_path === undefined ? {} : { output: basename(run.output_path) }),
+    ...(failed && onRunHere !== undefined ? { onRunHere: () => onRunHere(name) } : {}),
   };
 }
 

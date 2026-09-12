@@ -649,7 +649,7 @@ a modifier.
 j / k / ↓ / ↑  move focus
 Enter          open the focused job. Acts on nothing   (list only)
 o              open. The same act, named so the palette can display it   (list only)
-r              review
+r              review             (list only)
 t              attest
 d              redirect
 s              restart step        (detail only)
@@ -673,6 +673,7 @@ o              open the output      (detail only)
 g              open the stage       (detail only)
 B              raise the cost cap   (detail only) (confirms)
 T              raise the turn cap   (detail only) (confirms)
+r              open the run sheet   (detail only)
 ```
 
 **This is the map, not a pattern.** It was settled by drawing the Job

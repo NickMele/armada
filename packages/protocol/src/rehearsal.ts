@@ -5,6 +5,7 @@
 // and nothing here moves a Job, so no field maps onto a status colour.
 
 import type { ChangedFile } from "./events";
+import type { JobRead, Outcome } from "./reads";
 import type { ProtocolVersion } from "./version";
 import type { ServerEntry } from "./servers";
 
@@ -127,6 +128,16 @@ export type RunOutput = {
 export type NamedRun = { id: string };
 
 /**
+ * What `list_runs` came back as. **Answered to the caller rather than held
+ * as state**, `CallRead`'s reason: the sheet asks for it once, when a person
+ * opens *Earlier runs*, and it does not move once Fleet has answered.
+ */
+export type RunListRead = { ok: true; runs: RunList } | { ok: false; outcome: Outcome };
+
+/** What `get_run_output` came back as. `RunListRead`'s shape and reason. */
+export type RunOutputRead = { ok: true; output: RunOutput } | { ok: false; outcome: Outcome };
+
+/**
  * One message on a run's socket, `GET /jobs/:job_id/runs/:run_id/observe`.
  * `observe_job`'s shape: the log so far, then new lines, a count where the
  * bound dropped some, and why it stopped. Output never rides `/events`.
@@ -148,3 +159,32 @@ export type RunOpened = {
   /** Older lines the opening read left out, because the window is bounded. */
   skipped: number;
 };
+
+/** `GET /jobs/:job_id/run_sheet`, in `reads.ts`'s four states. Bridge-only, not on the wire. */
+export type RunSheetRead = JobRead<{ sheet: RunSheet }>;
+
+/**
+ * The run a window is watching on `observe_run`, as main holds it.
+ *
+ * **`FollowedLog`'s shape, one subject over** — a run's own id in place of a
+ * Check's `kept`, and `RunMessage`'s four kinds in place of `OutputMessage`'s
+ * three. One at a time: the sheet shows one run's output, and opening another
+ * replaces it.
+ */
+export type RunFollowed =
+  | { state: "none" }
+  | { state: "opening"; jobId: string; runId: string }
+  | {
+      state: "following";
+      jobId: string;
+      runId: string;
+      name: string;
+      path: string;
+      /** The file's own line number of `lines[0]`, counted from one. */
+      fromLine: number;
+      /** The newest lines, oldest first, bounded. */
+      lines: string[];
+      /** Why the stream ended, or absent while it is still arriving. */
+      ended?: string;
+    }
+  | { state: "failed"; jobId: string; runId: string; detail: string };

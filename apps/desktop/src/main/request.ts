@@ -15,6 +15,7 @@ import type {
   TransportFault,
 } from "@armada/protocol";
 import type { FleetCapacity, JobSummary, ManifestReading } from "@armada/protocol";
+import type { ServerList } from "@armada/protocol";
 import type { CallArguments, CheckOutput } from "@armada/protocol";
 import type { ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
 import { refusedWith } from "@armada/protocol";
@@ -192,6 +193,21 @@ export async function capacityOf(port: number): Promise<FleetCapacity | null> {
 export async function manifestReadingOf(port: number): Promise<ManifestReading | null> {
   const answer = await ask(port, "GET", "/manifest/reading");
   return answer.ok === true ? ((answer.body as ManifestReading | null) ?? null) : null;
+}
+
+/**
+ * Every server Fleet holds — each Job's and the main checkout's — and the last
+ * instance of each that ended.
+ *
+ * **`null` where Fleet did not answer**, `capacityOf`'s reason: a server's
+ * phase is live and a stale list would draw a *Serving* row for one that has
+ * since exited. Read once per connection, like the capacity and the Manifest
+ * reading beside it — after that, `server.*` on `/events` carries each row
+ * whole, so nothing here is re-fetched on a timer.
+ */
+export async function serversOf(port: number): Promise<ServerList | null> {
+  const answer = await ask(port, "GET", "/servers");
+  return answer.ok === true ? (answer.body as ServerList) : null;
 }
 
 /**

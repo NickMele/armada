@@ -9,10 +9,12 @@ import type { BridgeState, Summons } from "../shared/bridge";
 import type { Draft } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
 import type { Artifact, CommandAnswer, WhenBlocked } from "@armada/protocol";
+import type { StartRun } from "@armada/protocol";
 import { FleetConnection } from "./connection";
 import { openArtifact } from "./open";
 import { openPullRequest, openRemarkLink } from "./forge";
 import { RemarksPoll } from "./remarks-poll";
+import { openServerLink } from "./servers";
 import { Attention } from "./telling";
 
 // Bridge's window, and the one connection under it.
@@ -434,6 +436,44 @@ void app.whenReady().then(() => {
   // and because it walks a process table, which a Job's detail does not.
   ipcMain.handle(CHANNELS.readResources, (_event, jobId: string | null) =>
     connection?.readResources(jobId),
+  );
+  // The run sheet, Journey 9. Opened by the sheet rather than by the Job.
+  // Every act below is `connection.rehearsal`'s — see `rehearsal.ts`.
+  ipcMain.handle(CHANNELS.watchRunSheet, (_event, jobId: string | null) =>
+    connection?.rehearsal.watchRunSheet(jobId),
+  );
+  // One run's output, `followCheckOutput`'s reason and its own socket for it.
+  ipcMain.handle(CHANNELS.observeRun, (_event, jobId: string | null, runId: string | null) =>
+    connection?.rehearsal.observeRun(jobId, runId),
+  );
+  // A rehearsal in this Job's own worktree — no Evidence, nothing on the Job
+  // moves. Opens `observeRun` for the caller the moment the run exists.
+  ipcMain.handle(CHANNELS.startRun, (_event, jobId: string, body: StartRun) =>
+    connection?.rehearsal.startRun(jobId, body),
+  );
+  ipcMain.handle(CHANNELS.stopRun, (_event, jobId: string, runId: string) =>
+    connection?.rehearsal.stopRun(jobId, runId),
+  );
+  ipcMain.handle(CHANNELS.undoRun, (_event, jobId: string, runId: string) =>
+    connection?.rehearsal.undoRun(jobId, runId),
+  );
+  ipcMain.handle(CHANNELS.listRuns, (_event, jobId: string) => connection?.rehearsal.listRuns(jobId));
+  ipcMain.handle(CHANNELS.getRunOutput, (_event, jobId: string, runId: string) =>
+    connection?.rehearsal.getRunOutput(jobId, runId),
+  );
+  // A declared server, for this Job's worktree or the main checkout where no
+  // Job is named. `servers` on the published state is what keeps a *Serving*
+  // row on screen after the sheet that started it closes.
+  ipcMain.handle(CHANNELS.startServer, (_event, name: string, jobId?: string) =>
+    connection?.rehearsal.startServer(name, jobId),
+  );
+  ipcMain.handle(CHANNELS.stopServer, (_event, serverId: string) =>
+    connection?.rehearsal.stopServer(serverId),
+  );
+  // The third channel that leaves this machine. The address is checked against
+  // what main published for that server before anything is handed to the OS.
+  ipcMain.handle(CHANNELS.openServerLink, (_event, serverId: string, url: string) =>
+    openServerLink(published, serverId, url),
   );
   // The act above that read. It moves nothing, costs no model call, and the
   // answer it publishes is also written into the Job's own log.

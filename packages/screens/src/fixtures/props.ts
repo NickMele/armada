@@ -86,5 +86,23 @@ export function propsFor(fixture: JobFixture): JobDetailProps {
     recorded: fixture.recorded,
     onCopied: noop,
     onSaid: noop,
+    // Journey 9's run sheet. A story is a reading of one moment and nothing
+    // here has opened the sheet, so the reads are `none` and every act is a
+    // no-op, on this function's own rule.
+    rehearsal: {
+      runSheet: { state: "none" },
+      runFollowed: { state: "none" },
+      servers: { servers: [] },
+      onWatchRunSheet: noop,
+      onObserveRun: noop,
+      onStartRun: async () => NOT_CONNECTED,
+      onStopRun: async () => NOT_CONNECTED,
+      onUndoRun: async () => NOT_CONNECTED,
+      onListRuns: async () => ({ ok: false, outcome: NOT_CONNECTED }),
+      onGetRunOutput: async () => ({ ok: false, outcome: NOT_CONNECTED }),
+      onStartServer: async () => NOT_CONNECTED,
+      onStopServer: async () => NOT_CONNECTED,
+      onOpenServerLink: async () => UNKNOWN_JOB_FOLLOWED,
+    },
   };
 }

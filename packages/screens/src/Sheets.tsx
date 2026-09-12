@@ -19,10 +19,12 @@ import {
   ActivityLogSheet,
   JobDiffSheet,
   JobHoldsSheet,
+  RunSheet,
   railOfPatch,
   type ActivityFilter,
   type JobDiffFile,
   type JobHoldsSheetProps,
+  type RunSheetProps,
 } from "@armada/components";
 import { useMemo, useState, type ReactNode } from "react";
 
@@ -49,8 +51,12 @@ import { NOTHING_YET_ON_THIS_STEP, whyNotWatching, type LogRow } from "./story";
  * person can change on a running Job. It is here because the header's one line
  * for one of them read as the screen's main button, and a layer a person
  * already knows how to leave is where changing a Job does least to the reading.
+ *
+ * **`run` is the fifth, Journey 9's.** It opens from `r`, from the worktree
+ * row's `Run…`, and from a refused Check's `Run it here` — never from a
+ * chapter, so it lands nowhere on close, `holds`'s way.
  */
-export type OpenSheet = "log" | "diff" | "holds" | "settings" | null;
+export type OpenSheet = "log" | "diff" | "holds" | "settings" | "run" | null;
 
 /**
  * Where the log's reading was held, and how much it had then.
@@ -93,6 +99,12 @@ export type DetailSheetProps = {
   holds: Omit<JobHoldsSheetProps, "open" | "floor" | "onClose">;
   /** What the Job settings panel reads and sends, beyond the Job it already has. */
   settings: Omit<SettingsSheetProps, "job" | "whole" | "floor" | "onClose">;
+  /**
+   * The run sheet, Journey 9 — built by the caller from `RunSheetRead`,
+   * `RunFollowed` and the run-sheet's own selection state, `holds`'s reason:
+   * the arguments belong to `rehearsal.ts` and `JobDetail`, not to this file.
+   */
+  run: Omit<RunSheetProps, "open" | "floor" | "onClose">;
   /** The window is at `--window-floor`. */
   floor: boolean;
   onClose: () => void;
@@ -112,6 +124,7 @@ export function DetailSheet({
   onHold,
   holds,
   settings,
+  run,
   floor,
   onClose,
 }: DetailSheetProps) {
@@ -168,6 +181,9 @@ export function DetailSheet({
   }
   if (which === "settings") {
     return <SettingsSheet job={job} whole={whole} floor={floor} onClose={onClose} {...settings} />;
+  }
+  if (which === "run") {
+    return <RunSheet open floor={floor} onClose={onClose} {...run} />;
   }
   return null;
 }

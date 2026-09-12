@@ -1,7 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 import { CHANNELS } from "../shared/bridge";
-import type { BridgeApi, BridgeState, Summons } from "../shared/bridge";
+import type { BridgeState, Summons } from "../shared/bridge";
+import type { BridgeApi } from "../shared/api";
 import type {
   CallRead,
   CheckOutputRead,
@@ -14,7 +15,7 @@ import type {
 } from "@armada/protocol";
 import type { FileReport } from "@armada/protocol";
 import type { Artifact, Followed, Opened } from "@armada/protocol";
-import type { ProtocolVersion } from "@armada/protocol";
+import type { ProtocolVersion, RunListRead, RunOutputRead, StartRun } from "@armada/protocol";
 import type { CommandAnswer, WhenBlocked } from "@armada/protocol";
 import { PROTOCOL_VERSION } from "@armada/protocol";
 
@@ -195,6 +196,49 @@ const api: BridgeApi = {
   // naming the Job and this walks a process table and a directory.
   readResources: (jobId: string | null): Promise<void> =>
     ipcRenderer.invoke(CHANNELS.readResources, jobId),
+
+  // The run sheet — Journey 9. Opened by the sheet rather than by the Job,
+  // `readDiff`'s reason: the Manifest a Job froze is read on the press that
+  // draws it, not on every Job opened.
+  watchRunSheet: (jobId: string | null): Promise<void> =>
+    ipcRenderer.invoke(CHANNELS.watchRunSheet, jobId),
+
+  // One run's output, read-only like `followCheckOutput` beside it and its
+  // own socket for the same reason.
+  observeRun: (jobId: string | null, runId: string | null): Promise<void> =>
+    ipcRenderer.invoke(CHANNELS.observeRun, jobId, runId),
+
+  // Run one Check or Command in this Job's worktree. **A rehearsal**: no
+  // Evidence, no `job_step_checks` row, nothing on the Job moves.
+  startRun: (jobId: string, body: StartRun): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.startRun, jobId, body),
+
+  stopRun: (jobId: string, runId: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.stopRun, jobId, runId),
+
+  undoRun: (jobId: string, runId: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.undoRun, jobId, runId),
+
+  listRuns: (jobId: string): Promise<RunListRead> => ipcRenderer.invoke(CHANNELS.listRuns, jobId),
+
+  getRunOutput: (jobId: string, runId: string): Promise<RunOutputRead> =>
+    ipcRenderer.invoke(CHANNELS.getRunOutput, jobId, runId),
+
+  // Start a declared server, for this Job's worktree or, with no Job, the
+  // main checkout — the one capability on this seam Manifest's own surface
+  // will share once it exists, which is why `jobId` is optional here already.
+  startServer: (name: string, jobId?: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.startServer, name, jobId),
+
+  stopServer: (serverId: string): Promise<Outcome> =>
+    ipcRenderer.invoke(CHANNELS.stopServer, serverId),
+
+  // The third entry that reaches outside the app. A server id and the link's
+  // own address, `openRemarkLink`'s reason: main checks the address against
+  // what it is already holding for that server before it opens anything, so
+  // no string a click handler composed reaches `shell.openExternal` unchecked.
+  openServerLink: (serverId: string, url: string): Promise<Followed> =>
+    ipcRenderer.invoke(CHANNELS.openServerLink, serverId, url),
 
   // Ask Fleet to go and look now. **The rung below intervene**, and the one
   // entry here that is an act and changes nothing: what it leaves is a line in

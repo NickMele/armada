@@ -35,14 +35,48 @@
 // asks the question.
 
 import { File, Folder, GitBranch } from "lucide-react";
+import { Button } from "@armada/components";
 import type { JobBriefProps, JobLogReferenceRow, NotOpened } from "@armada/components";
 
-import type { Watched } from "@armada/protocol";
+import type { ServerState, Watched } from "@armada/protocol";
 import { artifactPath, recordsOf, repoOf } from "@armada/protocol";
 import type { Artifact } from "@armada/protocol";
 import { openArtifact, type OpenArtifact } from "./opening";
 import type { JobDetail as JobWhole, JobSummary } from "@armada/protocol";
 import type { ManifestSummary, WorkflowSummary } from "@armada/protocol";
+import type { RunSheetSlice } from "./rehearsal";
+
+/**
+ * What the worktree row's **Run…** and a *Serving* row need — Journey 9, on
+ * the one surface both open onto besides the sheet itself.
+ */
+export type WorkRehearsal = {
+  /** Opens the run sheet with nothing selected. */
+  onRun: () => void;
+  /** The sheet's own reading of whether the worktree is on disk, once it has
+   * one — `undefined` before anybody has opened the sheet, which falls back
+   * to whether the Job has dispatched a worktree at all. */
+  worktreeOnDisk: boolean | undefined;
+  /** Every server Fleet holds. Filtered to this Job and to the live ones. */
+  servers: readonly ServerState[];
+  onStopServer: (serverId: string) => void;
+  onOpenServerLink: (serverId: string, url: string) => void;
+};
+
+/** Builds `WorkRehearsal` off `useRunSheet`'s own return, so a caller passes one line. */
+export function workRehearsalOf(
+  onRun: () => void,
+  worktreeOnDisk: boolean | undefined,
+  slice: RunSheetSlice,
+): WorkRehearsal {
+  return {
+    onRun,
+    worktreeOnDisk,
+    servers: slice.servers.servers,
+    onStopServer: (serverId) => void slice.onStopServer(serverId),
+    onOpenServerLink: (serverId, url) => void slice.onOpenServerLink(serverId, url),
+  };
+}
 
 export { repoOf };
 
@@ -104,6 +138,7 @@ export function workOf(
   whole: JobWhole | null,
   manifest: ManifestSummary | undefined,
   workflow: WorkflowSummary | undefined,
+  rehearsal: WorkRehearsal,
 ): JobLogReferenceRow[] {
   const repo = repoOf(manifest);
   // Only `worktree` is drawn on this screen, which never reads `records` —
@@ -127,6 +162,11 @@ export function workOf(
       copyValue: where,
       open: opener(open, job.id, "worktree", "Open the worktree"),
       meta: dispatched ? undefined : NOT_WRITTEN,
+      // **Run…**, Journey 9. Disabled with a reason rather than hidden.
+      // `worktree_on_disk` is the sheet's own reading and wins once it
+      // exists; before the sheet has ever been opened this falls back to
+      // whether the Job has dispatched a worktree at all.
+      run: { onRun: rehearsal.onRun, disabledReason: disabledReasonOf(dispatched, rehearsal.worktreeOnDisk) },
     });
   }
 
@@ -165,7 +205,91 @@ export function workOf(
   }
 
   if (whole !== null) rows.push(...overlapRows(whole));
+  rows.push(...servingRows(job.id, rehearsal));
   return rows;
+}
+
+/**
+ * How long a value can be before the 380px column — the shared label column,
+ * narrowed further by a server's own action buttons beside it — has no room
+ * left to read it in full. `localhost:41207`, a leased-span address at its
+ * typical length, is already past it: measured against the row as drawn,
+ * past this the row falls back to the port alone rather than truncating a
+ * value Nick's standing decision says must read in full.
+ */
+const SERVING_VALUE_BUDGET = 9;
+
+/** The host and port a server's link resolves to, exactly as declared. */
+function addressOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+/** The port alone, where the address itself does not fit. */
+function portOf(url: string): string | undefined {
+  try {
+    return new URL(url).port || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The row's value. **The same link its button opens** — never a `localhost`
+ * guess reconstructed from `ports[0]`, which can name a host the server never
+ * declared and a port that is not the one the button beside it opens. No
+ * links at all falls back to the port alone, or the server's name where it
+ * has not even leased one — never the raw `serve` line, which is a command
+ * and not a place.
+ */
+function servingValueOf(server: ServerState): string {
+  const link = server.links[0];
+  if (link === undefined) {
+    return server.ports[0] === undefined ? server.name : String(server.ports[0].port);
+  }
+  const address = addressOf(link.url);
+  if (address.length <= SERVING_VALUE_BUDGET) return address;
+  return portOf(link.url) ?? address;
+}
+
+/**
+ * A row per server this Job is running or has running — Journey 9's *A
+ * server*. **The sheet closed stops nothing**, so this draws for as long as
+ * the server itself is up, independent of whether anybody has the sheet
+ * open. Exited servers are the sheet's own business, not this region's.
+ */
+function servingRows(jobId: string, rehearsal: WorkRehearsal): JobLogReferenceRow[] {
+  return rehearsal.servers
+    .filter((server) => server.job_id === jobId && server.phase !== "exited")
+    .map((server) => ({
+      iconLabel: "Serving",
+      // The address, not the name — `WhereRow`'s own rule for a mono value.
+      // **No `meta` beside it**: the shared label column `853da1d9` fixed
+      // wide enough for "Size on disk" leaves this row's value area narrow,
+      // and a note here squeezed the address down to one character before
+      // its own ellipsis. The name is still on the sheet and on hover.
+      value: servingValueOf(server),
+      actions: (
+        <>
+          {server.links.map((link) => (
+            <Button
+              key={link.url}
+              variant="secondary"
+              size="sm"
+              onClick={() => rehearsal.onOpenServerLink(server.id, link.url)}
+            >
+              {link.name ?? link.url}
+            </Button>
+          ))}
+          <Button variant="secondary" size="sm" onClick={() => rehearsal.onStopServer(server.id)}>
+            Stop
+          </Button>
+        </>
+      ),
+    }));
 }
 
 /**
@@ -220,6 +344,23 @@ export function stillReading(watched: Watched, jobId: string): boolean {
   if (watched.state === "none") return true;
   if (watched.jobId !== jobId) return true;
   return watched.state !== "read" && watched.state !== "failed";
+}
+
+/** Why **Run…** is disabled on a Job that has not dispatched a worktree yet. */
+const NOT_DISPATCHED = "This Job has no worktree yet.";
+
+/** Why **Run…** is disabled on a Job whose worktree the sheet found gone. */
+const WORKTREE_GONE = "This Job's worktree is gone.";
+
+/**
+ * Why **Run…** is disabled, or `undefined` where it is not. `worktreeOnDisk`
+ * is the run sheet's own reading and wins once it exists — it is the only
+ * signal that tells a reclaimed worktree from one still there — and the
+ * cheaper `dispatched` guess carries the row until somebody opens the sheet.
+ */
+function disabledReasonOf(dispatched: boolean, worktreeOnDisk: boolean | undefined): string | undefined {
+  if (worktreeOnDisk !== undefined) return worktreeOnDisk ? undefined : WORKTREE_GONE;
+  return dispatched ? undefined : NOT_DISPATCHED;
 }
 
 /**

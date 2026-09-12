@@ -151,7 +151,12 @@ export function manifest(): ManifestSummary {
   return {
     id: MANIFEST_ID,
     repository: "armada",
-    path: "armada.yml",
+    // A bare `armada.yml` has no directory component, so `repoOf` — which
+    // cuts at the manifest's own last `/` — read every fixture built on this
+    // one as a Job with no repository and drew *Where things are* with no
+    // Worktree row at all. A workspace-relative path is what `repoOf` is
+    // actually built to read.
+    path: "armada/armada.yml",
     // Fleet keeps a repository's records in a folder of its own, off the
     // checkout. A made-up home, since a real one would name a person.
     records_root: "/Users/user/Library/Application Support/Armada/records/armada",

@@ -98,6 +98,7 @@ export function evidenceChaptersOf({
   now,
   following,
   undecided,
+  onRunHere,
 }: {
   /** Now, injected, so a running Check's elapsed time moves with the clock. */
   now: number;
@@ -124,6 +125,8 @@ export function evidenceChaptersOf({
    * fixture this file replaced.
    */
   outputs: Outputs;
+  /** **Run it here** on a refused Check's row, from the run sheet — Journey 9. */
+  onRunHere?: (checkId: string) => void;
 }): Unnumbered[] {
   // Read once and drawn twice: the Checks chapter's Judge row and the Verdicts
   // grid are the same panel, and the two counts have to be one count.
@@ -135,7 +138,7 @@ export function evidenceChaptersOf({
   // count is the story's to make, over the list it actually built. The order
   // is still fixed: Checks always before Verdicts.
   return [
-    checksChapter(step, panels, opens, outputs, now, following, undecided),
+    checksChapter(step, panels, opens, outputs, now, following, undecided, onRunHere),
     verdictsChapter(step, panels, opens, undecided),
   ].filter(
     (chapter): chapter is Unnumbered => chapter !== undefined,
