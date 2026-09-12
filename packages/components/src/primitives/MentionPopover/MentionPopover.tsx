@@ -2,9 +2,9 @@ export { useMention } from "./useMention";
 
 /**
  * The `@` mention popup — a person typing a request or a brief types `@` and
- * narrows this as they keep typing, the way Claude Code's own `@` file
- * reference works. `useMention` in this module decides when it is open and
- * what it holds; this only draws what it is handed.
+ * narrows this as they keep typing, the way an editor's own file reference
+ * works. `useMention` in this module decides when it is open and what it
+ * holds; this only draws what it is handed.
  *
  * **Anchored under the field, not the caret.** `CommandPalette` is the nearest
  * relative and is a centred, floating layer with nothing to anchor to; a
