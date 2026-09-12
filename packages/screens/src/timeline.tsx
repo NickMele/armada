@@ -2,9 +2,10 @@
 // the order they happen — instructed, working, checks, judge. What the attempt
 // wrote rides on working, with the turns that wrote it.
 //
-// **Derived here and drawn in one draft.** `Drafts/Step timeline` is the only
-// caller. The panel it is meant to replace still draws the strip and the
-// chapters beneath it, and the owner asked to see this before either moves.
+// **Derived here and drawn by the panel.** `stepTimelineOf` below arranges the
+// step's own chapters into these rows, and `InsideAJob` draws them in place of
+// the strip and the story that used to say the same thing twice. The draft this
+// was written against is deleted, which is what a draft is for.
 //
 // # What the wire can and cannot say
 //

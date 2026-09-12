@@ -93,7 +93,6 @@ import { span } from "./duration";
 import { ordered } from "./facts";
 import { headingOf, Unrenderable } from "./heading";
 import { detailOf, holdingOf, logOf, lookOf, turnsOf } from "./mine";
-import { phasesOf } from "./phases";
 import { checkEntryId, useRunSheet, type RunSheetSlice } from "./rehearsal";
 import { verdictSlotOf } from "./verdict-answered";
 // Which Check's output `o` opens. **The same call the Checks chapter's own act
@@ -465,11 +464,12 @@ export function JobDetail({
     () => (recorded.evidence.state === "read" ? recorded.evidence.steps.find((one) => one.step_id === open?.step_id) : undefined),
     [recorded.evidence, open?.step_id],
   );
-  const asking = whole?.judge_question?.step_id === open?.step_id ? whole?.judge_question?.criterion_id : undefined;
-  const phases =
-    whole === null || open === undefined
-      ? undefined
-      : phasesOf(open, whole.acceptance_criteria, opensRecords, job.status, claimed, asking);
+  // The criterion a live judge question holds open on this step. Read here and
+  // handed to the story; the strip that also took it is gone.
+  const asking =
+    whole?.judge_question?.step_id === open?.step_id
+      ? whole?.judge_question?.criterion_id
+      : undefined;
 
   // The detail's contextual tier, and the open state it moves. Bound while a
   // Job is open and not before, so nothing on the Board listens for a key that
@@ -479,7 +479,6 @@ export function JobDetail({
   const keys = useDetailKeys({
     run,
     landings: () => landingsOf(timeline ?? []),
-    stages: phases?.stages,
     // `f`, from `actions.toml` — `open_diff`, scope `detail`. It opens the
     // layer now rather than a chapter: the patch stopped being something the
     // panel draws. `Enter` needs nothing here, because `[` `]` land focus on
@@ -801,14 +800,7 @@ export function JobDetail({
               // command the Drone is waiting on is the same box, and at the gate
               // so is the review (the owner, 11 Sep 2026).
               before: atGate ? <>{waiting}{verdictSlot}</> : waiting,
-              // The strip draws the stage the keyboard pinned, and hover stays
-              // its own: hovering reports where the pointer is rather than what
-              // a reader decided, so nothing up here holds it.
-              phases:
-                phases === undefined
-                  ? undefined
-                  : { ...phases, pinnedStage: keys.pinnedStage, onPin: keys.onPinStage },
-              phasesAbsent: whyNoSteps(watched, job.id),
+              timelineAbsent: whyNoSteps(watched, job.id),
               timeline,
               openRow: keys.openChapterId,
               onOpenRow: keys.onOpenChapter,
