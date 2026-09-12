@@ -259,3 +259,6 @@ export * from "./compositions/RunSheet/RunSheet";
 // A step's work with runs of one tool folded to a line. The rows inside a group
 // are the caller's own log, drawn unfolded everywhere else.
 export * from "./compositions/WorkGroups/WorkGroups";
+// A step as one timeline: the phases in the order they happened, repeated for
+// each attempt, with the earlier ones folded. Replaces the strip and the story.
+export * from "./compositions/StepTimeline/StepTimeline";

@@ -11,6 +11,7 @@ import {
   JobDetailHeaderActions,
   PhaseStrip,
   PhaseStripSkeleton,
+  StepTimeline,
   RunTree,
   RunTreeSkeleton,
   Skeleton,
@@ -25,6 +26,7 @@ import {
   type JobLogReferenceRow,
   type NotOpened,
   type PhaseStripProps,
+  type StepTimelineAttempt,
   type RunTreeSkeletonProps,
   type RunTreeStep,
   type StepChapter,
@@ -85,6 +87,19 @@ export type StepPanel = {
    * step. Absent on a step where nothing has gone wrong, which is most of them.
    */
   notice?: StepNotice;
+  /**
+   * The step as one timeline: its phases in the order they happened, repeated
+   * per attempt, each row holding the chapter that phase produced.
+   *
+   * **Present replaces the strip and the story both.** They said the same thing
+   * twice — a failed Check was a red node in one and a printed exit code in the
+   * other — and the timeline is the one reading. Absent draws the pair, which
+   * is what every caller that has not moved over still gets.
+   */
+  timeline?: StepTimelineAttempt[];
+  /** Which row is open, held by the surface, so a keyboard map can name one. */
+  openRow?: string | null;
+  onOpenRow?: (rowId: string | null) => void;
   /** Where this step is — its phases and its gate tiers as one progression. */
   phases?: PhaseStripProps;
   /** Why there is no strip, where there is none. */
@@ -97,7 +112,12 @@ export type StepPanel = {
    */
   before?: ReactNode;
   /** Drone instructions, Activity log, Produced — in that order, always. */
-  chapters: StepChapter[];
+  /**
+   * **Absent on a panel drawing a timeline**, which holds the same chapters
+   * inside the phase that produced each one. A caller hands over one or the
+   * other; both would be the two readings the timeline replaces.
+   */
+  chapters?: StepChapter[];
   /** Which chapter is open on mount. */
   openChapter?: string;
   /**
@@ -443,29 +463,48 @@ export function InsideAJob({
                 </div>
               )}
 
-              {step.phases === undefined ? (
-                <p className="armada-inside__absent" role="note">
-                  {step.phasesAbsent ??
-                    "Gates unknown"}
-                </p>
+              {step.timeline !== undefined ? (
+                <>
+                  {/* The box a person acts in comes before the record, for the
+                      reason it did between the strip and the story: you cannot
+                      write a useful sentence until you have read them. */}
+                  {step.before === undefined ? null : (
+                    <div className="armada-inside__before">{step.before}</div>
+                  )}
+                  <StepTimeline
+                    attempts={step.timeline}
+                    label="Where this step is"
+                    openRow={step.openRow}
+                    onOpenRow={step.onOpenRow}
+                  />
+                </>
               ) : (
-                // The screen's own handler falls through to the strip unless
-                // the caller gave the strip one of its own, so a Check's row
-                // in a phase card opens the same viewer every other selector
-                // on this screen opens.
-                <PhaseStrip onOpenArtifact={onOpenArtifact} {...step.phases} />
-              )}
+                <>
+                {step.phases === undefined ? (
+                  <p className="armada-inside__absent" role="note">
+                    {step.phasesAbsent ??
+                      "Gates unknown"}
+                  </p>
+                ) : (
+                  // The screen's own handler falls through to the strip unless
+                  // the caller gave the strip one of its own, so a Check's row
+                  // in a phase card opens the same viewer every other selector
+                  // on this screen opens.
+                  <PhaseStrip onOpenArtifact={onOpenArtifact} {...step.phases} />
+                )}
 
-              {step.before === undefined ? null : (
-                <div className="armada-inside__before">{step.before}</div>
-              )}
+                {step.before === undefined ? null : (
+                  <div className="armada-inside__before">{step.before}</div>
+                )}
 
-              <StepStory
-                chapters={step.chapters}
-                openId={step.openChapter}
-                openChapter={step.openChapterId}
-                onOpen={step.onOpenChapter}
-              />
+                <StepStory
+                  chapters={step.chapters ?? []}
+                  openId={step.openChapter}
+                  openChapter={step.openChapterId}
+                  onOpen={step.onOpenChapter}
+                />
+                </>
+              )}
 
               {step.after === undefined ? null : (
                 <div className="armada-inside__after">{step.after}</div>

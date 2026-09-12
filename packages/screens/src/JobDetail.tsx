@@ -87,6 +87,7 @@ import { DIFF_CHAPTER, LOG_CHAPTER, namesStep, useDetailKeys } from "./detail-ke
 import { useAtFloor } from "@armada/shell";
 import { DetailSheet, holdOf, type HeldAt, type OpenSheet } from "./Sheets";
 import { chaptersOf } from "./chapters";
+import { stepTimelineOf } from "./timeline";
 import { againOf, useShowAgain, type ShowAgainCall } from "./again";
 import { span } from "./duration";
 import { ordered } from "./facts";
@@ -631,6 +632,9 @@ export function JobDetail({
           onRunHere: (checkId) => runHook.open(checkEntryId(checkId)), // Journey 9
         });
 
+  // The timeline arranges the chapters just built; it derives nothing they hold.
+  const timeline = open && stepTimelineOf(open, watching?.rows ?? [], now, chapters);
+
   // The verdict sheet's slot: `Decide`'s place at the gate, and the finished
   // Job's own place, whichever of the three arrangements the render is —
   // `verdictSlotOf`, in `verdict-answered.tsx`.
@@ -805,9 +809,9 @@ export function JobDetail({
                   ? undefined
                   : { ...phases, pinnedStage: keys.pinnedStage, onPin: keys.onPinStage },
               phasesAbsent: whyNoSteps(watched, job.id),
-              chapters,
-              openChapterId: keys.openChapterId,
-              onOpenChapter: keys.onOpenChapter,
+              timeline,
+              // Uncontrolled: `[` `]` still name chapters, not rows. #timeline
+              onOpenRow: keys.onOpenChapter,
               // A finished Job's verdict sheet is a record, read after the story.
               after: atGate ? undefined : verdictSlot,
             }

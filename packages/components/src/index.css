@@ -212,3 +212,6 @@
 
 /* A step's work, with runs of one tool folded to a line. */
 @import "./compositions/WorkGroups/WorkGroups.css";
+
+/* A step as one timeline, the phases in order and an attempt per section. */
+@import "./compositions/StepTimeline/StepTimeline.css";

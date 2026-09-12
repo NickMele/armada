@@ -16,8 +16,10 @@
 // their order is the phase order — instructed, working, checks, judge — which
 // is the order the strip already draws and the order Fleet runs them in. A
 // timeline that claimed measured times for them would be inventing them.
+import type { ReactNode } from "react";
+
 import type { ChangedFile, CheckRun, Judged, StepAttempt, StepDetail, Turn } from "@armada/protocol";
-import type { StepActivity } from "@armada/components";
+import type { StepActivity, StepChapter, StepTimelineAttempt } from "@armada/components";
 
 import { span } from "./duration";
 import { askedOf, didNotPass } from "./gates";
@@ -266,4 +268,97 @@ function judgeRow(
     ...(asking ? { live: true } : {}),
     judged: ruled,
   };
+}
+
+/**
+ * The timeline as the panel draws it: the phases of each attempt, with the
+ * step's own chapters arranged into the rows they belong to.
+ *
+ * **Arranged, never rebuilt.** `chaptersOf` already builds the brief, the log,
+ * what was produced and what the gates found, and each carries its own preview,
+ * body and act. Building them a second time here would be two readings of one
+ * step, which is the drift this repository deletes on sight — so the chapters
+ * are placed into the phase that produced them and nothing is derived twice.
+ *
+ * **Only the attempt being read has bodies.** Every chapter narrows itself to
+ * the current attempt, so an earlier attempt draws what this file derived for
+ * it — its counts, its outcome and what its gate found — and no body it would
+ * have to invent.
+ */
+export function stepTimelineOf(
+  step: StepDetail,
+  turns: readonly Turn[],
+  now: number,
+  /** The chapters the story already built, in the order it built them. */
+  chapters: readonly StepChapter[],
+): StepTimelineAttempt[] {
+  const held = new Map(chapters.map((chapter) => [chapter.id, chapter]));
+  return timelineOf(step, turns, now).map((attempt) => ({
+    id: attempt.id,
+    name: `Attempt ${attempt.attempt}`,
+    ...(saidOf(attempt) === undefined ? {} : { said: saidOf(attempt) }),
+    current: attempt.current,
+    rows: attempt.rows.map((row) => ({
+      id: `${attempt.id}-${row.id}`,
+      name: row.name,
+      activity: row.mark,
+      ...(row.meta === undefined ? {} : { meta: row.meta }),
+      ...(row.live === true ? { live: true } : {}),
+      ...bodyOf(row.phase, attempt.current ? held : new Map()),
+    })),
+  }));
+}
+
+/** Which chapters belong to which phase, in the order the phase produced them. */
+const CHAPTERS: Record<TimelinePhase, readonly string[]> = {
+  instructed: ["instructions"],
+  // What the Drone did and what came out of it are one reading — the owner's
+  // call, 11 Sep 2026 — so the log, what it showed and what it wrote all sit
+  // under the phase that produced them.
+  working: ["log", "shown", "produced"],
+  checks: ["checks"],
+  judge: ["verdicts"],
+};
+
+/** A row's body and act, from the chapters the phase owns. */
+function bodyOf(
+  phase: TimelinePhase,
+  held: Map<string, StepChapter>,
+): { body?: ReactNode; act?: ReactNode } {
+  const mine = CHAPTERS[phase].flatMap((id) => {
+    const chapter = held.get(id);
+    return chapter === undefined ? [] : [chapter];
+  });
+  if (mine.length === 0) return {};
+  // One act to a row: the first chapter that carries one. A phase owning three
+  // chapters has at most one thing worth leaving the panel for.
+  const act = mine.find((chapter) => chapter.act !== undefined)?.act;
+  return {
+    body: mine.map((chapter) => (
+      <section key={chapter.id}>
+        {mine.length === 1 ? null : <span className="caps">{chapter.title}</span>}
+        {chapter.preview}
+        {chapter.content}
+      </section>
+    )),
+    ...(act === undefined ? {} : { act }),
+  };
+}
+
+/**
+ * What became of an attempt, in words rather than in the wire's own.
+ *
+ * **`retrying` is "handed back".** It is the step's word for what happens next,
+ * and on an attempt that has ended it reads as a Drone still working.
+ */
+function saidOf(attempt: TimelineAttempt): string | undefined {
+  const said =
+    attempt.outcome === "retrying"
+      ? "handed back"
+      : attempt.outcome === "advanced"
+        ? "advanced"
+        : attempt.outcome === "stopped"
+          ? "stopped"
+          : attempt.outcome;
+  return attempt.took === undefined ? said : `${said} · ${attempt.took}`;
 }
