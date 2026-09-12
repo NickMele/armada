@@ -103,10 +103,11 @@ async fn a_branch_the_drone_committed_is_pushed_and_opened_for_review() {
     );
 }
 
-/// **A repository with no base has nothing to be ahead of.** Every commit on
-/// the branch would count as the Job's, so nothing goes out and the log says so.
+/// **A repository with no base has nothing to measure against, so the branch
+/// goes out** — as it does where Fleet made the commit — and no pull request
+/// opens, because there is nothing to open one against.
 #[tokio::test]
-async fn a_committed_branch_with_no_base_to_measure_it_against_sends_nothing() {
+async fn a_committed_branch_with_no_base_is_pushed_and_opens_nothing() {
     let home = TempDir::new();
     let (fleet, job) = finished_through(
         &home,
@@ -120,10 +121,15 @@ async fn a_committed_branch_with_no_base_to_measure_it_against_sends_nothing() {
     )
     .await;
 
-    assert_eq!(went_out(fleet.vcs()), (false, false));
+    assert_eq!(
+        went_out(fleet.vcs()),
+        (true, false),
+        "pushed, with no pull request: {:?}",
+        fleet.vcs().delivered()
+    );
     let said = log_of(&home, &job);
     assert!(
-        said.iter().any(|msg| msg.contains("held nothing new")),
-        "the Job's log says why the branch did not go: {said:?}"
+        !said.iter().any(|msg| msg.contains("held nothing new")),
+        "the log does not call a branch with commits on it empty: {said:?}"
     );
 }
