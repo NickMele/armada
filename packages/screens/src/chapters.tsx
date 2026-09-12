@@ -45,6 +45,7 @@ import {
 } from "@armada/components";
 
 import type { Criterion, Diff, Footprint, KeptFrame, Turn } from "@armada/protocol";
+import type { ChangedFile as WireFile } from "@armada/protocol";
 import type { JobSummary, StepDetail } from "@armada/protocol";
 import type { JobFootprint } from "@armada/protocol";
 import { briefChecksOf, briefStepsOf } from "./brief";
@@ -66,7 +67,7 @@ import {
   type Frames,
   type Paired,
 } from "./frames";
-import { readingFor, whyNoFootprint } from "./files";
+import { fileRowsOf, readingFor, whyNoFootprint } from "./files";
 import { WorkGrouped } from "./grouped";
 import { Log } from "./Log";
 import type { Following, Outputs } from "./outputs";
@@ -111,6 +112,8 @@ export function chaptersOf({
   undecided,
   asking,
   onRunHere,
+  attempt,
+  ended,
 }: {
   /** Now, injected, so a running Check's elapsed time moves with the clock. */
   now: number;
@@ -218,7 +221,7 @@ export function chaptersOf({
    * names, and an optional handler is how a surface goes quietly back to it.
    */
   opens: Opens;
-  onOpenSheet: (which: "log" | "diff") => void;
+  onOpenSheet: (which: "log" | "diff", attempt?: number) => void;
   /**
    * Fleet's own reason the gate could not decide on this step's current
    * attempt, for the Verdicts chapter and the Checks chapter's Judge row.
@@ -230,6 +233,15 @@ export function chaptersOf({
   asking?: string;
   /** **Run it here** on a refused Check's row, from the run sheet — Journey 9. */
   onRunHere?: (checkId: string) => void;
+  /** Which run of the step this story is of, so its sheets open that run's. */
+  attempt?: number;
+  /**
+   * What that run wrote, where it has ended — Fleet's own reading at the step
+   * boundary. **Present also drops the patch**: the diff reads the live
+   * worktree, which has moved on, so an earlier run names its files and offers
+   * no control that would open somebody else's.
+   */
+  ended?: readonly WireFile[];
 }): StepChapter[] {
   const { rows, unread } = hideUnread(watching === null ? [] : entriesOf(watching.rows, step.step_id));
   // **The turns Fleet sent, and not everything in Armada's voice.** The two
@@ -239,7 +251,10 @@ export function chaptersOf({
   // echoing it back. This chapter is the first of those.
   const told = rows.filter((row) => row.kind === "instructed");
   const opened = told[0];
-  const produced = producedIn(kept, readingFor(footprint, job.id));
+  const produced =
+    ended === undefined
+      ? producedIn(kept, readingFor(footprint, job.id))
+      : { files: fileRowsOf(ended), planDeclared: false };
   // Read once, here, and drawn twice: the same call builds the Submitted
   // tier's rows on the phase strip. Two readings is how the two surfaces
   // came to state one ordering separately. #321.
@@ -329,7 +344,7 @@ export function chaptersOf({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => onOpenSheet("log")}
+                onClick={() => onOpenSheet("log", attempt)}
                 {...namesChapter(LOG_CHAPTER)}
               >
                 Open the log
@@ -404,7 +419,7 @@ export function chaptersOf({
           ) : (
             <ChangedFiles
               files={produced.files}
-              emptyNote={nothingTouched(documents.length)}
+              emptyNote={nothingTouched(documents.length, ended !== undefined)}
               note={noteUnder(produced)}
             />
           )}
@@ -422,7 +437,7 @@ export function chaptersOf({
       // saying the worktree is gone — the count reads as the truth and the
       // patch reads as broken, and it is neither. #381. A control that goes
       // nowhere is worse than one that is not there.
-      ...(sheet === "diff" || !readable(diff, job.id)
+      ...(ended !== undefined || sheet === "diff" || !readable(diff, job.id)
         ? {}
         : {
             act: (
@@ -622,7 +637,8 @@ const DOCUMENTS_NOTE =
  * 7,605-byte plan sat on disk, and the subject of the sentence is the
  * repository rather than the drone besides. #307.
  */
-function nothingTouched(documents: number): string {
-  if (documents === 0) return "No changes yet";
+function nothingTouched(documents: number, ended: boolean): string {
+  // `yet` is a promise, and a run that is over cannot keep it.
+  if (documents === 0) return ended ? "Nothing was written" : "No changes yet";
   return "No repository changes";
 }

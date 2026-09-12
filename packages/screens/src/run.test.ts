@@ -157,7 +157,14 @@ describe("a step being worked again", () => {
   });
 
   it("says the Judge is being asked while the call is out", () => {
-    const judging = { look: "criterion", model: "sonnet", call: 1, of: 2, since: "2026-09-12T18:10:48Z" };
+    const judging = {
+      look: "criterion",
+      model: "sonnet",
+      call: 1,
+      of: 2,
+      since: "2026-09-12T18:10:48Z",
+      budget_ms: 120000,
+    };
     expect(factsOf(retrying({ judging })).get("Judge")).toBe("asking · 1 criterion");
   });
 

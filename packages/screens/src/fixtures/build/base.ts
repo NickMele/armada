@@ -420,6 +420,21 @@ export function instructed(step: string, ts: string, onPart: number, doneWhen: s
   };
 }
 
+/**
+ * What the gate told the Drone when it handed the step back — `Occasion::Outcome`
+ * on the Rust side, and the turn a retried attempt opens with. **Every attempt
+ * after the first has one**, which is what makes its Instructed phase a phase.
+ */
+export function handedBack(step: string, ts: string, text: string): Turn {
+  return {
+    ts,
+    seq: nextSeq(),
+    step,
+    by: "armada",
+    saw: { event: "instructed", occasion: "outcome", text },
+  };
+}
+
 export function said(step: string, ts: string, text: string): Turn {
   return { ts, seq: nextSeq(), step, by: "drone", saw: { event: "said", text } };
 }

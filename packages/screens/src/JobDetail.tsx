@@ -32,7 +32,9 @@ import { named } from "./run-labels";
 import { useAtFloor } from "@armada/shell";
 import { DetailSheet, holdOf, type HeldAt, type OpenSheet } from "./Sheets";
 import { chaptersOf } from "./chapters";
-import { landingsOf, stepTimelineOf } from "./timeline";
+import { landingsOf, stepTimelineOf, turnsOfAttempt, wroteIn } from "./timeline";
+import type { AttemptRead } from "./timeline";
+import type { StepChapter } from "@armada/components";
 import { againOf, useShowAgain } from "./again";
 import { span } from "./duration";
 import { ordered } from "./facts";
@@ -138,6 +140,12 @@ export function JobDetail({
   // two cannot both be open, and a pair of flags is a state that says they can.
   const [sheet, setSheet] = useState<OpenSheet>(null);
   useEffect(() => setSheet(null), [job.id]);
+
+  // Which run of the step the log sheet is reading, or `null` for the step
+  // whole. **An earlier attempt's `Open the log` means that attempt's log** —
+  // the same control over the step's every turn would be the panel answering a
+  // question about one run with the record of three.
+  const [logAttempt, setLogAttempt] = useState<number | null>(null);
 
   // Where the log's reading was held, and what has arrived since. **The tail is
   // not followed while a sheet is open**: a stream that scrolls itself cannot
@@ -317,18 +325,23 @@ export function JobDetail({
   // the open step. `again.tsx` holds all of it.
   const pressing = useShowAgain(onShowAgain, job.id, whole?.show_again, open?.step_id, frames);
 
-  const rows = hideUnread(
-    watching === null || open === undefined ? [] : entriesOf(watching.rows, open.step_id),
-  ).rows;
+  const turns = watching === null ? [] : watching.rows;
+  // The sheet's turns: one attempt's where it was opened from one, the step's
+  // whole record otherwise.
+  const read = open === undefined || logAttempt === null ? turns : turnsOfAttempt(open, logAttempt, turns);
+  const rows = hideUnread(open === undefined ? [] : entriesOf(read, open.step_id)).rows;
 
   /**
    * Open a sheet. **The second one replaces the first** rather than stacking on
    * it, and opening the log takes the reading's position: from here on the tail
    * is not followed, and what arrives is counted rather than scrolled to.
    */
-  function openSheet(which: Exclude<OpenSheet, null>): void {
+  function openSheet(which: Exclude<OpenSheet, null>, attempt?: number): void {
     setSheet(which);
-    if (which === "log") setHeld(holdOf(now, rows.length));
+    setLogAttempt(attempt ?? null);
+    // Held only where there is a tail to stop following. A run that has ended
+    // does not grow, so the strip would offer a jump to nothing.
+    if (which === "log" && attempt === undefined) setHeld(holdOf(now, rows.length));
   }
 
   /**
@@ -345,59 +358,81 @@ export function JobDetail({
   function closeSheet(): void {
     const was = sheet;
     setSheet(null);
+    setLogAttempt(null);
     setHeld(null);
     if (was === "log" || was === "diff") {
       keys.onFocusChapter(was === "log" ? LOG_CHAPTER : DIFF_CHAPTER);
     }
   }
 
-  const chapters =
-    open === undefined
-      ? []
-      : chaptersOf({
-          job,
-          step: open,
-          // Every step, in the frozen workflow's order, for the Drone brief's
-          // `steps` section. Same nullable read as `criteria` below: a Job
-          // whose detail has not arrived yet has no order to report.
-          steps: whole?.steps ?? [],
-          // The Job's frozen criteria, for the Verdicts chapter. The same list
-          // the phase strip's Judge tier joins against, from the same reading.
-          criteria: whole?.acceptance_criteria ?? [],
-          watching,
-          footprint: recorded.footprint,
-          kept: whole?.footprint,
-          diff: recorded.diff,
-          live: observed.state === "watching",
-          transcript,
-          log: keys.inLog,
-          calls,
-          outputs,
-          frames,
-          again: againOf(
-            onShowAgain === undefined ? undefined : whole?.show_again,
-            open.step_id,
-            frames,
-            pressing,
-          ),
-          sheet,
-          // The Produced chapter opens the step's deliverable, which the phase
-          // strip's Submitted tier was the only route to. Same handler, because
-          // two would be two vocabularies for one failed open — #307.
-          opens: opensRecords,
-          onOpenSheet: openSheet,
-          now,
-          following,
-          // Scoped to the step `stuck` is actually about — a reader may have
-          // navigated to a different step, and `stuck.undecided` is not that
-          // step's reason for anything.
-          undecided: whole?.stuck?.step_id === open.step_id ? whole?.stuck?.undecided : undefined,
-          asking,
-          onRunHere: (checkId) => runHook.open(checkEntryId(checkId)), // Journey 9
-        });
+  /**
+   * The step's story, **built for one of its runs rather than for the step**.
+   * `read` is that run narrowed by `asAttempt`, and every chapter narrows
+   * itself to the attempt it is handed — so the timeline can ask for each.
+   *
+   * A run that is over gets nothing that means *right now*: no live mark, no
+   * Judge's open question, no harness to run again, and no patch.
+   */
+  function storyOf(read: AttemptRead, over: boolean): StepChapter[] {
+    if (open === undefined) return [];
+    const step = read.step;
+    const attempt = step.attempts[0]?.attempt;
+    const ended = over ? wroteIn(read.turns) : undefined;
+    return chaptersOf({
+      job,
+      step,
+      // Every step, in the frozen workflow's order, for the Drone brief's
+      // `steps` section. Same nullable read as `criteria` below: a Job
+      // whose detail has not arrived yet has no order to report.
+      steps: whole?.steps ?? [],
+      // The Job's frozen criteria, for the Verdicts chapter. The same list
+      // the phase strip's Judge tier joins against, from the same reading.
+      criteria: whole?.acceptance_criteria ?? [],
+      watching: watching === null ? watching : { ...watching, rows: read.turns },
+      footprint: recorded.footprint,
+      kept: whole?.footprint,
+      diff: recorded.diff,
+      live: ended === undefined && observed.state === "watching",
+      transcript,
+      log: keys.inLog,
+      calls,
+      outputs,
+      frames,
+      ...(ended !== undefined
+        ? {}
+        : {
+            again: againOf(
+              onShowAgain === undefined ? undefined : whole?.show_again,
+              open.step_id,
+              frames,
+              pressing,
+            ),
+          }),
+      sheet: ended === undefined ? sheet : null,
+      // The Produced chapter opens the step's deliverable, which the phase
+      // strip's Submitted tier was the only route to. Same handler, because
+      // two would be two vocabularies for one failed open — #307.
+      opens: opensRecords,
+      onOpenSheet: openSheet,
+      now,
+      following,
+      // Scoped to the step `stuck` is actually about — a reader may have
+      // navigated to a different step, and `stuck.undecided` is not that
+      // step's reason for anything.
+      undecided:
+        ended === undefined && whole?.stuck?.step_id === open.step_id
+          ? whole?.stuck?.undecided
+          : undefined,
+      asking: ended === undefined ? asking : undefined,
+      onRunHere: (checkId) => runHook.open(checkEntryId(checkId)), // Journey 9
+      ...(attempt === undefined ? {} : { attempt }),
+      ...(ended === undefined ? {} : { ended }),
+    });
+  }
 
-  // The timeline arranges the chapters just built; it derives nothing they hold.
-  const timeline = open && stepTimelineOf(open, watching?.rows ?? [], now, chapters);
+  // The timeline arranges what the story builds, run by run; it derives
+  // nothing either of them holds.
+  const timeline = open && stepTimelineOf(open, turns, now, storyOf);
 
   // The verdict sheet's slot: `Decide`'s place at the gate, and the finished
   // Job's own place, whichever of the three arrangements the render is —
@@ -591,10 +626,11 @@ export function JobDetail({
             whole={whole}
             step={open}
             rows={rows}
+            {...(logAttempt === null ? {} : { ofAttempt: logAttempt })}
             // The turns those rows were folded from, which carry the tool and
             // the timing a row no longer does. The sheet folds runs of one tool
             // the way the chapter does, and this is what it folds them by.
-            turns={watching === null ? [] : watching.rows}
+            turns={read}
             observed={observed}
             diff={recorded.diff}
             calls={calls}
