@@ -85,6 +85,39 @@ pub async fn history(records_root: &str, handle: &str) -> (Vec<TranscriptRow>, u
     (Vec::from(kept), skipped)
 }
 
+/// One Drone's own rows, newest kept, and how many older ones were left out.
+///
+/// **One file, not the Job's.** [`history`] answers a viewer watching a Job and
+/// reads every transcript it has had; this answers a question about one process
+/// and opens only that process's file.
+pub async fn of_one(
+    records_root: &str,
+    handle: &str,
+    drone: &DroneId,
+    most: usize,
+) -> (Vec<TranscriptRow>, u64) {
+    let mut kept: VecDeque<TranscriptRow> = VecDeque::with_capacity(0);
+    let mut older = 0u64;
+    let Ok(file) = fs::File::open(transcript_of(records_root, handle, drone)).await else {
+        return (Vec::new(), 0);
+    };
+    let mut lines = BufReader::new(file).lines();
+    while let Ok(Some(line)) = lines.next_line().await {
+        // A line that will not decode is counted rather than skipped in
+        // silence, for [`history`]'s reason: it was a row.
+        let Ok(row) = ipc::decode::<TranscriptRow>("a transcript row", line.as_bytes()) else {
+            older += 1;
+            continue;
+        };
+        if kept.len() == most {
+            kept.pop_front();
+            older += 1;
+        }
+        kept.push_back(row.for_a_viewer());
+    }
+    (Vec::from(kept), older)
+}
+
 /// One call's arguments, out of the file that kept them.
 ///
 /// **The read a person's gesture pays for.** Opening a row asks about one call,

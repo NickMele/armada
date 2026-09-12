@@ -28,9 +28,10 @@ use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::{Observed, Queries, Refusal, Resolved};
 use core_model::JobReference;
 use ipc::{
-    CallArguments, FleetCapacity, JobDelivery, JobDetail, JobDiff, JobEvidence, JobHistory, JobId,
-    JobList, JobRemarks, JobResources, JobReview, JobSpend, ManifestReading, ManifestSummary,
-    ModelChoices, Work, WorkflowSummary, WorktreesHeld,
+    AlertList, CallArguments, DroneDetail, DroneId, DroneList, FleetCapacity, FleetHealth,
+    FleetUsage, JobDelivery, JobDetail, JobDiff, JobEvidence, JobHistory, JobId, JobList,
+    JobRemarks, JobResources, JobReview, JobSpend, ManifestConfig, ManifestId, ManifestReading,
+    ManifestSummary, ModelChoices, Work, WorkflowSummary, WorktreesHeld,
 };
 use store::{LoadJobError, ResolveJobError};
 
@@ -105,6 +106,53 @@ where
                 })
                 .collect(),
         })
+    }
+
+    /// The Manifest every answer is given inside. **This Fleet's own**, which
+    /// is the whole of the scope today — `#698` is what lets a caller name one.
+    async fn scope(&self) -> Result<ManifestId, Refusal> {
+        Ok(ManifestId::from(self.manifest().id()))
+    }
+
+    /// The four narrowings, each one rule, stated in `crate::attention`.
+    async fn list_job_board(&self) -> Result<JobList, Refusal> {
+        self.job_board().await
+    }
+
+    async fn list_reviews(&self) -> Result<JobList, Refusal> {
+        self.reviews().await
+    }
+
+    async fn get_activity_feed(&self) -> Result<JobList, Refusal> {
+        self.activity_feed().await
+    }
+
+    async fn list_alerts(&self) -> Result<AlertList, Refusal> {
+        self.alerts().await
+    }
+
+    /// The roster, read without taking a working slot — `crate::rostered`.
+    async fn list_drones(&self) -> Result<DroneList, Refusal> {
+        self.drone_list().await
+    }
+
+    async fn get_drone(&self, drone_id: DroneId) -> Result<DroneDetail, Refusal> {
+        self.drone_detail(drone_id).await
+    }
+
+    /// The probes Fleet can run on itself — `crate::probing`.
+    async fn get_health(&self) -> Result<FleetHealth, Refusal> {
+        self.health().await
+    }
+
+    /// The spend, and what the ceilings hold — `crate::spending`.
+    async fn get_usage(&self) -> Result<FleetUsage, Refusal> {
+        self.usage().await
+    }
+
+    /// What this repository declares — `crate::configured`.
+    async fn get_manifest(&self, manifest_id: ManifestId) -> Result<ManifestConfig, Refusal> {
+        self.manifest_config(manifest_id)
     }
 
     /// How full the fleet is, and the one thing holding the next Drone back.

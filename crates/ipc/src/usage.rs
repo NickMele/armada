@@ -6,11 +6,25 @@
 
 use serde::{Deserialize, Serialize};
 
+/// One Job admission will not start another Drone on, and why.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Overspending {
+    /// What a person calls the Job.
+    pub handle: String,
+    /// Which ceiling it met, as `enum-verbs.toml` spells it — `cost` or
+    /// `turns`. A string, for [`EventTally::kind`](crate::EventTally)'s reason.
+    pub ceiling: String,
+    /// What the Job has spent against that ceiling.
+    pub spent: u64,
+    /// The ceiling in force for this Job, resolved across the three tiers.
+    pub allowed: u64,
+}
+
 /// The fleet's spend, summed across every Job it holds.
 ///
-/// **Notional dollars.** `docs/spikes/005-what-does-a-job-cost.md` priced the
-/// figure at list price on an account nothing bills per token — a runaway
-/// detector rather than an invoice.
+/// **No ceiling crosses, only what one did.** A cap resolves across three tiers
+/// per Job — `fleet::Allowance::at` — so a single number here would be a tier
+/// nothing asks about. What is actionable is which Jobs are held, below.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FleetUsage {
     /// Every priced Drone of every Job, added up.
@@ -26,15 +40,7 @@ pub struct FleetUsage {
     pub unpriced: u64,
     /// How many Jobs were summed.
     pub jobs: u64,
-    /// The machine-tier ceiling one Job may spend before admission refuses its
-    /// next Drone. **Per Job, never fleet-wide**: nothing holds a ceiling on
-    /// the total above, and a reader adding one up would invent a gate.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cost_cap_micros_per_job: Option<u64>,
-    /// The other machine-tier ceiling, in turns, refused the same way.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub turn_cap_per_job: Option<u64>,
-    /// The handles of Jobs held out of dispatch by one of the two ceilings.
-    /// Empty is the ordinary answer.
-    pub over_budget: Vec<String>,
+    /// Jobs the ceilings are holding out of dispatch right now, with which
+    /// ceiling each hit. Empty is the ordinary answer.
+    pub over_budget: Vec<Overspending>,
 }

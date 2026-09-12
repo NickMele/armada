@@ -189,7 +189,7 @@ pub use underway::{
     CheckUnderway, ChecksUnderway, OutputClosed, OutputEnded, OutputLines, OutputMessage,
     OutputOpened,
 };
-pub use usage::FleetUsage;
+pub use usage::{FleetUsage, Overspending};
 pub use version::{ProtocolVersion, Skew, PROTOCOL_VERSION};
 pub use waiting::{AskedOption, ChosenAnswer, QuestionInFlight, RedirectInFlight, RedirectWaiting};
 pub use work::{

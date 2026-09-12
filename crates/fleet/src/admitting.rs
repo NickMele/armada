@@ -157,7 +157,7 @@ where
     /// stale rather than waiting for it to. The reading itself is taken on a
     /// blocking thread: it is three processes and about eighty milliseconds,
     /// which is not something to hold a runtime worker for.
-    async fn machine_reading(&self) -> Option<Reading> {
+    pub(crate) async fn machine_reading(&self) -> Option<Reading> {
         let now = self.clock().now();
         let mut polled = self.polled().lock().await;
         if let Some(last) = polled.as_ref() {

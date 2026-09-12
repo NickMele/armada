@@ -25,6 +25,9 @@
 //! `crate::readopting` reopens the same file and writes what nothing observed.
 
 mod backfill;
+
+/// One Drone's own rows, newest kept. See [`backfill::of_one`].
+pub(crate) use backfill::of_one as one_drones_rows;
 /// Renaming what an older Fleet wrote under a ULID.
 mod migrating;
 mod refused;

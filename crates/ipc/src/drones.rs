@@ -3,6 +3,9 @@
 //! **Read off the roster, never off the Jobs.** A Job that escalated keeps its
 //! Drone alive and idle so a redirect costs no respawn, so a list derived from
 //! statuses would omit exactly the Drone somebody is asking about.
+//!
+//! What drifted outside a declaration is not here: it rides on `get_diff`'s
+//! file list, where the whole Job's work is measured rather than one slot's.
 
 use serde::{Deserialize, Serialize};
 
@@ -20,21 +23,24 @@ pub struct DroneSummary {
     /// The step it was put on. **It never moves**: a slot does not outlive a
     /// step boundary, so this is both where it started and where it is.
     pub step_id: StepId,
-    /// The checkout it is writing in.
-    pub worktree: String,
-    /// When the step in this slot began, by Fleet's clock.
-    pub since: Instant,
-    /// Whether Fleet adopted this Drone rather than spawning it. **An adopted
-    /// Drone has no pipe to speak into**, so every act that would say something
-    /// to it is refused — which is a fact about the slot, not about the Job.
-    pub adopted: bool,
+    /// The checkout it is writing in. **Absent where the worktree is gone** —
+    /// a Drone outliving its checkout is a real state and not a blank string.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worktree: Option<String>,
+    /// The process Fleet is holding. **The fact a Doctor probe asked for** —
+    /// which process is working which Job.
+    pub pid: u32,
+    /// When the Drone arrived on the step, off the Job's own log. **Absent
+    /// where the log has no arrival for it**, which a reclaimed record gives.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub since: Option<Instant>,
 }
 
-/// Every Drone Fleet is holding a slot for.
+/// Every Drone Fleet is holding.
 ///
-/// **`occupied` on `get_capacity` is this list's length**, taken from the same
-/// roster under the same lock. Two counts that could disagree is what a second
-/// derivation here would be.
+/// **Read off the process register, never off the slots.** A slot is held for
+/// the length of a Check, so a read that took one would block behind a gate;
+/// what this walks is the pid map, which nothing holds across an await.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DroneList {
     pub drones: Vec<DroneSummary>,
@@ -44,13 +50,14 @@ pub struct DroneList {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DroneDetail {
     pub drone: DroneSummary,
-    /// The paths the Drone said this step's work would be in. **`None` until it
-    /// declares**, which is a different answer from an empty declaration.
+    /// The paths the Drone said this step's work would be in, as the record
+    /// kept them. **`None` until it declares**, which is a different answer
+    /// from an empty declaration.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub declared: Option<Vec<String>>,
-    /// Every file seen changed outside that declaration while the step ran, in
-    /// the order first seen. It fails nothing — the Drone may declare again.
-    pub drifted: Vec<String>,
+    /// When that declaration was taken.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub declared_at: Option<Instant>,
     /// This Drone's own rows, oldest last, narrowed for a viewer. **A window,
     /// not the transcript**: see [`DroneDetail::older`].
     pub turns: Vec<TranscriptRow>,

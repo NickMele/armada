@@ -526,6 +526,12 @@ pub enum Adrift {
     /// naming the other were both permanently unadmittable behind a Board label
     /// that reads as ordinary waiting.
     NoSuchPeer { named: String },
+    /// A request named a Drone no slot of this Fleet is holding.
+    ///
+    /// **The process register is the roster**, so a Drone that has exited is
+    /// not in it — and an empty detail would draw a dead process as a live one
+    /// with nothing to say. What it did is the Job's, through `observe_job`.
+    NoSuchDrone { named: String },
     /// A request named a tool call this Job's transcripts do not carry.
     ///
     /// **The Job is there and the call is not**, which is why it is this rather
