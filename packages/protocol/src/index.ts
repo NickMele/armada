@@ -20,6 +20,7 @@ export * from "./connection";
 export * from "./detail";
 export * from "./events";
 export * from "./explaining";
+export * from "./files";
 export * from "./folding";
 export * from "./footprint";
 export * from "./forge";

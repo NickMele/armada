@@ -18,10 +18,11 @@
 //! means Fleet asked for what the edge table says cannot happen, a bug in Fleet.
 //!
 //! **Three locks — the roster, one Job's slot, the store — taken in that order
-//! and in no other**, with [`crate::slots`] holding the argument. The gate holds
-//! a slot across a Check, but the checked Job's own, so a quarter-hour run holds
-//! up that Job's Drone alone. [`Fleet::merge_end`] is a fourth and sits outside
-//! the order, for the reason its field gives.
+//! and in no other**, with [`crate::slots`] holding the argument. The gate
+//! holds none of them across a Check or a Judge call, so a quarter-hour run
+//! holds up nothing — including the reads a surface makes of that same Job.
+//! [`Fleet::merge_end`] is a fourth and sits outside the order, for the reason
+//! its field gives.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;

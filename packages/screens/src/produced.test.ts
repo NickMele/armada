@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Turn } from "@armada/protocol";
 
-import { wroteSoFar } from "./produced";
+import { noteUnder, wroteSoFar, THE_JOBS_WORK } from "./produced";
 
 function produced(seq: number, paths: string[]): Turn {
   return {
@@ -38,5 +38,19 @@ describe("wroteSoFar", () => {
 
   it("is empty where nothing has been read yet", () => {
     expect(wroteSoFar([said(1)])).toBe("");
+  });
+});
+
+// **The list is the Job's and it is drawn inside one step's row**, so it says
+// so — under it, beside whatever it has to say about drift.
+describe("noteUnder", () => {
+  it("says whose work it is", () => {
+    expect(noteUnder({ files: [], planDeclared: false })).toBe(THE_JOBS_WORK);
+  });
+
+  it("keeps the drift sentence beside it, in that order", () => {
+    const note = noteUnder({ files: [], planDeclared: true, note: "2 of 9 paths are outside." });
+    expect(note.startsWith(THE_JOBS_WORK)).toBe(true);
+    expect(note.endsWith("2 of 9 paths are outside.")).toBe(true);
   });
 });

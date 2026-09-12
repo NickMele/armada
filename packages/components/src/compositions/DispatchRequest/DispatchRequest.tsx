@@ -373,9 +373,11 @@ export function DispatchRequest({
                   value={request}
                   placeholder={PLACEHOLDER}
                   disabled={reading || disabled}
+                  {...mention.fieldAria}
                   onChange={mention.onFieldChange}
                   onKeyDown={mention.onFieldKeyDown}
                   onSelect={mention.onFieldSelect}
+                  onBlur={mention.onFieldBlur}
                   onPaste={onRequestPaste}
                 />
                 {/* The `@` mention popup, directly under the field it opened
@@ -386,6 +388,8 @@ export function DispatchRequest({
                     query={mention.query}
                     results={mention.results}
                     active={mention.active}
+                    listId={mention.listId}
+                    optionId={mention.optionId}
                     onHover={mention.onHover}
                     onChoose={mention.onChoose}
                   />

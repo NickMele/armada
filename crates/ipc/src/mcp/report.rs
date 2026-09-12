@@ -29,6 +29,35 @@ use core::time::Duration;
 
 use crate::enums::CheckOutcome;
 
+/// The tail of one failed Check's own output, carried on its row instead of
+/// left behind a path outside a Drone's worktree.
+///
+/// **Never on a Check that passed.** A pass has nothing to explain, and
+/// carrying a page of output nobody asked to read would spend the one thing a
+/// Drone's context is shorter of than a person's screen: `#737`, where a
+/// Drone spent seven minutes and six permission questions hunting for the log
+/// path a report like this one already named.
+///
+/// **Built from the capture already in memory, never from a file.** A Drone
+/// reading this touches no path outside its worktree, because there is no
+/// path here to touch.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CheckExcerpt {
+    /// The window, oldest line first, both streams marked exactly as the kept
+    /// log file marks them — so a Drone reading this and a person opening the
+    /// log afterwards are reading the same shape.
+    pub lines: Vec<String>,
+    /// How many lines came before this window and are not in it. Zero where
+    /// the whole of the Check's output fit.
+    pub cut_from_top: u32,
+    /// Whether the run's own capture had already cut a stream before this
+    /// window was ever taken. Carried rather than folded into `cut_from_top`:
+    /// this excerpt has no way to know how much a lost tail would have added,
+    /// so the two facts — cut here, and cut before this ever ran — are said
+    /// apart.
+    pub capture_truncated: bool,
+}
+
 /// One Check, as a dry run found it.
 ///
 /// **`detail` and `log` are `Option` because both are legitimately absent**: a
@@ -55,6 +84,9 @@ pub struct CheckRan {
     /// packages it was measured over is holding the answer, and a command cut
     /// short is one nobody can run again.
     pub narrowed_to: Option<String>,
+    /// The tail of what this Check printed, where it did not advance. See
+    /// [`CheckExcerpt`] for why a pass never carries one.
+    pub output: Option<CheckExcerpt>,
 }
 
 /// Every Check the step declares, with what each one did.
@@ -155,6 +187,28 @@ impl fmt::Display for CheckReport {
             // out of alignment with it.
             if let Some(narrowed) = &check.narrowed_to {
                 writeln!(out, "{:width$}  {narrowed}", "")?;
+            }
+            // The excerpt, last of all: it is what a Drone came to this row
+            // for, and it is the one part of a row that can run to a hundred
+            // lines on its own.
+            if let Some(excerpt) = &check.output {
+                if excerpt.cut_from_top > 0 {
+                    writeln!(
+                        out,
+                        "{:width$}  … {} earlier line(s) of this Check's output cut …",
+                        "", excerpt.cut_from_top
+                    )?;
+                }
+                for line in &excerpt.lines {
+                    writeln!(out, "{:width$}  {line}", "")?;
+                }
+                if excerpt.capture_truncated {
+                    writeln!(
+                        out,
+                        "{:width$}  … the run itself printed more than was captured …",
+                        ""
+                    )?;
+                }
             }
         }
         let failed = self.failed();

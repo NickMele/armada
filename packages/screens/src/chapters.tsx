@@ -71,7 +71,7 @@ import { WorkGrouped } from "./grouped";
 import { Log } from "./Log";
 import type { Following, Outputs } from "./outputs";
 import { keptOf, type KeptRead, type Opens } from "./phases";
-import { producedIn } from "./produced";
+import { noteUnder, producedIn } from "./produced";
 import type { OpenSheet } from "./Sheets";
 import { entriesOf, NOTHING_YET_ON_THIS_STEP, hideUnread } from "./story";
 
@@ -405,7 +405,7 @@ export function chaptersOf({
             <ChangedFiles
               files={produced.files}
               emptyNote={nothingTouched(documents.length)}
-              note={produced.note}
+              note={noteUnder(produced)}
             />
           )}
           {documents.length === 0 ? null : <Documents kept={documents} />}

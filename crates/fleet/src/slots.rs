@@ -15,13 +15,13 @@
 //! The roster — this type, behind one mutex — and each Job's own slot, behind
 //! its own. **The roster is always taken first.** It is held briefly to find a
 //! slot, and across an admission, so one dispatch runs at a time; a slot is held
-//! for everything about that one Job, including its gate.
+//! for one thing about one Job at a time, and never across a Check or a Judge
+//! call — `crate::settling` and `crate::turning` say what that cost.
 //!
 //! One lock over the whole set would have been the working slot again under
-//! another name: the gate holds a slot across a Check, so a Job running `cargo
-//! nextest` would have held every other Drone out of `submit_evidence` for the
-//! length of it. The slot a Check holds is the checked Job's, and nothing else
-//! waits on it.
+//! another name: a Job running `cargo nextest` would have held every other
+//! Drone out of `submit_evidence` for the length of it. What waits on a Job's
+//! own slot is that Job's own work, and only for as long as one step of it.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;

@@ -132,12 +132,16 @@ where
     /// A person's answer to the question this Job is holding open.
     ///
     /// **Agree fails the step exactly as it does where a criterion is marked
-    /// `refuse`**: `awaiting_human -> stopped(gate_failure)`, then the Job
-    /// escalates. **Disagree advances it**: `awaiting_human -> advanced`, the
-    /// same edge a person approving a review gate walks, and the Job goes on
-    /// to the next step or completes — [`crate::overruling::override_verdict`]'s
-    /// own tail, walked from the gate that never stopped rather than from one
-    /// a person is lifting.
+    /// `refuse`**, walked through `running`: `awaiting_review -> escalated` is
+    /// `interrupted`'s edge alone, so this takes the same two declared edges
+    /// `reviewing::Fleet::loop_is_spent` already walks off the same gate.
+    /// **Disagree advances it**: `awaiting_human -> advanced`, the edge a
+    /// person approving a review gate walks, and the Job goes on to the next
+    /// step or completes.
+    ///
+    /// **The question clears last, after the move lands** — a move that fails
+    /// leaves it open rather than stranding an answered, stopped step with
+    /// nothing left to retry.
     pub async fn answer_judge(
         &self,
         job_id: &JobId,
@@ -162,6 +166,39 @@ where
                 because: "this job is not holding a judge question open".to_string(),
             })?;
         let step = StepId::new(open.step_id);
+        let job = match answer {
+            JudgeAnswer::Agree => {
+                let trigger = StepLevelTrigger::of(EscalationTrigger::GateFailure)
+                    .expect("gate_failure is a step-level trigger");
+                let job = self.move_job(&job, Target::Running, Actor::Human).await?;
+                let job = self
+                    .move_step_by(&job, &step, StepTarget::Stopped(trigger), Actor::Human)
+                    .await?;
+                self.move_job(
+                    &job,
+                    Target::Escalated(EscalationTrigger::GateFailure),
+                    Actor::Human,
+                )
+                .await?
+            }
+            JudgeAnswer::DisagreeOnce | JudgeAnswer::DisagreeAlways => {
+                let slot = self.slot_for(job_id).await;
+                let mut working = slot.lock().await;
+                let passed = self.declared_step(&job, &step)?.clone();
+                let next = job.workflow().after(&step).cloned();
+                let job = self
+                    .move_step_by(&job, &step, StepTarget::Advanced, Actor::Human)
+                    .await?;
+                match next {
+                    None => {
+                        let told = OutcomeTurn::approved(&passed, None);
+                        self.completed(&job, &told, job_id, &mut working, Actor::Human)
+                            .await?
+                    }
+                    Some(_) => self.move_job(&job, Target::Queued, Actor::Human).await?,
+                }
+            }
+        };
         if answer == JudgeAnswer::DisagreeAlways {
             self.store()
                 .lock()
@@ -178,38 +215,7 @@ where
         if let Some(note) = note.as_deref().filter(|note| !note.trim().is_empty()) {
             self.noted_answer_note(job_id, &step, note);
         }
-        match answer {
-            JudgeAnswer::Agree => {
-                let trigger = StepLevelTrigger::of(EscalationTrigger::GateFailure)
-                    .expect("gate_failure is a step-level trigger");
-                let job = self
-                    .move_step_by(&job, &step, StepTarget::Stopped(trigger), Actor::Human)
-                    .await?;
-                self.move_job(
-                    &job,
-                    Target::Escalated(EscalationTrigger::GateFailure),
-                    Actor::Human,
-                )
-                .await
-            }
-            JudgeAnswer::DisagreeOnce | JudgeAnswer::DisagreeAlways => {
-                let slot = self.slot_for(job_id).await;
-                let mut working = slot.lock().await;
-                let passed = self.declared_step(&job, &step)?.clone();
-                let next = job.workflow().after(&step).cloned();
-                let job = self
-                    .move_step_by(&job, &step, StepTarget::Advanced, Actor::Human)
-                    .await?;
-                match next {
-                    None => {
-                        let told = OutcomeTurn::approved(&passed, None);
-                        self.completed(&job, &told, job_id, &mut working, Actor::Human)
-                            .await
-                    }
-                    Some(_) => self.move_job(&job, Target::Queued, Actor::Human).await,
-                }
-            }
-        }
+        Ok(job)
     }
 
     /// This Job's setting, for `get_job`. `per_criterion` where the store will

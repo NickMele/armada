@@ -407,21 +407,31 @@ where
             ran: rows
                 .into_iter()
                 .enumerate()
-                .map(|(at, row)| CheckRan {
-                    name: row.name,
-                    outcome: row.outcome.into(),
-                    // The failure's own sentence, kept rather than re-derived —
-                    // which lines of a run were the failure is not a question
-                    // anything here answers, and the log path beside it is how
-                    // a Drone finds out.
-                    detail: row.produced,
-                    took: took.get(at).copied().unwrap_or(Duration::ZERO),
-                    log: row.output_path,
-                    // The command that actually ran, where it was not the
-                    // Check's own. A Drone reading a narrowed pass has to be
-                    // able to see what it was narrowed to, or the row claims
-                    // more than the run measured.
-                    narrowed_to: narrowed_to.get(at).cloned().flatten(),
+                .map(|(at, row)| {
+                    // `#737`: a path named on this row and nothing to read it
+                    // with. The tail rides on the row itself now, and only
+                    // where the Check did not advance — a pass has nothing to
+                    // explain.
+                    let output = (!row.outcome.advances())
+                        .then(|| printed.iter().find(|(name, _)| *name == row.name))
+                        .flatten()
+                        .map(|(_, printed)| check_output::excerpt(printed));
+                    CheckRan {
+                        name: row.name,
+                        outcome: row.outcome.into(),
+                        // The failure's own sentence, kept rather than
+                        // re-derived — which lines of a run were the failure
+                        // is not a question anything here answers.
+                        detail: row.produced,
+                        took: took.get(at).copied().unwrap_or(Duration::ZERO),
+                        log: row.output_path,
+                        // The command that actually ran, where it was not the
+                        // Check's own. A Drone reading a narrowed pass has to
+                        // be able to see what it was narrowed to, or the row
+                        // claims more than the run measured.
+                        narrowed_to: narrowed_to.get(at).cloned().flatten(),
+                        output,
+                    }
                 })
                 .collect(),
             narrowed: narrow,

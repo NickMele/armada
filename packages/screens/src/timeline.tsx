@@ -55,6 +55,17 @@ export type TimelineRow = {
   produced?: ChangedFile[];
   /** What the attempt kept beside them, on `working`: deliverables, then frames. */
   kept?: string[];
+  /**
+   * How many things this attempt wrote — its own files, and what it kept
+   * beside them.
+   *
+   * **Off `meta` rather than in it**, because whether it may be said at all
+   * depends on what the row draws. This is the step's own reading, taken at
+   * its boundary; the Produced chapter a row unfolds is the **Job's** whole
+   * work, and a row asserting `3 files` over a list of nine is two answers to
+   * one question. `stepTimelineOf` is where both are known.
+   */
+  wrote?: number;
 };
 
 /** One attempt of a step, with its phases inside it. */
@@ -131,9 +142,10 @@ export function timelineOf(
         phase: "working",
         name: "Working",
         mark: working ? "running" : within.length === 0 ? "not_started" : "advanced",
-        meta: workingSays(readable, span(attempt.started_at, ended ?? now), wrote.length + kept.length),
+        meta: workingSays(readable, span(attempt.started_at, ended ?? now)),
         ...(working ? { live: true } : {}),
         turns: within,
+        ...(wrote.length + kept.length === 0 ? {} : { wrote: wrote.length + kept.length }),
         ...(wrote.length === 0 ? {} : { produced: wrote }),
         ...(kept.length === 0 ? {} : { kept }),
       },
@@ -165,16 +177,24 @@ export const EVERY_STEP_PHASE: readonly string[] = ["Instructed", "Working", "Ch
 const WORKING = new Set(["running", "retrying"]);
 
 /**
- * `14 turns · 6m 01s · 4 files`, dropping what there is nothing to say about.
+ * `14 turns · 6m 01s`, dropping what there is nothing to say about.
  *
  * The turn count is what a reader would count in the log, echoes already out.
+ *
+ * **What the attempt wrote is added by `stepTimelineOf`, or not at all** — see
+ * `TimelineRow.wrote`.
  */
-function workingSays(turns: number, took: string | null, files: number): string {
+function workingSays(turns: number, took: string | null): string {
   return [
     `${turns} ${turns === 1 ? "turn" : "turns"}`,
     ...(took === null ? [] : [took]),
-    ...(files === 0 ? [] : [`${files} ${files === 1 ? "file" : "files"}`]),
   ].join(" · ");
+}
+
+/** `14 turns · 6m 01s · 4 files`, where the count may be said. */
+function alsoWrote(said: string | undefined, wrote: number): string | undefined {
+  if (said === undefined) return `${wrote} ${wrote === 1 ? "file" : "files"}`;
+  return `${said} · ${wrote} ${wrote === 1 ? "file" : "files"}`;
 }
 
 /**
@@ -319,17 +339,29 @@ export function stepTimelineOf(
     name: `Attempt ${attempt.attempt}`,
     ...(saidOf(attempt) === undefined ? {} : { said: saidOf(attempt) }),
     current: attempt.current,
-    rows: attempt.rows.map((row) => ({
-      id: `${attempt.id}-${row.id}`,
-      // Named the way a chapter was, because `[` `]` land on whatever carries
-      // this — and what they land on is a phase of an attempt now.
-      marker: namesChapter(`${attempt.id}-${row.id}`),
-      name: row.name,
-      activity: row.mark,
-      ...(row.meta === undefined ? {} : { meta: row.meta }),
-      ...(row.live === true ? { live: true } : {}),
-      ...bodyOf(row.phase, attempt.current ? held : new Map()),
-    })),
+    rows: attempt.rows.map((row) => {
+      const drawn = bodyOf(row.phase, attempt.current ? held : new Map());
+      // **The count is said only where the row does not draw the list.** What
+      // this attempt wrote is its own boundary reading; the Produced chapter
+      // under it is the Job's whole work, so a row that draws the chapter and
+      // states its own number puts two answers to one question on one line.
+      // A folded row, and every earlier attempt, has no list and the count is
+      // the whole of what it can say.
+      const meta = row.wrote === undefined || drawn.showsWhatItWrote === true
+        ? row.meta
+        : alsoWrote(row.meta, row.wrote);
+      return {
+        id: `${attempt.id}-${row.id}`,
+        // Named the way a chapter was, because `[` `]` land on whatever carries
+        // this — and what they land on is a phase of an attempt now.
+        marker: namesChapter(`${attempt.id}-${row.id}`),
+        name: row.name,
+        activity: row.mark,
+        ...(meta === undefined ? {} : { meta }),
+        ...(row.live === true ? { live: true } : {}),
+        ...drawn.row,
+      };
+    }),
   }));
 }
 
@@ -344,16 +376,23 @@ const CHAPTERS: Record<TimelinePhase, readonly string[]> = {
   judge: ["verdicts"],
 };
 
-/** A row's body and act, from the chapters the phase owns. */
+/**
+ * A row's body and act, from the chapters the phase owns — and whether what it
+ * drew already names the files.
+ *
+ * **The second half is the row's meta talking to the row's body.** Only here
+ * are both known, and `stepTimelineOf` is the one caller.
+ */
 function bodyOf(
   phase: TimelinePhase,
   held: Map<string, StepChapter>,
-): { body?: ReactNode; act?: ReactNode; bounded?: boolean } {
+): { row: { body?: ReactNode; act?: ReactNode; bounded?: boolean }; showsWhatItWrote?: boolean } {
   const mine = CHAPTERS[phase].flatMap((id) => {
     const chapter = held.get(id);
     return chapter === undefined ? [] : [chapter];
   });
-  if (mine.length === 0) return {};
+  if (mine.length === 0) return { row: {} };
+  const showsWhatItWrote = mine.some((chapter) => chapter.id === "produced");
   // **Every act the phase's chapters carry, not the first.** Working owns the
   // log, what was shown and what was produced, and each has somewhere of its
   // own to go — keeping only the first took `Open the diff` off the panel
@@ -369,16 +408,20 @@ function bodyOf(
     </section>
   ));
   return {
-    body: drawn,
-    // **The brief gets a height of its own.** Unfolded whole it is a screen and
-    // a half and pushes every phase below it off the panel. A line clamp was
-    // tried first and does nothing here, for the reason `Clamped.css` states.
-    ...(phase === "instructed" ? { bounded: true } : {}),
-    ...(acts.length === 0
-      ? {}
-      : {
-          act: acts.map((one) => <Fragment key={one.id}>{one.act}</Fragment>),
-        }),
+    row: {
+      body: drawn,
+      // **The brief gets a height of its own.** Unfolded whole it is a screen
+      // and a half and pushes every phase below it off the panel. A line clamp
+      // was tried first and does nothing here, for the reason `Clamped.css`
+      // states.
+      ...(phase === "instructed" ? { bounded: true } : {}),
+      ...(acts.length === 0
+        ? {}
+        : {
+            act: acts.map((one) => <Fragment key={one.id}>{one.act}</Fragment>),
+          }),
+    },
+    ...(showsWhatItWrote ? { showsWhatItWrote } : {}),
   };
 }
 

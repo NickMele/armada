@@ -576,11 +576,7 @@ where
             .branch()
             .map(|branch| branch.as_str().to_string())
             .unwrap_or_else(|| spec.branch());
-        let worktree = Worktree::at(spec.worktree_path(), branch);
-        Ok(match self.manifest().base() {
-            Some(base) => worktree.from_base(base),
-            None => worktree,
-        })
+        Ok(self.based(Worktree::at(spec.worktree_path(), branch)))
     }
 
     /// Why this step stopped, read off the record.

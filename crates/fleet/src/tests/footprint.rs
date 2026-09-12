@@ -35,7 +35,9 @@ use testkit::{FakeHarness, FakeVcs, FakeWorkProduct, Scoped, Sketch};
 use crate::clock::Clock;
 use crate::daemon::Fleet;
 use crate::tests::admitted::dispatched;
-use crate::tests::daemon::{a_proposal, fittings, one, worktree_directory};
+use crate::tests::daemon::{
+    a_fleet_whose_manifest_declares_a_base, a_proposal, fittings, one, worktree_directory,
+};
 use crate::tests::tmp::TempDir;
 use crate::tests::tools::declared_by_the_one;
 
@@ -579,4 +581,47 @@ async fn the_live_event_carries_no_counts() {
         fleet.work().counted().is_empty(),
         "the event was assembled without ever asking what a line cost"
     );
+}
+
+/// **One Job, one base, whichever surface is reading it.**
+///
+/// The live reading is taken on the worktree the slot holds and the patch on
+/// one derived from the Job, and only the second carried the Manifest's base.
+/// Without it `adapters` falls back to the main checkout's HEAD — where a
+/// person happens to be standing — so a Produced chapter and the diff beside
+/// it could be measured from two different commits on one worktree. Worse
+/// inside one Job: every step after the first is cut through `crate::resume`,
+/// which did attach the base, so the reading moved at the first boundary.
+/// `crate::basing`.
+#[tokio::test]
+async fn every_reading_of_the_work_is_measured_from_the_declared_base() {
+    let home = TempDir::new();
+    let fleet = a_fleet_whose_manifest_declares_a_base(
+        &home,
+        FakeWorkProduct::changed(&["src/log.rs"]),
+        FakeVcs::new(),
+        "release",
+    );
+    let job = fleet
+        .propose(a_proposal("make the parser take it"))
+        .await
+        .unwrap();
+    worktree_directory(&home, &job);
+    dispatched(&fleet, job.id()).await.unwrap();
+
+    let slot = fleet.slot_of(job.id()).await.expect("the Job holds a slot");
+    let held = slot.lock().await;
+    let (_, _, live) = held.as_ref().expect("a drone on it").standing();
+    assert_eq!(
+        live.base(),
+        Some("release"),
+        "the worktree the live footprint is read from"
+    );
+
+    let job = fleet.load(job.id()).await.unwrap();
+    let read = fleet
+        .worktree_of(&job)
+        .unwrap()
+        .expect("a worktree on disk to read the patch from");
+    assert_eq!(read.base(), Some("release"), "and the one the patch is");
 }

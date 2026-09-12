@@ -19,6 +19,9 @@
 //! while `store` kept both runs' rows — leaving the first attempt's row
 //! pointing at the second attempt's output, which is worse than pointing at
 //! nothing. A path that is the whole key cannot do that.
+//!
+//! # Over 500 lines: `#737`'s [`excerpt`] shares [`windowed`] with
+//! [`kept_output`] rather than copying its bound into a file of its own.
 
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Write};
@@ -423,29 +426,15 @@ pub fn kept_output(
     let file = std::fs::File::open(Path::new(records_root).join(&path)).ok()?;
     let bytes = file.metadata().map(|at| at.len()).unwrap_or_default();
 
-    // A window over a stream rather than the file in memory: the oldest line
-    // goes as soon as the window is over either bound, so what this holds is
-    // bounded by the two constants above and by nothing a Check printed.
-    let mut window: VecDeque<String> = VecDeque::new();
-    let mut held = 0usize;
-    let mut total = 0u32;
-    let mut first = 1u32;
-    for line in BufReader::new(file).lines() {
-        // A line that will not decode is where the reading stops. Skipping it
-        // would renumber every line after it, and this read's whole claim is
-        // that its numbering is the file's.
-        let Ok(line) = line else { break };
-        total = total.saturating_add(1);
-        held += line.len();
-        window.push_back(line);
-        while window.len() > A_READING || (held > MOST && window.len() > 1) {
-            held -= window
-                .pop_front()
-                .map(|gone| gone.len())
-                .unwrap_or_default();
-            first = first.saturating_add(1);
-        }
-    }
+    // A line that will not decode is where the reading stops. Skipping it
+    // would renumber every line after it, and this read's whole claim is that
+    // its numbering is the file's — `map_while` stops at the first `Err` the
+    // same way the loop this replaced broke on one.
+    let (window, first, total) = windowed(
+        BufReader::new(file).lines().map_while(Result::ok),
+        A_READING,
+        MOST,
+    );
 
     Some(ipc::CheckOutput {
         attempt,
@@ -457,6 +446,69 @@ pub fn kept_output(
         whole: first == 1,
         lines: window.into(),
     })
+}
+
+/// How many lines of a failed Check's own output ride inside the tool call
+/// that ran it, rather than being left behind a path.
+///
+/// **Far smaller than [`A_READING`].** That bound serves a person reading a
+/// panel; this rides inside a message a model reads on every turn it makes,
+/// and read there on every turn is the reason it is the tighter of the two.
+const FOR_A_TOOL_CALL: usize = 100;
+/// The byte bound paired with [`FOR_A_TOOL_CALL`], for [`MOST`]'s reason: one
+/// minified line can be a whole file.
+const FOR_A_TOOL_CALL_BYTES: usize = 8 * 1024;
+
+/// The tail of one Check's own output, bounded for a Drone's own tool call.
+///
+/// **Built from the capture already in memory, and opens no file.** `#737`'s
+/// Drone had a path named on its own report and no way to read it; this is
+/// read before either stream is ever written to disk, so there is nothing
+/// here for a Drone to go looking for outside its worktree.
+pub fn excerpt(output: &Output) -> ipc::mcp::CheckExcerpt {
+    let mut lines = vec![String::from("--- stdout ---")];
+    lines.extend(output.stdout.lines().map(String::from));
+    lines.push(String::from("--- stderr ---"));
+    lines.extend(output.stderr.lines().map(String::from));
+
+    let (window, first, _total) =
+        windowed(lines.into_iter(), FOR_A_TOOL_CALL, FOR_A_TOOL_CALL_BYTES);
+    ipc::mcp::CheckExcerpt {
+        lines: window.into(),
+        cut_from_top: first.saturating_sub(1),
+        capture_truncated: output.truncated,
+    }
+}
+
+/// A window kept over a stream of lines: whichever bound is hit first evicts
+/// the oldest line, so what survives is the tail under both — [`kept_output`]
+/// and [`excerpt`] open through this rather than each keeping its own copy of
+/// the eviction rule.
+///
+/// Returns the window, the file's own number for the window's first line
+/// (counted from one), and how many lines the stream held in total.
+fn windowed(
+    lines: impl Iterator<Item = String>,
+    most_lines: usize,
+    most_bytes: usize,
+) -> (VecDeque<String>, u32, u32) {
+    let mut window: VecDeque<String> = VecDeque::new();
+    let mut held = 0usize;
+    let mut total = 0u32;
+    let mut first = 1u32;
+    for line in lines {
+        total = total.saturating_add(1);
+        held += line.len();
+        window.push_back(line);
+        while window.len() > most_lines || (held > most_bytes && window.len() > 1) {
+            held -= window
+                .pop_front()
+                .map(|gone| gone.len())
+                .unwrap_or_default();
+            first = first.saturating_add(1);
+        }
+    }
+    (window, first, total)
 }
 
 /// Which recorded run of which Check kept a file under this name, and where.

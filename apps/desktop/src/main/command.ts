@@ -16,7 +16,7 @@
 
 import type { CommandExplainedRead } from "../shared/api";
 import type { BridgeState } from "../shared/bridge";
-import type { ClearOutcome, Draft, Outcome, ReclaimOutcome, StagedAttachment } from "@armada/protocol";
+import type { ClearOutcome, Draft, FilesFound, Outcome, ReclaimOutcome, StagedAttachment } from "@armada/protocol";
 import type { CapRaise, ChosenAnswer, FileReport, JobSummary, Overruled, ProposeJob, Redirection, Redispatched, Report, RestartRequested, TurnRaise } from "@armada/protocol";
 import type {
   AnswerCommand,
@@ -319,7 +319,7 @@ export class JobCommands {
     const port = this.board.port();
     if (port === null) return [];
     const answer = await ask(port, "GET", `/manifest/files?q=${encodeURIComponent(query)}`);
-    return answer.ok === true ? (answer.body as { paths: string[] }).paths : [];
+    return answer.ok === true ? (answer.body as FilesFound).paths : [];
   }
 
   // ------------------------------------------------------------ dispatching

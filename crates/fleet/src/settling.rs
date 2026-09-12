@@ -39,8 +39,8 @@ use crate::evidence::{Decline, Standing};
 use crate::gate::{rule_on, Ruling};
 use crate::keeping::Keeping;
 use crate::policy::HeldBecause;
+use crate::slots::Slot;
 use crate::turning::{Turned, Worked};
-use crate::working::Working;
 
 /// The `msg` [`Fleet::noted_undecided`] writes. `crate::stuck` reads a Job's
 /// log back for exactly this line, so the two carry one string rather than two
@@ -85,27 +85,45 @@ where
     W::Error: std::error::Error + Send + Sync + 'static,
 {
     /// Run the gate over one waiting submission, and do what it says.
-    pub(crate) async fn settle(&self, working: &mut Option<Working>) -> Result<Settled, Adrift> {
-        // A slot the turn walked to and found empty. The Drone has gone and
-        // whatever it left is `stranded_submissions`'s to answer, outside every
-        // slot — there is no Job here to read one against.
-        let Some(at_work) = working.as_ref() else {
-            return Ok(Settled::default());
-        };
-        let (job_id, step, worktree) = at_work.standing();
-        // The whole of an ordinary turn ends here: nothing of this Job's
-        // landed, so nothing is taken, nothing is declined and nothing is
-        // written down. Read rather than popped, and read under the slot lock
-        // every submission is accepted under, so the take below cannot come up
-        // empty.
-        if self.evidence_waiting_for(&job_id) == 0 {
-            return Ok(Settled::default());
-        }
-        // **Below every guard that could decline without ruling.** From here
-        // down a decline drops the submission, and each of the two says why
-        // dropping is the right answer to its own case.
-        let Some(landed) = self.take_evidence(&job_id) else {
-            return Ok(Settled::default());
+    ///
+    /// **The slot is taken three times and never held across the gate.** What
+    /// the gate needs off it is read in the first and carried by value; the
+    /// Checks and the Judge then run holding nothing, because `get_job` and
+    /// `list_jobs` read this same slot and a gate that held it published
+    /// `job.checking` a surface could not answer. It is taken again to write
+    /// the run into the Drone's transcript, and a third time for `act_on`.
+    pub(crate) async fn settle(&self, slot: &Slot) -> Result<Settled, Adrift> {
+        let (job_id, step, worktree, declared, entered_with, landed) = {
+            let working = slot.lock().await;
+            // A slot the turn walked to and found empty. The Drone has gone and
+            // whatever it left is `stranded_submissions`'s to answer, outside
+            // every slot — there is no Job here to read one against.
+            let Some(at_work) = working.as_ref() else {
+                return Ok(Settled::default());
+            };
+            let (job_id, step, worktree) = at_work.standing();
+            // The whole of an ordinary turn ends here: nothing of this Job's
+            // landed, so nothing is taken, nothing is declined and nothing is
+            // written down. Read rather than popped, and read under the slot
+            // lock every submission is accepted under, so the take below cannot
+            // come up empty.
+            if self.evidence_waiting_for(&job_id) == 0 {
+                return Ok(Settled::default());
+            }
+            // **Below every guard that could decline without ruling.** From
+            // here down a decline drops the submission, and each of the two
+            // says why dropping is the right answer to its own case.
+            let Some(landed) = self.take_evidence(&job_id) else {
+                return Ok(Settled::default());
+            };
+            (
+                job_id,
+                step,
+                worktree,
+                at_work.declared().cloned(),
+                at_work.entered_with().cloned(),
+                landed,
+            )
         };
         // A submission from the idle Drone of a Job that is no longer being
         // worked. The gate ruled on this step already, and it is dropped rather
@@ -153,7 +171,6 @@ where
                 job: job_id.clone(),
                 cause,
             })?;
-        let declared = at_work.declared().cloned();
         // Read before the gate rather than inside it: `rule_on` reaches no
         // database, and a baseline is a row like any other.
         let recorded = self
@@ -162,7 +179,6 @@ where
             .await
             .step_evidence(&job_id)
             .map_err(Adrift::Reading)?;
-        let entered_with = at_work.entered_with().cloned();
         // **Which run of the step this is**, read off the step's own log and
         // never off a counter here. It decides two things and they must be the
         // same number: whether a failed Check has budget left to be handed back
@@ -273,7 +289,12 @@ where
         // record. The reading of the worktree goes beside them: it is the only
         // per-step one there is, and `JobFootprint` is the Job's whole work at
         // the instant it stopped.
-        if let Some(at_work) = working.as_ref() {
+        // **Taken again, and the Job is checked.** The gate ran holding
+        // nothing, so what is in the slot now is what a person's act left
+        // there — a stand-down clears it, and a row told to another Job's
+        // Drone would be a run in somebody else's transcript.
+        let working = slot.lock().await;
+        if let Some(at_work) = working.as_ref().filter(|held| held.is(&job_id)) {
             for run in ruling.checks() {
                 at_work.told(
                     ipc::Voice::Fleet,
@@ -304,8 +325,12 @@ where
         // stop. `gate_undecided` says the gate could not decide; only this says
         // what about.
         self.noted_undecided(&job_id, &step, &ruling);
+        drop(working);
         let holds_for_review = matches!(ruling, Ruling::HeldForReview { .. });
-        self.act_on(&ruling, &job_id, &step, working).await?;
+        // The third take. `act_on` is what moves the step and may clear the
+        // slot, so it needs the slot itself rather than a reading of it.
+        self.act_on(&ruling, &job_id, &step, &mut *slot.lock().await)
+            .await?;
         // **After `act_on`, and reloaded**, on the step this ruling holds for
         // a person. The delivering step composes its own review at entry —
         // `crate::delivery::opened_for_review` — and is skipped here; every
