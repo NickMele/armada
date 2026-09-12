@@ -132,6 +132,7 @@ fn verify_foundations() -> ExitCode {
         rules_stylesheets::every_stylesheet_reaches_the_sheet_the_app_loads(&root),
         rules_tests::every_test_file_is_declared(&root),
         rules_protocol::the_router_serves_what_the_inventory_names(&root),
+        rules_protocol::unserved::every_operation_the_inventory_names_is_served(&root),
         rules_protocol::version::the_version_and_its_generated_constant_agree(&root),
         rules_errors::one_code_names_one_failure(&root),
         rules_enums::every_registry_key_is_a_variant(&root),

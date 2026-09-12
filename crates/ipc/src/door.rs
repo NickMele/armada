@@ -502,8 +502,8 @@ fn said_as(text: &str, is_error: bool) -> Value {
 
 /// Standard base64, for the one answer that is bytes.
 ///
-/// **Twenty lines rather than a dependency.** `crates/CLAUDE.md` keeps this
-/// crate to two, and an encoder has one shape and a test beneath it.
+/// **Twenty lines rather than a dependency.** This crate is held to two, and
+/// an encoder has one shape with a test beneath it.
 fn base64(bytes: &[u8]) -> String {
     const ALPHABET: &[u8; 64] =
         b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

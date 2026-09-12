@@ -20,22 +20,27 @@ pub struct Probe {
     pub detail: String,
 }
 
-/// Every probe Fleet ran, and every module it could not run one for.
+/// Every probe Fleet ran, and everything it could not run one for.
 ///
 /// **`not_probed` is the honest half.** A report of four passing rows with no
-/// mention of the six nobody asked reads as a healthy machine.
+/// mention of the modules nobody asked reads as a healthy machine.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FleetHealth {
     pub probes: Vec<Probe>,
-    /// Doctor modules this answer says nothing about, with why beside each.
+    /// What this answer says nothing about, with why beside each.
     pub not_probed: Vec<Unprobed>,
 }
 
-/// A Doctor module Fleet cannot answer for.
+/// A set of Doctor probes Fleet cannot run.
+///
+/// **Grouped by who owns them, not listed by name.** The modules are named in
+/// `docs/concepts/doctor.md`, and the crate boundary that keeps a vendor's
+/// spellings inside `adapters` is the reason they are not restated here.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Unprobed {
-    pub module: String,
-    /// Which crate owns the probe, or what is missing. Read by a person, not
-    /// matched on.
+    /// Which crate or surface owns the probes.
+    pub owner: String,
+    /// Why Fleet cannot run them, and where their list is. Read by a person,
+    /// never matched on.
     pub because: String,
 }

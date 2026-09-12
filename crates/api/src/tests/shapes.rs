@@ -658,8 +658,8 @@ pub fn drone_detail() -> DroneDetail {
     }
 }
 
-/// Four probes and the modules Fleet cannot answer for, which is the half of
-/// this answer a surface must not drop.
+/// One probe and the half of the answer a surface must not drop: what nobody
+/// asked.
 pub fn health() -> FleetHealth {
     FleetHealth {
         probes: vec![Probe {
@@ -668,8 +668,8 @@ pub fn health() -> FleetHealth {
             detail: "answering".to_string(),
         }],
         not_probed: vec![Unprobed {
-            module: "Docker".to_string(),
-            because: "probed from `adapters`".to_string(),
+            owner: "adapters".to_string(),
+            because: "it owns talking to anything outside Armada".to_string(),
         }],
     }
 }

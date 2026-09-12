@@ -24,23 +24,29 @@ fn probe(module: &str, outcome: &str, detail: String) -> Probe {
     }
 }
 
-/// The modules Fleet holds no probe for, each saying who does.
+/// The probes Fleet holds none of, grouped by who owns them.
+///
+/// **Named by owner rather than one by one.** Which modules those are is
+/// `docs/concepts/doctor.md`'s, and spelling them here would put a vendor's
+/// name in a crate that is not `adapters`.
 fn elsewhere() -> Vec<Unprobed> {
     [
-        ("Docker", "probed from `adapters`, which owns talking to it"),
-        ("Keychain", "probed from `adapters`"),
-        ("Claude", "probed from `adapters`"),
-        ("Git", "probed from `adapters`"),
-        ("Kit", "probed from `config`, and nothing in this workspace parses a `kit.yml`"),
-        ("Machine", "probed from `config`"),
         (
-            "Armada API",
-            "not a probe at all — it is Bridge's own connection state",
+            "adapters",
+            "it owns talking to anything outside Armada, and Doctor's four probes of those              live there. `docs/concepts/doctor.md` names them; none is built",
+        ),
+        (
+            "config",
+            "it reads and validates its own files, and Doctor's two probes of those live              there. Neither is built, and nothing in this workspace parses a Kit at all",
+        ),
+        (
+            "Bridge",
+            "the Armada API row is not a probe: it is a client's own connection state, and              only the client holding it can answer",
         ),
     ]
     .into_iter()
-    .map(|(module, because)| Unprobed {
-        module: module.to_string(),
+    .map(|(owner, because)| Unprobed {
+        owner: owner.to_string(),
         because: because.to_string(),
     })
     .collect()

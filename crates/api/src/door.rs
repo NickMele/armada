@@ -199,8 +199,12 @@ impl<D: Queries> Doorway<D> {
         let Ok(request) = request else {
             return unanswerable(call, "that call did not make a request");
         };
-        let Ok(response) = self.surface.clone().oneshot(request).await else {
-            return unanswerable(call, "the surface did not answer");
+        // Infallible: the surface's error type is `Infallible`, so a failure
+        // here is a request that was never made rather than a route that
+        // refused — and a refusal comes back as a status like any other.
+        let response = match self.surface.clone().oneshot(request).await {
+            Ok(response) => response,
+            Err(_) => return unanswerable(call, "the surface did not answer"),
         };
         let status = response.status().as_u16();
         let media_type = response
