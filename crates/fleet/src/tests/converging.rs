@@ -58,7 +58,7 @@ fn on_calls(calls: u32) -> StepNorms {
 }
 
 /// One step, gated on nothing, so nothing but the chain can move it.
-fn one_step(scope: Option<Scoped<'static>>) -> ResolvedWorkflow {
+pub(super) fn one_step(scope: Option<Scoped<'static>>) -> ResolvedWorkflow {
     testkit::resolved(&[Sketch {
         id: "implement",
         label: "Implement",
@@ -131,7 +131,7 @@ fn alive(pid: u32) -> bool {
 /// entirely, and not one `no_report` is a finding about. That is
 /// [`a_drone_still_inside_a_call`], and the case below it carries what telling
 /// them apart cost. `testkit::REPLAYED` reads the echo back.
-fn a_drone_that_will_not_answer(calls: u32) -> FakeHarness {
+pub(super) fn a_drone_that_will_not_answer(calls: u32) -> FakeHarness {
     FakeHarness::running(
         "/bin/sh",
         &[
@@ -186,7 +186,7 @@ fn ended() -> DroneEvent {
 
 /// A Fleet whose one step is watched by these norms and looked at by this
 /// Judge, with that Drone on it.
-fn a_watched_fleet(
+pub(super) fn a_watched_fleet(
     home: &TempDir,
     harness: FakeHarness,
     judge: Arc<FakeJudge>,
