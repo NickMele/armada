@@ -102,6 +102,9 @@ pub struct FakeVcs {
     /// inferred: a fake that guessed whether a worktree it never created has
     /// anything in it would be asserting against its own guess.
     commits: Mutex<Willing>,
+    /// Commits already on the branch that the base has not got. Zero unless a
+    /// test says otherwise — see [`FakeVcs::with_commits_on_the_branch`].
+    ahead: Mutex<usize>,
     /// What delivery answers. Scripted for the same reason: there is no
     /// repository here to be behind anything, and no remote to push to.
     delivery: Mutex<Delivering>,
@@ -547,6 +550,10 @@ impl Delivery for FakeVcs {
 
     fn standing(&self, _worktree: &Worktree, _base: &Base) -> Result<Standing, NotDelivered> {
         Ok(self.delivery.lock().expect("not poisoned").standing)
+    }
+
+    fn ahead(&self, _worktree: &Worktree, _base: &Base) -> Result<usize, NotDelivered> {
+        Ok(*self.ahead.lock().expect("not poisoned"))
     }
 
     fn base_on_the_remote(
