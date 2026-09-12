@@ -128,7 +128,7 @@ export function escalatedGateFailure(): JobFixture {
       "Regression check",
     ),
     called("regression_verify", "2026-09-10T14:23:02Z", "call_nextest_1", "Bash", "cargo nextest run --workspace"),
-    checked("regression_verify", "2026-09-10T14:24:40Z", nextestFailed(1)),
+    checked("regression_verify", "2026-09-10T14:24:39Z", nextestFailed(1)),
     handedBack(
       "regression_verify",
       "2026-09-10T14:24:42Z",
@@ -136,7 +136,7 @@ export function escalatedGateFailure(): JobFixture {
     ),
     said("regression_verify", "2026-09-10T14:24:45Z", "Attempt 2: adjusting the memo key."),
     called("regression_verify", "2026-09-10T14:25:10Z", "call_nextest_2", "Bash", "cargo nextest run --workspace"),
-    checked("regression_verify", "2026-09-10T14:26:55Z", nextestFailed(2)),
+    checked("regression_verify", "2026-09-10T14:26:54Z", nextestFailed(2)),
     handedBack(
       "regression_verify",
       "2026-09-10T14:26:57Z",
@@ -144,7 +144,7 @@ export function escalatedGateFailure(): JobFixture {
     ),
     said("regression_verify", "2026-09-10T14:27:00Z", "Attempt 3: the same failure again."),
     called("regression_verify", "2026-09-10T14:27:30Z", "call_nextest_3", "Bash", "cargo nextest run --workspace"),
-    checked("regression_verify", "2026-09-10T14:29:04Z", nextestFailed(3)),
+    checked("regression_verify", "2026-09-10T14:29:03Z", nextestFailed(3)),
   ];
 
   return {

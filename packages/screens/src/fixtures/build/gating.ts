@@ -100,7 +100,7 @@ export function retryingCheckFailure(): JobFixture {
   const rows = [
     instructed("regression_verify", "2026-09-10T14:22:18Z", 4, "cargo nextest run --workspace exits 0", "Regression check"),
     called("regression_verify", "2026-09-10T14:23:02Z", "call_nextest_1", "Bash", "cargo nextest run --workspace"),
-    checked("regression_verify", "2026-09-10T14:24:40Z", nextestFailed(1)),
+    checked("regression_verify", "2026-09-10T14:24:39Z", nextestFailed(1)),
     handedBack(
       "regression_verify",
       "2026-09-10T14:24:42Z",
