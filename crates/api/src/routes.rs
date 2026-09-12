@@ -45,7 +45,9 @@ use crate::queries::{
     list_worktrees, search_files,
 };
 use crate::rehearsing::{
-    get_run_output, get_run_sheet, list_runs, observe_run, start_run, stop_run, undo_run,
+    get_checkout_run_output, get_checkout_run_sheet, get_run_output, get_run_sheet,
+    list_checkout_runs, list_runs, observe_checkout_run, observe_run, start_checkout_run,
+    start_run, stop_checkout_run, stop_run, undo_checkout_run, undo_run,
 };
 use crate::served::Served;
 use crate::servers::{list_servers, observe_server, start_server, stop_server};
@@ -362,6 +364,38 @@ pub const SERVED: &[Route] = &[
         method: "POST",
         path: "/jobs/:job_id/undo_run",
     },
+    // The same sheet for the main checkout, under `/manifest` beside
+    // `get_manifest_reading` and for its reason: no Job is involved at all.
+    Route {
+        operation: "get_checkout_run_sheet",
+        method: "GET",
+        path: "/manifest/run_sheet",
+    },
+    Route {
+        operation: "list_checkout_runs",
+        method: "GET",
+        path: "/manifest/runs",
+    },
+    Route {
+        operation: "get_checkout_run_output",
+        method: "GET",
+        path: "/manifest/runs/:run_id/output",
+    },
+    Route {
+        operation: "start_checkout_run",
+        method: "POST",
+        path: "/manifest/start_run",
+    },
+    Route {
+        operation: "stop_checkout_run",
+        method: "POST",
+        path: "/manifest/stop_run",
+    },
+    Route {
+        operation: "undo_checkout_run",
+        method: "POST",
+        path: "/manifest/undo_run",
+    },
     // Servers: a Command that stays running. Not under `/jobs` because one
     // started with no Job belongs to none; the start and stop are segments of
     // the collection, `stop_proposal`'s shape, since an instance's id is all a
@@ -531,6 +565,12 @@ pub const SERVED: &[Route] = &[
         operation: "observe_run",
         method: "GET",
         path: "/jobs/:job_id/runs/:run_id/observe",
+    },
+    // One checkout run's output — `observe_run`'s socket, one owner over.
+    Route {
+        operation: "observe_checkout_run",
+        method: "GET",
+        path: "/manifest/runs/:run_id/observe",
     },
     // One server's output, as it prints — `observe_run`'s shape per instance.
     Route {
@@ -791,6 +831,19 @@ fn surface<D: Daemon>(served: Served<D>) -> Router {
         .route("/jobs/:job_id/start_run", post(start_run::<D>))
         .route("/jobs/:job_id/stop_run", post(stop_run::<D>))
         .route("/jobs/:job_id/undo_run", post(undo_run::<D>))
+        .route("/manifest/run_sheet", get(get_checkout_run_sheet::<D>))
+        .route("/manifest/runs", get(list_checkout_runs::<D>))
+        .route(
+            "/manifest/runs/:run_id/output",
+            get(get_checkout_run_output::<D>),
+        )
+        .route(
+            "/manifest/runs/:run_id/observe",
+            get(observe_checkout_run::<D>),
+        )
+        .route("/manifest/start_run", post(start_checkout_run::<D>))
+        .route("/manifest/stop_run", post(stop_checkout_run::<D>))
+        .route("/manifest/undo_run", post(undo_checkout_run::<D>))
         .route("/servers", get(list_servers::<D>))
         .route("/servers/start", post(start_server::<D>))
         .route("/servers/stop", post(stop_server::<D>))

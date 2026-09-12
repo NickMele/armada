@@ -15,8 +15,8 @@
 
 use axum::extract::ws::{Message, WebSocket};
 use ipc::{
-    JobId, Missed, OutputClosed, OutputEnded, OutputLines, RunMessage, RunOpened, ServerMessage,
-    ServerOpened, PROTOCOL_VERSION,
+    CheckoutRunMessage, CheckoutRunOpened, JobId, Missed, OutputClosed, OutputEnded, OutputLines,
+    RunMessage, RunOpened, ServerMessage, ServerOpened, PROTOCOL_VERSION,
 };
 use serde::Serialize;
 use tokio::sync::broadcast;
@@ -123,6 +123,21 @@ pub struct ObservedRun {
     pub unreadable: bool,
 }
 
+/// [`ObservedRun`]'s shape for a run in the main checkout. **There is no
+/// `job_id` at all**: this run belongs to the checkout and not to a Job that
+/// happens to be absent.
+pub struct ObservedCheckoutRun {
+    pub id: String,
+    pub name: String,
+    pub path: String,
+    /// `None` where the run has ended. The history is then all of it.
+    pub live: Option<RunWatch>,
+    pub history: Vec<String>,
+    pub skipped: u64,
+    pub read_to: u64,
+    pub unreadable: bool,
+}
+
 /// [`ObservedRun`]'s shape for a server. `job_id` is absent on a server
 /// started with no Job, which is the one field that differs.
 pub struct ObservedServer {
@@ -158,6 +173,18 @@ impl Spoken for RunMessage {
     }
 }
 
+impl Spoken for CheckoutRunMessage {
+    fn lines(lines: Vec<String>) -> Self {
+        CheckoutRunMessage::Lines(OutputLines { lines })
+    }
+    fn missed(dropped: u64) -> Self {
+        CheckoutRunMessage::Missed(Missed { dropped })
+    }
+    fn closed(because: OutputEnded) -> Self {
+        CheckoutRunMessage::Closed(OutputClosed { because })
+    }
+}
+
 impl Spoken for ServerMessage {
     fn lines(lines: Vec<String>) -> Self {
         ServerMessage::Lines(OutputLines { lines })
@@ -176,6 +203,25 @@ pub(crate) async fn relay(socket: WebSocket, observed: ObservedRun) {
     let opened = RunMessage::Opened(RunOpened {
         protocol_version: PROTOCOL_VERSION,
         job_id: observed.job_id,
+        id: observed.id,
+        name: observed.name,
+        path: observed.path,
+        live: observed.live.is_some(),
+        skipped: observed.skipped,
+    });
+    let tail = Tail {
+        live: observed.live,
+        history: observed.history,
+        read_to: observed.read_to,
+        unreadable: observed.unreadable,
+    };
+    relayed(socket, opened, tail).await;
+}
+
+/// Serve one viewer of a run in the main checkout, [`relay`]'s way.
+pub(crate) async fn relay_checkout(socket: WebSocket, observed: ObservedCheckoutRun) {
+    let opened = CheckoutRunMessage::Opened(CheckoutRunOpened {
+        protocol_version: PROTOCOL_VERSION,
         id: observed.id,
         name: observed.name,
         path: observed.path,

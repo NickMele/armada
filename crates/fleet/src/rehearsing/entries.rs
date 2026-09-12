@@ -6,7 +6,7 @@ use checks_runner::Narrowed;
 use config::Manifest;
 use core_model::{Job, Narrowing, Prerequisite, ResolvedCheck};
 
-use super::Unrehearsable;
+use super::{Unrehearsable, Whose};
 
 /// One Check or Command, resolved: everything a run of it needs.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -170,13 +170,14 @@ fn command(name: &str, run: &str, destructive: bool, frozen: bool) -> Entry {
 
 impl Listed {
     /// The entry a run names, or the refusal that lists what there is.
-    pub(crate) fn named(&self, name: &str) -> Result<Entry, Unrehearsable> {
+    pub(crate) fn named(&self, name: &str, whose: Whose) -> Result<Entry, Unrehearsable> {
         self.every()
             .find(|entry| entry.name == name)
             .cloned()
             .ok_or_else(|| Unrehearsable::NotDeclared {
                 name: name.to_string(),
                 declared: self.every().map(|entry| entry.name.clone()).collect(),
+                whose,
             })
     }
 

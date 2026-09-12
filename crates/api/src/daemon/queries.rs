@@ -17,11 +17,11 @@ use crate::daemon::Refusal;
 use crate::observing::Observed;
 use crate::reference::Resolved;
 use ipc::{
-    AlertList, CallArguments, CheckOutput, CommandExplained, DroneDetail, DroneId, DroneList,
-    FilesFound, FleetCapacity, FleetHealth, FleetUsage, JobDetail, JobDiff, JobEvidence,
-    JobHistory, JobId, JobList, JobRemarks, JobResources, KeptFrame, ManifestConfig, ManifestDrift,
-    ManifestId, ManifestReading, ManifestSummary, ModelChoices, ReportList, RunList, RunOutput,
-    RunSheet, WorkflowSummary, WorktreesHeld,
+    AlertList, CallArguments, CheckOutput, CheckoutRunList, CheckoutRunSheet, CommandExplained,
+    DroneDetail, DroneId, DroneList, FilesFound, FleetCapacity, FleetHealth, FleetUsage, JobDetail,
+    JobDiff, JobEvidence, JobHistory, JobId, JobList, JobRemarks, JobResources, KeptFrame,
+    ManifestConfig, ManifestDrift, ManifestId, ManifestReading, ManifestSummary, ModelChoices,
+    ReportList, RunList, RunOutput, RunSheet, WorkflowSummary, WorktreesHeld,
 };
 
 /// What a caller asked for of a frame's bytes.
@@ -574,6 +574,36 @@ pub trait Queries: Send + Sync + 'static {
         job_id: JobId,
         run_id: String,
     ) -> impl Future<Output = Result<crate::ObservedRun, Refusal>> + Send;
+
+    /// `get_checkout_run_sheet` — what a person can run in the main checkout:
+    /// its Setup, its Checks and its Commands, off the Manifest Fleet holds.
+    ///
+    /// **It needs no Job and never refuses.** This is the file Fleet is
+    /// already running on, so the sheet answers against an empty store — which
+    /// is the whole of what Journey 9's *Running one* asks for.
+    fn get_checkout_run_sheet(
+        &self,
+    ) -> impl Future<Output = Result<CheckoutRunSheet, Refusal>> + Send;
+
+    /// `list_checkout_runs` — the main checkout's earlier runs, newest first,
+    /// with the records that would not read answered beside them.
+    fn list_checkout_runs(&self) -> impl Future<Output = Result<CheckoutRunList, Refusal>> + Send;
+
+    /// `get_checkout_run_output` — one checkout run's log, as a window that
+    /// says it is one. [`Queries::get_run_output`]'s shape and its allowlist:
+    /// `run_id` is resolved against the checkout's own runs before a file is
+    /// opened. [`Refusal::Unacceptable`] where it names none.
+    fn get_checkout_run_output(
+        &self,
+        run_id: String,
+    ) -> impl Future<Output = Result<RunOutput, Refusal>> + Send;
+
+    /// `observe_checkout_run` — one checkout run's output on a socket of its
+    /// own, for [`Queries::observe_run`]'s reasons.
+    fn observe_checkout_run(
+        &self,
+        run_id: String,
+    ) -> impl Future<Output = Result<crate::ObservedCheckoutRun, Refusal>> + Send;
 
     /// `list_servers` — every server Fleet holds, a Job's and the main
     /// checkout's, and the last instance of each that ended.

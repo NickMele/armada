@@ -1,24 +1,23 @@
-//! A person's run of one Manifest entry in a Job's worktree — Journey 9,
+//! A person's run of one Manifest entry — Journey 9, *Running one* and
 //! *Running one inside a Job* — and what it leaves behind.
 //!
 //! **A rehearsal, never a verdict.** Nothing here writes Evidence or a
-//! `job_step_checks` row, and nothing moves the Job: the run's own directory
+//! `job_step_checks` row, and nothing moves a Job: the run's own directory
 //! under `.armada/runs` is its only record ([`records`]).
 //!
-//! **Off the turn loop**, for `crate::showing_again`'s reason: the run is a task
-//! of its own on the `Arc` the listener holds, no slot lock is taken, and one
-//! run at a time per Job is [`Rehearsals`]'s to keep.
+//! **Off the turn loop**, for `crate::showing_again`'s reason: the run is a
+//! task of its own, and one run at a time per owner is [`Rehearsals`]'s.
 //!
-//! | Module | Holds |
-//! |---|---|
-//! | [`entries`] | What the sheet lists, from what the Job froze |
-//! | [`records`] | A run's directory: its log, its record, their retention |
-//! | [`running`] | The run: snapshot, prerequisites, output, the end |
-//! | [`in_flight`] | Which Job has a run out, and how to stop it |
-//! | [`unrehearsable`] | Every refusal, and its code on the wire |
+//! **Keyed on an owner — a Job, or the main checkout.** Below the entrances
+//! everything takes a [`Place`](owner::Place) and never a `JobId`: a run is a
+//! command in a tree. What the owners do not share is at the edges — the
+//! entrances here and in [`checkout`], and the shapes [`record`] projects.
 
+mod checkout;
 mod entries;
 mod in_flight;
+mod owner;
+mod record;
 /// `pub(crate)` because a server's log is a run's log one directory over, read
 /// and followed the same way — `crate::servers`.
 pub(crate) mod records;
@@ -29,10 +28,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct, Worktree, WorktreeSpec};
+use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use api::Refusal;
 use checks_runner::Narrowed;
-use core_model::{Job, JobId, JobStatus, Timestamp};
+use core_model::{JobId, JobStatus, Timestamp};
 use ipc::WireError;
 use tokio::sync::watch;
 
@@ -40,16 +39,25 @@ use crate::daemon::Fleet;
 use entries::Entry;
 use in_flight::Held;
 pub(crate) use in_flight::Rehearsals;
-pub use unrehearsable::Unrehearsable;
+use owner::{Owner, Place, Tree};
+use record::{Record, Underway};
+pub use unrehearsable::{Unrehearsable, Whose};
 
-/// How long `stop_run` waits for a stopped run's record. The group is ended
-/// with `SIGKILL`, so what is left is one tree read and one file write.
+/// How long a stop waits for a stopped run's record. The group is ended with
+/// `SIGKILL`, so what is left is one tree read and one file write.
 const STOPPING: Duration = Duration::from_secs(30);
 
-/// A Job's worktree on disk, as a path and as what `WorkProduct` reads.
-pub(crate) struct Tree {
-    path: PathBuf,
-    worktree: Worktree,
+/// What one viewer of a run's socket is answered with, before either owner's
+/// opening message is built from it.
+pub(crate) struct Seen {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) path: String,
+    pub(crate) live: Option<api::RunWatch>,
+    pub(crate) history: Vec<String>,
+    pub(crate) skipped: u64,
+    pub(crate) read_to: u64,
+    pub(crate) unreadable: bool,
 }
 
 impl<H, V, W> Fleet<H, V, W>
@@ -62,12 +70,17 @@ where
     W: WorkProduct + Send + Sync + 'static,
     W::Error: std::error::Error + Send + Sync + 'static,
 {
+    // -----------------------------------------------------------------------
+    // A Job's half — Journey 9, *Running one inside a Job*
+    // -----------------------------------------------------------------------
+
     /// What the run sheet lists for this Job, and the facts beside it.
     pub(crate) async fn run_sheet(&self, job_id: &JobId) -> Result<ipc::RunSheet, Refusal> {
-        let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
-        let tree = self.tree_of(&job);
-        let (manifest, has_snapshot) = self.effective_manifest(&job).await;
-        let listed = entries::frozen(&job, &manifest, has_snapshot);
+        let loaded = self.load(job_id).await.map_err(|why| self.refusal(why))?;
+        let place = Place::of_job(loaded.clone());
+        let tree = self.tree_at(&place);
+        let (manifest, has_snapshot) = self.manifest_at(&place).await;
+        let listed = entries::frozen(&loaded, &manifest, has_snapshot);
         let changed = tree
             .as_ref()
             .map(|tree| self.changed_in(tree))
@@ -78,61 +91,207 @@ where
             Some(Err(why)) => (false, Some(why)),
         };
         let (setup, checks, commands) = listed.sheet(&changed);
+        let wired = ipc::JobId::from(job_id);
         Ok(ipc::RunSheet {
-            job_id: ipc::JobId::from(job_id),
+            job_id: wired.clone(),
             setup,
             checks,
             commands,
-            manifest_edited_at: self.edited_before(&job, tree.as_ref()),
+            manifest_edited_at: self.edited_before(loaded.created_at(), tree.as_ref()),
             worktree_on_disk: tree.is_some(),
             worktree_differs,
             worktree_unreadable,
-            drone_working: job.status() == JobStatus::Running,
-            running: self.rehearsals().in_flight(job_id),
-            servers: self.declared_servers(job_id, &manifest),
+            drone_working: loaded.status() == JobStatus::Running,
+            running: self
+                .rehearsals()
+                .in_flight(&place.owner)
+                .map(|out| out.of_job(&wired)),
+            servers: self.declared_servers(&crate::servers::Holder::Job(job_id.clone()), &manifest),
         })
     }
 
-    /// Start one run, and answer as soon as it is underway.
+    /// Start one run in this Job's worktree, and answer as soon as it is
+    /// underway.
     pub(crate) async fn start_rehearsal(
         self: Arc<Self>,
         job_id: &JobId,
         asked: ipc::StartRun,
     ) -> Result<ipc::RunUnderway, Refusal> {
         let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
-        let refused = |why| self.run_refusal(job_id, why);
-        // A server never exits, so a run of one would hold the Job's one run
-        // slot for good — and Fleet would not know to hand it on or stop it.
-        let (froze, _) = self.effective_manifest(&job).await;
-        if froze.server(&asked.name).is_some() {
-            return Err(refused(Unrehearsable::IsAServer { name: asked.name }));
-        }
-        let Some(tree) = self.tree_of(&job) else {
-            return Err(refused(Unrehearsable::NoWorktree));
-        };
-        if let Some(out) = self.rehearsals().in_flight(job_id) {
-            return Err(refused(Unrehearsable::AlreadyRunning { name: out.name }));
-        }
-        let entry = match asked.worktree_version {
-            false => {
-                let (manifest, has_snapshot) = self.effective_manifest(&job).await;
-                entries::frozen(&job, &manifest, has_snapshot).named(&asked.name)
-            }
-            true => {
-                let theirs = self
-                    .theirs(&tree)
-                    .map_err(|why| refused(Unrehearsable::WorktreeManifest { why }))?;
-                entries::declared(&theirs).named(&asked.name)
-            }
-        }
-        .map_err(refused)?;
+        let place = Place::of_job(job);
+        let owner = place.owner.clone();
+        let (entry, tree) = self
+            .entry_at(&place, &asked.name, asked.worktree_version)
+            .await
+            .map_err(|why| self.refused_run(&owner, why))?;
         let (command, narrowed) = match asked.narrowed {
             false => (entry.run.clone(), false),
-            true => self.narrowed(&entry, &tree).map_err(refused)?,
+            true => self
+                .narrowed(&entry, &tree)
+                .map_err(|why| self.refused_run(&owner, why))?,
         };
-        let underway = ipc::RunUnderway {
-            id: self.mint().ulid().as_str().to_string(),
+        let underway = Arc::clone(&self)
+            .started_at(
+                place,
+                tree,
+                entry,
+                command,
+                narrowed,
+                asked.worktree_version,
+            )
+            .await
+            .map_err(|why| self.refused_run(&owner, why))?;
+        Ok(underway.of_job(&ipc::JobId::from(job_id)))
+    }
+
+    /// End a run's group, and answer with its record once it is written.
+    pub(crate) async fn stop_rehearsal(
+        &self,
+        job_id: &JobId,
+        id: String,
+    ) -> Result<ipc::RunRecord, Refusal> {
+        let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
+        let place = Place::of_job(job);
+        let record = self
+            .stopped_at(&place, id)
+            .await
+            .map_err(|why| self.refused_run(&place.owner, why))?;
+        self.only_a_jobs(&place, record)
+    }
+
+    /// Put back what one run changed, from the snapshot taken before it.
+    pub(crate) async fn undo_rehearsal(
+        &self,
+        job_id: &JobId,
+        id: String,
+    ) -> Result<ipc::RunRecord, Refusal> {
+        let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
+        let place = Place::of_job(job);
+        // **First**: a Drone's work is uncommitted until delivery, and nothing
+        // below can tell its edits from the run's.
+        if place
+            .job
+            .as_ref()
+            .is_some_and(|job| job.status() == JobStatus::Running)
+        {
+            return Err(self.refused_run(&place.owner, Unrehearsable::DroneWorking));
+        }
+        let record = self
+            .undone_at(&place, id)
+            .await
+            .map_err(|why| self.refused_run(&place.owner, why))?;
+        self.only_a_jobs(&place, record)
+    }
+
+    /// This Job's earlier runs, newest first.
+    pub(crate) async fn rehearsal_history(&self, job_id: &JobId) -> Result<ipc::RunList, Refusal> {
+        let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
+        let place = Place::of_job(job);
+        let (kept, unreadable) = self.history_at(&place);
+        Ok(ipc::RunList {
             job_id: ipc::JobId::from(job_id),
+            runs: kept.iter().filter_map(Record::of_job).collect(),
+            unreadable,
+        })
+    }
+
+    /// One run's log. **The Job's own runs are the allowlist**: an id that
+    /// names none of them reaches no file.
+    pub(crate) async fn rehearsal_output(
+        &self,
+        job_id: &JobId,
+        id: String,
+    ) -> Result<ipc::RunOutput, Refusal> {
+        let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
+        let place = Place::of_job(job);
+        self.output_at(&place, &id)
+            .ok_or_else(|| self.no_such_run(&place, id))
+    }
+
+    /// A run's socket, resolved before it opens: **the subscription first,
+    /// then the log as history**, for `observe_job`'s reason. A finished run
+    /// opens too, with its whole log and nothing live.
+    pub(crate) async fn observe_rehearsal(
+        &self,
+        job_id: &JobId,
+        id: String,
+    ) -> Result<api::ObservedRun, Refusal> {
+        let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
+        let place = Place::of_job(job);
+        let seen = self
+            .observed_at(&place, &id)
+            .ok_or_else(|| self.no_such_run(&place, id))?;
+        Ok(api::ObservedRun {
+            job_id: ipc::JobId::from(job_id),
+            id: seen.id,
+            name: seen.name,
+            path: seen.path,
+            live: seen.live,
+            history: seen.history,
+            skipped: seen.skipped,
+            read_to: seen.read_to,
+            unreadable: seen.unreadable,
+        })
+    }
+
+    // -----------------------------------------------------------------------
+    // What both owners do
+    // -----------------------------------------------------------------------
+
+    /// The entry a run names and the tree it would run in, checked in the
+    /// order that refuses before anything is written.
+    async fn entry_at(
+        &self,
+        place: &Place,
+        name: &str,
+        worktree_version: bool,
+    ) -> Result<(Entry, Tree), Unrehearsable> {
+        let whose = place.whose();
+        // A server never exits, so a run of one would hold the owner's one run
+        // slot for good — and Fleet would not know to hand it on or stop it.
+        let (manifest, has_snapshot) = self.manifest_at(place).await;
+        if manifest.server(name).is_some() {
+            return Err(Unrehearsable::IsAServer {
+                name: name.to_string(),
+            });
+        }
+        let Some(tree) = self.tree_at(place) else {
+            return Err(Unrehearsable::NoWorktree);
+        };
+        if let Some(out) = self.rehearsals().in_flight(&place.owner) {
+            return Err(Unrehearsable::AlreadyRunning {
+                name: out.name,
+                whose,
+            });
+        }
+        let listed = match (worktree_version, place.job.as_ref()) {
+            (true, _) => {
+                let theirs = self
+                    .theirs(&tree)
+                    .map_err(|why| Unrehearsable::WorktreeManifest { why })?;
+                entries::declared(&theirs)
+            }
+            (false, Some(job)) => entries::frozen(job, &manifest, has_snapshot),
+            // The main checkout froze nothing: the file Fleet holds is the one
+            // that runs, and `worktree_version` has nothing to mean there.
+            (false, None) => entries::declared(&manifest),
+        };
+        Ok((listed.named(name, whose)?, tree))
+    }
+
+    /// Take the owner's one run slot, make the run's directory, and spawn it.
+    async fn started_at(
+        self: Arc<Self>,
+        place: Place,
+        tree: Tree,
+        entry: Entry,
+        command: String,
+        narrowed: bool,
+        worktree_version: bool,
+    ) -> Result<Underway, Unrehearsable> {
+        let whose = place.whose();
+        let underway = Underway {
+            id: self.mint().ulid().as_str().to_string(),
             name: entry.name.clone(),
             command,
             narrowed,
@@ -143,11 +302,14 @@ where
         let feed = api::RunFeed::new();
         let Some(held) = self
             .rehearsals()
-            .take(job_id, &underway, stop, ended, feed.clone())
+            .take(&place.owner, &underway, stop, ended, feed.clone())
         else {
-            return Err(refused(Unrehearsable::AlreadyRunning { name: entry.name }));
+            return Err(Unrehearsable::AlreadyRunning {
+                name: entry.name,
+                whose,
+            });
         };
-        let (root, handle) = (&self.host().records_root, job.handle());
+        let (root, handle) = (&self.host().records_root, place.handle.clone());
         records::swept(
             root,
             &handle,
@@ -157,18 +319,17 @@ where
                 let _ = adapters::snapshot::forget(&tree.path, reference);
             },
         );
-        let dir = records::made(root, &handle, &underway.id).map_err(|why| {
-            refused(Unrehearsable::NotKept {
+        let dir =
+            records::made(root, &handle, &underway.id).map_err(|why| Unrehearsable::NotKept {
                 why: why.to_string(),
-            })
-        })?;
+            })?;
         let plan = running::Plan {
-            job,
+            place,
             tree,
             entry,
             underway: underway.clone(),
             dir,
-            worktree_version: asked.worktree_version,
+            worktree_version,
             feed,
         };
         let this = Arc::clone(&self);
@@ -176,73 +337,59 @@ where
         Ok(underway)
     }
 
-    /// End a run's group, and answer with its record once it is written.
-    pub(crate) async fn stop_rehearsal(
-        &self,
-        job_id: &JobId,
-        id: String,
-    ) -> Result<ipc::RunRecord, Refusal> {
-        let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
-        let Some((stop, mut done)) = self.rehearsals().stopping(job_id, &id) else {
-            let why = match records::read(&self.host().records_root, &job.handle(), &id) {
+    async fn stopped_at(&self, place: &Place, id: String) -> Result<Record, Unrehearsable> {
+        let (root, handle) = (&self.host().records_root, place.handle.as_str());
+        let Some((stop, mut done)) = self.rehearsals().stopping(&place.owner, &id) else {
+            return Err(match records::read(root, handle, &id) {
                 Some(Ok(_)) => Unrehearsable::NotRunning { id },
-                _ => Unrehearsable::NoSuchRun { id },
-            };
-            return Err(self.run_refusal(job_id, why));
+                _ => Unrehearsable::NoSuchRun {
+                    id,
+                    whose: place.whose(),
+                },
+            });
         };
         let _ = stop.send(true);
         let ended = tokio::time::timeout(STOPPING, done.wait_for(Option::is_some)).await;
-        let record = match ended {
+        match ended {
             Ok(Ok(seen)) => seen.clone(),
             _ => None,
-        };
-        record.ok_or_else(|| {
-            self.run_refusal(
-                job_id,
-                Unrehearsable::NotKept {
-                    why: String::from("the run did not write its record after it was stopped"),
-                },
-            )
+        }
+        .ok_or_else(|| Unrehearsable::NotKept {
+            why: String::from("the run did not write its record after it was stopped"),
         })
     }
 
-    /// Put back what one run changed, from the snapshot taken before it.
-    pub(crate) async fn undo_rehearsal(
-        &self,
-        job_id: &JobId,
-        id: String,
-    ) -> Result<ipc::RunRecord, Refusal> {
-        let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
-        let refused = |why| self.run_refusal(job_id, why);
-        // **First**: a Drone's work is uncommitted until delivery, and nothing
-        // below can tell its edits from the run's.
-        if job.status() == JobStatus::Running {
-            return Err(refused(Unrehearsable::DroneWorking));
+    async fn undone_at(&self, place: &Place, id: String) -> Result<Record, Unrehearsable> {
+        if self.rehearsals().in_flight(&place.owner).is_some() {
+            return Err(Unrehearsable::RunInFlight);
         }
-        if self.rehearsals().in_flight(job_id).is_some() {
-            return Err(refused(Unrehearsable::RunInFlight));
-        }
-        let Some(tree) = self.tree_of(&job) else {
-            return Err(refused(Unrehearsable::NoWorktree));
+        let Some(tree) = self.tree_at(place) else {
+            return Err(Unrehearsable::NoWorktree);
         };
-        let (root, handle) = (&self.host().records_root, job.handle());
-        let mut record = match records::read(root, &handle, &id) {
+        let (root, handle) = (&self.host().records_root, place.handle.as_str());
+        let mut record = match records::read(root, handle, &id) {
             Some(Ok(record)) => record,
-            Some(Err(why)) => return Err(refused(Unrehearsable::NothingToUndo { id, why })),
-            None => return Err(refused(Unrehearsable::NoSuchRun { id })),
+            Some(Err(why)) => return Err(Unrehearsable::NothingToUndo { id, why }),
+            None => {
+                return Err(Unrehearsable::NoSuchRun {
+                    id,
+                    whose: place.whose(),
+                })
+            }
         };
-        let nothing = |why: &str| {
-            refused(Unrehearsable::NothingToUndo {
-                id: record.id.clone(),
-                why: why.to_string(),
-            })
+        let nothing = |why: &str| Unrehearsable::NothingToUndo {
+            id: record.id.clone(),
+            why: why.to_string(),
         };
         if record.undone_at.is_some() {
-            return Err(refused(Unrehearsable::AlreadyUndone { id }));
+            return Err(Unrehearsable::AlreadyUndone { id });
         }
         if record.changed.is_empty() {
             return Err(nothing("the run changed nothing"));
         }
+        // **Never offered where no snapshot was taken.** This can be the tree
+        // holding a person's own uncommitted work, and nothing puts that back
+        // without a copy of what was there before.
         let Some(reference) = record.snapshot.clone() else {
             return Err(nothing(
                 record
@@ -257,96 +404,68 @@ where
         match undone {
             Ok(Ok(_)) => {}
             Ok(Err(adapters::snapshot::NotUndone::Moved { paths })) => {
-                return Err(refused(Unrehearsable::Moved { paths }))
+                return Err(Unrehearsable::Moved { paths })
             }
             Ok(Err(adapters::snapshot::NotUndone::NotRestored { path, cause })) => {
-                return Err(refused(Unrehearsable::NotKept {
+                return Err(Unrehearsable::NotKept {
                     why: format!("{path} could not be written back: {cause}"),
-                }))
+                })
             }
             Ok(Err(other)) => return Err(nothing(&other.to_string())),
             Err(_) => return Err(nothing("the undo did not finish")),
         }
         record.undone_at = Some(ipc::Instant::from(&self.now()));
-        let kept = records::dir_of(root, &handle, &record.id)
+        let kept = records::dir_of(root, handle, &record.id)
             .map(|dir| records::write(&dir, &record))
             .unwrap_or_else(|| Err(std::io::Error::other("not one path component")));
-        kept.map_err(|why| {
-            refused(Unrehearsable::NotKept {
-                why: format!("the tree was put back and the record was not: {why}"),
-            })
+        kept.map_err(|why| Unrehearsable::NotKept {
+            why: format!("the tree was put back and the record was not: {why}"),
         })?;
-        self.noted_undo(&job, &record);
+        self.noted_undo(place.job.as_ref(), &record);
         Ok(record)
     }
 
-    /// This Job's earlier runs, newest first.
-    pub(crate) async fn rehearsal_history(&self, job_id: &JobId) -> Result<ipc::RunList, Refusal> {
-        let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
-        let running = self.rehearsals().in_flight(job_id).map(|out| out.id);
-        let (runs, unreadable) =
-            records::every(&self.host().records_root, &job.handle(), running.as_deref());
-        Ok(ipc::RunList {
-            job_id: ipc::JobId::from(job_id),
-            runs,
-            unreadable,
-        })
+    fn history_at(&self, place: &Place) -> (Vec<Record>, Vec<ipc::UnreadableRun>) {
+        let running = self.rehearsals().in_flight(&place.owner).map(|out| out.id);
+        records::every(&self.host().records_root, &place.handle, running.as_deref())
     }
 
-    /// One run's log. **The Job's own runs are the allowlist**: an id that
+    /// One run's log. **The owner's own runs are the allowlist**: an id that
     /// names none of them reaches no file.
-    pub(crate) async fn rehearsal_output(
-        &self,
-        job_id: &JobId,
-        id: String,
-    ) -> Result<ipc::RunOutput, Refusal> {
-        let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
-        let (root, handle) = (&self.host().records_root, job.handle());
+    fn output_at(&self, place: &Place, id: &str) -> Option<ipc::RunOutput> {
+        let (root, handle) = (&self.host().records_root, place.handle.as_str());
         let name = match self
             .rehearsals()
-            .in_flight(job_id)
+            .in_flight(&place.owner)
             .filter(|out| out.id == id)
         {
             Some(out) => Some(out.name),
-            None => match records::read(root, &handle, &id) {
+            None => match records::read(root, handle, id) {
                 Some(Ok(record)) => Some(record.name),
                 _ => None,
             },
         };
-        name.and_then(|name| records::output(root, &handle, &id, name))
-            .ok_or_else(|| self.run_refusal(job_id, Unrehearsable::NoSuchRun { id: id.clone() }))
+        name.and_then(|name| records::output(root, handle, id, name))
     }
 
-    /// A run's socket, resolved before it opens: **the subscription first,
-    /// then the log as history**, for `observe_job`'s reason. A finished run
-    /// opens too, with its whole log and nothing live.
-    pub(crate) async fn observe_rehearsal(
-        &self,
-        job_id: &JobId,
-        id: String,
-    ) -> Result<api::ObservedRun, Refusal> {
-        let job = self.load(job_id).await.map_err(|why| self.refusal(why))?;
-        let (root, handle) = (&self.host().records_root, job.handle());
-        let no_such = || self.run_refusal(job_id, Unrehearsable::NoSuchRun { id: id.clone() });
-        let (name, live) = match self.rehearsals().watching(job_id, &id) {
+    fn observed_at(&self, place: &Place, id: &str) -> Option<Seen> {
+        let (root, handle) = (&self.host().records_root, place.handle.as_str());
+        let (name, live) = match self.rehearsals().watching(&place.owner, id) {
             Some((name, watch)) => (name, Some(watch)),
-            None => match records::read(root, &handle, &id) {
+            None => match records::read(root, handle, id) {
                 Some(Ok(record)) => (record.name, None),
-                _ => return Err(no_such()),
+                _ => return None,
             },
         };
-        let log = records::dir_of(root, &handle, &id)
-            .ok_or_else(no_such)?
-            .join(records::LOG);
+        let log = records::dir_of(root, handle, id)?.join(records::LOG);
         let (history, skipped, read_to, unreadable) = match records::history(&log, live.is_none()) {
             Some((history, skipped, read_to)) => (history, skipped, read_to, false),
             None => (Vec::new(), 0, 0, true),
         };
-        Ok(api::ObservedRun {
-            job_id: ipc::JobId::from(job_id),
-            path: records::relative_log(&handle, &id),
-            id,
+        Some(Seen {
+            id: id.to_string(),
             name,
+            path: records::relative_log(handle, id),
             live,
             history,
             skipped,
@@ -355,31 +474,45 @@ where
         })
     }
 
-    fn run_refusal(&self, job: &JobId, why: Unrehearsable) -> Refusal {
-        let (code, refusal) = why.spelled();
-        refusal(
-            WireError::raised(code, why.to_string(), self.run_id())
-                .about_job(ipc::JobId::from(job)),
+    /// A record answered to a Job's caller. The `None` arm is unreachable from
+    /// a Job's entrance — a directory under the Job's handle carries its id —
+    /// and is a fault rather than an invented record if it ever is reached.
+    fn only_a_jobs(&self, place: &Place, record: Record) -> Result<ipc::RunRecord, Refusal> {
+        record.of_job().ok_or_else(|| {
+            self.refused_run(
+                &place.owner,
+                Unrehearsable::NotKept {
+                    why: String::from("this run's record names no Job"),
+                },
+            )
+        })
+    }
+
+    fn no_such_run(&self, place: &Place, id: String) -> Refusal {
+        self.refused_run(
+            &place.owner,
+            Unrehearsable::NoSuchRun {
+                id,
+                whose: place.whose(),
+            },
         )
     }
 
-    fn tree_of(&self, job: &Job) -> Option<Tree> {
-        let spec = WorktreeSpec::for_job(&self.host().repo_root, &job.handle()).ok()?;
-        let path = PathBuf::from(spec.worktree_path());
-        path.is_dir().then(|| Tree {
-            // Measured from the Manifest's base like every other reading of a
-            // Job's work, so the narrowing the sheet offers names the files
-            // the diff beside it draws.
-            worktree: self.based(Worktree::at(spec.worktree_path(), spec.branch())),
-            path,
+    fn refused_run(&self, owner: &Owner, why: Unrehearsable) -> Refusal {
+        let (code, refusal) = why.spelled();
+        let raised = WireError::raised(code, why.to_string(), self.run_id());
+        refusal(match owner {
+            Owner::Job(job) => raised.about_job(ipc::JobId::from(job)),
+            Owner::Checkout => raised,
         })
     }
 
     /// What the Job changed, for a narrowing. A worktree that will not read
     /// is no change here: the sheet then offers the whole tree and nothing else.
     fn changed_in(&self, tree: &Tree) -> Vec<String> {
-        self.work()
-            .changed_files(&tree.worktree)
+        tree.worktree
+            .as_ref()
+            .and_then(|worktree| self.work().changed_files(worktree).ok())
             .map(|changed| changed.paths())
             .unwrap_or_default()
     }
@@ -387,14 +520,15 @@ where
     /// The command a narrowed run of `entry` is, **resolved the way a Drone's
     /// dry run resolves it** — the worktree's own diff through the same call.
     fn narrowed(&self, entry: &Entry, tree: &Tree) -> Result<(String, bool), Unrehearsable> {
-        let Some(narrow) = entry.narrow.as_ref() else {
-            return Err(Unrehearsable::DoesNotNarrow {
-                name: entry.name.clone(),
-            });
+        let does_not = || Unrehearsable::DoesNotNarrow {
+            name: entry.name.clone(),
+        };
+        let (Some(narrow), Some(worktree)) = (entry.narrow.as_ref(), tree.worktree.as_ref()) else {
+            return Err(does_not());
         };
         let changed = self
             .work()
-            .changed_files(&tree.worktree)
+            .changed_files(worktree)
             .map_err(|why| Unrehearsable::Unreadable {
                 why: why.to_string(),
             })?
@@ -432,14 +566,14 @@ where
         config::Manifest::load(&tree.path.join(self.manifest_file())).map_err(|why| why.to_string())
     }
 
-    /// When the Manifest was last changed by a commit made at or before the
-    /// Job was created — **before it froze it**, not the latest edit.
-    fn edited_before(&self, job: &Job, tree: Option<&Tree>) -> Option<ipc::Instant> {
-        let froze = job.created_at().epoch_millis()?.div_euclid(1_000);
+    /// When the Manifest was last changed by a commit made at or before
+    /// `before` — for a Job, **before it froze it**, not the latest edit.
+    fn edited_before(&self, before: &Timestamp, tree: Option<&Tree>) -> Option<ipc::Instant> {
+        let before = before.epoch_millis()?.div_euclid(1_000);
         let root = tree.map_or_else(|| PathBuf::from(&self.host().repo_root), |t| t.path.clone());
         let file = self.manifest_file();
         let seconds =
-            adapters::snapshot::last_touched(&root, &file.to_string_lossy(), froze).ok()??;
+            adapters::snapshot::last_touched(&root, &file.to_string_lossy(), before).ok()??;
         let at = Timestamp::from_rfc3339(crate::clock::rfc3339_utc(seconds.saturating_mul(1_000)));
         Some(ipc::Instant::from(&at))
     }

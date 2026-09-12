@@ -768,6 +768,27 @@ where
         self.observe_rehearsal(&job_id.to_domain(), run_id).await
     }
 
+    /// The Manifest surface's own sheet, off the file Fleet holds. **No Job
+    /// is loaded and no store is read** — `crate::rehearsing::checkout`.
+    async fn get_checkout_run_sheet(&self) -> Result<ipc::CheckoutRunSheet, Refusal> {
+        self.checkout_run_sheet().await
+    }
+
+    async fn list_checkout_runs(&self) -> Result<ipc::CheckoutRunList, Refusal> {
+        self.checkout_rehearsal_history().await
+    }
+
+    async fn get_checkout_run_output(&self, run_id: String) -> Result<ipc::RunOutput, Refusal> {
+        self.checkout_rehearsal_output(run_id).await
+    }
+
+    async fn observe_checkout_run(
+        &self,
+        run_id: String,
+    ) -> Result<api::ObservedCheckoutRun, Refusal> {
+        self.observe_checkout_rehearsal(run_id).await
+    }
+
     /// Every server Fleet holds — `crate::servers`.
     async fn list_servers(&self) -> Result<ipc::ServerList, Refusal> {
         Ok(self.server_list())

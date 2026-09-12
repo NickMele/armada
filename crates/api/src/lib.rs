@@ -73,5 +73,6 @@ pub use routes::{router, Route, SERVED};
 pub use served::Served;
 pub use stream::{Broadcaster, Next, Subscription, BACKLOG, TALLIED};
 pub use watching_run::{
-    ObservedRun, ObservedServer, RunChunk, RunFeed, RunSeen, RunWatch, RUN_BACKLOG,
+    ObservedCheckoutRun, ObservedRun, ObservedServer, RunChunk, RunFeed, RunSeen, RunWatch,
+    RUN_BACKLOG,
 };

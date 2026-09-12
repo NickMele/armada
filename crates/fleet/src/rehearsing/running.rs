@@ -11,20 +11,26 @@ use std::path::{Path, PathBuf};
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use checks_runner::Writing;
 use core_model::{Component, Envelope, FieldValue, Job, JobStatus, Level, Timestamp};
-use ipc::RunRecord;
 use tokio::sync::watch;
 use verification::{Exit, NeverRan};
 
 use super::entries::Entry;
-use super::{records, Held, Tree};
+use super::owner::{Place, Tree};
+use super::record::{Record, Underway};
+use super::{records, Held};
 use crate::daemon::Fleet;
 
 /// Everything a run needs, decided before it was spawned.
+///
+/// **Owner-blind from here down.** Which tree this is, whose ports it draws
+/// and where its record goes were all settled in [`Place`]; what follows runs
+/// one command in one directory and writes one record, the same way for a Job
+/// and for the main checkout.
 pub(crate) struct Plan {
-    pub(crate) job: Job,
+    pub(crate) place: Place,
     pub(crate) tree: Tree,
     pub(crate) entry: Entry,
-    pub(crate) underway: ipc::RunUnderway,
+    pub(crate) underway: Underway,
     pub(crate) dir: PathBuf,
     pub(crate) worktree_version: bool,
     /// Where the run's output goes. Dropped when the run returns, which with
@@ -59,7 +65,7 @@ where
         plan: Plan,
         held: Held,
         stopped: watch::Receiver<bool>,
-        done: watch::Sender<Option<RunRecord>>,
+        done: watch::Sender<Option<Record>>,
     ) {
         let log = plan.dir.join(records::LOG);
         let started = self.now();
@@ -88,14 +94,22 @@ where
                 None,
             ),
         };
-        let shared_with_drone = plan.job.status() == JobStatus::Running
-            || self
-                .load(plan.job.id())
-                .await
-                .is_ok_and(|job| job.status() == JobStatus::Running);
-        let record = RunRecord {
+        // **Never in the main checkout**: no Drone works in it, so there is
+        // nothing of anybody else's for the run's own change to be confused
+        // with.
+        let shared_with_drone = match plan.place.job.as_ref() {
+            None => false,
+            Some(job) => {
+                job.status() == JobStatus::Running
+                    || self
+                        .load(job.id())
+                        .await
+                        .is_ok_and(|job| job.status() == JobStatus::Running)
+            }
+        };
+        let record = Record {
             id: plan.underway.id.clone(),
-            job_id: plan.underway.job_id.clone(),
+            job_id: plan.place.job_id().map(ipc::JobId::from),
             name: plan.underway.name.clone(),
             command: plan.underway.command.clone(),
             narrowed: plan.underway.narrowed,
@@ -118,15 +132,21 @@ where
             shared_with_drone,
             snapshot: reference,
             undone_at: None,
-            log: records::relative_log(&plan.job.handle(), &plan.underway.id),
+            log: records::relative_log(&plan.place.handle, &plan.underway.id),
         };
         let kept = records::write(&plan.dir, &record);
-        self.noted_rehearsal(&plan.job, &record, kept.err());
+        self.noted_rehearsal(plan.place.job.as_ref(), &record, kept.err());
         // Given back before anybody is told, so a caller that starts the next
         // run on `run.finished` is not refused as though this one were out.
         drop(held);
         let _ = done.send(Some(record.clone()));
-        self.publish(ipc::Event::RunFinished(record));
+        // **A Job's runs only.** `run.finished` carries a `RunRecord`, whose
+        // `job_id` says which Job Bridge re-reads on it; a checkout run moves
+        // no row on any surface that stream feeds. Its end is the answer to
+        // `stop_checkout_run`, and the close of its own socket.
+        if let Some(finished) = record.of_job() {
+            self.publish(ipc::Event::RunFinished(finished));
+        }
     }
 
     /// A Check's prerequisites, in order, then the command — into one log.
@@ -139,8 +159,14 @@ where
     async fn ran(&self, plan: &Plan, log: &Path, stopped: watch::Receiver<bool>) -> Outcome {
         let budget = self.budget().duration();
         let path = plan.tree.path.as_path();
-        let ports = self.port_map(&plan.job).await;
-        let env = self.port_env(&plan.job).await;
+        // The Job's own claimed span, or the main checkout's — `crate::ports`.
+        let (ports, env) = match plan.place.job.as_ref() {
+            Some(job) => (self.port_map(job).await, self.port_env(job).await),
+            None => (
+                self.main_checkout_ports().await,
+                self.main_checkout_port_env().await,
+            ),
+        };
         let mut required = Vec::new();
         for needed in &plan.entry.requires {
             if *stopped.borrow() {
@@ -199,8 +225,17 @@ where
     }
 
     /// Write the run into the Job's own log. **Fields, never an interpolated
-    /// message**, for `crate::dry_run`'s reason.
-    fn noted_rehearsal(&self, job: &Job, record: &RunRecord, not_kept: Option<std::io::Error>) {
+    /// message**, for `crate::dry_run`'s reason. A run with no Job has no log
+    /// of that kind to go in — `crate::servers::noted_server`'s own case.
+    fn noted_rehearsal(
+        &self,
+        job: Option<&Job>,
+        record: &Record,
+        not_kept: Option<std::io::Error>,
+    ) {
+        let Some(job) = job else {
+            return;
+        };
         let level = match not_kept {
             Some(_) => Level::Warn,
             None => Level::Info,
@@ -226,7 +261,10 @@ where
         self.noted_in_the_log(job.id(), &envelope);
     }
 
-    pub(crate) fn noted_undo(&self, job: &Job, record: &RunRecord) {
+    pub(crate) fn noted_undo(&self, job: Option<&Job>, record: &Record) {
+        let Some(job) = job else {
+            return;
+        };
         let envelope = Envelope::new(
             self.now(),
             Level::Info,

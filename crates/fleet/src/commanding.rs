@@ -326,6 +326,31 @@ where
         self.undo_rehearsal(&job_id.to_domain(), run.id).await
     }
 
+    /// A person's run in the main checkout. **The `Arc` is handed on**, for
+    /// [`Commands::start_run`]'s reason — `crate::rehearsing::checkout`.
+    async fn start_checkout_run(
+        self: std::sync::Arc<Self>,
+        run: ipc::StartCheckoutRun,
+    ) -> Result<ipc::CheckoutRunUnderway, Refusal> {
+        Fleet::start_checkout_rehearsal(self, run).await
+    }
+
+    /// **Not [`budgeted`]**, for [`Commands::start_run`]'s reason.
+    async fn stop_checkout_run(
+        &self,
+        run: ipc::NamedRun,
+    ) -> Result<ipc::CheckoutRunRecord, Refusal> {
+        self.stop_checkout_rehearsal(run.id).await
+    }
+
+    /// **Not [`budgeted`]**, for [`Commands::start_run`]'s reason.
+    async fn undo_checkout_run(
+        &self,
+        run: ipc::NamedRun,
+    ) -> Result<ipc::CheckoutRunRecord, Refusal> {
+        self.undo_checkout_rehearsal(run.id).await
+    }
+
     /// A person starting a server, for a Job or the main checkout. **The `Arc`
     /// is handed on**, so the server is a task of its own — `crate::servers`.
     ///
