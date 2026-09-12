@@ -106,11 +106,11 @@ pub enum Shown {
 
 /// Why the harness produced nothing.
 ///
-/// **Each names the command it is about**, because the four are four different
+/// **Each names the command it is about**, because the five are five different
 /// edits: a serve that will not start is a dependency, a readiness command that
 /// never answers is a port or a build, a spec run that fails is the Drone's
-/// spec, and a frames directory that cannot be read is the `evidence.frames`
-/// path.
+/// spec, a frames directory that cannot be read is the `evidence.frames` path,
+/// and no harness at all is a section this repository never declared.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NotShown {
     /// `evidence.serve` could not be started at all.
@@ -128,6 +128,12 @@ pub enum NotShown {
     SpecFailed(Exit),
     /// The directory `evidence.frames` names could not be read after the run.
     FramesUnreadable { at: String },
+    /// The step asked to be captured and the Manifest declares no
+    /// `evidence:` — the ordinary case, not a broken one. `config` no
+    /// longer refuses a workflow for asking a Manifest that never opted in;
+    /// a Manifest whose `evidence:` is present and wrong never reaches
+    /// this, since it fails to load before a Job exists.
+    NoHarness,
 }
 
 impl NotShown {
@@ -166,6 +172,9 @@ impl NotShown {
             }
             NotShown::FramesUnreadable { at } => {
                 format!("`evidence.frames` names `{at}`, which could not be read")
+            }
+            NotShown::NoHarness => {
+                String::from("no `evidence:` is declared, so capture was skipped")
             }
         }
     }
@@ -719,15 +728,12 @@ where
         if !declared.captured() {
             return Ok(None);
         }
-        // Unreachable on a Job that was resolved — `ResolvedWorkflow::resolve`
-        // refuses a captured step against a Manifest with no harness — and
-        // checked because the Job froze its workflow and the Manifest is read
-        // live. A repository that deleted the section under a running Job
-        // reaches here, and saying so beats capturing nothing quietly.
+        // **The ordinary path now, not a race.** `ResolvedWorkflow::resolve`
+        // no longer refuses a captured step for lacking `evidence:`, so a
+        // repository that never declared one reaches here on every captured
+        // step, the same as one whose section vanished mid-Job.
         let Some(harness) = self.manifest().harness() else {
-            return Ok(Some(NotShown::FramesUnreadable {
-                at: String::from("evidence:"),
-            }));
+            return Ok(Some(NotShown::NoHarness));
         };
         let spec = submission.shown_by();
         if spec.trim().is_empty() {

@@ -271,6 +271,39 @@ pub fn manifest() -> Manifest {
     .expect("a manifest that parses")
 }
 
+/// A one-step workflow whose evidence is what it looks like, resolved
+/// against [`manifest`] — which declares no `evidence:` at all.
+///
+/// **This resolves.** `#778` is what makes it possible: a captured step no
+/// longer needs a Manifest that can capture it to be dispatched, and the
+/// gap is Fleet's to say something about when the step actually runs, not
+/// config's to refuse before it does.
+pub fn shown_step_with_no_harness() -> config::ResolvedWorkflow {
+    let def = config::WorkflowDef::parse(
+        std::path::Path::new("fixture-shown-bare.yml"),
+        r#"
+version: 1
+workflow_id: fixture-shown-bare
+name: fixture
+structure: linear
+steps:
+  - id: show
+    label: "Show"
+    evidence:
+      submitted:
+        type: diff
+      captured: true
+    delivers: false
+    advance_gate: auto
+"#,
+        &config::Roster::offering_nothing(),
+    )
+    .unwrap_or_else(|refused| panic!("the fixture workflow did not parse: {refused}"));
+    config::ResolvedWorkflow::resolve(&def, &manifest()).unwrap_or_else(|refused| {
+        panic!("a captured step with no harness still resolves: {refused}")
+    })
+}
+
 /// A one-step workflow whose evidence is what it looks like, and the Manifest
 /// it resolves against — declaring `evidence:` with `run` and `frames` alone,
 /// the shape a repository with nothing to serve writes.

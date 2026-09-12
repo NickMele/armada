@@ -5,7 +5,7 @@
 //! only what neither can answer alone — whether a name a step wrote is
 //! declared, and what a Check carries with it once it is.
 
-use core_model::{ResolvedCheck, StepId};
+use core_model::ResolvedCheck;
 
 use super::{bug_with, manifest, parse, BUG, MANIFEST};
 use crate::error::{Disagreement, ResolveError, UnknownCheck};
@@ -435,32 +435,26 @@ evidence:
   frames: .playwright/frames
 "#;
 
-/// **A step asking to be captured, held to a repository that can capture it.**
+/// **A step asking to be captured, met with a repository that never set that
+/// up, resolves anyway.**
 ///
-/// Neither file can answer this alone: `evidence.captured` parses against no
-/// Manifest, and an `evidence:` section is declared with no workflow in
-/// sight. So it is checked here, at resolve, and refused before anything is
-/// dispatched.
-///
-/// **Refusing at dispatch is the whole argument.** The alternative is a Job
-/// that reaches the step with a worktree cut and a Drone spawned and then
-/// captures nothing — which reads as a broken harness rather than as a file
-/// that never declared one, and sends a person to fix the wrong thing.
+/// This workflow ships with the app and is dispatched against any repository
+/// — refusing it here would be refusing somebody else's workflow for not
+/// having opted into something optional. The step still carries `captured`;
+/// what happens to it is Fleet's decision at run time (`showing::showed`
+/// skips the capture and warns on the Job), not config's decision at resolve
+/// time.
 #[test]
-fn a_step_that_shows_its_work_is_refused_where_nothing_can_show_it() {
+fn a_step_that_shows_its_work_resolves_where_nothing_can_show_it() {
     let def = WorkflowDef::parse(&named("workflows/shows.yml"), SHOWS, &roster())
         .expect("a workflow with a captured step");
 
-    let refused = ResolvedWorkflow::resolve(&def, &manifest())
-        .expect_err("no harness is declared, so the step cannot run");
+    let resolved = ResolvedWorkflow::resolve(&def, &manifest())
+        .expect("no harness is declared, and the workflow still resolves");
 
-    let ResolveError::ShowsWithNoHarness { steps, .. } = refused else {
-        panic!("expected a harness refusal and got: {refused}");
-    };
-    assert_eq!(
-        steps.iter().map(StepId::as_str).collect::<Vec<&str>>(),
-        ["show"],
-        "the step is named, so the message says which one to look at"
+    assert!(
+        resolved.steps()[1].captured(),
+        "the step still asks to be captured — only whether it can be answered has moved"
     );
 }
 

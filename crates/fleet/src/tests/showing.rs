@@ -599,7 +599,7 @@ evidence:
 
 /// Every `NotShown` names the key it is about, because the ways a harness fails
 /// are different edits to `armada.yml` — and a sentence saying only *the
-/// harness failed* would send a person to read all five.
+/// harness failed* would send a person to read all six.
 #[test]
 fn what_went_wrong_names_the_key_to_go_and_look_at() {
     assert!(NotShown::ServeEnded.said().contains("evidence.serve"));
@@ -613,6 +613,7 @@ fn what_went_wrong_names_the_key_to_go_and_look_at() {
     }
     .said()
     .contains("shots"));
+    assert!(NotShown::NoHarness.said().contains("evidence:"));
 }
 
 /// The Job id is on the module rather than in a signature nothing here takes,

@@ -53,9 +53,9 @@ pub use handed_in::{
     worktree_directory_named,
 };
 pub use workflows::{
-    manifest, one, shown_step, two_steps_both_gated_on_a_diff, two_steps_gated_on_a_manifest_rule,
-    two_steps_gated_on_a_person, workflow_named, workflow_named_gated_on_diff, NEVER_QUIET,
-    UNTRIPPABLE,
+    manifest, one, shown_step, shown_step_with_no_harness, two_steps_both_gated_on_a_diff,
+    two_steps_gated_on_a_manifest_rule, two_steps_gated_on_a_person, workflow_named,
+    workflow_named_gated_on_diff, NEVER_QUIET, UNTRIPPABLE,
 };
 
 use fleets::a_fleet_whose_drone_leaves;
@@ -485,5 +485,72 @@ async fn a_shown_step_runs_its_spec_once_and_makes_no_base_checkout() {
     assert!(
         fleet.vcs().bases().is_empty(),
         "no base checkout was ever asked for — the before run stays off"
+    );
+}
+
+/// **`#778`.** A step that asks to be captured, met with a repository that
+/// never declared `evidence:`, runs anyway — the capture is skipped and the
+/// Job's own log says why, rather than the workflow being refused before a
+/// worktree was ever cut.
+#[tokio::test]
+async fn a_captured_step_with_no_harness_skips_the_capture_and_says_so() {
+    use crate::evidence::Call;
+    use config::EvidenceType;
+    use verification::{Claimed, NotClaimed, ShownBy};
+
+    let home = TempDir::new();
+    let mut fittings = fittings(&home, FakeWorkProduct::untouched());
+    fittings.workflows = one(shown_step_with_no_harness());
+    fittings.manifest = manifest();
+    let fleet = Fleet::assembled(fittings);
+
+    let job = fleet
+        .propose(a_proposal_for(
+            "show what it looks like",
+            "fixture-shown-bare",
+        ))
+        .await
+        .unwrap();
+    worktree_directory(&home, &job);
+    dispatched(&fleet, job.id()).await.unwrap();
+
+    submitted_by_the_one(
+        &fleet,
+        Call {
+            evidence_type: EvidenceType::Diff,
+            claimed: Claimed("the panel now collapses"),
+            shown_by: ShownBy("e2e/panel.spec.ts"),
+            not_claimed: NotClaimed(""),
+        },
+    )
+    .await
+    .unwrap();
+    let turned = fleet.turn().await.unwrap();
+    assert!(
+        matches!(
+            turned.ruled(),
+            Some(Ruling::Advanced { .. }) | Some(Ruling::Finished { .. })
+        ),
+        "capture is not among the four things that gate a step: {:?}",
+        turned.ruled()
+    );
+
+    let kept = fleet
+        .store()
+        .lock()
+        .await
+        .step_frames_every_attempt(job.id())
+        .expect("the frame record reads back");
+    assert!(kept.is_empty(), "no harness ran, so nothing was captured");
+
+    let path = crate::transcript::log_of(&home.path().to_string_lossy(), &job.handle());
+    let written = std::fs::read_to_string(path).unwrap_or_default();
+    assert!(
+        written.contains("the step's harness produced nothing to look at"),
+        "a skip that says nothing is the failure this line rules out: {written}"
+    );
+    assert!(
+        written.contains("no `evidence:` is declared, so capture was skipped"),
+        "the line names why, not only that: {written}"
     );
 }
