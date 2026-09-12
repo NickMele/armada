@@ -167,7 +167,9 @@ pub struct AskedOption {
 /// the labels the Drone offered, and an answer Fleet cannot match to one of them
 /// is refused rather than passed through — which is what keeps this from
 /// becoming the conversation `docs/scope.md` rejected. Words go to a Drone
-/// through [`Redirection`](crate::Redirection) and through nothing else.
+/// through [`Redirection`](crate::Redirection), and since 11.5 through the note
+/// a reject carries on [`AnswerCommand`](crate::AnswerCommand) — which is about
+/// the one command it refuses, not an open channel. Never through this.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChosenAnswer {
     /// Which question is being answered. A window that has been open across an

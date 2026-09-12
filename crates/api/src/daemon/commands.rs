@@ -557,10 +557,10 @@ pub trait Commands: Send + Sync + 'static {
     /// the row rather than re-reading the board.
     ///
     /// **There is no field for prose.** [`ChosenAnswer::chose`] is one of the labels
-    /// the Drone offered and a label matching none is refused rather than passed
-    /// through; words reach a Drone through [`Commands::redirect_drone`] and
-    /// nothing else, which is what keeps this from becoming the conversation
-    /// `docs/scope.md` rejected.
+    /// the Drone offered and a label matching none is refused, which keeps this from
+    /// becoming the conversation `docs/scope.md` rejected. Words reach a Drone by
+    /// redirect, and since 11.5 by a reject's note on [`Commands::answer_command`]
+    /// — about the one command it refuses. Never through this one.
     ///
     /// [`Refusal::IllegalMove`] where nothing is outstanding, where the id names
     /// a question already answered, and where the label was not offered.

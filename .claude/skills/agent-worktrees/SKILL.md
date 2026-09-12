@@ -91,6 +91,20 @@ checkout instead. Confirmed twice on 12 Sep 2026, in one session: one agent left
 13 files on `main` this way and another 22, and both had been told in their brief
 to use absolute paths. Neither noticed; the dispatching session found it.
 
+**An agent may be refused a worktree outright, and then it lands in yours.**
+Confirmed 12 Sep 2026: two agents dispatched in parallel were each refused
+`git worktree add` and `git -C` by the sandbox — one was refused its branch
+twice as a "shared-resource change" — so both committed onto the branch the
+dispatching session's own worktree held. Nothing was lost, because their scopes
+were disjoint and each staged by explicit path, but the dispatching session
+learned it from the first agent's report rather than from the brief. **Plan for
+it rather than forbidding it**: while agents run, the dispatching session's tree
+is not its own, so it cannot commit — a `git add` sweeps their half-written
+files into somebody else's commit — and it cannot run the Checks, because the
+run captures a mid-write tree. Tell each agent to stage by explicit path, expect
+one branch rather than two, and treat your own tree as read-only from dispatch
+until the last one reports.
+
 Three habits, and they are cheap:
 
 - **Prove the worktree, with output you read.** `git -C <repo root> worktree list`

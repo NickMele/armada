@@ -67,8 +67,9 @@ matches on, which is a major bump and Bridge falling back to the /v0 lifeboat.
 **The answer is one of the labels the Drone itself offered.** Two to four of
 them, each saying what it commits to, and there is no field for prose anywhere
 on the path — which is what makes this an event on a Job rather than the
-conversation `scope.md` rejected. Redirect stays the one route a person's own
-words reach a Drone by.
+conversation `scope.md` rejected. Redirect is how a person's own words reach a
+Drone from here — and since protocol 11.5 a reject carries a note about the one
+command it refuses, which is a refusal explaining itself rather than a reply.
 
 Neither vigil counts a waiting Drone as a stopped one: `crates/fleet/src/silence.rs`
 and `crates/fleet/src/converging.rs` decline on it exactly as they decline on
