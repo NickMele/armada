@@ -37,7 +37,9 @@
 // for a recording and nothing has to be revoked for one, because there is no
 // `blob:` in it at all.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
+
+import { useHeldReads } from "./held-reads";
 
 import type { FrameContent, ShownFrame } from "@armada/components";
 import type { FrameRead, KeptFrame } from "@armada/protocol";
@@ -132,18 +134,10 @@ export type ReadFrame = (jobId: string, kept: string) => Promise<FrameRead>;
  * wrote.
  */
 export function useFrames(read: ReadFrame, jobId: string, streamed: FrameSrc): Frames {
-  const [held, setHeld] = useState<Record<string, FrameState>>({});
-
-  // Read through a ref inside the callbacks so an answer landing does not
-  // re-create them. The story is rebuilt on every tick of the clock, and a
-  // `want` that changed with it would ask again on every second.
-  const current = useRef(held);
-  current.current = held;
-
   // **Every object URL this window minted, revoked when the Job changes or the
-  // window goes.** Held beside the state rather than read out of it because
-  // the cleanup runs after the state has already been replaced — a cleanup
-  // that read `held` would be revoking the new Job's URLs, or nothing at all.
+  // window goes.** An effect, because a `blob:` is held by the document rather
+  // than by React, and synchronising with something outside React is the one
+  // thing an effect is for.
   const minted = useRef<string[]>([]);
   useEffect(() => {
     return () => {
@@ -151,46 +145,36 @@ export function useFrames(read: ReadFrame, jobId: string, streamed: FrameSrc): F
       minted.current = [];
     };
   }, [jobId]);
-  useEffect(() => setHeld({}), [jobId]);
+
+  const { of, fetch, hold } = useHeldReads<FrameRead, FrameState>({
+    read,
+    jobId,
+    settle: (answer) => drawn(answer, minted),
+    asking: { state: "fetching" },
+    // A rejected invoke is main gone, which is the window closing. Recorded as
+    // an absence so the plate is not left saying `reading…` for the rest of
+    // its life.
+    failed: { state: "absent", note: NOT_ANSWERED },
+  });
 
   const want = useCallback(
     (frames: KeptFrame[]) => {
-      const asking = frames.filter((frame) => current.current[frame.kept] === undefined);
-      if (asking.length === 0) return;
-      // **A video is never fetched; it is pointed at.** The address is
-      // composed from the id the record already carries, so a recording is
-      // `got` in the same breath it is asked for and the player does the
-      // reading — which is what makes one longer than a minute watchable at
-      // all. Everything else is fetched; only its own kind, once the bytes are
-      // back, can tell it apart from something Bridge cannot draw.
-      const watching = asking.filter((frame) => namedAsVideo(frame.name));
-      const fetching = asking.filter((frame) => !namedAsVideo(frame.name));
-      setHeld((was) => {
-        const next = { ...was };
-        for (const frame of watching) {
-          next[frame.kept] = {
-            state: "got",
-            content: { kind: "video", src: streamed(jobId, frame.kept) },
-          };
+      for (const frame of frames) {
+        if (of(frame.kept) !== undefined) continue;
+        // **A video is never fetched; it is pointed at.** The address is
+        // composed from the id the record already carries, so a recording is
+        // `got` in the same breath it is asked for and the player does the
+        // reading — which is what makes one longer than a minute watchable.
+        if (namedAsVideo(frame.name)) {
+          hold(frame.kept, { state: "got", content: { kind: "video", src: streamed(jobId, frame.kept) } });
+        } else {
+          fetch(frame.kept);
         }
-        for (const frame of fetching) next[frame.kept] = { state: "fetching" };
-        return next;
-      });
-      for (const frame of fetching) {
-        const kept = frame.kept;
-        void read(jobId, kept).then(
-          (answer) => setHeld((was) => ({ ...was, [kept]: drawn(answer, minted) })),
-          // A rejected invoke is main gone, which is the window closing.
-          // Recorded as an absence so the plate is not left saying `reading…`
-          // for the rest of its life.
-          () => setHeld((was) => ({ ...was, [kept]: { state: "absent", note: NOT_ANSWERED } })),
-        );
       }
     },
-    [read, jobId, streamed],
+    [of, fetch, hold, streamed, jobId],
   );
 
-  const of = useCallback((kept: string) => current.current[kept], []);
   return { of, want };
 }
 

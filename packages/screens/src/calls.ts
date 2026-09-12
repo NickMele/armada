@@ -18,9 +18,9 @@
 // to keep off the stream, and pre-fetching every cut row would spend on the
 // screen exactly what the split was made to avoid.
 
-import { useCallback, useEffect, useRef, useState } from "react";
-
 import type { CallRead, CommandExplainedRead } from "@armada/protocol";
+
+import { useHeldReads } from "./held-reads";
 
 /**
  * What one call's arguments are, as this window has them.
@@ -81,33 +81,16 @@ export type { CommandExplainedRead };
 export type ExplainCommand = (jobId: string, callId: string) => Promise<CommandExplainedRead>;
 
 export function useCallArguments(read: ReadCall, jobId: string): Calls {
-  const [held, setHeld] = useState<Record<string, CallState>>({});
-  useEffect(() => setHeld({}), [jobId]);
-
-  // Read through a ref inside the callback so pressing does not re-create the
-  // function on every answer. The log is rebuilt on every tick of the clock and
-  // a prop that changed with it would remount nothing usefully.
-  const current = useRef(held);
-  current.current = held;
-
-  const fetch = useCallback(
-    (callId: string) => {
-      // Already asked, or already answered. A second press while one is in
-      // flight is the same request, and Fleet reads a file for each one.
-      if (current.current[callId] !== undefined) return;
-      setHeld((was) => ({ ...was, [callId]: { state: "fetching" } }));
-      void read(jobId, callId).then(
-        (read) => setHeld((was) => ({ ...was, [callId]: settled(read) })),
-        // A rejected invoke is main gone, which is the window closing. Recorded
-        // as an absence like any other so the row is not left saying `Fetching`
-        // for the rest of its life.
-        () => setHeld((was) => ({ ...was, [callId]: { state: "absent", note: NOT_ANSWERED } })),
-      );
-    },
-    [read, jobId],
-  );
-
-  const of = useCallback((callId: string) => current.current[callId], []);
+  const { of, fetch } = useHeldReads<CallRead, CallState>({
+    read,
+    jobId,
+    settle: settled,
+    asking: { state: "fetching" },
+    // A rejected invoke is main gone, which is the window closing. Recorded as
+    // an absence like any other so the row is not left saying `Fetching` for
+    // the rest of its life.
+    failed: { state: "absent", note: NOT_ANSWERED },
+  });
   return { of, fetch };
 }
 

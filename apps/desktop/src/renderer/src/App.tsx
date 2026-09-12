@@ -393,7 +393,9 @@ export function App() {
               is one loop, so the detail is not a panel beside the list — and the
               list is what Escape and the control in the head both return to. */}
           {reading !== null ? (
-            <Boundary region="the job detail" {...guarded}>
+            // Keyed by the Job, so a render that threw on one Job is not the
+            // failure notice drawn over the next one opened.
+            <Boundary key={reading.id} region="the job detail" {...guarded}>
               <JobDetail
                 job={reading}
                 onReadDiff={readDiff}
