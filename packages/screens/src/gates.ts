@@ -355,9 +355,33 @@ export function notedFrom(said: string, from: number | undefined): string {
   return from === undefined ? said : `${said} — from attempt ${from}`;
 }
 
+/**
+ * Whether the run this step is being read as has ended.
+ *
+ * **Not the same question as `state`.** A run handed back reads `retrying`,
+ * which is a step still working; what separates them is whether the attempt
+ * itself closed. A gate that never reached its Judge says so in the past tense
+ * once it has, and in the present tense only while there is one.
+ */
+export function runEnded(step: StepDetail): boolean {
+  return step.attempts.at(-1)?.ended_at !== undefined;
+}
+
 /** How many criteria the step's declaration says the panel will answer. */
 export function askedOf(step: StepDetail): number {
   return (step.judge_checks ?? []).reduce((sum, judge) => sum + judge.criteria, 0);
+}
+
+/**
+ * What a Judge still out says — `asking · 2 criteria`.
+ *
+ * **One sentence, because two surfaces say it.** The timeline's Judge row and
+ * the run tree's Judge fact both draw a step whose panel is being asked, and a
+ * call in flight reading two ways in one panel is the drift this file holds.
+ */
+export function judgeAsking(step: StepDetail): string {
+  const asked = askedOf(step);
+  return `asking · ${asked} ${asked === 1 ? "criterion" : "criteria"}`;
 }
 
 /**

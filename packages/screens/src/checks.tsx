@@ -42,6 +42,7 @@ import {
   isWaiting,
   notedFrom,
   outputRunOf,
+  runEnded,
   sentenceOf,
   stoppedUndecided,
   type CheckRead,
@@ -422,14 +423,22 @@ export function judgeRow(
         identifierIsAName: true,
       };
     }
-    // A call that is out right now is not the same fact as a panel nothing has
-    // asked yet, and `judging` is the only thing on the wire that says so.
+    // Three facts and they are never one row: a call out right now, a gate
+    // still ahead of its Judge, and a run that ended without ever reaching it.
+    // The third used to read as the second, so an attempt handed back a day
+    // ago said its Judge was waiting on Checks that had long since failed.
+    if (step.judging !== undefined) {
+      return { id: JUDGE_ROW, says: ASKING_NOW, identifier, identifierIsAName: true, named: "running" };
+    }
+    if (runEnded(step)) {
+      return { id: JUDGE_ROW, says: NEVER_ASKED, identifier, identifierIsAName: true };
+    }
     return {
       id: JUDGE_ROW,
-      says: step.judging === undefined ? NOT_ASKED_YET : ASKING_NOW,
+      says: NOT_ASKED_YET,
       identifier,
       identifierIsAName: true,
-      named: step.judging === undefined ? "queued" : "running",
+      named: "queued",
     };
   }
   const refused = panels.filter((panel) => panel.verdict === "not_met").length;
@@ -474,6 +483,9 @@ const NOT_ASKED_YET = "Waiting on the Checks";
 
 /** What it says while a call is out. `judging` is what makes the two different. */
 const ASKING_NOW = "The panel is answering now.";
+
+/** What it says on a run that ended before its gate ever got to the Judge. */
+const NEVER_ASKED = "The gate did not reach the panel.";
 
 /**
  * What the Judge's row says where the gate asked and never read an answer

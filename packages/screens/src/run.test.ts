@@ -110,3 +110,82 @@ describe("the Checks tier on a step Fleet gates on everything it declares", () =
     expect(factsOf(step()).get("Checks")).toBe("8 of 8 passed");
   });
 });
+
+/**
+ * The `implement` step of `4-make-permission-hold-injectable-and-prove-l`, on
+ * the afternoon this was reported: attempt 1 held for a person with two
+ * criteria refused, attempt 2 handed back with `test` failing, attempt 3
+ * thirty seconds old and its gate not reached. The tree drew all three of
+ * those at once — Checks from attempt 2, Judge from attempt 1, Verdict from
+ * attempt 2 — in red, over a step whose own mark was running.
+ */
+function retrying(over: Partial<StepDetail> = {}): StepDetail {
+  return step({
+    state: "running",
+    check_runs: [
+      { attempt: 1, name: "build", outcome: "passed" },
+      { attempt: 1, name: "test", outcome: "passed" },
+      { attempt: 2, name: "build", outcome: "passed" },
+      { attempt: 2, name: "test", outcome: "failed", produced: "it exited 100" },
+    ],
+    judged: [
+      {
+        attempt: 1,
+        criterion_id: "restructures_without_changing",
+        verdict: "not_met",
+        cited: [],
+      },
+    ],
+    attempts: [
+      { attempt: 1, outcome: "awaiting_human", started_at: "2026-09-12T05:10:58Z", ended_at: "2026-09-12T05:30:07Z" },
+      { attempt: 2, outcome: "retrying", why: "gate_failure", started_at: "2026-09-12T18:01:29Z", ended_at: "2026-09-12T18:06:02Z" },
+      { attempt: 3, outcome: "running", started_at: "2026-09-12T18:06:02Z" },
+    ],
+    verdicts: [{ attempt: 2, named: "failed", trigger: "gate_failure" }],
+    last_verdict: { attempt: 2, named: "failed", trigger: "gate_failure" },
+    ...over,
+  });
+}
+
+describe("a step being worked again", () => {
+  it("reads its Checks off the live attempt, which has not reached them", () => {
+    expect(factsOf(retrying()).get("Checks")).toBe("not reached");
+  });
+
+  it("reads its Judge off the live attempt, which nobody has asked", () => {
+    expect(factsOf(retrying()).get("Judge")).toBe("1 declared");
+  });
+
+  it("says the Judge is being asked while the call is out", () => {
+    const judging = {
+      look: "criterion",
+      model: "sonnet",
+      call: 1,
+      of: 2,
+      since: "2026-09-12T18:10:48Z",
+      budget_ms: 120000,
+    };
+    expect(factsOf(retrying({ judging })).get("Judge")).toBe("asking · 1 criterion");
+  });
+
+  it("draws no verdict, because the one on the wire ruled the attempt before", () => {
+    expect(factsOf(retrying()).has("Verdict")).toBe(false);
+  });
+
+  it("records what the attempt before came to, and never as this step's own state", () => {
+    const facts = runOf(whole(retrying()), NOW, "tests", [])[0]?.facts ?? [];
+    const before = facts.find((fact) => fact.label === "Attempt 2");
+    expect(before?.value).toBe("stopped at the gate");
+    // Neutral. A hue here is the screen saying the step is failing right now.
+    expect(before?.named).toBeUndefined();
+    expect(facts.every((fact) => fact.named !== "failed")).toBe(true);
+  });
+
+  it("still reads the newest attempt that answered once the step is at rest", () => {
+    // An overrule advances a step whose Checks are the attempt before's, and
+    // `gates.ts` has drawn them there all along.
+    const rest = retrying({ state: "awaiting_human" });
+    expect(factsOf(rest).get("Checks")).toBe("test failed");
+    expect(factsOf(rest).get("Verdict")).toBe("stopped at the gate");
+  });
+});

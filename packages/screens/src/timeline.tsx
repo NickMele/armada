@@ -24,7 +24,7 @@ import type { StepActivity, StepChapter, StepTimelineAttempt } from "@armada/com
 
 import { namesChapter } from "./detail-keys";
 import { span } from "./duration";
-import { askedOf, didNotPass } from "./gates";
+import { askedOf, didNotPass, judgeAsking } from "./gates";
 import { entriesOf } from "./story";
 
 /** Which phase a row is. What an attempt wrote rides on `working`. */
@@ -81,6 +81,22 @@ export type TimelineAttempt = {
   /** The last attempt, which is the one a person is reading. */
   current: boolean;
   rows: TimelineRow[];
+  /** The step as this run alone, for a caller that builds a story from one. */
+  read: AttemptRead;
+};
+
+/**
+ * One attempt as a step of its own: its rows, its turns, and nothing from the
+ * runs either side of it.
+ *
+ * **A whole `StepDetail` rather than the parts**, because every reading this
+ * repository has of a step's insides takes one and narrows it to the current
+ * attempt itself — so handed a step whose only attempt is this one, all of
+ * them answer about this one and not a line of them is written twice.
+ */
+export type AttemptRead = {
+  step: StepDetail;
+  turns: Turn[];
 };
 
 /**
@@ -95,10 +111,7 @@ export function timelineOf(
   turns: readonly Turn[],
   now: number,
 ): TimelineAttempt[] {
-  const spine: StepAttempt[] =
-    step.attempts.length > 0
-      ? [...step.attempts].sort((a, b) => a.attempt - b.attempt)
-      : [{ attempt: 1, outcome: step.state, started_at: step.entered_at }];
+  const spine = spineOf(step);
   const mine = turns.filter((turn) => turn.step === undefined || turn.step === step.step_id);
 
   return spine.map((attempt, at) => {
@@ -122,20 +135,25 @@ export function timelineOf(
     // What this attempt wrote, as Fleet read it at the step boundary. The last
     // reading in the window wins, for the reason `run.ts` states: a step read
     // three times has three rows and only the newest describes the work.
-    const wrote = producedIn(within);
+    const wrote = wroteIn(within);
     // **Counted the way the log counts**, through `entriesOf`, which drops a
     // Drone's echo of its own instruction. Counting the raw window here said
     // 1763 turns on a row whose own body said 1756, and one row cannot hold
     // two numbers for one fact.
     const readable = entriesOf(within, step.step_id).length;
+    // Every attempt after the first opens with the gate's hand-back, which
+    // Fleet writes as an `instructed` turn like the opening brief.
+    const told = within.filter((turn) => turn.saw.event === "instructed");
 
     const rows: TimelineRow[] = [
       {
         id: `${attempt.attempt}-instructed`,
         phase: "instructed",
         name: "Instructed",
-        mark: "advanced",
-        turns: within.filter((turn) => turn.saw.event === "instructed"),
+        // **Read, never assumed.** A tick over a body reading "Armada has not
+        // opened this step yet" is the row and its own chapter disagreeing.
+        mark: told.length === 0 ? "not_started" : "advanced",
+        turns: told,
       },
       {
         id: `${attempt.attempt}-working`,
@@ -160,8 +178,90 @@ export function timelineOf(
       ...(took(attempt, ended, now) === undefined ? {} : { took: took(attempt, ended, now) }),
       current,
       rows,
+      read: { step: asAttempt(step, attempt, ended, current), turns: within },
     };
   });
+}
+
+/**
+ * The step as one of its runs.
+ *
+ * **`attempts` becomes the one, and that is the whole trick.**
+ * `onlyCurrentAttempt` reads the newest attempt among a step's rows and
+ * `earlierAttempt` compares it against `attempts.at(-1)` — so a step holding
+ * one attempt answers every reading already written, about that attempt.
+ *
+ * **The live gate belongs to the live run**: `checking` and `judging` are
+ * Fleet's "right now", and an earlier run has no now.
+ *
+ * **`flagged` is not narrowed, because the wire does not stamp it** — a gaming
+ * flag carries no attempt, so it stays whole rather than being guessed at.
+ */
+function asAttempt(
+  step: StepDetail,
+  attempt: StepAttempt,
+  ended: string | undefined,
+  current: boolean,
+): StepDetail {
+  const only = <T extends { attempt: number }>(rows: readonly T[]): T[] =>
+    rows.filter((row) => row.attempt === attempt.attempt);
+  const { checking, judging, last_verdict: _ruled, ...rest } = step;
+  const ruled = step.verdicts.find((one) => one.attempt === attempt.attempt);
+  return {
+    ...rest,
+    ...(current && checking !== undefined ? { checking } : {}),
+    ...(current && judging !== undefined ? { judging } : {}),
+    state: attempt.outcome,
+    check_runs: only(step.check_runs),
+    judged: only(step.judged),
+    verdicts: only(step.verdicts),
+    // Stamped where the next run's start is what ended this one, so a reading
+    // downstream can ask whether the run it is drawing is over.
+    attempts: [ended === undefined ? attempt : { ...attempt, ended_at: ended }],
+    ...(ruled === undefined ? {} : { last_verdict: ruled }),
+    ...(step.deliverables === undefined ? {} : { deliverables: only(step.deliverables) }),
+    ...(step.frames === undefined ? {} : { frames: only(step.frames) }),
+    entered_at: attempt.started_at,
+    updated_at: ended ?? step.updated_at,
+  };
+}
+
+/**
+ * Every run of the step, oldest first.
+ *
+ * **A step with no attempts still has one.** Fleet sends none until the first
+ * is recorded, and a step a person is looking at has begun.
+ */
+function spineOf(step: StepDetail): StepAttempt[] {
+  return step.attempts.length > 0
+    ? [...step.attempts].sort((a, b) => a.attempt - b.attempt)
+    : [{ attempt: 1, outcome: step.state, started_at: step.entered_at }];
+}
+
+/**
+ * One run's turns, by the same window the timeline draws it in.
+ *
+ * **For a sheet opened from an earlier attempt.** An attempt ends when the next
+ * begins, so its turns are the ones stamped inside that span; unknown attempt
+ * is the step's whole record rather than nothing, because a reading that
+ * silently empties is worse than one that is wider than asked.
+ */
+export function turnsOfAttempt(
+  step: StepDetail,
+  attempt: number,
+  turns: readonly Turn[],
+): Turn[] {
+  const spine = spineOf(step);
+  const at = spine.findIndex((one) => one.attempt === attempt);
+  const run = spine[at];
+  if (run === undefined) return [...turns];
+  const ended = run.ended_at ?? spine[at + 1]?.started_at;
+  return turns.filter(
+    (turn) =>
+      (turn.step === undefined || turn.step === step.step_id) &&
+      turn.ts >= run.started_at &&
+      (ended === undefined || turn.ts < ended),
+  );
 }
 
 /**
@@ -204,7 +304,7 @@ function alsoWrote(said: string | undefined, wrote: number): string | undefined 
  * step level: Fleet takes one at every ruling, and only the newest describes
  * the work as it stands.
  */
-function producedIn(turns: readonly Turn[]): ChangedFile[] {
+export function wroteIn(turns: readonly Turn[]): ChangedFile[] {
   let files: ChangedFile[] = [];
   for (const turn of turns) {
     if (turn.saw.event === "produced") files = turn.saw.files;
@@ -295,7 +395,7 @@ function judgeRow(
       ? asked === 0
         ? "no judge declared"
         : asking
-          ? `asking · ${asked} ${asked === 1 ? "criterion" : "criteria"}`
+          ? judgeAsking(step)
           : `${asked} ${asked === 1 ? "criterion" : "criteria"}, not asked`
       : refused > 0
         ? `${refused} of ${criteria.size} refused`
@@ -321,48 +421,52 @@ function judgeRow(
  * step, which is the drift this repository deletes on sight — so the chapters
  * are placed into the phase that produced them and nothing is derived twice.
  *
- * **Only the attempt being read has bodies.** Every chapter narrows itself to
- * the current attempt, so an earlier attempt draws what this file derived for
- * it — its counts, its outcome and what its gate found — and no body it would
- * have to invent.
+ * **Every attempt keeps its record, and the story is built per run.** It used
+ * to be built once for the step and given to the current attempt alone, so an
+ * earlier one drew four open rows with empty wells where its brief, its log,
+ * its files and its refusals had been — and the current one's log listed every
+ * turn of the step under a row whose own count was its window's.
  */
 export function stepTimelineOf(
   step: StepDetail,
   turns: readonly Turn[],
   now: number,
-  /** The chapters the story already built, in the order it built them. */
-  chapters: readonly StepChapter[],
+  /** The step's story over one of its runs. `ended` is a run that is over. */
+  story: (read: AttemptRead, ended: boolean) => readonly StepChapter[],
 ): StepTimelineAttempt[] {
-  const held = new Map(chapters.map((chapter) => [chapter.id, chapter]));
-  return timelineOf(step, turns, now).map((attempt) => ({
-    id: attempt.id,
-    name: `Attempt ${attempt.attempt}`,
-    ...(saidOf(attempt) === undefined ? {} : { said: saidOf(attempt) }),
-    current: attempt.current,
-    rows: attempt.rows.map((row) => {
-      const drawn = bodyOf(row.phase, attempt.current ? held : new Map());
-      // **The count is said only where the row does not draw the list.** What
-      // this attempt wrote is its own boundary reading; the Produced chapter
-      // under it is the Job's whole work, so a row that draws the chapter and
-      // states its own number puts two answers to one question on one line.
-      // A folded row, and every earlier attempt, has no list and the count is
-      // the whole of what it can say.
-      const meta = row.wrote === undefined || drawn.showsWhatItWrote === true
-        ? row.meta
-        : alsoWrote(row.meta, row.wrote);
-      return {
-        id: `${attempt.id}-${row.id}`,
-        // Named the way a chapter was, because `[` `]` land on whatever carries
-        // this — and what they land on is a phase of an attempt now.
-        marker: namesChapter(`${attempt.id}-${row.id}`),
-        name: row.name,
-        activity: row.mark,
-        ...(meta === undefined ? {} : { meta }),
-        ...(row.live === true ? { live: true } : {}),
-        ...drawn.row,
-      };
-    }),
-  }));
+  return timelineOf(step, turns, now).map((attempt) => {
+    const mine = new Map(
+      story(attempt.read, !attempt.current).map((chapter) => [chapter.id, chapter]),
+    );
+    return {
+      id: attempt.id,
+      name: `Attempt ${attempt.attempt}`,
+      ...(saidOf(attempt) === undefined ? {} : { said: saidOf(attempt) }),
+      current: attempt.current,
+      rows: attempt.rows.map((row) => {
+        const drawn = bodyOf(row.phase, mine);
+        // **The count is said only where the row does not draw the list.** What
+        // this attempt wrote is its own boundary reading; the Produced chapter
+        // under it is the Job's whole work, so a row that draws the chapter and
+        // states its own number puts two answers to one question on one line.
+        // A folded row has no list, and there the count is the whole of it.
+        const meta = row.wrote === undefined || drawn.showsWhatItWrote === true
+          ? row.meta
+          : alsoWrote(row.meta, row.wrote);
+        return {
+          id: `${attempt.id}-${row.id}`,
+          // Named the way a chapter was, because `[` `]` land on whatever carries
+          // this — and what they land on is a phase of an attempt now.
+          marker: namesChapter(`${attempt.id}-${row.id}`),
+          name: row.name,
+          activity: row.mark,
+          ...(meta === undefined ? {} : { meta }),
+          ...(row.live === true ? { live: true } : {}),
+          ...drawn.row,
+        };
+      }),
+    };
+  });
 }
 
 /** Which chapters belong to which phase, in the order the phase produced them. */

@@ -29,7 +29,15 @@ import type { Footprint } from "@armada/protocol";
 
 /** The rows, in the order the reading found them. Never re-sorted. */
 export function filesOf(reading: JobFilesChanged): ChangedFile[] {
-  return reading.files.map((file: WireFile) => ({
+  return fileRowsOf(reading.files);
+}
+
+/**
+ * The same rows off a bare list — what a step's own boundary reading carries,
+ * which is an attempt's files rather than a whole Job's.
+ */
+export function fileRowsOf(files: readonly WireFile[]): ChangedFile[] {
+  return files.map((file: WireFile) => ({
     path: file.path,
     change: file.change,
     // Absent and `false` are the same fact here — the wire omits it rather than

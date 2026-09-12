@@ -11,7 +11,7 @@ import type { StepChapter } from "@armada/components";
 import type { CheckRun, StepDetail, Turn } from "@armada/protocol";
 
 import { freshStep, instructed, producedTurn, said } from "./fixtures/build/base";
-import { stepTimelineOf, timelineOf } from "./timeline";
+import { stepTimelineOf, timelineOf, turnsOfAttempt } from "./timeline";
 
 const NOW = Date.parse("2026-09-10T14:30:00Z");
 
@@ -131,14 +131,16 @@ describe("what an attempt wrote", () => {
     ]);
     const turns = [wrote, wroteAgain];
 
-    const [earlier, current] = stepTimelineOf(handedBack(), turns, NOW, [aProducedChapter()]);
+    const [earlier, current] = stepTimelineOf(handedBack(), turns, NOW, (_read, ended) =>
+      ended ? [] : [aProducedChapter()],
+    );
     expect(earlier?.rows.find((row) => row.name === "Working")?.meta).toBe(
       "1 turn · 2m 22s · 1 file",
     );
     expect(current?.rows.find((row) => row.name === "Working")?.meta).toBe("1 turn · 5m 20s");
 
     // With no chapter to draw, every attempt says what it wrote.
-    const [, alone] = stepTimelineOf(handedBack(), turns, NOW, []);
+    const [, alone] = stepTimelineOf(handedBack(), turns, NOW, () => []);
     expect(alone?.rows.find((row) => row.name === "Working")?.meta).toBe(
       "1 turn · 5m 20s · 1 file",
     );
@@ -168,5 +170,73 @@ describe("the gate's rows", () => {
     const step = handedBack({ judge_checks: [{ criteria: 2, gaming_check: false }] });
     const [, second] = timelineOf(step, [], NOW);
     expect(second?.rows.find((row) => row.phase === "judge")?.meta).toBe("2 criteria, not asked");
+  });
+});
+
+describe("what an attempt that has ended keeps", () => {
+  const wroteFirst = producedTurn("regression_verify", "2026-09-10T14:23:30Z", [
+    { path: "crates/settings/src/hold.rs", change: "modified" },
+  ]);
+  const wroteAgain = producedTurn("regression_verify", "2026-09-10T14:25:30Z", [
+    { path: "crates/settings/src/reducer.rs", change: "modified" },
+  ]);
+
+  /** The step handed to the builder for each run that has ended. */
+  function narrowedBy(step: StepDetail, turns: Turn[]): StepDetail[] {
+    const asked: StepDetail[] = [];
+    stepTimelineOf(step, turns, NOW, (read, ended) => {
+      if (ended) asked.push(read.step);
+      return [];
+    });
+    return asked;
+  }
+
+  it("is asked for, run by run, and never for the one being worked", () => {
+    const step = handedBack({ check_runs: [failedRun(1)] });
+    const narrowed = narrowedBy(step, [wroteFirst, wroteAgain]);
+    expect(narrowed.map((one) => one.attempts.map((run) => run.attempt))).toEqual([[1]]);
+  });
+
+  it("carries its own gate and not the step's", () => {
+    const step = handedBack({ check_runs: [failedRun(1), failedRun(2)] });
+    const [first] = narrowedBy(step, []);
+    expect(first?.check_runs.map((run) => run.attempt)).toEqual([1]);
+    // `checking` and `judging` are Fleet's "right now", and this run is over.
+    expect(first?.checking).toBeUndefined();
+    expect(first?.state).toBe("retrying");
+  });
+
+  it("draws the body the builder hands back, where it drew nothing at all", () => {
+    const step = handedBack();
+    const bare = stepTimelineOf(step, [wroteFirst, wroteAgain], NOW, () => []);
+    expect(bare[0]?.rows.find((row) => row.name === "Working")?.body).toBeUndefined();
+
+    const kept = stepTimelineOf(step, [wroteFirst, wroteAgain], NOW, () => [aProducedChapter()]);
+    expect(kept[0]?.rows.find((row) => row.name === "Working")?.body).toBeDefined();
+  });
+
+  it("reads its own turns, by the window the next attempt closed", () => {
+    const step = handedBack();
+    const asked: Turn[][] = [];
+    stepTimelineOf(step, [wroteFirst, wroteAgain], NOW, (read, ended) => {
+      if (ended) asked.push(read.turns);
+      return [];
+    });
+    expect(asked[0]?.map((turn) => turn.ts)).toEqual(["2026-09-10T14:23:30Z"]);
+  });
+});
+
+describe("one run's turns, for a sheet opened from it", () => {
+  const first = said("regression_verify", "2026-09-10T14:23:30Z", "first");
+  const second = said("regression_verify", "2026-09-10T14:25:30Z", "second");
+
+  it("ends an attempt where the next one began", () => {
+    expect(turnsOfAttempt(handedBack(), 1, [first, second])).toEqual([first]);
+    expect(turnsOfAttempt(handedBack(), 2, [first, second])).toEqual([second]);
+  });
+
+  it("answers with the step's whole record for an attempt it does not have", () => {
+    // Wider than asked beats a reading that silently empties.
+    expect(turnsOfAttempt(handedBack(), 9, [first, second])).toEqual([first, second]);
   });
 });

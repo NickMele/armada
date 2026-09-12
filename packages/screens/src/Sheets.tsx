@@ -81,6 +81,14 @@ export type DetailSheetProps = {
   /** The step's rows, in the order they arrived. */
   rows: LogRow[];
   /**
+   * Which run of the step the rows are, where they are one run's.
+   *
+   * **The header has to say so**, because a log opened from attempt 1 and one
+   * opened from the step are the same layer with different contents, and
+   * nothing else on it distinguishes a short run from a quiet step.
+   */
+  ofAttempt?: number;
+  /**
    * The same turns those rows were folded from, which carry the tool and the
    * timing the rows no longer do. **The sheet is where the folding earns its
    * keep**: one real step put 1763 rows behind this layer.
@@ -126,6 +134,7 @@ export function DetailSheet({
   whole,
   step,
   rows,
+  ofAttempt,
   turns,
   observed,
   diff,
@@ -156,10 +165,12 @@ export function DetailSheet({
       <ActivityLogSheet
         open
         floor={floor}
-        step={step.label}
+        step={ofAttempt === undefined ? step.label : `${step.label} · attempt ${ofAttempt}`}
         jobId={job.id}
         total={rows.length}
-        live={observed.state === "watching"}
+        // **A closed run's log is not live**, and the hold strip has nothing to
+        // jump to: both of those describe a tail, and this run has no tail.
+        live={ofAttempt === undefined && observed.state === "watching"}
         // When the stream stopped. Nothing on the wire carries a Job's end, so
         // this is the open step's own `updated_at` — the instant the panel's
         // own `Took` is measured to, rather than a second reading of it.

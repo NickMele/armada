@@ -18,6 +18,7 @@ import {
   consumersStep,
   detail,
   foldedReads,
+  handedBack,
   holdsRead,
   instructed,
   job,
@@ -100,6 +101,11 @@ export function retryingCheckFailure(): JobFixture {
     instructed("regression_verify", "2026-09-10T14:22:18Z", 4, "cargo nextest run --workspace exits 0", "Regression check"),
     called("regression_verify", "2026-09-10T14:23:02Z", "call_nextest_1", "Bash", "cargo nextest run --workspace"),
     checked("regression_verify", "2026-09-10T14:24:40Z", nextestFailed(1)),
+    handedBack(
+      "regression_verify",
+      "2026-09-10T14:24:42Z",
+      "cargo_nextest did not pass: 3 of 2034 tests failed. The step is yours again — attempt 2 of 3.",
+    ),
     said("regression_verify", "2026-09-10T14:24:45Z", "Attempt 2: the memo key is keeping the old reference. Adjusting it."),
     called("regression_verify", "2026-09-10T14:25:10Z", "call_nextest_2", "Bash", "cargo nextest run --workspace"),
   ];

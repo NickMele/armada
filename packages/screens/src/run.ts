@@ -36,8 +36,8 @@ import type {
 import { isSweepMarker } from "./declared";
 import { DIFF_CHAPTER } from "./detail-keys";
 import { span } from "./duration";
-import { ordered } from "./facts";
-import { checksOf, checksStand, panelsFrom } from "./gates";
+import { onlyCurrentAttempt, ordered } from "./facts";
+import { checksOf, checksStand, judgeAsking, panelsFrom } from "./gates";
 import { frozenBeneath } from "./frozen";
 
 /**
@@ -123,6 +123,16 @@ function factsOfStep(
   asking?: string,
 ): RunTreeFact[] {
   const facts: RunTreeFact[] = [];
+  // **A Drone at work is not a gate that failed.** `check_runs` and `judged`
+  // hold every attempt and `last_verdict` is the newest ruling, so a step
+  // handed back and picked up again drew the gate that refused the *previous*
+  // attempt beside a Drone that had just started — three rows in red under a
+  // step whose own mark was running, and on the Job this was found on they
+  // were not even the same attempt as each other: Checks from attempt 2, Judge
+  // from attempt 1, Verdict from attempt 2, over a live attempt 3 whose Checks
+  // were all passing. The reading is one attempt's or it is nobody's.
+  const working = WORKING.has(activity);
+  const live = step.attempts.at(-1)?.attempt;
   // **The attempts are the panel's now.** Each one used to draw here with its
   // Checks, Judge and Verdict nested beneath it, and the step panel draws that
   // same list a few inches to the right — one reading in two columns, which is
@@ -140,18 +150,30 @@ function factsOfStep(
   // **While the gate runs them, the fact is what is running**, in the words the
   // Checks chapter uses — one reading, two places.
   const checks =
-    step.checking === undefined ? checksFact(step, step.check_runs) : checkingFact(step);
+    step.checking === undefined
+      ? checksFact(step, gateOf(step.check_runs, live, working))
+      : checkingFact(step);
   if (checks !== undefined) facts.push(checks);
 
-  const judge = judgeFact(step, step.judged, criteria, asking);
+  const judge = judgeFact(step, gateOf(step.judged, live, working), criteria, asking);
   if (judge !== undefined) facts.push(judge);
 
-  if (step.last_verdict !== undefined) facts.push(verdictFact(step.last_verdict));
+  // **The verdict is the live attempt's or it is not drawn.** `last_verdict` is
+  // the newest ruling and nothing else, so on a step being worked again it is
+  // the ruling that sent the Drone back — a sentence about a run that is over,
+  // in the row a person reads for where the step is now.
+  const ruled = step.last_verdict;
+  if (ruled !== undefined && (!working || ruled.attempt === live)) facts.push(verdictFact(ruled));
 
   // Served as a field rather than left as a pair to notice: a step reading
   // `advanced` beside a failed verdict is one a person overruled, and a tree
   // that drew only the first would render an overruled gate as a cleared one.
   if (step.overridden) facts.push({ label: "Advanced", value: "overruled by a person" });
+
+  // What the run before this one came to, once its rows have stopped being
+  // this step's gate. Neutral, and only while a later attempt is in flight.
+  const before = working ? beforeFact(step) : undefined;
+  if (before !== undefined) facts.push(before);
 
   const stands = standsFact(step, activity);
   if (stands !== undefined) facts.push(stands);
@@ -170,11 +192,64 @@ function factsOfStep(
  * broken, and the trigger is the word that reconciles it.
  */
 function verdictFact(verdict: { named: string; trigger?: string }): RunTreeFact {
+  return { label: "Verdict", value: ruledSaid(verdict), named: verdict.named };
+}
+
+/** A ruling in words: its trigger's verb where it carried one, its own name where not. */
+function ruledSaid(verdict: { named: string; trigger?: string }): string {
+  return verdict.trigger === undefined
+    ? verdict.named
+    : (ESCALATION_REASON[verdict.trigger]?.verb ?? verdict.trigger);
+}
+
+/** The step states in which a Drone is at work right now. `timeline.tsx`'s own set. */
+const WORKING = new Set<StepActivity>(["running", "retrying"]);
+
+/**
+ * The gate rows a step's facts are read from.
+ *
+ * **While a Drone works, the live attempt's and no others** — an attempt whose
+ * gate has not run yet has no Checks and no verdicts, and that is the true
+ * answer rather than the last attempt's. Empty is what makes `Checks` read
+ * `not reached` and `Judge` read `2 declared` on a retry, which is where the
+ * step is.
+ *
+ * **At rest, the newest attempt that answered**, which is `gates.ts`'s rule for
+ * every other surface: a step advanced by an overrule carries Checks from the
+ * attempt before it, and dropping them there would lose the gate that ran.
+ */
+function gateOf<T extends { attempt: number }>(
+  rows: T[],
+  live: number | undefined,
+  working: boolean,
+): T[] {
+  if (!working || live === undefined) return onlyCurrentAttempt(rows);
+  return rows.filter((row) => row.attempt === live);
+}
+
+/**
+ * What the attempt before the live one came to — `Attempt 2 · stopped at the
+ * gate`.
+ *
+ * **Neutral, never hued.** A run that is over is history on a step that is
+ * moving, and a red chip on it is the screen saying the step is failing right
+ * now. It carries no `named` for that reason.
+ *
+ * **One row, and it is the previous attempt's.** Every attempt's own record is
+ * the timeline's, phase by phase; what the tree owes a person is why this
+ * Drone is on its second go, which is one line.
+ */
+function beforeFact(step: StepDetail): RunTreeFact | undefined {
+  const before = step.attempts.at(-2);
+  if (before === undefined) return undefined;
+  const ruled = step.verdicts.find((one) => one.attempt === before.attempt);
   const said =
-    verdict.trigger === undefined
-      ? verdict.named
-      : (ESCALATION_REASON[verdict.trigger]?.verb ?? verdict.trigger);
-  return { label: "Verdict", value: said, named: verdict.named };
+    ruled !== undefined
+      ? ruledSaid(ruled)
+      : before.why !== undefined
+        ? (ESCALATION_REASON[before.why]?.verb ?? before.why)
+        : (STEP_STATE[before.outcome]?.verb ?? before.outcome);
+  return { label: `Attempt ${before.attempt}`, value: said };
 }
 
 
@@ -273,6 +348,10 @@ function judgeFact(
   const declared = step.judge_checks;
   if (declared === undefined) return undefined;
   if (judged.length === 0 && asking === undefined) {
+    // **A call still out is not a gate that has not been reached.** `judging`
+    // is Fleet's own "right now", and the sentence is `gates.ts`'s so the
+    // timeline's Judge row four inches away cannot word it differently.
+    if (step.judging !== undefined) return { label: "Judge", value: judgeAsking(step) };
     return declared.length === 0
       ? undefined
       : { label: "Judge", value: `${declared.length} declared`, named: undefined };
