@@ -16,7 +16,7 @@ import type { StepDetail } from "@armada/protocol";
 
 import { checksChapter } from "./checks";
 import type { Following, Outputs } from "./outputs";
-import { phasesOf, type Opens } from "./phases";
+import type { Opens } from "./phases";
 
 const OPENS: Opens = {
   jobId: "01M130Y1380016YK5S0JXBXDQ5",
@@ -105,19 +105,5 @@ describe("a step whose gate is running its Checks", () => {
   it("counts what is running in the chapter's summary", () => {
     const chapter = checksChapter(gating(), [], OPENS, OUTPUTS, NOW, FOLLOWING);
     expect(chapter?.summary).toBe("1 running · 1 of 3 passed");
-  });
-
-  it("says the gate has the step, not the Drone", () => {
-    const { stages, note } = phasesOf(gating(), [], OPENS, "running");
-    expect(stages.find((stage) => stage.id === "working")?.state).toBe("cleared");
-    expect(stages.find((stage) => stage.id === "submitted")?.state).toBe("cleared");
-    expect(stages.find((stage) => stage.id === "checks")?.state).toBe("current");
-    expect(note).toBe("The Drone has submitted, and the gate is running its Checks.");
-  });
-
-  it("goes back to the Drone working once nothing is checking", () => {
-    const { stages } = phasesOf(gating({ checking: undefined }), [], OPENS, "running");
-    expect(stages.find((stage) => stage.id === "working")?.state).toBe("current");
-    expect(stages.find((stage) => stage.id === "checks")?.state).toBe("ahead");
   });
 });

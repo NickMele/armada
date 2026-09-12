@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { ChevronDown, ChevronRight } from "lucide-react";
 
+import { Skeleton } from "../../primitives/Skeleton/Skeleton";
 import { Chapter } from "../Chapter/Chapter";
 import { StepActivityMark, type StepActivity } from "../StepActivityMark/StepActivityMark";
 
@@ -203,6 +204,32 @@ function Row({
         row.body
       )}
     </Chapter>
+  );
+}
+
+/** Instructed, Working, Checks, Judge: the phases a step is read against. */
+const SKELETON_ROWS = 4;
+
+/**
+ * The timeline, before the step it draws has come back.
+ *
+ * **Closed rows, and named.** A phase's name is the workflow's and is known
+ * before the step is read, so the skeleton says which four are coming; what it
+ * cannot say is where the step stands, which is the mark and the meta — and
+ * those are the bars. It replaced a strip skeleton drawing four unnamed nodes
+ * above a story skeleton drawing three named chapters, which between them
+ * promised a shape this panel no longer has.
+ */
+export function StepTimelineSkeleton({ phases }: { phases?: readonly ReactNode[] }) {
+  const named = phases ?? Array.from({ length: SKELETON_ROWS }, () => undefined);
+  return (
+    <div className="armada-steps" role="status" aria-label="Reading the step" aria-busy>
+      <div className="armada-steps__rows">
+        {named.map((name, at) => (
+          <Chapter key={at} name={name ?? <Skeleton width="var(--space-12)" />} open={false} />
+        ))}
+      </div>
+    </div>
   );
 }
 

@@ -1,8 +1,8 @@
 // What job detail draws while this Job's own read is out.
 //
 // **Most of the screen is already in memory.** The run's step names, which step
-// is open and the chapters every story has come off the Board's row and the
-// holds loaded for every Job, so they are drawn rather than stood in for. What
+// is open and the phases every step is read against come off the Board's row and
+// the holds loaded for every Job, so they are drawn rather than stood in for. What
 // only `GET /jobs/:job_id` carries — where each step stands, the brief, the open
 // step's fields and gates — is what waits behind a placeholder.
 //
@@ -11,7 +11,7 @@
 
 import type { RunTreeSkeletonProps } from "@armada/components";
 import type { JobSummary, Watched, WorkflowSummary } from "@armada/protocol";
-import { EVERY_STORY_TELLS } from "./chapters";
+import { EVERY_STEP_PHASE } from "./timeline";
 import type { StepReading } from "./InsideAJob";
 import { stepsAhead } from "./run";
 import { stillReading } from "./work";
@@ -41,7 +41,7 @@ export function whileReading(
     step: {
       label: open?.label,
       labelIsAnIdentifier: open?.labelIsAnIdentifier,
-      chapters: Object.values(EVERY_STORY_TELLS),
+      phases: EVERY_STEP_PHASE,
     },
   };
 }

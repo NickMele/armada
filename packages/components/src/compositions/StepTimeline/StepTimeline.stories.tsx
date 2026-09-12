@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 
 import { Button } from "../../primitives/Button/Button";
-import { StepTimeline } from "./StepTimeline";
+import { StepTimeline, StepTimelineSkeleton } from "./StepTimeline";
 
 /**
  * A step as one timeline, replacing the phase strip and the story that repeated
@@ -16,6 +16,12 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+/**
+ * The skeleton is its own component, so its stories are typed against it.
+ * Typed as the timeline's, they would owe `attempts` that a skeleton has none of.
+ */
+type SkeletonStory = StoryObj<typeof StepTimelineSkeleton>;
 
 /** A line standing in for a chapter's body. */
 function body(text: string) {
@@ -121,4 +127,22 @@ export const Advanced: Story = {
       },
     ],
   },
+};
+
+/**
+ * Before the step has come back.
+ *
+ * **The names are known and the standing is not.** A phase's name comes off the
+ * workflow, so the skeleton says which four are coming; where each one stands is
+ * what the read answers, and that is the bar.
+ */
+export const Reading: SkeletonStory = {
+  name: "Reading the step",
+  render: () => <StepTimelineSkeleton phases={["Instructed", "Working", "Checks", "Judge"]} />,
+};
+
+/** The same, where even the names are not in hand. */
+export const ReadingUnnamed: SkeletonStory = {
+  name: "Reading, names unknown",
+  render: () => <StepTimelineSkeleton />,
 };
