@@ -73,6 +73,7 @@ fn reached() -> Result<Loopback, String> {
     let at = runtime::machine_path().map_err(|why| why.to_string())?;
     let fleet = Loopback::at(listening(runtime::read(&at), &at)?);
     serving(&standing, &fleet)?;
+    answering(&fleet)?;
     Ok(fleet)
 }
 
@@ -221,15 +222,45 @@ fn listed(served: &[ManifestSummary]) -> String {
     }
 }
 
+/// Whether the door is there at all.
+///
+/// **One ping before the session opens.** A Fleet older than this binary is
+/// serving the HTTP surface and not the agent's door, and every skew rule above
+/// passes it: the protocol version says nothing about which routes exist. Found
+/// here, it is a sentence; found later, it is a 404 for every tool call.
+fn answering(fleet: &Loopback) -> Result<(), String> {
+    let answer = fleet
+        .post(api::DOOR_PATH, PING.as_bytes())
+        .map_err(|why| format!("Armada did not answer: {why}"))?;
+    match answer.status {
+        200 => Ok(()),
+        404 => Err(format!(
+            "the Fleet running on this machine does not serve an agent door at {} — it is \
+             older than this `armada`, and what it serves cannot be reached this way.",
+            api::DOOR_PATH
+        )),
+        status => Err(format!(
+            "Armada answered {status} when asked whether its agent door is open."
+        )),
+    }
+}
+
+/// The cheapest message on the door, and one with no session behind it.
+const PING: &str = r#"{"jsonrpc":"2.0","id":0,"method":"ping"}"#;
+
 /// Carry every message to the door and every answer back. One line in, at most
 /// one line out, which is what the stdio transport is.
 fn carried(fleet: &Loopback) -> ExitCode {
     each_message(|message| {
         match fleet.post(api::DOOR_PATH, message) {
-            // A notification: acknowledged with no body, because answering one
-            // is what JSON-RPC forbids.
-            Ok(answer) if answer.status == 202 || answer.body.is_empty() => None,
-            Ok(answer) if answer.status == 200 => Some(answer.body),
+            // A notification: acknowledged with 202 and no body, because
+            // answering one is what JSON-RPC forbids.
+            Ok(answer) if answer.status == 202 => None,
+            // **The status decides, and an empty body is not silence.** A 404
+            // carries no body either, and reading that as a notification is a
+            // client left waiting for an answer to an id nothing will mention
+            // again.
+            Ok(answer) if answer.status == 200 && !answer.body.is_empty() => Some(answer.body),
             Ok(answer) => refused(
                 message,
                 &format!(
@@ -252,7 +283,7 @@ fn mute(why: &str) -> ExitCode {
 }
 
 /// One message, answered by this process rather than by Fleet.
-fn refused(message: &[u8], why: &str) -> Option<Vec<u8>> {
+pub(crate) fn refused(message: &[u8], why: &str) -> Option<Vec<u8>> {
     // No shapes, because there is no Fleet serving any: a `tools/call` that
     // arrives is refused by name before anything else looks at it.
     let answered = match ipc::door::read(message, &[]) {

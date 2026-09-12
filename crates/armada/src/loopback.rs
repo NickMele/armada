@@ -26,6 +26,7 @@ pub struct Loopback {
 
 /// What Fleet answered: the status and the bytes, nothing interpreted. **This
 /// module does not parse JSON** — it carries a body between two things that do.
+#[derive(Debug)]
 pub struct Answer {
     pub status: u16,
     pub body: Vec<u8>,
