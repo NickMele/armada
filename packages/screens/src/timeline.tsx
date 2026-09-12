@@ -19,6 +19,7 @@
 import { Fragment, type ReactNode } from "react";
 
 import type { ChangedFile, CheckRun, Judged, StepAttempt, StepDetail, Turn } from "@armada/protocol";
+import { Clamped } from "@armada/components";
 import type { StepActivity, StepChapter, StepTimelineAttempt } from "@armada/components";
 
 import { namesChapter } from "./detail-keys";
@@ -136,9 +137,9 @@ export function timelineOf(
         ...(wrote.length === 0 ? {} : { produced: wrote }),
         ...(kept.length === 0 ? {} : { kept }),
       },
-      checksRow(step, attempt, runs, current),
-      judgeRow(step, attempt, ruled, current),
     ];
+    const gate = [checksRow(step, attempt, runs, current), judgeRow(step, attempt, ruled, current)];
+    for (const row of gate) if (row !== undefined) rows.push(row);
     return {
       id: `attempt-${attempt.attempt}`,
       attempt: attempt.attempt,
@@ -199,12 +200,18 @@ function checksRow(
   attempt: StepAttempt,
   runs: CheckRun[],
   current: boolean,
-): TimelineRow {
+): TimelineRow | undefined {
   const declared = step.checks?.length ?? 0;
   const running = current && step.checking?.attempt === attempt.attempt;
   const failed = runs.filter(didNotPass);
   const mark: StepActivity =
     runs.length === 0 ? (running ? "running" : "not_started") : failed.length > 0 ? "failed" : "advanced";
+  // **A step that gates on nothing draws no Checks row.** Saying "none
+  // declared" on most steps is a row reporting an absence. Read off the step
+  // and not off this attempt: a step whose first attempt ran Checks still has
+  // a Checks phase on its second, and dropping it there would lose the fact
+  // that the gate is ahead of it.
+  if (declared === 0 && step.check_runs.length === 0 && !running) return undefined;
   const meta =
     runs.length === 0
       ? declared === 0
@@ -239,7 +246,7 @@ function judgeRow(
   attempt: StepAttempt,
   ruled: Judged[],
   current: boolean,
-): TimelineRow {
+): TimelineRow | undefined {
   const asked = askedOf(step);
   const asking = current && step.judging !== undefined;
   const criteria = new Map<string, boolean>();
@@ -250,6 +257,10 @@ function judgeRow(
   const refused = criteria.size - met;
   const mark: StepActivity =
     criteria.size === 0 ? (asking ? "running" : "not_started") : refused > 0 ? "failed" : "advanced";
+  // The same rule as the Checks row, read off the step: a step nobody ever
+  // asked a Judge about has no Judge phase, rather than a phase reporting that
+  // it does not exist.
+  if (asked === 0 && step.judged.length === 0 && !asking) return undefined;
   const meta =
     criteria.size === 0
       ? asked === 0
@@ -313,6 +324,9 @@ export function stepTimelineOf(
   }));
 }
 
+/** How much of the opening brief a phase row shows before it offers the rest. */
+const INSTRUCTED_LINES = 8;
+
 /** Which chapters belong to which phase, in the order the phase produced them. */
 const CHAPTERS: Record<TimelinePhase, readonly string[]> = {
   instructed: ["instructions"],
@@ -341,14 +355,26 @@ function bodyOf(
   const acts = mine.flatMap((chapter) =>
     chapter.act === undefined ? [] : [{ id: chapter.id, act: chapter.act }],
   );
+  const drawn = mine.map((chapter) => (
+    <section key={chapter.id}>
+      {mine.length === 1 ? null : <span className="caps">{chapter.title}</span>}
+      {chapter.preview}
+      {chapter.content}
+    </section>
+  ));
   return {
-    body: mine.map((chapter) => (
-      <section key={chapter.id}>
-        {mine.length === 1 ? null : <span className="caps">{chapter.title}</span>}
-        {chapter.preview}
-        {chapter.content}
-      </section>
-    )),
+    // **The brief is bounded here.** Opening Instructed unfolded the whole
+    // passage — the brief, the standing instructions and the step list — and
+    // pushed every phase under it off the screen. The chapter clamps itself
+    // only where its headings carry no kinds, so this holds the rest.
+    body:
+      phase === "instructed" ? (
+        <Clamped lines={INSTRUCTED_LINES} moreLabel="Read the whole instruction">
+          {drawn}
+        </Clamped>
+      ) : (
+        drawn
+      ),
     ...(acts.length === 0
       ? {}
       : {
