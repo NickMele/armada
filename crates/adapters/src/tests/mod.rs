@@ -13,6 +13,7 @@
 mod basing;
 mod commit;
 mod delivery;
+mod git_guard_gaps;
 mod harness;
 mod issue_lookup;
 mod judge;
