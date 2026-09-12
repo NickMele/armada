@@ -9,8 +9,9 @@
 //! `ipc` alone.
 
 use ipc::{
-    CallArguments, CheckOutput, FilesFound, FleetCapacity, JobDetail, JobDiff, JobEvidence,
-    JobHistory, JobId, JobList, JobRemarks, JobResources, KeptFrame, ManifestReading,
+    AlertList, CallArguments, CheckOutput, DroneDetail, DroneId, DroneList, FilesFound,
+    FleetCapacity, FleetHealth, FleetUsage, JobDetail, JobDiff, JobEvidence, JobHistory, JobId,
+    JobList, JobRemarks, JobResources, KeptFrame, ManifestConfig, ManifestId, ManifestReading,
     ManifestSummary, ModelChoices, WorkflowSummary, WorktreesHeld,
 };
 
@@ -33,6 +34,24 @@ impl FakeDaemon {
             "the fake daemon runs nothing in a worktree",
             run_id(),
         )))
+    }
+}
+
+impl FakeDaemon {
+    /// The fake's own rows, kept where their status is one of `wanted`.
+    fn narrowed(&self, wanted: &[&str]) -> Result<JobList, Refusal> {
+        if *self.mute.lock().expect("not poisoned") {
+            return Err(self.fault("the fake was told not to answer"));
+        }
+        let jobs = self.jobs.lock().expect("not poisoned");
+        Ok(JobList {
+            jobs: jobs
+                .iter()
+                .filter(|job| wanted.contains(&job.status.as_wire()))
+                .cloned()
+                .collect(),
+            unreadable: self.unreadable.lock().expect("not poisoned").clone(),
+        })
     }
 }
 
@@ -62,6 +81,81 @@ impl Queries for FakeDaemon {
             jobs: self.jobs.lock().expect("not poisoned").clone(),
             unreadable: self.unreadable.lock().expect("not poisoned").clone(),
         })
+    }
+
+    /// The one Manifest the fake holds, which is what every answer is inside.
+    async fn scope(&self) -> Result<ManifestId, Refusal> {
+        Ok(shapes::manifests()[0].id.clone())
+    }
+
+    /// **The narrowings are the real rule applied to the fake's own rows.** A
+    /// fixed list here would let a route pass while the predicate behind it
+    /// said something else.
+    async fn list_job_board(&self) -> Result<JobList, Refusal> {
+        self.narrowed(&["awaiting_approval", "queued"])
+    }
+
+    async fn list_reviews(&self) -> Result<JobList, Refusal> {
+        self.narrowed(&["awaiting_review", "awaiting_attestation"])
+    }
+
+    async fn get_activity_feed(&self) -> Result<JobList, Refusal> {
+        self.narrowed(&[
+            "completed_success",
+            "completed_failed",
+            "killed",
+            "rejected",
+            "superseded",
+        ])
+    }
+
+    async fn list_alerts(&self) -> Result<AlertList, Refusal> {
+        if *self.mute.lock().expect("not poisoned") {
+            return Err(self.fault("the fake was told not to answer"));
+        }
+        Ok(shapes::alerts())
+    }
+
+    async fn list_drones(&self) -> Result<DroneList, Refusal> {
+        if *self.mute.lock().expect("not poisoned") {
+            return Err(self.fault("the fake was told not to answer"));
+        }
+        Ok(DroneList {
+            drones: vec![shapes::drone()],
+        })
+    }
+
+    /// **The refusal is what matters**: an id naming no live Drone is a 404,
+    /// never a detail with nothing in it.
+    async fn get_drone(&self, drone_id: DroneId) -> Result<DroneDetail, Refusal> {
+        match drone_id == shapes::drone().drone_id {
+            true => Ok(shapes::drone_detail()),
+            false => Err(self.no_such_job(&JobId::carried(drone_id.as_str()))),
+        }
+    }
+
+    async fn get_health(&self) -> Result<FleetHealth, Refusal> {
+        Ok(shapes::health())
+    }
+
+    async fn get_usage(&self) -> Result<FleetUsage, Refusal> {
+        if *self.mute.lock().expect("not poisoned") {
+            return Err(self.fault("the fake was told not to answer"));
+        }
+        Ok(shapes::usage())
+    }
+
+    /// A Manifest this fake does not hold is a 422 and never a 404: the request
+    /// is well-formed and names something not in the record.
+    async fn get_manifest(&self, manifest_id: ManifestId) -> Result<ManifestConfig, Refusal> {
+        match manifest_id == shapes::manifests()[0].id {
+            true => Ok(shapes::manifest_config()),
+            false => Err(Refusal::Unacceptable(ipc::WireError::raised(
+                "fleet.unacceptable_proposal",
+                "this Fleet holds no such Manifest",
+                run_id(),
+            ))),
+        }
     }
 
     async fn get_capacity(&self) -> Result<FleetCapacity, Refusal> {

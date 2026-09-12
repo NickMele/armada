@@ -7,6 +7,9 @@
 //! the step's claim about testability are the same claim, and these tests are
 //! what makes the second one checkable.
 
+/// The agent's door, over the router: a tool call reaches the route that
+/// serves the operation.
+mod door;
 mod fake;
 mod following;
 mod journal;

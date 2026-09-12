@@ -24,9 +24,8 @@
 
 use axum::routing::{get, post};
 use axum::Router;
-use ipc::RunId;
-use std::sync::Arc;
 
+use crate::attention::{get_activity_feed, list_alerts, list_job_board, list_reviews};
 use crate::commands::{
     answer_command, answer_judge, answer_question, approve_dispatch, approve_review, examine_job,
     file_report, forget_job, kill_drone, kill_job, merge_pull_request, override_verdict,
@@ -36,7 +35,9 @@ use crate::commands::{
     stop_proposal, take_up_remarks,
 };
 use crate::daemon::Daemon;
-use crate::journal::Journal;
+use crate::fleetwide::{
+    get_drone, get_events_since, get_health, get_manifest, get_usage, list_drones,
+};
 use crate::queries::{
     get_call, get_capacity, get_check_output, get_diff, get_evidence, get_frame, get_job,
     get_job_events, get_job_resources, get_manifest_reading, get_remarks, list_jobs,
@@ -45,9 +46,9 @@ use crate::queries::{
 use crate::rehearsing::{
     get_run_output, get_run_sheet, list_runs, observe_run, start_run, stop_run, undo_run,
 };
+use crate::served::Served;
 use crate::servers::{list_servers, observe_server, start_server, stop_server};
 use crate::sockets::{events, job_log, observe_check_output, observe_job};
-use crate::stream::Broadcaster;
 
 /// One operation, and where it is served.
 ///
@@ -628,109 +629,85 @@ pub const SERVED: &[Route] = &[
         method: "GET",
         path: "/events",
     },
+    // The four narrowings of `/jobs`, each its own route rather than a filter
+    // on the list: what counts as waiting on a person is a rule, and a rule
+    // stated by every caller is a rule nobody owns.
+    Route {
+        operation: "list_job_board",
+        method: "GET",
+        path: "/jobs/board",
+    },
+    Route {
+        operation: "list_reviews",
+        method: "GET",
+        path: "/jobs/reviews",
+    },
+    Route {
+        operation: "get_activity_feed",
+        method: "GET",
+        path: "/jobs/activity",
+    },
+    // Not under `/jobs`, because it is not a list of Jobs: two buckets, each
+    // holding a row about one.
+    Route {
+        operation: "list_alerts",
+        method: "GET",
+        path: "/alerts",
+    },
+    // The roster and one slot in it. `/drones/:drone_id` is the collection and
+    // the member, naming no act, which is `list_jobs` and `get_job`'s shape one
+    // record over — and not under `/jobs`, because a Drone outlives the step
+    // pointer that names it.
+    Route {
+        operation: "list_drones",
+        method: "GET",
+        path: "/drones",
+    },
+    Route {
+        operation: "get_drone",
+        method: "GET",
+        path: "/drones/:drone_id",
+    },
+    // Fleet's own three, beside `/capacity` and for its reason: none of them is
+    // a fact about any Job. `/manifests/:manifest_id` is the member read under
+    // the collection `list_manifests` already serves.
+    Route {
+        operation: "get_health",
+        method: "GET",
+        path: "/health",
+    },
+    Route {
+        operation: "get_usage",
+        method: "GET",
+        path: "/usage",
+    },
+    Route {
+        operation: "get_manifest",
+        method: "GET",
+        path: "/manifests/:manifest_id",
+    },
+    // What crossed the stream, counted. **Not `/events`**, which is the socket:
+    // this is the read for a caller that cannot hold one, and `?since=` carries
+    // a position rather than naming a resource.
+    Route {
+        operation: "get_events_since",
+        method: "GET",
+        path: "/events/since",
+    },
 ];
 
-/// Everything a handler needs. Cloned per request, so nothing here may be
-/// expensive to clone.
-pub struct Served<D> {
-    daemon: Arc<D>,
-    /// **This process's** run id, minted at start and never Fleet's-by-
-    /// assumption. Every error the transport raises carries it.
-    run_id: RunId,
-    events: Broadcaster,
-    /// Where a Job's own log is read from, handed in by whoever built the
-    /// listener.
-    ///
-    /// **Not a constructor argument**, which is the one thing worth explaining.
-    /// Twenty-odd call sites build a `Served`, nearly all of them tests that
-    /// exercise routes having nothing to do with a log, and widening the two
-    /// constructors would have made every one of them state a reader they never
-    /// call. `None` is answered by [`crate::sockets::NO_JOURNAL`] — a fault
-    /// naming what is missing, never an empty stream.
-    journal: Option<Arc<dyn Journal>>,
-}
-
-impl<D> Served<D> {
-    /// The daemon this listener answers from, handed over.
-    ///
-    /// The transport is the only holder. For a caller that also has to *drive*
-    /// the daemon — anything calling a turn on an interval — see
-    /// [`Served::sharing`].
-    pub fn by(daemon: D, run_id: RunId, events: Broadcaster) -> Served<D> {
-        Served::sharing(Arc::new(daemon), run_id, events)
-    }
-
-    /// The same daemon the caller keeps a reference to.
-    ///
-    /// **This is what lets a Job advance.** Serving is one of two things a
-    /// process does with a daemon and driving it is the other, so a
-    /// constructor that consumed it left nothing in the process able to call
-    /// `turn` — a Job dispatched on approval and then never settled. The state
-    /// was already an `Arc` for cloning per request; this only stops that
-    /// `Arc` being made where nobody else can reach it.
-    ///
-    /// No `Daemon` implementation for `Arc<D>` is needed for this and none is
-    /// stated: the handlers reach the daemon through the state's own `Arc`, so
-    /// `D` stays the concrete daemon and one indirection stays one.
-    pub fn sharing(daemon: Arc<D>, run_id: RunId, events: Broadcaster) -> Served<D> {
-        Served {
-            daemon,
-            run_id,
-            events,
-            journal: None,
-        }
-    }
-
-    /// The reader for a Job's own log, from the side that knows where the logs
-    /// are. See [`Served::journal`] for why this is not a constructor argument.
-    pub fn reading(mut self, journal: Arc<dyn Journal>) -> Served<D> {
-        self.journal = Some(journal);
-        self
-    }
-
-    /// The stream this listener publishes from, for whoever holds the daemon.
-    pub fn events(&self) -> Broadcaster {
-        self.events.clone()
-    }
-
-    /// The daemon, for a handler in another module of this crate.
-    pub(crate) fn daemon(&self) -> &D {
-        &self.daemon
-    }
-
-    /// The daemon as the `Arc` this listener holds it by, for the commands that
-    /// hand their work to a task of their own — `show_again`, `start_run`. A spawned task
-    /// has to own what it runs on, and a borrow of the state does not outlive
-    /// the request.
-    pub(crate) fn shared(&self) -> Arc<D> {
-        Arc::clone(&self.daemon)
-    }
-
-    /// The Job log reader, where one was handed in.
-    pub(crate) fn journal(&self) -> Option<Arc<dyn Journal>> {
-        self.journal.clone()
-    }
-
-    /// **This process's** run id, which every error the transport raises
-    /// carries. Read by the handlers next door and by nothing outside.
-    pub(crate) fn run_id(&self) -> &RunId {
-        &self.run_id
-    }
-}
-
-impl<D> Clone for Served<D> {
-    fn clone(&self) -> Served<D> {
-        Served {
-            daemon: Arc::clone(&self.daemon),
-            run_id: self.run_id.clone(),
-            events: self.events.clone(),
-            journal: self.journal.clone(),
-        }
-    }
-}
-
-/// The one listener. HTTP for queries and commands, an upgrade for events.
+/// The one listener: the HTTP surface, the Drone's endpoint and the agent's
+/// door, on one port.
+///
+/// **The surface is built twice on purpose.** The agent's door makes every
+/// tool call against it rather than against the daemon, and a router that held
+/// itself is not a value — so it is handed its own copy of the same table.
 pub fn router<D: Daemon>(served: Served<D>) -> Router {
+    surface(served.clone()).merge(crate::door::mounted::<D>(served.clone(), surface(served)))
+}
+
+/// The HTTP surface and the Drone's endpoint: every route but the door.
+fn surface<D: Daemon>(served: Served<D>) -> Router {
     Router::new()
         .route("/jobs", get(list_jobs::<D>).post(propose_job::<D>))
         .route("/jobs/from_request", post(propose_from_request::<D>))
@@ -739,6 +716,16 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route("/manifests", get(list_manifests::<D>))
         .route("/models", get(list_models::<D>))
         .route("/capacity", get(get_capacity::<D>))
+        .route("/health", get(get_health::<D>))
+        .route("/usage", get(get_usage::<D>))
+        .route("/alerts", get(list_alerts::<D>))
+        .route("/drones", get(list_drones::<D>))
+        .route("/drones/:drone_id", get(get_drone::<D>))
+        .route("/manifests/:manifest_id", get(get_manifest::<D>))
+        .route("/events/since", get(get_events_since::<D>))
+        .route("/jobs/board", get(list_job_board::<D>))
+        .route("/jobs/reviews", get(list_reviews::<D>))
+        .route("/jobs/activity", get(get_activity_feed::<D>))
         .route("/manifest/reading", get(get_manifest_reading::<D>))
         .route("/manifest/files", get(search_files::<D>))
         .route("/jobs/:job_id", get(get_job::<D>))

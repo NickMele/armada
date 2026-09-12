@@ -18,7 +18,7 @@ use serde::Deserialize;
 use crate::answers::{answer, file, refused};
 use crate::daemon::Queries;
 use crate::reference::Resolved;
-use crate::routes::Served;
+use crate::served::Served;
 
 /// The second segment of `/jobs/:job_id/calls/:call_id`.
 ///

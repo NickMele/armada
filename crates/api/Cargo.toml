@@ -13,6 +13,10 @@ workspace = true
 # a domain type it cannot name is a domain type it cannot leak.
 ipc = { path = "../ipc" }
 axum = { version = "0.7", features = ["ws"] }
+# `tower`: the agent's door calls the HTTP surface as the service axum already
+# builds it into, so a tool call and a Bridge request take the same route and
+# the same handler. Already under `axum`; named here because this crate calls it.
+tower = { version = "0.5", features = ["util"] }
 serde = "1"
 # `time`: one bounded wait, in `observing`, for the Drone a Job that advances
 # spawns next. Nothing here is on a timer.

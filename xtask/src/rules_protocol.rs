@@ -7,11 +7,13 @@
 //! and not a compile error, and only a rule reading both files catches an
 //! operation that is served under a name the inventory does not have.
 //!
-//! It runs one way on purpose, against the inventory. The inventory names
-//! every operation the seam will carry and M1 serves a subset, so one with no
-//! route is *not yet built* rather than wrong. What is wrong is the reverse: a
-//! route serving something the inventory never named, a `SERVED` row with no
-//! route under it, or a command answered on `GET`.
+//! What this one reads is what is served: a route naming an operation the
+//! inventory never had, a `SERVED` row with no route under it, or a command
+//! answered on `GET`.
+//!
+//! **The other direction is [`unserved`](mod@unserved)**, and it is a second
+//! rule rather than a second loop here: what it fails on is a name with nothing
+//! behind it, which is a different subject and carries an allowance of its own.
 //!
 //! # The event half runs both ways
 //!
@@ -132,7 +134,7 @@ fn check(inventory: &str, table: &str, event_source: &str, report: &mut Report) 
 
 /// Every `[operations.<name>]` key, with its `kind`. No TOML parser: the gate
 /// has no dependencies, and the file's shape is one table per operation.
-fn operations(inventory: &str) -> BTreeMap<String, String> {
+pub(crate) fn operations(inventory: &str) -> BTreeMap<String, String> {
     let mut found = BTreeMap::new();
     let mut current: Option<String> = None;
     for line in inventory.lines().map(str::trim) {
@@ -149,7 +151,7 @@ fn operations(inventory: &str) -> BTreeMap<String, String> {
 }
 
 /// Every row of the `SERVED` table, as (operation, method, path).
-fn rows(table: &str) -> Vec<(String, String, String)> {
+pub(crate) fn rows(table: &str) -> Vec<(String, String, String)> {
     let field = |line: &str, key: &str| -> Option<String> {
         line.trim()
             .strip_prefix(key)?
@@ -207,6 +209,7 @@ fn published_event_kinds(source: &str) -> Vec<String> {
         .collect()
 }
 
+pub mod unserved;
 pub mod version;
 
 #[cfg(test)]

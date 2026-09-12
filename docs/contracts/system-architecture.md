@@ -330,10 +330,24 @@ history. Unmeasured.
 request-response and both go over HTTP. Only unsolicited pushes need the
 socket.
 
-**The Fleet MCP is the HTTP surface only.** Helm reaches Fleet through it,
-so Helm gets a strict subset of what Bridge gets — not a mirror. An agent
-cannot be interrupted mid-turn, so events are Bridge-exclusive. Every Helm
-call is scoped to the selected Manifest.
+**The Fleet MCP is the HTTP surface only**, and it is built: a second MCP
+path on the listener already bound, beside the Drone's. Every tool on it is
+one row of the inventory served at the route the table already names, so
+there is no second implementation to drift; the tool set is emitted from the
+`agent_access` column rather than written by hand, because a second copy is
+how a tool gets added to the file and stays unreachable. An agent gets a
+strict subset of what Bridge gets — not a mirror. An agent cannot be
+interrupted mid-turn, so events are Bridge-exclusive. Every call is answered
+inside one Manifest, and the handshake says which.
+
+**The context cost is answered at the door rather than by the column.** Six
+operations were refused an agent because a whole patch, a test runner's
+output or an image pulled into a session stays in that session for the rest
+of it. That is true and the refusal cost more: an agent that cannot read a
+diff cannot check its own change. All six are open, and a tool answer over
+64 KiB is cut, says it was cut, and names the route that serves it whole. An
+image has no window, so one over the cap is answered as its route rather
+than as fewer bytes.
 
 **Helm polls instead of receiving events.** `get_events_since(cursor)`
 returns a count plus one line per event kind rather than the events
@@ -344,6 +358,11 @@ Decisions.
 On a command, an agent's access is the Intervention Ladder rung. The full
 set of operations — each with its kind, its transport and what an agent
 may reach directly — is in `crates/ipc/operations.toml`.
+
+**An operation the inventory names and nothing serves fails the gate**, with
+an allowance that carries a written reason per operation. Four commands and
+four events are in it today, each with its argument in `xtask`'s protocol
+rule, which prints them on every run.
 
 **`pause_job` is not built, and the act it would have backed was retired
 2026-09-03** — see `docs/concepts/drone.md`. It carried no Intervention Ladder

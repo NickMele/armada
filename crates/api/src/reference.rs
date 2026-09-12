@@ -28,7 +28,7 @@ use serde::Deserialize;
 
 use crate::answers::{problem, refused};
 use crate::daemon::Queries;
-use crate::routes::Served;
+use crate::served::Served;
 
 /// The Job a request named, resolved.
 ///

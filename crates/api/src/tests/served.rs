@@ -14,7 +14,9 @@ use tower::ServiceExt;
 
 use crate::tests::fake::{at, running, FakeDaemon};
 use crate::tests::shapes;
-use crate::tests::shapes::{run_id, A_PROPOSAL, THE_ARGUMENT, THE_CALL, THE_FRAME, THE_OUTPUT};
+use crate::tests::shapes::{
+    run_id, A_PROPOSAL, THE_ARGUMENT, THE_CALL, THE_DRONE, THE_FRAME, THE_MANIFEST, THE_OUTPUT,
+};
 use crate::{router, Broadcaster, Next, Served, Subscription, SERVED};
 
 fn wired(daemon: FakeDaemon, events: Broadcaster) -> Router {
@@ -69,6 +71,8 @@ async fn every_operation_the_table_names_is_routed() {
             .replace(":job_id", "01JOB0")
             .replace(":call_id", THE_CALL)
             .replace(":kept", THE_OUTPUT)
+            .replace(":drone_id", THE_DRONE)
+            .replace(":manifest_id", THE_MANIFEST)
             .replace(":run/:name", THE_FRAME);
         let (status, _) = call(&app, route.method, &uri, A_PROPOSAL).await;
         assert_ne!(

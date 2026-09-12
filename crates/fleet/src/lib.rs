@@ -30,6 +30,8 @@ pub mod allowance;
 pub mod asked;
 pub mod asking;
 pub mod at_step;
+/// The four narrowings of the board, and the one rule each is.
+mod attention;
 pub mod basing;
 mod boundary;
 pub mod briefing;
@@ -40,6 +42,9 @@ pub mod clock;
 /// `serving` holds the read half of. Three traits, three impl blocks, three
 /// files, and no delegating signature between them.
 pub mod commanding;
+/// One Manifest as Fleet resolved it, for the caller asking what a Job here
+/// will be held to.
+mod configured;
 /// What an upstream's terminal status does to the Job waiting behind it — the
 /// one place a dependency edge is weighed, for both admission and the Board.
 pub mod conflict_resolution;
@@ -108,6 +113,9 @@ pub mod policy;
 pub mod ports;
 mod precedent;
 pub mod preparing;
+/// The probes Fleet can run on itself, and the Doctor modules it cannot.
+/// **Not Doctor**, whose grid is ten modules and is not built.
+mod probing;
 pub mod process;
 pub mod proposal;
 pub mod proposals;
@@ -145,6 +153,8 @@ pub mod resources;
 pub mod resume;
 mod review;
 pub mod reviewing;
+/// The Drones Fleet is holding, read without taking a working slot.
+mod rostered;
 mod ruling;
 pub mod runtime;
 pub mod saying;
@@ -164,6 +174,8 @@ pub mod slots;
 /// directly.
 mod snapshotting;
 pub mod spawning;
+/// What the fleet has spent, and which Jobs a ceiling is holding.
+mod spending;
 mod stuck;
 pub mod sub_dispatch;
 mod summarising;

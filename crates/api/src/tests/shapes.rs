@@ -15,12 +15,13 @@
 
 use ipc::mcp::{CheckRan, CheckReport};
 use ipc::{
-    Actor, Asked, CallArguments, CheckOutput, EvidenceType, Finding, FleetCapacity, Held, Instant,
-    JobDetail, JobDiff, JobEvidence, JobExamined, JobHistory, JobId, JobProcess, JobRemarks,
-    JobResources, JobStatus, JobSummary, KeptFrame, Look, ManifestId, ManifestSummary,
-    ModelChoices, Movement, NotedField, Origin, ReclaimedBranch, ReclaimedWorktree, Recorded,
-    RunId, StatusMoved, StepId, Submitted, Urgency, Work, WorkflowId, WorkflowSummary,
-    WorktreeReclaimed,
+    Actor, Alert, AlertList, Asked, CallArguments, CheckOutput, DroneDetail, DroneId, DroneSummary,
+    EvidenceType, Finding, FleetCapacity, FleetHealth, FleetUsage, Held, Instant, JobDetail,
+    JobDiff, JobEvidence, JobExamined, JobHistory, JobId, JobProcess, JobRemarks, JobResources,
+    JobStatus, JobSummary, KeptFrame, Look, ManifestConfig, ManifestId, ManifestSummary,
+    ModelChoices, Movement, NotedField, Origin, Overspending, Probe, ReclaimedBranch,
+    ReclaimedWorktree, Recorded, RunId, StatusMoved, StepId, Submitted, Unprobed, Urgency, Work,
+    WorkflowId, WorkflowSummary, WorktreeReclaimed,
 };
 
 /// A spelling the registry has. Panics in a test rather than returning an
@@ -36,6 +37,13 @@ pub fn run_id() -> RunId {
 /// The one call id this fake's record holds. Anything else is a call the
 /// transcripts do not carry, which is a different answer from a missing Job.
 pub const THE_CALL: &str = "toolu_01Haa";
+
+/// The one Drone this fake is holding a slot for. Anything else names no live
+/// process, which is a 404 and not a detail with nothing in it.
+pub const THE_DRONE: &str = "01DRONE";
+
+/// The one Manifest this fake serves, and therefore the only scope.
+pub const THE_MANIFEST: &str = "01MF";
 
 /// An argument longer than a row carries, so a test can prove the whole of it
 /// comes back rather than the line the socket sent.
@@ -553,7 +561,7 @@ pub fn workflows() -> Vec<WorkflowSummary> {
 /// The one Manifest the fake holds.
 pub fn manifests() -> Vec<ManifestSummary> {
     vec![ManifestSummary {
-        id: ManifestId::carried("01MF"),
+        id: ManifestId::carried(THE_MANIFEST),
         repository: "a-repository".to_string(),
         path: "/a-repository/armada.yml".to_string(),
         records_root: "/records/a-repository-key".to_string(),
@@ -607,5 +615,103 @@ pub fn check_report() -> CheckReport {
             },
         ],
         narrowed: false,
+    }
+}
+
+/// One blocked Job and one resting at a gate, which is the whole of what
+/// `list_alerts` has to keep apart.
+pub fn alerts() -> AlertList {
+    AlertList {
+        blocked: vec![Alert {
+            job_id: JobId::carried("01JOB1"),
+            handle: "1-a-job".to_string(),
+            status: "escalated".to_string(),
+            why: Some("drone_stopped_reporting".to_string()),
+            since: Some(Instant::carried("2026-09-11T09:00:00Z")),
+        }],
+        waiting: vec![Alert {
+            job_id: JobId::carried("01JOB2"),
+            handle: "2-another-job".to_string(),
+            status: "awaiting_review".to_string(),
+            why: None,
+            since: Some(Instant::carried("2026-09-11T09:30:00Z")),
+        }],
+    }
+}
+
+/// The one Drone the fake is holding.
+pub fn drone() -> DroneSummary {
+    DroneSummary {
+        drone_id: DroneId::carried(THE_DRONE),
+        job_id: JobId::carried("01JOB1"),
+        handle: "1-a-job".to_string(),
+        step_id: StepId::carried("implement"),
+        worktree: Some("/worktrees/1-a-job".to_string()),
+        pid: 4242,
+        since: Some(Instant::carried("2026-09-11T09:00:00Z")),
+    }
+}
+
+/// A declaration and no rows. **`older` is nought and `turns` empty**, which
+/// is a Drone that has said nothing yet rather than a window that lost it.
+pub fn drone_detail() -> DroneDetail {
+    DroneDetail {
+        drone: drone(),
+        declared: Some(vec!["src/".to_string()]),
+        declared_at: Some(Instant::carried("2026-09-11T09:01:00Z")),
+        turns: Vec::new(),
+        older: 0,
+    }
+}
+
+/// One probe and the half of the answer a surface must not drop: what nobody
+/// asked.
+pub fn health() -> FleetHealth {
+    FleetHealth {
+        probes: vec![Probe {
+            module: "Fleet".to_string(),
+            outcome: "pass".to_string(),
+            detail: "answering".to_string(),
+        }],
+        not_probed: vec![Unprobed {
+            owner: "adapters".to_string(),
+            because: "it owns talking to anything outside Armada".to_string(),
+        }],
+    }
+}
+
+/// A fleet that has spent something and is holding one Job over a ceiling.
+pub fn usage() -> FleetUsage {
+    FleetUsage {
+        cost_micros: 63_000,
+        turns: 18,
+        drones: 3,
+        unpriced: 1,
+        jobs: 2,
+        over_budget: vec![Overspending {
+            handle: "1-a-job".to_string(),
+            ceiling: "turns".to_string(),
+            spent: 393,
+            allowed: 300,
+        }],
+    }
+}
+
+/// What the one Manifest declares, past the summary a picker reads.
+pub fn manifest_config() -> ManifestConfig {
+    ManifestConfig {
+        id: ManifestId::carried(THE_MANIFEST),
+        summary: manifests()[0].clone(),
+        base: Some("main".to_string()),
+        checks_as_written: vec!["build".to_string()],
+        proved_after_a_merge: Vec::new(),
+        commands: vec!["migrate".to_string()],
+        servers: vec!["web".to_string()],
+        ports: vec!["web".to_string()],
+        exclude_paths: vec![".armada/".to_string()],
+        cost_cap_micros: Some(5_000_000),
+        turn_cap: Some(300),
+        quiet_after_seconds: Some(120),
+        poke_limit: Some(3),
     }
 }

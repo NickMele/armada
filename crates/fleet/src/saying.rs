@@ -461,6 +461,12 @@ impl fmt::Display for Adrift {
             // sentence written here would be a second wording of the same
             // refusal, and the two would drift.
             Adrift::Unresolvable(why) => write!(out, "{why}"),
+            Adrift::NoSuchDrone { named } => write!(
+                out,
+                "no Drone `{named}` is at work. Fleet holds a process while a step is being \
+                 worked and lets it go when the step ends, so an id from a step that has \
+                 finished reaches nothing — what it did is on the Job"
+            ),
             Adrift::NoSuchCall { named } => write!(
                 out,
                 "nothing in this Job's transcripts is the call `{named}`. The record holds \
@@ -595,6 +601,7 @@ impl Adrift {
             | Adrift::NoSuchManifest { .. }
             | Adrift::NoSuchPeer { .. }
             | Adrift::NoSuchCall { .. }
+            | Adrift::NoSuchDrone { .. }
             | Adrift::NoSuchCheckOutput { .. }
             | Adrift::Unresolvable(_)
             | Adrift::NoSuchFrame { .. }
@@ -658,6 +665,7 @@ impl Error for Adrift {
             | Adrift::NoSuchManifest { .. }
             | Adrift::NoSuchPeer { .. }
             | Adrift::NoSuchCall { .. }
+            | Adrift::NoSuchDrone { .. }
             | Adrift::NoSuchCheckOutput { .. }
             | Adrift::NoSuchFrame { .. }
             // The five resume refusals are refusals rather than faults: a Job

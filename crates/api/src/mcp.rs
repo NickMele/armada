@@ -30,7 +30,7 @@ use axum::Router;
 use ipc::mcp::{self, Answered, Incoming};
 
 use crate::daemon::{PermissionAnswer, Tools};
-use crate::routes::Served;
+use crate::served::Served;
 
 /// Where the Evidence tool is served.
 ///

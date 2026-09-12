@@ -72,6 +72,15 @@ const UNREADABLE: i64 = -32700;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CallId(Value);
 
+impl CallId {
+    /// The id a message arrived with. **Only the two transports call this** —
+    /// this module's `read` and [`crate::door`]'s, which is the same JSON-RPC
+    /// id on a different seam.
+    pub(crate) fn of(value: Value) -> CallId {
+        CallId(value)
+    }
+}
+
 /// One message read off the transport.
 ///
 /// Every variant but [`Incoming::Nothing`] is answered, and the answer is
@@ -312,7 +321,7 @@ pub fn read(bytes: &[u8]) -> Incoming {
         return Incoming::Nothing;
     }
     // Anything else with no id cannot be answered either, whatever it meant.
-    let Some(id) = envelope.id.map(CallId) else {
+    let Some(id) = envelope.id.map(CallId::of) else {
         return Incoming::Nothing;
     };
     match envelope.method.as_str() {
