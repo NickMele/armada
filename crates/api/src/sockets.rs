@@ -24,7 +24,7 @@ use ipc::{Missed, Resync, StreamMessage, WireError, PROTOCOL_VERSION};
 use crate::answers::{problem, refused};
 use crate::daemon::Queries;
 use crate::reference::Resolved;
-use crate::routes::Served;
+use crate::served::Served;
 use crate::stream::Next;
 
 /// A listener built with no reader for a Job's own log.

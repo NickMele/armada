@@ -14,7 +14,7 @@ use serde::Deserialize;
 use crate::answers::{answer, refused, undecodable};
 use crate::daemon::{Commands, Queries};
 use crate::reference::Resolved;
-use crate::routes::Served;
+use crate::served::Served;
 
 /// The segment after `runs` on `get_run_output`.
 #[derive(Deserialize)]

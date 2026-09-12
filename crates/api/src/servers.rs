@@ -16,7 +16,7 @@ use serde::Deserialize;
 
 use crate::answers::{answer, refused, undecodable};
 use crate::daemon::{Commands, Queries};
-use crate::routes::Served;
+use crate::served::Served;
 
 /// The segment before `observe` on `observe_server`.
 #[derive(Deserialize)]

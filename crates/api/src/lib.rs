@@ -25,11 +25,16 @@
 //! [`SERVED`]. See `mcp`.
 
 mod answers;
+/// The four reads that narrow the Board rather than drawing it.
+mod attention;
 mod commands;
 mod daemon;
 /// One Job's own log, followed off the file Fleet already writes.
 /// **The third voice in the activity log.**
 mod following;
+/// The reads that belong to no Job: the roster, the machine, the spend and
+/// what crossed the stream.
+mod fleetwide;
 mod journal;
 mod mcp;
 mod observing;
@@ -40,6 +45,9 @@ mod reference;
 /// worktree, and what the runs left.
 mod rehearsing;
 mod routes;
+/// Everything a handler is given. **Next door to the table**, which is what
+/// the gate rule reads.
+mod served;
 mod servers;
 mod sockets;
 mod stream;
@@ -55,8 +63,9 @@ pub use journal::{Journal, Reading, FOLLOW};
 pub use mcp::{Caller, MCP_PATH};
 pub use observing::{Feed, Observed, Seen, Turns, Watch, WATCHING};
 pub use reference::Resolved;
-pub use routes::{router, Route, Served, SERVED};
-pub use stream::{Broadcaster, Next, Subscription, BACKLOG};
+pub use routes::{router, Route, SERVED};
+pub use served::Served;
+pub use stream::{Broadcaster, Next, Subscription, BACKLOG, TALLIED};
 pub use watching_run::{
     ObservedRun, ObservedServer, RunChunk, RunFeed, RunSeen, RunWatch, RUN_BACKLOG,
 };

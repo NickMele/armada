@@ -133,6 +133,23 @@ pub enum Event {
     ServerExited(ServerState),
 }
 
+impl Event {
+    /// The dotted name this publishes under — `operations.toml`'s own key.
+    ///
+    /// **Read out of the serialisation, never matched.** A `match` here would
+    /// be a second spelling of the `#[serde(rename)]` lines above, and the two
+    /// would disagree the first kind somebody added to one of them.
+    pub fn kind(&self) -> String {
+        serde_json::to_value(self)
+            .ok()
+            .and_then(|value| value.get("kind")?.as_str().map(str::to_string))
+            // Unreachable: the enum is externally tagged with `kind` and every
+            // variant's body is a struct. Answered rather than panicked,
+            // because this runs on the publish path of every event.
+            .unwrap_or_default()
+    }
+}
+
 // `manifest.reread` carries [`ManifestReading`] itself rather than a payload
 // wrapping it, for [`JobForgotten`]'s stated reason: the answer to
 // `get_manifest_reading` and this event's body are **the same fact**, and

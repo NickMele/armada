@@ -17,8 +17,9 @@ use crate::daemon::Refusal;
 use crate::observing::Observed;
 use crate::reference::Resolved;
 use ipc::{
-    CallArguments, CheckOutput, FilesFound, FleetCapacity, JobDetail, JobDiff, JobEvidence,
-    JobHistory, JobId, JobList, JobRemarks, JobResources, KeptFrame, ManifestReading,
+    AlertList, CallArguments, CheckOutput, DroneDetail, DroneId, DroneList, FilesFound,
+    FleetCapacity, FleetHealth, FleetUsage, JobDetail, JobDiff, JobEvidence, JobHistory, JobId,
+    JobList, JobRemarks, JobResources, KeptFrame, ManifestConfig, ManifestId, ManifestReading,
     ManifestSummary, ModelChoices, ReportList, RunList, RunOutput, RunSheet, WorkflowSummary,
     WorktreesHeld,
 };
@@ -49,6 +50,92 @@ pub trait Queries: Send + Sync + 'static {
 
     /// `list_jobs` — Jobs with state and reason.
     fn list_jobs(&self) -> impl Future<Output = Result<JobList, Refusal>> + Send;
+
+    /// The Manifest every answer to this caller is given inside.
+    ///
+    /// **Not an operation, and on no route of its own** — [`resolve_job`]'s
+    /// shape one question over. A Fleet serves one repository, so this is that
+    /// repository's Manifest; what selects a *session's* scope when an agent
+    /// may name one is `#698`, and the door compares the two.
+    ///
+    /// [`resolve_job`]: Queries::resolve_job
+    fn scope(&self) -> impl Future<Output = Result<ManifestId, Refusal>> + Send;
+
+    /// `list_job_board` — the open queue: Jobs no Drone has been started on.
+    ///
+    /// **A [`ipc::JobList`] and not a shape of its own**, as `list_reviews` and
+    /// `get_activity_feed` are. The three differ in which Jobs they carry, not
+    /// in what a Job is, and three near-identical types would be three places
+    /// to forget the partial-failure list.
+    fn list_job_board(&self) -> impl Future<Output = Result<JobList, Refusal>> + Send;
+
+    /// `list_reviews` — Jobs resting at a gate a person has to answer.
+    ///
+    /// **Not every Job that needs somebody**: one stopped mid-flight is
+    /// `list_alerts`'s `blocked`, and folding the two would put work that is
+    /// holding a Drone into a queue somebody reads at leisure.
+    fn list_reviews(&self) -> impl Future<Output = Result<JobList, Refusal>> + Send;
+
+    /// `get_activity_feed` — Jobs that are over, newest first.
+    ///
+    /// **Terminal by the registry's own `terminal` column**, never by a list of
+    /// status names kept here. A status added to `job-statuses.toml` joins this
+    /// answer without anything in this workspace being edited.
+    fn get_activity_feed(&self) -> impl Future<Output = Result<JobList, Refusal>> + Send;
+
+    /// `list_alerts` — what is waiting on a person, split by what the waiting
+    /// costs. See [`ipc::AlertList`] for the line between the two buckets.
+    ///
+    /// **Derived, never stored.** Fleet keeps no Alert record, which is why no
+    /// `alert.raised` event exists to go with this.
+    fn list_alerts(&self) -> impl Future<Output = Result<AlertList, Refusal>> + Send;
+
+    /// `list_drones` — every Drone Fleet holds a slot for.
+    ///
+    /// **The roster, not the Jobs.** An escalated Job keeps its Drone alive and
+    /// idle so a redirect costs no respawn, so a list derived from statuses
+    /// would omit exactly the Drone somebody is asking about.
+    fn list_drones(&self) -> impl Future<Output = Result<DroneList, Refusal>> + Send;
+
+    /// `get_drone` — one Drone, what it declared, and a window of its own rows.
+    ///
+    /// [`Refusal::NoSuchJob`] where the id names no Drone in the roster. **A
+    /// Drone that has exited is gone from it** — its transcript is the Job's,
+    /// read through `observe_job`, and answering here from a file would make a
+    /// dead process look like a slot.
+    fn get_drone(
+        &self,
+        drone_id: DroneId,
+    ) -> impl Future<Output = Result<DroneDetail, Refusal>> + Send;
+
+    /// `get_health` — the probes Fleet can run on itself.
+    ///
+    /// **Not Doctor.** Doctor's grid is ten modules probed from three crates
+    /// and is not built; what this cannot answer for is named in
+    /// [`ipc::FleetHealth::not_probed`] rather than left out.
+    ///
+    /// It never refuses. A probe that could not read is a `fail` row with the
+    /// reason in it — a 500 here would be the health check being the thing
+    /// that is unhealthy.
+    fn get_health(&self) -> impl Future<Output = Result<FleetHealth, Refusal>> + Send;
+
+    /// `get_usage` — what the fleet has spent, against the ceilings that refuse
+    /// the next Drone.
+    ///
+    /// **Spend, not quota.** No quantity reaches Armada from a Drone's stream,
+    /// so there is no percentage and nothing here claims one —
+    /// `settings.budget-quota-floor-for-interactive-use`.
+    fn get_usage(&self) -> impl Future<Output = Result<FleetUsage, Refusal>> + Send;
+
+    /// `get_manifest` — one Manifest as Fleet resolved it.
+    ///
+    /// [`Refusal::NoSuchJob`] is not the refusal here: a Manifest this Fleet
+    /// does not serve is [`Refusal::Unacceptable`], a well-formed request
+    /// naming something that is not in the record.
+    fn get_manifest(
+        &self,
+        manifest_id: ManifestId,
+    ) -> impl Future<Output = Result<ManifestConfig, Refusal>> + Send;
 
     /// `get_capacity` — the bound, what is occupying it, and the one thing
     /// holding the next Drone back.

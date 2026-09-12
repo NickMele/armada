@@ -22,7 +22,7 @@ use ipc::{
 use crate::answers::{answer, refused, undecodable};
 use crate::daemon::Commands;
 use crate::reference::Resolved;
-use crate::routes::Served;
+use crate::served::Served;
 
 pub(crate) async fn propose_job<D: Commands>(
     State(served): State<Served<D>>,
