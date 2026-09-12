@@ -148,6 +148,7 @@ const BRIEF = ".armada/briefs/12-the-job/regression_verify.1.gaming.assertion_we
 const FLAGGED: Partial<StepDetail> = {
   flagged: [
     {
+      attempt: 1,
       pattern: "assertion_weakened",
       cited: "crates/store/src/retain.rs:41 — the sentence holds back less than it did",
       at: { file: "crates/store/src/retain.rs", line: 41 },

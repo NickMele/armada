@@ -7,9 +7,9 @@
 //
 // # An attempt is a row, not a counter
 //
-// `StepDetail.attempts` is every run of the step, oldest first, so a step
-// worked twice draws `Attempt 1 refused` and `Attempt 2 advanced` rather than
-// one number. It is the only place an earlier run's outcome survives: `state`
+// `StepDetail.attempts` is every run of the step, oldest first, so the panel's
+// timeline draws a section per run rather than one number — and the tree names
+// only the run before the live one, while a step is being worked again. It is the only place an earlier run's outcome survives: `state`
 // and `last_verdict` are both the latest, so a step that passed on its third
 // try and one that passed on its first were the same message on the wire.
 //
@@ -37,7 +37,7 @@ import { isSweepMarker } from "./declared";
 import { DIFF_CHAPTER } from "./detail-keys";
 import { span } from "./duration";
 import { onlyCurrentAttempt, ordered } from "./facts";
-import { checksOf, checksStand, judgeAsking, panelsFrom } from "./gates";
+import { askedOf, checksOf, checksStand, judgeAsking, panelsFrom } from "./gates";
 import { frozenBeneath } from "./frozen";
 
 /**
@@ -352,9 +352,13 @@ function judgeFact(
     // is Fleet's own "right now", and the sentence is `gates.ts`'s so the
     // timeline's Judge row four inches away cannot word it differently.
     if (step.judging !== undefined) return { label: "Judge", value: judgeAsking(step) };
-    return declared.length === 0
+    // **Criteria, not declarations.** One Judge declaration asks two criteria
+    // on the step this was found on, and `1 declared` beside the timeline's
+    // `2 criteria, not asked` was two counts of one thing. `askedOf` is that one.
+    const asked = askedOf(step);
+    return asked === 0
       ? undefined
-      : { label: "Judge", value: `${declared.length} declared`, named: undefined };
+      : { label: "Judge", value: `${asked} ${asked === 1 ? "criterion" : "criteria"}, not asked` };
   }
   const panels = panelsFrom(judged, criteria, asking);
   const refused = panels.filter((one) => one.verdict === "not_met").length;

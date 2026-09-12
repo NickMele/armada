@@ -153,7 +153,7 @@ describe("a step being worked again", () => {
   });
 
   it("reads its Judge off the live attempt, which nobody has asked", () => {
-    expect(factsOf(retrying()).get("Judge")).toBe("1 declared");
+    expect(factsOf(retrying()).get("Judge")).toBe("1 criterion, not asked");
   });
 
   it("says the Judge is being asked while the call is out", () => {

@@ -304,6 +304,14 @@ IPC types will be its first real occupant once the protocol crate exists.
 Don't create a package pre-emptively for Bridge alone; a package with one
 consumer is a folder with an import path, per `packages/README.md`.
 
+**No formatter is configured, so none is run.** The TypeScript is wrapped by
+hand at about a hundred columns, and there is no Prettier config for a tool to
+find. Confirmed 12 Sep 2026: `npx prettier --write` on one file fell back to
+Prettier's eighty-column default and rewrapped every line of
+`packages/screens/src/timeline.tsx`, burying a forty-line change in a whole-file
+diff; it had to be reverted and made again by hand. Match the lines around an
+edit instead.
+
 **pnpm workspace, not npm or yarn**, `packages: ["apps/*", "packages/*"]`
 per `pnpm-workspace.yaml` — Fleet and Bridge version together in one repo and
 one commit, so don't introduce a second lockfile or a second package manager

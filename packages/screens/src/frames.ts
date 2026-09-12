@@ -353,7 +353,7 @@ export function pairedFrames(frames: KeptFrame[], held: Frames): Paired[] {
   const building = new Map<string, { name: string; attempt: number; before?: Half; after?: Half }>();
 
   frames.forEach((frame, at) => {
-    const key = `${frame.attempt} ${frame.name}`;
+    const key = `${frame.attempt}\u0000${frame.name}`;
     let pair = building.get(key);
     if (pair === undefined) {
       pair = { name: frame.name, attempt: frame.attempt };

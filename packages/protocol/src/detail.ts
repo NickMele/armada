@@ -686,6 +686,9 @@ export type StepDetail = {
    * was found and where. The same relation `judged` has to a `gate_failure`,
    * and the reason a person deciding whether to overrule a flag can be shown
    * what the flag was about. Empty on every step nothing was flagged on.
+   *
+   * Every run of the step, oldest first. Since 13.0; before that it was the
+   * newest run's alone. Join to `attempts` by `attempt`.
    */
   flagged: Flagged[];
   /**

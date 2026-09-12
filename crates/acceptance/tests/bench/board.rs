@@ -89,7 +89,13 @@ pub fn step_facts(job: &Job, ruled: &[(&str, &Ruling)]) -> Vec<StepFacts> {
                     .unwrap_or_default(),
                 flagged: ruling
                     .and_then(Ruling::flagged)
-                    .map(|found| found.cited().iter().map(Flagged::from).collect())
+                    .map(|found| {
+                        found
+                            .cited()
+                            .iter()
+                            .map(|flag| Flagged::of(1, flag))
+                            .collect()
+                    })
                     .unwrap_or_default(),
                 deliverables: Vec::new(),
                 frames: Vec::new(),

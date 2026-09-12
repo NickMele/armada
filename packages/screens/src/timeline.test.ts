@@ -198,9 +198,14 @@ describe("what an attempt that has ended keeps", () => {
   });
 
   it("carries its own gate and not the step's", () => {
-    const step = handedBack({ check_runs: [failedRun(1), failedRun(2)] });
+    const step = handedBack({
+      check_runs: [failedRun(1), failedRun(2)],
+      // Since 13.0 a flag names its run, so the newest attempt's is not the first's.
+      flagged: [{ attempt: 2, pattern: "assertion_weakened", cited: "src/retain.rs:41" }],
+    });
     const [first] = narrowedBy(step, []);
     expect(first?.check_runs.map((run) => run.attempt)).toEqual([1]);
+    expect(first?.flagged).toEqual([]);
     // `checking` and `judging` are Fleet's "right now", and this run is over.
     expect(first?.checking).toBeUndefined();
     expect(first?.state).toBe("retrying");

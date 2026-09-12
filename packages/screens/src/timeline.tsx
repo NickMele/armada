@@ -61,9 +61,10 @@ export type TimelineRow = {
    *
    * **Off `meta` rather than in it**, because whether it may be said at all
    * depends on what the row draws. This is the step's own reading, taken at
-   * its boundary; the Produced chapter a row unfolds is the **Job's** whole
-   * work, and a row asserting `3 files` over a list of nine is two answers to
-   * one question. `stepTimelineOf` is where both are known.
+   * its boundary; the Produced chapter a row unfolds lists files too — the
+   * **Job's** whole work on the live run, that run's own on an earlier one —
+   * and a row asserting `3 files` over a list of nine is two answers to one
+   * question. `stepTimelineOf` is where both are known.
    */
   wrote?: number;
 };
@@ -194,8 +195,8 @@ export function timelineOf(
  * **The live gate belongs to the live run**: `checking` and `judging` are
  * Fleet's "right now", and an earlier run has no now.
  *
- * **`flagged` is not narrowed, because the wire does not stamp it** — a gaming
- * flag carries no attempt, so it stays whole rather than being guessed at.
+ * **`flagged` narrows with the rest** since protocol 13.0 stamped each flag
+ * with its attempt.
  */
 function asAttempt(
   step: StepDetail,
@@ -214,6 +215,7 @@ function asAttempt(
     state: attempt.outcome,
     check_runs: only(step.check_runs),
     judged: only(step.judged),
+    flagged: only(step.flagged),
     verdicts: only(step.verdicts),
     // Stamped where the next run's start is what ended this one, so a reading
     // downstream can ask whether the run it is drawing is over.
@@ -447,7 +449,7 @@ export function stepTimelineOf(
         const drawn = bodyOf(row.phase, mine);
         // **The count is said only where the row does not draw the list.** What
         // this attempt wrote is its own boundary reading; the Produced chapter
-        // under it is the Job's whole work, so a row that draws the chapter and
+        // under it lists files of its own, so a row that draws the chapter and
         // states its own number puts two answers to one question on one line.
         // A folded row has no list, and there the count is the whole of it.
         const meta = row.wrote === undefined || drawn.showsWhatItWrote === true

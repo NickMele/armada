@@ -13,6 +13,7 @@
 import { useState } from "react";
 import { Button, Dialog, GAMING_PATTERN, GamingFlags, Textarea } from "@armada/components";
 
+import { onlyCurrentAttempt } from "./facts";
 import { openKept, type Opens } from "./phases";
 import { onwards, OVERRULING, type Overrule } from "./recovery";
 
@@ -81,7 +82,8 @@ export function OverruleControl({
   // Only a flag has these, and a step can trip more than one pattern. Read
   // rather than counted: what was cited is the whole value of a flag, exactly
   // as a citation is the whole value of a refusal.
-  const flagged = overrule.trigger === "evidence_suspect" ? overrule.step.flagged : [];
+  const flagged =
+    overrule.trigger === "evidence_suspect" ? onlyCurrentAttempt(overrule.step.flagged) : [];
 
   function close() {
     setOpen(false);

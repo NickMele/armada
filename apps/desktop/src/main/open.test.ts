@@ -60,6 +60,7 @@ function stopped(): StepDetail {
     judged: [],
     flagged: [
       {
+        attempt: 1,
         pattern: "assertion_weakened",
         cited: "crates/store/src/retain.rs:41 — the sentence holds back less than it did",
         brief_path: BRIEF,

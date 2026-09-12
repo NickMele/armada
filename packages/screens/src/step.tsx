@@ -38,6 +38,7 @@ import type { CommandAnswer, CommandInFlight, Criterion, JobDetail as JobWhole, 
 import type { CommandExplainedRead } from "./calls";
 import { answerNamed, offeredOf, said } from "./copy";
 import { span } from "./duration";
+import { onlyCurrentAttempt } from "./facts";
 import { panelsOf, sentenceOf } from "./gates";
 import { Opening, openKept, type Opens } from "./phases";
 import { recourseOf, type Recourse } from "./recovery";
@@ -406,7 +407,8 @@ export function noticeOf(
   // person told a policy stopped the Job is told what the policy stopped. It is
   // `undefined` on a Job refused nothing, which is most of them.
   const refused = refusedIn(whole);
-  const flagged = step.flagged;
+  // The attempt that stopped the step. `flagged` holds every run's since 13.0.
+  const flagged = onlyCurrentAttempt(step.flagged);
   // The Judge's own refused criteria — `judgeRefusalsOf`'s own doc says why.
   const judgeRefusals = judgeRefusalsOf(step, whole?.acceptance_criteria ?? []);
   // **Present only where `stopped_by` is `gate_undecided`** — `Stuck.undecided`

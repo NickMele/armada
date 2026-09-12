@@ -717,6 +717,17 @@ narrower set alone, which is why the refusal is worth the major: a Bridge built
 before this looks `shown` up in the generated vocabulary and finds a word Fleet
 can no longer send.
 
+## Protocol 13.0: a step's flags are every attempt's
+
+`#791`. `StepDetail.flagged` held the newest attempt's gaming flags, with no
+attempt on them; it now holds every attempt's, each stamped with the run that
+raised it — the change `check_runs` and `judged` took at 7.0.
+
+**The field is not new, its meaning is, and that is the major.** A Bridge built
+before this reads `flagged` as where the step stands now, and handed every
+attempt's flags it would draw a run that is over as the reason the step is held.
+The store always kept a flag's attempt; only the detail route dropped it.
+
 ## Other things specific to this seam
 
 **Bridge finds Fleet through a runtime file, not a fixed port.** The file
