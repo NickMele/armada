@@ -158,14 +158,20 @@ function Row({ row, step }: { row: TimelineRow; step: StepDetail }) {
 function Body({ row, step }: { row: TimelineRow; step: StepDetail }) {
   if (row.phase === "working") {
     const { rows, unread } = hideUnread(entriesOf(row.turns ?? [], step.step_id));
+    // **Bounded, because a real step is not small.** The recorded Job's
+    // implement step carries 1763 turns, 770 of them readable, and a row that
+    // draws them all is a row nobody can scroll past. The panel proper opens
+    // the log chapter, which is bounded and followable; this says the counts
+    // and draws the end of the work, which is where a person looks first.
+    const shown = rows.slice(-TURNS_DRAWN);
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
-        {rows.map((one) => (
+        <span className="text-2xs text-fg-subtle">{turnsSaid(rows.length, unread, shown.length)}</span>
+        {shown.map((one) => (
           <span key={one.id} className="text-2xs">
             <span className="mono text-fg-subtle">{one.at}</span> {one.actor} · {one.message}
           </span>
         ))}
-        {unread === 0 ? null : <span className="text-2xs text-fg-subtle">{`${unread} hidden`}</span>}
         <Wrote row={row} />
       </div>
     );
@@ -203,6 +209,22 @@ function Body({ row, step }: { row: TimelineRow; step: StepDetail }) {
   );
 }
 
+/** How many turns the draft draws, newest last. The log chapter has the rest. */
+const TURNS_DRAWN = 12;
+
+/** How many files it names before it counts the rest. The diff has them all. */
+const FILES_DRAWN = 8;
+
+/** What the body says about the turns it is not drawing. */
+function turnsSaid(readable: number, unread: number, shown: number): string {
+  const held = readable + unread;
+  const counted = `${held} ${held === 1 ? "turn" : "turns"}`;
+  const hidden = unread === 0 ? "" : `, ${unread} of them unread rows`;
+  return shown >= readable
+    ? `${counted}${hidden}`
+    : `${counted}${hidden} · the last ${shown} are here, and the log has the rest`;
+}
+
 /**
  * What the attempt wrote, under the turns that wrote it — the owner's call:
  * what a Drone did and what came out of it are one reading.
@@ -211,6 +233,7 @@ function Wrote({ row }: { row: TimelineRow }) {
   const produced = row.produced ?? [];
   const kept = row.kept ?? [];
   if (produced.length === 0 && kept.length === 0) return null;
+  const files = produced.slice(0, FILES_DRAWN);
   return (
     <div
       style={{
@@ -222,13 +245,20 @@ function Wrote({ row }: { row: TimelineRow }) {
         borderTop: "var(--border-width) solid var(--border-subtle)",
       }}
     >
-      <span className="armada-screen__eyebrow">Produced</span>
-      {produced.map((file) => (
+      <span className="armada-screen__eyebrow">
+        {`Produced · ${produced.length} ${produced.length === 1 ? "file" : "files"}`}
+      </span>
+      {files.map((file) => (
         <span key={file.path} className="text-2xs">
           <span className="mono">{file.path}</span>{" "}
           <span className="text-fg-subtle">{file.change}</span>
         </span>
       ))}
+      {produced.length <= FILES_DRAWN ? null : (
+        <span className="text-2xs text-fg-subtle">
+          {`${produced.length - FILES_DRAWN} more, in the diff`}
+        </span>
+      )}
       {kept.map((one) => (
         <span key={one} className="text-2xs mono">
           {one}

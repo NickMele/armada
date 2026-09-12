@@ -7,7 +7,7 @@
 // drifting past it.
 import { describe, expect, it } from "vitest";
 
-import type { CheckRun, StepDetail } from "@armada/protocol";
+import type { CheckRun, StepDetail, Turn } from "@armada/protocol";
 
 import { freshStep, instructed, producedTurn, said } from "./fixtures/build/base";
 import { timelineOf } from "./timeline";
@@ -76,6 +76,21 @@ describe("turns fall into the attempt that was running", () => {
   it("counts them, and the time the attempt ran, on the row itself", () => {
     const [first] = timelineOf(handedBack(), turns, NOW);
     expect(first?.rows.find((row) => row.phase === "working")?.meta).toBe("2 turns · 2m 22s");
+  });
+
+  it("counts the turns a reader would count, with Armada's own echo out", () => {
+    // The log drops Armada's echo of its own instruction, so a row that counted
+    // the raw window said 1763 turns above a body that listed 1756.
+    const echo: Turn = {
+      ts: "2026-09-10T14:23:10Z",
+      seq: 900,
+      step: "regression_verify",
+      by: "armada",
+      saw: { event: "said", text: "Armada opened the step." },
+    };
+    const [first] = timelineOf(handedBack(), [...turns.slice(0, 2), echo], NOW);
+    expect(first?.rows.find((row) => row.phase === "working")?.meta).toBe("2 turns · 2m 22s");
+    expect(first?.rows.find((row) => row.phase === "working")?.turns).toHaveLength(3);
   });
 
   it("never draws a finished attempt as running, on a step that is", () => {

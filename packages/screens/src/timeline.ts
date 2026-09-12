@@ -21,6 +21,7 @@ import type { StepActivity } from "@armada/components";
 
 import { span } from "./duration";
 import { askedOf, didNotPass } from "./gates";
+import { entriesOf } from "./story";
 
 /** Which phase a row is. What an attempt wrote rides on `working`. */
 export type TimelinePhase = "instructed" | "working" | "checks" | "judge";
@@ -107,6 +108,11 @@ export function timelineOf(
     // reading in the window wins, for the reason `run.ts` states: a step read
     // three times has three rows and only the newest describes the work.
     const wrote = producedIn(within);
+    // **Counted the way the log counts**, through `entriesOf`, which drops a
+    // Drone's echo of its own instruction. Counting the raw window here said
+    // 1763 turns on a row whose own body said 1756, and one row cannot hold
+    // two numbers for one fact.
+    const readable = entriesOf(within, step.step_id).length;
 
     const rows: TimelineRow[] = [
       {
@@ -121,7 +127,7 @@ export function timelineOf(
         phase: "working",
         name: "Working",
         mark: working ? "running" : within.length === 0 ? "not_started" : "advanced",
-        meta: workingSays(within.length, span(attempt.started_at, ended ?? now), wrote.length + kept.length),
+        meta: workingSays(readable, span(attempt.started_at, ended ?? now), wrote.length + kept.length),
         ...(working ? { live: true } : {}),
         turns: within,
         ...(wrote.length === 0 ? {} : { produced: wrote }),
@@ -145,7 +151,11 @@ export function timelineOf(
 /** The step states in which a Drone is working right now. */
 const WORKING = new Set(["running", "retrying"]);
 
-/** `14 turns · 6m 01s · 4 files`, dropping what there is nothing to say about. */
+/**
+ * `14 turns · 6m 01s · 4 files`, dropping what there is nothing to say about.
+ *
+ * The turn count is what a reader would count in the log, echoes already out.
+ */
 function workingSays(turns: number, took: string | null, files: number): string {
   return [
     `${turns} ${turns === 1 ? "turn" : "turns"}`,
