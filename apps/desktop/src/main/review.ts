@@ -22,6 +22,12 @@
 // nobody is writing to, and all three decisions move the Job off the status
 // that made the surface reachable. Re-reading a megabyte on every event would
 // spend the bytes the split exists to save.
+//
+// **That is true of a Job at a gate and was never true of one that is running**,
+// which the diff has been read for since it stopped belonging to the review
+// block alone. So the surface asks again — a press, or the file list moving
+// under it — and `diff` below takes the reading rather than answering out of
+// what was read when the Job was opened. Still no event on this side.
 
 import type { Diff, Evidence, Remarks } from "@armada/protocol";
 import type { JobDiff, JobEvidence, JobRemarks, Submitted, Work } from "@armada/protocol";
@@ -121,8 +127,24 @@ export class ReviewMaterial {
     await this.claims.want(port, jobId);
   }
 
-  /** Read one Job's worktree against its branch, or `null` to stop. */
+  /**
+   * Read one Job's worktree against its branch, or `null` to stop.
+   *
+   * **Asking again for the Job already held takes the reading again.** The
+   * patch was read on open and never after, so a running Job's sheet drew the
+   * worktree as it was before its Drone wrote — beside a Produced chapter off
+   * the live event naming the files. Two surfaces, one worktree, no way to tell
+   * which was lying.
+   *
+   * **`again`, not `want`** — `remarksChanged`'s reason: `want` republishes a
+   * transient `reading`, which blanks a sheet somebody is looking at. The id
+   * moving is still a `want`, because there the blank is the truth.
+   */
   async diff(port: number | null, jobId: string | null): Promise<void> {
+    if (jobId !== null && port !== null && this.patch.jobId === jobId) {
+      await this.patch.again(port);
+      return;
+    }
     await this.patch.want(port, jobId);
   }
 

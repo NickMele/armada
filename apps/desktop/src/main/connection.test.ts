@@ -599,3 +599,53 @@ it("re-reads the comments on job.remarks_changed, only where a person asked for 
   await published.until(() => fleet.read(REMARKS_ROUTE) === 3);
   expect(fleet.read(REMARKS_ROUTE)).toBe(3);
 });
+
+/**
+ * The running-Job half of the same rule: a surface asking again for the Job it
+ * already holds gets a new reading, not the one taken when the Job was opened.
+ *
+ * A Drone writes for ten minutes after that first read, so the sheet drew `0
+ * files` beside a Produced chapter naming seven — one worktree, two answers,
+ * and nothing on either saying which was older.
+ */
+it("takes the patch again when a surface asks for the Job it already holds", async () => {
+  const fleet = await serving();
+  const home = await runtimeFile(fleet.port);
+  const published = publishing();
+  /** Every state the patch was published in, in order. */
+  const drawn: string[] = [];
+  const connection = new FleetConnection({
+    home,
+    publish: (state) => {
+      drawn.push(state.diff.state);
+      published.publish(state);
+    },
+    now: () => 1_756_840_000_000,
+  });
+  opened.push(() => connection.stop());
+
+  connection.start();
+  const stream = await fleet.stream(0);
+  stream.send(resyncing(1));
+  await published.until((state) => state.connection.state === "connected");
+
+  // Opening the Job takes the reading once, which is what it has always done.
+  await connection.readDiff(A_JOB);
+  await published.until((state) => state.diff.state === "read");
+  expect(fleet.read(SCREEN.diff)).toBe(1);
+
+  // The sheet opens, or the file list moves under one already open.
+  drawn.length = 0;
+  await connection.readDiff(A_JOB);
+  await published.until(() => fleet.read(SCREEN.diff) === 2);
+  expect(fleet.read(SCREEN.diff)).toBe(2);
+  // **And the sheet is never blanked to do it.** `want` republishes `reading`,
+  // which empties the layer somebody is reading; the second read keeps the
+  // first one up until it lands.
+  expect(drawn).not.toContain("reading");
+
+  // A different Job is a different reading, and there the blank is the truth.
+  drawn.length = 0;
+  await connection.readDiff("01M1HQZAKN001AJ5MT3PT0OTHR");
+  expect(drawn).toContain("reading");
+});
