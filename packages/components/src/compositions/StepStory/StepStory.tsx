@@ -160,21 +160,3 @@ export function StepStory({ chapters, openId, openChapter, onOpen }: StepStoryPr
     </ol>
   );
 }
-
-/**
- * The story, before the step it tells has come back: the chapters every step
- * has, by name and closed, because what is in each is what the read answers.
- */
-export function StepStorySkeleton({ chapters }: { chapters: readonly ReactNode[] }) {
-  return (
-    <div role="status" aria-label="Reading the story" aria-busy>
-      <ol className="armada-story">
-        {chapters.map((name, at) => (
-          <li className="armada-story__chapter" key={at}>
-            <Chapter ordinal={at + 1} name={name} open={false} />
-          </li>
-        ))}
-      </ol>
-    </div>
-  );
-}
