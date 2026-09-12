@@ -80,6 +80,14 @@ button.armada-frames__plate:focus-visible {
   object-fit: contain;
 }
 
+/* A recording keeps its player when it cannot play, and the reason goes under
+   it — so the plate stacks rather than centring one child. The player is the
+   only response a person has to a read that failed, which is why it stays. */
+.armada-frames__plate--video {
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
 /* Text and JSON do not fit the 16/10 box an image is measured for — a log is
    tall and a plate that clipped it to a screen's shape would be worse than the
    broken image this surface exists to replace. The plate grows to the content

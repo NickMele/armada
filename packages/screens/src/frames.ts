@@ -26,6 +26,17 @@
 // screenshots in memory. The revoking is this module's whole reason for holding
 // state rather than fetching in a component.
 
+// # A recording is pointed at rather than read
+//
+// A video is the one kind never fetched here. What a plate gets is an address
+// on the scheme Bridge's main process handles, and main forwards a span of it
+// at a time — so a two-minute capture starts playing without being held
+// anywhere first, and seeking to the end does not read what came before.
+//
+// This is what retired the twenty-mebibyte skip (`#615`). Nothing is minted
+// for a recording and nothing has to be revoked for one, because there is no
+// `blob:` in it at all.
+
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { FrameContent, ShownFrame } from "@armada/components";
@@ -47,10 +58,9 @@ export type FrameState =
    * Nothing is drawn, and the reader says why in one sentence.
    *
    * **The frame's own, never the step's.** A frame the record holds and the
-   * disk does not is a 422 about one file; a kind Bridge does not know is a
-   * decision made once, in [`drawn`]; a video held back for its size is a
-   * decision made before it is ever asked for, in [`want`]. All three are one
-   * frame's business, and the other frames of that run are still drawn.
+   * disk does not is a 422 about one file, and a kind Bridge does not know is a
+   * decision made once, in [`drawn`]. Both are one frame's business, and the
+   * other frames of that run are still drawn.
    */
   | { state: "absent"; note: string };
 
@@ -77,11 +87,11 @@ function kindOf(mediaType: string): FrameContent["kind"] | undefined {
  * Whether a name is one of the extensions Fleet answers as a video.
  *
  * **A guess, and the only one this module makes.** Every other kind is read
- * off the media type Fleet already sent; this one is asked before that answer
- * exists, because [`VIDEO_BOUND_BYTES`] has to be checked before the fetch it
- * would otherwise gate. `answers::media_type` is the one true mapping — this
- * only has to agree with it closely enough that a large video is not read
- * whole by mistake, and a false negative here costs nothing but the bound.
+ * off the media type Fleet already sent; this one is asked before any answer
+ * exists, because a video is never fetched at all — it is drawn from an
+ * address instead. `answers::media_type` is the one true mapping and this has
+ * to agree with it on the two extensions it names; a false negative costs a
+ * recording read whole the way an image is, which is what this replaced.
  */
 function namedAsVideo(name: string): boolean {
   const said = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
@@ -89,20 +99,13 @@ function namedAsVideo(name: string): boolean {
 }
 
 /**
- * What a video is allowed to weigh before Bridge reads it.
+ * Where a recording streams from, as the screen's caller hands it in.
  *
- * **A client-side bound, not a change to how Fleet reads a file.** `#605`
- * asks for a bound or a streamed read because `showing::frame_bytes` loads a
- * frame whole; this repository has no route this screen may add one to (see
- * `#603`, in flight against the same seam), so the honest thing reachable
- * from here is to never ask. `KeptFrame.bytes` is already on the record
- * before any fetch, so a video over this line is never read into memory on
- * either side of the wire — the plate says why instead. Twenty mebibytes is a
- * guess proportioned to a Job's other files rather than a measurement; it
- * belongs in `crates/config/settings.toml` once something reads it on the
- * Fleet side too.
+ * **[`ReadFrame`]'s rule, for a thing that is not a read.** A screen may not
+ * know how to reach Fleet, so the way to compose an address arrives as an
+ * argument exactly as the way to ask does — and a story passes its own.
  */
-const VIDEO_BOUND_BYTES = 20 * 1024 * 1024;
+export type FrameSrc = (jobId: string, kept: string) => string;
 
 /** What a chapter needs: what is held, and how to ask for a step's worth. */
 export type Frames = {
@@ -128,7 +131,7 @@ export type ReadFrame = (jobId: string, kept: string) => Promise<FrameRead>;
  * holds it, and carried into the next Job it would name a file that Job never
  * wrote.
  */
-export function useFrames(read: ReadFrame, jobId: string): Frames {
+export function useFrames(read: ReadFrame, jobId: string, streamed: FrameSrc): Frames {
   const [held, setHeld] = useState<Record<string, FrameState>>({});
 
   // Read through a ref inside the callbacks so an answer landing does not
@@ -154,19 +157,21 @@ export function useFrames(read: ReadFrame, jobId: string): Frames {
     (frames: KeptFrame[]) => {
       const asking = frames.filter((frame) => current.current[frame.kept] === undefined);
       if (asking.length === 0) return;
-      // **A video over the bound is never fetched.** The record already says
-      // what it weighs — [`KeptFrame.bytes`] — so this is decided before the
-      // frame is asked for rather than after Fleet has read the whole file to
-      // answer it. Everything else is fetched; only its own kind, once the
-      // bytes are back, can tell it apart from something Bridge cannot draw.
-      const held = asking.filter(
-        (frame) => namedAsVideo(frame.name) && frame.bytes > VIDEO_BOUND_BYTES,
-      );
-      const fetching = asking.filter((frame) => !held.includes(frame));
+      // **A video is never fetched; it is pointed at.** The address is
+      // composed from the id the record already carries, so a recording is
+      // `got` in the same breath it is asked for and the player does the
+      // reading — which is what makes one longer than a minute watchable at
+      // all. Everything else is fetched; only its own kind, once the bytes are
+      // back, can tell it apart from something Bridge cannot draw.
+      const watching = asking.filter((frame) => namedAsVideo(frame.name));
+      const fetching = asking.filter((frame) => !namedAsVideo(frame.name));
       setHeld((was) => {
         const next = { ...was };
-        for (const frame of held) {
-          next[frame.kept] = { state: "absent", note: tooLargeToRead(frame.bytes) };
+        for (const frame of watching) {
+          next[frame.kept] = {
+            state: "got",
+            content: { kind: "video", src: streamed(jobId, frame.kept) },
+          };
         }
         for (const frame of fetching) next[frame.kept] = { state: "fetching" };
         return next;
@@ -182,7 +187,7 @@ export function useFrames(read: ReadFrame, jobId: string): Frames {
         );
       }
     },
-    [read, jobId],
+    [read, jobId, streamed],
   );
 
   const of = useCallback((kept: string) => current.current[kept], []);
@@ -239,16 +244,6 @@ const NOT_ANSWERED = "Fleet did not answer for this frame.";
  * has to say why there is nothing on it.
  */
 const CANNOT_DRAW = "Bridge does not know how to draw this kind of file.";
-
-/**
- * The sentence for a video [`VIDEO_BOUND_BYTES`] held back from ever being
- * asked for. Says what it weighs, for the same reason a frame still being read
- * says its weight before its bytes arrive — the size is what makes the wait
- * legible as a decision rather than a stall.
- */
-function tooLargeToRead(bytes: number): string {
-  return `This video is ${weighs(bytes)} — too large to read here.`;
-}
 
 /**
  * What the two sides are called on the screen.
