@@ -1,6 +1,6 @@
 // A step as a timeline: one section per attempt, and inside it the phases in
-// the order they happen — instructed, working, checks, judge, and whatever the
-// attempt kept.
+// the order they happen — instructed, working, checks, judge. What the attempt
+// wrote rides on working, with the turns that wrote it.
 //
 // **Derived here and drawn in one draft.** `Drafts/Step timeline` is the only
 // caller. The panel it is meant to replace still draws the strip and the
@@ -16,14 +16,14 @@
 // their order is the phase order — instructed, working, checks, judge — which
 // is the order the strip already draws and the order Fleet runs them in. A
 // timeline that claimed measured times for them would be inventing them.
-import type { CheckRun, Judged, StepAttempt, StepDetail, Turn } from "@armada/protocol";
+import type { ChangedFile, CheckRun, Judged, StepAttempt, StepDetail, Turn } from "@armada/protocol";
 import type { StepActivity } from "@armada/components";
 
 import { span } from "./duration";
 import { askedOf, didNotPass } from "./gates";
 
-/** Which phase a row is. `kept` is what the attempt left behind. */
-export type TimelinePhase = "instructed" | "working" | "checks" | "judge" | "kept";
+/** Which phase a row is. What an attempt wrote rides on `working`. */
+export type TimelinePhase = "instructed" | "working" | "checks" | "judge";
 
 /** One phase of one attempt. */
 export type TimelineRow = {
@@ -42,7 +42,13 @@ export type TimelineRow = {
   runs?: CheckRun[];
   /** This attempt's rulings, on `judge`. */
   judged?: Judged[];
-  /** What the attempt kept, on `kept`: deliverables first, then frames. */
+  /**
+   * What this attempt wrote, on `working`. **The owner's call, 11 Sep 2026**:
+   * what a Drone did and what came out of it are one reading, so Produced is
+   * not a row of its own — the files sit under the turns that wrote them.
+   */
+  produced?: ChangedFile[];
+  /** What the attempt kept beside them, on `working`: deliverables, then frames. */
   kept?: string[];
 };
 
@@ -97,6 +103,10 @@ export function timelineOf(
       ...(step.frames ?? []).filter((one) => one.attempt === attempt.attempt).map((one) => one.name),
     ];
     const working = current && ended === undefined && WORKING.has(step.state);
+    // What this attempt wrote, as Fleet read it at the step boundary. The last
+    // reading in the window wins, for the reason `run.ts` states: a step read
+    // three times has three rows and only the newest describes the work.
+    const wrote = producedIn(within);
 
     const rows: TimelineRow[] = [
       {
@@ -111,24 +121,15 @@ export function timelineOf(
         phase: "working",
         name: "Working",
         mark: working ? "running" : within.length === 0 ? "not_started" : "advanced",
-        meta: workingSays(within.length, span(attempt.started_at, ended ?? now)),
+        meta: workingSays(within.length, span(attempt.started_at, ended ?? now), wrote.length + kept.length),
         ...(working ? { live: true } : {}),
         turns: within,
+        ...(wrote.length === 0 ? {} : { produced: wrote }),
+        ...(kept.length === 0 ? {} : { kept }),
       },
       checksRow(step, attempt, runs, current),
       judgeRow(step, attempt, ruled, current),
     ];
-    if (kept.length > 0) {
-      rows.push({
-        id: `${attempt.attempt}-kept`,
-        phase: "kept",
-        name: "Kept",
-        mark: "advanced",
-        meta: `${kept.length} ${kept.length === 1 ? "file" : "files"}`,
-        kept,
-      });
-    }
-
     return {
       id: `attempt-${attempt.attempt}`,
       attempt: attempt.attempt,
@@ -144,10 +145,28 @@ export function timelineOf(
 /** The step states in which a Drone is working right now. */
 const WORKING = new Set(["running", "retrying"]);
 
-/** `14 turns · 6m 01s`, or just the count where there is no span to say. */
-function workingSays(turns: number, took: string | null): string {
-  const counted = `${turns} ${turns === 1 ? "turn" : "turns"}`;
-  return took === null ? counted : `${counted} · ${took}`;
+/** `14 turns · 6m 01s · 4 files`, dropping what there is nothing to say about. */
+function workingSays(turns: number, took: string | null, files: number): string {
+  return [
+    `${turns} ${turns === 1 ? "turn" : "turns"}`,
+    ...(took === null ? [] : [took]),
+    ...(files === 0 ? [] : [`${files} ${files === 1 ? "file" : "files"}`]),
+  ].join(" · ");
+}
+
+/**
+ * What an attempt wrote, out of its own turns.
+ *
+ * **The last reading wins**, which is `run.ts`'s rule for the same event at
+ * step level: Fleet takes one at every ruling, and only the newest describes
+ * the work as it stands.
+ */
+function producedIn(turns: readonly Turn[]): ChangedFile[] {
+  let files: ChangedFile[] = [];
+  for (const turn of turns) {
+    if (turn.saw.event === "produced") files = turn.saw.files;
+  }
+  return files;
 }
 
 /** How long an attempt ran, or nothing where it has not begun to. */

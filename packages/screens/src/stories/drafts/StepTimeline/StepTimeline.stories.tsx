@@ -34,6 +34,15 @@ export const HandedBack: Story = {
   args: { fixture: retryingCheckFailure() },
 };
 
+/**
+ * A step that finished, with what it wrote under the turns that wrote it —
+ * the owner's call that Working is the activity log and Produced together.
+ */
+export const WroteFiles: Story = {
+  name: "Wrote files",
+  args: { fixture: running(), stepId: "repro" },
+};
+
 /** Three attempts, the last of them stopped at the gate. */
 export const ThreeAttempts: Story = {
   name: "Three attempts",

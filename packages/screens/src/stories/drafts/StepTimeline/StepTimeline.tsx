@@ -166,6 +166,7 @@ function Body({ row, step }: { row: TimelineRow; step: StepDetail }) {
           </span>
         ))}
         {unread === 0 ? null : <span className="text-2xs text-fg-subtle">{`${unread} hidden`}</span>}
+        <Wrote row={row} />
       </div>
     );
   }
@@ -192,17 +193,6 @@ function Body({ row, step }: { row: TimelineRow; step: StepDetail }) {
       </div>
     );
   }
-  if (row.phase === "kept") {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)" }}>
-        {(row.kept ?? []).map((one) => (
-          <span key={one} className="text-2xs mono">
-            {one}
-          </span>
-        ))}
-      </div>
-    );
-  }
   const opened = (row.turns ?? [])[0];
   return (
     <span className="text-2xs text-fg-muted">
@@ -210,5 +200,40 @@ function Body({ row, step }: { row: TimelineRow; step: StepDetail }) {
         ? "The words Armada opened this attempt with are in the brief."
         : `Opened at ${clock(opened.ts)}. The brief itself draws here in the panel.`}
     </span>
+  );
+}
+
+/**
+ * What the attempt wrote, under the turns that wrote it — the owner's call:
+ * what a Drone did and what came out of it are one reading.
+ */
+function Wrote({ row }: { row: TimelineRow }) {
+  const produced = row.produced ?? [];
+  const kept = row.kept ?? [];
+  if (produced.length === 0 && kept.length === 0) return null;
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--space-1)",
+        marginTop: "var(--space-2)",
+        paddingTop: "var(--space-2)",
+        borderTop: "var(--border-width) solid var(--border-subtle)",
+      }}
+    >
+      <span className="armada-screen__eyebrow">Produced</span>
+      {produced.map((file) => (
+        <span key={file.path} className="text-2xs">
+          <span className="mono">{file.path}</span>{" "}
+          <span className="text-fg-subtle">{file.change}</span>
+        </span>
+      ))}
+      {kept.map((one) => (
+        <span key={one} className="text-2xs mono">
+          {one}
+        </span>
+      ))}
+    </div>
   );
 }
