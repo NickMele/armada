@@ -29,8 +29,9 @@ import { describe, expect, it } from "vitest";
 import { SILENCE } from "@armada/components";
 import type { BlockKind, Observed, Turn, Turns } from "@armada/protocol";
 
+import { called } from "./fixtures/build/base";
 import { leading } from "./reading";
-import { NOTHING_YET_ON_THIS_STEP, entriesOf, hideUnread, whyNotWatching } from "./story";
+import { NOTHING_YET_ON_THIS_STEP, entriesOf, hideUnread, inside, whyNotWatching } from "./story";
 
 const A_JOB = "01M1HQZAKN001AJ5MT3PT09KKY";
 
@@ -297,5 +298,37 @@ describe("a kind this Bridge has no reading for", () => {
   it("keeps the kind on the payload, so the row still opens to something", () => {
     const lines = payload(unrecognised("thinking_delta"));
     expect(lines.map((line) => line.text)).toEqual(["thinking_delta"]);
+  });
+});
+
+describe("a call's argument loses the worktree it was read in", () => {
+  it("leaves the path as the repository spells it", () => {
+    expect(inside("~/Development/armada/.armada/worktrees/1-a-job/crates/ipc/src/turn.rs")).toBe(
+      "crates/ipc/src/turn.rs",
+    );
+  });
+
+  it("drops the prefix from every path in one argument", () => {
+    const both =
+      "grep -n foo ~/x/.armada/worktrees/1-a-job/crates/a.rs ~/x/.armada/worktrees/1-a-job/crates/b.rs";
+    expect(inside(both)).toBe("grep -n foo crates/a.rs crates/b.rs");
+  });
+
+  it("leaves an argument that names no worktree alone", () => {
+    expect(inside("select:mcp__armada__declare_scope")).toBe("select:mcp__armada__declare_scope");
+  });
+
+  it("leaves a path that is already relative alone", () => {
+    expect(inside("crates/store/src/read.rs")).toBe("crates/store/src/read.rs");
+  });
+
+  it("keeps the whole argument on the payload, which is what a row opens to", () => {
+    const whole = "~/Development/armada/.armada/worktrees/1-a-job/crates/ipc/src/turn.rs";
+    const [row] = entriesOf(
+      [called("implement", "2026-09-10T14:00:00Z", "c1", "Read", whole)],
+      "implement",
+    );
+    expect(row?.message).toBe("Read  crates/ipc/src/turn.rs");
+    expect(row?.payload[0]?.text).toBe(whole);
   });
 });

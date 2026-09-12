@@ -33,6 +33,7 @@
 // carries no size the row says nothing about size at all — an old transcript
 // cannot recover one, and a number nobody measured is worse than no number.
 
+import { ARMADA } from "@armada/protocol";
 import type { BlockKind, Observed, Turn } from "@armada/protocol";
 import type { ChangedFile, CheckRun } from "@armada/protocol";
 import { CHECK_ADVANCES, CHECK_OUTCOME, SILENCE } from "@armada/components";
@@ -108,6 +109,28 @@ export type LogRow = {
    */
   call?: CutCall;
 };
+
+/**
+ * A call's argument with the Job's own worktree prefix dropped.
+ *
+ * **The line is the argument, and the prefix is the same on every row.** A
+ * Drone works inside one worktree, so every path it read began with the same
+ * forty characters and a `Read` row was most of the way across the panel before
+ * it said which file. What is left is the path as the repository spells it,
+ * which is how the diff and the footprint already name a file.
+ *
+ * **Derived from the layout, not guessed at.** `artifacts.ts` fixes it as
+ * `<repo>/.armada/worktrees/<job>`, and says it is not configurable — so the
+ * segment after `worktrees` is the worktree and everything before it is the
+ * machine. **The message only**: the payload keeps the argument whole, because
+ * a row that opens is a row somebody wants the real path from.
+ */
+export function inside(detail: string): string {
+  return detail.replace(WORKTREE, "");
+}
+
+/** `<anything>/.armada/worktrees/<one segment>/`, wherever it appears. */
+const WORKTREE = new RegExp(`\\S*/${ARMADA.replace(".", "\\.")}/worktrees/[^/\\s]+/`, "g");
 
 /** A cut argument: which call, how much of it the row has, and how much there is. */
 export type CutCall = {
@@ -290,7 +313,8 @@ function rowOf(row: Turn): LogRow {
         at,
         actor,
         kind,
-        message: saw.detail === "" ? `${saw.tool}  ${saw.call}` : `${saw.tool}  ${saw.detail}`,
+        message:
+          saw.detail === "" ? `${saw.tool}  ${saw.call}` : `${saw.tool}  ${inside(saw.detail)}`,
         mono: true,
         // What was sent, and how much of it there is where the wire said. The
         // row never reports an absence: `detail` is what arrived, and the size
