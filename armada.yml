@@ -256,6 +256,22 @@ commands:
     # Exits non-zero on purpose, which is why it is not a Check.
     run: cargo xtask verify-foundations
 
+  # The `storybook` Check builds and exits; this holds the port open. `--ci` or
+  # a taken port opens a prompt nobody can answer.
+  storybook_dev:
+    serve: pnpm -C packages/components exec storybook dev -p ${port.storybook} --no-open --ci
+    # A command rather than a duration, the rule `evidence:` already follows.
+    # Storybook's first start on a cold cache is minutes, and a number here
+    # would be a guess against whichever machine is slowest that week.
+    ready: curl -sf http://localhost:${port.storybook}
+    links:
+      - url: http://localhost:${port.storybook}
+        name: Storybook
+
+# Armada places these, so two worktrees never bind the same number.
+ports:
+  storybook: {}
+
 # How patient Fleet is with a Drone working here. Both keys are optional and
 # each falls back on its own: what is not written is what Fleet was started
 # with, and a workflow step may override either again.
