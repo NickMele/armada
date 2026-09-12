@@ -27,7 +27,7 @@
 use std::path::PathBuf;
 
 use core_model::{
-    EvidenceScope, FrozenWorkflow, RepoPath, ResolvedCheck, ResolvedStep, StepId, WorkflowId,
+    EvidenceScope, FrozenWorkflow, RepoPath, ResolvedCheck, ResolvedStep, WorkflowId,
 };
 
 use crate::error::{Disagreement, ResolveError, UnknownCheck};
@@ -80,24 +80,15 @@ impl ResolvedWorkflow {
                 unknown,
             });
         }
-        // **Between the two, and this is the one place both files are in
-        // hand.** `evidence.captured` parses against no Manifest, and an
-        // `evidence:` section is declared with no workflow in sight; only here
-        // can a step asking to be captured be held to a repository that can
-        // capture it. Refusing at dispatch is the whole argument — the
-        // alternative is a Job that reaches the step with a worktree cut and a
-        // Drone spawned and then captures nothing, which reads as a broken
-        // harness rather than a file that never had one.
-        if manifest.harness().is_none() {
-            let shows = asking_to_be_captured(def);
-            if !shows.is_empty() {
-                return Err(ResolveError::ShowsWithNoHarness {
-                    workflow: def.path().to_path_buf(),
-                    manifest: manifest.path().to_path_buf(),
-                    steps: shows,
-                });
-            }
-        }
+        // **This used to be refused here, and no longer is.** These
+        // workflows ship with the app and run against any repository, so a
+        // step asking to be captured is a request the workflow makes of a
+        // Manifest that may never have opted in — refusing the file was
+        // refusing somebody else's `feature` workflow because they had not
+        // set up something optional. What a repository with no `evidence:`
+        // gets instead is a Job that runs the step, skips the capture, and
+        // says so on the step rather than failing silent — see
+        // `Fleet::showed` and `NotShown`, in `crates/fleet/src/showing.rs`.
         if !disagreements.is_empty() {
             return Err(ResolveError::StepsDisagreeWithTheManifest {
                 workflow: def.path().to_path_buf(),
@@ -152,25 +143,6 @@ impl ResolvedWorkflow {
     pub fn steps(&self) -> &[ResolvedStep] {
         self.frozen.steps()
     }
-}
-
-/// Every step Fleet is asked to capture, in the order the workflow declares
-/// them.
-///
-/// **All of them and not the first**, which is [`UnknownCheck`]'s rule: a
-/// workflow with three such steps is one edit to the Manifest, and a refusal
-/// naming one would make it three attempts to find that out.
-///
-/// **Found through `captured` rather than through an evidence type.** A step
-/// asking to be captured now says so in its own key, so a step that hands in a
-/// diff *and* is captured is found here too — which the old reading could not
-/// see, because one value could not say both. `#777`.
-fn asking_to_be_captured(def: &WorkflowDef) -> Vec<StepId> {
-    def.steps()
-        .iter()
-        .filter(|step| step.captured())
-        .map(|step| step.id().clone())
-        .collect()
 }
 
 /// A step's checks, resolved. A name that misses is recorded and the step is
