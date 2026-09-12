@@ -671,6 +671,17 @@ pub struct JobDelivery {
     /// is nothing to have settled without one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub landed: Option<Settled>,
+    /// Why [`commit`](JobDelivery::commit) never reached the branch's remote,
+    /// where it did not. Since protocol 11.2, `#691`.
+    ///
+    /// **Absent is not "unknown"** — it is a push that went out, a repository
+    /// with no remote to fail against, or a Job that has not reached a
+    /// delivering step at all. Present is the one fact this exists for: the
+    /// commit stands in the worktree and [`pull_request`](JobDelivery::pull_request),
+    /// where one is already open, still shows what it carried before this
+    /// attempt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unpushed: Option<String>,
 }
 
 /// What Fleet's rotation last read live off an open pull request.

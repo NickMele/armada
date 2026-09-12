@@ -258,6 +258,7 @@ where
                     pull_request: came_to.pull_request,
                     pull_request_detail,
                     landed: came_to.landed.as_ref().and_then(crate::noticing::settled),
+                    unpushed: came_to.unpushed,
                 })
             }
         };

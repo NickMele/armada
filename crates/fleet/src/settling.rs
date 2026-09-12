@@ -26,8 +26,8 @@
 
 use adapter_traits::{AgentHarness, Delivery, Vcs, WorkProduct};
 use core_model::{
-    Actor, Component, Envelope, EscalationTrigger, FieldValue, JobId, JobStatus, Level, StepId,
-    Target,
+    Actor, Component, Envelope, EscalationTrigger, FieldValue, JobId, JobStatus, Level,
+    ResolvedStep, StepId, Target,
 };
 use verification::{Lifted, Request};
 
@@ -38,6 +38,7 @@ use crate::drone_moves::steps_holding_a_drone;
 use crate::evidence::{Decline, Standing};
 use crate::gate::{rule_on, Ruling};
 use crate::keeping::Keeping;
+use crate::policy::HeldBecause;
 use crate::turning::{Turned, Worked};
 use crate::working::Working;
 
@@ -237,6 +238,15 @@ where
             &port_env,
         )
         .await;
+        // **Before anything is recorded, and only for a delivering step.**
+        // `#691`: `Ruling::Finished` on a delivering step whose own catch-up
+        // conflicted is a step with no human gate at all carrying a Job to
+        // `completed_success` over a pull request its last commit never
+        // reached. Every other ruling either already stops for a person or
+        // never claimed the branch went out.
+        let ruling = self
+            .guarded_against_unpushed_delivery(&job_id, at.step(), ruling)
+            .await?;
         // Before the Job or the step moves. A recorded result the transition
         // then failed to make is readable; a transition whose evidence was
         // never written down is a verdict with no trace.
@@ -294,6 +304,64 @@ where
             self.compose_review_at_gate(&held, &step, &worktree).await;
         }
         Ok(Settled::ruling(ruling))
+    }
+
+    /// Turn a delivering step's `Finished` ruling into a held one where its
+    /// own catch-up left the commit it made unpushed. `#691`.
+    ///
+    /// **The one ruling this touches, and the one step.** `Ruling::HeldForReview`
+    /// already stops for a person and needs nothing added; every other ruling
+    /// failed, refused, handed the work back, or asked the Drone again, and
+    /// none of them claims the branch went out. A non-delivering step has no
+    /// push to have skipped. What is left is `Finished` on a delivering step
+    /// whose `advance_gate` asked for no person at all — the one road that
+    /// would otherwise carry a Job to `completed_success` over a pull request
+    /// its last commit never reached.
+    ///
+    /// **Read off the store and not off this turn's own `Delivered`.** The
+    /// commit and the push happened at this step's *entry*, turns before its
+    /// evidence could land here — `crate::landing`'s module doc — so what
+    /// this step's own catch-up came to is `note_delivery`'s row, not
+    /// anything this call computed.
+    async fn guarded_against_unpushed_delivery(
+        &self,
+        job_id: &JobId,
+        step: &ResolvedStep,
+        ruling: Ruling,
+    ) -> Result<Ruling, Adrift> {
+        if !step.delivers() {
+            return Ok(ruling);
+        }
+        match ruling {
+            Ruling::Finished {
+                tell,
+                checks,
+                output,
+                judged,
+            } => {
+                let delivery = self
+                    .store()
+                    .lock()
+                    .await
+                    .delivery_for(job_id)
+                    .map_err(Adrift::Reading)?;
+                Ok(match delivery.unpushed {
+                    Some(_) => Ruling::HeldForReview {
+                        checks,
+                        output,
+                        judged,
+                        held: HeldBecause::TheBranchDidNotGoOut,
+                    },
+                    None => Ruling::Finished {
+                        tell,
+                        checks,
+                        output,
+                        judged,
+                    },
+                })
+            }
+            other => Ok(other),
+        }
     }
 
     /// Evidence is waiting and there is no Job in the slot.

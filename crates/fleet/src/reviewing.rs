@@ -503,6 +503,26 @@ where
         working: &mut Option<crate::working::Working>,
         by: Actor,
     ) -> Result<Job, Adrift> {
+        // **Refused before anything moves, and the Job stays exactly where it
+        // was.** `#691`: the delivering step's own catch-up can conflict after
+        // its ruling already passed every tier it declared, and both callers
+        // of this method — a person's approval and an overruled verdict — are
+        // one call past that ruling with no other look at the branch. A Job
+        // whose pull request does not carry its last commit must not become
+        // `completed_success` by either road.
+        if let Some(why) = self
+            .store()
+            .lock()
+            .await
+            .delivery_for(job_id)
+            .map_err(Adrift::Reading)?
+            .unpushed
+        {
+            return Err(Adrift::UnpushedDelivery {
+                job: job_id.clone(),
+                why,
+            });
+        }
         let job = self.move_job(job, Target::CompletedSuccess, by).await?;
         let said = self.tell(job_id, told, None, working).await;
         self.end_the_drone(working).await;

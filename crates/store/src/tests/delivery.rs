@@ -30,6 +30,7 @@ fn what_the_branch_came_to_is_read_back() {
         pushed: Some("origin/armada/01DELIVERY000000000000001".to_string()),
         pull_request: Some("https://example.invalid/armada/pull/229".to_string()),
         landed: None,
+        unpushed: None,
     };
     store
         .record_delivery(&crate::tests::job_id("01DELIVERY000000000000001"), &came_to)
@@ -57,6 +58,7 @@ fn a_commit_with_no_push_keeps_the_other_two_absent() {
                 pushed: Some("no remote".to_string()),
                 pull_request: None,
                 landed: None,
+                unpushed: None,
             },
         )
         .expect("the delivery is recorded");
@@ -102,6 +104,7 @@ fn a_second_delivery_clears_what_the_first_one_wrote() {
                 pushed: Some("origin/first".to_string()),
                 pull_request: Some("https://example.invalid/pull/1".to_string()),
                 landed: None,
+                unpushed: None,
             },
         )
         .expect("the first delivery is recorded");
@@ -113,6 +116,7 @@ fn a_second_delivery_clears_what_the_first_one_wrote() {
                 pushed: Some("origin/second".to_string()),
                 pull_request: None,
                 landed: None,
+                unpushed: None,
             },
         )
         .expect("the second delivery is recorded");
@@ -142,6 +146,7 @@ fn a_merge_is_recorded_without_touching_what_the_branch_came_to() {
                 pushed: Some("origin/armada/01DELIVERY000000000000006".to_string()),
                 pull_request: Some("https://example.invalid/armada/pull/337".to_string()),
                 landed: None,
+                unpushed: None,
             },
         )
         .expect("the delivery is recorded");
@@ -186,6 +191,7 @@ fn an_open_or_unknown_answer_is_not_written_down() {
                 pushed: Some("origin/one".to_string()),
                 pull_request: Some(url.clone()),
                 landed: None,
+                unpushed: None,
             },
         )
         .expect("the delivery is recorded");
@@ -221,6 +227,43 @@ fn a_job_that_is_not_there_reads_as_nothing() {
         .delivery_for(&crate::tests::job_id("01DELIVERY000000000000005"))
         .expect("a missing job is not a failure");
     assert!(read.is_empty());
+}
+
+/// **`#691`.** A commit that never reached its remote reads back with why,
+/// and a row that answers nothing here is a row this rule cannot fire on.
+#[test]
+fn an_unpushed_reason_is_read_back() {
+    let dir = TempDir::new();
+    let mut store = open(&dir);
+    a_job(&mut store, "01DELIVERY000000000000008");
+    let id = crate::tests::job_id("01DELIVERY000000000000008");
+    store
+        .record_delivery(
+            &id,
+            &Delivery {
+                commit: Some("9698bb2d".to_string()),
+                pushed: Some("origin/armada/01DELIVERY000000000000008".to_string()),
+                pull_request: Some("https://example.invalid/armada/pull/660".to_string()),
+                landed: None,
+                unpushed: Some(String::from(
+                    "catching the branch up to `main` left conflicts in the files, \
+                     so the commit was not pushed",
+                )),
+            },
+        )
+        .expect("the delivery is recorded");
+    let read = store.delivery_for(&id).expect("the delivery is read");
+    assert_eq!(
+        read.unpushed.as_deref(),
+        Some(
+            "catching the branch up to `main` left conflicts in the files, \
+             so the commit was not pushed"
+        )
+    );
+    assert!(
+        !read.is_empty(),
+        "an unpushed commit is something to say even where nothing else changed"
+    );
 }
 
 /// **`#663`'s durability**: what a rebase against a moved base came to

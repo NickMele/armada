@@ -54,6 +54,35 @@ pub struct Delivered {
     pub opened: Option<Opened>,
 }
 
+impl Delivered {
+    /// Why this delivery's commit never reached its remote, where
+    /// [`deliver`](Fleet::deliver) returned before the push. `#691`.
+    ///
+    /// **`None` on every shape but one.** A clean push, a repository with no
+    /// base, and a worktree with nothing new all leave [`pushed`](Self::pushed)
+    /// set or leave [`caught_up`](Self::caught_up) empty — `deliver` sets
+    /// `pushed` on every path except the one that returns before reaching it,
+    /// so the two conditions together name that path and no other. **The one
+    /// sentence**, so the Job's log, the stored record and the wire agree on
+    /// what a person reads.
+    pub fn unpushed_reason(&self) -> Option<String> {
+        if self.pushed.is_some() {
+            return None;
+        }
+        match self.caught_up.as_ref()? {
+            BroughtUpToDate::Clean { .. } => None,
+            BroughtUpToDate::Conflicted { base, .. } => Some(format!(
+                "catching the branch up to `{base}` left conflicts in the files, so the commit \
+                 was not pushed"
+            )),
+            BroughtUpToDate::PutBack { base, .. } => Some(format!(
+                "the branch's own commits would not replay onto `{base}`, so they were put back \
+                 exactly as they were and the commit was not pushed"
+            )),
+        }
+    }
+}
+
 impl<H, V, W> Fleet<H, V, W>
 where
     H: AgentHarness + Send + Sync + 'static,

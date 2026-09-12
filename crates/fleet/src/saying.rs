@@ -139,6 +139,12 @@ impl fmt::Display for Adrift {
                  is no step to send a conflict back to",
                 job.as_str()
             ),
+            Adrift::UnpushedDelivery { job, why } => write!(
+                out,
+                "{}'s last commit never reached its branch's remote: {why} — approving would \
+                 end the Job over a pull request that does not carry it",
+                job.as_str()
+            ),
             Adrift::NotMerged { job, why } => write!(
                 out,
                 "{}'s pull request was not merged and nothing retries — {}",
@@ -523,6 +529,7 @@ impl Adrift {
             | Adrift::NothingToMerge { job }
             | Adrift::NothingToResolve { job }
             | Adrift::NoStepToRedo { job }
+            | Adrift::UnpushedDelivery { job, .. }
             | Adrift::NotMerged { job, .. }
             | Adrift::ReviewUnreadable { job, .. }
             | Adrift::NoRemarksChosen { job }
@@ -678,6 +685,10 @@ impl Error for Adrift {
             // The two a conflict resolution makes, on the same ground.
             | Adrift::NothingToResolve { .. }
             | Adrift::NoStepToRedo { .. }
+            // An approval refused over a commit that never reached its
+            // remote. It says what the delivery record holds, not what
+            // failed underneath it.
+            | Adrift::UnpushedDelivery { .. }
             // Four of a review's comments' own refusals. Each says what a
             // press could not be, and none wraps a failure underneath it —
             // `RemarksFileUnwritable`, the fifth, does and is above with the
