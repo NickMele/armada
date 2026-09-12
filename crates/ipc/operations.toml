@@ -79,7 +79,7 @@ A member read, so the path is `/jobs/:job_id/calls/:call_id` and names no act �
 [operations.get_check_output]
 kind = "query"
 transport = "HTTP"
-agent_access = "Yes"
+agent_access = "No"
 description = "One Check's own output, read back into the app"
 notes = """
 **The other end of a path that opened nothing in Armada.** `CheckRun.output_path` has said where a Check's stdout and stderr were written since the record kept them, and Bridge hands that path to the operating system — so the one surface built to audit a suite that went green for the wrong reason could only send a person out of the app to do it. This is what a reader asks for, once, about the one Check they opened.
@@ -90,13 +90,13 @@ The split is `get_call`'s, made against the same measurement. A Check's output i
 
 **A window, and it says it is one.** The tail is served, for the reason `checks_runner` captures the tail: a test runner prints its failures last. `from_line` is the file's own numbering, `total_lines` is exact because the file is counted as it is read, and `whole` is stated rather than left to be inferred.
 
-`agent_access` is `Yes`: a Check's own output is what tells an agent whether the run meant what its exit code said, and an agent that ran a Check and cannot read back what it printed has verified nothing about it.
+`agent_access` is `No` for the reason `get_diff` and `observe_job` have it: a test runner's output pulled into a Helm session stays in that session for the rest of it, and the reader this exists for is a person who pressed a row.
 """
 
 [operations.get_frame]
 kind = "query"
 transport = "HTTP"
-agent_access = "Yes"
+agent_access = "No"
 description = "One frame a step's harness produced, as the file itself"
 notes = """
 **The only operation on this seam that does not answer JSON.** A frame has no window. `get_check_output` serves a tail and describes it — `from_line`, `total_lines`, `whole` — because half a log is still a log; half an image is not an image, it is a file nothing can draw. So there is no partial reading for an envelope to carry, and base64 would inflate the bytes by a third to say nothing the row did not already say. The response is the file, with a media type read off its own name and `nosniff` beside it.
@@ -111,13 +111,13 @@ The split is `get_check_output`'s and made against the same measurement. `KeptFr
 
 **Since 10.1 a person's press has run directories of its own**, `implement.again2.1.branch/home.png` beside the step's `implement.1.branch/home.png` — see `show_again`. The rows those name are the second list this resolves against, and the same allowlist rule holds for both.
 
-`agent_access` is `Yes`: an agent that cannot see what its change drew has verified nothing, and a frame is exactly that — what a step's harness produced, as the file itself.
+`agent_access` is `No` for the reason `get_diff`, `get_call` and `get_check_output` have it: a file this size pulled into a Helm session stays in that session for its remainder, and the viewer this exists for is a person who opened a frame.
 """
 
 [operations.get_diff]
 kind = "query"
 transport = "HTTP"
-agent_access = "Yes"
+agent_access = "No"
 description = "One Job's whole patch, with the file list beside it"
 notes = """
 The expensive half of the work product, and the one operation that spends it. `adapter-traits`' `WorkProduct` splits `changed_files` from `patch` because the bytes are large and most steps ask no semantic question, so a call returning both would pay for the patch on every gate. A person reading a diff to decide whether to take the work is the case those bytes are for, and this is the route that fetches them — not `get_job`, which is read on every open of a Job to draw a summary.
@@ -126,7 +126,7 @@ Not `job.files_changed` either. That event is the cheap half, published while a 
 
 `work` is absent where there was no worktree to read — a Job at the approval gate, or one whose worktree was reclaimed. An empty file list is a Drone that changed nothing, which is a different answer and fails a `diff_nonempty` check; one shape for both would report a Job that never ran as one that did nothing.
 
-`agent_access` is `Yes`: an agent that reviewed no diff has verified nothing about what a Drone actually changed, and the cost is the same one weighed and accepted for a person reading a diff to decide whether to take the work.
+`agent_access` is `No` for the reason `observe_job` is: a whole patch pulled into a Helm session stays in that session for the rest of it, and the tokens are the cost `get_events_since` names.
 """
 
 [operations.get_drone]
@@ -1201,7 +1201,7 @@ Intervention Ladder.
 [operations.show_again]
 kind = "command"
 transport = "HTTP"
-agent_access = "Yes"
+agent_access = "No"
 description = "A person asks a Job to show its work: the repository's harness runs the last spec a Drone named, in the Job's worktree, and the frames are kept as a set of their own"
 notes = """
 **The other half of #603's "both".** A step whose evidence is `shown` runs the
@@ -1245,9 +1245,8 @@ offering a press that fails.
 with `nothing` set to the sentence the Job's own log carries — `JobExamined`'s
 rule for a look that found something wrong.
 
-`agent_access` is `Yes`: it is the way to ask a stopped harness to run again, and
-`get_frame`'s reasoning holds here too — an agent that cannot see what its
-change drew has verified nothing.
+`agent_access` is `No` for `get_frame`'s reason: what it produces is images for a
+person to look at, and Helm reads none of them.
 """
 
 # Journey 9, *Running one inside a Job*: the run sheet's operations, kept
@@ -1257,7 +1256,7 @@ change drew has verified nothing.
 [operations.get_run_sheet]
 kind = "query"
 transport = "HTTP"
-agent_access = "Yes"
+agent_access = "No"
 description = "What a person can run in one Job's worktree — its Setup, Checks and Commands — and the facts the run sheet's header draws"
 notes = """
 **The Job's frozen Manifest, not the file on disk.** A Check the Job's workflow names is listed as the Job froze it at creation — `run`, `requires`, `narrow` and the bar — because the gate judges the Job against that, and rehearsing anything else answers a question the gate never asks. Nothing a Job holds freezes a Command, or a Check its workflow does not name, so those come from the Manifest Fleet holds now and say so: `frozen` is false on each.
@@ -1266,7 +1265,7 @@ notes = """
 
 `worktree_differs` compares the worktree's own `armada.yml` against these lists; `start_run` runs that version only when asked. `manifest_edited_at` is read from git: the newest commit at or before the Job's creation that changed the file.
 
-`agent_access` is `Yes`: a rehearsal writes no Evidence and no `job_step_checks` row, so reading what is available to run costs the Job's own record nothing, and an agent standing beside a person at the run sheet needs the same list to run the same thing.
+`agent_access` is `No`: the reader is a person at the run sheet.
 """
 
 [operations.list_runs]
@@ -1339,12 +1338,12 @@ Refused while a Drone is working in the tree, while a run is in flight, on a run
 [operations.list_servers]
 kind = "query"
 transport = "HTTP"
-agent_access = "Yes"
+agent_access = "No"
 description = "Every server Fleet holds — each Job's and the main checkout's — and the last instance of each that ended"
 notes = """
 **In Fleet's memory and nowhere else.** A server is true only while the process holding it lives, so there is no table: a Fleet that restarts holds none, having stopped every one it held on the way out — or, after a crash, ended what it left behind when it next starts. The last instance of each that ended is kept beside the live ones, so a server that fell over is still there to read — with its exit code and its log — until it is started again or its Job ends.
 
-`agent_access` is `Yes`: a server is process state, not a Job record, so an agent asking what is already up or already fell over costs the Job's own record nothing.
+`agent_access` is `No`: the reader is a person at the run sheet or *Where things are*.
 """
 
 [operations.start_server]
