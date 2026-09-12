@@ -184,22 +184,15 @@ pub(crate) struct Working {
     /// Armada last put a turn into this session.
     ///
     /// **The baseline that tells a Drone at rest from a Drone that owes an
-    /// answer.** A terminating event is a turn boundary and not a lifetime —
-    /// `Ending::Reported` says so — because Armada injects turns and the same
-    /// process runs again. Which of the two a boundary is depends entirely on
-    /// whether anything is outstanding for it, and that is not a question the
-    /// transcript can answer on its own.
+    /// answer** — a terminating event is a turn boundary, not a lifetime
+    /// (`Ending::Reported`), since Armada injects turns into the same process;
+    /// which one it is depends on what is outstanding, not on the transcript.
     ///
-    /// **Written before the send at every site**, which is what makes it
-    /// exact rather than probable: [`Working::instructed`] is called by every
-    /// caller that speaks into a session, and every one of them calls it
-    /// before it writes. A baseline taken afterwards would have the answer
-    /// inside it — [`rested`](Working::rested)'s hazard, and it costs the same
-    /// care.
-    ///
-    /// An atomic because `instructed` is `&self`, like the [`told`] it is
-    /// built on: a slot is read through a shared reference while a turn goes
-    /// down the pipe, and none of the six senders holds it mutably.
+    /// **Written before the send at every site** — `answering`'s same hazard,
+    /// above — by [`Working::instructed`], called by every caller that speaks
+    /// into a session, before it writes. An atomic, like [`told`], because a
+    /// slot is read through a shared reference while a turn goes down the
+    /// pipe, and none of the six senders holds it mutably.
     ///
     /// [`told`]: Working::told
     told_after: AtomicUsize,
