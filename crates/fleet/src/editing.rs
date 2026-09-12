@@ -31,33 +31,68 @@ fn beside(file: &Path) -> PathBuf {
     file.with_file_name(format!(".{name}.saving"))
 }
 
-/// Put `text` where `file` is, by writing beside it and renaming over.
+/// Why a save did not happen.
+///
+/// **Three outcomes and not two.** A file that moved under the edit is not a
+/// failure — nothing broke, and what a person does next is reconcile rather
+/// than retry.
+#[derive(Debug)]
+pub(crate) enum NotSaved {
+    /// The file would not open to be compared against.
+    Unreadable(io::Error),
+    /// It changed after the edit started, and this is what is there now —
+    /// **absent where it is no longer there at all**, which is a different
+    /// thing to do about and so a different thing to say.
+    Moved(Option<String>),
+    /// The bytes would not go down.
+    Unwritable(io::Error),
+}
+
+/// Put `text` where `file` is — **only where `read` is still what is there**.
+///
+/// **There is no unguarded write in this crate**, which is why the comparison
+/// is inside this function rather than in front of it. A save that could skip
+/// the check is one somebody eventually calls.
+///
+/// **The disk is read, never the watcher's last reading.** That reading can be
+/// older than the file by up to the settle window, so a guard consulting it
+/// would wave through exactly the save this exists to stop.
 ///
 /// **Not a truncate-and-write.** That leaves a half-written `armada.yml` behind
-/// a crash, in the one file a person is least able to afford one. The watcher's
-/// own measurement is what makes the replace safe to prefer: it polls and
+/// a crash, in the one file a person is least able to afford one. The watcher
 /// re-resolves the path each round, so a rename over the target is one change
 /// like any other — `crates/armada/src/watching.rs`, `SETTLE`.
-///
-/// The mode is carried across where the file is already there, so a save does
-/// not quietly reset what somebody set on it.
-pub(crate) fn save(file: &Path, text: &str) -> Result<(), io::Error> {
+pub(crate) fn save(file: &Path, read: &str, text: &str) -> Result<(), NotSaved> {
+    // **The window between this read and the rename below is microseconds**,
+    // against the minutes a person spends editing. Closing it would mean a lock
+    // on a repository file held across a request, which is a worse thing to
+    // leave behind than the race it removes.
+    match fs::read_to_string(file) {
+        Ok(on_disk) if on_disk == read => {}
+        Ok(on_disk) => return Err(NotSaved::Moved(Some(on_disk))),
+        Err(why) if why.kind() == io::ErrorKind::NotFound => return Err(NotSaved::Moved(None)),
+        Err(why) => return Err(NotSaved::Unreadable(why)),
+    }
+    write(file, text).map_err(NotSaved::Unwritable)
+}
+
+/// The replace itself. The mode is carried across, so a save does not quietly
+/// reset what somebody set on the file.
+fn write(file: &Path, text: &str) -> Result<(), io::Error> {
     let staged = beside(file);
-    let write = fs::write(&staged, text)
+    let written = fs::write(&staged, text)
         .and_then(|()| match fs::metadata(file) {
             Ok(was) => fs::set_permissions(&staged, was.permissions()),
-            // Nothing to carry across: the file is not there, which is a save
-            // over a Manifest somebody deleted and still a save.
             Err(_) => Ok(()),
         })
         .and_then(|()| fs::rename(&staged, file));
-    if write.is_err() {
-        // **Left behind it would be read as a Manifest.** The name is dotted
-        // and untracked, so the cost of a stray one is small and silent, which
-        // is exactly why it is swept here rather than noticed later.
+    if written.is_err() {
+        // **Left behind it would be one more file in the repository root.** The
+        // name is dotted and untracked, so a stray one is small and silent —
+        // which is exactly why it is swept here rather than noticed later.
         let _ = fs::remove_file(&staged);
     }
-    write
+    written
 }
 
 impl<H, V, W> Fleet<H, V, W>
@@ -91,18 +126,27 @@ where
 
     /// `save_manifest_file` — the bytes the caller sent, on disk.
     ///
-    /// **Nothing about the text can refuse this.** A person correcting a file
+    /// **Nothing about the *text* can refuse this.** A person correcting a file
     /// gets it wrong on the way, and a save that parsed first would leave them
     /// unable to put down work in progress.
+    ///
+    /// **What the file was when the edit started can.** `armada.yml` is
+    /// tracked, so a save that took an incoming `git checkout` with it would
+    /// destroy a committed edit with nothing said.
     pub(crate) fn write_manifest_file(
         &self,
         asked: SaveManifestFile,
     ) -> Result<ManifestSaved, Refusal> {
         let file = self.manifest().path();
-        save(file, &asked.text).map_err(|cause| {
-            self.refusal(Adrift::ManifestUnwritable {
-                path: file.display().to_string(),
-                cause,
+        let path = file.display().to_string();
+        save(file, &asked.read, &asked.text).map_err(|why| {
+            self.refusal(match why {
+                NotSaved::Unreadable(cause) => Adrift::ManifestUnreadable { path, cause },
+                NotSaved::Moved(on_disk) => Adrift::ManifestMovedUnderTheEdit {
+                    path: file.display().to_string(),
+                    on_disk,
+                },
+                NotSaved::Unwritable(cause) => Adrift::ManifestUnwritable { path, cause },
             })
         })?;
         Ok(ManifestSaved {

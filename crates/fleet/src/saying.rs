@@ -507,6 +507,19 @@ impl fmt::Display for Adrift {
                 "{path} could not be read: {cause}. What Fleet is running with is unchanged — \
                  this is the file on disk, not the configuration in force"
             ),
+            Adrift::ManifestMovedUnderTheEdit {
+                path,
+                on_disk: Some(_),
+            } => write!(
+                out,
+                "{path} changed after this edit read it, so the save was refused rather than \
+                 taking the incoming change with it. What is on disk now is on `on_disk`"
+            ),
+            Adrift::ManifestMovedUnderTheEdit { path, on_disk: None } => write!(
+                out,
+                "{path} is no longer there, so the save was refused rather than putting a file \
+                 back that nobody asked for. Whatever removed it is what to look at first"
+            ),
             Adrift::ManifestUnwritable { path, cause } => write!(
                 out,
                 "the corrected Manifest could not be written to {path}: {cause}. Nothing was \
@@ -627,6 +640,7 @@ impl Adrift {
             | Adrift::NoSuchManifest { .. }
             | Adrift::ManifestUnreadable { .. }
             | Adrift::ManifestUnwritable { .. }
+            | Adrift::ManifestMovedUnderTheEdit { .. }
             | Adrift::NoSuchPeer { .. }
             | Adrift::NoSuchCall { .. }
             | Adrift::NoSuchDrone { .. }
@@ -765,6 +779,7 @@ impl Error for Adrift {
             // underneath — nothing failed, and what was running is still
             // running.
             | Adrift::CommandTimedOut { .. }
+            | Adrift::ManifestMovedUnderTheEdit { .. }
             | Adrift::Modelless => None,
             Adrift::NotProposed { cause, .. } => Some(cause),
             Adrift::NoReading { cause, .. }

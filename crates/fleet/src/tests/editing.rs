@@ -13,7 +13,7 @@ use std::path::Path;
 
 use config::{LoadError, Manifest};
 
-use crate::editing::save;
+use crate::editing::{save, NotSaved};
 use crate::tests::tmp::TempDir;
 
 /// A Manifest that parses, for the cases about the bytes rather than the parse.
@@ -39,7 +39,7 @@ fn the_bytes_the_caller_sends_are_the_bytes_on_disk() {
     let corrected =
         "# the lint check, fixed\nversion: 1\nid: edited\nchecks:\n  lint:\n    run: cargo clippy";
 
-    save(&file, corrected).expect("the save lands");
+    save(&file, GOOD, corrected).expect("the save lands");
 
     assert_eq!(
         std::fs::read_to_string(&file).expect("the file reads back"),
@@ -56,7 +56,7 @@ fn a_save_leaves_nothing_beside_the_file_it_replaced() {
     let dir = TempDir::new();
     let file = manifest_in(&dir);
 
-    save(&file, "version: 1\nid: edited\n").expect("the save lands");
+    save(&file, GOOD, "version: 1\nid: edited\n").expect("the save lands");
 
     let left: Vec<String> = std::fs::read_dir(dir.path())
         .expect("the directory reads")
@@ -93,7 +93,7 @@ fn a_manifest_that_does_not_parse_is_still_saved_and_is_refused_for_every_fault(
                  \x20 build:\n\
                  \x20   run: 7\n";
 
-    save(&file, wrong).expect("a save is never refused for what the text says");
+    save(&file, GOOD, wrong).expect("a save is never refused for what the text says");
 
     assert_eq!(
         std::fs::read_to_string(&file).expect("the file reads back"),
@@ -126,7 +126,7 @@ fn a_refused_read_leaves_the_last_good_manifest_the_only_one_there_is() {
     let file = manifest_in(&dir);
     let good = Manifest::load(&file).expect("the fixture parses");
 
-    save(&file, "version: 1\nid: edited\nchecks: 7\n").expect("the save lands");
+    save(&file, GOOD, "version: 1\nid: edited\nchecks: 7\n").expect("the save lands");
 
     assert!(
         Manifest::load(&file).is_err(),
@@ -139,19 +139,60 @@ fn a_refused_read_leaves_the_last_good_manifest_the_only_one_there_is() {
     );
 }
 
-/// A save over a Manifest somebody deleted is still a save. Fleet resolved this
-/// path at boot and goes on holding it; the file being gone is a reason to put
-/// one back, not a reason to refuse the only act that could.
+/// A Manifest somebody deleted while the view was open is a file that moved,
+/// and is refused — **saying it is gone rather than handing back an empty
+/// text**, which would read as a file somebody emptied.
 #[test]
-fn a_manifest_that_is_no_longer_there_is_written_rather_than_refused() {
+fn a_manifest_that_is_no_longer_there_is_refused_as_gone() {
     let dir = TempDir::new();
     let file = manifest_in(&dir);
     std::fs::remove_file(&file).expect("a Manifest somebody deleted");
 
-    save(&file, GOOD).expect("the save lands");
+    let refused = save(&file, GOOD, "version: 1\nid: edited\n");
 
+    assert!(
+        matches!(refused, Err(NotSaved::Moved(None))),
+        "gone, and said as gone"
+    );
+    assert!(!file.exists(), "nothing was put back that nobody asked for");
+}
+
+/// **The case the guard exists for.** A `git checkout` lands while the view is
+/// open, and the next Save would have taken the incoming change with it. It is
+/// refused, the disk keeps what arrived, and the refusal carries that text so
+/// a surface can show both without asking again.
+#[test]
+fn a_save_over_a_file_that_moved_under_the_edit_is_refused_and_hands_back_the_disk() {
+    let dir = TempDir::new();
+    let file = manifest_in(&dir);
+    let incoming = "version: 1\nid: edited\nchecks:\n  test:\n    run: cargo nextest run\n";
+    std::fs::write(&file, incoming).expect("somebody else's committed edit lands");
+
+    let refused = save(&file, GOOD, "version: 1\nid: edited\n");
+
+    let Err(NotSaved::Moved(Some(on_disk))) = refused else {
+        panic!("a moved file is refused as moved, never overwritten or reported as a fault");
+    };
+    assert_eq!(on_disk, incoming, "what is there now, whole");
     assert_eq!(
-        std::fs::read_to_string(&file).expect("the file is back"),
+        std::fs::read_to_string(&file).expect("the file reads"),
+        incoming,
+        "and the incoming change is still what is on disk"
+    );
+}
+
+/// **An empty `read` is not a way round the guard.** A caller that never read
+/// the file has nothing that matches it, and is refused like any other.
+#[test]
+fn a_save_that_read_nothing_is_refused_over_a_file_that_has_something() {
+    let dir = TempDir::new();
+    let file = manifest_in(&dir);
+
+    let refused = save(&file, "", "version: 1\nid: blind\n");
+
+    assert!(matches!(refused, Err(NotSaved::Moved(Some(_)))));
+    assert_eq!(
+        std::fs::read_to_string(&file).expect("the file reads"),
         GOOD
     );
 }
@@ -166,7 +207,7 @@ fn the_file_written_is_the_file_fleet_holds() {
     let elsewhere = dir.path().join("armada.yml.bak");
     std::fs::write(&elsewhere, "version: 1\nid: other\n").expect("a decoy");
 
-    save(&file, "version: 1\nid: edited\nchecks: {}\n").expect("the save lands");
+    save(&file, GOOD, "version: 1\nid: edited\nchecks: {}\n").expect("the save lands");
 
     assert_eq!(
         std::fs::read_to_string(&elsewhere).expect("the decoy reads"),
@@ -174,4 +215,52 @@ fn the_file_written_is_the_file_fleet_holds() {
         "nothing but the resolved Manifest is written"
     );
     assert!(Path::new(&file).exists());
+}
+
+/// **The wire half of the guard, through a real Fleet.** A person opens the
+/// file view, somebody else's change lands, and Save is pressed with the text
+/// the view opened with. The answer is a 409 under its own code, carrying what
+/// is on disk now — and the same read's text, sent back unchanged, saves.
+#[tokio::test]
+async fn a_fleet_refuses_a_moved_save_with_the_disk_on_the_refusal_and_admits_an_unmoved_one() {
+    use ipc::{SaveManifestFile, WireValue};
+    use testkit::FakeWorkProduct;
+
+    let home = TempDir::new();
+    let file = manifest_in(&home);
+    let mut fittings = crate::tests::daemon::fittings(&home, FakeWorkProduct::changed(&[]));
+    fittings.manifest = Manifest::parse(&file, GOOD).expect("the fixture parses");
+    let fleet = crate::daemon::Fleet::assembled(fittings);
+
+    let opened = fleet.read_manifest_file().expect("the file view opens");
+    let incoming = "version: 1\nid: edited\nchecks:\n  test:\n    run: cargo nextest run\n";
+    std::fs::write(&file, incoming).expect("a pull lands while the view is open");
+
+    let refused = fleet
+        .write_manifest_file(SaveManifestFile {
+            read: opened.text.clone(),
+            text: "version: 1\nid: mine\n".to_string(),
+        })
+        .expect_err("a save over a file that moved is refused");
+    assert_eq!(refused.status(), 409, "a conflict, not a fault");
+    assert_eq!(refused.error().code, "fleet.manifest_moved_under_the_edit");
+    assert!(
+        matches!(refused.error().fields.get("on_disk"), Some(WireValue::Str(text)) if text == incoming),
+        "what is on disk rides the refusal: {:?}",
+        refused.error().fields
+    );
+    assert_eq!(std::fs::read_to_string(&file).expect("reads"), incoming);
+
+    let reopened = fleet.read_manifest_file().expect("the view reopens");
+    let saved = fleet
+        .write_manifest_file(SaveManifestFile {
+            read: reopened.text,
+            text: "version: 1\nid: mine\n".to_string(),
+        })
+        .expect("a save over the text it read lands");
+    assert_eq!(saved.path, reopened.path, "one file, spelled one way");
+    assert_eq!(
+        std::fs::read_to_string(&file).expect("reads"),
+        "version: 1\nid: mine\n"
+    );
 }

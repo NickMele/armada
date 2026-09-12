@@ -12,6 +12,10 @@
 //! to stop sending people to. The bytes go to disk, Fleet's watch re-reads
 //! them, and [`ManifestReading`] reports what it could not adopt.
 //!
+//! **A write over a file that moved is refused.** Nothing here destroys work
+//! without saying so, and `armada.yml` is tracked — what a blind save clobbers
+//! is somebody's committed edit. [`SaveManifestFile::read`] is the guard.
+//!
 //! [`ManifestReading`]: crate::ManifestReading
 
 use serde::{Deserialize, Serialize};
@@ -39,11 +43,25 @@ pub struct ManifestFile {
 
 /// A corrected Manifest, on its way to disk.
 ///
-/// **Text and nothing else.** No path, for this module's reason, and no flag
-/// that would make this a staging or a commit — the act has one shape and a
-/// caller cannot ask for a second.
+/// **No path, and no flag that would make this a staging or a commit** — the
+/// act has one shape and a caller cannot ask for a second.
+///
+/// **Both fields are required, so there is no unguarded save to reach for.** A
+/// caller that omits [`SaveManifestFile::read`] does not get an overwrite; it
+/// gets a body that will not decode.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SaveManifestFile {
+    /// What the edit started from: [`ManifestFile::text`], unchanged.
+    ///
+    /// **The whole text and not a digest.** A digest needs an algorithm both
+    /// sides agree on and a dependency neither has, to compare a few kilobytes
+    /// — and it answers *probably the same* where this answers *the same*.
+    ///
+    /// Fleet compares it against the disk at the moment of the save and
+    /// refuses where the two differ. A `git checkout` landing while the view is
+    /// open is somebody's committed edit, and this is what stops the next Save
+    /// taking it silently.
+    pub read: String,
     /// The bytes to put on disk, exactly as they arrive.
     pub text: String,
 }

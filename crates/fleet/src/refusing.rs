@@ -112,6 +112,10 @@ const MANIFEST_UNREADABLE: &str = "fleet.manifest_unreadable";
 /// still in front of them and is not on disk, where a failed read left them
 /// with nothing to type into.
 const MANIFEST_UNWRITABLE: &str = "fleet.manifest_unwritable";
+/// The file changed after the edit that was about to be saved read it. **A 409
+/// and never either code above**: nothing failed, and what a person does next
+/// is reconcile the two texts rather than retry the act.
+const MANIFEST_MOVED: &str = "fleet.manifest_moved_under_the_edit";
 /// A press that named no comment at all. **A 422**, like a blank note: the
 /// request decoded and names something that cannot work.
 const NO_REMARKS_CHOSEN: &str = "fleet.no_remarks_chosen";
@@ -378,6 +382,16 @@ where
             }
             Adrift::ManifestUnwritable { .. } => {
                 Refusal::Fault(WireError::raised(MANIFEST_UNWRITABLE, said, self.run_id()))
+            }
+            // A conflict and not a fault. **What is on disk rides the
+            // refusal**, so a surface shows both texts without a second round
+            // trip — and is absent where the file is gone.
+            Adrift::ManifestMovedUnderTheEdit { on_disk, .. } => {
+                let refused = WireError::raised(MANIFEST_MOVED, said, self.run_id());
+                Refusal::IllegalMove(match on_disk {
+                    Some(text) => refused.with_field("on_disk", WireValue::Str(text.clone())),
+                    None => refused,
+                })
             }
             // The comments a person picked would not write to disk. A 500,
             // for `ReviewUnreadable`'s reason: nothing about the request is

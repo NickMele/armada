@@ -527,6 +527,16 @@ pub enum Adrift {
     /// A corrected `armada.yml` would not go to disk. **Nothing about the text
     /// can raise this** — a save is never refused for what it says.
     ManifestUnwritable { path: String, cause: io::Error },
+    /// `armada.yml` changed after the edit that was about to be saved read it.
+    ///
+    /// **Not a failure, and that is why it is not the variant above.** Nothing
+    /// broke; what a person does next is reconcile rather than retry. What is
+    /// on disk now travels with it so a surface can show both, and is absent
+    /// where the file is no longer there at all.
+    ManifestMovedUnderTheEdit {
+        path: String,
+        on_disk: Option<String>,
+    },
     /// A proposal named a peer Job this Fleet does not hold.
     ///
     /// The third of the same fault, for the ids on `dependencies` — and the one
