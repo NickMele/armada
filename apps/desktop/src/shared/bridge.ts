@@ -30,62 +30,9 @@ import type {
 import type { FleetCapacity, JobSummary, ProposalInFlight, UnreadableJob } from "@armada/protocol";
 import type { ManifestReading } from "@armada/protocol";
 import type { RunFollowed, RunSheetRead, ServerList } from "@armada/protocol";
-import type { CheckoutRunList, CheckoutRunSheet, Outcome } from "@armada/protocol";
+import type { CheckoutRunFollowed, CheckoutRunSheetRead } from "@armada/protocol";
 import { spoken } from "@armada/protocol";
 
-// ---------------------------------------------------------------------------
-// The Manifest surface's two readings — Journey 9, *Running one*
-// ---------------------------------------------------------------------------
-//
-// **Declared here and again in `@armada/screens`' `checkout-runs.ts`, and the
-// duplication is deliberate.** Every other Bridge-only read state — `Reports`,
-// `HeldWorktrees`, `RunSheetRead`, `RunFollowed` — lives in `@armada/protocol`,
-// which is the one package main, the preload and a screen can all reach. These
-// two could not be added there: the checkout's half of the wire landed on its
-// own and the protocol package was another child's ground at the time.
-//
-// **Nothing drifts silently.** `App.tsx` hands `checkoutRunSheet` and
-// `checkoutRunFollowed` straight to `<Manifest>`, so the two declarations meet
-// at one assignment and a field added to one and not the other is a typecheck
-// failure rather than a field that is quietly always absent.
-
-/**
- * `GET /manifest/run_sheet`, where the Manifest surface asked for it.
- *
- * **`Reports`' shape rather than a `JobRead`**, for that type's own stated
- * reason: there is no id to check an answer against, which is the whole of
- * what `JobRead` exists to do.
- */
-export type CheckoutRunSheetRead =
-  | { state: "none" }
-  | { state: "reading" }
-  | { state: "read"; sheet: CheckoutRunSheet }
-  | { state: "failed"; outcome: Outcome };
-
-/** The checkout run a window is reading, as it prints. `RunFollowed`'s four
- * states with the Job taken out of each. */
-export type CheckoutRunFollowed =
-  | { state: "none" }
-  | { state: "opening"; runId: string }
-  | {
-      state: "following";
-      runId: string;
-      name: string;
-      path: string;
-      /** The file's own line number of `lines[0]`, counted from one. */
-      fromLine: number;
-      /** The newest lines, oldest first, bounded. */
-      lines: string[];
-      /** Why the stream ended, or absent while it is still arriving. */
-      ended?: string;
-    }
-  | { state: "failed"; runId: string; detail: string };
-
-/** What `list_checkout_runs` came back as, answered to the caller rather than
- * held as state — `RunListRead`'s reason, one owner over. */
-export type CheckoutRunListRead =
-  | { ok: true; runs: CheckoutRunList }
-  | { ok: false; outcome: Outcome };
 
 
 

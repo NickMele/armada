@@ -6,10 +6,15 @@
 // made up is only the data, and it is typed against the wire.
 
 import { connectedTo, PROTOCOL_VERSION, type Connection } from "@armada/protocol";
-import type { CheckoutRunList, Outcome, RunOutputRead } from "@armada/protocol";
+import type {
+  CheckoutRunFollowed,
+  CheckoutRunList,
+  CheckoutRunSheetRead,
+  Outcome,
+  RunOutputRead,
+} from "@armada/protocol";
 import { headOf, Shell, statementOf, SURFACE } from "@armada/shell";
 import { Manifest } from "../../../Manifest";
-import type { CheckoutRunFollowed, CheckoutRunSheetRead } from "../../../checkout-runs";
 import { CREATED_AT, manifest, MANIFEST_ID } from "../../../fixtures/build/base";
 
 /** The moment every elapsed figure on this page is read at, so it never moves. */

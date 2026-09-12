@@ -25,8 +25,8 @@ import type {
   StartRun,
 } from "@armada/protocol";
 import type { Outcome } from "@armada/protocol";
-import type { StartCheckoutRun } from "@armada/protocol";
-import type { BridgeState, CheckoutRunListRead } from "../shared/bridge";
+import type { CheckoutRunListRead, StartCheckoutRun } from "@armada/protocol";
+import type { BridgeState } from "../shared/bridge";
 import { ask, route, serversOf } from "./request";
 import { CheckoutRunCommands, CheckoutRunSocket, CheckoutSheetReader } from "./checkout-runs";
 import { JobReader } from "./reader";

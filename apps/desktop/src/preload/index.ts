@@ -18,8 +18,7 @@ import type {
 import type { FileReport } from "@armada/protocol";
 import type { Artifact, Followed, Opened } from "@armada/protocol";
 import type { ProtocolVersion, RunListRead, RunOutputRead, StartRun } from "@armada/protocol";
-import type { StartCheckoutRun } from "@armada/protocol";
-import type { CheckoutRunListRead } from "../shared/bridge";
+import type { CheckoutRunListRead, StartCheckoutRun } from "@armada/protocol";
 import type { CommandAnswer, JudgeAnswer, WhenBlocked, WhenRefused } from "@armada/protocol";
 import { PROTOCOL_VERSION } from "@armada/protocol";
 

@@ -14,9 +14,12 @@
 import WebSocket from "ws";
 
 import type {
+  CheckoutRunFollowed,
   CheckoutRunList,
+  CheckoutRunListRead,
   CheckoutRunMessage,
   CheckoutRunSheet,
+  CheckoutRunSheetRead,
   CheckoutRunUnderway,
   NamedRun,
   Outcome,
@@ -24,7 +27,6 @@ import type {
   RunOutputRead,
   StartCheckoutRun,
 } from "@armada/protocol";
-import type { CheckoutRunFollowed, CheckoutRunListRead, CheckoutRunSheetRead } from "../shared/bridge";
 import { ask } from "./request";
 import { HOST } from "./runtime-file";
 

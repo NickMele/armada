@@ -25,13 +25,14 @@ import type {
   ReclaimOutcome,
   RunListRead,
   RunOutputRead,
+  CheckoutRunListRead,
   StagedAttachment,
   StartCheckoutRun,
   StartRun,
   WhenBlocked,
   WhenRefused,
 } from "@armada/protocol";
-import type { BridgeState, CheckoutRunListRead, Summons } from "./bridge";
+import type { BridgeState, Summons } from "./bridge";
 
 /**
  * What `explain_command` came back as. **Protocol's, beside `CallRead`**, and

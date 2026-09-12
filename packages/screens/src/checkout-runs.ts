@@ -26,9 +26,11 @@ import type {
   RunPageServerStatus,
 } from "@armada/components";
 import type {
-  CheckoutRunList,
+  CheckoutRunFollowed,
+  CheckoutRunListRead,
   CheckoutRunRecord,
   CheckoutRunSheet,
+  CheckoutRunSheetRead,
   Followed,
   Outcome,
   RunEntry,
@@ -40,48 +42,6 @@ import type {
 import { absoluteOf, span } from "./duration";
 import { openServerLink } from "./opening";
 import { CHECK_PREFIX, COMMAND_PREFIX, isServerEntry, nameOf, SERVER_PREFIX, SETUP_PREFIX } from "./rehearsal";
-
-/**
- * `GET /manifest/run_sheet`, as main published it.
- *
- * **`Reports`' shape rather than a `JobRead`**, and for that type's own stated
- * reason: there is no id to check an answer against, which is the whole of
- * what `JobRead` exists to do. The four states are the same four, because
- * "nobody asked" and "the read failed" are still different things to draw.
- *
- * Bridge-only, like `RunSheetRead` — nothing on the wire has this shape.
- */
-export type CheckoutRunSheetRead =
-  | { state: "none" }
-  | { state: "reading" }
-  | { state: "read"; sheet: CheckoutRunSheet }
-  | { state: "failed"; outcome: Outcome };
-
-/**
- * The checkout run a window is watching on `observe_checkout_run`, as main
- * holds it. `RunFollowed`'s four states with the Job taken out of each.
- */
-export type CheckoutRunFollowed =
-  | { state: "none" }
-  | { state: "opening"; runId: string }
-  | {
-      state: "following";
-      runId: string;
-      name: string;
-      path: string;
-      /** The file's own line number of `lines[0]`, counted from one. */
-      fromLine: number;
-      /** The newest lines, oldest first, bounded. */
-      lines: string[];
-      /** Why the stream ended, or absent while it is still arriving. */
-      ended?: string;
-    }
-  | { state: "failed"; runId: string; detail: string };
-
-/** What `list_checkout_runs` came back as, answered to the caller. */
-export type CheckoutRunListRead =
-  | { ok: true; runs: CheckoutRunList }
-  | { ok: false; outcome: Outcome };
 
 /** What the Manifest surface asks of the host. One prop, `rehearsal`'s precedent. */
 export type ManifestSlice = {

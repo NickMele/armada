@@ -3,7 +3,12 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { CheckoutRunRecord, CheckoutRunSheet, RunEntry } from "@armada/protocol";
+import type {
+  CheckoutRunFollowed,
+  CheckoutRunRecord,
+  CheckoutRunSheet,
+  RunEntry,
+} from "@armada/protocol";
 import {
   checkoutChangedRunOf,
   checkoutGroupsOf,
@@ -11,7 +16,6 @@ import {
   checkoutRunnablesOf,
   runningEntryOf,
 } from "./checkout-runs";
-import type { CheckoutRunFollowed } from "./checkout-runs";
 
 function entry(name: string, run: string, over: Partial<RunEntry> = {}): RunEntry {
   return {
