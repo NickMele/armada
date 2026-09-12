@@ -18,6 +18,11 @@ prose still asserts what the work just made false**, **`docs/OPEN.md` and the
 milestone match reality**, **every follow-up has a durable home**, and **the
 owner has been told if a running Fleet is now stale**.
 
+**PASS means the owner closes the session and never opens it again.** Not one
+action left for them — no restart, no merge, no decision, nothing to remember,
+nothing "for context" that they would then have to act on. Anything left makes
+the verdict **NOT READY**, however green every row looks. See *Output*.
+
 This skill checks all six and **drives the first four to completion itself** —
 merge and cleanup and doc-fixes, not detection handed back as a to-do list. Then
 it reports a verdict.
@@ -205,8 +210,14 @@ the repository reads, and neither was in it.
 ## 6. The running Fleet
 
 **A running Fleet is a stale binary the moment you merge.** If
-`protocol-version.toml` moved or a store migration landed, say so in the last
-message — a major bump means Bridge refuses to connect until it is rebuilt.
+`protocol-version.toml` moved or a store migration landed, the session is not
+done until Fleet and Bridge are running the merged code — a major bump means
+Bridge refuses to connect until both are rebuilt.
+
+**It is a blocker, not a note.** `scripts/dev` is not an agent's to run on its
+own (`docs/practices/running-locally.md`), so ask with `AskUserQuestion` whether
+to run it now. On a yes, run it and confirm Bridge connects; then the row is ✅.
+On a no, the verdict is **NOT READY** and the restart is its first sentence.
 
 ## 7. Skills, and this file
 
@@ -225,25 +236,38 @@ incident behind it is advice, and advice is skipped.
 | Prose reconciled | ✅ / N/A | what was corrected; N/A only if no code changed |
 | `OPEN.md`, issues, milestones | ✅ / N/A | entries removed, issues closed, milestone confirmed empty |
 | Follow-up documented | ✅ / ❌ | where each item now lives, or what is missing |
-| Fleet restart needed | ✅ / N/A | protocol version, migrations |
+| Fleet running the merged code | ✅ / ❌ / N/A | protocol version, migrations; restarted, or why not |
 
-**Ready to close** only if every non-N/A row is ✅. Otherwise **Not ready**, and
-say exactly what blocks each ❌.
+**PASS only when the owner has nothing to do.** Every row ✅ or N/A, and no row,
+sentence or footnote anywhere in the message asks anything of them. **A row with
+an action for the owner is ❌**, whatever surface would remind them of it — a
+restart they must run is not a ✅ with "Owner: you" beside it.
 
-Label every line with who acts: already handled, waiting on the owner, or context
-only. **One sentence when nothing needs them** — do not leave it to be inferred.
+**Before the verdict, clear what is left.** For each thing that would need the
+owner: do it yourself if it is this skill's to do; if it needs their say-so, ask
+with `AskUserQuestion` and do it on a yes. Only what they decline, or what
+genuinely cannot be done from here, is left — and then the verdict is NOT READY.
 
-**PASS is not compatible with anything the owner has to remember.** Every item
-left for them names the surface that will put it in front of them again —
-`docs/OPEN.md`, an issue on the board, a failing gate line — and an item that
-names none is a ❌ on the follow-up row whatever else is true. Confirmed
-2026-09-08: a run reported PASS and then listed three things waiting on the
-owner, and the owner said the two did not go together and that he was reluctant
-to close on it. He was right. Two of the three were in `docs/OPEN.md` and on the
-board; the third existed only in the history file, which this page already says
-is not a home. **Writing "waiting on you" without naming where it waits is the
-same defect as not filing it** — the item is real, the owner is holding it, and
-nothing in the repository will raise it again.
+**The shape of the message follows the verdict:**
+
+- **PASS** — the first sentence is "Ready to close." Then the table, and nothing
+  after it: no "one more thing", no "you'll need to", no closing note.
+- **NOT READY** — the first sentence is "Not ready to close," and the next lines
+  are the owner's actions as a numbered list, each one a thing to type or press.
+  Then the table.
+
+**Context that asks nothing may sit in a row's Detail** — another agent's
+worktree left in place, a count — but never as a sentence of its own after the
+table, where it reads as the thing still open.
+
+Confirmed twice. 2026-09-08: a run reported PASS and then listed three things
+waiting on the owner, and he said he was reluctant to close on it. The rule it
+produced let an item through if it named where it waited — and 2026-09-12 a run
+used exactly that: every row ✅, **PASS**, then a request to rebuild and restart
+Fleet and Bridge for protocol 13.0, with the restart row marked ✅ and "Owner:
+you". The owner's words: green checks followed by one more thing means it was
+never ready to close. **An item naming its surface is still an item.** The
+surface decides where a follow-up lives, not whether the session is done.
 
 ## Gotchas
 
@@ -279,7 +303,9 @@ nothing in the repository will raise it again.
 ## Verification
 
 Before ending: state **PASS** or **FAIL** plainly — PASS only if what this skill
-exists to produce actually landed, not "I ran the steps."
+exists to produce actually landed **and the owner has nothing left to do**, not
+"I ran the steps." A history file whose Follow-ups table has an owner row is a
+FAIL.
 
 Then write `.claude/history/<UTC-timestamp>-reflect.md`:
 
