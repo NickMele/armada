@@ -810,7 +810,7 @@ export function JobDetail({
                   : { ...phases, pinnedStage: keys.pinnedStage, onPin: keys.onPinStage },
               phasesAbsent: whyNoSteps(watched, job.id),
               timeline,
-              // Uncontrolled: `[` `]` still name chapters, not rows. #timeline
+              openRow: keys.openChapterId,
               onOpenRow: keys.onOpenChapter,
               // A finished Job's verdict sheet is a record, read after the story.
               after: atGate ? undefined : verdictSlot,

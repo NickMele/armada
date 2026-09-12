@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { ChevronDown, ChevronRight } from "lucide-react";
 
@@ -81,16 +81,21 @@ export type StepTimelineProps = {
 };
 
 export function StepTimeline({ attempts, label, openRow, onOpenRow }: StepTimelineProps) {
-  // Controlled by presence, not by a flag: a caller either holds the value or
-  // it does not, and a boolean beside it is a second answer that can disagree.
-  const controlled = openRow !== undefined;
   const [held, setHeld] = useState<string | null>(() => whereItIs(attempts));
-  const open = controlled ? openRow : held;
   const many = attempts.length > 1;
 
+  // **Synced, not controlled, and never synced to nothing.** A caller that
+  // names a row — the keyboard — sets this rather than owning it. It starts at
+  // `null` and mounts before anyone has pressed anything, so honouring that
+  // null shut every row on arrival; closing is a press, which goes through
+  // `toggle` below.
+  useEffect(() => {
+    if (openRow !== undefined && openRow !== null) setHeld(openRow);
+  }, [openRow]);
+
   function toggle(rowId: string): void {
-    const next = open === rowId ? null : rowId;
-    if (!controlled) setHeld(next);
+    const next = held === rowId ? null : rowId;
+    setHeld(next);
     onOpenRow?.(next);
   }
 
@@ -98,7 +103,7 @@ export function StepTimeline({ attempts, label, openRow, onOpenRow }: StepTimeli
     <div className="armada-steps">
       {label === undefined ? null : <span className="armada-steps__label">{label}</span>}
       {attempts.map((attempt) => (
-        <Attempt key={attempt.id} attempt={attempt} named={many} open={open} onToggle={toggle} />
+        <Attempt key={attempt.id} attempt={attempt} named={many} open={held} onToggle={toggle} />
       ))}
     </div>
   );
