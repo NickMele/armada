@@ -544,6 +544,13 @@ pub trait Delivery {
     /// moved**, so that a branch which is not behind costs one comparison.
     fn standing(&self, worktree: &Worktree, base: &Base) -> Result<Standing, NotDelivered>;
 
+    /// How many commits the branch holds that the base has not got.
+    ///
+    /// **Not a variant of [`Standing`]**, because a branch can be ahead and
+    /// behind at once. Asked where Fleet's own commit found nothing new: a
+    /// branch somebody else committed on still has work to send out.
+    fn ahead(&self, worktree: &Worktree, base: &Base) -> Result<usize, NotDelivered>;
+
     /// Where the base branch stands against the one the forge would merge into.
     ///
     /// **Asked at the pull request and nowhere else.** It changes nothing about

@@ -64,6 +64,17 @@ impl Delivery for GitVcs {
         }
     }
 
+    fn ahead(&self, worktree: &Worktree, base: &Base) -> Result<usize, NotDelivered> {
+        let repo = open(worktree)?;
+        let tip = head_of(&repo, worktree)?;
+        let base_tip = tip_of(&repo, base.name())?;
+        repo.graph_ahead_behind(tip, base_tip)
+            .map(|(ahead, _)| ahead)
+            .map_err(|cause| {
+                NotDelivered::of("comparing the branch with its base", cause.message())
+            })
+    }
+
     fn base_on_the_remote(
         &self,
         worktree: &Worktree,

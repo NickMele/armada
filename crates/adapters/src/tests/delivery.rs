@@ -108,6 +108,59 @@ fn the_standing_counts_what_the_base_has_and_the_branch_has_not() {
     );
 }
 
+/// **What a Drone's own `git commit` leaves.** Fleet's commit finds the tree
+/// already on the branch, and only this reading says there is work to send.
+#[test]
+fn a_branch_committed_by_hand_is_ahead_though_nothing_is_left_to_commit() {
+    let repo = TempRepo::with_a_commit();
+    let worktree = worktree_for(&repo);
+    let base = Base::Inferred(String::from("main"));
+    assert_eq!(GitVcs::new().ahead(&worktree, &base).expect("a reading"), 0);
+
+    for (file, message) in [("one.txt", "first"), ("two.txt", "second")] {
+        wrote(&worktree, file, "what the Drone wrote\n");
+        committed_by_hand(&worktree, file, message);
+    }
+    main_moves_on(&repo, "elsewhere.txt", "one");
+
+    let at = adapter_traits::CommitTime::seconds_since_epoch(1_787_734_800);
+    assert_eq!(
+        GitVcs::new()
+            .commit_all(&worktree, "the Job's work", at)
+            .expect("a reading"),
+        adapter_traits::Committed::NothingToCommit
+    );
+    assert_eq!(
+        GitVcs::new().ahead(&worktree, &base).expect("a reading"),
+        2,
+        "counted whatever the base did meanwhile — ahead and behind are independent"
+    );
+}
+
+fn committed_by_hand(worktree: &Worktree, file: &str, message: &str) {
+    for args in [
+        vec!["add", file],
+        vec![
+            "-c",
+            "user.name=a drone",
+            "-c",
+            "user.email=drone@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            message,
+        ],
+    ] {
+        let run = std::process::Command::new("git")
+            .arg("-C")
+            .arg(worktree.path())
+            .args(&args)
+            .output()
+            .expect("git on PATH");
+        assert!(run.status.success(), "git {args:?}: {run:?}");
+    }
+}
+
 // -------------------------------------------------------- catching up
 
 #[test]

@@ -107,16 +107,16 @@ where
         }
         match self.land_and_deliver(job, worktree).await {
             // **The one case that used to fall through here silently — `#691`.**
-            // A commit was made and `deliver` returned `Ok`, which is not the
-            // same claim as "the branch went out": a conflicting catch-up
-            // returns before the push, and this arm is where that stopped
-            // being told apart from an ordinary success.
-            Ok((Committed::Made { .. }, delivered)) => {
+            // `deliver` returned `Ok`, which is not the same claim as "the
+            // branch went out": a conflicting catch-up returns before the push,
+            // and this arm is where that stopped being told apart from an
+            // ordinary success.
+            Ok(Some(delivered)) => {
                 if let Some(why) = delivered.unpushed_reason() {
                     self.noted_push_skipped(job, step, &why);
                 }
             }
-            Ok((Committed::NothingToCommit, _)) => self.noted_not_sent(
+            Ok(None) => self.noted_not_sent(
                 job,
                 step,
                 "this step sends the work out and the worktree held nothing new, \
@@ -212,33 +212,27 @@ where
         &self,
         job: &Job,
         worktree: &Worktree,
-    ) -> Result<(Committed, Delivered), Adrift> {
+    ) -> Result<Option<Delivered>, Adrift> {
         // **One Job at a time from here.** The commit, the rebase and the push
         // all write into the one `.git` every worktree is cut from, and whether
         // two of them can do that concurrently is not established. See
         // `Fleet::merge_end`.
         let _at_the_merge_end = self.merge_end().lock().await;
         let landed = self.land(job, worktree).await;
-        // **A worktree holding nothing new is not pushed and opens nothing**,
-        // which is the same rule `deliver` already applies one stage later: a
-        // stage is skipped where the one before it says there is nothing to do
-        // it to, and a branch known to conflict is not pushed for the same
-        // reason a branch with no commits on it is not — a pull request over
-        // either is a review request nobody can act on.
+        // **What is sent is the branch, not Fleet's commit.** A clean tree used
+        // to mean nothing to send, until a Drone that ran `git commit` itself
+        // finished with two commits on a branch nobody pushed. Only a branch
+        // with nothing ahead of its base, and nothing to commit, sends nothing —
+        // a pull request over it is a review request nobody can act on.
         //
         // **This does not decide whether the workflow delivers**, and the
         // distinction is the whole of `#520`. The workflow says whether; the
-        // tree says whether there is anything. Reading the tree for the first
-        // question is what pushed a design document, and it was wrong in both
-        // directions — a Prototype writes real code nobody wants merged, and an
-        // Epic that touched a tracked file would have been delivered for it.
-        //
-        // What it costs is silence on a Job whose delivering step found an
-        // empty tree, so `note_delivery` writes the commit's absence and the
-        // caller's log line says the branch did not go.
-        let delivered = match landed {
-            Ok(Committed::Made { .. }) => self.deliver(job, worktree).await,
-            Ok(Committed::NothingToCommit) | Err(_) => Ok(Delivered::default()),
+        // branch says whether there is anything. Reading the tree for the first
+        // question is what pushed a design document.
+        let delivered = match &landed {
+            Ok(Committed::Made { .. }) => self.deliver(job, worktree).await.map(Some),
+            Ok(Committed::NothingToCommit) => self.deliver_if_ahead(job, worktree).await,
+            Err(_) => Ok(None),
         };
         // **Written down before it is handed to the turn.** `left_delivered`
         // leaves this where `take_delivered` *drains* it, so the Drone's
@@ -250,16 +244,16 @@ where
         // **Held, not raised**, like everything else in this method: a Job
         // whose delivery cannot be written down still finished, and the write
         // failing must not cost the slot.
-        let noted = self
-            .note_delivery(job, landed.as_ref().ok(), delivered.as_ref().ok())
-            .await;
+        let sent = delivered.as_ref().ok().and_then(Option::as_ref);
+        let noted = self.note_delivery(job, landed.as_ref().ok(), sent).await;
         if let Ok(delivered) = &delivered {
-            self.left_delivered(job.id(), delivered.clone()).await;
+            self.left_delivered(job.id(), delivered.clone().unwrap_or_default())
+                .await;
         }
-        let committed = landed?;
+        landed?;
         let delivered = delivered?;
         noted?;
-        Ok((committed, delivered))
+        Ok(delivered)
     }
 
     /// Write what the branch came to onto the Job's record.
@@ -270,8 +264,8 @@ where
     /// surface that could not tell them apart would have to say "unknown" to a
     /// person whose branch is sitting on a remote.
     ///
-    /// `NothingToCommit` writes no commit: the record says what happened, and
-    /// "the worktree held nothing new" is not an id.
+    /// `NothingToCommit` writes no commit, even where the branch went out: the
+    /// field is the commit Fleet wrote, and here Fleet wrote none.
     ///
     /// **A skip carries `pushed` and `pull_request` forward rather than
     /// clearing them, and that is the fix for `#691`.** Every other field

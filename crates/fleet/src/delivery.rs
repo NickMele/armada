@@ -218,6 +218,30 @@ where
         Ok(delivered)
     }
 
+    /// [`deliver`](Fleet::deliver), where Fleet's own commit found nothing new
+    /// but the branch holds commits its base has not got — what a Drone that
+    /// ran `git commit` itself leaves. `None` is nothing to send.
+    ///
+    /// **A repository with no base is delivered unmeasured**, the same as when
+    /// Fleet made the commit: `deliver` pushes and opens nothing, because no
+    /// pull request can name a target.
+    pub(crate) async fn deliver_if_ahead(
+        &self,
+        job: &Job,
+        worktree: &Worktree,
+    ) -> Result<Option<Delivered>, Adrift> {
+        if let Some(base) = self.the_base(job.id(), worktree)? {
+            let ahead = self
+                .vcs()
+                .ahead(worktree, &base)
+                .map_err(|why| Adrift::from_delivery(job.id(), why))?;
+            if ahead == 0 {
+                return Ok(None);
+            }
+        }
+        self.deliver(job, worktree).await.map(Some)
+    }
+
     /// Assemble the pull request from the record and open it.
     async fn opened_for_review(
         &self,

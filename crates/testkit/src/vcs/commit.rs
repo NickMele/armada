@@ -37,6 +37,15 @@ impl FakeVcs {
         self
     }
 
+    /// Put commits on the branch that the base has not got, as a Drone running
+    /// `git commit` itself leaves it. Pair with
+    /// [`with_nothing_to_commit`](FakeVcs::with_nothing_to_commit) for the clean
+    /// worktree that follows.
+    pub fn with_commits_on_the_branch(self, commits: usize) -> FakeVcs {
+        *self.ahead.lock().expect("not poisoned") = commits;
+        self
+    }
+
     /// Make every commit fail as git refusing one would.
     pub fn refusing_to_commit(self, standing_in_for: &'static str) -> FakeVcs {
         *self.commits.lock().expect("not poisoned") = Willing::No(standing_in_for);
