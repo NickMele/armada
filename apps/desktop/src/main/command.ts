@@ -20,10 +20,14 @@ import type { CapRaise, ChosenAnswer, FileReport, JobSummary, Overruled, Propose
 import type {
   AnswerCommand,
   CommandAnswer,
+  JudgeAnswer,
+  JudgeAnswered,
   RemoveAllowedCommand,
   SetModel,
   SetWhenBlocked,
+  SetWhenRefused,
   WhenBlocked,
+  WhenRefused,
 } from "@armada/protocol";
 import type { ProposalInFlight, Proposed, ShownAgain } from "@armada/protocol";
 import { ask, COMMAND_MS, isJobSummary, MODEL_CALL_MS, NO_WAIT, route, type Answer } from "./request";
@@ -501,6 +505,30 @@ export class JobCommands {
     const body: SetWhenBlocked = { when_blocked: whenBlocked };
     return this.act(jobId, this.setting, "already_setting", (port) =>
       ask(port, "POST", route(jobId, "set_when_blocked"), body),
+    );
+  }
+
+  /**
+   * Answer the question a judge refusal opened: agree with it, disagree for
+   * this step, or disagree and stand the criterion down for the repository.
+   * One press is the whole answer — `note` is never required.
+   */
+  async answerJudge(jobId: string, answer: JudgeAnswer, note?: string): Promise<Outcome> {
+    const body: JudgeAnswered = { answer, note };
+    return this.act(jobId, this.answering, "already_answering", (port) =>
+      ask(port, "POST", route(jobId, "answer_judge"), body),
+    );
+  }
+
+  /**
+   * Change how this job meets a judge criterion that refuses. **Live, and
+   * nothing restarts** — Fleet reads it at the next criterion that refuses,
+   * and the job comes back exactly where it was.
+   */
+  async setWhenRefused(jobId: string, whenRefused: WhenRefused): Promise<Outcome> {
+    const body: SetWhenRefused = { when_refused: whenRefused };
+    return this.act(jobId, this.setting, "already_setting", (port) =>
+      ask(port, "POST", route(jobId, "set_when_refused"), body),
     );
   }
 

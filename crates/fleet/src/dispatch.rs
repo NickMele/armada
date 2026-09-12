@@ -310,6 +310,18 @@ where
                 self.stood_down(job_id, working).await?;
                 Ok(())
             }
+            // A refusal `crate::asking` says to ask a person about rather than
+            // stop the step over. The step moves; the Drone does not — see
+            // that module for why.
+            Ruling::Questioned { .. } => {
+                let job = self.load(job_id).await?;
+                let job = self
+                    .move_step(&job, step, StepTarget::HeldForReview)
+                    .await?;
+                self.applied(&job, ruling).await?;
+                self.asked_the_judge_question(&job, step, ruling).await?;
+                Ok(())
+            }
             // The gate failed and there is budget left. **Nothing about the
             // Job moves** — it is still `running`, the Drone still holds its
             // session and its context, and the only thing that happens is the

@@ -28,6 +28,7 @@ mod step;
 
 use serde::{Deserialize, Serialize};
 
+use crate::asking::{JudgeQuestion, WhenRefused};
 use crate::commanding::{CommandAnswer, CommandInFlight, WhenBlocked};
 use crate::enums::{CriterionSource, DependencyDirection, Recourse};
 use crate::ids::{CriterionId, Instant, JobId, StepId};
@@ -193,6 +194,17 @@ pub struct JobDetail {
     /// [`JobDetail::of`], like `when_blocked`. See [`CommandInFlight`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub command_waiting: Option<CommandInFlight>,
+    /// The Judge question a person is being asked about, right now. **Since
+    /// 11.1**, and absent from a Fleet older than that. Filled after
+    /// `JobDetail::of`, like `command_waiting`. See `JudgeQuestion`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub judge_question: Option<JudgeQuestion>,
+    /// How this Job meets a Judge criterion that refuses. **Since 11.3**, and
+    /// absent from a Fleet older than that -- which a reader draws as no
+    /// setting at all rather than as the default. Filled after
+    /// `JobDetail::of`, like `when_blocked`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub when_refused: Option<WhenRefused>,
     /// The commands a person allowed for this Job, oldest first. **Since
     /// 11.0.**
     ///
@@ -567,6 +579,8 @@ impl JobDetail {
             show_again: None,
             when_blocked: None,
             command_waiting: None,
+            judge_question: None,
+            when_refused: None,
             allowed_commands: Vec::new(),
             model_override: None,
             review,

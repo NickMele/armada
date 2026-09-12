@@ -90,6 +90,9 @@ pub struct Forgotten {
     /// one at teardown — see `docs/concepts/fleet.md`, *Ports*: forgetting is
     /// the safety net behind that release, not the release itself.
     pub port_claims: usize,
+    /// The question the Job was holding open, if any. One row while a
+    /// question is open, none otherwise.
+    pub judge_questions: usize,
     /// Rows removed from a table this build has no field for.
     ///
     /// Always zero today, and a test says so. It exists because the delete is
@@ -130,6 +133,7 @@ impl Forgotten {
             "job_remarks_taken_up" => &mut self.remarks_taken_up,
             "job_allowed_commands" => &mut self.allowed_commands,
             "port_claims" => &mut self.port_claims,
+            "job_judge_questions" => &mut self.judge_questions,
             _ => return None,
         })
     }

@@ -22,6 +22,7 @@ import { GitPullRequest, Minus } from "lucide-react";
 import {
   Button,
   CheckRuns,
+  JudgeQuestion,
   Tooltip,
   VerdictSheet,
   type CheckRun as CheckRunRow,
@@ -33,6 +34,7 @@ import type {
   Evidence,
   JobDetail as JobWhole,
   JobSummary,
+  JudgeAnswer,
   PullRequestDetail,
   Remarks,
   StepDetail,
@@ -533,6 +535,8 @@ export type VerdictSlotAtGateArgs = {
   onOpenRemarkLink: (jobId: string, remarkId: string) => void;
   onOpenPullRequest: OpenPullRequest;
   onSaid: (sentence: string) => void;
+  /** Answer the question a judge refusal opened. `answer_judge` is one press. */
+  onAnswerJudge: (jobId: string, answer: JudgeAnswer, note?: string) => void;
 };
 
 /**
@@ -563,7 +567,30 @@ export function verdictSlotAtGate({
   onOpenRemarkLink,
   onOpenPullRequest,
   onSaid,
+  onAnswerJudge,
 }: VerdictSlotAtGateArgs): ReactNode {
+  // A judge question outranks the rest of this slot: the gate is a human
+  // boundary either way, but this step is answered before it is reviewed.
+  const question = whole?.judge_question;
+  if (question !== undefined && question.step_id === open.step_id) {
+    return (
+      <JudgeQuestion
+        question={question.question}
+        expected={question.expected}
+        produced={question.produced}
+        consequence={question.consequence}
+        disabled={stale || deciding}
+        disabledNote={
+          stale
+            ? "This job is not live, so nothing can be sent."
+            : deciding
+              ? "Something sent to this job is still on its way to Fleet."
+              : undefined
+        }
+        onAnswer={(answer, note) => onAnswerJudge(job.id, answer, note)}
+      />
+    );
+  }
   const address = whole?.delivery?.pull_request;
   const detail = whole?.delivery?.pull_request_detail;
   const unpushed = whole?.delivery?.unpushed;

@@ -21,8 +21,9 @@ use std::collections::BTreeMap;
 use core_model::{
     AdvanceGate, ContextSource, Covers, CriterionId, DeclarePlanAt, EvidenceRef, EvidenceScope,
     EvidenceType, FrozenWorkflow, GamingCheck, GamingPattern, GateVerdict, JudgeCheck,
-    JudgeCriterion, ModelName, Narrowing, PathPattern, Prerequisite, RepoPath, ResolvedCheck,
-    ResolvedStep, StepId, Ulid, WorkflowId, ARTIFACT_EXISTS, DIFF_NONEMPTY, MANIFEST_CHECK,
+    JudgeCriterion, ModelName, Narrowing, OnRefusal, PathPattern, Prerequisite, RepoPath,
+    ResolvedCheck, ResolvedStep, StepId, Ulid, WorkflowId, ARTIFACT_EXISTS, DIFF_NONEMPTY,
+    MANIFEST_CHECK,
 };
 use serde_json::{json, Map, Value};
 
@@ -108,6 +109,7 @@ pub fn write_workflow(workflow: &FrozenWorkflow) -> String {
                 "criteria": judge.criteria().iter().map(|criterion| json!({
                     "criterion_id": criterion.criterion_id.as_str(),
                     "question": criterion.question,
+                    "on_refusal": criterion.on_refusal.as_wire(),
                 })).collect::<Vec<Value>>(),
                 "gaming_check": judge.gaming().map(|gaming| json!({
                     "baseline_ref": gaming.baseline().map(EvidenceRef::as_wire),
@@ -500,9 +502,18 @@ fn read_judge(judge: &Map<String, Value>) -> Result<JudgeCheck, Malformed> {
     let mut criteria = Vec::new();
     for criterion in array(field(judge, "criteria")?)? {
         let criterion = object(criterion)?;
+        // Absent reads as `Ask`, exactly as `config::judge` reads an absent
+        // `on_refusal`: a row written before this field existed is a
+        // criterion that asked by default in every version that could have
+        // written it.
+        let on_refusal = match criterion.get("on_refusal") {
+            Some(Value::String(named)) => OnRefusal::from_wire(named).unwrap_or_default(),
+            _ => OnRefusal::default(),
+        };
         criteria.push(JudgeCriterion {
             criterion_id: CriterionId::new(text(criterion, "criterion_id")?),
             question: text(criterion, "question")?,
+            on_refusal,
         });
     }
     Ok(JudgeCheck::declared(

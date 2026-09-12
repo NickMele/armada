@@ -78,7 +78,7 @@ import type {
   Outcome,
   Watched,
 } from "@armada/protocol";
-import type { CommandAnswer, FileReport, JobSummary, WhenBlocked } from "@armada/protocol";
+import type { CommandAnswer, FileReport, JobSummary, JudgeAnswer, WhenBlocked, WhenRefused } from "@armada/protocol";
 import type { ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
 import { heldForMoney, heldForTurns, type ConfirmableAct } from "./Acts";
 import { useCallArguments, type ReadCall } from "./calls";
@@ -159,8 +159,12 @@ export type JobDetailProps = {
    * stopped job. Straight through, for `onAnswer`'s reason.
    */
   onAnswerCommand: (jobId: string, call: string, answer: CommandAnswer) => void;
+  /** Answer the question a judge refusal opened. One press is the whole answer. */
+  onAnswerJudge: (jobId: string, answer: JudgeAnswer, note?: string) => void;
   /** How this job meets the next such command. Live; nothing restarts. */
   onSetWhenBlocked: (jobId: string, whenBlocked: WhenBlocked) => void;
+  /** How this job meets the next judge criterion that refuses. Live; nothing restarts. */
+  onSetWhenRefused: (jobId: string, whenRefused: WhenRefused) => void;
   /** The model this job's later steps start on, or `null` for the workflow's. Live. */
   onSetModel: (jobId: string, model: string | null) => void;
   /** Take back a command allowed for this job. A line in `armada.yml` is not touched. */
@@ -349,7 +353,9 @@ export function JobDetail({
   onRedirect,
   onAnswer,
   onAnswerCommand,
+  onAnswerJudge,
   onSetWhenBlocked,
+  onSetWhenRefused,
   onSetModel,
   onRemoveAllowedCommand,
   models,
@@ -664,6 +670,7 @@ export function JobDetail({
     onOpenRemarkLink,
     onOpenPullRequest,
     onSaid,
+    onAnswerJudge,
     notes: noted?.notes ?? [],
   });
 
@@ -855,7 +862,7 @@ export function JobDetail({
             }}
             // Every setting a person can change on this Job, and what each sends.
             settings={{
-              models, stale, acting, onSetWhenBlocked, onSetModel,
+              models, stale, acting, onSetWhenBlocked, onSetWhenRefused, onSetModel,
               onRemoveAllowedCommand, onRaiseCap, onRaiseTurnCap,
             }}
             run={runHook.slot}

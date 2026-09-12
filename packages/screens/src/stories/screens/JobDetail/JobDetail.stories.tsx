@@ -194,6 +194,48 @@ export const JudgeRefused: Story = { name: "Judge refused", render: drawing(esca
 /** Every Check passed and the Judge met every criterion. A person decides next. */
 export const Review: Story = { name: "Review", render: drawing(review) };
 
+/** What answering a judge question sends. A module's spy, cleared by the play that reads it. */
+const answerJudge = fn();
+
+/**
+ * The same gate as `Review`, holding on a judge question instead of a clean
+ * pass. The question outranks the rest of the slot: no merge answer, no
+ * checks list, just the criterion and the three presses.
+ */
+function reviewAtAQuestion(): JobFixture {
+  const fixture = review();
+  if (fixture.watched.state !== "read") return fixture;
+  return {
+    ...fixture,
+    watched: watchedRead({
+      ...fixture.watched.detail,
+      judge_question: {
+        step_id: "regression_verify",
+        criterion_id: "c1",
+        question: "Does the fix address the cause the note names?",
+        expected: "packages/settings/src/selectors.ts imports no store type",
+        produced: "The module still imports RootState directly, behind a re-export",
+        consequence: "the regression this step exists to catch can still reach the selectors",
+        asked_at: "2026-09-10T14:29:40Z",
+      },
+    }),
+  };
+}
+
+export const JudgeQuestionAtGate: Story = {
+  name: "Judge question at the gate",
+  render: () => (
+    <JobDetailFrom fixture={reviewAtAQuestion()} on={{ onAnswerJudge: answerJudge }} />
+  ),
+  play: async ({ canvas, userEvent }) => {
+    answerJudge.mockClear();
+    await userEvent.click(
+      await canvas.findByRole("button", { name: "Disagree, just this step" }),
+    );
+    await expect(answerJudge).toHaveBeenCalledWith(JOB_ID, "disagree_once", undefined);
+  },
+};
+
 /**
  * The review moment on a Job whose names are as long as real ones get, with the
  * spend and turns a long run reaches. The header a person reported on 11 Sep

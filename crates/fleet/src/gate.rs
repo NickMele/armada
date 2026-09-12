@@ -34,9 +34,9 @@ use std::time::Duration;
 use adapter_traits::{Changed, Footprint, WorkProduct};
 use checks_runner::Output;
 use core_model::{
-    Actor, AdvanceGate, DeclaredPaths, EscalationTrigger, IllegalTransition, Job, Judgment,
-    ResolvedCheck, ResolvedStep, StepCheck, StepEvidence, StepId, StepLevelTrigger, Target,
-    Timestamp, Transitioned,
+    Actor, AdvanceGate, CriterionId, DeclaredPaths, EscalationTrigger, IllegalTransition, Job,
+    Judgment, ResolvedCheck, ResolvedStep, StepCheck, StepEvidence, StepId, StepLevelTrigger,
+    Target, Timestamp, Transitioned, WhenRefused,
 };
 use verification::{
     decide, out_of_bounds, Accepted, Answered, Baseline, CheckFailed, Delivered, InScope, Lifted,
@@ -45,7 +45,7 @@ use verification::{
 
 use crate::at_step::AtStep;
 use crate::checking;
-use crate::judging::{self, Judging};
+use crate::judging::{self, JudgeFold, Judging};
 use crate::keeping::Keeping;
 use crate::policy::{HeldBecause, Policies};
 use crate::underway::Announcing;
@@ -103,6 +103,8 @@ pub use crate::ruling::Ruling;
 /// | `policies` | What this repository has said about `auto_merge` and `review_gate`, folded across the Job's gating Manifests. **Handed in and never read here**, for `lifted`'s reason and one more: both settings are `Live`, so the answer is only true at the instant it is taken, and a gate that read the file for itself would be a second reader of a value the caller has already resolved. `crate::policy` is where it is built |
 /// | `announcing` | Where each Check is said to start and to finish while it runs. **Told, never read**: nothing below decides on it, and the ruling is what `crate::checking` hands back. Handed in because the entry it writes has to stand until the caller has written the ruling down, which is after this returns — `crate::underway` |
 /// | `ports`, `port_env` | The Job's claimed span, resolved to a name-to-port map and to the environment it sets. **Handed in for `lifted`'s reason** — this function is given a step and not a Job, and only a caller holding one can ask the store for its claim. `crate::ports` |
+/// | `refusal_policy` | This Job's `WhenRefused` setting, off the store. **Handed in for `lifted`'s reason** — a step cannot ask the store for a Job-level setting, and a setting read here for itself would be a second reader of the value `crate::asking::answer_judge` writes |
+/// | `tolerated` | Every criterion this repository has stood down with "always disagree", off the store. **Handed in and read once per pass**, so a criterion answered before this Job existed is never asked about again without a second query per criterion |
 #[allow(clippy::too_many_arguments)]
 pub async fn rule_on<W>(
     at: AtStep<'_>,
@@ -120,6 +122,8 @@ pub async fn rule_on<W>(
     announcing: &Announcing,
     ports: &BTreeMap<String, u16>,
     port_env: &[(String, String)],
+    refusal_policy: WhenRefused,
+    tolerated: &[CriterionId],
 ) -> Ruling
 where
     W: WorkProduct,
@@ -380,11 +384,37 @@ where
             };
             let answered = Answered::of(&checks, &printed);
             match judging::judged(
-                at, request, accepted, &patch, delivered, answered, &off_plan, recorded, judging,
+                at,
+                request,
+                accepted,
+                &patch,
+                delivered,
+                answered,
+                &off_plan,
+                recorded,
+                judging,
+                refusal_policy,
+                tolerated,
             )
             .await
             {
-                Ok((judged, refusals)) => (judged, mechanical.but_for(refusals)),
+                // Returned whole, ahead of the gaming look and the advance
+                // gate below: a step being asked about must not also draw a
+                // gaming flag or a held-for-review reading over the same
+                // evidence.
+                Ok((judged, JudgeFold::Asking(question, question_text))) => {
+                    return Ruling::Questioned {
+                        question,
+                        question_text,
+                        checks,
+                        output,
+                        judged,
+                    }
+                }
+                Ok((judged, JudgeFold::Refused(refusals))) => {
+                    (judged, mechanical.but_for(Some(refusals)))
+                }
+                Ok((judged, JudgeFold::Clear)) => (judged, mechanical),
                 // A verification that could not run is not a refusal, and it is
                 // not a pass. The step neither advances nor fails.
                 Err(cause) => {
@@ -723,7 +753,12 @@ pub fn apply(
         // awaiting_review` is the edge `fleet::reviewing`'s three acts all
         // start from, and Fleet is the actor: the person has not answered yet,
         // they have only been asked.
-        Ruling::HeldForReview { .. } => Target::AwaitingReview,
+        // The same target `HeldForReview` uses, and the same reason: the
+        // machine is satisfied and a person answers next, so the Job is
+        // waiting on them rather than stopped. `Ruling::Questioned`'s own doc
+        // says why this ruling does not stand its Drone down where the other
+        // one does.
+        Ruling::HeldForReview { .. } | Ruling::Questioned { .. } => Target::AwaitingReview,
         // **The rulings that escalate are exactly the rulings that stop the
         // step**, which is why this reads the trigger off that answer instead
         // of naming one. `None` covers the three that move nothing: a step

@@ -61,6 +61,8 @@ async fn a_check_that_passes_is_written_down_as_a_pass() {
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],
+        core_model::WhenRefused::default(),
+        &[],
     )
     .await;
 
@@ -102,6 +104,8 @@ async fn a_check_that_fails_records_the_code_it_returned() {
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],
+        core_model::WhenRefused::default(),
+        &[],
     )
     .await;
 
@@ -141,6 +145,8 @@ async fn a_hanging_check_is_recorded_as_timed_out_and_not_as_failed() {
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],
+        core_model::WhenRefused::default(),
+        &[],
     )
     .await;
 
@@ -177,6 +183,8 @@ async fn a_check_whose_command_does_not_exist_is_recorded_as_never_ran() {
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
+        &[],
+        core_model::WhenRefused::default(),
         &[],
     )
     .await;
@@ -229,6 +237,8 @@ async fn a_step_that_added_nothing_to_what_it_inherited_fails_its_diff_check() {
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],
+        core_model::WhenRefused::default(),
+        &[],
     )
     .await;
 
@@ -280,6 +290,8 @@ async fn a_step_that_moved_work_it_inherited_advances() {
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],
+        core_model::WhenRefused::default(),
+        &[],
     )
     .await;
 
@@ -310,6 +322,8 @@ async fn a_step_whose_start_was_never_read_does_not_advance_on_the_doubt() {
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
+        &[],
+        core_model::WhenRefused::default(),
         &[],
     )
     .await;
@@ -343,6 +357,8 @@ async fn an_ungated_step_records_nothing_because_there_was_nothing_to_run() {
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
+        &[],
+        core_model::WhenRefused::default(),
         &[],
     )
     .await;

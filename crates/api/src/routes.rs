@@ -28,11 +28,12 @@ use ipc::RunId;
 use std::sync::Arc;
 
 use crate::commands::{
-    answer_command, answer_question, approve_dispatch, approve_review, examine_job, file_report,
-    forget_job, kill_drone, kill_job, merge_pull_request, override_verdict, propose_from_request,
-    propose_job, raise_cost_cap, raise_turn_cap, reclaim_worktree, redirect_drone, redispatch_job,
-    reject_job, request_changes, rerun_gate, resolve_pull_request_conflict, restart_step,
-    set_when_blocked, show_again, stop_proposal, take_up_remarks,
+    answer_command, answer_judge, answer_question, approve_dispatch, approve_review, examine_job,
+    file_report, forget_job, kill_drone, kill_job, merge_pull_request, override_verdict,
+    propose_from_request, propose_job, raise_cost_cap, raise_turn_cap, reclaim_worktree,
+    redirect_drone, redispatch_job, reject_job, request_changes, rerun_gate,
+    resolve_pull_request_conflict, restart_step, set_when_blocked, set_when_refused, show_again,
+    stop_proposal, take_up_remarks,
 };
 use crate::daemon::Daemon;
 use crate::journal::Journal;
@@ -442,6 +443,16 @@ pub const SERVED: &[Route] = &[
         path: "/jobs/:job_id/set_when_blocked",
     },
     Route {
+        operation: "answer_judge",
+        method: "POST",
+        path: "/jobs/:job_id/answer_judge",
+    },
+    Route {
+        operation: "set_when_refused",
+        method: "POST",
+        path: "/jobs/:job_id/set_when_refused",
+    },
+    Route {
         operation: "set_model",
         method: "POST",
         path: "/jobs/:job_id/set_model",
@@ -793,6 +804,11 @@ pub fn router<D: Daemon>(served: Served<D>) -> Router {
         .route(
             "/jobs/:job_id/set_when_blocked",
             post(set_when_blocked::<D>),
+        )
+        .route("/jobs/:job_id/answer_judge", post(answer_judge::<D>))
+        .route(
+            "/jobs/:job_id/set_when_refused",
+            post(set_when_refused::<D>),
         )
         .route(
             "/jobs/:job_id/set_model",

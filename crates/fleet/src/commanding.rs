@@ -477,6 +477,36 @@ where
         self.summarised(&job).await
     }
 
+    /// A person's answer to the question a Judge refusal opened.
+    /// `crate::asking::answer_judge`'s refusals.
+    async fn answer_judge(
+        &self,
+        job_id: JobId,
+        answered: ipc::JudgeAnswered,
+    ) -> Result<JobSummary, Refusal> {
+        let id = job_id.to_domain();
+        let job = Fleet::answer_judge(self, &id, answered.answer, answered.note)
+            .await
+            .map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
+    }
+
+    /// How this Job meets a Judge criterion that refuses, changed. Loaded
+    /// first, for `set_when_blocked`'s reason.
+    async fn set_when_refused(
+        &self,
+        job_id: JobId,
+        setting: ipc::SetWhenRefused,
+    ) -> Result<JobSummary, Refusal> {
+        let id = job_id.to_domain();
+        let job = self.load(&id).await.map_err(|why| self.refusal(why))?;
+        let when = crate::asking::domain_when_refused(setting.when_refused);
+        Fleet::set_when_refused(self, &id, when)
+            .await
+            .map_err(|why| self.refusal(why))?;
+        self.summarised(&job).await
+    }
+
     /// The model this Job's later steps spawn on, chosen or cleared. Loaded
     /// first for `set_when_blocked`'s reason; the refusals are
     /// `crate::permitting::NotPermitted`'s.

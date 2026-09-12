@@ -158,6 +158,7 @@ pub fn workflow() -> FrozenWorkflow {
                     vec![JudgeCriterion {
                         criterion_id: CriterionId::new("c1"),
                         question: "Does the fix address the cause the note names?".to_string(),
+                        on_refusal: core_model::OnRefusal::Ask,
                     }],
                     Some(GamingCheck::declared(
                         EvidenceRef::parse("root_cause.evidence"),

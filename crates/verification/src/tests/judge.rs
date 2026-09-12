@@ -480,6 +480,7 @@ fn the_call_count_is_criteria_times_panel_size() {
         .map(|id| JudgeCriterion {
             criterion_id: CriterionId::new(*id),
             question: "Is it right?".to_string(),
+            on_refusal: core_model::OnRefusal::Ask,
         })
         .collect();
     let check = core_model::JudgeCheck::declared(None, 3, criteria, None);

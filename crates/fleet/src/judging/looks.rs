@@ -15,11 +15,16 @@
 //! criterion asking about the request whose author forgot the key is #169 one
 //! dial smaller. The cost is unmeasured: a few hundred characters beside a brief
 //! already carrying a whole diff, times `panel_size` — the dial to reach for.
+//!
+//! **Past 500 lines since `docs/concepts/judge.md`'s asking design.** `fold`
+//! and its two small readers belong beside `judged`, the one place a step's
+//! judgments exist as a list before a `Ruling` is chosen from them — a second
+//! file would be a second place that list is walked.
 
 use adapter_traits::{Ask, Model, Patch};
 use core_model::{
-    DeclaredPaths, GamingFlag, Given, JudgeCheck, Judgment, RepoPath, ResolvedStep, StepEvidence,
-    StepId,
+    CriterionId, DeclaredPaths, GamingFlag, Given, JudgeCheck, Judgment, OnRefusal, RepoPath,
+    ResolvedStep, StepEvidence, StepId, WhenRefused,
 };
 use verification::{
     Accepted, Answered, Baseline, Brief, Convergence, ConvergenceBrief, Delivered, Flagged,
@@ -30,6 +35,117 @@ use crate::at_step::AtStep;
 
 use super::marking::Calling;
 use super::{said, CallFailed, Judging, Look};
+
+/// What one pass over a step's refusals resolves to.
+///
+/// **The fold every refusal goes through, on the way to a `Ruling`.** A
+/// refusal marked `refuse` -- by its own declaration or by the Job's
+/// `WhenRefused` setting -- still stops the step exactly as it always has;
+/// `docs/concepts/judge.md`'s asking design only ever changes what happens to
+/// the ones that do not.
+///
+/// **At most one criterion is ever asked about per pass.** A step that draws
+/// more than one ask-eligible refusal in the same pass is asked about the
+/// first, in the order the criteria were declared; the others are recorded --
+/// every refusal reaches `job_step_judgments` regardless of this fold -- and
+/// asked about only if the step comes round again still refusing.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum JudgeFold {
+    /// Nothing refused, or every refusal was tolerated by a standing "always
+    /// disagree".
+    Clear,
+    /// At least one refusal must stop the step, exactly as before this
+    /// existed.
+    Refused(Refusals),
+    /// Nothing must stop the step yet, and a person is being asked about this
+    /// one. The plain question text rides alongside the judgment: neither
+    /// `Judgment` nor its citations carry it.
+    Asking(Judgment, String),
+}
+
+/// Fold a step's judgments into `JudgeFold`.
+///
+/// `tolerated` is read once per criterion. A criterion this repository has
+/// stood down -- `crate::asking`'s "always disagree" -- is treated as if it
+/// had not refused at all: not asked about a second time, and not what stops
+/// the step.
+fn fold(
+    judgments: &[Judgment],
+    step: &ResolvedStep,
+    off_plan: &[RepoPath],
+    policy: WhenRefused,
+    tolerated: &[CriterionId],
+) -> JudgeFold {
+    let mut refuse_now = Vec::new();
+    let mut ask = Vec::new();
+    for judgment in judgments {
+        if !judgment.verdict.refuses() {
+            continue;
+        }
+        if tolerated.contains(&judgment.criterion_id) {
+            continue;
+        }
+        let effective = if judgment.criterion_id.as_str() == verification::DECLARED_PLAN_DRIFT {
+            // The one criterion no policy can move. Fleet's own drift look
+            // never authored an entry in `judge_checks[]`, so there is
+            // nothing here for `WhenRefused::AlwaysRefuse` to override --
+            // `docs/concepts/judge.md`'s own header says drift tags the step
+            // and never fails it.
+            OnRefusal::Ask
+        } else {
+            policy.resolve(on_refusal_of(&judgment.criterion_id, step))
+        };
+        match effective {
+            OnRefusal::Refuse => refuse_now.push(judgment.clone()),
+            OnRefusal::Ask => ask.push(judgment.clone()),
+        }
+    }
+    if let Some(refusals) = Refusals::among(&refuse_now) {
+        return JudgeFold::Refused(refusals);
+    }
+    match ask.into_iter().next() {
+        Some(first) => {
+            let question = question_text_of(&first.criterion_id, step, off_plan);
+            JudgeFold::Asking(first, question)
+        }
+        None => JudgeFold::Clear,
+    }
+}
+
+/// What the step itself declared for this criterion. `Ask` where the step
+/// names no such criterion -- unreachable on a real refusal, since every
+/// refusing `Judgment` answers a criterion this step just asked, but the safe
+/// default all the same.
+fn on_refusal_of(criterion_id: &CriterionId, step: &ResolvedStep) -> OnRefusal {
+    step.judge_checks()
+        .iter()
+        .flat_map(JudgeCheck::criteria)
+        .find(|criterion| &criterion.criterion_id == criterion_id)
+        .map_or(OnRefusal::Ask, |criterion| criterion.on_refusal)
+}
+
+/// The plain question this criterion asked. Neither a `Judgment` nor its
+/// citations carry it, so a person reading the question card is answered from
+/// the same two sources `on_refusal_of` reads: the step's own declaration, or
+/// -- for `declared_plan_drift`, which declares nothing -- the paths that
+/// actually drifted.
+fn question_text_of(
+    criterion_id: &CriterionId,
+    step: &ResolvedStep,
+    off_plan: &[RepoPath],
+) -> String {
+    if criterion_id.as_str() == verification::DECLARED_PLAN_DRIFT {
+        return verification::drift_criterion(off_plan)
+            .map(|criterion| criterion.question)
+            .unwrap_or_default();
+    }
+    step.judge_checks()
+        .iter()
+        .flat_map(JudgeCheck::criteria)
+        .find(|criterion| &criterion.criterion_id == criterion_id)
+        .map(|criterion| criterion.question.clone())
+        .unwrap_or_default()
+}
 
 /// Judge one step, and answer with the refusals or with none.
 ///
@@ -48,6 +164,7 @@ use super::{said, CallFailed, Judging, Look};
 /// [`CallFailed::NothingToJudge`] — which the gate turns into a ruling that
 /// decided neither way. It used to come back as a refusal, every time, on every
 /// Job whose first step wrote a note.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn judged(
     at: AtStep<'_>,
     request: Request<'_>,
@@ -58,7 +175,9 @@ pub(crate) async fn judged(
     off_plan: &[RepoPath],
     recorded: &[(StepId, StepEvidence)],
     judging: &Judging,
-) -> Result<(Vec<Judgment>, Option<Refusals>), CallFailed> {
+    refusal_policy: WhenRefused,
+    tolerated: &[CriterionId],
+) -> Result<(Vec<Judgment>, JudgeFold), CallFailed> {
     let step = at.step();
     let product =
         Product::of(step, patch, accepted, delivered).map_err(CallFailed::NothingToJudge)?;
@@ -169,8 +288,8 @@ pub(crate) async fn judged(
         judgment.given = Some(handed(&ask));
         judgments.push(judgment);
     }
-    let refusals = Refusals::among(&judgments);
-    Ok((judgments, refusals))
+    let folded = fold(&judgments, step, off_plan, refusal_policy, tolerated);
+    Ok((judgments, folded))
 }
 
 /// What one call was handed, as something two rows can be compared on.

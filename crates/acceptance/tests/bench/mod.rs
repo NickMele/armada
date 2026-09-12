@@ -442,6 +442,8 @@ impl Bench {
             &fleet::Announcing::nowhere(),
             &std::collections::BTreeMap::new(),
             &[],
+            core_model::WhenRefused::default(),
+            &[],
         )
         .await;
         // What `fleet::dispatch` does with the store, done with a list: the

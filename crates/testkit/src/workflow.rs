@@ -459,8 +459,13 @@ fn workflow_text(
         if !step.judged_on.is_empty() {
             text.push_str("        criteria:\n");
             for (id, question) in step.judged_on {
+                // `on_refusal: refuse` on every fixture criterion, so every
+                // existing test exercising a veto keeps testing one:
+                // `docs/concepts/judge.md`'s asking design makes `ask` the
+                // default, and a fixture that wants that behaviour tests it
+                // through a criterion of its own rather than through this one.
                 text.push_str(&format!(
-                    "          - criterion_id: {id}\n            question: \"{question}\"\n"
+                    "          - criterion_id: {id}\n            question: \"{question}\"\n            on_refusal: refuse\n"
                 ));
             }
         }

@@ -71,6 +71,8 @@ async fn a_step_that_declares_no_scope_still_cannot_write_a_secret() {
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],
+        core_model::WhenRefused::default(),
+        &[],
     )
     .await;
 
@@ -159,6 +161,8 @@ async fn a_step_that_declares_no_scope_gains_a_floor_and_not_a_drift_check() {
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],
+        core_model::WhenRefused::default(),
+        &[],
     )
     .await;
 
@@ -199,6 +203,8 @@ async fn the_deliverable_a_workflow_asks_for_is_not_a_boundary() {
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],
+        core_model::WhenRefused::default(),
+        &[],
     )
     .await;
 
@@ -233,6 +239,8 @@ async fn a_step_with_no_scope_whose_worktree_will_not_open_decides_nothing() {
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
+        &[],
+        core_model::WhenRefused::default(),
         &[],
     )
     .await;

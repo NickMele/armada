@@ -171,6 +171,8 @@ impl Repo {
             &crate::underway::Announcing::nowhere(),
             &std::collections::BTreeMap::new(),
             &[],
+            core_model::WhenRefused::default(),
+            &[],
         )
         .await
     }

@@ -65,6 +65,40 @@ impl JudgeVerdict {
     }
 }
 
+/// What a refusal on this criterion does to the step.
+///
+/// **`Ask` is the default**, per `docs/concepts/judge.md`'s asking design: a
+/// refusal is usually "is this more than you asked for", a question with an
+/// obvious owner, and not a verdict that should spend a retry or discard a
+/// Drone on its own. `Refuse` is the escape hatch for a criterion where
+/// stopping the step outright, exactly as every refusal did before this
+/// existed, is the only sane answer.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum OnRefusal {
+    #[default]
+    Ask,
+    Refuse,
+}
+
+impl OnRefusal {
+    pub const ALL: &'static [OnRefusal] = &[OnRefusal::Ask, OnRefusal::Refuse];
+
+    pub fn as_wire(&self) -> &'static str {
+        match self {
+            OnRefusal::Ask => "ask",
+            OnRefusal::Refuse => "refuse",
+        }
+    }
+
+    /// `None` where the text is neither spelling.
+    pub fn from_wire(value: &str) -> Option<OnRefusal> {
+        OnRefusal::ALL
+            .iter()
+            .copied()
+            .find(|o| o.as_wire() == value)
+    }
+}
+
 /// One narrow yes/no the Judge is asked about a step's evidence.
 ///
 /// The question is the whole of what a call is asked. It is one criterion per
@@ -74,6 +108,10 @@ impl JudgeVerdict {
 pub struct JudgeCriterion {
     pub criterion_id: CriterionId,
     pub question: String,
+    /// What a refusal on this criterion does to the step. A Job-level
+    /// `crate::WhenRefused` setting may override this in either direction --
+    /// `docs/concepts/judge.md`'s asking design.
+    pub on_refusal: OnRefusal,
 }
 
 /// What a step declares for the semantic tier, as the Job froze it.

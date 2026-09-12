@@ -76,6 +76,8 @@ async fn ruling_over(work: &FakeWorkProduct) -> Ruling {
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
         &[],
+        core_model::WhenRefused::default(),
+        &[],
     )
     .await
 }
@@ -214,6 +216,8 @@ async fn a_step_whose_checks_declare_no_paths_reads_the_diff_once_and_no_more() 
         Policies::unstated(),
         &crate::underway::Announcing::nowhere(),
         &std::collections::BTreeMap::new(),
+        &[],
+        core_model::WhenRefused::default(),
         &[],
     )
     .await;

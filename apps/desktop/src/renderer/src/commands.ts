@@ -36,7 +36,13 @@ import type {
   StagedAttachment,
   WorktreeReclaimed,
 } from "@armada/protocol";
-import type { CommandAnswer, StartRun, WhenBlocked } from "@armada/protocol";
+import type {
+  CommandAnswer,
+  JudgeAnswer,
+  StartRun,
+  WhenBlocked,
+  WhenRefused,
+} from "@armada/protocol";
 import type { Answered, ConfirmableAct } from "@armada/screens";
 import { proposeRequest } from "./dispatch";
 import type { Proposing } from "./dispatch";
@@ -307,6 +313,30 @@ export function useCommands(sending: Sending) {
   }
 
   /**
+   * Answer the question a judge refusal opened. **Not through `act`**, for
+   * `answerCommand`'s reason: the answer is one of the closed set this design
+   * offers, and none of them ends anything from the renderer's own view.
+   */
+  async function answerJudge(jobId: string, answer: JudgeAnswer, note?: string): Promise<void> {
+    setActing(jobId);
+    try {
+      setOutcome(await window.armada.answerJudge(jobId, answer, note));
+    } finally {
+      setActing(null);
+    }
+  }
+
+  /** Change how the job meets the next judge criterion that refuses. On `setWhenBlocked`'s terms. */
+  async function setWhenRefused(jobId: string, whenRefused: WhenRefused): Promise<void> {
+    setActing(jobId);
+    try {
+      setOutcome(await window.armada.setWhenRefused(jobId, whenRefused));
+    } finally {
+      setActing(null);
+    }
+  }
+
+  /**
    * Choose the model the job's next step starts on, or `null` for the
    * workflow's. On `setWhenBlocked`'s terms: nothing to confirm, and under
    * `acting` so the panel is off while it is out.
@@ -511,6 +541,8 @@ export function useCommands(sending: Sending) {
     redirect,
     answer,
     answerCommand,
+    answerJudge,
+    setWhenRefused,
     setWhenBlocked,
     setModel,
     removeAllowedCommand,

@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from "react";
-import type { Reach, WhenBlocked } from "@armada/protocol";
+import type { Reach, WhenBlocked, WhenRefused } from "@armada/protocol";
 import { Button } from "../../primitives/Button/Button";
 import { Radio, RadioGroup } from "../../primitives/Radio/Radio";
 import { Select } from "../../primitives/Select/Select";
@@ -47,6 +47,16 @@ export type JobSettingsProps = {
   whenBlocked: WhenBlocked;
   /** The line under the choice once a change took. */
   whenBlockedSaid?: ReactNode;
+  /**
+   * The three answers to a judge criterion that refuses, in the order to
+   * offer them. Absent where Fleet sent no `when_refused` — a Fleet older
+   * than 11.3 — and then the section is not drawn at all.
+   */
+  judgeChoices?: readonly JobSettingsJudgeChoice[];
+  whenRefused?: WhenRefused;
+  /** The line under the choice once a change took. */
+  whenRefusedSaid?: ReactNode;
+  onWhenRefused?: (whenRefused: WhenRefused) => void;
   /** What a person allowed for this Job, oldest first. */
   allowed: readonly JobSettingsAllowed[];
   /** The line under the list once an allow was taken back. */
@@ -79,6 +89,9 @@ export type JobSettingsCeiling = {
 /** One answer to a command the drone was not given, with what it commits to. */
 export type JobSettingsChoice = { value: WhenBlocked; label: string; means: string };
 
+/** One answer to a judge criterion that refuses, with what it commits to. */
+export type JobSettingsJudgeChoice = { value: WhenRefused; label: string; means: string };
+
 /** One command allowed for this Job, and how far the allow reaches. */
 export type JobSettingsAllowed = { run: string; reach: Reach };
 
@@ -97,12 +110,16 @@ export function JobSettings({
   choices,
   whenBlocked,
   whenBlockedSaid,
+  judgeChoices,
+  whenRefused,
+  whenRefusedSaid,
   allowed,
   allowedSaid,
   disabled = false,
   disabledNote,
   onModel,
   onWhenBlocked,
+  onWhenRefused,
   onRemove,
   onClose,
 }: JobSettingsProps) {
@@ -284,6 +301,36 @@ export function JobSettings({
             <Said>{allowedSaid}</Said>
           </div>
         </section>
+
+        {judgeChoices === undefined || whenRefused === undefined ? null : (
+          <section className="armada-job-settings__section" aria-labelledby={`${group}-judge`}>
+            <h3 className="armada-job-settings__heading" id={`${group}-judge`}>
+              Judge
+            </h3>
+            <div className="armada-job-settings__field">
+              <RadioGroup label="When a judge refuses">
+                {judgeChoices.map((choice) => (
+                  <div className="armada-job-settings__option" key={choice.value}>
+                    <Radio
+                      name={`${group}-when-refused`}
+                      value={choice.value}
+                      checked={whenRefused === choice.value}
+                      disabled={disabled}
+                      aria-describedby={`${group}-${choice.value}`}
+                      onChange={() => onWhenRefused?.(choice.value)}
+                    >
+                      {choice.label}
+                    </Radio>
+                    <p className="armada-job-settings__option-means" id={`${group}-${choice.value}`}>
+                      {choice.means}
+                    </p>
+                  </div>
+                ))}
+              </RadioGroup>
+              <Said>{whenRefusedSaid}</Said>
+            </div>
+          </section>
+        )}
       </div>
     </Sheet>
   );
