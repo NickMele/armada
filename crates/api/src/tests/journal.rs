@@ -249,6 +249,177 @@ async fn a_fleet_with_no_reader_says_so_rather_than_opening_an_empty_stream() {
     );
 }
 
+/// The claim `get_job_log` makes: the same log, answered once, over HTTP.
+///
+/// **The half an agent can use.** It cannot be interrupted mid-turn and so
+/// cannot follow the socket above; what it needs is the lines already written,
+/// and this is that read.
+#[tokio::test]
+async fn the_settled_read_answers_the_log_once_and_says_it_is_a_window() {
+    let log = Arc::new(FakeLog::default());
+    log.wrote(note("worktree cut"));
+    log.wrote(note("preparation began"));
+    let app = wired(Arc::clone(&log));
+    let job = a_job(&app).await;
+
+    let answered = fetched(&app, &format!("/jobs/{}/log/read", job.as_str())).await;
+    assert_eq!(answered.0, StatusCode::OK);
+    let read: ipc::JobLog = ipc::decode("a Job log", &answered.1).expect("a Job log comes back");
+
+    assert_eq!(read.job_id, job);
+    assert_eq!(read.notes.len(), 2);
+    assert_eq!(read.notes[0].msg, "worktree cut");
+    assert_eq!(read.notes[1].msg, "preparation began");
+    assert_eq!(read.from_note, 1);
+    assert_eq!(read.total_notes, 2);
+    assert!(
+        read.whole,
+        "the answer says whether it is one, and is not asked"
+    );
+    assert!(!read.unreadable);
+    assert_eq!(read.path, ".armada/logs/a-proposal.jsonl");
+}
+
+/// **The stream is not reopened, and nothing about it moves.** The settled read
+/// is a second route on the same reader; the socket next door still opens, and
+/// still hands the same notes.
+#[tokio::test]
+async fn the_settled_read_leaves_the_stream_exactly_where_it_was() {
+    let log = Arc::new(FakeLog::default());
+    log.wrote(note("worktree cut"));
+    let app = wired(Arc::clone(&log));
+    let job = a_job(&app).await;
+
+    let answered = fetched(&app, &format!("/jobs/{}/log/read", job.as_str())).await;
+    assert_eq!(answered.0, StatusCode::OK);
+
+    let mut socket = connected(app, &format!("/jobs/{}/log", job.as_str()), 8192).await;
+    let JournalMessage::Opened(_) = read(&mut socket).await else {
+        panic!("the socket still opens");
+    };
+    assert_eq!(said(read(&mut socket).await).msg, "worktree cut");
+}
+
+/// A log that will not read answers with what it had and says so, rather than
+/// refusing. **A refusal would throw away the notes that did read**, on the one
+/// call somebody makes when something is already wrong.
+#[tokio::test]
+async fn a_settled_read_of_a_broken_log_says_so_rather_than_refusing() {
+    let log = Arc::new(FakeLog::default());
+    log.wrote(note("worktree cut"));
+    log.broke();
+    let app = wired(Arc::clone(&log));
+    let job = a_job(&app).await;
+
+    let answered = fetched(&app, &format!("/jobs/{}/log/read", job.as_str())).await;
+    assert_eq!(answered.0, StatusCode::OK, "not a refusal");
+    let read: ipc::JobLog = ipc::decode("a Job log", &answered.1).expect("a Job log comes back");
+    assert!(read.unreadable);
+    assert!(!read.whole, "and so it is not the whole of it");
+    assert_eq!(read.notes.len(), 1, "what did read is still carried");
+}
+
+/// A Job id that names nothing is the extractor's 404, exactly as it is on the
+/// socket. The reader is never reached.
+#[tokio::test]
+async fn the_settled_read_of_an_unknown_job_is_a_404() {
+    let app = wired(Arc::new(FakeLog::default()));
+    let answered = fetched(&app, "/jobs/01NOSUCHJOB/log/read").await;
+    assert_eq!(answered.0, StatusCode::NOT_FOUND);
+}
+
+/// A listener built with no reader says so here too. **Never an empty window**
+/// — a Job whose log nothing can read is not a Job nothing happened to.
+#[tokio::test]
+async fn a_settled_read_with_no_reader_is_a_fault_and_not_an_empty_window() {
+    let events = Broadcaster::new();
+    let daemon = Arc::new(FakeDaemon::new(events.clone()));
+    let app = router(Served::sharing(daemon, run_id(), events));
+    let job = a_job(&app).await;
+    let answered = fetched(&app, &format!("/jobs/{}/log/read", job.as_str())).await;
+    assert_eq!(answered.0, StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+/// **The issue's own claim, end to end**: an agent investigating a Job reads
+/// what Fleet did to it, in one call, without following a stream.
+///
+/// It goes through the door rather than the route, because the door is what an
+/// agent has. Nothing hand-lists the tool — it is offered because the
+/// inventory's `agent_access` column says so.
+#[tokio::test]
+async fn an_agent_reads_what_fleet_did_to_a_job_in_one_call() {
+    let log = Arc::new(FakeLog::default());
+    log.wrote(note("worktree cut"));
+    log.wrote(note("preparation ran `pnpm install`"));
+    let app = wired(Arc::clone(&log));
+    let job = a_job(&app).await;
+
+    let offered = called(&app, r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#).await;
+    assert!(
+        offered.contains("get_job_log"),
+        "the tool set is generated from the inventory: {offered}"
+    );
+
+    let answered = called(
+        &app,
+        &format!(
+            r#"{{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{{
+               "name":"get_job_log","arguments":{{"job_id":"{}"}}}}}}"#,
+            job.as_str()
+        ),
+    )
+    .await;
+
+    assert!(answered.contains("preparation ran"), "{answered}");
+    assert!(answered.contains("worktree cut"), "{answered}");
+    // And it is one answer, not a subscription: nothing here is a cursor to
+    // come back with.
+    assert!(answered.contains("total_notes"), "{answered}");
+}
+
+/// One JSON-RPC message through the agent's door, as the text that came back.
+async fn called(app: &Router, body: &str) -> String {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(crate::door::DOOR_PATH)
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_string()))
+                .expect("a well-formed request"),
+        )
+        .await
+        .expect("the router answers");
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = http_body_util::BodyExt::collect(response.into_body())
+        .await
+        .expect("a body")
+        .to_bytes();
+    String::from_utf8(body.to_vec()).expect("text")
+}
+
+/// One GET against the router, as its status and its body.
+async fn fetched(app: &Router, path: &str) -> (StatusCode, axum::body::Bytes) {
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(path)
+                .body(Body::empty())
+                .expect("a well-formed request"),
+        )
+        .await
+        .expect("the router answers");
+    let status = response.status();
+    let body = http_body_util::BodyExt::collect(response.into_body())
+        .await
+        .expect("a body")
+        .to_bytes();
+    (status, body)
+}
+
 /// What a real handshake was answered with, where it was refused.
 ///
 /// A hand-built request that is not a valid upgrade is refused by the extractor
