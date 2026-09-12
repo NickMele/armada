@@ -192,7 +192,10 @@ the Check a Drone is measured by.
 
 A Job that passes every Check ends with its work committed on its own branch,
 that branch brought up to date with the branch it merges into, pushed, and a
-pull request open against it. Fleet does all four — a Drone is denied `git`.
+pull request open against it. Fleet does all four. A Drone is denied the `git`
+commands that change a repository, whatever the operator's own settings allow,
+and a branch that already holds commits its base has not got is still delivered
+when Fleet finds nothing left to commit.
 
 **The branch it merges into is `base:` in `armada.yml`.** Left out, Armada
 infers one: what `origin/HEAD` names, then `main`, then `master`. A declared
