@@ -11,7 +11,7 @@ use http_body_util::BodyExt;
 use tower::ServiceExt;
 
 use crate::tests::fake::{running, FakeDaemon};
-use crate::tests::shapes::run_id;
+use crate::tests::shapes::{run_id, THE_CALL, THE_DRONE, THE_FRAME, THE_MANIFEST, THE_OUTPUT};
 use crate::{offered, router, Broadcaster, Served, DOOR_PATH, SERVED};
 
 fn wired(daemon: FakeDaemon) -> Router {
@@ -98,6 +98,59 @@ async fn the_tool_list_is_every_reachable_operation_and_names_its_route() {
         body.contains("GET /jobs/:job_id"),
         "a tool must name its route"
     );
+}
+
+/// Every tool, called. **The door's half of `every_operation_the_table_names_is_routed`**:
+/// that one proves a path is in the router, and this proves the door builds a
+/// request that reaches it. A tool that answers "no such tool" or a route that
+/// is not there is what fails here.
+#[tokio::test]
+async fn every_tool_the_door_offers_answers_something_other_than_a_missing_route() {
+    // The Job `1` every path below names is real, so a route that is there and
+    // answers "no such Job" cannot be mistaken for a route that is not.
+    let app = wired(holding_one());
+    for shape in offered() {
+        let arguments = format!(
+            r#"{{"job_id":"1","drone_id":"{THE_DRONE}","manifest_id":"{THE_MANIFEST}",
+               "call_id":"{THE_CALL}","kept":"{THE_OUTPUT}","run":"{}","name":"{}",
+               "since":"0","q":"src","body":{{}}}}"#,
+            THE_FRAME.split('/').next().expect("a run directory"),
+            THE_FRAME.split('/').nth(1).expect("a frame name"),
+        );
+        let (status, body) = call(
+            &app,
+            &format!(
+                r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"{}",
+                   "arguments":{arguments}}}}}}}"#,
+                shape.operation
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{}", shape.operation);
+        assert!(
+            !body.contains("is not a tool this Fleet offers"),
+            "{} is offered and not callable: {body}",
+            shape.operation
+        );
+        assert!(
+            !body.contains("served at no route"),
+            "{} is offered and routed nowhere: {body}",
+            shape.operation
+        );
+        assert!(
+            !body.contains("did not make a request"),
+            "{} built no request: {body}",
+            shape.operation
+        );
+        // **An empty text block is the shape a missing route takes here.** A
+        // route axum does not hold answers 404 with no body, which reaches the
+        // agent as a tool error saying nothing at all.
+        assert!(
+            !body.contains(r#""text":"""#),
+            "{} answered with nothing, which is what an unrouted path does: {body}",
+            shape.operation
+        );
+    }
 }
 
 /// The point of the whole door: a tool call and a Bridge request reach one
