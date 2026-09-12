@@ -1,66 +1,17 @@
-// One Job, read whole — and one arrangement, whatever the Job is doing.
+// One Job, read whole, and one arrangement whatever the Job is doing: the run
+// as a tree on the left, the selected step in the panel, its story in the order
+// it happened. What a status changes is which chapter is the reason you are
+// here, not where anything sits.
 //
-// # What replaced four renders
-//
-// This file used to choose between four screens: a running Job led with a rail,
-// a Job at review led with a diff, a finished one led with what it produced and
-// a stopped one led with what stopped it. Below the shared header no region sat
-// in the same place twice, so a person who learned where something was on one
-// Job could not find it on the next. There is one arrangement now — the run as
-// a tree on the left, the selected step in the panel, its story in the order it
-// happened — and what a status changes is which chapter is the reason you are
-// here and what the panel offers you to do about it.
-//
-// `render.ts` is still what says which state a Job is in. What it no longer
-// does is pick a screen.
-//
-// # Acts are split by what they act on
-//
-// Four of the eight acted on a step and were drawn in the Job header. Redirect,
-// restart step, override the verdict and re-run the gate are in the panel
-// header now, beside the step they change, and the accent goes with them. Kill,
-// redispatch and approve stay in the Job header, which is also where Pilot
-// lands — `#250`, and nothing here has to change to take it.
-//
-// # Two chapters leave the panel
-//
-// The activity log holds 1676 entries on a real Job and the diff is the Job's
-// whole patch. Neither is a longer version of something a chapter can hold — an
-// expander pushes everything under it off the screen and gives a patch a 602px
-// column — so both open as a trailing sheet instead, and the panel stays
-// exactly as it was underneath. #286, and Journey 4's frames 4i-4m.
-//
-// **One sheet at a time.** Opening the diff while the log is open replaces it,
-// and `Esc` returns to the panel rather than to the previous sheet: a layer
-// that pops back to another layer makes one key mean two depths of *back*.
-//
-// **Two exits and no third.** The labelled control and `Esc`. A click on the
-// screen behind does not close a sheet — a 1676-entry read must not be
-// dismissed by a stray click, and `Sheet` is where that is held.
-//
-// # The story is three chapters and none of them is behind a tab
-//
-// Drone instructions, then Activity log, then Produced, in the order they
-// happened. The log streams while the Job runs and is on the page at every
-// state — it used to be one of four tabs inside a region called *What it left
-// behind*, which the drawing has none of, so the chapter that says what is
-// happening right now was the one thing a person had to go and find. That
-// region is gone: the turns are chapter two, the files are chapter three, and
-// the raw event table is not something this screen needs at all.
-//
-// # What this file keeps, and where the next thing goes
-//
-// It holds the open state of one reading — which step, which sheet, where the
-// log was held, whether the report dialog is up — and it arranges the regions.
-// **What each region says, it no longer decides.** The Job header is
+// This file holds the open state of one reading — which step, which sheet,
+// where the log was held, whether the report dialog is up — and it arranges the
+// regions. What any of them says, it does not decide. The Job header is
 // `heading.tsx`, the step's facts, band and question box are `step.tsx`, the
-// story is `chapters.tsx`, the two sheets are `Sheets.tsx`, and which reading
-// is this Job's is `mine.ts`.
+// story is `chapters.tsx`, the two sheets are `Sheets.tsx`, what a caller hands
+// in is `detail-props.ts`, and which reading is this Job's is `mine.ts`.
 //
-// That is the seam, and it is the one this file was missing: it was cut twice
-// and grew back both times, because it was the only place an addition to a
-// region could be written. The pull request link and Pilot's slot are the two
-// most recent, and both are the header's — they go in `heading.tsx` now.
+// An addition to a region goes in that region's file. This one was cut twice
+// and grew back both times, because it was the only place one could be written.
 
 import { JobHoldsSummary } from "@armada/components";
 import { ChevronRight } from "lucide-react";
