@@ -42,11 +42,8 @@ use crate::row::{column, string};
 /// that changed nothing.
 ///
 /// **The pair may not half-arrive**, which is why the table is rebuilt rather
-/// than altered: `SQLite` cannot add a `CHECK` to a table that exists, and the
-/// counts come from one walk of one patch, so a row holding one number and not
-/// the other is a state no reading can produce and none should be able to
-/// write. **Nothing to backfill**: a footprint written before this has no
-/// counts, which is what null says.
+/// than altered: `SQLite` cannot add a `CHECK` to a table that exists.
+/// **Nothing to backfill**: a footprint written before this has no counts.
 pub(crate) const V25: &str = r#"
 CREATE TABLE job_footprint_files_counted (
     job_id  TEXT NOT NULL REFERENCES jobs(job_id),

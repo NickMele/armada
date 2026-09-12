@@ -6,15 +6,12 @@
 //! contradict.
 //!
 //! **It writes the whole list**, because `scope_revisions[]` is one TEXT column
-//! and there is no row to append — the list is the one the caller already holds,
-//! folded by `Job::scope_revised`. So the write is last-writer-wins, and what
-//! stops that mattering is upstream: one asker, in a Job's working slot, under
-//! that slot's lock, at most once per step. A second asker needs the column
-//! read back inside this transaction, and nothing here pretends it already is.
+//! and there is no row to append. So the write is last-writer-wins, and what
+//! stops that mattering is upstream: one asker, in a Job's working slot, at
+//! most once per step.
 //!
 //! It updates two things and no others: a title, a status or a workflow has no
-//! path through here, so [`insert_job`](Store::insert_job)'s rule that creation
-//! is not an update is unbroken.
+//! path through here.
 
 use core_model::{Job, WriteTargets};
 

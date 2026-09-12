@@ -23,20 +23,17 @@ const TABLE: &str = "job_step_gaming_flags";
 /// Version 24 — where a flag points, beside what it cites.
 ///
 /// Beside the table it changes rather than in `schema.rs`, like
-/// [`V22`](crate::judged::V22) and for the same reason: that file is at the
-/// 900 lines the gate refuses at.
+/// [`V22`](crate::judged::V22): that file is at the 900 lines the gate refuses
+/// at.
 ///
-/// **Two nullable columns and no `CHECK`.** `SQLite` cannot add a constraint
-/// by `ALTER`, and the invariant one would state — a line is never recorded
-/// without the file it is a line of — is already unspeakable one layer up:
-/// `core_model::CitedAt` has no constructor taking a line alone. A row with a
-/// line and a null `cited_file` reads back as no location at all, which is
-/// what a value nothing in the workspace could have written deserves.
+/// **Two nullable columns and no `CHECK`.** `SQLite` cannot add a constraint by
+/// `ALTER`, and the invariant one would state is already unspeakable one layer
+/// up: `core_model::CitedAt` has no constructor taking a line alone.
 ///
 /// **Nothing is backfilled.** A flag written before this existed kept only the
 /// sentence the check wrote, and where in the patch that sentence came from was
-/// never recorded anywhere — so the honest answer for every existing row is
-/// null, which is V5's rule.
+/// never recorded — so the honest answer for every existing row is null, V5's
+/// rule.
 pub(crate) const V24: &str = r#"
 ALTER TABLE job_step_gaming_flags ADD COLUMN cited_file TEXT;
 ALTER TABLE job_step_gaming_flags ADD COLUMN cited_line INTEGER;
