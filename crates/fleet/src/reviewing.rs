@@ -612,13 +612,9 @@ where
             .unwrap_or_else(|| spec.branch());
         // **The Manifest's base rides along**, because a patch measured against
         // anything else is a smaller claim than the Job's work and nothing
-        // downstream can tell. `adapters` cannot read a Manifest — the layers
-        // forbid it — so the one place that holds both hands it over.
-        let worktree = Worktree::at(spec.worktree_path(), branch);
-        Ok(Some(match self.manifest().base() {
-            Some(base) => worktree.from_base(base),
-            None => worktree,
-        }))
+        // downstream can tell. `crate::basing`'s `based` is the one place that
+        // holds the Manifest and a worktree together.
+        Ok(Some(self.based(Worktree::at(spec.worktree_path(), branch))))
     }
 }
 

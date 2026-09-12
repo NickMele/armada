@@ -367,7 +367,10 @@ where
         let spec = WorktreeSpec::for_job(&self.host().repo_root, &job.handle()).ok()?;
         let path = PathBuf::from(spec.worktree_path());
         path.is_dir().then(|| Tree {
-            worktree: Worktree::at(spec.worktree_path(), spec.branch()),
+            // Measured from the Manifest's base like every other reading of a
+            // Job's work, so the narrowing the sheet offers names the files
+            // the diff beside it draws.
+            worktree: self.based(Worktree::at(spec.worktree_path(), spec.branch())),
             path,
         })
     }
