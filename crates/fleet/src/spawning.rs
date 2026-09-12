@@ -351,9 +351,14 @@ where
         ))
     }
 
-    /// What the Drone may call: the Evidence tool, its own worktree, each
-    /// **non-destructive** command the Manifest declares, and — on one step of
-    /// one workflow — the dispatch tool.
+    /// What the Drone may call: the Evidence tool, its own worktree, the git
+    /// verbs that cannot change a repository, each **non-destructive** command
+    /// the Manifest declares, and — on one step of one workflow — the dispatch
+    /// tool.
+    ///
+    /// **The read-only git grant is unconditional, like the worktree grant
+    /// beside it** — not read off a person's own settings file, and not one a
+    /// Job's setting can withhold, because it cannot change a repository.
     ///
     /// A destructive command is withheld, and that is a decision this file
     /// makes rather than one it inherits: `commands.<name>.destructive` is a
@@ -379,6 +384,7 @@ where
         let (manifest, _) = self.effective_manifest(job).await;
         let mut belt = Toolbelt::evidence_only()
             .and(Grant::ReadTheWorktree)
+            .and(Grant::ReadTheRepository)
             .and(Grant::ChangeTheWorktree);
         for name in manifest.command_names() {
             match manifest.command(&name) {
