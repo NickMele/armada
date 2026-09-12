@@ -17,7 +17,7 @@ import { keyFor } from "@armada/components";
 
 import type { Diff, JobDetail as JobWhole } from "@armada/protocol";
 
-import { gaveBackTheWorktree, shownBy } from "./Sheets";
+import { gaveBackTheWorktree, NO_SHEET, sheetMoved, shownBy } from "./Sheets";
 import type { LogRow } from "./story";
 
 function row(actor: LogRow["actor"], id: string): LogRow {
@@ -130,5 +130,30 @@ describe("whether a missing reading is a worktree that was given back", () => {
     expect(gaveBackTheWorktree({ state: "reading", jobId: JOB }, JOB, whole(KEPT))).toBe(false);
     const other = { state: "read", jobId: "01M130Y1380016YK5S0JXBXDQ6" } as Diff;
     expect(gaveBackTheWorktree(other, JOB, whole(KEPT))).toBe(false);
+  });
+});
+
+describe("what the sheet is reading, as one value", () => {
+  const HELD = { at: "10:31:00", rows: 12 };
+
+  it("drops the log's attempt and hold when another sheet replaces it", () => {
+    const log = sheetMoved(NO_SHEET, { move: "open", which: "log", attempt: 1, held: HELD });
+    expect(sheetMoved(log, { move: "open", which: "diff" })).toEqual({ which: "diff" });
+  });
+
+  it("forgets the attempt when the log is opened again for the whole step", () => {
+    const one = sheetMoved(NO_SHEET, { move: "open", which: "log", attempt: 1 });
+    expect(sheetMoved(one, { move: "open", which: "log", held: HELD })).toEqual({
+      which: "log",
+      held: HELD,
+    });
+  });
+
+  it("holds only the log, and closing clears everything", () => {
+    const diff = sheetMoved(NO_SHEET, { move: "open", which: "diff" });
+    expect(sheetMoved(diff, { move: "hold", held: HELD })).toBe(diff);
+    const log = sheetMoved(NO_SHEET, { move: "open", which: "log" });
+    expect(sheetMoved(log, { move: "hold", held: HELD })).toEqual({ which: "log", held: HELD });
+    expect(sheetMoved(log, { move: "close" })).toBe(NO_SHEET);
   });
 });

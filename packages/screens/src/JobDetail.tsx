@@ -15,7 +15,7 @@
 
 import { JobHoldsSummary } from "@armada/components";
 import { ChevronRight } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 import { InsideAJob } from "./InsideAJob";
 
 import type { FollowedLog } from "@armada/protocol";
@@ -30,7 +30,7 @@ import { openArtifact } from "./opening";
 import { DIFF_CHAPTER, LOG_CHAPTER, useDetailKeys } from "./detail-keys";
 import { named } from "./run-labels";
 import { useAtFloor } from "@armada/shell";
-import { DetailSheet, holdOf, type HeldAt, type OpenSheet } from "./Sheets";
+import { DetailSheet, holdOf, NO_SHEET, sheetMoved, type OpenSheet } from "./Sheets";
 import { chaptersOf } from "./chapters";
 import { landingsOf, stepTimelineOf, turnsOfAttempt, wroteIn } from "./timeline";
 import type { AttemptRead } from "./timeline";
@@ -145,21 +145,13 @@ function OneJob({
   // the reader with it until they choose a step themselves.
   const [selected, setSelected] = useState<string | null>(null);
 
-  // Which sheet is open, or none. **One value rather than two booleans**: the
-  // two cannot both be open, and a pair of flags is a state that says they can.
-  const [sheet, setSheet] = useState<OpenSheet>(null);
-
-  // Which run of the step the log sheet is reading, or `null` for the step
-  // whole. **An earlier attempt's `Open the log` means that attempt's log** —
-  // the same control over the step's every turn would be the panel answering a
-  // question about one run with the record of three.
-  const [logAttempt, setLogAttempt] = useState<number | null>(null);
-
-  // Where the log's reading was held, and what has arrived since. **The tail is
-  // not followed while a sheet is open**: a stream that scrolls itself cannot
-  // be read. `held` is how many rows the step had when the reading was taken,
-  // and `Jump to now` takes it again. No reset effect: `closeSheet` clears it.
-  const [held, setHeld] = useState<HeldAt | null>(null);
+  // Which sheet is up and what it is reading — `Sheets.tsx`'s `SheetReading`.
+  // **One value**, because the log's attempt and its held position only ever
+  // change with the sheet, and as separate state one could outlive the other.
+  const [onSheet, move] = useReducer(sheetMoved, NO_SHEET);
+  const sheet = onSheet.which;
+  const logAttempt = onSheet.which === "log" ? (onSheet.attempt ?? null) : null;
+  const held = onSheet.which === "log" ? onSheet.held : null;
 
   // Whether the report dialog is up. Two controls open it — the Job header's
   // menu entry and `b` — and the keyboard is bound at the screen's level.
@@ -172,7 +164,7 @@ function OneJob({
   // Whether the turn-cap dialog is up. Its own state beside the cost cap's:
   // `budget_hold` offers one control or the other, never both.
   const [raisingTurns, setRaisingTurns] = useState(false);
-  const runHook = useRunSheet({ ...rehearsal, jobId: job.id, jobTitle: job.title, sheet, now, setSheet, onSaid });
+  const runHook = useRunSheet({ ...rehearsal, jobId: job.id, jobTitle: job.title, sheet, now, setSheet: (which) => move({ move: "open", which }), onSaid });
 
   // The diff, for every Job that is open rather than only for one at review.
   // **A produced file opens to what it actually wrote**, and it did that on one
@@ -342,11 +334,15 @@ function OneJob({
    * is not followed, and what arrives is counted rather than scrolled to.
    */
   function openSheet(which: Exclude<OpenSheet, null>, attempt?: number): void {
-    setSheet(which);
-    setLogAttempt(attempt ?? null);
     // Held only where there is a tail to stop following. A run that has ended
     // does not grow, so the strip would offer a jump to nothing.
-    if (which === "log" && attempt === undefined) setHeld(holdOf(now, rows.length));
+    const holding = which === "log" && attempt === undefined ? holdOf(now, rows.length) : undefined;
+    move({
+      move: "open",
+      which,
+      ...(attempt === undefined ? {} : { attempt }),
+      ...(holding === undefined ? {} : { held: holding }),
+    });
   }
 
   /**
@@ -362,9 +358,7 @@ function OneJob({
    */
   function closeSheet(): void {
     const was = sheet;
-    setSheet(null);
-    setLogAttempt(null);
-    setHeld(null);
+    move({ move: "close" });
     if (was === "log" || was === "diff") {
       keys.onFocusChapter(was === "log" ? LOG_CHAPTER : DIFF_CHAPTER);
     }
@@ -643,7 +637,7 @@ function OneJob({
             // the chapter's preview. Two logs over one stream hold equal ids.
             log={keys.inLog("sheet")}
             held={held}
-            onHold={setHeld}
+            onHold={(to) => move({ move: "hold", held: to })}
             // The full reading, unchanged from what the run column used to
             // draw — `Look now` came with it, because it acts on this reading
             // and not on the five lines that open it.

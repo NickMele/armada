@@ -299,6 +299,39 @@ export function holdOf(now: number, rows: number): HeldAt {
 }
 
 /**
+ * Which sheet is up, and what it is reading — one value.
+ *
+ * **Three pieces that only ever change together.** The log's attempt and where
+ * its reading was held mean nothing without the log up, and held as three
+ * pieces of state a sheet could close and leave either behind for the next
+ * sheet to inherit.
+ */
+export type SheetReading =
+  | { which: null }
+  | { which: "log"; attempt?: number; held: HeldAt | null }
+  | { which: Exclude<OpenSheet, "log" | null> };
+
+/** What can happen to it: a sheet goes up, comes down, or the log is held or let go. */
+export type SheetMove =
+  | { move: "open"; which: Exclude<OpenSheet, null>; attempt?: number; held?: HeldAt }
+  | { move: "close" }
+  | { move: "hold"; held: HeldAt | null };
+
+export const NO_SHEET: SheetReading = { which: null };
+
+/** The next reading. A second sheet replaces the first; holding means nothing off the log. */
+export function sheetMoved(was: SheetReading, move: SheetMove): SheetReading {
+  if (move.move === "close") return NO_SHEET;
+  if (move.move === "hold") return was.which === "log" ? { ...was, held: move.held } : was;
+  if (move.which !== "log") return { which: move.which };
+  return {
+    which: "log",
+    ...(move.attempt === undefined ? {} : { attempt: move.attempt }),
+    held: move.held ?? null,
+  };
+}
+
+/**
  * The file rail beside the patch — the paths, and what each gained and lost.
  *
  * **From the patch, which is the answer the body is drawn from.** It used to
