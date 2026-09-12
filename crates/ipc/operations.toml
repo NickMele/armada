@@ -1370,6 +1370,93 @@ Refused while a Drone is working in the tree, while a run is in flight, on a run
 `agent_access` is `Yes`, `start_run`'s reason: what it reverses is a rehearsal's own footprint, never a step's recorded work, so an agent putting the tree back costs the Job's record nothing.
 """
 
+# Journey 9, *Running one*: the same acts for the main checkout, which is not a
+# Job and is not a Job with a blank id. Their shapes are the Job's minus what
+# only a Job has — a frozen Manifest, a worktree that can be gone, a Drone in
+# the tree, and a diff to narrow against. `observe_checkout_run` is with the
+# sockets.
+
+[operations.get_checkout_run_sheet]
+kind = "query"
+transport = "HTTP"
+agent_access = "No"
+description = "What a person can run in the main checkout - its Setup, Checks and Commands - off the Manifest Fleet holds"
+notes = """
+**It needs no Job and reads no store.** This is the `armada.yml` Fleet is already running on and watching, which is why it answers on a repository that has never had a Job in it. Nothing here is frozen: there is one file and it is the one that runs.
+
+Under `/manifest` beside `get_manifest_reading`, for that operation's reason — a Fleet serves one repository, and this reads it before any Job exists to read one from instead.
+
+`agent_access` is `No` while the surface is being built. `get_run_sheet` is what an agent working a Job needs, and the main checkout is the tree a Drone is confined out of.
+"""
+
+[operations.list_checkout_runs]
+kind = "query"
+transport = "HTTP"
+agent_access = "No"
+description = "The main checkout's earlier runs: name, exit code, when, how long, what changed, and the log"
+notes = """
+`list_runs` read off `.armada/runs/main/` rather than `.armada/runs/<job>/`. A Job handle always begins with the Job's own number, so no Job can be called `main` and the two cannot collide.
+
+Kept for the Machine's ad-hoc run log retention, swept when the checkout next starts a run.
+"""
+
+[operations.get_checkout_run_output]
+kind = "query"
+transport = "HTTP"
+agent_access = "No"
+description = "One checkout run's log, read back as a window that says it is one"
+notes = """
+`get_run_output`'s shape and its allowlist: `:run_id` names a run the checkout recorded or the one in flight, resolved against its own run directories before anything is opened.
+"""
+
+[operations.observe_checkout_run]
+kind = "query"
+transport = "WebSocket"
+agent_access = "No"
+description = "One person's run in the main checkout - what its log holds, then what it prints next - on a socket of its own"
+notes = """
+`observe_run`'s socket, one owner over, message for message. What ended the run is `checkout_run.finished`'s, as it is for a Job — this carries only what the run printed.
+
+`agent_access` is `No` for `observe_run`'s reason.
+"""
+
+[operations.start_checkout_run]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Run one Check or Command in the main checkout's working tree - a rehearsal that records nothing anywhere"
+notes = """
+**In the working tree as it is on disk.** There is no throwaway copy and no Where control: a copy would be a worktree by another name, and a Job's own run sheet is already that tree — Journey 9, *Running one*.
+
+**The request names an entry and carries nothing else.** `StartCheckoutRun` has neither `narrowed` nor `worktree_version`: there is no diff of the checkout's own to narrow against and no frozen second Manifest to choose between, so a caller cannot ask for either because the field is not there to set.
+
+**One run at a time is per owner, not per repository.** A checkout run and a Job's run are in different trees and neither waits for the other; two checkout runs are in one tree and the second is refused.
+
+A destructive Command runs without approval, as the Manifest concept page settles: a person's own invocation is not approved a second time. The confirmation that names it is Bridge's.
+
+It answers at once with the run underway, output arrives on `observe_checkout_run`, and the end is `checkout_run.finished` on `/events` — its own kind, because the record names no Job.
+"""
+
+[operations.stop_checkout_run]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "End a checkout run's process group; its log keeps what printed"
+notes = """
+Answers with the run's record once it is written, `stop_run`'s reason: the caller does not wait on an event for an end it asked for. Refused on a run that is not in flight.
+"""
+
+[operations.undo_checkout_run]
+kind = "command"
+transport = "HTTP"
+agent_access = "No"
+description = "Put back the files one checkout run changed, from the snapshot taken just before it"
+notes = """
+**Never offered where no snapshot was taken.** This tree holds a person's own uncommitted work, which no Job's worktree does, so a run with nothing kept behind it is refused rather than discarded from — `CheckoutRunRecord.undoable` is that answer, given before anything is offered.
+
+Refused while a run is in flight, on a run already undone or with no snapshot, and where a path the run changed has moved since. The confirmation naming what would be discarded is Bridge's.
+"""
+
 # Servers: a Command with `serve`, held by Fleet — `docs/concepts/fleet.md`,
 # *Servers*. `observe_server` is with the sockets and the three `server.*`
 # kinds with the events.
@@ -1641,6 +1728,17 @@ agent_access = "Bridge only"
 description = "A person's run ended: its record, with exit code, duration and what it changed"
 notes = """
 Carries the whole `RunRecord` — the row `list_runs` answers — so the sheet draws the result and the changed files without a read. Published after the record is written, so a reader that re-reads on it finds the run in the history.
+"""
+
+[operations."checkout_run.finished"]
+kind = "event"
+transport = "WebSocket"
+agent_access = "Bridge only"
+description = "A run in the main checkout ended: its record, with exit code, duration and what it changed"
+notes = """
+`run.finished` for the other owner, and a kind of its own because the record is a different shape. It carries `CheckoutRunRecord`, which names no Job — so a reader folding `run.finished` by its `job_id` is never handed one that has none, which is the whole reason the two are not one kind.
+
+Published after the record is written, `run.finished`'s reason. It is what makes the Manifest surface and the Job's run sheet the same surface to write against: both learn a run ended from this stream carrying the result, rather than one of them re-fetching after a socket closed.
 """
 
 [operations."server.starting"]

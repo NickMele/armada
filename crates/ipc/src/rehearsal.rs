@@ -207,3 +207,136 @@ pub struct RunOpened {
     /// Older lines the opening read left out, because the window is bounded.
     pub skipped: u64,
 }
+
+// ---------------------------------------------------------------------------
+// The checkout's half — Journey 9, *Running one*
+// ---------------------------------------------------------------------------
+//
+// **Its own shapes rather than the Job's with the id left out.** Every type
+// above carries a `job_id` that is required and means something, and the main
+// checkout is not a Job with a blank one: a sentinel there is an id that names
+// no Job, and both sides would have to learn it. What the checkout's half
+// drops is what only a Job has — a frozen Manifest, a worktree that can be
+// gone, a Drone in the tree, a diff to narrow against — so these are smaller
+// shapes, not copies.
+
+/// `get_checkout_run_sheet`: what can be run in the main checkout, and the
+/// facts the panel's header draws from.
+///
+/// **No `worktree_on_disk` and no `drone_working`.** The tree is the checkout
+/// Fleet is running on, which is there for as long as Fleet is, and no Drone
+/// ever works in it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CheckoutRunSheet {
+    /// The Commands `setup.requires` names, in its order.
+    pub setup: Vec<RunEntry>,
+    /// Every Check, in the order the Manifest declares them.
+    pub checks: Vec<RunEntry>,
+    /// Every Command `setup.requires` does not name.
+    pub commands: Vec<RunEntry>,
+    /// When the Manifest file was last changed by a commit. Absent where no
+    /// commit in reach touched it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manifest_edited_at: Option<Instant>,
+    /// The run in flight in the checkout, if one is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub running: Option<CheckoutRunUnderway>,
+    /// The Commands declaring `serve`, with the checkout's instance of each.
+    /// Not in `commands`: a server is started with `start_server`.
+    #[serde(default)]
+    pub servers: Vec<crate::servers::ServerEntry>,
+}
+
+/// `start_checkout_run`'s body. **A name and nothing else.**
+///
+/// Not [`StartRun`]: there is no frozen Manifest to choose against and no
+/// Job's diff to narrow to, so neither of that type's two flags has an answer
+/// here. A caller cannot ask for one because the field is not there to set.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StartCheckoutRun {
+    pub name: String,
+}
+
+/// A checkout run that has started and not finished. `start_checkout_run`'s
+/// answer.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CheckoutRunUnderway {
+    /// The run's own id. What `stop_checkout_run`, `undo_checkout_run` and
+    /// `get_checkout_run_output` take.
+    pub id: String,
+    pub name: String,
+    /// The command line that is running, as the Manifest declares it.
+    pub command: String,
+    /// Elapsed time is counted from here; nothing ticks on the wire.
+    pub started_at: Instant,
+}
+
+/// One finished checkout run, as its directory under `.armada` records it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CheckoutRunRecord {
+    pub id: String,
+    pub name: String,
+    pub command: String,
+    /// The Commands that ran first, in order.
+    pub required: Vec<String>,
+    pub started_at: Instant,
+    pub ended_at: Instant,
+    pub duration_ms: u64,
+    /// Absent where there was no code: a signal, a budget, a spawn that failed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
+    pub expect_exit_code: i64,
+    /// How it ended, in a sentence. **Unhued on every surface**: a rehearsal.
+    pub ended: String,
+    /// A person pressed Stop.
+    pub stopped: bool,
+    /// What the run wrote, read from the tree before and after it.
+    pub changed: Vec<ChangedFile>,
+    /// Why the change could not be read, where it could not. `changed` is then
+    /// empty and means nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub changed_unreadable: Option<String>,
+    /// **Whether Undo is there to offer**, and not where the tree before the
+    /// run is kept: this tree holds a person's own uncommitted work, so a
+    /// surface that offered Undo with no snapshot behind it would be offering
+    /// to discard it. `false` is a run there is nothing to put back from.
+    pub undoable: bool,
+    /// When a person undid it. A run is undone once.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub undone_at: Option<Instant>,
+    /// The log, relative to `ManifestSummary::records_root`.
+    pub log: String,
+}
+
+/// `list_checkout_runs`: the checkout's earlier runs, newest first — and the
+/// directories that would not read, said rather than dropped.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CheckoutRunList {
+    pub runs: Vec<CheckoutRunRecord>,
+    pub unreadable: Vec<UnreadableRun>,
+}
+
+/// One message on a checkout run's socket, `observe_checkout_run`.
+/// [`RunMessage`]'s four, one subject over.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "message", rename_all = "snake_case")]
+pub enum CheckoutRunMessage {
+    Opened(CheckoutRunOpened),
+    Lines(OutputLines),
+    Missed(Missed),
+    Closed(OutputClosed),
+}
+
+/// The first message: which run, and what the opening read left out.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CheckoutRunOpened {
+    pub protocol_version: ProtocolVersion,
+    pub id: String,
+    pub name: String,
+    /// The log, relative to `ManifestSummary::records_root`.
+    pub path: String,
+    /// Whether the run was still going when this opened.
+    pub live: bool,
+    /// Older lines the opening read left out, because the window is bounded.
+    pub skipped: u64,
+}

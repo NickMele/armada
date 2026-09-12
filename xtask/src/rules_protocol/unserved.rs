@@ -16,7 +16,7 @@ use std::path::Path;
 
 use crate::Report;
 
-use super::{operations, rows, INVENTORY, TABLE};
+use super::{operations, rows, INVENTORY, SERVED_TABLE};
 
 /// An operation the inventory names, that nothing serves, and why not.
 ///
@@ -87,8 +87,8 @@ pub fn every_operation_the_inventory_names_is_served(root: &Path) -> Report {
         report.fail(format!("{INVENTORY} — the operation inventory itself"));
         return report;
     };
-    let Ok(table) = fs::read_to_string(root.join(TABLE)) else {
-        report.fail(format!("{TABLE} — the route table itself"));
+    let Ok(table) = fs::read_to_string(root.join(SERVED_TABLE)) else {
+        report.fail(format!("{SERVED_TABLE} — the route table itself"));
         return report;
     };
 
@@ -108,7 +108,8 @@ pub(super) fn check(inventory: &str, table: &str, report: &mut Report) {
         // broken one. This is the failure the forward rule already refuses on
         // an empty `SERVED`, arriving from the other side.
         report.fail(format!(
-            "{INVENTORY} named {} operations and {TABLE} served {} — a comparison of nothing",
+            "{INVENTORY} named {} operations and {SERVED_TABLE} served {} — a comparison of \
+             nothing",
             named.len(),
             served.len()
         ));
@@ -120,7 +121,8 @@ pub(super) fn check(inventory: &str, table: &str, report: &mut Report) {
         let routed = served.contains(operation);
         match (routed, allowed.get(operation.as_str())) {
             (false, None) => report.fail(format!(
-                "{INVENTORY} names `{operation}` ({kind}) and {TABLE} serves it at no route. \
+                "{INVENTORY} names `{operation}` ({kind}) and {SERVED_TABLE} serves it at no \
+                 route. \
                  Route it, or say in `xtask`'s NOT_BUILT why it has none — a name with \
                  nothing behind it is a call that 404s, or an event nothing ever publishes"
             )),

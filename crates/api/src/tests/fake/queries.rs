@@ -54,6 +54,11 @@ impl FakeDaemon {
         if !jobs.iter().any(|job| &job.id == job_id) {
             return Err(self.no_such_job(job_id));
         }
+        self.runs_nothing_here()
+    }
+
+    /// The checkout's own, which name no Job to be missing.
+    pub(super) fn runs_nothing_here<T>(&self) -> Result<T, Refusal> {
         Err(Refusal::Unacceptable(ipc::WireError::raised(
             "fleet.cannot_run_here",
             "the fake daemon runs nothing in a worktree",
@@ -372,6 +377,38 @@ impl Queries for FakeDaemon {
         _run_id: String,
     ) -> Result<crate::ObservedRun, Refusal> {
         self.runs_nothing(&job_id)
+    }
+
+    /// **The fake declares nothing**, so the sheet is empty rather than
+    /// refused: `get_checkout_run_sheet` answers on a repository that has
+    /// never had a Job in it, and an empty Manifest is that answer.
+    async fn get_checkout_run_sheet(&self) -> Result<ipc::CheckoutRunSheet, Refusal> {
+        Ok(ipc::CheckoutRunSheet {
+            setup: Vec::new(),
+            checks: Vec::new(),
+            commands: Vec::new(),
+            manifest_edited_at: None,
+            running: None,
+            servers: Vec::new(),
+        })
+    }
+
+    async fn list_checkout_runs(&self) -> Result<ipc::CheckoutRunList, Refusal> {
+        Ok(ipc::CheckoutRunList {
+            runs: Vec::new(),
+            unreadable: Vec::new(),
+        })
+    }
+
+    async fn get_checkout_run_output(&self, _run_id: String) -> Result<ipc::RunOutput, Refusal> {
+        self.runs_nothing_here()
+    }
+
+    async fn observe_checkout_run(
+        &self,
+        _run_id: String,
+    ) -> Result<crate::ObservedCheckoutRun, Refusal> {
+        self.runs_nothing_here()
     }
 
     /// **The fake holds no server**, so the list is empty and every id names

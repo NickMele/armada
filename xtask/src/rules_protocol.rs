@@ -11,6 +11,11 @@
 //! inventory never had, a `SERVED` row with no route under it, or a command
 //! answered on `GET`.
 //!
+//! **Two files, read as one text.** `SERVED` moved out of `routes.rs` when
+//! that file crossed the 900-line rule; the router and the table it is
+//! compared against are still one subject to this rule, so both are read and
+//! joined before anything is parsed.
+//!
 //! **The other direction is [`unserved`](mod@unserved)**, and it is a second
 //! rule rather than a second loop here: what it fails on is a name with nothing
 //! behind it, which is a different subject and carries an allowance of its own.
@@ -31,7 +36,10 @@ use std::path::Path;
 use crate::Report;
 
 const INVENTORY: &str = "crates/ipc/operations.toml";
+/// The router: every `.route(` call.
 const TABLE: &str = "crates/api/src/routes.rs";
+/// The inventory half of the same subject: every `SERVED` row.
+const SERVED_TABLE: &str = "crates/api/src/routes/served.rs";
 const EVENT_ENUM: &str = "crates/ipc/src/event.rs";
 
 pub fn the_router_serves_what_the_inventory_names(root: &Path) -> Report {
@@ -41,10 +49,15 @@ pub fn the_router_serves_what_the_inventory_names(root: &Path) -> Report {
         report.fail(format!("{INVENTORY} — the operation inventory itself"));
         return report;
     };
-    let Ok(table) = fs::read_to_string(root.join(TABLE)) else {
-        report.fail(format!("{TABLE} — the route table itself"));
+    let Ok(router) = fs::read_to_string(root.join(TABLE)) else {
+        report.fail(format!("{TABLE} — the router itself"));
         return report;
     };
+    let Ok(rows) = fs::read_to_string(root.join(SERVED_TABLE)) else {
+        report.fail(format!("{SERVED_TABLE} — the route table itself"));
+        return report;
+    };
+    let table = format!("{rows}\n{router}");
     let Ok(event_source) = fs::read_to_string(root.join(EVENT_ENUM)) else {
         report.fail(format!(
             "{EVENT_ENUM} — the closed set of published event kinds"
@@ -64,14 +77,16 @@ fn check(inventory: &str, table: &str, event_source: &str, report: &mut Report) 
     // breaks and the rule must not depend on that.
     let compact: String = table.chars().filter(|c| !c.is_whitespace()).collect();
     if served.is_empty() {
-        report.fail(format!("{TABLE} — a SERVED table with no rows in it"));
+        report.fail(format!(
+            "{SERVED_TABLE} — a SERVED table with no rows in it"
+        ));
         return;
     }
 
     for (operation, method, path) in &served {
         match kinds.get(operation) {
             None => report.fail(format!(
-                "{TABLE} serves `{operation}`, which {INVENTORY} does not name"
+                "{SERVED_TABLE} serves `{operation}`, which {INVENTORY} does not name"
             )),
             // Who initiates is the whole rule: a query and a command are alike
             // request-response over HTTP, and only an unsolicited push needs
@@ -90,7 +105,7 @@ fn check(inventory: &str, table: &str, event_source: &str, report: &mut Report) 
         }
         if !compact.contains(&format!(".route(\"{path}\"")) {
             report.fail(format!(
-                "`{operation}` is in the SERVED table at {path} and in no route — a runtime 404"
+                "`{operation}` is in {SERVED_TABLE} at {path} and in no route — a runtime 404"
             ));
         }
     }
@@ -99,8 +114,8 @@ fn check(inventory: &str, table: &str, event_source: &str, report: &mut Report) 
     for routed in routes(&compact) {
         if !paths.contains(&routed.as_str()) {
             report.fail(format!(
-                "{TABLE} routes {routed}, which no SERVED row names — nothing can compare it to \
-                 the inventory"
+                "{TABLE} routes {routed}, which no {SERVED_TABLE} row names — nothing can compare \
+                 it to the inventory"
             ));
         }
     }
@@ -125,8 +140,8 @@ fn check(inventory: &str, table: &str, event_source: &str, report: &mut Report) 
     for kind in published {
         if !operations.contains(&kind.as_str()) {
             report.fail(format!(
-                "{EVENT_ENUM} declares `{kind}`, which {TABLE} does not list — a kind already \
-                 published on /events that no rule reading SERVED can see"
+                "{EVENT_ENUM} declares `{kind}`, which {SERVED_TABLE} does not list — a kind \
+                 already published on /events that no rule reading SERVED can see"
             ));
         }
     }

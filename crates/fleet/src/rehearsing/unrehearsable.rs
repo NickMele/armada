@@ -21,24 +21,83 @@ const NO_SUCH_RUN: &str = "fleet.no_such_run";
 /// The worktree or the run's own directory would not read or write.
 const RUN_FAULT: &str = "fleet.run_fault";
 
+/// Whose tree a refusal is about, for the sentence it is written in.
+///
+/// **A word, not a branch.** Every refusal below is the same refusal for both
+/// owners; what changes is what a person is told they were refused *in*, and a
+/// message reading "this Job's worktree" to somebody who ran it in their own
+/// checkout is the one way this could mislead.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Whose {
+    Job,
+    Checkout,
+}
+
+impl Whose {
+    fn tree(self) -> &'static str {
+        match self {
+            Whose::Job => "this Job's worktree",
+            Whose::Checkout => "this checkout",
+        }
+    }
+
+    fn owner(self) -> &'static str {
+        match self {
+            Whose::Job => "this Job",
+            Whose::Checkout => "this checkout",
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Unrehearsable {
     NoWorktree,
-    AlreadyRunning { name: String },
-    NotDeclared { name: String, declared: Vec<String> },
-    IsAServer { name: String },
-    WorktreeManifest { why: String },
-    DoesNotNarrow { name: String },
-    NothingToNarrowTo { name: String },
-    Unreadable { why: String },
-    NoSuchRun { id: String },
-    NotRunning { id: String },
+    AlreadyRunning {
+        name: String,
+        whose: Whose,
+    },
+    NotDeclared {
+        name: String,
+        declared: Vec<String>,
+        whose: Whose,
+    },
+    IsAServer {
+        name: String,
+    },
+    WorktreeManifest {
+        why: String,
+    },
+    DoesNotNarrow {
+        name: String,
+    },
+    NothingToNarrowTo {
+        name: String,
+    },
+    Unreadable {
+        why: String,
+    },
+    NoSuchRun {
+        id: String,
+        whose: Whose,
+    },
+    NotRunning {
+        id: String,
+    },
     DroneWorking,
     RunInFlight,
-    AlreadyUndone { id: String },
-    NothingToUndo { id: String, why: String },
-    Moved { paths: Vec<String> },
-    NotKept { why: String },
+    AlreadyUndone {
+        id: String,
+    },
+    NothingToUndo {
+        id: String,
+        why: String,
+    },
+    Moved {
+        paths: Vec<String>,
+    },
+    NotKept {
+        why: String,
+    },
 }
 
 impl Unrehearsable {
@@ -75,14 +134,20 @@ impl fmt::Display for Unrehearsable {
                 "this Job's worktree is no longer on disk, so there is nowhere to run anything. \
                  A clean or a reclaim took it",
             ),
-            AlreadyRunning { name } => write!(
+            AlreadyRunning { name, whose } => write!(
                 out,
-                "`{name}` is already running in this Job's worktree. Stop it or wait for it — \
-                 two runs in one tree fight over one build directory"
+                "`{name}` is already running in {}. Stop it or wait for it — two runs in one \
+                 tree fight over one build directory",
+                whose.tree()
             ),
-            NotDeclared { name, declared } => write!(
+            NotDeclared {
+                name,
+                declared,
+                whose,
+            } => write!(
                 out,
-                "`{name}` is not a Check or Command this Job can run — it declares {}",
+                "`{name}` is not a Check or Command {} can run — it declares {}",
+                whose.owner(),
                 declared
                     .iter()
                     .map(|one| format!("`{one}`"))
@@ -92,7 +157,7 @@ impl fmt::Display for Unrehearsable {
             IsAServer { name } => write!(
                 out,
                 "`{name}` is a server — it declares `serve` and stays running — so it is \
-                 started with start_server and held for the Job, not run here"
+                 started with start_server and held for its owner, not run here"
             ),
             WorktreeManifest { why } => write!(
                 out,
@@ -112,7 +177,9 @@ impl fmt::Display for Unrehearsable {
                 "the worktree's change could not be read, so the narrowed command could not be \
                  worked out: {why}"
             ),
-            NoSuchRun { id } => write!(out, "no run of this Job is called `{id}`"),
+            NoSuchRun { id, whose } => {
+                write!(out, "no run of {} is called `{id}`", whose.owner())
+            }
             NotRunning { id } => write!(
                 out,
                 "run `{id}` has already finished, so there is nothing to stop"
@@ -121,9 +188,7 @@ impl fmt::Display for Unrehearsable {
                 "a Drone is working in this Job's worktree, and Undo would take its edits with \
                  the run's. Undo once the Job stops",
             ),
-            RunInFlight => {
-                out.write_str("a run is still going in this Job's worktree. Undo once it ends")
-            }
+            RunInFlight => out.write_str("a run is still going in this tree. Undo once it ends"),
             AlreadyUndone { id } => write!(out, "run `{id}` has already been undone"),
             NothingToUndo { id, why } => write!(out, "run `{id}` has nothing to undo: {why}"),
             Moved { paths } => write!(

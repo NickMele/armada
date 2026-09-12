@@ -340,7 +340,10 @@ async fn a_server_that_falls_over_shows_as_stopped_on_its_own_with_its_log() {
         [one] if one.id == started.id && one.phase == ServerPhase::Exited
     ));
     let on_the_sheet = fleet
-        .declared_servers(job.id(), &fleet.effective_manifest(&job).await.0)
+        .declared_servers(
+            &crate::servers::Holder::Job(job.id().clone()),
+            &fleet.effective_manifest(&job).await.0,
+        )
         .into_iter()
         .find(|entry| entry.name == "falls_over")
         .and_then(|entry| entry.instance);
@@ -500,7 +503,7 @@ async fn a_jobs_servers_are_the_ones_it_froze() {
         "{drone:?}"
     );
     assert!(!fleet
-        .declared_servers(job.id(), &froze)
+        .declared_servers(&crate::servers::Holder::Job(job.id().clone()), &froze)
         .iter()
         .any(|entry| entry.name == "late"));
 
@@ -560,7 +563,7 @@ async fn a_job_with_no_readable_snapshot_finds_its_servers_in_the_live_file() {
     let (read, frozen) = fleet.effective_manifest(&job).await;
     assert!(!frozen, "nothing frozen to read");
     assert!(fleet
-        .declared_servers(job.id(), &read)
+        .declared_servers(&crate::servers::Holder::Job(job.id().clone()), &read)
         .iter()
         .any(|entry| entry.name == "late"));
     let (started, _) = Arc::clone(&fleet)

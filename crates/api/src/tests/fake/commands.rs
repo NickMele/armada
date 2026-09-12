@@ -135,6 +135,24 @@ impl Commands for FakeDaemon {
     ) -> Result<ipc::RunRecord, Refusal> {
         self.runs_nothing(&job_id)
     }
+    async fn start_checkout_run(
+        self: std::sync::Arc<Self>,
+        _run: ipc::StartCheckoutRun,
+    ) -> Result<ipc::CheckoutRunUnderway, Refusal> {
+        self.runs_nothing_here()
+    }
+    async fn stop_checkout_run(
+        &self,
+        _run: ipc::NamedRun,
+    ) -> Result<ipc::CheckoutRunRecord, Refusal> {
+        self.runs_nothing_here()
+    }
+    async fn undo_checkout_run(
+        &self,
+        _run: ipc::NamedRun,
+    ) -> Result<ipc::CheckoutRunRecord, Refusal> {
+        self.runs_nothing_here()
+    }
     /// Refused, naming what was asked for, so a route test can tell the body
     /// arrived. Holding a server is `fleet::servers`' and tested there.
     async fn start_server(

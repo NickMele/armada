@@ -307,10 +307,9 @@ where
     /// instance.
     pub(crate) fn declared_servers(
         &self,
-        job: &JobId,
+        holder: &Holder,
         manifest: &config::Manifest,
     ) -> Vec<ServerEntry> {
-        let holder = Holder::Job(job.clone());
         manifest
             .server_names()
             .into_iter()
@@ -329,7 +328,7 @@ where
                         })
                         .collect(),
                     destructive: server.is_destructive(),
-                    instance: self.servers().instance(&holder, &name),
+                    instance: self.servers().instance(holder, &name),
                     name,
                 })
             })

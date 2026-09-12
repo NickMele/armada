@@ -19,10 +19,11 @@ use std::future::Future;
 
 use crate::daemon::Refusal;
 use ipc::{
-    AnswerCommand, CapRaise, ChangesRequested, ChosenAnswer, FileReport, JobExamined, JobForgotten,
-    JobId, JobSummary, JudgeAnswered, NamedRun, ProposeJob, Redirection, Redispatched,
-    RemarksTakenUp, Report, RestartRequested, RunRecord, RunUnderway, SetWhenBlocked,
-    SetWhenRefused, StartRun, TurnRaise, WorktreeReclaimed,
+    AnswerCommand, CapRaise, ChangesRequested, CheckoutRunRecord, CheckoutRunUnderway,
+    ChosenAnswer, FileReport, JobExamined, JobForgotten, JobId, JobSummary, JudgeAnswered,
+    NamedRun, ProposeJob, Redirection, Redispatched, RemarksTakenUp, Report, RestartRequested,
+    RunRecord, RunUnderway, SetWhenBlocked, SetWhenRefused, StartCheckoutRun, StartRun, TurnRaise,
+    WorktreeReclaimed,
 };
 
 /// Everything a client asks Fleet to do.
@@ -672,6 +673,47 @@ pub trait Commands: Send + Sync + 'static {
         job_id: JobId,
         run: NamedRun,
     ) -> impl Future<Output = Result<RunRecord, Refusal>> + Send;
+
+    /// `start_checkout_run` — run one Check or Command in the main checkout,
+    /// as a rehearsal: no Evidence, no Check row, and no Job to move.
+    ///
+    /// **By `Arc`, for [`Commands::start_run`]'s reason.** It runs in the
+    /// working tree as it is on disk — there is no throwaway copy and no Where
+    /// control, Journey 9, *Running one*.
+    ///
+    /// **A checkout run and a Job's run do not lock each other out.** One run
+    /// at a time is per owner: two runs in one tree fight over one build
+    /// directory, and these are two trees.
+    ///
+    /// [`Refusal::IllegalMove`] where a run is already out in the checkout;
+    /// [`Refusal::Unacceptable`] where nothing declares the name.
+    fn start_checkout_run(
+        self: std::sync::Arc<Self>,
+        run: StartCheckoutRun,
+    ) -> impl Future<Output = Result<CheckoutRunUnderway, Refusal>> + Send;
+
+    /// `stop_checkout_run` — end the run's process group, and answer with its
+    /// record once it is written. [`Refusal::IllegalMove`] on a run not in
+    /// flight.
+    fn stop_checkout_run(
+        &self,
+        run: NamedRun,
+    ) -> impl Future<Output = Result<CheckoutRunRecord, Refusal>> + Send;
+
+    /// `undo_checkout_run` — put back what one run changed, from the snapshot
+    /// taken before it.
+    ///
+    /// **Never offered where no snapshot was taken.** This tree holds a
+    /// person's own uncommitted work, which no Job's worktree does, so a run
+    /// with nothing kept behind it is refused rather than discarded from.
+    ///
+    /// [`Refusal::IllegalMove`] while a run is in flight, on a run already
+    /// undone or with no snapshot, and where a path the run changed has moved
+    /// since.
+    fn undo_checkout_run(
+        &self,
+        run: NamedRun,
+    ) -> impl Future<Output = Result<CheckoutRunRecord, Refusal>> + Send;
 
     /// `start_server` — start a server the Manifest declares, in a Job's
     /// worktree on its span or in the main checkout on its own, **or answer

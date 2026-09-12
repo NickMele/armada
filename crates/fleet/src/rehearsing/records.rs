@@ -1,6 +1,10 @@
-//! A run's directory, `.armada/runs/<job>/<run>/` under the repository's
-//! records root: `output.log`, and `run.json`, which is `ipc::RunRecord`
-//! itself — what `list_runs` answers.
+//! A run's directory, `.armada/runs/<owner>/<run>/` under the repository's
+//! records root: `output.log`, and `run.json`, which is [`Record`] itself.
+//!
+//! **`handle` is the owner's directory and nothing more** — a Job's handle, or
+//! `main` for the checkout ([`owner`](super::owner)). Nothing here knows which
+//! of the two it has, which is why serving the checkout's half needed no
+//! change to this file.
 //!
 //! **No table.** A rehearsal is not the store's, and the record goes through
 //! `ipc`'s codec, gate rule five's one reader of untyped bytes on this side.
@@ -10,8 +14,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use core_model::Timestamp;
-use ipc::{RunOutput, RunRecord, UnreadableRun};
+use ipc::{RunOutput, UnreadableRun};
 
+use super::record::Record;
 use crate::check_output::one_component;
 
 pub(crate) const LOG: &str = "output.log";
@@ -47,7 +52,7 @@ pub(crate) fn made(root: &str, handle: &str, id: &str) -> std::io::Result<PathBu
 }
 
 /// Write the record whole or not at all: a reader never finds half of one.
-pub(crate) fn write(dir: &Path, record: &RunRecord) -> std::io::Result<()> {
+pub(crate) fn write(dir: &Path, record: &Record) -> std::io::Result<()> {
     let text = ipc::encode(record).map_err(|why| std::io::Error::other(why.to_string()))?;
     let next = dir.join(format!("{RECORD}.next"));
     std::fs::write(&next, text)?;
@@ -55,23 +60,23 @@ pub(crate) fn write(dir: &Path, record: &RunRecord) -> std::io::Result<()> {
 }
 
 /// One run's record. `None` where there is no such run, or it wrote none.
-pub(crate) fn read(root: &str, handle: &str, id: &str) -> Option<Result<RunRecord, String>> {
+pub(crate) fn read(root: &str, handle: &str, id: &str) -> Option<Result<Record, String>> {
     let dir = dir_of(root, handle, id)?;
     let bytes = match std::fs::read(dir.join(RECORD)) {
         Ok(bytes) => bytes,
         Err(why) if why.kind() == std::io::ErrorKind::NotFound => return None,
         Err(why) => return Some(Err(why.to_string())),
     };
-    Some(ipc::decode::<RunRecord>("a run record", &bytes).map_err(|why| why.to_string()))
+    Some(ipc::decode::<Record>("a run record", &bytes).map_err(|why| why.to_string()))
 }
 
-/// Every run of one Job, newest first, and the directories that would not
+/// Every run of one owner, newest first, and the directories that would not
 /// read — **said, never dropped**. `running` is skipped: it has no record yet.
 pub(crate) fn every(
     root: &str,
     handle: &str,
     running: Option<&str>,
-) -> (Vec<RunRecord>, Vec<UnreadableRun>) {
+) -> (Vec<Record>, Vec<UnreadableRun>) {
     let (mut runs, mut unreadable) = (Vec::new(), Vec::new());
     let listing = match std::fs::read_dir(runs_dir(root, handle)) {
         Ok(listing) => listing,
@@ -106,7 +111,7 @@ pub(crate) fn every(
     (runs, unreadable)
 }
 
-/// Take away this Job's runs that ended longer ago than `kept_for` allows,
+/// Take away this owner's runs that ended longer ago than `kept_for` allows,
 /// letting each one's snapshot go with it.
 ///
 /// `kept_for` is `settings.ad-hoc-run-log-retention`, resolved by the
