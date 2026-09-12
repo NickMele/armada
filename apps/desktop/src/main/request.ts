@@ -19,7 +19,41 @@ import type { ServerList } from "@armada/protocol";
 import type { CallArguments, CheckOutput } from "@armada/protocol";
 import type { ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
 import { refusedWith } from "@armada/protocol";
+import { Socket } from "node:net";
 import { HOST } from "./runtime-file";
+
+/**
+ * The type-of-service byte is advisory, and this makes Node treat it that way.
+ *
+ * Node's bundled `undici` sets it at the top of every HTTP/1 write, from
+ * `writeH1`, with nothing around the call, and `Socket.setTypeOfService` throws
+ * whatever errno came back on every platform but Windows. macOS answers
+ * `EINVAL` once a socket has been shut down — `setsockopt(2)` says so — and a
+ * peer resetting between the handshake and that write leaves a socket the
+ * kernel has torn down and JavaScript still reads as open. The throw is held by
+ * nobody: an uncaught exception in main, and a whole suite lost after every
+ * test in it passed. #613.
+ *
+ * **Only this syscall**, so the unhandled-error class is untouched. If the
+ * socket really is dead the write behind it fails and undici reports that.
+ */
+function typeOfServiceStaysAdvisory(): void {
+  const socket = Socket.prototype as unknown as {
+    setTypeOfService?: (this: Socket, tos: number) => unknown;
+  };
+  const setting = socket.setTypeOfService;
+  if (setting === undefined) return;
+  socket.setTypeOfService = function (this: Socket, tos: number): unknown {
+    try {
+      return setting.call(this, tos);
+    } catch (cause) {
+      if ((cause as NodeJS.ErrnoException | undefined)?.syscall !== "setTypeOfService") throw cause;
+      return this;
+    }
+  };
+}
+
+typeOfServiceStaysAdvisory();
 
 /**
  * How long an ordinary command waits before it is a transport failure.
