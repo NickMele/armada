@@ -24,6 +24,9 @@
 //! every operation; the types here serve what M1 needs, and a command adds a
 //! type only where a Job is not what it answers with.
 
+/// What is waiting on a person, in two buckets. **Derived from the Jobs Fleet
+/// holds, never stored** — which is why nothing publishes `alert.raised`.
+mod alerts;
 /// How many times a step was worked, and what each run came to. **The record
 /// held it and nothing served it** — see the module.
 mod asking;
@@ -36,12 +39,20 @@ mod codec;
 /// A command a Drone was not given, and what a person answers about it. **Two
 /// paths to one answer** — while the Drone waits, or after the Job stopped.
 mod commanding;
+/// One Manifest as Fleet resolved it, past the summary a picker reads.
+mod configured;
 mod detail;
+/// The processes Fleet is holding, and what one of them has been doing.
+/// **Read off the roster, never off the Jobs.**
+mod drones;
 mod enums;
 mod error;
 mod event;
 /// What `search_files` found under the checkout, for the `@` mention popup.
 mod files;
+/// What Fleet can say about its own health, and what it cannot. **Not
+/// Doctor**, whose grid is ten modules and is not built.
+mod health;
 mod history;
 /// What Fleet is holding disk for, and the test each one did not pass.
 /// **A piloted worktree is not on this wire at all** — `#367`.
@@ -85,10 +96,15 @@ mod servers;
 mod setup;
 /// What a step's harness produced, as a client is told about it.
 mod showing;
+/// What crossed the stream since a cursor, counted rather than carried.
+/// **An agent's substitute for the socket it cannot hold.**
+mod since;
 mod turn;
 /// A step's Checks while the gate is running them, and the socket a running
 /// Check's log is read over.
 mod underway;
+/// What the fleet has spent, against the ceilings that refuse the next Drone.
+mod usage;
 /// The two numbers both sides read, and what a mismatch between them means.
 /// `build.rs` embeds them from `protocol-version.toml`.
 mod version;
@@ -100,6 +116,7 @@ mod work;
 #[cfg(test)]
 mod tests;
 
+pub use alerts::{Alert, AlertList};
 pub use asking::{JudgeAnswer, JudgeAnswered, JudgeQuestion, SetWhenRefused, WhenRefused};
 pub use attempt::{Move, StepAttempt};
 pub use capacity::{AdmissionHold, FleetCapacity};
@@ -109,10 +126,12 @@ pub use commanding::{
     AllowedCommandRow, AnswerCommand, CommandAnswer, CommandInFlight, Reach, RemoveAllowedCommand,
     SetModel, SetWhenBlocked, WhenBlocked,
 };
+pub use configured::ManifestConfig;
 pub use detail::{
     Criterion, Currency, Dependency, JobDelivery, JobDetail, JobReview, JobSpend, JudgeInFlight,
     PullRequestDetail, Refusal, ReviewedBy, Settled, StepDetail, StepFacts, Stuck, Verdict,
 };
+pub use drones::{DroneDetail, DroneList, DroneSummary};
 pub use enums::{
     Actor, AdvanceGate, BudgetHold, CheckOutcome, CriterionSource, DependencyDirection,
     DronePresence, EvidenceType, JobStatus, JudgeVerdict, Origin, QueuedReason, Recourse,
@@ -126,6 +145,7 @@ pub use event::{
     StreamMessage,
 };
 pub use files::FilesFound;
+pub use health::{FleetHealth, Probe, Unprobed};
 pub use history::{DroneMoved, JobHistory, Movement, Recorded, StatusMoved, StepMoved};
 pub use holding::{HeldReason, WorktreeHeld, WorktreesHeld};
 pub use ids::{
@@ -158,6 +178,7 @@ pub use servers::{
     NamedServer, ServerEntry, ServerLink, ServerList, ServerMessage, ServerOpened, ServerPhase,
     ServerPort, ServerState, StartServer, StartedBy,
 };
+pub use since::{EventTally, EventsSince};
 pub use setup::{ManifestSummary, ModelChoices, WorkflowStep, WorkflowSummary};
 pub use showing::{KeptFrame, NamedSpec, ShowAgain, ShownAgain, ShownSet};
 pub use turn::{
@@ -168,6 +189,7 @@ pub use underway::{
     CheckUnderway, ChecksUnderway, OutputClosed, OutputEnded, OutputLines, OutputMessage,
     OutputOpened,
 };
+pub use usage::FleetUsage;
 pub use version::{ProtocolVersion, Skew, PROTOCOL_VERSION};
 pub use waiting::{AskedOption, ChosenAnswer, QuestionInFlight, RedirectInFlight, RedirectWaiting};
 pub use work::{
