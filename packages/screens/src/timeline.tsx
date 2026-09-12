@@ -19,7 +19,6 @@
 import { Fragment, type ReactNode } from "react";
 
 import type { ChangedFile, CheckRun, Judged, StepAttempt, StepDetail, Turn } from "@armada/protocol";
-import { Clamped } from "@armada/components";
 import type { StepActivity, StepChapter, StepTimelineAttempt } from "@armada/components";
 
 import { namesChapter } from "./detail-keys";
@@ -324,9 +323,6 @@ export function stepTimelineOf(
   }));
 }
 
-/** How much of the opening brief a phase row shows before it offers the rest. */
-const INSTRUCTED_LINES = 8;
-
 /** Which chapters belong to which phase, in the order the phase produced them. */
 const CHAPTERS: Record<TimelinePhase, readonly string[]> = {
   instructed: ["instructions"],
@@ -342,7 +338,7 @@ const CHAPTERS: Record<TimelinePhase, readonly string[]> = {
 function bodyOf(
   phase: TimelinePhase,
   held: Map<string, StepChapter>,
-): { body?: ReactNode; act?: ReactNode } {
+): { body?: ReactNode; act?: ReactNode; bounded?: boolean } {
   const mine = CHAPTERS[phase].flatMap((id) => {
     const chapter = held.get(id);
     return chapter === undefined ? [] : [chapter];
@@ -363,18 +359,11 @@ function bodyOf(
     </section>
   ));
   return {
-    // **The brief is bounded here.** Opening Instructed unfolded the whole
-    // passage — the brief, the standing instructions and the step list — and
-    // pushed every phase under it off the screen. The chapter clamps itself
-    // only where its headings carry no kinds, so this holds the rest.
-    body:
-      phase === "instructed" ? (
-        <Clamped lines={INSTRUCTED_LINES} moreLabel="Read the whole instruction">
-          {drawn}
-        </Clamped>
-      ) : (
-        drawn
-      ),
+    body: drawn,
+    // **The brief gets a height of its own.** Unfolded whole it is a screen and
+    // a half and pushes every phase below it off the panel. A line clamp was
+    // tried first and does nothing here, for the reason `Clamped.css` states.
+    ...(phase === "instructed" ? { bounded: true } : {}),
     ...(acts.length === 0
       ? {}
       : {

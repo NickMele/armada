@@ -78,3 +78,19 @@
   gap: var(--space-2);
   min-width: 0;
 }
+
+/* A body held to a height of its own, scrolling past it.
+
+   A HEIGHT AND NOT A LINE CLAMP. `-webkit-line-clamp` counts line boxes and a
+   sectioned brief is a column of cards carrying none, so a clamp there does
+   nothing at all — `Clamped.css` carries that account. What the opening brief
+   needs is a bound that holds whatever flow it is written in.
+
+   The fraction of the window is the drawn value: a brief taller than the panel
+   is the thing being fixed, so the bound has to be of the viewport rather than
+   of the type scale. No token spells a proportion of the window. Reported. */
+.armada-steps__bounded {
+  max-height: 45vh;
+  overflow-y: auto;
+  min-width: 0;
+}

@@ -39,6 +39,16 @@ export type StepTimelineRow = {
    */
   body?: ReactNode;
   /**
+   * Hold the body to a height of its own, scrolling past it.
+   *
+   * **For a phase whose body is somebody else's passage.** The opening brief
+   * is a screen and a half, and unfolded inside a row it pushes every phase
+   * below it off the panel. A line clamp cannot help: it counts line boxes and
+   * a sectioned brief is one box carrying none, which `Clamped.css` says in
+   * those words.
+   */
+  bounded?: boolean;
+  /**
    * Attributes naming this row for whatever finds it — the marker a keyboard
    * map queries rather than reaching for the class this component ships.
    *
@@ -187,7 +197,11 @@ function Row({
       // takes no `onToggle` there, so no control opens an empty box.
       {...(row.body === undefined ? {} : { open, onToggle })}
     >
-      {row.body}
+      {row.bounded === true ? (
+        <div className="armada-steps__bounded">{row.body}</div>
+      ) : (
+        row.body
+      )}
     </Chapter>
   );
 }
