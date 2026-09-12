@@ -445,32 +445,29 @@ pub fn nothing_writes_its_own_log_format(root: &Path) -> Report {
 
 // -------------------------------------------------------- rule twenty-three
 
-/// A comment block runs to twenty-five lines and no further.
+/// A comment is a line or two; five is where a block asks a question rather
+/// than gets refused.
 ///
-/// Measured before it was written: about three lines in ten of this workspace
-/// are comments, and single blocks reached seventy — several module headers
-/// longer than the code beneath them.
-///
-/// **The cap is not a claim that long reasoning is unwanted.** It is a claim
-/// about where reasoning goes. A block this long is one of three things: a
-/// comment written at three times the length it needs, which reduction fixes
-/// and nothing is lost; a decision with its alternatives, which belongs with
-/// the decision; or a module explaining how a whole area works, which is a
-/// practice doc with the module pointing at it.
-///
-/// **Reduce before filing.** Assuming a long comment is a document moves the
-/// verbosity somewhere new and calls it filing.
+/// This is a warning, not a failure — the backlog was measured at over five
+/// thousand blocks and none of them are being rewritten today.
+/// `.claude/skills/comments/SKILL.md` has the reduce-then-file order.
 pub fn no_comment_block_too_long(root: &Path) -> Report {
-    let mut report = Report::new("no comment block over 25 lines");
-    const CAP: usize = 25;
+    let mut report = Report::new("no comment block over 5 lines");
+    const CAP: usize = 5;
 
     for source_root in SOURCE_ROOTS {
-        for path in files_with_ext(root, &root.join(source_root), &["rs"]) {
+        for path in files_with_ext(root, &root.join(source_root), SOURCE_EXTS) {
             let Ok(text) = fs::read_to_string(root.join(&path)) else {
                 continue;
             };
             let (mut run, mut started) = (0usize, 0usize);
-            let mut worst = (0usize, 0usize);
+            let flush = |report: &mut Report, run: usize, started: usize| {
+                if run > CAP {
+                    report.warn(format!(
+                        "{path}:{started} — {run} lines of comment in one block, over {CAP}"
+                    ));
+                }
+            };
             for (n, line) in text.lines().enumerate() {
                 let t = line.trim_start();
                 if t.starts_with("//") || t.starts_with('*') || t.starts_with("/*") {
@@ -478,21 +475,12 @@ pub fn no_comment_block_too_long(root: &Path) -> Report {
                         started = n + 1;
                     }
                     run += 1;
-                    if run > worst.0 {
-                        worst = (run, started);
-                    }
                 } else {
+                    flush(&mut report, run, started);
                     run = 0;
                 }
             }
-            if worst.0 > CAP {
-                report.fail(format!(
-                    "{path}:{} — {} lines of comment in one block, over {CAP}. \
-                     Reduce it first; file it only if it cannot shorten without \
-                     losing a fact. `.claude/skills/comments/SKILL.md`",
-                    worst.1, worst.0
-                ));
-            }
+            flush(&mut report, run, started);
         }
     }
     report
