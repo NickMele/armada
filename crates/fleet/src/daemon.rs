@@ -63,7 +63,7 @@ pub use fittings::{Fittings, Host};
 pub struct Fleet<H, V, W> {
     store: Mutex<Store>,
     harness: Arc<H>,
-    vcs: V,
+    vcs: Arc<V>,
     work: W,
     clock: Arc<dyn Clock>,
     mint: Arc<dyn Mint>,

@@ -21,8 +21,12 @@ import type { ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/pro
 import { refusedWith } from "@armada/protocol";
 import { HOST } from "./runtime-file";
 
-/** How long a command waits for an answer before it is a transport failure. */
-const COMMAND_MS = 5000;
+/**
+ * How long an ordinary command waits before it is a transport failure —
+ * margin over the worst queueing measured (`#693`: `GET /jobs` at 18s behind
+ * blocking calls now off Fleet's runtime), not a bound Fleet enforces.
+ */
+export const COMMAND_MS = 20_000;
 
 /**
  * What a route waits when a model call is inside the request.

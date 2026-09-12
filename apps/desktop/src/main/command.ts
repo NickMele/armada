@@ -26,7 +26,7 @@ import type {
   WhenBlocked,
 } from "@armada/protocol";
 import type { ProposalInFlight, Proposed, ShownAgain } from "@armada/protocol";
-import { ask, isJobSummary, MODEL_CALL_MS, NO_WAIT, route, type Answer } from "./request";
+import { ask, COMMAND_MS, isJobSummary, MODEL_CALL_MS, NO_WAIT, route, type Answer } from "./request";
 import { Clearing } from "./clearing";
 import { proposeFromRequest as propose } from "./proposing";
 import { decide, takeUp, type Decision } from "./review";
@@ -190,7 +190,13 @@ export class JobCommands {
     inFlight.add(jobId);
     try {
       const answer = await send(port);
-      if (answer.ok !== true) return answer.outcome;
+      if (answer.ok !== true) {
+        const { outcome } = answer;
+        if (!outcome.ok && outcome.why === "transport" && outcome.fault.why === "timed_out") {
+          this.readAgainOnceFleetHasHadLonger(port, jobId);
+        }
+        return outcome;
+      }
       // Folding whatever a route answered would put a malformed row on the
       // board, so a body that is not one is a re-read instead.
       if (isJobSummary(answer.body)) this.board.fold(answer.body);
@@ -200,6 +206,14 @@ export class JobCommands {
     } finally {
       inFlight.delete(jobId);
     }
+  }
+
+  /**
+   * A Job read again once Fleet has had a further `COMMAND_MS` to answer —
+   * `#693`, so a late land does not leave the row under a stale notice.
+   */
+  private readAgainOnceFleetHasHadLonger(port: number, jobId: string): void {
+    setTimeout(() => this.board.refresh(port, jobId), COMMAND_MS);
   }
 
   // ------------------------------------------------------------- proposing

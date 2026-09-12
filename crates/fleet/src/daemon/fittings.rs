@@ -210,7 +210,7 @@ where
         Fleet {
             store: Mutex::new(fittings.store),
             harness: Arc::new(fittings.harness),
-            vcs: fittings.vcs,
+            vcs: Arc::new(fittings.vcs),
             work: fittings.work,
             clock: fittings.clock,
             mint: fittings.mint,

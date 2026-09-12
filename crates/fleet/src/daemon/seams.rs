@@ -62,7 +62,7 @@ where
     pub(crate) fn harness(&self) -> &Arc<H> {
         &self.harness
     }
-    pub(crate) fn vcs(&self) -> &V {
+    pub(crate) fn vcs(&self) -> &Arc<V> {
         &self.vcs
     }
     pub(crate) fn work(&self) -> &W {
