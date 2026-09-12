@@ -26,16 +26,17 @@ import {
   GAMING_PATTERN,
   GamingFlags,
   JOB_LIFECYCLE,
+  JudgeRefusal,
   Refusals,
 } from "@armada/components";
 import type { JobDetailField } from "@armada/components";
 import type { StepNotice } from "./InsideAJob";
 import type { ReactNode } from "react";
 
-import type { CommandAnswer, JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
+import type { CommandAnswer, Criterion, JobDetail as JobWhole, JobSummary, StepDetail } from "@armada/protocol";
 import { answerNamed, offeredOf } from "./copy";
 import { span } from "./duration";
-import { sentenceOf } from "./gates";
+import { panelsOf, sentenceOf } from "./gates";
 import { Opening, openKept, type Opens } from "./phases";
 import { recourseOf, type Recourse } from "./recovery";
 import { refusedIn, shownOf } from "./refused";
@@ -320,6 +321,8 @@ export function noticeOf(
   // `undefined` on a Job refused nothing, which is most of them.
   const refused = refusedIn(whole);
   const flagged = step.flagged;
+  // The Judge's own refused criteria — `judgeRefusalsOf`'s own doc says why.
+  const judgeRefusals = judgeRefusalsOf(step, whole?.acceptance_criteria ?? []);
   // **Present only where `stopped_by` is `gate_undecided`** — `Stuck.undecided`
   // says so, so nothing here re-checks the trigger before drawing it. Fleet
   // writes it lower-case and unpunctuated, like a log line; `sentenceOf` is
@@ -327,6 +330,7 @@ export function noticeOf(
   const undecided = whole?.stuck?.undecided;
   const shown =
     undecided !== undefined ||
+    judgeRefusals !== null ||
     flagged.length > 0 ||
     refused !== undefined ||
     recourse.sent !== undefined;
@@ -361,6 +365,7 @@ export function noticeOf(
         {undecided === undefined ? null : (
           <span className="block">{sentenceOf(undecided)}</span>
         )}
+        {judgeRefusals}
         {flagged.length === 0 ? null : (
           <GamingFlags
             flags={flagged.map((flag) => ({
@@ -400,6 +405,35 @@ export function noticeOf(
       </>
     ),
   };
+}
+
+/**
+ * The Judge's own refused criteria, for the band on a step it stopped over —
+ * `flagged`'s counterpart, and `#689`'s gap: the finding sat under the Checks,
+ * three chapters down. `null` where nothing was refused this attempt.
+ */
+function judgeRefusalsOf(step: StepDetail, criteria: readonly Criterion[]): ReactNode {
+  const refused = panelsOf(step, criteria).filter((panel) => panel.verdict === "not_met");
+  if (refused.length === 0) return null;
+  return (
+    <>
+      {refused.map((panel) => {
+        const finding = panel.refused[0];
+        if (finding === undefined) return null;
+        return (
+          <JudgeRefusal
+            key={panel.criterionId}
+            heading={panel.criterion?.text ?? panel.criterionId}
+            finding={{
+              ...(finding.expected === undefined ? {} : { expected: finding.expected }),
+              ...(finding.produced === undefined ? {} : { produced: finding.produced }),
+              ...(finding.consequence === undefined ? {} : { consequence: finding.consequence }),
+            }}
+          />
+        );
+      })}
+    </>
+  );
 }
 
 /**

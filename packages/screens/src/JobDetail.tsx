@@ -68,18 +68,7 @@ import { useEffect, useMemo, useState } from "react";
 import { type RunTreeStep } from "@armada/components";
 import { InsideAJob } from "./InsideAJob";
 
-import type {
-  Examination,
-  History,
-  Holds,
-  FollowedLog,
-  Journalled,
-  Observed,
-  Outcome,
-  Watched,
-} from "@armada/protocol";
-import type { CommandAnswer, FileReport, JobSummary, JudgeAnswer, WhenBlocked, WhenRefused } from "@armada/protocol";
-import type { ManifestSummary, ModelChoices, WorkflowSummary } from "@armada/protocol";
+import type { CommandAnswer, Examination, FileReport, FollowedLog, History, Holds, JobSummary, Journalled, JudgeAnswer, ManifestSummary, ModelChoices, Observed, Outcome, Watched, WhenBlocked, WhenRefused, WorkflowSummary } from "@armada/protocol";
 import { heldForMoney, heldForTurns, type ConfirmableAct } from "./Acts";
 import { useCallArguments, type ReadCall } from "./calls";
 import {
@@ -472,16 +461,14 @@ export function JobDetail({
   // `read` is the only state carrying rows, and a read that has not arrived is
   // not a step that claimed nothing — the tier draws its documents either way.
   const claimed = useMemo(
-    () =>
-      recorded.evidence.state === "read"
-        ? recorded.evidence.steps.find((one) => one.step_id === open?.step_id)
-        : undefined,
+    () => (recorded.evidence.state === "read" ? recorded.evidence.steps.find((one) => one.step_id === open?.step_id) : undefined),
     [recorded.evidence, open?.step_id],
   );
+  const asking = whole?.judge_question?.step_id === open?.step_id ? whole?.judge_question?.criterion_id : undefined;
   const phases =
     whole === null || open === undefined
       ? undefined
-      : phasesOf(open, whole.acceptance_criteria, opensRecords, job.status, claimed);
+      : phasesOf(open, whole.acceptance_criteria, opensRecords, job.status, claimed, asking);
 
   // The detail's contextual tier, and the open state it moves. Bound while a
   // Job is open and not before, so nothing on the Board listens for a key that
