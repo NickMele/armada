@@ -351,9 +351,7 @@ impl Store {
     ///
     /// **The column is on `job_steps` and the row is found by the pair.** A
     /// step the Job does not have is [`WriteError::NoSuchStep`], the same
-    /// refusal [`record_step_transition`] makes — and the model has already
-    /// refused it, so reaching this is a store that disagrees with the record
-    /// it was handed.
+    /// refusal [`record_step_transition`] makes.
     ///
     /// [`record_transition`]: Store::record_transition
     /// [`record_step_transition`]: Store::record_step_transition

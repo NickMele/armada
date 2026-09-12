@@ -1,20 +1,17 @@
 //! One step of a workflow: what each key means, and where two of them disagree.
 //!
 //! **Absent is not a default.** Every optional key on [`Step`] says on its own
-//! reader what leaving it out means, and none of them invents a value here.
-//! `settings.toml` names three attempts per step as the Kit-level default and
-//! there is no Kit-level anything for this parser to read it from; inventing
-//! three here would put a threshold in the one place nobody looking at a
-//! workflow would find it. The workflows under `.armada/workflows/` declare
-//! their own, in the file, where an author reading the step sees what it costs.
-//! An unknown model name is refused here against the roster the caller resolved
-//! rather than carried to the spawn — [`crate::Roster`] for why.
+//! reader what leaving it out means. `settings.toml` names three attempts per
+//! step as the Kit-level default, and there is no Kit-level anything for this
+//! parser to read it from — inventing three here would put a threshold in the
+//! one place nobody looking at a workflow would find it. An unknown model name
+//! is refused here against the roster the caller resolved rather than carried
+//! to the spawn — [`crate::Roster`] for why.
 //!
 //! **Two refusals need every key at once**, which is what keeps them here
 //! rather than on the reader of either key: a gate that names a tier declaring
 //! nothing, and a criterion put to the Judge about a product the step does not
-//! produce. Each is a step no Drone could pass, and each is refused where it is
-//! written.
+//! produce.
 
 use std::collections::BTreeMap;
 

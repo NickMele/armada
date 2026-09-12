@@ -2,19 +2,16 @@
 //!
 //! **The declaration is the record, not the file it was read from.** A Job that
 //! came back knowing only which workflow it followed would have to go to
-//! `.armada/workflows/` to find out what its steps declare — which is the one
-//! thing that could have changed underneath it, and the whole reason the
-//! workflow is frozen onto the Job at all.
+//! `.armada/workflows/` to find out what its steps declare, which could have
+//! changed underneath it.
 //!
 //! **A key that did not exist when a row was written reads back as an absence,
-//! and an absence is a value.** Some of these are a row frozen before a key
-//! existed, and they assert that nothing backfills; the rest are malformed
-//! rows, which refuse rather than read as a none, because a widened Check and a
-//! dropped one are both unrecoverable from the record afterwards.
+//! and an absence is a value.** Some rows are frozen before a key existed and
+//! assert that nothing backfills; the rest are malformed rows, refused rather
+//! than read as none.
 //!
 //! Those go straight at [`read_workflow`](crate::columns::read_workflow) with
-//! no store at all. The subject is the dialect, and opening a file would only
-//! make the same assertion slower.
+//! no store at all.
 
 use core_model::{
     AdvanceGate, ContextSource, Covers, DeclarePlanAt, EvidenceRef, GamingPattern, ModelName,

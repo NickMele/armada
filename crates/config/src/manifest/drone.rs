@@ -1,20 +1,18 @@
 //! `drone:`, what a repository says about how a Drone works here.
 //!
-//! **The one section of `armada.yml` that is a dial rather than a registry**,
-//! which is why it is its own file: every other section in
-//! [`crate::manifest`] is a map of named things resolved against another map,
-//! and this one is four values with four separate fallbacks. `#414` added
-//! the first two.
+//! **The one section of `armada.yml` that is a dial rather than a registry**:
+//! every other section in [`crate::manifest`] is a map of named things resolved
+//! against another map, and this one is four values with four separate
+//! fallbacks. `#414` added the first two.
 //!
 //! **Named for what it configures, not for who enforces it.** Fleet enforces
-//! all four and there is no `fleet:` section — `docs/contracts/configuration.md`
-//! gives the rule and the reason.
+//! all four and there is no `fleet:` section —
+//! `docs/contracts/configuration.md` gives the rule.
 //!
-//! **The cap says `per_job` in its own name because this section does not.** A
-//! Drone belongs to one step, so a four-step Job is four Drones and a key read
-//! as per-Drone would be four times the ceiling anybody thought they set. The
-//! other three keys really are a Drone's; this one is the Job's and is written
-//! here because it is the same repository saying how work is done.
+//! **The cap says `per_job` because this section does not.** A Drone belongs to
+//! one step, so a four-step Job is four Drones, and a key read as per-Drone
+//! would be four times the ceiling anybody set. The other three keys are the
+//! Drone's; this one is the Job's.
 
 use core_model::RepoPath;
 use serde_yaml_ng::Value;
